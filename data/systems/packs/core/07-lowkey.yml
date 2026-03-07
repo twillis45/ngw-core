@@ -1,0 +1,16 @@
+id: profile_lowkey
+name: Low Key Profile
+
+intent:
+  look: dark
+  contrast: high
+  texture: dramatic
+  shadow_style: split
+
+preferred_modifiers:
+  - grid
+  - reflector
+
+recommended_systems:
+  - pro_05_lowkey_split_grid
+  - pro_03_dramatic_rembrandt_dish_rim

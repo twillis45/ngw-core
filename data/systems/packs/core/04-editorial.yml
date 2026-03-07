@@ -1,0 +1,17 @@
+id: profile_editorial
+name: Editorial Fashion Profile
+
+intent:
+  look: bold
+  contrast: variable
+  texture: crisp
+  shadow_style: stylized
+
+preferred_modifiers:
+  - fresnel
+  - grid
+  - stripbox
+
+recommended_systems:
+  - pro_06_editorial_hard_sun
+  - pro_03_dramatic_rembrandt_dish_rim

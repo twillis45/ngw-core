@@ -1,0 +1,25 @@
+id: short_lighting_portrait
+name: Short Lighting Portrait
+criteria:
+  brightness: 8000
+  color_accuracy: 95
+  setup_speed: 6
+  control: 9
+features:
+  dimmable: true
+  battery_capable: true
+  smart_ready: false
+taxonomy_refs:
+  gear_profile: strobe_mono
+  modifier_family: softbox
+  mood: portrait
+  environment: studio_large
+  skin_tone: medium
+notes:
+- Slimming portrait lighting
+diagram_hints:
+  key:
+    angle_deg: 55
+    height: above_eye
+    distance_ft: "4\u20136"
+    modifier: softbox

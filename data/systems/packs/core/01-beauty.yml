@@ -1,0 +1,17 @@
+id: profile_beauty
+name: Beauty Lighting Profile
+
+intent:
+  look: flattering
+  contrast: low
+  texture: soft
+  shadow_style: clamshell
+
+preferred_modifiers:
+  - beauty_dish
+  - large_softbox
+  - reflector
+
+recommended_systems:
+  - pro_01_beauty_clamshell
+  - pro_09_butterfly_paramount

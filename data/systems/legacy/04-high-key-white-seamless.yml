@@ -1,0 +1,25 @@
+id: high_key_white_seamless
+name: High Key White Seamless
+criteria:
+  brightness: 9500
+  color_accuracy: 96
+  setup_speed: 4
+  control: 8
+features:
+  dimmable: true
+  battery_capable: false
+  smart_ready: false
+taxonomy_refs:
+  gear_profile: strobe_pack
+  modifier_family: softbox
+  mood: commercial
+  environment: studio_large
+  skin_tone: light
+notes:
+- Bright white background commercial lighting
+diagram_hints:
+  key:
+    angle_deg: 25
+    height: above_eye
+    distance_ft: "5\u20137"
+    modifier: large_softbox

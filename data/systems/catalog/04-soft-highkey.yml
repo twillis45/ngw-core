@@ -1,0 +1,42 @@
+id: soft-highkey
+name: Soft High-Key (Large Source)
+pack: pro
+rank: 4
+
+taxonomy-refs:
+  mood: soft
+  environment: studio
+  gear-profile: strobe-mono
+  modifier-family: large-softbox
+
+shadow:
+  expected:
+    pattern: minimal
+    notes:
+      - Very low contrast; shadows barely visible.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: eye-level
+    lens: standard
+
+lights:
+  - role: key
+    name: Key
+    angle-deg: 20.0
+    distance-ft: "3–6"
+    height: slightly above eye line
+    modifier: very large softbox / octa
+    notes:
+      - Big, close, feathered.
+
+  - role: background
+    name: Background
+    angle-deg: 180.0
+    distance-ft: "3–6"
+    height: mid-height
+    modifier: bare / wide
+    notes:
+      - Drive background to clean white if needed.

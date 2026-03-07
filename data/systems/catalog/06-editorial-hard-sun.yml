@@ -1,0 +1,33 @@
+id: editorial-hard-sun
+name: Editorial Hard Sun (Fresnel / Hard Source)
+pack: pro
+rank: 6
+
+taxonomy-refs:
+  mood: editorial
+  environment: studio
+  gear-profile: fresnel
+  modifier-family: hard
+
+shadow:
+  expected:
+    pattern: hard
+    notes:
+      - Crisp shadow edges; strong nose/cheek shadows.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: eye-level
+    lens: standard
+
+lights:
+  - role: key
+    name: Key
+    angle-deg: 45.0
+    distance-ft: "8–12"
+    height: above head height
+    modifier: fresnel / bare hard source
+    notes:
+      - Aim like sun. Add cutters if needed.

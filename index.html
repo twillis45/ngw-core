@@ -1,0 +1,110 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NGW Core v1</title>
+<style>
+*{margin:0;box-sizing:border-box}
+:root{--bg:#0c0c0f;--s1:#16171c;--s2:#22242b;--fg:#c8c8cf;--dim:#64656e;--acc:#e2a229;--grn:#34d399;--red:#f87171;--r:5px;--f:13px/1.55 'SF Mono',Menlo,Consolas,monospace}
+body{background:var(--bg);color:var(--fg);font:var(--f);padding:28px 20px;max-width:720px;margin:0 auto}
+h1{font-size:14px;color:var(--acc);letter-spacing:.6px;margin-bottom:20px}
+h1 span{color:var(--dim);font-weight:400}
+fieldset{border:1px solid var(--s2);border-radius:var(--r);padding:12px 14px;margin-bottom:12px}
+legend{color:var(--acc);font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:0 6px}
+label{display:block;color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.7px;margin:8px 0 3px}
+input,select,textarea{width:100%;background:var(--s1);color:var(--fg);border:1px solid var(--s2);border-radius:var(--r);padding:6px 9px;font:inherit;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+textarea{height:62px;resize:vertical;font-size:12px}
+.g{display:grid;gap:8px}.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:1fr 1fr 1fr}
+.cb{display:flex;gap:14px;margin-top:6px}
+.cb label{display:flex;align-items:center;gap:5px;margin:0;font-size:12px;color:var(--fg);text-transform:none;letter-spacing:0;cursor:pointer}
+.cb input{width:auto}
+button{margin-top:14px;width:100%;padding:9px;background:var(--acc);color:var(--bg);border:none;border-radius:var(--r);font:700 13px/1 inherit;cursor:pointer;letter-spacing:.4px;transition:opacity .15s}
+button:hover{opacity:.85}button:disabled{opacity:.35;cursor:wait}
+#add{background:var(--s2);color:var(--fg);font-weight:400;margin-top:8px;padding:7px}
+#out{margin-top:20px;display:none}
+.card{background:var(--s1);border:1px solid var(--s2);border-radius:var(--r);padding:12px 14px;margin-bottom:8px;position:relative}
+.card.p{border-color:var(--acc)}
+.rk{display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;margin-right:5px;background:var(--s2);color:var(--dim)}
+.card.p .rk{background:var(--acc);color:var(--bg)}
+.sc{float:right;color:var(--dim);font-size:12px}
+.nm{font-weight:700;font-size:13px;margin:5px 0 3px}
+.bar{height:4px;background:var(--s2);border-radius:2px;margin:6px 0 3px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px;transition:width .4s ease}
+.rs{color:var(--dim);font-size:11px;margin-top:4px;line-height:1.45}
+.mt{color:var(--dim);font-size:11px;margin-top:10px}
+.err{color:var(--red);font-size:12px;margin-top:12px}
+.hl{color:var(--acc)}
+</style></head><body>
+<h1>NGW <span>Core v1 — Lighting Recommender</span></h1>
+<form id="fm" onsubmit="return addSys()">
+<fieldset><legend>Add System</legend>
+ <div class="g g2"><div><label>ID</label><input id="sid" value="strobe-key" required></div>
+ <div><label>Name</label><input id="snm" value="Studio Strobe" required></div></div>
+ <label>Criteria</label>
+ <div class="g g3">
+  <div><label>Brightness</label><input id="cbr" type="number" value="9000"></div>
+  <div><label>Color Accuracy</label><input id="cca" type="number" value="96"></div>
+  <div><label>Efficiency</label><input id="cee" type="number" value="80"></div>
+ </div>
+ <div class="g g3" style="margin-top:2px">
+  <div><label>Lifespan (hrs)</label><input id="clh" type="number" value="50000"></div>
+  <div><label>Cost Effective</label><input id="cce" type="number" value="60"></div>
+  <div><label>Modifier</label><input id="smod" type="number" step="0.01" placeholder="optional"></div>
+ </div>
+ <label>Features</label>
+ <div class="cb"><label><input type="checkbox" id="fdim" checked> Dimmable</label>
+ <label><input type="checkbox" id="fsm"> Smart-ready</label>
+ <label><input type="checkbox" id="fwp"> Waterproof</label></div>
+ <button type="submit" id="add">+ Add to list</button>
+</fieldset></form>
+<fieldset><legend>Systems (<span id="cnt">0</span>)</legend>
+ <textarea id="sj" readonly placeholder="Systems will appear here..."></textarea>
+</fieldset>
+<div class="g g2"><button id="go" onclick="run()" disabled>&#9654; Recommend</button>
+<button id="clr" onclick="clearAll()" style="background:var(--s2);color:var(--fg);font-weight:400">&#10005; Clear</button></div>
+<div id="out"></div>
+<script>
+let S=[];
+function addSys(){
+  const s={id:g('sid'),name:g('snm'),criteria:{brightness:n('cbr'),color_accuracy:n('cca'),
+    energy_efficiency:n('cee'),lifespan_hours:n('clh'),cost_effectiveness:n('cce')},
+    features:{dimmable:c('fdim'),smart_ready:c('fsm'),waterproof:c('fwp')}};
+  const m=document.getElementById('smod').value;if(m!=='')s.modifier=parseFloat(m);
+  if(!s.id||!s.name)return!1;
+  if(S.find(x=>x.id===s.id)){alert('Duplicate ID: '+s.id);return!1}
+  S.push(s);sync();return!1;
+}
+function g(i){return document.getElementById(i).value.trim()}
+function n(i){return parseFloat(document.getElementById(i).value)||0}
+function c(i){return document.getElementById(i).checked}
+function sync(){document.getElementById('sj').value=JSON.stringify(S,null,1);
+  document.getElementById('cnt').textContent=S.length;
+  document.getElementById('go').disabled=S.length===0;}
+function clearAll(){S=[];sync();document.getElementById('out').style.display='none'}
+async function run(){
+  const btn=document.getElementById('go'),out=document.getElementById('out');
+  if(!S.length)return;
+  btn.disabled=true;btn.textContent='Running...';out.style.display='none';
+  try{
+    const r=await fetch('/recommend',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({systems:S})});
+    const d=await r.json();
+    if(d.status!=='success'){show('<div class="err">'+(d.error?.message||'Engine error')+'</div>');return}
+    render(d);
+  }catch(e){show('<div class="err">Fetch failed: '+e.message+'</div>')}
+  finally{btn.disabled=false;btn.textContent='\u25B6 Recommend'}
+}
+function show(h){const o=document.getElementById('out');o.innerHTML=h;o.style.display='block'}
+function render(d){
+  const sel=d.result.structured.selection,pk=sel.top_picks;let h='';
+  pk.forEach((p,i)=>{const b=p.breakdown,cs=b.confidence.score,
+    col=cs>=70?'var(--grn)':cs>=40?'var(--acc)':'var(--red)';
+    h+='<div class="card'+(i===0?' p':'')+'"><span class="rk">#'+p.rank+'</span>'
+    +'<span class="sc">'+b.final_score+' pts</span>'
+    +'<div class="nm">'+b.system_name+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim)">'
+    +'Confidence <strong style="color:'+col+'">'+cs+'</strong>/100'
+    +'<span style="flex:1"><span class="bar"><i style="width:'+cs+'%;background:'+col+'"></i></span></span></div>'
+    +'<div class="rs">'+p.reason+'</div></div>';});
+  h+='<div class="mt">'+sel.total_candidates+' evaluated &middot; '+d.usage.processing_ms.toFixed(1)+'ms &middot; <span class="hl">'+d.request_id+'</span></div>';
+  show(h);
+}
+</script></body></html>
