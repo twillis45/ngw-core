@@ -1,5 +1,5 @@
 import { useAppState, useDispatch } from '../context/AppContext';
-import { fetchRecommendation, fetchShootMatch } from '../api';
+import { fetchRecommendation, fetchShootMatch, uploadReferenceImage } from '../api';
 import { transformForUI, transformShootMatch } from '../transform';
 import { criteriaForGear, GEAR_CRITERIA, GEAR_SHORT_NAMES } from '../gearPresets';
 
@@ -79,6 +79,11 @@ export default function GearInputScreen() {
           gear: lights.map(l => l.type),
           ...(state.skinTone && { skinTone: state.skinTone }),
         };
+        if (state.referenceImage) {
+          try {
+            wizardState.referenceImage = await uploadReferenceImage(state.referenceImage);
+          } catch (_) { /* proceed without image */ }
+        }
         const apiResponse = await fetchShootMatch(wizardState);
         const result = transformShootMatch(apiResponse);
         dispatch({ type: 'SET_RESULT', result, apiResponse });

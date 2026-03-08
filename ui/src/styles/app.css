@@ -151,6 +151,31 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Image Upload ──────────────────────────────────── */
+.upload-zone {
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.upload-zone:hover { border-color: var(--accent); background: rgba(59,130,246,0.05); }
+.upload-zone__text { font-size: 0.875rem; color: var(--text-dim); }
+
+.upload-preview {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.upload-preview__name {
+  font-size: 0.875rem; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ── Gear Mode Toggle ───────────────────────────────── */
 .gear-toggle {
   display: flex;

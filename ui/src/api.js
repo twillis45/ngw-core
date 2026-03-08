@@ -18,6 +18,25 @@ export async function fetchRecommendation(payload) {
   return resp.json();
 }
 
+/** Upload a reference image and return the server path. */
+
+export async function uploadReferenceImage(file) {
+  const form = new FormData();
+  form.append('file', file);
+
+  const resp = await fetch('/api/upload-reference', {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!resp.ok) {
+    throw new Error('Failed to upload reference image');
+  }
+
+  const data = await resp.json();
+  return data.path;
+}
+
 /** POST /api/shoot-match and return UI-ready card data. */
 
 export async function fetchShootMatch(wizardState) {

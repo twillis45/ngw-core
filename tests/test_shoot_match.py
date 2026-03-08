@@ -141,6 +141,41 @@ def test_reference_image_nonexistent_ignored():
     assert "referenceImageAnalysis" not in resp.json()
 
 
+def test_camera_settings_included():
+    resp = client.post("/api/shoot-match", json=_wizard())
+    cards = resp.json()["cards"]
+    cam = cards["cameraSettings"]
+    assert cam is not None
+    assert "aperture" in cam
+    assert "iso" in cam
+    assert "shutter" in cam
+    assert "wb" in cam
+    assert "tip" in cam
+
+
+def test_pattern_not_unknown_for_corporate():
+    resp = client.post("/api/shoot-match", json=_wizard(mood="Clean & Classic"))
+    pattern = resp.json()["cards"]["howToTest"]["pattern"]
+    assert pattern != "Unknown"
+
+
+def test_upload_reference_endpoint():
+    import io
+    # Create a minimal 1x1 PNG
+    png = (
+        b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+        b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+        b'\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00'
+        b'\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+    )
+    resp = client.post(
+        "/api/upload-reference",
+        files={"file": ("test.png", io.BytesIO(png), "image/png")},
+    )
+    assert resp.status_code == 200
+    assert "path" in resp.json()
+
+
 @pytest.mark.parametrize("mood", [
     "Clean & Classic", "Moody & Dramatic", "Soft & Ethereal",
     "Bold & Edgy", "Natural & Available", "Cinematic",

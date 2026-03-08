@@ -32,6 +32,12 @@ dist/
 build/
 *.egg-info/
 
+# Node
+node_modules/
+
+# Archives
+*.zip
+
 # Jupyter / temp
 .ipynb_checkpoints/
 tmp/

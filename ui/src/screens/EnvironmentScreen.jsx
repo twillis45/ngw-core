@@ -18,7 +18,7 @@ const SKIN_TONES = [
 ];
 
 export default function EnvironmentScreen() {
-  const { environment, skinTone } = useAppState();
+  const { environment, skinTone, referenceImage } = useAppState();
   const dispatch = useDispatch();
 
   function selectEnv(value) {
@@ -27,6 +27,17 @@ export default function EnvironmentScreen() {
 
   function selectTone(value) {
     dispatch({ type: 'SET_SKIN_TONE', skinTone: value });
+  }
+
+  function handleImageUpload(e) {
+    const file = e.target.files?.[0];
+    if (file) {
+      dispatch({ type: 'SET_REFERENCE_IMAGE', file });
+    }
+  }
+
+  function clearImage() {
+    dispatch({ type: 'SET_REFERENCE_IMAGE', file: null });
   }
 
   function next() {
@@ -70,6 +81,30 @@ export default function EnvironmentScreen() {
           </button>
         ))}
       </div>
+
+      <h3 className="section-label" style={{ marginTop: 24 }}>Reference photo (optional)</h3>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: 12 }}>
+        Upload a photo you like and we'll analyze its color palette.
+      </p>
+
+      {!referenceImage ? (
+        <label className="upload-zone">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            style={{ display: 'none' }}
+          />
+          <span className="upload-zone__text">Tap to upload a reference photo</span>
+        </label>
+      ) : (
+        <div className="upload-preview">
+          <span className="upload-preview__name">{referenceImage.name}</span>
+          <button className="btn btn--ghost btn--sm" onClick={clearImage} type="button">
+            Remove
+          </button>
+        </div>
+      )}
 
       <StickyBottomBar>
         <button

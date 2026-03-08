@@ -54,6 +54,16 @@ def classify_lighting_pattern(
     if gear in ("basic_2_light", "speedlight_2_light") and "dramatic" in m:
         return "rembrandt-ish"
 
+    # Mood-based defaults when position/fill data isn't available
+    if m in ("cinematic", "low_key", "lowkey"):
+        return "split/short"
+    if m in ("corporate",):
+        return "loop"
+    if m in ("editorial",):
+        return "rembrandt-ish"
+    if m in ("high_key", "highkey"):
+        return "clamshell"
+
     return "unknown"
 
 

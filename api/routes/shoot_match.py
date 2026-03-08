@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
 from engine.image_analysis import describe_image
@@ -88,6 +89,49 @@ MODIFIER_LABELS = {
 }
 
 ROLE_LABELS = {"key": "Key Light", "fill": "Fill Light", "rim": "Rim Light"}
+
+CAMERA_SETTINGS = {
+    "beauty": {
+        "aperture": "f/2.8 \u2013 f/5.6", "iso": "100", "shutter": "1/160",
+        "wb": "5500 K",
+        "tip": "Open up to f/2.8 for shallower depth of field and skin smoothing",
+    },
+    "cinematic": {
+        "aperture": "f/2 \u2013 f/4", "iso": "100 \u2013 400", "shutter": "1/125",
+        "wb": "4800 K (warm)",
+        "tip": "Shoot at f/2\u2013f/4 for dramatic fall-off; consider CTO gel on key",
+    },
+    "corporate": {
+        "aperture": "f/5.6 \u2013 f/8", "iso": "100", "shutter": "1/160",
+        "wb": "5500 K",
+        "tip": "Shoot at f/5.6\u2013f/8 for full sharpness across the face",
+    },
+    "editorial": {
+        "aperture": "f/4 \u2013 f/8", "iso": "100", "shutter": "1/200",
+        "wb": "5200 K",
+        "tip": "Experiment with hard light and strong angles for graphic impact",
+    },
+    "natural": {
+        "aperture": "f/2.8 \u2013 f/4", "iso": "200 \u2013 800", "shutter": "1/125",
+        "wb": "5800 K (daylight)",
+        "tip": "Match your WB to the window light; bump ISO before adding flash",
+    },
+    "high_key": {
+        "aperture": "f/8 \u2013 f/11", "iso": "100", "shutter": "1/160",
+        "wb": "5500 K",
+        "tip": "Overexpose the background by 1\u20132 stops for that pure-white look",
+    },
+    "low_key": {
+        "aperture": "f/4 \u2013 f/5.6", "iso": "100", "shutter": "1/200",
+        "wb": "5000 K",
+        "tip": "Underexpose ambient by 2+ stops; let the key be your only source",
+    },
+    "dramatic": {
+        "aperture": "f/4 \u2013 f/5.6", "iso": "100", "shutter": "1/200",
+        "wb": "5000 K",
+        "tip": "Keep ambient low; let the key light do all the work",
+    },
+}
 
 
 # ── Request model ──
@@ -187,6 +231,21 @@ def _map_light(light: Dict[str, Any]) -> Dict[str, Any]:
         "distance": _m_to_ft(light["distance_m"]),
         "notes": light.get("notes", []),
     }
+
+
+UPLOAD_DIR = Path("static/uploads")
+
+
+@router.post("/upload-reference")
+async def upload_reference(file: UploadFile = File(...)) -> Dict[str, str]:
+    """Save an uploaded reference image and return its server path."""
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    ext = Path(file.filename or "photo.jpg").suffix or ".jpg"
+    filename = f"ref_{uuid.uuid4().hex[:8]}{ext}"
+    dest = UPLOAD_DIR / filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    return {"path": str(dest)}
 
 
 # ── Endpoint ──
@@ -306,6 +365,7 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
                 for s in source.get("substitutions", [])
             ],
         },
+        "cameraSettings": CAMERA_SETTINGS.get(mood, CAMERA_SETTINGS["corporate"]),
         "otherSetups": [
             {
                 "name": p.breakdown.system_name,

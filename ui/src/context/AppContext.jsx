@@ -23,6 +23,7 @@ const initialState = {
   mood: null,
   environment: null,
   skinTone: null,
+  referenceImage: null,  // File object from upload
 
   lights: [defaultLight()],
   modifiers: [],
@@ -65,6 +66,9 @@ function reducer(state, action) {
 
     case 'SET_SKIN_TONE':
       return { ...state, skinTone: action.skinTone };
+
+    case 'SET_REFERENCE_IMAGE':
+      return { ...state, referenceImage: action.file };
 
     case 'ADD_LIGHT':
       return { ...state, lights: [...state.lights, defaultLight()] };

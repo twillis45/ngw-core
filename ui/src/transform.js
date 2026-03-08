@@ -195,7 +195,7 @@ export function transformShootMatch(apiResponse) {
 
     diagram: c.diagram,
 
-    cameraSettings: null,
+    cameraSettings: c.cameraSettings || null,
 
     testSteps: [
       { step: 1, text: `This setup creates a ${c.howToTest.pattern} pattern.` },
