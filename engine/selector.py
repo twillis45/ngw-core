@@ -3,42 +3,71 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
-from models.output_model import Confidence, SelectionResult, WinnerInfo, AlternativeInfo, ScoreBreakdown
+from engine.diagram import build_diagram_spec
 from engine.scoring import score_system
-from engine.diagram import build_diagram_spec, DiagramSpec
+from models.output_model import SelectionPick, SelectionResult, WinnerInfo
 
 
 @dataclass(frozen=True)
 class RankedSystem:
     rank: int
-    system_id: str
-    system_name: str
-    score_breakdown: ScoreBreakdown
-    diagram_spec: DiagramSpec
+    breakdown: Any
+    reason: str
+    diagram_spec: Any
 
 
 @dataclass(frozen=True)
 class SelectorOutcome:
     total_candidates: int
-    winner: RankedSystem
-    rankings: List[RankedSystem]
-    confidence: Confidence
+    confidence: float
+    winner: WinnerInfo
+    rankings: List[SelectionPick]
     reasons: List[str]
-    top_picks: List[RankedSystem]
+    top_picks: List[SelectionPick]
 
 
-def _confidence(winner: ScoreBreakdown, runner_up: Optional[ScoreBreakdown]) -> Confidence:
-    if runner_up is None:
-        return Confidence(score=100, method="single", details={})
+def _build_reasons(winner_pick: SelectionPick, runner_up: Optional[SelectionPick]) -> List[str]:
+    winner_score = float(winner_pick.breakdown.final_score)
+    reasons = [
+        f"selected winner by highest final score {winner_score:.1f}.",
+        "Strongest criterion coverage came from the winner's weighted criteria.",
+        "Feature bonuses and modifier signals were considered in scoring.",
+        "Confidence included and used for explanation.",
+        "Diagram generated per pick for expected shadow/shape.",
+    ]
+    if runner_up is not None:
+        runner_score = float(runner_up.breakdown.final_score)
+        gap = winner_score - runner_score
+        if gap == 0:
+            reasons.insert(
+                1,
+                (
+                    f"Tie on final score between "
+                    f"{winner_pick.breakdown.system_name} and "
+                    f"{runner_up.breakdown.system_name}; "
+                    f"lexicographic id tie-break selected "
+                    f"{winner_pick.breakdown.system_id}."
+                ),
+            )
+        else:
+            reasons.insert(1, f"Winner margin over runner-up: {gap:.2f} points.")
+    return reasons
 
-    w = max(winner.final_score, 1e-9)
-    margin = winner.final_score - runner_up.final_score
-    pct = int(max(0.0, min(100.0, (margin / w) * 100.0)))
 
-    richness = min(20, len(winner.components) * 5)  # more evidence => more confidence
-    pct = int(max(0, min(100, pct + richness)))
+def _pick_reason(index: int, pick: SelectionPick, winner_pick: SelectionPick, confidence_score: float) -> str:
+    score = float(pick.breakdown.final_score)
+    if index == 0:
+        return (
+            f"Primary: {pick.breakdown.system_name} selected with score {score:.1f} "
+            f"and confidence {float(confidence_score):.1f}."
+        )
 
-    return Confidence(score=pct, method="margin+evidence", details={"margin": margin, "richness": richness})
+    winner_score = float(winner_pick.breakdown.final_score)
+    if score == winner_score:
+        return "Alternative: tied on score (tie-break applied)."
+
+    gap = winner_score - score
+    return f"Alternative: behind by {gap:.1f} points."
 
 
 def select_best_system(
@@ -50,65 +79,82 @@ def select_best_system(
     if not systems:
         raise ValueError("systems must be non-empty")
 
-    ranked: List[RankedSystem] = []
-    for s in systems:
-        sid = str(s.get("id") or s.get("system_id") or s.get("name") or "unknown")
-        name = str(s.get("name") or sid)
-        bd = score_system(s, input_ctx=input_ctx)
-        diag = build_diagram_spec(s, modifiers_available=modifiers_available)
-        ranked.append(RankedSystem(rank=0, system_id=sid, system_name=name, score_breakdown=bd, diagram_spec=diag))
+    picks: List[SelectionPick] = []
+    for rank_seed, system in enumerate(systems, start=1):
+        breakdown = score_system(system, input_ctx=input_ctx)
+        diagram_spec = build_diagram_spec(system, modifiers_available=modifiers_available)
+        picks.append(
+            SelectionPick(
+                rank=rank_seed,
+                breakdown=breakdown,
+                reason="",
+                diagram_spec=diagram_spec,
+            )
+        )
 
-    ranked_sorted = sorted(
-        ranked,
-        key=lambda r: (-r.score_breakdown.final_score, -r.score_breakdown.base_score, r.system_id),
+    picks.sort(
+        key=lambda p: (
+            -float(p.breakdown.final_score),
+            -float(p.breakdown.base_score),
+            p.breakdown.system_id,
+        )
     )
-    ranked_sorted = [r.__class__(i + 1, r.system_id, r.system_name, r.score_breakdown, r.diagram_spec) for i, r in enumerate(ranked_sorted)]
 
-    winner = ranked_sorted[0]
-    runner_up = ranked_sorted[1].score_breakdown if len(ranked_sorted) > 1 else None
+    reranked: List[SelectionPick] = []
+    for idx, pick in enumerate(picks, start=1):
+        reranked.append(
+            SelectionPick(
+                rank=idx,
+                breakdown=pick.breakdown,
+                reason="",
+                diagram_spec=pick.diagram_spec,
+            )
+        )
 
-    conf = _confidence(winner.score_breakdown, runner_up)
+    winner_pick = reranked[0]
+    runner_up = reranked[1] if len(reranked) > 1 else None
+    reasons = _build_reasons(winner_pick, runner_up)
 
-    reasons: List[str] = []
-    reasons.append(f"Selected '{winner.system_id}' because it has the highest final score.")
-    reasons.append(f"Winner final_score={winner.score_breakdown.final_score:.3f}, base_score={winner.score_breakdown.base_score:.3f}, modifier={winner.score_breakdown.modifier:.3f}.")
-    if runner_up is not None:
-        delta = winner.score_breakdown.final_score - runner_up.final_score
-        reasons.append(f"Next best was {ranked_sorted[1].system_id} at {runner_up.final_score:.3f} (Δ {delta:.3f}).")
-    reasons.append(f"Confidence computed via {conf.method}.")
-    if len(reasons) < 4:
-        reasons.append("Deterministic tie-breakers applied (score, base, id).")
+    confidence_score = float(winner_pick.breakdown.confidence.score if winner_pick.breakdown.confidence else 0.0)
 
-    top_picks = ranked_sorted[: min(3, len(ranked_sorted))]
+    finalized: List[SelectionPick] = []
+    for idx, pick in enumerate(reranked):
+        finalized.append(
+            SelectionPick(
+                rank=pick.rank,
+                breakdown=pick.breakdown,
+                reason=_pick_reason(idx, pick, winner_pick, confidence_score),
+                diagram_spec=pick.diagram_spec,
+            )
+        )
+
+    winner = WinnerInfo(
+        system_id=winner_pick.breakdown.system_id,
+        system_name=winner_pick.breakdown.system_name,
+        final_score=float(winner_pick.breakdown.final_score),
+        confidence=winner_pick.breakdown.confidence,
+        rationale=" ".join(reasons),
+    )
+
+    top_picks = finalized[: min(3, len(finalized))]
 
     return SelectorOutcome(
-        total_candidates=len(ranked_sorted),
+        total_candidates=len(finalized),
+        confidence=confidence_score,
         winner=winner,
-        rankings=ranked_sorted,
-        confidence=conf,
+        rankings=finalized,
         reasons=reasons,
         top_picks=top_picks,
     )
 
 
 def as_public_selection(outcome: SelectorOutcome, *, trace: Optional[Dict[str, Any]] = None) -> SelectionResult:
-    winner_bd = outcome.winner.score_breakdown
-    winner = WinnerInfo(
-        system_id=outcome.winner.system_id,
+    return SelectionResult(
+        total_candidates=outcome.total_candidates,
         confidence=outcome.confidence,
-        rationale=" ".join(outcome.reasons),
-        score_breakdown=winner_bd,
+        winner=outcome.winner,
+        rankings=outcome.rankings,
+        reasons=outcome.reasons,
+        top_picks=outcome.top_picks,
+        trace=trace or {},
     )
-
-    alternatives: List[AlternativeInfo] = []
-    for r in outcome.rankings[1:]:
-        alternatives.append(
-            AlternativeInfo(
-                system_id=r.system_id,
-                score=r.score_breakdown.final_score,
-                delta=winner_bd.final_score - r.score_breakdown.final_score,
-                notes=list(r.score_breakdown.notes),
-            )
-        )
-
-    return SelectionResult(winner=winner, alternatives=alternatives, trace=trace or {})

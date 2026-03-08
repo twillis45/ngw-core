@@ -1,0 +1,26 @@
+diff --git a/engine/selector.py b/engine/selector.py
+index 1111111..2222222 100644
+--- a/engine/selector.py
++++ b/engine/selector.py
+@@ -24,8 +24,19 @@ def _build_reasons(winner_pick: SelectionPick, runner_up: Optional[SelectionPic
+         "Diagram generated per pick for expected shadow/shape.",
+     ]
+     if runner_up is not None:
+-        gap = winner_score - float(runner_up.breakdown.final_score)
+-        reasons.insert(1, f"Winner margin over runner-up: {gap:.2f} points.")
++        runner_score = float(runner_up.breakdown.final_score)
++        gap = winner_score - runner_score
++        if gap == 0:
++            reasons.insert(
++                1,
++                (
++                    f"Tie on final score between "
++                    f"{winner_pick.breakdown.system_name} and "
++                    f"{runner_up.breakdown.system_name}; "
++                    f"lexicographic id tie-break selected "
++                    f"{winner_pick.breakdown.system_id}."
++                ),
++            )
++        else:
++            reasons.insert(1, f"Winner margin over runner-up: {gap:.2f} points.")
+     return reasons

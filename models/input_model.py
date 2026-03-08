@@ -1,35 +1,65 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from engine.normalizer import normalize_token, normalize_modifier_list
+
+class TaskType(str, Enum):
+    GENERATE = "generate"
+    RECOMMEND = "recommend"
+
+
+class OutputFormat(str, Enum):
+    JSON = "json"
+    TEXT = "text"
+
+
+class EngineOptions(BaseModel):
+    temperature: float = 0.7
+    model_config = ConfigDict(extra="forbid")
+
+    include_trace: bool = False
+    include_diagram: bool = True
+
+
+class ContextItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str
+    content: str
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        allowed = {"system", "user", "assistant"}
+        if v not in allowed:
+            raise ValueError(f"role must be one of {sorted(allowed)}")
+        return v
+
+
+class NGWRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str
+    task: TaskType = TaskType.RECOMMEND
+    output_format: OutputFormat = OutputFormat.JSON
+    context: List[ContextItem] = Field(default_factory=list)
+
+    options: EngineOptions = Field(default_factory=EngineOptions)
+    engine_options: EngineOptions = Field(default_factory=EngineOptions, alias="options")    
+    @field_validator("prompt")
+    @classmethod
+    def validate_prompt(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("prompt must be non-empty")
+        return v
 
 
 class InputModel(BaseModel):
-    """
-    Boundary model for request input.
-
-    Keep this permissive (extra allowed) so the API can evolve without breaking callers.
-    """
     model_config = ConfigDict(extra="allow")
 
-    skin_tone: str = Field(default="unknown")
-    mood: str = Field(default="neutral")
-    environment: str = Field(default="studio")
-    gear_profile: str = Field(default="standard")
     modifiers_available: List[str] = Field(default_factory=list)
-
-    preferences: Optional[Dict[str, Any]] = None
     trace: Dict[str, Any] = Field(default_factory=dict)
 
-    @classmethod
-    def from_payload(cls, payload: Dict[str, Any]) -> "InputModel":
-        data = dict(payload or {})
-        for k in ("skin_tone", "mood", "environment", "gear_profile"):
-            if k in data and data[k] is not None:
-                data[k] = normalize_token(str(data[k]))
-        if "modifiers_available" in data and data["modifiers_available"] is not None:
-            data["modifiers_available"] = normalize_modifier_list(data["modifiers_available"])
-        return cls(**data)

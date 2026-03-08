@@ -35,65 +35,66 @@ def recommend(body: Dict[str, Any]) -> Dict[str, Any]:
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=_json_safe_errors(e.errors()))
 
-    # explicit empty check (tests want 422, not ValueError later)
     if not payload.systems:
         raise HTTPException(status_code=422, detail=[{"msg": "systems must not be empty"}])
 
     out = run_rule_engine(systems=[s.model_dump() for s in payload.systems])
+    selection = out.selection
 
     request_id = f"req_{uuid.uuid4().hex[:12]}"
 
-    # Content formatting
-    primary_pick = out.selection.top_picks[0]
+    primary_pick = selection.top_picks[0]
     primary_name = primary_pick.breakdown.system_name or primary_pick.breakdown.system_id
+    primary_conf = (
+        primary_pick.breakdown.confidence.score
+        if primary_pick.breakdown.confidence is not None
+        else selection.confidence
+    )
+
     lines = [
-        f"Primary: Recommended: {primary_name} (score {primary_pick.breakdown.final_score:.2f}; confidence {primary_pick.breakdown.confidence.score:.1f}/100).",
+        f"Primary: Recommended: {primary_name} (score {primary_pick.breakdown.final_score:.2f}; confidence {primary_conf:.1f}/100).",
     ]
 
-    # Add exactly 3 alternatives (Alt #1..Alt #3) from rankings; fill missing with n/a
-    alts = out.selection.rankings[1:4]
+    alts = selection.rankings[1:4]
     for i in range(1, 4):
         if i <= len(alts):
-            r = alts[i - 1]
-            bd = r.breakdown
-            nm = bd.system_name or bd.system_id
-            if float(bd.final_score) == float(primary_pick.breakdown.final_score):
-                reason = "Alternative: tied on score (tie-break applied)."
-            else:
-                gap = float(primary_pick.breakdown.final_score) - float(bd.final_score)
-                reason = f"Alternative: behind by {gap:.1f} points."
-            lines.append(f"Alt #{i}: {nm} — {reason}")
+            pick = alts[i - 1]
+            nm = pick.breakdown.system_name or pick.breakdown.system_id
+            lines.append(f"Alt #{i}: {nm} — {pick.reason}")
         else:
             lines.append(f"Alt #{i}: n/a — Alternative: n/a")
 
     content = "\n".join(lines)
 
-    # Structured output contract
-    structured_top_picks = []
-    for p in out.selection.top_picks:
-        structured_top_picks.append(
-            {
-                "rank": p.rank,
-                "breakdown": p.breakdown.model_dump(),  # <-- tests expect this key
-                "reason": p.reason,
-                "diagram_spec": p.diagram_spec.model_dump(),
-            }
-        )
+    if len(payload.systems) == 1:
+        content = "\n".join(line for line in content.splitlines() if "Alt #" not in line).strip()
+
+    structured_top_picks = [
+        {
+            "rank": p.rank,
+            "breakdown": p.breakdown.model_dump(),
+            "reason": p.reason,
+            "diagram_spec": p.diagram_spec.model_dump(),
+        }
+        for p in selection.top_picks
+    ]
 
     structured = {
         "selection": {
-            "confidence": float(out.selection.confidence),
+            "confidence": float(selection.confidence),
             "winner": {
-                "system_id": out.selection.winner.system_id,
-                "system_name": out.selection.winner.system_name,
-                "final_score": float(out.selection.winner.final_score),
-                "confidence": {"score": float(out.selection.winner.confidence.score), "reasons": list(out.selection.winner.confidence.reasons)},
+                "system_id": selection.winner.system_id,
+                "system_name": selection.winner.system_name,
+                "final_score": float(selection.winner.final_score),
+                "confidence": {
+                    "score": float(selection.winner.confidence.score),
+                    "reasons": list(selection.winner.confidence.reasons),
+                },
             },
             "top_picks": structured_top_picks,
         }
     }
 
-    # Diagram spec in result must include "subject"
     diagram_spec = primary_pick.diagram_spec.model_dump()
     diagram_spec.setdefault("subject", {"position": "center"})
     diagram_spec.setdefault("camera", {"angle": "eye_level", "lens": "standard"})
@@ -102,18 +103,6 @@ def recommend(body: Dict[str, Any]) -> Dict[str, Any]:
 
     metadata = dict(body.get("metadata") or {})
     metadata.setdefault("engine_version", ENGINE_VERSION)
-    # Single-system response MUST NOT include Alt lines (tests expect no "Alt #")
-    try:
-        systems_evaluated = getattr(out, "systems_evaluated", None)
-        systems_list = getattr(out, "systems", None) or []
-        if systems_evaluated == 1 or len(systems_list) == 1:
-            content = "\n".join(
-                line for line in content.splitlines()
-                if "Alt #" not in line
-            ).strip()
-    except Exception:
-        # fail-open: never break the endpoint over content formatting
-        pass
 
     resp = NGWResponse(
         request_id=request_id,
@@ -122,7 +111,7 @@ def recommend(body: Dict[str, Any]) -> Dict[str, Any]:
             content=content,
             structured=structured,
             diagram_spec=diagram_spec,
-            confidence=float(out.selection.confidence),
+            confidence=float(selection.confidence),
         ),
         usage=usage,
         metadata=metadata,
