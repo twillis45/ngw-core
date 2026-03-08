@@ -100,9 +100,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
     lights: List[LightPlacement] = []
 
     system_modifier = str(
-        system.get("modifier")
-        or taxonomy.get("modifier_family")
-        or ""
+        taxonomy.get("modifier_family") or ""
     ).strip().lower()
 
     if system_modifier:

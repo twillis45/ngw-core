@@ -614,15 +614,16 @@ function drawDiagram(spec) {
   ctx.font = '10px sans-serif';
   ctx.fillText('Cam', camX, camY + 18);
 
-  // Lights
+  // Lights — compute positions first, then draw with label offsets
   const colors = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7' };
-  (spec.lights || []).forEach(light => {
+  const lightPositions = (spec.lights || []).map(light => {
     const angle = (light.angle_deg - 90) * Math.PI / 180;
     const dist = light.distance_m * scale;
-    const lx = cx + Math.cos(angle) * dist;
-    const ly = cy + Math.sin(angle) * dist;
+    return { light, lx: cx + Math.cos(angle) * dist, ly: cy + Math.sin(angle) * dist, angle };
+  });
 
-    // Beam line
+  // Draw beams and markers
+  lightPositions.forEach(({ light, lx, ly }) => {
     ctx.strokeStyle = colors[light.role] || '#fff';
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.4;
@@ -632,25 +633,30 @@ function drawDiagram(spec) {
     ctx.stroke();
     ctx.globalAlpha = 1;
 
-    // Light marker
     ctx.fillStyle = colors[light.role] || '#fff';
     ctx.beginPath();
     ctx.arc(lx, ly, 7, 0, Math.PI * 2);
     ctx.fill();
+  });
 
-    // Label
+  // Draw labels with collision avoidance
+  lightPositions.forEach(({ light, lx, ly, angle }, i) => {
+    // Push label outward from center to avoid overlap
+    const dx = lx - cx, dy = ly - cy;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nudge = 22;
+    const labelX = lx + (dx / len) * nudge;
+    const labelBaseY = ly + (dy / len) * nudge;
+
     ctx.fillStyle = '#f1f5f9';
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
-    const labelY = ly > cy ? ly + 16 : ly - 12;
-    ctx.fillText(light.label || light.role, lx, labelY);
+    ctx.fillText(light.label || light.role, labelX, labelBaseY);
 
-    // Modifier
     if (light.modifier) {
-      ctx.fillStyle = 'var(--text-dim)';
+      ctx.fillStyle = '#94a3b8';
       ctx.font = '9px sans-serif';
-      const modY = ly > cy ? ly + 26 : ly - 2;
-      ctx.fillText(light.modifier.replace(/_/g, ' '), lx, modY);
+      ctx.fillText(light.modifier.replace(/_/g, ' '), labelX, labelBaseY + 12);
     }
   });
 }
