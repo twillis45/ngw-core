@@ -77,6 +77,7 @@ export default function GearInputScreen() {
           ceiling: state.ceiling || 'normal',
           gearMode: gearMode === 'best_setup' ? 'anyGear' : 'myGear',
           gear: lights.map(l => l.type),
+          ...(state.skinTone && { skinTone: state.skinTone }),
         };
         const apiResponse = await fetchShootMatch(wizardState);
         const result = transformShootMatch(apiResponse);

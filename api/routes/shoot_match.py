@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from engine.image_analysis import describe_image
 from engine.patterns import (
     catchlight_plan_for,
     classify_lighting_pattern,
@@ -98,6 +99,7 @@ class ShootMatchRequest(BaseModel):
     ceiling: str = "normal"
     gearMode: str = "anyGear"
     gear: List[str] = Field(default_factory=list)
+    skinTone: Optional[str] = None
     referenceImage: Optional[str] = None
 
 
@@ -122,6 +124,11 @@ def _filter_systems(
     if req.gearMode == "myGear" and req.gear:
         owned = {GEAR_MAP.get(g.lower()) for g in req.gear} - {None}
         systems = [s for s in systems if s["taxonomy_refs"].get("gear_profile") in owned]
+
+    if req.skinTone:
+        tone_matches = [s for s in systems if s["taxonomy_refs"].get("skin_tone") == req.skinTone]
+        if tone_matches:
+            systems = tone_matches
 
     return systems
 
@@ -201,6 +208,16 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     mood = MOOD_MAP.get(req.mood, "natural")
     env = ENVIRONMENT_MAP.get(req.environment, "studio_small")
 
+    # Analyze reference image if provided
+    image_analysis = None
+    if req.referenceImage:
+        image_path = Path(req.referenceImage)
+        if image_path.exists():
+            try:
+                image_analysis = describe_image(str(image_path), describe_mode="basic")
+            except Exception:
+                image_analysis = None
+
     # Strip to engine-safe fields
     engine_systems = [
         {
@@ -214,9 +231,13 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
         for s in filtered
     ]
 
+    input_ctx = {"mood": mood, "environment": env, "modifiers_available": modifiers}
+    if req.skinTone:
+        input_ctx["skin_tone"] = req.skinTone
+
     outcome = select_best_system(
         engine_systems,
-        input_ctx={"mood": mood, "environment": env, "modifiers_available": modifiers},
+        input_ctx=input_ctx,
         modifiers_available=modifiers,
     )
 
@@ -295,9 +316,18 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
         ],
     }
 
-    return {
+    result = {
         "status": "success",
         "requestId": f"req_{uuid.uuid4().hex[:12]}",
         "processingMs": round((time.time() - t0) * 1000),
         "cards": cards,
     }
+
+    if image_analysis and image_analysis.get("ok"):
+        result["referenceImageAnalysis"] = {
+            "palette": image_analysis.get("palette", {}),
+            "orientation": image_analysis.get("orientation"),
+            "isGrayscale": image_analysis.get("is_grayscale_like", False),
+        }
+
+    return result

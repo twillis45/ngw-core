@@ -117,6 +117,30 @@ def test_missing_mood_still_works():
 
 # ── Mood/environment mapping ────────────────────────────────────────────────
 
+def test_skin_tone_filters_results():
+    resp = client.post("/api/shoot-match", json=_wizard(
+        mood="Soft & Ethereal",
+        environment="Large Studio",
+        skinTone="dark",
+    ))
+    assert resp.status_code == 200
+    # Should return a result (dark skin tone systems exist for beauty+large studio)
+    assert resp.json()["cards"]["bestMatch"]["name"]
+
+
+def test_skin_tone_graceful_when_no_match():
+    """When skin tone filter yields no results, falls back to unfiltered."""
+    resp = client.post("/api/shoot-match", json=_wizard(skinTone="light"))
+    assert resp.status_code == 200
+
+
+def test_reference_image_nonexistent_ignored():
+    """referenceImage pointing to a non-existent file should not crash."""
+    resp = client.post("/api/shoot-match", json=_wizard(referenceImage="/tmp/nonexistent.jpg"))
+    assert resp.status_code == 200
+    assert "referenceImageAnalysis" not in resp.json()
+
+
 @pytest.mark.parametrize("mood", [
     "Clean & Classic", "Moody & Dramatic", "Soft & Ethereal",
     "Bold & Edgy", "Natural & Available", "Cinematic",
