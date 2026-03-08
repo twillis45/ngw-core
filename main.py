@@ -4,8 +4,10 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -132,7 +134,15 @@ def health() -> Dict[str, str]:
 
 @app.get("/")
 def root() -> RedirectResponse:
-    return RedirectResponse(url="/static/index.html", status_code=307)
+    return RedirectResponse(url="/ui", status_code=307)
+
+
+@app.get("/ui")
+def ui() -> HTMLResponse:
+    ui_path = Path("static/ui/index.html")
+    if ui_path.exists():
+        return HTMLResponse(ui_path.read_text(encoding="utf-8"))
+    return HTMLResponse("<html><body><h1>NGW UI</h1></body></html>")
 
 
 @app.post("/recommend")
@@ -156,7 +166,7 @@ def recommend(body: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(status_code=422, detail=[{"msg": str(e)}])
 
     reasons = _reason_list(outcome)
-    confidence_score = float(getattr(outcome.confidence, "score", 0))
+    confidence_score = float(outcome.confidence)
 
     top_picks = list(outcome.top_picks)
     winner_pick = top_picks[0]

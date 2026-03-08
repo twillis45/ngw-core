@@ -244,7 +244,7 @@ class TestStaticUI:
     def test_root_redirects_to_ui(self):
         resp = client.get("/", follow_redirects=False)
         assert resp.status_code in (301, 302, 307)
-        assert "/static/index.html" in resp.headers.get("location", "")
+        assert "/ui" in resp.headers.get("location", "")
 
     def test_static_index_serves_html(self):
         resp = client.get("/static/index.html")
