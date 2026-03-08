@@ -1,5 +1,6 @@
 .PHONY: run test format lint clean install help
 
+PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || { command -v python3 || command -v python; })
 HOST   ?= 0.0.0.0
 PORT   ?= 8000
 PYARGS ?=
@@ -18,17 +19,17 @@ run-prod: ## Start production server (no reload)
 	uvicorn main:app --host $(HOST) --port $(PORT) --workers 2
 
 test: ## Run full test suite
-	python -m pytest tests/ -v --tb=short $(PYARGS)
+	$(PYTHON) -m pytest tests/ -v --tb=short $(PYARGS)
 
 test-fast: ## Run tests without verbose output
-	python -m pytest tests/ -q $(PYARGS)
+	$(PYTHON) -m pytest tests/ -q $(PYARGS)
 
 format: ## Format code with ruff
-	python -m ruff format .
-	python -m ruff check --fix .
+	$(PYTHON) -m ruff format .
+	$(PYTHON) -m ruff check --fix .
 
 lint: ## Lint without fixing
-	python -m ruff check .
+	$(PYTHON) -m ruff check .
 
 clean: ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true

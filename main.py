@@ -19,7 +19,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 class SystemRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: Optional[str] = None
@@ -46,7 +46,7 @@ class SystemRequest(BaseModel):
 
 
 class RecommendRequest(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     systems: List[SystemRequest] = Field(min_length=1)
     input: Dict[str, Any] = Field(default_factory=dict)

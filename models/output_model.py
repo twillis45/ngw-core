@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from typing import Any, Dict, List, Optional
 
@@ -129,7 +129,7 @@ class ResultPayload(BaseModel):
 class NGWResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     request_id: str
     status: str

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple
 
 from models.output_model import Confidence, CriterionComponent, FeatureBonus, ScoreBreakdown
 
-FALLBACK_MODIFIER: float = 0.85
+FALLBACK_MODIFIER: float = 1.0
 
 BASE_WEIGHTS: Dict[str, float] = {
     "brightness": 0.20,
@@ -191,10 +191,7 @@ def score_system(system: Dict[str, Any], *, input_ctx: Dict[str, Any] | None = N
 
     base_score = subtotal + bonus_total
 
-    if modifier_source == "fallback":
-        final_score = base_score
-    else:
-        final_score = base_score * modifier
+    final_score = base_score * modifier
 
     confidence = _build_confidence(
         supplied_criteria_count=supplied_criteria_count,

@@ -14,7 +14,7 @@ ENGINE_VERSION = "1.0.0"
 
 
 class LightingSystemEntry(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
@@ -37,10 +37,11 @@ class LightingSystemEntry(BaseModel):
         vv = str(v).strip()
         if not vv:
             raise ValueError("name must be non-empty")
-        return 
-    
+        return vv
+
+
 class LightingSystemsPayload(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     systems: List[LightingSystemEntry] = Field(min_length=1)
     input: Dict[str, Any] = Field(default_factory=dict)

@@ -48,7 +48,7 @@ class NGWRequest(BaseModel):
     context: List[ContextItem] = Field(default_factory=list)
 
     options: EngineOptions = Field(default_factory=EngineOptions)
-    engine_options: EngineOptions = Field(default_factory=EngineOptions, alias="options")    
+
     @field_validator("prompt")
     @classmethod
     def validate_prompt(cls, v: str) -> str:
