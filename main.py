@@ -12,11 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from engine.selector import select_best_system
+from api.routes.shoot_match import router as shoot_match_router
 
 
 ENGINE_VERSION = "1.0.0"
 
 app = FastAPI(title="NGW Core v1", version=ENGINE_VERSION)
+app.include_router(shoot_match_router, prefix="/api")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
