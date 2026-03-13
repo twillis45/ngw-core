@@ -1,0 +1,20 @@
+{
+  "reference_id": "butterfly_adler_01",
+  "pattern_id": "butterfly",
+  "photographer": "Lindsay Adler",
+  "title": "Beauty Butterfly Reference 01",
+  "source_type": "education",
+  "source_url": "",
+  "environment": "studio",
+  "light_count": 1,
+  "key_direction_deg": 0,
+  "key_height_relative": "high_front",
+  "shadow_pattern": "butterfly_shadow",
+  "modifier_family": "beauty_dish",
+  "estimated_distance_ft": 4,
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "matched_setup_ids": ["butterfly", "beauty_dish_clean"],
+  "notes": "Classic frontal high beauty light with nose shadow directly below."
+}
+

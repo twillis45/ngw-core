@@ -1,3 +1,5 @@
+import ShowMore from '../components/ShowMore';
+
 export default function WhatToLookForCard({ goodSigns, warnings }) {
   const hasContent = (goodSigns && goodSigns.length > 0) || (warnings && warnings.length > 0);
   if (!hasContent) return null;
@@ -13,9 +15,13 @@ export default function WhatToLookForCard({ goodSigns, warnings }) {
         <>
           <div className="section-label" style={{ marginBottom: 6 }}>Good signs</div>
           <ul className="sign-list sign-list--good">
-            {goodSigns.map((s, i) => (
-              <li className="sign-list__item" key={i}>{s}</li>
-            ))}
+            <ShowMore
+              items={goodSigns}
+              limit={4}
+              renderItem={(s, i) => (
+                <li className="sign-list__item" key={i}>{s}</li>
+              )}
+            />
           </ul>
         </>
       )}
@@ -24,9 +30,13 @@ export default function WhatToLookForCard({ goodSigns, warnings }) {
         <>
           <div className="section-label" style={{ marginTop: 12, marginBottom: 6 }}>Watch out for</div>
           <ul className="sign-list sign-list--bad">
-            {warnings.map((w, i) => (
-              <li className="sign-list__item" key={i}>{w}</li>
-            ))}
+            <ShowMore
+              items={warnings}
+              limit={4}
+              renderItem={(w, i) => (
+                <li className="sign-list__item" key={i}>{w}</li>
+              )}
+            />
           </ul>
         </>
       )}

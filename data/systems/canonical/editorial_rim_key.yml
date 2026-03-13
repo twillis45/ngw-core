@@ -1,0 +1,94 @@
+id: editorial_rim_key
+name: Editorial Rim + Key
+version: 1
+status: canonical
+
+pattern:
+  primary: editorial_rim_key
+  secondary: rim_only
+
+category: editorial
+difficulty: 3
+setup_time_minutes: 15
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 9
+  background: dark
+  background_distance_ft: 10
+
+subject:
+  distance_from_camera_ft: 8
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-200mm
+  angle_to_subject_deg: 0
+
+lights:
+  - role: key
+    modifier: softbox_rect
+    angle_deg: 25
+    height: above_eye_level
+    height_offset_in: 10
+    distance_ft: 6
+    power_ratio: 0.7
+    notes:
+      - Low-power key just opens the face
+      - Keep subtle so rim dominates the look
+      - Feather past subject to avoid flat lighting
+
+  - role: rim
+    modifier: stripbox
+    angle_deg: 150
+    height: above_head
+    height_offset_in: 18
+    distance_ft: 7
+    power_ratio: 1.0
+    notes:
+      - Primary light is the rim
+      - Grid essential to control spill
+      - Creates strong edge separation from dark background
+
+  - role: kicker
+    modifier: stripbox
+    angle_deg: -150
+    height: above_head
+    height_offset_in: 18
+    distance_ft: 7
+    power_ratio: 0.8
+    notes:
+      - Symmetric edge opposite the rim
+      - Optional but adds dimensionality
+      - Grid to prevent lens flare
+
+shadow_signature:
+  expected_pattern: rim
+  nose_shadow: minimal
+  cheek_shadow: moderate
+  contrast: high
+  softness: 0.3
+
+failure_modes:
+  - "Rim too hot: blown highlights on ears and shoulders"
+  - "Key too bright: kills the rim-dominant look"
+  - "No grid on rim: spill everywhere"
+
+substitutions:
+  - if_missing: stripbox
+    use: bare_bulb_with_barndoors
+    tradeoff: "Harder edge, less wrap"
+  - if_missing: softbox_rect
+    use: umbrella_white
+    tradeoff: "More spill on face; harder to keep subtle"
+
+use_cases:
+  - editorial
+  - athletic
+  - dramatic_portrait
+  - album_cover
+
+example_photographers:
+  - Albert Watson
+  - Mark Seliger

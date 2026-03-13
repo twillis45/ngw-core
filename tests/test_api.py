@@ -241,10 +241,15 @@ class TestHealth:
 # ── Static UI ────────────────────────────────────────────────────────────────
 
 class TestStaticUI:
-    def test_root_redirects_to_ui(self):
+    def test_root_serves_marketing_or_redirects(self):
+        """Root serves marketing homepage (200) or redirects to /ui (307)."""
         resp = client.get("/", follow_redirects=False)
-        assert resp.status_code in (301, 302, 307)
-        assert "/ui" in resp.headers.get("location", "")
+        # Marketing site installed → 200 HTML; fallback → 307 redirect to /ui
+        assert resp.status_code in (200, 301, 302, 307)
+        if resp.status_code == 200:
+            assert "text/html" in resp.headers.get("content-type", "")
+        else:
+            assert "/ui" in resp.headers.get("location", "")
 
     def test_static_index_serves_html(self):
         resp = client.get("/static/index.html")

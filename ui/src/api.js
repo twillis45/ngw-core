@@ -18,7 +18,7 @@ export async function fetchRecommendation(payload) {
   return resp.json();
 }
 
-/** Upload a reference image and return the server path. */
+/** Upload a reference image and return { path, analysis }. */
 
 export async function uploadReferenceImage(file) {
   const form = new FormData();
@@ -33,8 +33,7 @@ export async function uploadReferenceImage(file) {
     throw new Error('Failed to upload reference image');
   }
 
-  const data = await resp.json();
-  return data.path;
+  return resp.json();
 }
 
 /** POST /api/shoot-match and return UI-ready card data. */

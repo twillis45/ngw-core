@@ -1,24 +1,55 @@
 from __future__ import annotations
 
+# Load .env BEFORE any engine imports — engine/vlm.py reads API keys at
+# module import time, so dotenv must run first.
+from dotenv import load_dotenv
+load_dotenv()
+
 import time
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from engine.selector import select_best_system
 from api.routes.shoot_match import router as shoot_match_router
+from api.routes.auth import router as auth_router
+from api.routes.user_data import router as user_data_router
+from api.routes.admin import router as admin_router
+from api.routes.diagnostics import router as diagnostics_router
+from api.routes.lab import router as lab_router
+from api.routes.lighting_dna import router as lighting_dna_router
+from api.routes.shoot_mode import router as shoot_mode_router
+from api.routes.spatial import router as spatial_router
+from db.database import init_db
 
 
 ENGINE_VERSION = "1.0.0"
 
-app = FastAPI(title="NGW Core v1", version=ENGINE_VERSION)
+
+@asynccontextmanager
+async def lifespan(app):
+    init_db()
+    yield
+
+
+app = FastAPI(title="NGW Core v1", version=ENGINE_VERSION, lifespan=lifespan)
 app.include_router(shoot_match_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
+app.include_router(user_data_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
+app.include_router(diagnostics_router, prefix="/api")
+app.include_router(lab_router, prefix="/api")
+app.include_router(lighting_dna_router, prefix="/api")
+app.include_router(shoot_mode_router, prefix="/api")
+app.include_router(spatial_router, prefix="/api")
+app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -135,8 +166,30 @@ def health() -> Dict[str, str]:
 
 
 @app.get("/")
-def root() -> RedirectResponse:
+def root() -> HTMLResponse:
+    www_path = Path("static/www/index.html")
+    if www_path.exists():
+        return HTMLResponse(www_path.read_text(encoding="utf-8"))
     return RedirectResponse(url="/ui", status_code=307)
+
+
+_MARKETING_PAGES = {"features", "pricing", "library", "blog", "login", "signup"}
+
+
+@app.get("/features")
+@app.get("/pricing")
+@app.get("/library")
+@app.get("/blog")
+@app.get("/login")
+@app.get("/signup")
+def marketing_page(request: Request) -> HTMLResponse:
+    page = request.url.path.lstrip("/")
+    if page not in _MARKETING_PAGES:
+        raise HTTPException(status_code=404)
+    file_path = Path(f"static/www/{page}.html")
+    if file_path.exists():
+        return HTMLResponse(file_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404)
 
 
 @app.get("/ui")

@@ -29,9 +29,18 @@ const GEAR_TO_MODIFIERS = {
   "led cob": ["softbox_octa", "softbox_rect", "diffusion_panel"],
   "ring light": [],
   fresnel: ["grid_spot", "gel_cto"],
+  ellipsoidal: ["gobo", "grid_spot", "gel_cto"],
+  "etc source four": ["gobo", "grid_spot", "gel_cto"],
+  "source four": ["gobo", "grid_spot", "gel_cto"],
+  leko: ["gobo", "grid_spot", "gel_cto"],
   "continuous lights": ["softbox_rect", "umbrella_shoot_through"],
   "natural light": ["diffusion_panel"],
   "reflector only": [],
+  trigger: [],          // accessory — no modifiers
+  "remote trigger": [],
+  pocketwizard: [],
+  "light meter": [],    // accessory — no modifiers
+  sekonic: [],
 };
 
 /**

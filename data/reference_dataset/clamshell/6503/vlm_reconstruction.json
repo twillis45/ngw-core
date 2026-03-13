@@ -1,0 +1,190 @@
+{
+  "primary_reconstruction": {
+    "dominant_source_direction_deg": -98.7,
+    "dominant_source_height_class": "eye_level",
+    "dominant_source_height_deg_estimate": null,
+    "dominant_source_distance_class": "close",
+    "dominant_source_distance_ft": 2.0,
+    "source_size_class": "small",
+    "modifier_family_candidates": [
+      {
+        "type": "reflector_hard",
+        "confidence": 0.55
+      },
+      {
+        "type": "bare_bulb",
+        "confidence": 0.25
+      },
+      {
+        "type": "unknown",
+        "confidence": 0.2
+      }
+    ],
+    "environment": "studio",
+    "likely_light_count": 1,
+    "roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15
+      },
+      "negative_fill": {
+        "present": true,
+        "confidence": 0.45
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 1.0
+      }
+    },
+    "reconstruction_confidence": 0.62,
+    "ambiguity_notes": [
+      "No catchlights detected; catchlight geometry unavailable.",
+      "Pose and self-shadow interference reduce highlight/shadow certainty.",
+      "Window light environment class detected but with low confidence; studio cues stronger.",
+      "Modifier shape evidence is weak; only apparent source size and penumbra support hard modifier."
+    ],
+    "contradiction_notes": [
+      "Environment_pass suggests window_light (conf=0.15) but background and lighting cues support studio.",
+      "No direct evidence for window or sun; modifier unknown."
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "candidate_1",
+      "key_light_angle_deg": -98.7,
+      "key_light_height_class": "eye_level",
+      "key_light_height_deg_estimate": 2.3,
+      "key_light_distance_class": "close",
+      "key_light_distance_ft_estimate": 2.0,
+      "source_size_class": "small",
+      "modifier_family_candidates": [
+        {
+          "type": "reflector_hard",
+          "confidence": 0.55
+        },
+        {
+          "type": "bare_bulb",
+          "confidence": 0.25
+        },
+        {
+          "type": "unknown",
+          "confidence": 0.2
+        }
+      ],
+      "environment": "studio",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": true,
+          "confidence": 0.45
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 1.0
+        }
+      },
+      "confidence_score": 0.62,
+      "ambiguity_notes": [
+        "No catchlights detected; catchlight geometry unavailable.",
+        "Pose and self-shadow interference reduce highlight/shadow certainty.",
+        "Window light environment class detected but with low confidence; studio cues stronger.",
+        "Modifier shape evidence is weak; only apparent source size and penumbra support hard modifier."
+      ]
+    },
+    {
+      "candidate_id": "candidate_2",
+      "key_light_angle_deg": -98.7,
+      "key_light_height_class": "eye_level",
+      "key_light_height_deg_estimate": 2.3,
+      "key_light_distance_class": "close",
+      "key_light_distance_ft_estimate": 2.0,
+      "source_size_class": "small",
+      "modifier_family_candidates": [
+        {
+          "type": "window",
+          "confidence": 0.15
+        },
+        {
+          "type": "unknown",
+          "confidence": 0.85
+        }
+      ],
+      "environment": "window",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": true,
+          "confidence": 0.45
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 1.0
+        }
+      },
+      "confidence_score": 0.41,
+      "ambiguity_notes": [
+        "Environment_pass suggests window_light but with low confidence.",
+        "No direct window reflections or rectangular catchlights.",
+        "Lighting characteristics could fit small window source or hard studio modifier."
+      ]
+    }
+  ],
+  "ok": true,
+  "notes": []
+}

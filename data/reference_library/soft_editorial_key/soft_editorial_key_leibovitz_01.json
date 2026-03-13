@@ -1,0 +1,19 @@
+{
+  "reference_id": "soft_editorial_key_leibovitz_01",
+  "pattern_id": "soft_editorial_key",
+  "photographer": "Annie Leibovitz",
+  "title": "Leibovitz Style Soft Editorial Key 01",
+  "source_type": "editorial",
+  "source_url": "",
+  "environment": "studio",
+  "light_count": 1,
+  "key_direction_deg": 25,
+  "key_height_relative": "above_eye",
+  "shadow_pattern": "soft_editorial_short",
+  "modifier_family": "large_softbox",
+  "estimated_distance_ft": 6,
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "matched_setup_ids": ["soft_editorial_key", "corporate_soft_key"],
+  "notes": "Large soft source with elegant editorial falloff and subtle shaping."
+}

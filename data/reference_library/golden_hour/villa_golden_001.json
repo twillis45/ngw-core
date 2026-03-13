@@ -1,0 +1,39 @@
+{
+  "reference_id": "villa_golden_001",
+  "pattern_id": "golden_hour",
+  "photographer": "Jose Villa",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "direct_sun",
+  "notes": "Low-angle warm sun from side creating long shadows and golden tones on face",
+  "lights": [
+    {
+      "role": "key",
+      "modifier": "sun",
+      "angle_deg": 60,
+      "height_deg": 10,
+      "distance_ft": 0
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "opposite_key",
+    "chin_shadow": "defined",
+    "cheek_shadow": "long"
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 8,
+    "focal_length": 85
+  },
+  "use_cases": [
+    "engagement",
+    "portrait",
+    "lifestyle"
+  ],
+  "light_count": 1,
+  "key_direction_deg": 60,
+  "modifier_family": "sun",
+  "estimated_distance_ft": 0,
+  "shadow_pattern": "golden_hour",
+  "key_height_relative": "eye_level"
+}

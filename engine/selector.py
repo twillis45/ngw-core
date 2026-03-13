@@ -79,10 +79,12 @@ def select_best_system(
     if not systems:
         raise ValueError("systems must be non-empty")
 
+    master_mode = (input_ctx or {}).get("master_mode")
+
     picks: List[SelectionPick] = []
     for rank_seed, system in enumerate(systems, start=1):
         breakdown = score_system(system, input_ctx=input_ctx)
-        diagram_spec = build_diagram_spec(system, modifiers_available=modifiers_available)
+        diagram_spec = build_diagram_spec(system, modifiers_available=modifiers_available, master_mode=master_mode)
         picks.append(
             SelectionPick(
                 rank=rank_seed,

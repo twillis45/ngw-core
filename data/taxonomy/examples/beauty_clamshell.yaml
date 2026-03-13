@@ -1,0 +1,126 @@
+identity:
+  setup_id: beauty_clamshell_v1
+  setup_name: Beauty Clamshell
+  use_case: beauty
+  visual_intent: luxurious
+  pattern_family: clamshell
+  tags:
+    - portrait
+    - beauty
+    - clean
+    - glossy_skin
+
+subject_fit:
+  subject_types:
+    - female_portrait
+    - glossy_beauty
+    - dark_skin
+  skin_or_surface_notes:
+    - highlight_control_important
+    - under_eye_fill_critical
+  pose_assumptions:
+    - subject_facing_camera
+    - chin_slightly_down
+
+environment_fit:
+  minimum_ceiling_height_ft: 8
+  recommended_ceiling_height_ft: 9
+  minimum_room_width_ft: 8
+  minimum_room_depth_ft: 10
+  indoor_outdoor_fit:
+    - indoor
+    - studio
+  portability: medium
+  power_requirements: low_to_medium
+  environment_tags:
+    - standard_ceiling
+    - small_room
+    - boom_possible
+
+light_architecture:
+  key_source:
+    role: key
+    modifier_family: beauty_dish
+    angle_deg: 0
+    height_relative_to_subject: slightly_above_forehead
+    distance_ft:
+      min: 3.5
+      max: 5.0
+    feather_direction: down_center
+  fill_source:
+    role: fill
+    modifier_family: reflector
+    position: below_camera
+    ratio_to_key_stops: -1.5
+  rim_sources: []
+  background_source: null
+  negative_fill: null
+  bounce: null
+
+camera_architecture:
+  lens_range_mm:
+    min: 85
+    max: 105
+  camera_height_relative_to_subject: eye_level
+  camera_angle: straight_on
+  camera_distance_ft:
+    min: 7
+    max: 10
+
+distance_references:
+  key_to_subject_ft:
+    min: 3.5
+    max: 5.0
+  fill_to_subject_ft:
+    min: 1.5
+    max: 3.0
+  rim_to_subject_ft: null
+  subject_to_background_ft:
+    min: 5
+    max: 8
+  camera_to_subject_ft:
+    min: 7
+    max: 10
+  background_light_to_background_ft: null
+
+expected_result:
+  shadow_pattern: soft_clamshell
+  contrast_profile: medium_low
+  catchlight_style: centered_high_and_low
+  background_relationship: slightly_darker_or_neutral
+  visual_notes:
+    - smooth_under_eye_transition
+    - defined_cheekbone_highlights
+    - flattering_skin_wrap
+
+diagnostics:
+  common_failure_modes:
+    - face_too_flat
+    - catchlight_too_high
+    - background_too_bright
+
+substitutions:
+  modifier_alternatives:
+    - primary: beauty_dish
+      alternatives:
+        - small_softbox
+        - umbrella_silver
+  gear_alternatives:
+    - primary: strobe
+      alternatives:
+        - speedlight
+        - led_version
+  adaptation_variants:
+    - ideal_setup
+    - low_ceiling_version
+    - small_room_version
+    - one_light_version
+    - speedlight_version
+
+reliability:
+  rule_confidence: 88
+  reliability_label: reliable
+  field_verified: false
+  verification_count: 0
+  notes:
+    - stable_across_many_portrait_use_cases

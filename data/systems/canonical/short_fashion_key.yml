@@ -1,0 +1,96 @@
+id: short_fashion_key
+name: Short Fashion Key
+version: 1
+status: canonical
+
+pattern:
+  primary: short_fashion_key
+  secondary: short
+
+category: fashion
+difficulty: 3
+setup_time_minutes: 12
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 9
+  background: dark_or_gray
+  background_distance_ft: 8
+
+subject:
+  distance_from_camera_ft: 8
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-200mm
+  angle_to_subject_deg: 0
+
+lights:
+  - role: key
+    modifier: softbox_octa
+    angle_deg: 45
+    height: above_eye_level
+    height_offset_in: 14
+    distance_ft: 5
+    power_ratio: 1.0
+    notes:
+      - Key on far side of face (short lighting)
+      - Subject turns toward camera, light hits narrow cheek
+      - Creates slimming, sculpted look
+      - Grid optional for tighter control
+
+  - role: negative_fill
+    modifier: v_flat_black
+    angle_deg: -60
+    height: face_height
+    height_offset_in: 0
+    distance_ft: 2
+    power_ratio: 0.0
+    notes:
+      - Black v-flat deepens shadow side
+      - Essential for editorial contrast
+      - Position close to subject for maximum absorption
+
+  - role: rim
+    modifier: stripbox
+    angle_deg: -140
+    height: head_height
+    height_offset_in: 4
+    distance_ft: 7
+    power_ratio: 0.5
+    notes:
+      - Edge separation light
+      - Grid essential to keep off nose
+      - Match or slightly overpower key for strong edge
+
+shadow_signature:
+  expected_pattern: short_fashion_key
+  nose_shadow: visible
+  cheek_shadow: strong
+  contrast: medium_high
+  softness: 0.4
+
+failure_modes:
+  - "Key too far back: half the face goes dark"
+  - "Rim on nose: unflattering hot spot"
+  - "No negative fill: shadows not deep enough"
+
+substitutions:
+  - if_missing: softbox_octa
+    use: parabolic_umbrella
+    tradeoff: "Slightly less control, wider spill"
+  - if_missing: stripbox
+    use: bare_bulb_with_grid
+    tradeoff: "Harder edge light; can work if controlled"
+
+use_cases:
+  - fashion
+  - editorial
+  - magazine
+  - portfolio
+
+example_photographers:
+  - Patrick Demarchelier
+  - Mario Testino
+  - Peter Lindbergh

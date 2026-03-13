@@ -28,6 +28,13 @@ def classify_lighting_pattern(
     kp = (key_position_text or "").lower()
     fm = (fill_method_text or "").lower()
 
+    # Triangle (Hurley-style): three-light symmetric setup for headshots
+    # Two flanking keys + low fill creating triangle catchlights
+    if ("headshot" in m or "clean" in m or "beauty" in m) and (
+        "triangle" in kp or "symmetric" in kp or "dual key" in kp or "hurley" in kp
+    ):
+        return "triangle"
+
     # Clamshell: commonly "beauty" vibe + centered-ish key + reflector/low fill near axis
     if ("beauty" in m or "clean" in m) and ("reflector" in fm or "near camera axis" in fm or "clamshell" in kp):
         return "clamshell"
@@ -72,6 +79,30 @@ def shadow_expectations_for(pattern: str) -> Dict[str, Any]:
     Photographer-speak shadow expectations + what to fix.
     """
     p = (pattern or "").lower()
+
+    if p == "triangle":
+        return {
+            "pattern": "Triangle (Hurley-style)",
+            "what_you_should_see": [
+                "Three catchlights forming a triangle in each eye.",
+                "Nearly shadowless face with subtle dimension from angled keys.",
+                "Clean jawline — no hard shadow under chin.",
+                "Even skin exposure across both sides of face.",
+                "Background blown clean white with no visible gradient.",
+            ],
+            "what_means_it_is_wrong": [
+                "One side brighter than the other → lights not balanced; meter both sides independently.",
+                "Hard nose shadow appearing → one light too high or too far to the side; bring it back toward center.",
+                "Only two catchlights visible → third light not reaching the eyes; move it closer or raise it slightly.",
+                "Flat or waxy skin look → lights too close; move all three back 6–12 inches.",
+                "Hot spot on forehead → lower the two upper lights or feather them slightly.",
+            ],
+            "fix_order": [
+                "Balance power between all three lights (meter each independently at subject position).",
+                "Adjust angles — small moves only, 5–10° at a time.",
+                "Then adjust distance (all three should move together to maintain the triangle shape).",
+            ],
+        }
 
     if p == "rembrandt-ish":
         return {
@@ -192,13 +223,33 @@ def catchlight_plan_for(modifier_family: str, pattern: str) -> Dict[str, Any]:
     ideal = "10–11 o’clock or 12 o’clock in the iris"
     if p == "clamshell":
         ideal = "Centered/top (11–1 o’clock), symmetrical and flattering"
+    if p == "triangle":
+        ideal = "Three catchlights in a triangle — two upper (10 and 2 o’clock), one lower (5–6 o’clock)"
+
+    if p == "triangle":
+        return {
+            "goal": "Three clean catchlights per eye forming an even triangle. This is the signature look.",
+            "expected_shape": expected_shape,
+            "ideal_position": "Two upper catchlights at 10 and 2 o’clock, one lower at 5–6 o’clock",
+            "avoid": [
+                "Missing third catchlight — means the low fill isn’t reaching the eyes.",
+                "Uneven triangle (one catchlight bigger) — lights at different distances.",
+                "Catchlights merging into a blob — lights too close together, spread them out.",
+                "Extra catchlight from background or bounce — flag or kill the spill source.",
+            ],
+            "quick_fixes": [
+                "Missing bottom catchlight: raise the low fill slightly or angle it more toward the face.",
+                "Uneven triangle: measure distances from each light to subject — they should match.",
+                "One catchlight too bright: that light is closer or higher power — pull it back or dim it.",
+            ],
+        }
 
     return {
         "goal": "One clean catchlight per eye. Portrait pop depends on this.",
         "expected_shape": expected_shape,
         "ideal_position": ideal,
         "avoid": [
-            "Double catchlights ('double headlights') unless intentional.",
+            "Double catchlights (‘double headlights’) unless intentional.",
             "Catchlight so high the eyes go dead.",
             "Rim/hair light creating a second catchlight."
         ],

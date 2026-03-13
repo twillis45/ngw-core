@@ -1,0 +1,53 @@
+<svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="400" height="300" rx="12" fill="#17191F"/>
+
+  <!-- Grid lines -->
+  <g stroke="#2A2E38" stroke-width="0.5" opacity="0.5">
+    <line x1="0" y1="75" x2="400" y2="75"/>
+    <line x1="0" y1="150" x2="400" y2="150"/>
+    <line x1="0" y1="225" x2="400" y2="225"/>
+    <line x1="100" y1="0" x2="100" y2="300"/>
+    <line x1="200" y1="0" x2="200" y2="300"/>
+    <line x1="300" y1="0" x2="300" y2="300"/>
+  </g>
+
+  <!-- Subject (center) -->
+  <circle cx="200" cy="150" r="18" fill="#1E2129" stroke="#F4F6F8" stroke-width="1.5"/>
+  <circle cx="200" cy="144" r="6" fill="none" stroke="#F4F6F8" stroke-width="1"/>
+  <path d="M192 158 Q200 152 208 158" stroke="#F4F6F8" stroke-width="1" fill="none"/>
+  <text x="200" y="182" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="10">Subject</text>
+
+  <!-- Key light (upper left) -->
+  <g>
+    <line x1="200" y1="150" x2="110" y2="70" stroke="#F5B041" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+    <rect x="90" y="50" width="40" height="40" rx="6" fill="#F5B041" fill-opacity="0.15" stroke="#F5B041" stroke-width="1.5"/>
+    <text x="110" y="74" text-anchor="middle" fill="#F5B041" font-family="system-ui" font-size="10" font-weight="600">KEY</text>
+    <text x="110" y="105" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="9">4.5 ft | 35&#xB0;</text>
+  </g>
+
+  <!-- Fill light (right) -->
+  <g>
+    <line x1="200" y1="150" x2="310" y2="150" stroke="#4DA3FF" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+    <rect x="290" y="130" width="40" height="40" rx="6" fill="#4DA3FF" fill-opacity="0.15" stroke="#4DA3FF" stroke-width="1.5"/>
+    <text x="310" y="154" text-anchor="middle" fill="#4DA3FF" font-family="system-ui" font-size="10" font-weight="600">FILL</text>
+    <text x="310" y="185" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="9">3 ft | 0&#xB0;</text>
+  </g>
+
+  <!-- Rim / hair light (behind subject) -->
+  <g>
+    <line x1="200" y1="150" x2="280" y2="60" stroke="#9B7CFF" stroke-width="1" stroke-dasharray="4 3" opacity="0.5"/>
+    <rect x="260" y="40" width="40" height="40" rx="6" fill="#9B7CFF" fill-opacity="0.15" stroke="#9B7CFF" stroke-width="1.5"/>
+    <text x="280" y="64" text-anchor="middle" fill="#9B7CFF" font-family="system-ui" font-size="10" font-weight="600">RIM</text>
+    <text x="280" y="95" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="9">6 ft | 145&#xB0;</text>
+  </g>
+
+  <!-- Camera (bottom center) -->
+  <g>
+    <line x1="200" y1="150" x2="200" y2="240" stroke="#A9AFBB" stroke-width="1" stroke-dasharray="4 3" opacity="0.3"/>
+    <rect x="184" y="240" width="32" height="24" rx="4" fill="#1E2129" stroke="#A9AFBB" stroke-width="1"/>
+    <circle cx="200" cy="252" r="6" fill="none" stroke="#A9AFBB" stroke-width="1"/>
+    <circle cx="200" cy="252" r="2.5" fill="#A9AFBB"/>
+    <text x="200" y="280" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="9">Camera | 8 ft</text>
+  </g>
+</svg>

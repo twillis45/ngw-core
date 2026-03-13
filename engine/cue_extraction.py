@@ -1,0 +1,1953 @@
+"""Visual cue extraction from image data.
+
+Each function extracts one of the 16 visual cues from the vision pipeline
+output (masks, palettes, catchlights, pose) and/or the raw image.
+
+The master orchestrator ``extract_visual_cues()`` calls all 16 extractors
+inside independent try/except blocks — one failure never breaks others.
+
+Dependencies:
+- numpy (always available in the engine)
+- cv2 (optional, graceful fallback)
+- engine.image_analysis_models (cue Pydantic models)
+"""
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+
+from engine.constants import (
+    BG,
+    CATCHLIGHT,
+    CONTRAST,
+    ENVIRONMENT,
+    FACE,
+    HOUGH,
+    SEPARATION,
+    SHADOW,
+    SPECULAR,
+    TONAL,
+    TRANSITION,
+)
+
+from engine.image_analysis_models import (
+    BackgroundIllumination,
+    BounceContributorAnalysis,
+    CatchlightPosition,
+    CatchlightShape,
+    CatchlightTopology,
+    ContinuousSourceSignals,
+    ContrastRatio,
+    EnvironmentalShadowContinuity,
+    HighlightAxisMap,
+    HighlightSymmetry,
+    HighlightToShadowTransition,
+    LightStructureDetection,
+    MultiShadowDetection,
+    OffAxisKeyDetection,
+    PoseInducedShadowInterference,
+    PrimaryShadowDirection,
+    ReflectionArchitecture,
+    SeparationLightAnalysis,
+    ShadowEdgeHardness,
+    ShadowInterruptionPattern,
+    SpecularHighlightBehavior,
+    SubjectBackgroundSeparation,
+    TonalProcessingEstimation,
+    VerticalLightAngle,
+    VisualCueReport,
+)
+
+try:
+    import cv2
+except Exception:  # pragma: no cover
+    cv2 = None  # type: ignore
+
+logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Individual Cue Extractors
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def extract_shadow_edge_hardness(
+    img_bgr: np.ndarray,
+    person_mask: np.ndarray,
+    skin_mask: np.ndarray,
+    is_high_contrast_grade: bool = False,
+) -> Optional[ShadowEdgeHardness]:
+    """Cue 1: Classify shadow edges as hard, soft, or mixed.
+
+    Method: Run Canny edge detection on the luminance channel within the
+    person region. Compare edge density in shadow vs midtone zones.
+    Hard light produces sharper, higher-density edges at shadow boundaries.
+
+    P2d: When is_high_contrast_grade is True, the contrast grading inflates
+    edge density at shadow boundaries.  We raise the hard threshold to
+    compensate — a "hard" classification under heavy grading needs stronger
+    evidence than under neutral processing.
+    """
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    # Isolate person region
+    person_gray = gray.copy()
+    person_gray[~person_mask] = 0
+
+    # Shadow region: darker third of person pixels
+    person_pixels = gray[person_mask]
+    if person_pixels.size < SHADOW.MIN_PERSON_PIXELS:
+        return None
+
+    p33 = np.percentile(person_pixels, SHADOW.SHADOW_PERCENTILE)
+    p66 = np.percentile(person_pixels, SHADOW.MIDTONE_PERCENTILE)
+
+    shadow_mask = person_mask & (gray <= p33)
+    midtone_mask = person_mask & (gray > p33) & (gray <= p66)
+
+    # Canny edges
+    edges = cv2.Canny(person_gray, SHADOW.CANNY_LOW, SHADOW.CANNY_HIGH)
+
+    shadow_area = max(np.sum(shadow_mask), 1)
+    midtone_area = max(np.sum(midtone_mask), 1)
+
+    shadow_edge_density = np.sum(edges[shadow_mask]) / (shadow_area * 255.0)
+    midtone_edge_density = np.sum(edges[midtone_mask]) / (midtone_area * 255.0)
+
+    notes = [f"Shadow edge density: {shadow_edge_density:.4f}, midtone: {midtone_edge_density:.4f}"]
+
+    # P2d: Contrast-grade-aware thresholds.  Heavy contrast grading amplifies
+    # edge density at shadow boundaries, making soft light appear hard.
+    # Raise the hard threshold from 0.03 to 0.05 under heavy grading.
+    hard_threshold = SHADOW.HARD_DENSITY
+    soft_threshold = SHADOW.SOFT_DENSITY
+    if is_high_contrast_grade:
+        hard_threshold = SHADOW.HARD_DENSITY_HCG
+        soft_threshold = SHADOW.SOFT_DENSITY_HCG
+        notes.append("Contrast-grade-aware thresholds applied (hard=0.05, soft=0.015).")
+
+    # High edge density at shadow boundaries → hard light
+    total_density = shadow_edge_density + midtone_edge_density
+    if total_density < SHADOW.MIN_TOTAL_DENSITY:
+        classification = "unknown"
+        confidence = 0.2
+    elif shadow_edge_density > hard_threshold:
+        classification = "hard"
+        confidence = min(0.85, 0.5 + shadow_edge_density * 5)
+        if is_high_contrast_grade:
+            confidence = min(confidence, 0.65)  # cap confidence under grading
+    elif shadow_edge_density < soft_threshold:
+        classification = "soft"
+        confidence = min(0.80, 0.5 + (hard_threshold - shadow_edge_density) * 20)
+    else:
+        classification = "mixed"
+        confidence = 0.45
+
+    return ShadowEdgeHardness(
+        classification=classification,
+        transition_width_px=None,  # future: measure gradient width
+        confidence=round(confidence, 2),
+        notes=notes,
+    )
+
+
+def extract_primary_shadow_direction(
+    img_bgr: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]],
+    skin_mask: np.ndarray,
+) -> Optional[PrimaryShadowDirection]:
+    """Cue 2: Determine primary shadow direction from face brightness asymmetry.
+
+    Uses two complementary methods:
+    1. **Nose shadow position** (primary): Find the darkest valley in the
+       central nose region across multiple heights.  The nose shadow falls
+       on the side AWAY from the key light — this is the most reliable
+       physical indicator, unaffected by clothing occlusion or face turn.
+    2. **Half-face brightness** (secondary): Compare left/right mean
+       brightness of the face box.  Used as a fallback or cross-check,
+       but can be confounded by clothing (hats, feathered collars,
+       scarves) covering one side of the face box.
+
+    When the two methods disagree, the nose shadow method takes priority
+    because it measures the actual light physics rather than overall
+    brightness which can be skewed by non-face content in the face box.
+    """
+    if face_box is None:
+        return PrimaryShadowDirection(
+            direction="unknown", confidence=0.0,
+            notes=["no_face_data: face_box unavailable"],
+        )
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY) if cv2 is not None else None
+    if gray is None:
+        return None
+
+    x0, y0, x1, y1 = face_box
+    face_gray = gray[y0:y1, x0:x1]
+    if face_gray.size < 100:
+        return None
+
+    face_h, face_w = face_gray.shape
+    mid_x = face_w // 2
+    notes: List[str] = []
+
+    # ── Method 1: Nose shadow position ──────────────────────────────
+    # The nose casts a shadow on the side away from the key light.
+    # Find the darkest valley in the central nose region at multiple
+    # heights (y 40-55% of face box) and check which side of center
+    # it consistently falls on.
+    nose_shadow_side = "unknown"
+    nose_shadow_confidence = 0.0
+    center_start = int(face_w * 0.30)
+    center_end = int(face_w * 0.70)
+    center_width = center_end - center_start
+
+    if center_width > 10:
+        left_votes = 0
+        right_votes = 0
+        total_votes = 0
+        for pct_y in (0.40, 0.42, 0.44, 0.46, 0.48, 0.50, 0.52, 0.54):
+            row_y = int(face_h * pct_y)
+            if row_y < 0 or row_y >= face_h:
+                continue
+            row = face_gray[row_y, center_start:center_end]
+            if row.size < 5:
+                continue
+            min_idx = int(np.argmin(row))
+            min_val = int(row[min_idx])
+            # The valley must be reasonably dark (below 50% of overall face mean)
+            face_mean = float(np.mean(face_gray))
+            if min_val > face_mean * 0.5:
+                continue  # No clear shadow valley at this height
+            min_x_pct = (center_start + min_idx) / face_w
+            total_votes += 1
+            if min_x_pct < 0.47:
+                left_votes += 1
+            elif min_x_pct > 0.53:
+                right_votes += 1
+            # Between 0.47-0.53 is ambiguous (centered shadow)
+
+        if total_votes >= 3:
+            if left_votes > right_votes and left_votes >= total_votes * 0.5:
+                nose_shadow_side = "left"
+                nose_shadow_confidence = min(0.80, 0.45 + left_votes / total_votes * 0.35)
+                notes.append(
+                    f"Nose shadow falls LEFT of center ({left_votes}/{total_votes} rows) "
+                    f"— key light from camera-right."
+                )
+            elif right_votes > left_votes and right_votes >= total_votes * 0.5:
+                nose_shadow_side = "right"
+                nose_shadow_confidence = min(0.80, 0.45 + right_votes / total_votes * 0.35)
+                notes.append(
+                    f"Nose shadow falls RIGHT of center ({right_votes}/{total_votes} rows) "
+                    f"— key light from camera-left."
+                )
+
+    # ── Method 2: Half-face brightness comparison ───────────────────
+    left_half = face_gray[:, :mid_x]
+    right_half = face_gray[:, mid_x:]
+
+    if left_half.size == 0 or right_half.size == 0:
+        return None
+
+    left_mean = float(np.mean(left_half))
+    right_mean = float(np.mean(right_half))
+    diff = abs(left_mean - right_mean)
+
+    overall_mean = float(np.mean(face_gray))
+    if overall_mean < 1:
+        return None
+
+    relative_diff = diff / overall_mean
+    halfface_side = "unknown"
+    halfface_confidence = 0.0
+
+    if relative_diff < 0.05:
+        halfface_side = "unknown"
+        halfface_confidence = 0.2
+        notes.append("Face brightness is nearly symmetric — flat or frontal lighting.")
+    elif left_mean < right_mean:
+        halfface_side = "left"
+        halfface_confidence = min(0.8, 0.4 + relative_diff * 3)
+        notes.append(f"Left face darker by {diff:.1f} (relative {relative_diff:.2f}).")
+    else:
+        halfface_side = "right"
+        halfface_confidence = min(0.8, 0.4 + relative_diff * 3)
+        notes.append(f"Right face darker by {diff:.1f} (relative {relative_diff:.2f}).")
+
+    # ── Method 2b: Clothing interference detection ────────────────
+    # Check skin_mask coverage in each half of the face box.  When the
+    # "darker" half has significantly lower skin ratio than the brighter
+    # half, the darkness likely comes from non-skin content (garments,
+    # feathers, accessories, dark hair) rather than actual shadow.
+    # In that case, demote half-face confidence so nose shadow can win.
+    _clothing_interference = False
+    if halfface_side != "unknown" and skin_mask is not None and skin_mask.size > 0:
+        face_skin = skin_mask[y0:y1, x0:x1]
+        if face_skin.size > 0 and face_skin.shape[1] > 1:
+            _fs_mid = face_skin.shape[1] // 2
+            left_skin = face_skin[:, :_fs_mid]
+            right_skin = face_skin[:, _fs_mid:]
+            left_skin_ratio = float(np.mean(left_skin > 0)) if left_skin.size > 0 else 0.0
+            right_skin_ratio = float(np.mean(right_skin > 0)) if right_skin.size > 0 else 0.0
+            # If the darker half has <60% of the skin coverage of the
+            # brighter half, clothing is likely interfering with brightness.
+            if halfface_side == "left" and right_skin_ratio > 0.1:
+                skin_ratio = left_skin_ratio / max(right_skin_ratio, 0.01)
+                if skin_ratio < 0.6:
+                    _clothing_interference = True
+                    halfface_confidence *= 0.5
+                    notes.append(
+                        f"Clothing interference: left skin ratio {left_skin_ratio:.2f} "
+                        f"vs right {right_skin_ratio:.2f} — dark half has less skin. "
+                        f"Half-face confidence reduced."
+                    )
+            elif halfface_side == "right" and left_skin_ratio > 0.1:
+                skin_ratio = right_skin_ratio / max(left_skin_ratio, 0.01)
+                if skin_ratio < 0.6:
+                    _clothing_interference = True
+                    halfface_confidence *= 0.5
+                    notes.append(
+                        f"Clothing interference: right skin ratio {right_skin_ratio:.2f} "
+                        f"vs left {left_skin_ratio:.2f} — dark half has less skin. "
+                        f"Half-face confidence reduced."
+                    )
+
+    # ── Combine: nose shadow preferred when clothing interferes ────
+    # When clothing interference is detected, the nose shadow method is
+    # more reliable because it measures actual light physics on skin
+    # rather than overall brightness which is skewed by garments.
+    # Otherwise, half-face remains primary with nose as cross-check.
+    _prefer_nose = (
+        _clothing_interference
+        and nose_shadow_side != "unknown"
+        and nose_shadow_confidence >= 0.4
+    )
+    if _prefer_nose:
+        # Clothing interfered with half-face → trust nose shadow
+        if nose_shadow_side == "left":
+            direction = "upper_left"
+        else:
+            direction = "upper_right"
+        confidence = nose_shadow_confidence
+        if halfface_side != "unknown" and halfface_side != nose_shadow_side:
+            notes.append(
+                f"Nose shadow ({nose_shadow_side}) overrides half-face ({halfface_side}) "
+                f"due to clothing interference."
+            )
+        elif halfface_side == nose_shadow_side:
+            confidence = min(0.90, confidence + 0.05)
+            notes.append("Nose shadow agrees with half-face despite clothing interference.")
+    elif halfface_side != "unknown":
+        if halfface_side == "left":
+            direction = "upper_left"
+        else:
+            direction = "upper_right"
+        confidence = halfface_confidence
+        # Cross-check with nose shadow
+        if nose_shadow_side != "unknown" and nose_shadow_side == halfface_side:
+            confidence = min(0.90, confidence + 0.10)
+            notes.append("Nose shadow confirms half-face direction.")
+        elif nose_shadow_side != "unknown" and nose_shadow_side != halfface_side:
+            notes.append(
+                f"Nose shadow suggests shadow on {nose_shadow_side} side "
+                f"(disagreeing with half-face). Possible hat/hair shadow confound — "
+                f"using half-face brightness as primary method."
+            )
+    elif nose_shadow_side != "unknown":
+        # Fallback to nose shadow when half-face is inconclusive
+        if nose_shadow_side == "left":
+            direction = "upper_left"
+        else:
+            direction = "upper_right"
+        confidence = nose_shadow_confidence
+    else:
+        direction = "unknown"
+        confidence = 0.2
+
+    return PrimaryShadowDirection(
+        direction=direction,
+        clock_angle=None,
+        consistency="unknown",
+        confidence=round(confidence, 2),
+        notes=notes,
+    )
+
+
+def extract_vertical_light_angle(
+    img_bgr: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]],
+) -> Optional[VerticalLightAngle]:
+    """Cue 3: Estimate vertical light angle from upper/lower face brightness.
+
+    Method: Split face into upper and lower halves. High light = upper brighter;
+    eye-level = even; low light = lower brighter.
+    """
+    if face_box is None:
+        return VerticalLightAngle(
+            angle="unknown", confidence=0.0,
+            notes=["no_face_data: face_box unavailable"],
+        )
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    x0, y0, x1, y1 = face_box
+    face_gray = gray[y0:y1, x0:x1]
+    if face_gray.size < 100:
+        return None
+
+    mid_y = face_gray.shape[0] // 2
+    upper_half = face_gray[:mid_y, :]
+    lower_half = face_gray[mid_y:, :]
+
+    if upper_half.size == 0 or lower_half.size == 0:
+        return None
+
+    upper_mean = float(np.mean(upper_half))
+    lower_mean = float(np.mean(lower_half))
+    diff = upper_mean - lower_mean
+    overall = float(np.mean(face_gray))
+    if overall < 1:
+        return None
+
+    relative_diff = diff / overall
+
+    if relative_diff > 0.08:
+        angle = "high"
+        evidence = "Upper face significantly brighter than lower — key light is above eye level."
+        confidence = min(0.75, 0.4 + relative_diff * 3)
+    elif relative_diff < -0.08:
+        angle = "low"
+        evidence = "Lower face brighter than upper — key light is below eye level (unusual)."
+        confidence = min(0.65, 0.3 + abs(relative_diff) * 3)
+    else:
+        angle = "eye_level"
+        evidence = "Upper and lower face brightness similar — key light near eye level."
+        confidence = 0.4
+
+    return VerticalLightAngle(
+        angle=angle,
+        evidence=evidence,
+        confidence=round(confidence, 2),
+    )
+
+
+def extract_catchlight_position(
+    catchlight_data: Dict[str, Any],
+) -> Optional[CatchlightPosition]:
+    """Cue 4: Repackage existing catchlight positions into cue model."""
+    if not catchlight_data.get("ok") or catchlight_data.get("count", 0) == 0:
+        return None
+
+    catchlights = catchlight_data.get("catchlights", [])
+    left_positions = [c["position"] for c in catchlights if c.get("eye") == "left"]
+    right_positions = [c["position"] for c in catchlights if c.get("eye") == "right"]
+
+    # Assess symmetry
+    if left_positions and right_positions:
+        if len(left_positions) == len(right_positions):
+            symmetry = "symmetric"
+        else:
+            symmetry = "asymmetric"
+    else:
+        symmetry = "unknown"
+
+    confidence = 0.7 if (left_positions and right_positions) else 0.4
+
+    return CatchlightPosition(
+        left_eye=left_positions,
+        right_eye=right_positions,
+        symmetry=symmetry,
+        confidence=confidence,
+    )
+
+
+def extract_catchlight_shape(
+    catchlight_data: Dict[str, Any],
+) -> Optional[CatchlightShape]:
+    """Cue 5: Repackage existing catchlight shapes into cue model."""
+    if not catchlight_data.get("ok") or catchlight_data.get("count", 0) == 0:
+        return None
+
+    catchlights = catchlight_data.get("catchlights", [])
+    shapes = [c.get("shape", "unknown") for c in catchlights]
+    shapes_seen = list(set(shapes))
+
+    round_count = shapes.count("round")
+    rect_count = shapes.count("rectangular")
+
+    if round_count > rect_count:
+        dominant = "round"
+    elif rect_count > round_count:
+        dominant = "rectangular"
+    elif shapes_seen:
+        dominant = "mixed"
+    else:
+        dominant = "unknown"
+
+    confidence = 0.6 if len(shapes) >= 2 else 0.35
+
+    return CatchlightShape(
+        dominant_shape=dominant,
+        shapes_seen=shapes_seen,
+        confidence=confidence,
+    )
+
+
+def extract_catchlight_topology(
+    topology_data: Dict[str, Any],
+) -> Optional[CatchlightTopology]:
+    """Extract catchlight topology cue from the catchlight_topology_pass output.
+
+    Repackages the topology pass results into a ``CatchlightTopology`` model.
+    Returns None when the pass failed or found zero catchlights.
+    """
+    if not topology_data.get("ok", False):
+        return None
+
+    count = topology_data.get("catchlight_count", 0)
+    if count == 0:
+        return None
+
+    return CatchlightTopology(
+        primary=topology_data.get("primary"),
+        secondary=topology_data.get("secondary"),
+        tertiary=topology_data.get("tertiary"),
+        catchlight_count=count,
+        cluster_geometry=topology_data.get("cluster_geometry", "unknown"),
+        cluster_spread_deg=topology_data.get("cluster_spread_deg", 0.0),
+        inter_catchlight_spacing=topology_data.get("inter_catchlight_spacing"),
+        bilateral_symmetry_score=topology_data.get("bilateral_symmetry_score", 0.0),
+        confidence=topology_data.get("confidence", 0.0),
+        notes=topology_data.get("notes", []),
+    )
+
+
+def extract_highlight_axis_map(
+    axis_map_data: Dict[str, Any],
+) -> Optional[HighlightAxisMap]:
+    """Extract highlight axis map cue from the highlight_axis_map_pass output."""
+    if not axis_map_data.get("ok", False):
+        return None
+
+    regions = axis_map_data.get("regions", {})
+    if not regions:
+        return None
+
+    return HighlightAxisMap(
+        regions=regions,
+        dominant_axis_deg=axis_map_data.get("dominant_axis_deg", 0.0),
+        axis_count=axis_map_data.get("axis_count", 0),
+        axis_consistency=axis_map_data.get("axis_consistency", 0.0),
+        wrap_ratio=axis_map_data.get("wrap_ratio", 0.0),
+        confidence=axis_map_data.get("confidence", 0.0),
+        notes=axis_map_data.get("notes", []),
+    )
+
+
+def extract_highlight_symmetry(
+    symmetry_data: Dict[str, Any],
+) -> Optional[HighlightSymmetry]:
+    """Extract highlight symmetry cue from the highlight_symmetry_pass output."""
+    if not symmetry_data.get("ok", False):
+        return None
+
+    return HighlightSymmetry(
+        left_intensity=symmetry_data.get("left_intensity", 0.0),
+        right_intensity=symmetry_data.get("right_intensity", 0.0),
+        symmetry_score=symmetry_data.get("symmetry_score", 0.0),
+        dominant_side=symmetry_data.get("dominant_side", "unknown"),
+        intensity_ratio=symmetry_data.get("intensity_ratio", 1.0),
+        fill_detected=symmetry_data.get("fill_detected", False),
+        fill_side=symmetry_data.get("fill_side"),
+        underfill_ev=symmetry_data.get("underfill_ev"),
+        confidence=symmetry_data.get("confidence", 0.0),
+        notes=symmetry_data.get("notes", []),
+    )
+
+
+def extract_continuous_source_signals(
+    source_data: Dict[str, Any],
+) -> Optional[ContinuousSourceSignals]:
+    """Extract continuous source signals cue from the continuous_source_heuristic_pass output."""
+    if not source_data.get("ok", False):
+        return None
+
+    return ContinuousSourceSignals(
+        likely_technology=source_data.get("likely_technology", "unknown"),
+        technology_confidence=source_data.get("technology_confidence", 0.0),
+        evidence=source_data.get("evidence", []),
+        specular_edge_sharpness=source_data.get("specular_edge_sharpness", 0.0),
+        color_temp_consistency=source_data.get("color_temp_consistency", 0.0),
+        confidence=source_data.get("confidence", 0.0),
+        notes=source_data.get("notes", []),
+    )
+
+
+def extract_bounce_contributor(
+    bounce_data: Dict[str, Any],
+) -> Optional[BounceContributorAnalysis]:
+    """Extract bounce contributor analysis from the bounce_contributor_pass output."""
+    if not bounce_data.get("ok", False):
+        return None
+
+    return BounceContributorAnalysis(
+        contributors=bounce_data.get("contributors", []),
+        primary_fill_type=bounce_data.get("primary_fill_type", "unknown"),
+        fill_to_key_ratio=bounce_data.get("fill_to_key_ratio", 0.0),
+        total_bounce_contribution=bounce_data.get("total_bounce_contribution", 0.0),
+        confidence=bounce_data.get("confidence", 0.0),
+        notes=bounce_data.get("notes", []),
+    )
+
+
+def extract_separation_light(
+    sep_data: Dict[str, Any],
+) -> Optional[SeparationLightAnalysis]:
+    """Extract separation light analysis from the separation_light_pass output."""
+    if not sep_data.get("ok", False):
+        return None
+
+    return SeparationLightAnalysis(
+        has_hair_light=sep_data.get("has_hair_light", False),
+        hair_light_direction_deg=sep_data.get("hair_light_direction_deg"),
+        hair_light_intensity=sep_data.get("hair_light_intensity", 0.0),
+        hair_light_width_ratio=sep_data.get("hair_light_width_ratio", 0.0),
+        has_rim_light=sep_data.get("has_rim_light", False),
+        rim_side=sep_data.get("rim_side"),
+        has_background_spill=sep_data.get("has_background_spill", False),
+        spill_vs_intentional_confidence=sep_data.get("spill_vs_intentional_confidence", 0.0),
+        confidence=sep_data.get("confidence", 0.0),
+        notes=sep_data.get("notes", []),
+    )
+
+
+def extract_off_axis_key(
+    off_axis_data: Dict[str, Any],
+) -> Optional[OffAxisKeyDetection]:
+    """Extract off-axis key detection from the off_axis_key_pass output."""
+    if not off_axis_data.get("ok", False):
+        return None
+
+    return OffAxisKeyDetection(
+        key_azimuth_deg=off_axis_data.get("key_azimuth_deg", 0.0),
+        key_elevation_deg=off_axis_data.get("key_elevation_deg", 0.0),
+        is_off_axis=off_axis_data.get("is_off_axis", False),
+        off_axis_angle_deg=off_axis_data.get("off_axis_angle_deg", 0.0),
+        detection_method=off_axis_data.get("detection_method", "unknown"),
+        confidence=off_axis_data.get("confidence", 0.0),
+        notes=off_axis_data.get("notes", []),
+    )
+
+
+def extract_light_structure(
+    structure_data: Dict[str, Any],
+) -> Optional[LightStructureDetection]:
+    """Extract light structure detection from the light_structure_pass output."""
+    if not structure_data.get("ok", False):
+        return None
+
+    return LightStructureDetection(
+        nose_shadow_shape=structure_data.get("nose_shadow_shape", "unknown"),
+        nose_shadow_length_ratio=structure_data.get("nose_shadow_length_ratio", 0.0),
+        nose_shadow_angle_deg=structure_data.get("nose_shadow_angle_deg", 0.0),
+        triangle_detected=structure_data.get("triangle_detected", False),
+        triangle_cheek=structure_data.get("triangle_cheek"),
+        triangle_completeness=structure_data.get("triangle_completeness", 0.0),
+        pattern_name=structure_data.get("pattern_name", "unknown"),
+        confidence=structure_data.get("confidence", 0.0),
+        notes=structure_data.get("notes", []),
+    )
+
+
+def extract_highlight_to_shadow_transition(
+    img_bgr: np.ndarray,
+    skin_mask: np.ndarray,
+) -> Optional[HighlightToShadowTransition]:
+    """Cue 6: Measure how gradually highlights transition to shadows on skin.
+
+    Method: Histogram of skin luminance. Bimodal = sharp; unimodal spread = gradual.
+    """
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    skin_pixels = gray[skin_mask]
+    if skin_pixels.size < 200:
+        return None
+
+    # Compute histogram
+    hist, _ = np.histogram(skin_pixels, bins=32, range=(0, 256))
+    hist_norm = hist.astype(float) / max(hist.sum(), 1)
+
+    # Check for bimodality: two peaks separated by a valley
+    peaks = []
+    for i in range(1, len(hist_norm) - 1):
+        if hist_norm[i] > hist_norm[i - 1] and hist_norm[i] > hist_norm[i + 1]:
+            if hist_norm[i] > 0.03:
+                peaks.append(i)
+
+    std_dev = float(np.std(skin_pixels))
+    relative_std = std_dev / 255.0
+
+    if len(peaks) >= 2 and (peaks[-1] - peaks[0]) > 8:
+        rate = "sharp"
+        confidence = min(0.7, 0.4 + (peaks[-1] - peaks[0]) * 0.02)
+    elif relative_std > 0.15:
+        rate = "mixed"
+        confidence = 0.4
+    else:
+        rate = "gradual"
+        confidence = min(0.7, 0.4 + (0.2 - relative_std) * 3)
+
+    return HighlightToShadowTransition(
+        rate=rate,
+        transition_zone_width=round(relative_std, 3),
+        confidence=round(confidence, 2),
+        notes=[f"Skin luminance std: {std_dev:.1f}, peaks: {len(peaks)}"],
+    )
+
+
+def extract_contrast_ratio(
+    img_bgr: np.ndarray,
+    person_mask: np.ndarray,
+) -> Optional[ContrastRatio]:
+    """Cue 7: Measure overall contrast ratio of the person region."""
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    person_pixels = gray[person_mask]
+    if person_pixels.size < 100:
+        return None
+
+    p5 = float(np.percentile(person_pixels, CONTRAST.PERCENTILE_LOW))
+    p95 = float(np.percentile(person_pixels, CONTRAST.PERCENTILE_HIGH))
+
+    if p5 < 1:
+        p5 = 1.0
+    ratio = p95 / p5
+    spread = (p95 - p5) / 255.0
+
+    if spread < CONTRAST.SPREAD_LOW:
+        label = "low"
+    elif spread < CONTRAST.SPREAD_MEDIUM:
+        label = "medium"
+    elif spread < CONTRAST.SPREAD_HIGH:
+        label = "high"
+    else:
+        label = "extreme"
+
+    confidence = 0.7  # histogram-based, fairly reliable
+
+    return ContrastRatio(
+        ratio=round(ratio, 2),
+        label=label,
+        confidence=confidence,
+        notes=[f"P5={p5:.0f}, P95={p95:.0f}, spread={spread:.2f}"],
+    )
+
+
+def extract_subject_background_separation(
+    img_bgr: np.ndarray,
+    person_mask: np.ndarray,
+    background_mask: np.ndarray,
+) -> Optional[SubjectBackgroundSeparation]:
+    """Cue 8: Measure luminance separation between subject and background."""
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    person_px = gray[person_mask]
+    bg_px = gray[background_mask]
+
+    if person_px.size < 100 or bg_px.size < 100:
+        return None
+
+    person_mean = float(np.mean(person_px))
+    bg_mean = float(np.mean(bg_px))
+    delta = abs(person_mean - bg_mean) / 255.0
+
+    if delta > SEPARATION.SHARP_DELTA:
+        edge_sharpness = "sharp"
+    elif delta > SEPARATION.GRADUAL_DELTA:
+        edge_sharpness = "gradual"
+    else:
+        edge_sharpness = "none"
+
+    confidence = min(0.75, 0.4 + delta)
+
+    return SubjectBackgroundSeparation(
+        luminance_delta=round(delta, 3),
+        edge_sharpness=edge_sharpness,
+        confidence=round(confidence, 2),
+        notes=[f"Subject mean: {person_mean:.0f}, BG mean: {bg_mean:.0f}"],
+    )
+
+
+def extract_background_illumination(
+    img_bgr: np.ndarray,
+    background_mask: np.ndarray,
+) -> Optional[BackgroundIllumination]:
+    """Cue 9: Characterize background illumination pattern."""
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    bg_pixels = gray[background_mask]
+
+    if bg_pixels.size < 500:
+        return None
+
+    bg_mean = float(np.mean(bg_pixels))
+    bg_std = float(np.std(bg_pixels))
+
+    # Relative brightness — compare BG against foreground (subject) pixels.
+    # Using overall image mean is misleading when the subject is dominated by
+    # dark clothing (hat, feathers, dark suit) which drags down the mean and
+    # makes a mid-grey backdrop appear "brighter than subject".  Foreground
+    # pixels give a more perceptually accurate comparison.
+    fg_pixels = gray[~background_mask]
+    if fg_pixels.size > 0:
+        # Use the 90th percentile of foreground luminance (approximates
+        # skin/highlight areas) rather than the mean, which is skewed by
+        # dark clothing.  Photographers judge "darker/brighter than subject"
+        # relative to the lit face, not the dark outfit.
+        fg_ref = float(np.percentile(fg_pixels, 90))
+    else:
+        fg_ref = float(np.mean(gray))
+    if bg_mean > fg_ref + BG.BRIGHTNESS_DELTA:
+        brightness_relative = "brighter"
+    elif bg_mean < fg_ref - BG.BRIGHTNESS_DELTA:
+        brightness_relative = "darker"
+    else:
+        brightness_relative = "similar"
+
+    # Pattern classification.
+    # P2f: Check mean brightness FIRST — a dark background is studio-controlled
+    # regardless of std (which contrast grading inflates in dark areas).
+    if bg_mean < BG.DARK_MEAN:
+        pattern = "dark"
+    elif bg_mean < BG.DARK_MEDIUM_MEAN and brightness_relative == "darker" and bg_std < BG.STUDIO_STD_MAX:
+        # Moderately dark, darker than subject, AND low variation →
+        # controlled studio bg.  High std (>= 40) with moderate mean
+        # suggests an environmental interior (café, room), not a studio
+        # backdrop — the variation comes from real scene content.
+        pattern = "dark"
+    elif bg_std < BG.EVEN_STD:
+        pattern = "even"
+    elif bg_std < BG.STUDIO_STD_MAX:
+        pattern = "gradient"
+    elif bg_std < BG.GRADIENT_STD_MAX and brightness_relative in ("darker", "similar") and bg_mean >= BG.GRADIENT_MEAN_MIN:
+        # P2c: Mid-tone backgrounds (80-200 mean) with moderate std (40-60)
+        # that are darker/similar to the subject are typically studio
+        # backdrops with vignette or slight falloff, not environmental.
+        # P2d: Require bg_mean >= 80 — below 80 with std > 40 is a dimly
+        # lit environmental interior (café, room), where the high variation
+        # comes from scene content rather than backdrop gradient.
+        pattern = "gradient"
+    elif bg_std < BG.GRADIENT_STD_MAX and bg_mean < BG.DARK_GARMENT_CORRECTION_MEAN and brightness_relative == "brighter":
+        # Dark-garment correction: when the subject is dominated by dark
+        # clothing (hat, feathers, dark fabric), overall image mean drops
+        # well below bg_mean, making the BG appear "brighter".  But a
+        # bg_mean < 120 with moderate std is still a controlled studio
+        # backdrop with gradient falloff, not environmental.
+        pattern = "gradient"
+    else:
+        pattern = "environmental"
+
+    confidence = 0.55
+
+    notes_list = [f"BG mean: {bg_mean:.0f}, std: {bg_std:.1f}"]
+    if bg_mean < BG.DARK_MEDIUM_MEAN and brightness_relative == "darker" and bg_std >= BG.STUDIO_STD_MAX:
+        notes_list.append(
+            "P2f: Dark background with elevated std (likely contrast grading) "
+            "→ classified as 'dark' (studio) rather than 'environmental'."
+        )
+
+    return BackgroundIllumination(
+        pattern=pattern,
+        brightness_relative=brightness_relative,
+        confidence=confidence,
+        notes=notes_list,
+    )
+
+
+def extract_specular_highlight_behavior(
+    img_bgr: np.ndarray,
+    skin_mask: np.ndarray,
+    person_mask: Optional[np.ndarray] = None,
+) -> Optional[SpecularHighlightBehavior]:
+    """Cue 10: Analyze specular highlights on skin (bright spots).
+
+    Falls back to person_mask when skin_mask has insufficient pixels
+    (e.g. B&W images where skin segmentation fails).
+    """
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    # Choose the best available mask: skin_mask preferred, person_mask fallback
+    active_mask = skin_mask
+    is_fallback = False
+    skin_pixels = gray[skin_mask] if skin_mask is not None else np.array([])
+    if skin_pixels.size < 200 and person_mask is not None:
+        person_pixels = gray[person_mask]
+        if person_pixels.size >= 200:
+            active_mask = person_mask
+            is_fallback = True
+            skin_pixels = person_pixels
+
+    if skin_pixels.size < 200:
+        return None
+
+    # Specular highlights: very bright pixels in skin/person region
+    threshold = max(SPECULAR.BRIGHT_THRESHOLD, float(np.percentile(skin_pixels, 95)))
+    bright_mask = active_mask & (gray > threshold)
+    bright_count = int(np.sum(bright_mask))
+    area = int(np.sum(active_mask))
+
+    if area == 0:
+        return None
+
+    bright_ratio = bright_count / area
+
+    if bright_ratio > SPECULAR.RATIO_STRONG:
+        intensity = "strong"
+        spread = "broad"
+    elif bright_ratio > SPECULAR.RATIO_MODERATE:
+        intensity = "moderate"
+        spread = "tight"
+    elif bright_ratio > SPECULAR.RATIO_SUBTLE:
+        intensity = "subtle"
+        spread = "tight"
+    else:
+        intensity = "none"
+        spread = "unknown"
+
+    confidence = 0.5 if bright_count > 10 else 0.3
+    # Lower confidence when using person_mask fallback (less precise than skin)
+    if is_fallback:
+        confidence = round(confidence * 0.7, 2)
+
+    notes_list = [f"Bright pixel ratio: {bright_ratio:.4f} ({bright_count}/{area})"]
+    if is_fallback:
+        notes_list.append("Used person_mask fallback (no skin detected)")
+
+    return SpecularHighlightBehavior(
+        intensity=intensity,
+        spread=spread,
+        count_estimate=min(bright_count, 100),
+        confidence=confidence,
+        notes=notes_list,
+    )
+
+
+def _parse_clock(pos_text: str) -> Optional[int]:
+    """Parse '5 o'clock' → 5."""
+    import re
+    m = re.match(r"(\d+)\s*o'?clock", str(pos_text).lower().strip())
+    return int(m.group(1)) if m else None
+
+
+def _dedup_catchlights_per_eye(
+    catchlights: list, eye_label: str,
+) -> list:
+    """P2e: Deduplicate catchlights for one eye.
+
+    1.  Drop floor reflections: 5–7 o'clock with below-median intensity.
+    2.  Group remaining by proximity — catchlights within ±1 clock position
+        are likely the same source; keep the brightest.
+    """
+    eye_cals = [c for c in catchlights if c.get("eye") == eye_label]
+    if not eye_cals:
+        return []
+
+    # Median intensity for floor-reflection filtering
+    intensities = [c.get("intensity", 0.5) for c in eye_cals]
+    med_intensity = sorted(intensities)[len(intensities) // 2]
+
+    # Pass 1: remove likely floor reflections (5–7 o'clock).
+    # Two heuristics:
+    #   a) Below-median intensity at 5-7 o'clock → almost certainly floor bounce.
+    #   b) When 3+ catchlights exist per eye, 5-7 o'clock positions are floor
+    #      reflections regardless of intensity (genuine 3+ light setups rarely
+    #      place a source directly below).
+    _many_catchlights = len(eye_cals) >= 3
+    filtered = []
+    for c in eye_cals:
+        clock = _parse_clock(c.get("position", ""))
+        if clock is not None and clock in (5, 6, 7):
+            if c.get("intensity", 0.5) < med_intensity:
+                continue  # low-intensity floor reflection
+            if _many_catchlights:
+                continue  # 3+ catchlights = floor bounce very likely
+        filtered.append(c)
+
+    # Pass 2: group by proximity — within ±2 clock positions = same source.
+    # Soft modifiers (softboxes, umbrellas) create elongated catchlight
+    # reflections that can span 2 clock positions; different parts of the
+    # same modifier reflect at slightly different angles.
+    # Sort by clock position, keep brightest in each group.
+    def _clock_key(c):
+        ck = _parse_clock(c.get("position", ""))
+        return ck if ck is not None else 99
+
+    filtered.sort(key=_clock_key)
+    deduped = []
+    for c in filtered:
+        ck = _parse_clock(c.get("position", ""))
+        if ck is None:
+            deduped.append(c)
+            continue
+        # Check if any existing deduped catchlight is within ±2
+        merged = False
+        for i, d in enumerate(deduped):
+            dk = _parse_clock(d.get("position", ""))
+            if dk is not None:
+                diff = min(abs(ck - dk), 12 - abs(ck - dk))  # circular
+                if diff <= 2:
+                    # Keep the brighter one
+                    if c.get("intensity", 0) > d.get("intensity", 0):
+                        deduped[i] = c
+                    merged = True
+                    break
+        if not merged:
+            deduped.append(c)
+
+    return deduped
+
+
+def extract_reflection_architecture(
+    catchlight_data: Dict[str, Any],
+) -> Optional[ReflectionArchitecture]:
+    """Cue 11: Overall catchlight count and symmetry across both eyes.
+
+    P2e: Uses deduplication to filter floor reflections and group nearby
+    catchlights as the same source before counting.
+    """
+    if not catchlight_data.get("ok"):
+        return None
+
+    catchlights = catchlight_data.get("catchlights", [])
+    left_deduped = _dedup_catchlights_per_eye(catchlights, "left")
+    right_deduped = _dedup_catchlights_per_eye(catchlights, "right")
+
+    left_count = len(left_deduped)
+    right_count = len(right_deduped)
+    total = left_count + right_count
+
+    if total == 0:
+        symmetry_score = 0.0
+    elif left_count == right_count:
+        symmetry_score = 1.0
+    else:
+        symmetry_score = round(min(left_count, right_count) / max(left_count, right_count), 2)
+
+    confidence = 0.6 if total >= 2 else 0.3
+
+    raw_left = len([c for c in catchlights if c.get("eye") == "left"])
+    raw_right = len([c for c in catchlights if c.get("eye") == "right"])
+    notes_list = []
+    if raw_left + raw_right != total:
+        notes_list.append(
+            f"Deduped catchlights: {raw_left + raw_right} raw → {total} "
+            f"(L:{raw_left}→{left_count}, R:{raw_right}→{right_count})"
+        )
+
+    return ReflectionArchitecture(
+        total_catchlights=total,
+        per_eye_counts={"left": left_count, "right": right_count},
+        symmetry_score=symmetry_score,
+        confidence=confidence,
+        notes=notes_list,
+    )
+
+
+def extract_multi_shadow_detection(
+    img_bgr: np.ndarray,
+    person_mask: np.ndarray,
+) -> Optional[MultiShadowDetection]:
+    """Cue 12: Detect multiple distinct shadow directions (multi-light setup).
+
+    Method: Edge detection in shadow regions, then look for multiple distinct
+    edge orientations via gradient direction histogram.
+    """
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    person_pixels = gray[person_mask]
+    if person_pixels.size < 200:
+        return None
+
+    # Shadow region
+    p30 = np.percentile(person_pixels, 30)
+    shadow_mask = person_mask & (gray <= p30)
+
+    if np.sum(shadow_mask) < 50:
+        return MultiShadowDetection(shadow_count=0, confidence=0.3,
+                                     notes=["Too few shadow pixels for multi-shadow analysis."])
+
+    # Sobel gradients for direction
+    masked_gray = gray.copy()
+    masked_gray[~person_mask] = 128  # neutral
+
+    gx = cv2.Sobel(masked_gray, cv2.CV_64F, 1, 0, ksize=3)
+    gy = cv2.Sobel(masked_gray, cv2.CV_64F, 0, 1, ksize=3)
+
+    # Only shadow boundary pixels
+    angles = np.arctan2(gy[shadow_mask], gx[shadow_mask])
+    magnitudes = np.sqrt(gx[shadow_mask] ** 2 + gy[shadow_mask] ** 2)
+
+    # Filter by significant gradient magnitude
+    significant = magnitudes > np.percentile(magnitudes, 70)
+    if np.sum(significant) < 20:
+        return MultiShadowDetection(shadow_count=1, confidence=0.3,
+                                     notes=["Weak shadow gradients — likely single source."])
+
+    sig_angles = angles[significant]
+
+    # Bin angles into 8 directions (45-degree bins)
+    bins = np.histogram(sig_angles, bins=8, range=(-np.pi, np.pi))[0]
+    bins_norm = bins / max(bins.sum(), 1)
+
+    # Count dominant directions (bins with >15% of edges)
+    dominant_dirs = int(np.sum(bins_norm > 0.15))
+
+    if dominant_dirs >= 3:
+        shadow_count = min(dominant_dirs, 4)
+        confidence = 0.5
+    elif dominant_dirs == 2:
+        shadow_count = 2
+        confidence = 0.45
+    else:
+        shadow_count = 1
+        confidence = 0.4
+
+    return MultiShadowDetection(
+        shadow_count=shadow_count,
+        angular_spread=None,
+        confidence=confidence,
+        notes=[f"Dominant gradient directions: {dominant_dirs}, bin distribution: {bins_norm.round(2).tolist()}"],
+    )
+
+
+def extract_environmental_shadow_continuity(
+    img_bgr: np.ndarray,
+    background_mask: np.ndarray,
+    classification: Optional[Dict[str, Any]] = None,
+) -> Optional[EnvironmentalShadowContinuity]:
+    """Cue 13: Detect natural/environmental vs artificial light indicators.
+
+    Indicators for natural light:
+    - Warm color temperature in background
+    - Uneven background with organic patterns
+    - Mixed hard/soft shadow edges (dappled foliage)
+
+    Indicators for artificial light:
+    - Even background with controlled falloff
+    - Neutral/cool color temperature
+    - Clean, consistent shadow edges
+    """
+    if cv2 is None:
+        return None
+
+    hints: List[str] = []
+    notes: List[str] = []
+
+    # Color temperature from background
+    bg_pixels = img_bgr[background_mask]
+    if bg_pixels.size < 300:
+        return EnvironmentalShadowContinuity(
+            has_natural_indicators=False,
+            has_artificial_indicators=False,
+            confidence=0.2,
+            notes=["Insufficient background pixels for environment analysis."],
+        )
+
+    # Average B, G, R channels in background
+    mean_bgr = np.mean(bg_pixels.reshape(-1, 3), axis=0)
+    warm_bias = float(mean_bgr[2] - mean_bgr[0])  # R - B
+
+    if warm_bias > ENVIRONMENT.WARM_BIAS:
+        hints.append("warm_background")
+        notes.append(f"Background warm bias: {warm_bias:.1f} (R-B)")
+
+    # Background texture variance (natural scenes have more texture)
+    bg_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    bg_std = float(np.std(bg_gray[background_mask]))
+
+    if bg_std > ENVIRONMENT.TEXTURE_STD_ENV:
+        hints.append("textured_background")
+        notes.append(f"Background texture std: {bg_std:.1f} — environmental/outdoor likely.")
+
+    # Check classification hint
+    if classification and classification.get("colorTemperature") == "warm":
+        hints.append("warm_overall")
+
+    # Dappled foliage hint: high variance + warm + green presence
+    bg_rgb = bg_pixels[:, ::-1]  # BGR → RGB
+    mean_rgb = np.mean(bg_rgb.reshape(-1, 3), axis=0)
+    green_dominance = mean_rgb[1] - (mean_rgb[0] + mean_rgb[2]) / 2
+    if green_dominance > ENVIRONMENT.GREEN_DOMINANCE and bg_std > ENVIRONMENT.DAPPLED_STD_MIN:
+        hints.append("dappled_foliage")
+        notes.append("Green-biased background with high texture — possible dappled foliage light.")
+
+    has_natural = len(hints) >= 2 or "dappled_foliage" in hints
+    has_artificial = bg_std < ENVIRONMENT.ARTIFICIAL_STD_MAX and abs(warm_bias) < ENVIRONMENT.ARTIFICIAL_WARM_MAX
+
+    if has_artificial:
+        hints.append("controlled_background")
+        notes.append("Low-variance neutral background — studio/controlled environment likely.")
+
+    confidence = 0.5 if (has_natural or has_artificial) else 0.25
+
+    return EnvironmentalShadowContinuity(
+        has_natural_indicators=has_natural,
+        has_artificial_indicators=has_artificial,
+        environment_hints=hints,
+        confidence=confidence,
+        notes=notes,
+    )
+
+
+def extract_pose_induced_shadow_interference(
+    pose_data: Dict[str, Any],
+    img_bgr: np.ndarray,
+    skin_mask: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]],
+) -> Optional[PoseInducedShadowInterference]:
+    """Cue 14: Detect shadows caused by pose rather than lighting.
+
+    Common pose-induced shadows:
+    - Chin down → shadow on neck/chest
+    - Crossed arms → shadow on torso
+    - Hand on face → shadow on cheek
+
+    We detect these by checking for dark regions immediately below/adjacent
+    to the face that are inconsistent with the overall lighting direction.
+    """
+    if not pose_data or not pose_data.get("ok"):
+        return PoseInducedShadowInterference(
+            detected=False,
+            severity="none",
+            confidence=0.2,
+            notes=["No pose data available for interference analysis."],
+        )
+
+    if face_box is None:
+        return PoseInducedShadowInterference(
+            detected=False, severity="none", confidence=0.0,
+            notes=["no_face_data: face_box unavailable"],
+        )
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape[:2]
+    x0, y0, x1, y1 = face_box
+    face_height = y1 - y0
+
+    regions: List[str] = []
+    notes: List[str] = []
+
+    # Check region below face (chin shadow on neck/chest)
+    chin_y0 = min(y1, h - 1)
+    chin_y1 = min(y1 + face_height // 2, h)
+    if chin_y1 > chin_y0:
+        chin_region = gray[chin_y0:chin_y1, x0:x1]
+        face_region = gray[y0:y1, x0:x1]
+        if chin_region.size > 50 and face_region.size > 50:
+            chin_mean = float(np.mean(chin_region))
+            face_mean = float(np.mean(face_region))
+            if face_mean > 0 and (face_mean - chin_mean) / face_mean > 0.25:
+                regions.append("chin_shadow")
+                notes.append(f"Dark region below face (delta={face_mean - chin_mean:.0f}) — likely chin shadow.")
+
+    # Check pose type for interference risk
+    pose_label = pose_data.get("pose", "unknown")
+    framing = pose_data.get("framing", "unknown")
+    if pose_label == "sitting" or framing == "half_body":
+        notes.append("Seated/half-body pose — arm and body shadows may interfere with lighting inference.")
+
+    detected = len(regions) > 0
+    severity = "none"
+    if len(regions) >= 2:
+        severity = "moderate"
+    elif len(regions) == 1:
+        severity = "mild"
+
+    confidence = 0.5 if detected else 0.3
+
+    return PoseInducedShadowInterference(
+        detected=detected,
+        interference_regions=regions,
+        severity=severity,
+        confidence=confidence,
+        notes=notes,
+    )
+
+
+def extract_tonal_processing_estimation(
+    img_bgr: np.ndarray,
+    classification: Optional[Dict[str, Any]] = None,
+    is_grayscale_like: bool = False,
+) -> Optional[TonalProcessingEstimation]:
+    """Cue 15: Detect heavy tonal processing (B&W, high-contrast grade, film look).
+
+    When detected, downstream inference should discount color cues and note
+    that contrast may be editorial rather than from lighting.
+    """
+    if cv2 is None:
+        return None
+
+    notes: List[str] = []
+    is_bw = is_grayscale_like
+    if is_bw:
+        notes.append("Image is grayscale / B&W — color-based cues are unreliable.")
+
+    # Check saturation
+    hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+    mean_sat = float(np.mean(hsv[:, :, 1]))
+
+    # P2a: Warm-toned B&W detection — sepia, selenium, silver-gelatin prints
+    # have slight colour cast so is_grayscale_like misses them.
+    # Two complementary checks:
+    #   1) Low mean saturation + low p90 (catches most warm B&W)
+    #   2) >90% of pixels below saturation 40 (catches warm B&W with
+    #      compression artefacts that spike p99 but don't affect bulk)
+    # Using p90 instead of p99 avoids false negatives from isolated hot
+    # pixels in JPEG/WebP artefact zones.
+    if not is_bw and mean_sat < TONAL.WARM_BW_MEAN_SAT:
+        sat_channel = hsv[:, :, 1]
+        p90_sat = float(np.percentile(sat_channel, 90))
+        pct_low_sat = float(np.sum(sat_channel < TONAL.LOW_SAT_THRESHOLD)) / sat_channel.size * 100
+        if p90_sat < TONAL.WARM_BW_P90_SAT or pct_low_sat > TONAL.LOW_SAT_PIXEL_PCT:
+            is_bw = True
+            notes.append(
+                f"Warm-toned B&W detected (mean sat={mean_sat:.0f}, "
+                f"p90 sat={p90_sat:.0f}, {pct_low_sat:.0f}% below 40) "
+                f"— treating as monochrome."
+            )
+
+    # Channel-difference B&W detection — catches dark images where HSV
+    # saturation is misleadingly high.  In dark pixels, even tiny RGB
+    # differences (e.g. RGB 20,18,15) produce high HSV saturation because
+    # S = (max-min)/max amplifies noise when max is small.  RGB channel
+    # differences are immune to this artefact.
+    if not is_bw:
+        b_ch = img_bgr[:, :, 0].astype(np.float32)
+        g_ch = img_bgr[:, :, 1].astype(np.float32)
+        r_ch = img_bgr[:, :, 2].astype(np.float32)
+        avg_diff = float(
+            np.mean(np.abs(r_ch - g_ch))
+            + np.mean(np.abs(g_ch - b_ch))
+            + np.mean(np.abs(r_ch - b_ch))
+        )
+        if avg_diff < TONAL.CHANNEL_DIFF_BW:
+            is_bw = True
+            notes.append(
+                f"Channel-difference B&W detected (avg RGB diff sum={avg_diff:.1f}, "
+                f"HSV sat={mean_sat:.0f}) — RGB channels nearly identical despite "
+                f"high HSV saturation in dark regions."
+            )
+
+    is_desaturated = mean_sat < TONAL.DESATURATED_SAT
+    if is_desaturated and not is_bw:
+        notes.append(f"Very low saturation ({mean_sat:.0f}) — desaturated processing likely.")
+
+    # Check contrast from classification
+    is_high_contrast = False
+    if classification:
+        light_quality = classification.get("lightQuality", "")
+        brightness = classification.get("brightness", "")
+        if light_quality == "hard" and brightness == "low":
+            is_high_contrast = True
+            notes.append("Hard light + low brightness from palette — possible high-contrast grading.")
+
+    # Also check histogram spread
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    p1 = float(np.percentile(gray, 1))
+    p99 = float(np.percentile(gray, 99))
+    if p99 - p1 > TONAL.HCG_TONAL_RANGE_MIN and mean_sat < TONAL.HCG_SATURATION_MAX:
+        is_high_contrast = True
+        notes.append(f"Near-full tonal range ({p1:.0f}–{p99:.0f}) with low saturation — high-contrast grade.")
+
+    # Determine processing label
+    if is_bw:
+        processing = "bw"
+    elif is_high_contrast and is_desaturated:
+        processing = "heavy_grade"
+    elif is_high_contrast:
+        processing = "high_contrast"
+    elif is_desaturated:
+        processing = "film_emulation"
+    else:
+        processing = "none"
+
+    confidence = 0.7 if (is_bw or is_high_contrast) else (0.5 if is_desaturated else 0.3)
+
+    return TonalProcessingEstimation(
+        is_bw=is_bw,
+        is_high_contrast_grade=is_high_contrast,
+        is_desaturated=is_desaturated,
+        estimated_processing=processing,
+        mean_saturation=round(mean_sat, 1),
+        confidence=confidence,
+        notes=notes,
+    )
+
+
+# ── Cue 16: Shadow Interruption Pattern ──────────────────────────────────
+
+def extract_shadow_interruption_pattern(
+    img_bgr: np.ndarray,
+    person_mask: np.ndarray,
+    skin_mask: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]],
+) -> Optional[ShadowInterruptionPattern]:
+    """Cue 16: Detect shadow interruption patterns (gobo / projection / slit).
+
+    Method
+    ------
+    1. Isolate shadow region within expanded face bounding box.
+    2. Canny edge detection on shadow boundaries.
+    3. ``cv2.HoughLinesP`` to find straight line segments.
+    4. Score lines for parallelism, periodicity, and facial-contour
+       incongruence.
+    5. Classify as ``geometric_bar``, ``patterned_projection``, or ``unknown``.
+
+    Coordination with other cues:
+    - Cue 1 (ShadowEdgeHardness) measures overall hard/soft — this cue
+      measures *line geometry* within hard-shadow regions.
+    - Cue 12 (MultiShadowDetection) counts shadows by gradient direction —
+      this cue looks for *straight parallel lines*, a different signal.
+    """
+    if face_box is None:
+        return ShadowInterruptionPattern(
+            detected=False, classification="none", confidence=0.0,
+            notes=["no_face_data: face_box unavailable"],
+        )
+    if cv2 is None:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape[:2]
+
+    # ── 1. Shadow mask within expanded face region ──
+    x0, y0, x1, y1 = face_box
+    pad_x = int((x1 - x0) * 0.2)
+    pad_y = int((y1 - y0) * 0.2)
+    rx0, ry0 = max(0, x0 - pad_x), max(0, y0 - pad_y)
+    rx1, ry1 = min(w, x1 + pad_x), min(h, y1 + pad_y)
+
+    face_region_mask = np.zeros_like(gray, dtype=bool)
+    face_region_mask[ry0:ry1, rx0:rx1] = True
+    analysis_mask = (person_mask > 0) & face_region_mask
+
+    person_pixels = gray[analysis_mask]
+    if person_pixels.size < 200:
+        return None
+
+    p33 = float(np.percentile(person_pixels, 33))
+    shadow_mask = analysis_mask & (gray <= p33)
+    if int(np.sum(shadow_mask)) < 50:
+        return None
+
+    # ── 2. Canny edges near shadow boundaries ──
+    masked_gray = gray.copy()
+    masked_gray[~analysis_mask] = 128
+    edges = cv2.Canny(masked_gray, 50, 150)
+
+    kernel = np.ones((5, 5), np.uint8)
+    dilated = cv2.dilate(shadow_mask.astype(np.uint8), kernel, iterations=1)
+    shadow_boundary = dilated.astype(bool) & ~shadow_mask
+    boundary_edges = edges.copy()
+    boundary_edges[~(shadow_boundary | shadow_mask)] = 0
+    # Restrict to face region
+    boundary_edges[:ry0, :] = 0
+    boundary_edges[ry1:, :] = 0
+    boundary_edges[:, :rx0] = 0
+    boundary_edges[:, rx1:] = 0
+
+    # ── 3. HoughLinesP ──
+    face_w = max(x1 - x0, 1)
+    min_len = max(20, face_w // 6)
+    lines = cv2.HoughLinesP(
+        boundary_edges, rho=1, theta=np.pi / 180,
+        threshold=30, minLineLength=min_len, maxLineGap=10,
+    )
+
+    if lines is None or len(lines) < 2:
+        return ShadowInterruptionPattern(
+            detected=False,
+            classification="none",
+            confidence=0.3,
+            notes=["Fewer than 2 line segments in shadow region."],
+        )
+
+    line_count = len(lines)
+    notes: List[str] = [f"HoughLinesP found {line_count} segments in face shadow region."]
+
+    # ── 4a. Line angles & lengths ──
+    angles = np.empty(line_count)
+    lengths = np.empty(line_count)
+    for idx, line in enumerate(lines):
+        lx0, ly0, lx1, ly1 = line[0]
+        angles[idx] = np.arctan2(ly1 - ly0, lx1 - lx0)
+        lengths[idx] = np.sqrt((lx1 - lx0) ** 2 + (ly1 - ly0) ** 2)
+
+    # ── 4b. Parallelism (circular mean resultant of doubled angles) ──
+    doubled = angles * 2
+    mean_sin = float(np.average(np.sin(doubled), weights=lengths))
+    mean_cos = float(np.average(np.cos(doubled), weights=lengths))
+    parallelism = float(np.clip(np.sqrt(mean_sin ** 2 + mean_cos ** 2), 0.0, 1.0))
+
+    # ── 4c. Periodicity (CV of perpendicular spacing) ──
+    periodicity = 0.0
+    if parallelism > 0.5 and line_count >= 3:
+        dominant_angle = np.arctan2(mean_sin, mean_cos) / 2
+        perp_x = -np.sin(dominant_angle)
+        perp_y = np.cos(dominant_angle)
+        projections = []
+        for line in lines:
+            mx = (line[0][0] + line[0][2]) / 2.0
+            my = (line[0][1] + line[0][3]) / 2.0
+            projections.append(mx * perp_x + my * perp_y)
+        projections.sort()
+        spacings = np.diff(projections)
+        if len(spacings) >= 2 and np.mean(spacings) > 0:
+            cv_spacing = float(np.std(spacings) / np.mean(spacings))
+            periodicity = float(np.clip(1.0 - cv_spacing, 0.0, 1.0))
+            notes.append(f"Line spacing CV={cv_spacing:.2f}, periodicity={periodicity:.2f}")
+
+    # ── 4d. Shadow–face incongruence ──
+    face_h = max(y1 - y0, 1)
+    face_aspect_angle = np.arctan2(float(face_h), float(face_w))
+    angle_diffs = np.abs(angles - face_aspect_angle)
+    angle_diffs = np.minimum(angle_diffs, np.pi - angle_diffs)
+    incongruence = float(np.clip(
+        np.average(angle_diffs, weights=lengths) / (np.pi / 4), 0.0, 1.0,
+    ))
+
+    # ── 4e. Cross / perpendicular pattern detection ──
+    # When parallelism is LOW, check if lines cluster into two groups
+    # roughly 90° apart (cross-shaped gobo pattern).
+    # Wrap angles to [0, π) for grouping (undirected lines).
+    cross_score = 0.0
+    if line_count >= 2 and parallelism < 0.6:
+        # Normalize angles to [0, π)
+        norm_angles = angles % np.pi
+        # K-means style: find 2 clusters of angles
+        # Simple approach: sort and find the gap
+        sorted_ang = np.sort(norm_angles)
+        # Check if angles form two groups ~90° apart
+        # Compute pairwise angular differences (wrapped to [0, π/2])
+        from itertools import combinations
+        perp_pairs = 0
+        total_pairs = 0
+        for i, j in combinations(range(line_count), 2):
+            diff = abs(norm_angles[i] - norm_angles[j])
+            diff = min(diff, np.pi - diff)  # wrap to [0, π/2]
+            total_pairs += 1
+            # ~90° apart (±20° tolerance)
+            if abs(diff - np.pi / 2) < np.pi / 9:  # ±20°
+                perp_pairs += 1
+        if total_pairs > 0:
+            cross_score = perp_pairs / total_pairs
+        notes.append(f"Cross-pattern score={cross_score:.2f} ({perp_pairs}/{total_pairs} perpendicular pairs)")
+
+    # ── 4e. P2b: Body-contour / textured-garment false-positive suppression ──
+    # When lines have very low parallelism (< 0.35) the detected "lines" are
+    # likely body contours / anatomical shadow boundaries (e.g. a prone figure
+    # on a white surface) or textured garment edges (feathers, fringe, lace)
+    # rather than projected gobo/slit patterns.  Real gobo patterns have
+    # moderate-to-high parallelism (parallel slits) or high cross_score
+    # (perpendicular grid).  Suppress detection when neither is met.
+    # Thresholds tightened: cross_score raised from 0.25→0.35 to avoid
+    # textured garment edges passing as grid patterns.
+    _body_contour_likely = (
+        parallelism < 0.35
+        and cross_score < 0.35
+        and periodicity < 0.4
+    )
+    if _body_contour_likely:
+        notes.append(
+            f"Low parallelism ({parallelism:.2f}), low cross-score ({cross_score:.2f}) "
+            f"— lines likely from body contours, not projected pattern. Suppressing."
+        )
+        return ShadowInterruptionPattern(
+            detected=False,
+            classification="none",
+            line_count=line_count,
+            line_parallelism=round(parallelism, 3),
+            periodicity_score=round(periodicity, 3),
+            shadow_face_incongruence=round(incongruence, 3),
+            confidence=0.2,
+            notes=notes,
+        )
+
+    # ── 5. Classification ──
+    if parallelism > 0.6 and line_count >= 3 and incongruence > 0.4:
+        classification = "geometric_bar"
+        confidence = min(0.85, 0.4 + parallelism * 0.3 + incongruence * 0.2)
+        notes.append(
+            f"Parallel bars across face (parallelism={parallelism:.2f}, "
+            f"incongruence={incongruence:.2f}) — geometric bar / slit lighting."
+        )
+    elif periodicity > 0.5 and line_count >= 4:
+        classification = "patterned_projection"
+        confidence = min(0.80, 0.35 + periodicity * 0.3 + line_count * 0.02)
+        notes.append(
+            f"Periodic pattern ({periodicity:.2f}, {line_count} lines) "
+            f"— gobo or projection lighting."
+        )
+    elif cross_score > 0.45 and line_count >= 3 and incongruence > 0.25:
+        # Cross / perpendicular gobo pattern (e.g. cross-shaped shadow).
+        # Thresholds tightened: cross_score from 0.3→0.45, line_count from
+        # 2→3, incongruence from 0.2→0.25 to avoid false positives from
+        # textured garments (feathers, fringe, lace) whose edges create
+        # pseudo-perpendicular line segments.
+        classification = "patterned_projection"
+        confidence = min(0.70, 0.3 + cross_score * 0.3 + incongruence * 0.1)
+        notes.append(
+            f"Cross/perpendicular pattern (cross_score={cross_score:.2f}, "
+            f"{line_count} lines) — gobo with cross or grid projection."
+        )
+    elif line_count >= 5 and incongruence > 0.3 and parallelism >= 0.25:
+        # Low-parallelism guard: require at least some parallelism (0.25) to
+        # avoid classifying random textured-garment edges as gobo projection.
+        # True gobo patterns with 5+ lines always show some degree of
+        # parallelism from the structured light source.
+        classification = "patterned_projection"
+        confidence = min(0.65, 0.3 + line_count * 0.03 + incongruence * 0.15)
+        notes.append(
+            f"Multiple non-anatomical segments ({line_count}) — possible gobo/projection."
+        )
+    elif (parallelism > 0.5 or incongruence > 0.5) and line_count >= 2:
+        classification = "unknown"
+        confidence = 0.35
+        notes.append("Some geometric shadow signal but insufficient for confident classification.")
+    else:
+        return ShadowInterruptionPattern(
+            detected=False,
+            classification="none",
+            line_count=line_count,
+            line_parallelism=round(parallelism, 3),
+            periodicity_score=round(periodicity, 3),
+            shadow_face_incongruence=round(incongruence, 3),
+            confidence=0.3,
+            notes=notes + ["Lines found but do not form a geometric interruption pattern."],
+        )
+
+    return ShadowInterruptionPattern(
+        detected=True,
+        classification=classification,
+        line_count=line_count,
+        line_parallelism=round(parallelism, 3),
+        periodicity_score=round(periodicity, 3),
+        shadow_face_incongruence=round(incongruence, 3),
+        confidence=round(confidence, 2),
+        notes=notes,
+    )
+
+
+def detect_projected_pattern_shape(
+    person_mask: np.ndarray,
+) -> Optional[str]:
+    """Detect cross/slit gobo shape from the spatial distribution of the person mask.
+
+    When person_ratio is very low (< 0.25), the lit region likely comes from a
+    narrow projected pattern (gobo/slit).  This function analyzes the row and
+    column projections of the person mask to determine whether the visible area
+    forms a cross (+), horizontal slit, or vertical slit.
+
+    Returns: "cross" | "vertical_slit" | "horizontal_slit" | None
+    """
+    if person_mask is None or not np.any(person_mask):
+        return None
+
+    h, w = person_mask.shape
+    total = h * w
+    if total == 0:
+        return None
+
+    person_ratio = float(np.sum(person_mask)) / total
+    if person_ratio > 0.25:
+        return None  # Too much visible — not a narrow projection
+
+    # Row and column projections: fraction of each row/column that is lit
+    row_proj = np.sum(person_mask, axis=1).astype(float) / w
+    col_proj = np.sum(person_mask, axis=0).astype(float) / h
+
+    # A "bar" exists when some rows/columns have substantial coverage (>20%).
+    # A cross pattern has bars in BOTH axes; a slit has a bar in ONE axis.
+    row_peak = float(np.max(row_proj)) if len(row_proj) > 0 else 0.0
+    col_peak = float(np.max(col_proj)) if len(col_proj) > 0 else 0.0
+
+    # Count how many rows/cols exceed a threshold (bar width)
+    bar_thresh = 0.15
+    row_bar_count = int(np.sum(row_proj > bar_thresh))
+    col_bar_count = int(np.sum(col_proj > bar_thresh))
+
+    # Minimum bar width: at least 5% of the dimension
+    row_has_bar = row_peak > 0.20 and row_bar_count > int(h * 0.05)
+    col_has_bar = col_peak > 0.20 and col_bar_count > int(w * 0.05)
+
+    if row_has_bar and col_has_bar:
+        return "cross"
+    elif col_has_bar and not row_has_bar:
+        return "vertical_slit"
+    elif row_has_bar and not col_has_bar:
+        return "horizontal_slit"
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Master Orchestrator
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def extract_visual_cues(
+    img_bgr: np.ndarray,
+    vision_data: Dict[str, Any],
+    classification: Optional[Dict[str, Any]] = None,
+) -> VisualCueReport:
+    """Extract all 16 visual cues from image data.
+
+    Each extractor runs independently inside a try/except — one failure
+    never prevents other cues from being computed.
+
+    Args:
+        img_bgr: Raw BGR image (numpy array from cv2.imread).
+        vision_data: Output from ``analyze_image_regions()`` with ``return_masks=True``.
+                     Must contain ``_masks`` dict and ``catchlights`` dict.
+        classification: Palette classification from ``describe_image()``.
+
+    Returns:
+        VisualCueReport with all successfully extracted cues populated.
+    """
+    masks = vision_data.get("_masks", {})
+    person_mask = masks.get("person")
+    skin_mask = masks.get("skin")
+    background_mask = masks.get("background")
+
+    catchlight_data = vision_data.get("catchlights", {})
+    pose_data = vision_data.get("pose", {})
+    face_box_list = vision_data.get("region_attribution", {}).get("face_box")
+    face_box = tuple(face_box_list) if face_box_list else None
+
+    is_grayscale = False
+    if classification:
+        # Check if grayscale from the parent describe_image output
+        is_grayscale = classification.get("_is_grayscale_like", False)
+
+    report = VisualCueReport()
+    cue_count = 0
+    all_notes: List[str] = []
+
+    # Helper to safely extract a cue
+    def _safe_extract(name: str, fn, *args, **kwargs):
+        nonlocal cue_count
+        try:
+            result = fn(*args, **kwargs)
+            if result is not None:
+                cue_count += 1
+            return result
+        except Exception as exc:
+            logger.warning("Cue extraction failed for %s: %s", name, exc)
+            all_notes.append(f"Cue '{name}' extraction failed: {exc}")
+            return None
+
+    # Need masks for most cues
+    has_masks = person_mask is not None and skin_mask is not None and background_mask is not None
+
+    if has_masks:
+        # P2d: Extract tonal processing FIRST so we can pass
+        # is_high_contrast_grade to shadow edge detection.
+        report.tonal_processing_estimation = _safe_extract(
+            "tonal_processing_estimation", extract_tonal_processing_estimation,
+            img_bgr, classification, is_grayscale,
+        )
+        _is_hcg = (
+            report.tonal_processing_estimation is not None
+            and report.tonal_processing_estimation.is_high_contrast_grade
+        )
+        report.shadow_edge_hardness = _safe_extract(
+            "shadow_edge_hardness", extract_shadow_edge_hardness,
+            img_bgr, person_mask, skin_mask, _is_hcg,
+        )
+        report.primary_shadow_direction = _safe_extract(
+            "primary_shadow_direction", extract_primary_shadow_direction,
+            img_bgr, face_box, skin_mask,
+        )
+        report.vertical_light_angle = _safe_extract(
+            "vertical_light_angle", extract_vertical_light_angle,
+            img_bgr, face_box,
+        )
+        report.highlight_to_shadow_transition = _safe_extract(
+            "highlight_to_shadow_transition", extract_highlight_to_shadow_transition,
+            img_bgr, skin_mask,
+        )
+        report.contrast_ratio = _safe_extract(
+            "contrast_ratio", extract_contrast_ratio,
+            img_bgr, person_mask,
+        )
+        report.subject_background_separation = _safe_extract(
+            "subject_background_separation", extract_subject_background_separation,
+            img_bgr, person_mask, background_mask,
+        )
+        report.background_illumination = _safe_extract(
+            "background_illumination", extract_background_illumination,
+            img_bgr, background_mask,
+        )
+        report.specular_highlight_behavior = _safe_extract(
+            "specular_highlight_behavior", extract_specular_highlight_behavior,
+            img_bgr, skin_mask, person_mask,
+        )
+        report.multi_shadow_detection = _safe_extract(
+            "multi_shadow_detection", extract_multi_shadow_detection,
+            img_bgr, person_mask,
+        )
+        report.environmental_shadow_continuity = _safe_extract(
+            "environmental_shadow_continuity", extract_environmental_shadow_continuity,
+            img_bgr, background_mask, classification,
+        )
+        report.pose_induced_shadow_interference = _safe_extract(
+            "pose_induced_shadow_interference", extract_pose_induced_shadow_interference,
+            pose_data, img_bgr, skin_mask, face_box,
+        )
+        # tonal_processing_estimation already extracted above (before shadow_edge_hardness)
+        report.shadow_interruption_pattern = _safe_extract(
+            "shadow_interruption_pattern", extract_shadow_interruption_pattern,
+            img_bgr, person_mask, skin_mask, face_box,
+        )
+        # Projected pattern shape: detect cross/slit from person mask spatial
+        # distribution.  Runs independently of SIP (which requires face_box).
+        report.projected_pattern_shape = _safe_extract(
+            "projected_pattern_shape", detect_projected_pattern_shape,
+            person_mask,
+        )
+    else:
+        all_notes.append("No masks available — only catchlight-based cues extracted.")
+
+    # Catchlight cues don't need masks
+    report.catchlight_position = _safe_extract(
+        "catchlight_position", extract_catchlight_position,
+        catchlight_data,
+    )
+    report.catchlight_shape = _safe_extract(
+        "catchlight_shape", extract_catchlight_shape,
+        catchlight_data,
+    )
+    report.reflection_architecture = _safe_extract(
+        "reflection_architecture", extract_reflection_architecture,
+        catchlight_data,
+    )
+
+    report.cues_computed = cue_count
+    report.notes = all_notes
+
+    return report
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pipeline-Derived Cue Enrichment
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def enrich_cue_report_from_pipeline(
+    report: VisualCueReport,
+    pipeline_results: Dict[str, Any],
+) -> VisualCueReport:
+    """Enrich cue report with cues derived from the extended vision pipeline.
+
+    The extended pipeline (``run_extended_pipeline``) produces passes that
+    are not available during initial cue extraction.  This function attaches
+    those results to the existing cue report.  New cues are only attached
+    when the pipeline pass succeeded (``ok=True``).
+
+    Parameters
+    ----------
+    report : VisualCueReport
+        Existing cue report to enrich (mutated in place and returned).
+    pipeline_results : dict
+        Full output from ``run_extended_pipeline``.
+
+    Returns
+    -------
+    VisualCueReport
+        The same report object, enriched with pipeline-derived cues.
+    """
+    # ── Catchlight topology ──
+    topology_data = pipeline_results.get("catchlight_topology")
+    if isinstance(topology_data, dict) and topology_data.get("ok"):
+        try:
+            report.catchlight_topology = extract_catchlight_topology(topology_data)
+        except Exception:
+            pass  # best-effort enrichment
+
+    # ── Highlight axis map ──
+    axis_map_data = pipeline_results.get("highlight_axis_map")
+    if isinstance(axis_map_data, dict) and axis_map_data.get("ok"):
+        try:
+            report.highlight_axis_map = extract_highlight_axis_map(axis_map_data)
+        except Exception:
+            pass
+
+    # ── Highlight symmetry ──
+    symmetry_data = pipeline_results.get("highlight_symmetry")
+    if isinstance(symmetry_data, dict) and symmetry_data.get("ok"):
+        try:
+            report.highlight_symmetry = extract_highlight_symmetry(symmetry_data)
+        except Exception:
+            pass
+
+    # ── Continuous source signals ──
+    source_data = pipeline_results.get("continuous_source")
+    if isinstance(source_data, dict) and source_data.get("ok"):
+        try:
+            report.continuous_source_signals = extract_continuous_source_signals(source_data)
+        except Exception:
+            pass
+
+    # ── Bounce contributor ──
+    bounce_data = pipeline_results.get("bounce_contributor")
+    if isinstance(bounce_data, dict) and bounce_data.get("ok"):
+        try:
+            report.bounce_contributor = extract_bounce_contributor(bounce_data)
+        except Exception:
+            pass
+
+    # ── Separation light ──
+    sep_data = pipeline_results.get("separation_light")
+    if isinstance(sep_data, dict) and sep_data.get("ok"):
+        try:
+            report.separation_light = extract_separation_light(sep_data)
+        except Exception:
+            pass
+
+    # ── Off-axis key ──
+    off_axis_data = pipeline_results.get("off_axis_key")
+    if isinstance(off_axis_data, dict) and off_axis_data.get("ok"):
+        try:
+            report.off_axis_key = extract_off_axis_key(off_axis_data)
+        except Exception:
+            pass
+
+    # ── Light structure ──
+    structure_data = pipeline_results.get("light_structure")
+    if isinstance(structure_data, dict) and structure_data.get("ok"):
+        try:
+            report.light_structure = extract_light_structure(structure_data)
+        except Exception:
+            pass
+
+    return report

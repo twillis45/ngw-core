@@ -10,6 +10,7 @@ export const GEAR_TYPES = [
   { value: 'led_cob',        label: 'LED COB (Aputure, etc.)' },
   { value: 'led_tube',       label: 'LED Tube (Pavotube, etc.)' },
   { value: 'fresnel',        label: 'Fresnel / Dedolight' },
+  { value: 'ellipsoidal',    label: 'Ellipsoidal / ETC Source Four' },
   { value: 'ring_light',     label: 'Ring Light' },
   { value: 'natural_window', label: 'Window / Natural Light' },
   { value: 'reflector_only', label: 'Reflector Only' },
@@ -23,19 +24,22 @@ export const GEAR_CRITERIA = {
   led_cob:        { brightness: 6000, color_accuracy: 95, portability: 30, battery_life: 20, energy_efficiency: 80 },
   led_tube:       { brightness: 1500, color_accuracy: 85, portability: 85, battery_life: 70, energy_efficiency: 95 },
   fresnel:        { brightness: 4000, color_accuracy: 90, portability: 25, battery_life: 10, energy_efficiency: 50 },
+  ellipsoidal:    { brightness: 8000, color_accuracy: 92, portability: 10, battery_life: 10, energy_efficiency: 55 },
   ring_light:     { brightness: 2500, color_accuracy: 82, portability: 60, battery_life: 40, energy_efficiency: 75 },
   natural_window: { brightness: 3500, color_accuracy: 98, portability: 0,  battery_life: 100, energy_efficiency: 100 },
   reflector_only: { brightness: 1000, color_accuracy: 98, portability: 95, battery_life: 100, energy_efficiency: 100 },
 };
 
-export const MODIFIER_OPTIONS = [
-  { value: 'softbox',     label: 'Softbox' },
-  { value: 'umbrella',    label: 'Umbrella' },
-  { value: 'beauty_dish', label: 'Beauty Dish' },
-  { value: 'grid_spot',   label: 'Grid / Spot' },
-  { value: 'stripbox',    label: 'Strip Box' },
-  { value: 'barn_doors',  label: 'Barn Doors' },
-  { value: 'snoot',       label: 'Snoot' },
+// Re-export from centralized modifier catalog for backward compat
+import { MODIFIER_CATALOG as _FULL_CATALOG } from './data/modifierCatalog';
+export const MODIFIER_OPTIONS = _FULL_CATALOG.map(m => ({ value: m.value, label: m.label }));
+
+/** Accessory types — these are not light sources but supporting gear.
+ *  They appear in the catalog for kit tracking but don't participate in
+ *  brightness/scoring calculations. */
+export const ACCESSORY_TYPES = [
+  { value: 'trigger',      label: 'Remote Trigger / Sync' },
+  { value: 'light_meter',  label: 'Light Meter' },
 ];
 
 /** Short photographer-friendly names for payload / diagram labels. */
@@ -47,9 +51,12 @@ export const GEAR_SHORT_NAMES = {
   led_cob:        'LED COB',
   led_tube:       'LED Tube',
   fresnel:        'Fresnel',
+  ellipsoidal:    'Source Four',
   ring_light:     'Ring Light',
   natural_window: 'Window Light',
   reflector_only: 'Reflector',
+  trigger:        'Trigger',
+  light_meter:    'Light Meter',
 };
 
 export function criteriaForGear(gearType) {

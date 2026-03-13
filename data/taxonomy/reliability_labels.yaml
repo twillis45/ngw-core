@@ -1,0 +1,21 @@
+version: 1.0
+reliability_labels:
+  - id: very_reliable
+    min_score: 90
+    max_score: 100
+
+  - id: reliable
+    min_score: 75
+    max_score: 89
+
+  - id: good_option
+    min_score: 60
+    max_score: 74
+
+  - id: experimental
+    min_score: 40
+    max_score: 59
+
+  - id: not_ideal
+    min_score: 0
+    max_score: 39

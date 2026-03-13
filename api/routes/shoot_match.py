@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import time
 import uuid
@@ -11,13 +12,22 @@ from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
 from engine.image_analysis import describe_image
+from engine.lighting_inference import (
+    infer_lighting_from_vision,
+    build_reference_description,
+    match_catchlights_to_diagram,
+)
 from engine.patterns import (
     catchlight_plan_for,
     classify_lighting_pattern,
     shadow_expectations_for,
 )
 from engine.selector import select_best_system
-from engine.diagram import build_diagram
+from engine.diagram import build_diagram, build_reference_diagram
+
+logger = logging.getLogger(__name__)
+from engine.taxonomy_loader import get_diagnostics_for_pattern
+from engine.master_mode import get_coaching_overlay, list_modes
 
 router = APIRouter()
 
@@ -26,6 +36,7 @@ SYSTEMS_PATH = Path("data/lighting_systems.json")
 # ── Mood / environment / gear maps (mirrors src/engine JS modules) ──
 
 MOOD_MAP = {
+    # Display labels (from chat UI)
     "Clean & Classic": "corporate",
     "Moody & Dramatic": "cinematic",
     "Soft & Ethereal": "beauty",
@@ -33,9 +44,18 @@ MOOD_MAP = {
     "High Fashion": "beauty",
     "Natural & Available": "natural",
     "Cinematic": "cinematic",
+    # Internal codes (from wizard UI)
+    "beauty": "beauty",
+    "cinematic": "cinematic",
+    "corporate": "corporate",
+    "editorial": "editorial",
+    "natural": "natural",
+    "high_key": "high_key",
+    "low_key": "low_key",
 }
 
 ENVIRONMENT_MAP = {
+    # Display labels (from chat UI)
     "Small Room": "studio_small",
     "Home Studio": "studio_small",
     "Medium Studio": "studio_large",
@@ -43,6 +63,11 @@ ENVIRONMENT_MAP = {
     "Outdoor": "on_location_outdoor",
     "Window Light": "on_location_indoor",
     "Office": "studio_small",
+    # Internal codes (from wizard UI)
+    "studio_small": "studio_small",
+    "studio_large": "studio_large",
+    "on_location_indoor": "on_location_indoor",
+    "on_location_outdoor": "on_location_outdoor",
 }
 
 GEAR_MAP = {
@@ -88,7 +113,7 @@ MODIFIER_LABELS = {
     "gel_cto": "CTO Gel",
 }
 
-ROLE_LABELS = {"key": "Key Light", "fill": "Fill Light", "rim": "Rim Light"}
+ROLE_LABELS = {"key": "Key Light", "fill": "Fill Light", "rim": "Rim Light", "background": "Background Light"}
 
 CAMERA_SETTINGS = {
     "beauty": {
@@ -145,6 +170,7 @@ class ShootMatchRequest(BaseModel):
     gear: List[str] = Field(default_factory=list)
     skinTone: Optional[str] = None
     referenceImage: Optional[str] = None
+    masterMode: Optional[str] = None
 
 
 # ── Helpers ──
@@ -205,9 +231,11 @@ def _m_to_ft(m: float) -> str:
 
 
 def _angle_desc(deg: float) -> str:
-    side = "camera left" if deg >= 0 else "camera right"
     if abs(deg) < 5:
         return "on axis (centered)"
+    if abs(deg) >= 135:
+        return "behind subject"
+    side = "camera right" if deg >= 0 else "camera left"
     return f"{round(abs(deg))}° {side}"
 
 
@@ -224,6 +252,7 @@ def _height_desc(h: float) -> str:
 def _map_light(light: Dict[str, Any]) -> Dict[str, Any]:
     mod = light.get("modifier", "")
     return {
+        "roleKey": light["role"],
         "role": ROLE_LABELS.get(light["role"], light.get("label", light["role"])),
         "modifier": MODIFIER_LABELS.get(mod, mod),
         "position": _angle_desc(light["angle_deg"]),
@@ -237,15 +266,143 @@ UPLOAD_DIR = Path("static/uploads")
 
 
 @router.post("/upload-reference")
-async def upload_reference(file: UploadFile = File(...)) -> Dict[str, str]:
-    """Save an uploaded reference image and return its server path."""
+async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Save an uploaded reference image, run basic analysis, and return both."""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     ext = Path(file.filename or "photo.jpg").suffix or ".jpg"
     filename = f"ref_{uuid.uuid4().hex[:8]}{ext}"
     dest = UPLOAD_DIR / filename
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
-    return {"path": str(dest)}
+
+    analysis = None
+    lighting_intel = None
+    try:
+        raw = describe_image(str(dest), describe_mode="vision")
+        if raw and raw.get("ok"):
+            analysis = {
+                "palette": raw.get("palette", {}),
+                "orientation": raw.get("orientation"),
+                "isGrayscale": raw.get("is_grayscale_like", False),
+                "classification": raw.get("classification"),
+            }
+            vision = raw.get("vision", {})
+            if vision and vision.get("ok"):
+                analysis["skinTone"] = vision.get("skin_tone")
+                catchlights = vision.get("catchlights")
+                if catchlights and catchlights.get("ok"):
+                    analysis["catchlights"] = catchlights
+
+                # Surface background data
+                region = vision.get("region_attribution", {})
+                masks = region.get("masks", {})
+                palettes = region.get("palettes", {})
+                bg_palette = palettes.get("background_palette")
+                if bg_palette is not None:
+                    analysis["background"] = {
+                        "palette": bg_palette,
+                        "ratio": masks.get("background_ratio"),
+                    }
+
+                # Run lighting inference
+                try:
+                    classification = raw.get("classification", {})
+                    cue_report_obj = raw.get("_cue_report")
+                    lighting_intel = infer_lighting_from_vision(
+                        vision, classification=classification,
+                        cue_report=cue_report_obj,
+                    )
+                except Exception:
+                    lighting_intel = None
+
+                if lighting_intel is not None:
+                    # Enrich background with light detection
+                    if lighting_intel.background_light_detected:
+                        bg_section = analysis.get("background", {})
+                        bg_section["lightDetected"] = True
+                        bg_section["lightConfidence"] = (
+                            lighting_intel.background_light_confidence
+                        )
+                        analysis["background"] = bg_section
+
+                    # Build detected diagram
+                    ref_diagram = build_reference_diagram(
+                        pattern=lighting_intel.pattern,
+                        modifier_family=lighting_intel.modifier_family,
+                        light_count=lighting_intel.light_count,
+                        key_position_text=lighting_intel.key_position_text,
+                        fill_method_text=lighting_intel.fill_method_text,
+                        background_light=lighting_intel.background_light_detected,
+                        key_side=lighting_intel.key_side,
+                    )
+                    ref_diagram_dict = ref_diagram.model_dump()
+
+                    # Match catchlights to diagram lights
+                    raw_catchlights: List[Dict[str, Any]] = []
+                    cd = vision.get("catchlights", {})
+                    if cd and cd.get("ok"):
+                        raw_catchlights = cd.get("catchlights", [])
+
+                    matched_lights = match_catchlights_to_diagram(
+                        diagram_lights=ref_diagram_dict["lights"],
+                        catchlights=raw_catchlights,
+                        pattern=lighting_intel.pattern,
+                    )
+
+                    diagram_lights: List[Dict[str, Any]] = []
+                    for ml in matched_lights:
+                        entry: Dict[str, Any] = {
+                            **_map_light(ml),
+                            "detectedFrom": ml.get("detectedFrom", []),
+                        }
+                        if ml.get("role") == "background":
+                            entry["detectedFromNote"] = (
+                                "Background lights illuminate the backdrop, "
+                                "not the subject's eyes. This light was "
+                                "inferred from background brightness analysis, "
+                                "not from catchlight evidence."
+                            )
+                        diagram_lights.append(entry)
+
+                    analysis["detectedDiagram"] = {
+                        "lights": diagram_lights,
+                        "subject": ref_diagram_dict["subject"],
+                        "camera": ref_diagram_dict["camera"],
+                        "raw": ref_diagram_dict,
+                    }
+
+                    # Build descriptions
+                    vlm_desc_obj = raw.get("_vlm_description")
+                    ref_description = build_reference_description(
+                        vision_data=vision,
+                        classification=raw.get("classification"),
+                        image_analysis=raw,
+                        inference=lighting_intel,
+                        cue_report=cue_report_obj,
+                        vlm_description=vlm_desc_obj,
+                    )
+                    analysis["description"] = ref_description
+
+                    # Lighting intelligence summary
+                    analysis["lightingIntelligence"] = {
+                        "detectedPattern": lighting_intel.pattern,
+                        "patternConfidence": lighting_intel.pattern_confidence,
+                        "detectedModifier": lighting_intel.modifier_family,
+                        "modifierConfidence": lighting_intel.modifier_confidence,
+                        "lightCount": lighting_intel.light_count,
+                        "keyPosition": lighting_intel.key_position_text,
+                        "keySide": lighting_intel.key_side,
+                        "fillMethod": lighting_intel.fill_method_text,
+                        "backgroundLight": lighting_intel.background_light_detected,
+                        "backgroundLightConfidence": (
+                            lighting_intel.background_light_confidence
+                        ),
+                        "notes": lighting_intel.notes,
+                    }
+    except Exception:
+        logger.exception("Reference image analysis failed")
+
+    return {"path": str(dest), "analysis": analysis}
 
 
 # ── Endpoint ──
@@ -267,15 +424,30 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     mood = MOOD_MAP.get(req.mood, "natural")
     env = ENVIRONMENT_MAP.get(req.environment, "studio_small")
 
-    # Analyze reference image if provided
+    # Analyze reference image if provided (vision mode for full intelligence)
     image_analysis = None
+    lighting_intel = None
     if req.referenceImage:
         image_path = Path(req.referenceImage)
         if image_path.exists():
             try:
-                image_analysis = describe_image(str(image_path), describe_mode="basic")
+                image_analysis = describe_image(str(image_path), describe_mode="vision")
             except Exception:
                 image_analysis = None
+
+            # Run lighting inference on vision data
+            if image_analysis and image_analysis.get("ok"):
+                vision_data = image_analysis.get("vision", {})
+                classification = image_analysis.get("classification", {})
+                if vision_data and vision_data.get("ok"):
+                    try:
+                        cue_report_obj = image_analysis.get("_cue_report")
+                        lighting_intel = infer_lighting_from_vision(
+                            vision_data, classification=classification,
+                            cue_report=cue_report_obj,
+                        )
+                    except Exception:
+                        lighting_intel = None
 
     # Strip to engine-safe fields
     engine_systems = [
@@ -291,8 +463,12 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     ]
 
     input_ctx = {"mood": mood, "environment": env, "modifiers_available": modifiers}
+    if req.masterMode:
+        input_ctx["master_mode"] = req.masterMode
     if req.skinTone:
         input_ctx["skin_tone"] = req.skinTone
+    if lighting_intel is not None:
+        input_ctx.update(lighting_intel.to_input_ctx_fields())
 
     outcome = select_best_system(
         engine_systems,
@@ -308,8 +484,8 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     # Find source system (with why_this_works, failure_modes, etc.)
     source = next((s for s in filtered if s["id"] == winner_id), filtered[0])
 
-    # Build diagram
-    diagram = build_diagram(source, modifiers_available=modifiers)
+    # Build diagram (master mode overrides geometry when active)
+    diagram = build_diagram(source, modifiers_available=modifiers, master_mode=req.masterMode)
     diagram_dict = diagram.model_dump()
     lights = diagram_dict["lights"]
 
@@ -317,7 +493,11 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     modifier_family = source["taxonomy_refs"].get("modifier_family", "")
     gear_profile = source["taxonomy_refs"].get("gear_profile", "")
     pattern = classify_lighting_pattern(
-        mood=mood, modifier_family=modifier_family, gear_profile=gear_profile
+        mood=mood,
+        modifier_family=modifier_family,
+        gear_profile=gear_profile,
+        key_position_text=input_ctx.get("detected_key_position", ""),
+        fill_method_text=input_ctx.get("detected_fill_method", ""),
     )
     shadows = shadow_expectations_for(pattern)
     catchlights = catchlight_plan_for(modifier_family, pattern)
@@ -355,6 +535,15 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
             "fixes": catchlights.get("quick_fixes", []),
             "fixOrder": shadows.get("fix_order", []),
         },
+        "diagnostics": [
+            {
+                "id": d["id"],
+                "symptoms": d.get("symptoms", []),
+                "likely_causes": d.get("likely_causes", []),
+                "quick_fixes": d.get("quick_fixes", []),
+            }
+            for d in get_diagnostics_for_pattern(pattern)
+        ],
         "substitutions": {
             "items": [
                 {
@@ -376,6 +565,45 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
         ],
     }
 
+    # ── Master mode coaching overlay ──
+    coaching = get_coaching_overlay(req.masterMode)
+    if coaching:
+        # Tag the best match with master mode info for the UI badge
+        cards["bestMatch"]["masterMode"] = coaching.get("masterModeId")
+        cards["bestMatch"]["masterModeLabel"] = coaching.get("masterModeLabel")
+        cards["bestMatch"]["masterModeIcon"] = coaching.get("masterModeIcon")
+
+        # Override rationale
+        if coaching.get("rationale"):
+            cards["whyThisWorks"]["body"] = coaching["rationale"]
+
+        # Override camera settings
+        if coaching.get("camera"):
+            cards["cameraSettings"] = {**cards["cameraSettings"], **coaching["camera"]}
+
+        # Prepend mode-specific good signs, warnings, quick fixes
+        if coaching.get("good_signs"):
+            existing = cards["whatToLookFor"].get("goodSigns", [])
+            cards["whatToLookFor"]["goodSigns"] = coaching["good_signs"] + existing
+
+        if coaching.get("warnings"):
+            existing = cards["whatToLookFor"].get("warnings", [])
+            cards["whatToLookFor"]["warnings"] = coaching["warnings"] + existing
+
+        if coaching.get("quick_fixes"):
+            existing = cards["quickFixes"].get("fixes", [])
+            cards["quickFixes"]["fixes"] = coaching["quick_fixes"] + existing
+
+        # Add substitution notes from mode
+        if coaching.get("substitution_notes"):
+            existing = cards["substitutions"].get("items", [])
+            mode_subs = [{"ifMissing": "—", "use": note, "tradeoff": ""} for note in coaching["substitution_notes"]]
+            cards["substitutions"]["items"] = mode_subs + existing
+
+        # Pass lights guide for per-light descriptions
+        if coaching.get("lights_guide"):
+            cards["bestMatch"]["lightsGuide"] = coaching["lights_guide"]
+
     result = {
         "status": "success",
         "requestId": f"req_{uuid.uuid4().hex[:12]}",
@@ -384,10 +612,138 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     }
 
     if image_analysis and image_analysis.get("ok"):
-        result["referenceImageAnalysis"] = {
+        ref_analysis: Dict[str, Any] = {
             "palette": image_analysis.get("palette", {}),
             "orientation": image_analysis.get("orientation"),
             "isGrayscale": image_analysis.get("is_grayscale_like", False),
+            "classification": image_analysis.get("classification"),
         }
+        # Enrich with vision data when available
+        vision = image_analysis.get("vision", {})
+        if vision and vision.get("ok"):
+            ref_analysis["skinTone"] = vision.get("skin_tone")
+            catchlight_data = vision.get("catchlights")
+            if catchlight_data and catchlight_data.get("ok"):
+                ref_analysis["catchlights"] = catchlight_data
+            # Surface background data at top level
+            region = vision.get("region_attribution", {})
+            masks = region.get("masks", {})
+            palettes = region.get("palettes", {})
+            bg_palette = palettes.get("background_palette")
+            if bg_palette is not None:
+                ref_analysis["background"] = {
+                    "palette": bg_palette,
+                    "ratio": masks.get("background_ratio"),
+                }
+
+        # ── Enrich top-level background with light detection ──
+        if lighting_intel is not None and lighting_intel.background_light_detected:
+            bg_section = ref_analysis.get("background", {})
+            bg_section["lightDetected"] = True
+            bg_section["lightConfidence"] = lighting_intel.background_light_confidence
+            ref_analysis["background"] = bg_section
+
+        # ── Diagram + descriptions on the reference evaluation ──
+        if lighting_intel is not None:
+            # Build a diagram showing what we *detected* in the reference
+            ref_diagram = build_reference_diagram(
+                pattern=lighting_intel.pattern,
+                modifier_family=lighting_intel.modifier_family,
+                light_count=lighting_intel.light_count,
+                key_position_text=lighting_intel.key_position_text,
+                fill_method_text=lighting_intel.fill_method_text,
+                background_light=lighting_intel.background_light_detected,
+                key_side=lighting_intel.key_side,
+            )
+            ref_diagram_dict = ref_diagram.model_dump()
+
+            # Match each diagram light to the catchlights that prove it
+            raw_catchlights: List[Dict[str, Any]] = []
+            cd = vision.get("catchlights", {}) if vision else {}
+            if cd and cd.get("ok"):
+                raw_catchlights = cd.get("catchlights", [])
+
+            matched_lights = match_catchlights_to_diagram(
+                diagram_lights=ref_diagram_dict["lights"],
+                catchlights=raw_catchlights,
+                pattern=lighting_intel.pattern,
+            )
+
+            diagram_lights: List[Dict[str, Any]] = []
+            for ml in matched_lights:
+                entry: Dict[str, Any] = {
+                    **_map_light(ml),
+                    "detectedFrom": ml.get("detectedFrom", []),
+                }
+                # Background lights are detected from backdrop brightness,
+                # not catchlights — explain why detectedFrom is empty.
+                if ml.get("role") == "background":
+                    entry["detectedFromNote"] = (
+                        "Background lights illuminate the backdrop, not the subject's eyes. "
+                        "This light was inferred from background brightness analysis, "
+                        "not from catchlight evidence."
+                    )
+                diagram_lights.append(entry)
+
+            ref_analysis["detectedDiagram"] = {
+                "lights": diagram_lights,
+                "subject": ref_diagram_dict["subject"],
+                "camera": ref_diagram_dict["camera"],
+                "raw": ref_diagram_dict,
+            }
+
+            # Build rich human-readable descriptions of the reference image
+            cue_report_for_desc = image_analysis.get("_cue_report")
+            vlm_desc_for_desc = image_analysis.get("_vlm_description")
+            ref_description = build_reference_description(
+                vision_data=vision,
+                classification=image_analysis.get("classification"),
+                image_analysis=image_analysis,
+                inference=lighting_intel,
+                cue_report=cue_report_for_desc,
+                vlm_description=vlm_desc_for_desc,
+            )
+            ref_analysis["description"] = ref_description
+
+        result["referenceImageAnalysis"] = ref_analysis
+
+    # Lighting intelligence (scoring influence from reference image)
+    if lighting_intel is not None:
+        intel_dict: Dict[str, Any] = {
+            "detectedPattern": lighting_intel.pattern,
+            "patternConfidence": lighting_intel.pattern_confidence,
+            "detectedModifier": lighting_intel.modifier_family,
+            "modifierConfidence": lighting_intel.modifier_confidence,
+            "detectedMood": lighting_intel.detected_mood,
+            "moodConfidence": lighting_intel.mood_confidence,
+            "detectedSkinTone": lighting_intel.detected_skin_tone,
+            "skinToneConfidence": lighting_intel.skin_tone_confidence,
+            "lightCount": lighting_intel.light_count,
+            "keyPosition": lighting_intel.key_position_text,
+            "fillMethod": lighting_intel.fill_method_text,
+            "backgroundLight": lighting_intel.background_light_detected,
+            "backgroundLightConfidence": lighting_intel.background_light_confidence,
+            "notes": lighting_intel.notes,
+        }
+        # Note discrepancy between user-selected mood and image-detected mood
+        if lighting_intel.detected_mood and lighting_intel.detected_mood != mood:
+            intel_dict["moodDiscrepancy"] = {
+                "userSelected": mood,
+                "imageDetected": lighting_intel.detected_mood,
+                "note": (
+                    f"Your selected mood '{mood}' differs from the reference image's "
+                    f"detected mood '{lighting_intel.detected_mood}'. The system used "
+                    f"both signals to improve recommendations."
+                ),
+            }
+        result["lightingIntelligence"] = intel_dict
 
     return result
+
+
+# ── Master Modes listing ──
+
+@router.get("/master-modes")
+async def get_master_modes():
+    """Return available master modes for the UI."""
+    return {"modes": list_modes()}

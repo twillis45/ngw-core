@@ -1,0 +1,79 @@
+version: "1.0"
+use_cases:
+  - id: portrait
+    description: General portrait photography — single subject, face as primary focus
+    typical_visual_intents: [soft, dramatic, natural, cinematic]
+    typical_patterns: [rembrandt, loop, butterfly, split]
+    business_priority: 1
+
+  - id: headshot
+    description: Tight framing on face and shoulders for professional or casting use
+    typical_visual_intents: [clean, soft, natural]
+    typical_patterns: [loop, butterfly, rembrandt]
+    business_priority: 1
+
+  - id: beauty
+    description: Close-up beauty photography emphasizing skin, makeup, and cosmetics
+    typical_visual_intents: [luxurious, glossy, clean]
+    typical_patterns: [butterfly, clamshell, flat_frontal]
+    business_priority: 2
+
+  - id: fashion
+    description: Full-body or editorial fashion with emphasis on clothing and styling
+    typical_visual_intents: [edgy, dramatic, luxurious, punchy]
+    typical_patterns: [hard_frontal, side_key, rim_dominant, split]
+    business_priority: 3
+
+  - id: editorial
+    description: Story-driven, concept-forward imagery for magazines and publications
+    typical_visual_intents: [edgy, cinematic, moody, dramatic]
+    typical_patterns: [split, side_key, rembrandt, hard_frontal]
+    business_priority: 3
+
+  - id: corporate
+    description: Professional headshots and team photos for business use
+    typical_visual_intents: [clean, neutral, soft]
+    typical_patterns: [loop, flat_frontal, clamshell]
+    business_priority: 1
+
+  - id: athletic
+    description: Sports and fitness portraiture emphasizing physique and energy
+    typical_visual_intents: [dramatic, punchy, edgy, sculptural]
+    typical_patterns: [side_key, rim_dominant, split]
+    business_priority: 4
+
+  - id: product
+    description: Studio product photography for catalog, advertising, or packaging
+    typical_visual_intents: [clean, commercial, glossy]
+    typical_patterns: [top_soft, side_gradient, wrap_diffusion, high_key_sweep]
+    business_priority: 2
+
+  - id: tabletop
+    description: Small product, food, or still-life photography on a table surface
+    typical_visual_intents: [natural, clean, luxurious]
+    typical_patterns: [top_soft, side_gradient, dark_field, light_field]
+    business_priority: 3
+
+  - id: e_commerce
+    description: White-background product shots for online retail
+    typical_visual_intents: [clean, neutral, commercial]
+    typical_patterns: [high_key_sweep, wrap_diffusion, light_field]
+    business_priority: 2
+
+  - id: creator
+    description: Content creator and social media — video, streaming, self-shot portraits
+    typical_visual_intents: [clean, soft, punchy]
+    typical_patterns: [flat_frontal, loop, clamshell]
+    business_priority: 3
+
+  - id: interview
+    description: Seated interview or documentary-style portraiture with video
+    typical_visual_intents: [natural, soft, neutral]
+    typical_patterns: [loop, rembrandt, side_key]
+    business_priority: 4
+
+  - id: cinematic_still
+    description: Film-inspired still photography with narrative lighting
+    typical_visual_intents: [cinematic, moody, dramatic]
+    typical_patterns: [rembrandt, split, side_key, rim_dominant]
+    business_priority: 4

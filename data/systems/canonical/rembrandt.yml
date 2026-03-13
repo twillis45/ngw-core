@@ -1,0 +1,83 @@
+id: rembrandt
+name: Rembrandt Lighting
+version: 1
+status: canonical
+
+pattern:
+  primary: rembrandt
+  secondary: null
+
+category: classic
+difficulty: 2
+setup_time_minutes: 10
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 8
+  background: dark_preferred
+  background_distance_ft: 6
+
+subject:
+  distance_from_camera_ft: 7
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-135mm
+  angle_to_subject_deg: 0
+
+lights:
+  - role: key
+    modifier: beauty_dish
+    angle_deg: 45
+    height: above_eye_level
+    height_offset_in: 14
+    distance_ft: 5
+    power_ratio: 1.0
+    notes:
+      - Position at 45 degrees off-axis for triangle patch
+      - Height above eye line creates shadow that connects to cheek
+      - Grid optional for tighter control and deeper shadow
+
+  - role: fill
+    modifier: reflector
+    angle_deg: -45
+    height: eye_level
+    height_offset_in: 0
+    distance_ft: 5
+    power_ratio: 0.15
+    notes:
+      - Very low fill ratio preserves drama
+      - Silver reflector or white bounce only
+      - Some photographers skip fill entirely
+
+shadow_signature:
+  expected_pattern: rembrandt
+  nose_shadow: opposite_key
+  cheek_shadow: strong
+  triangle_patch: true
+  contrast: medium_high
+  softness: 0.35
+
+failure_modes:
+  - "Key too low: triangle patch disappears"
+  - "Key too far forward: becomes loop"
+  - "Subject head turned wrong way: triangle on wrong side"
+
+substitutions:
+  - if_missing: beauty_dish
+    use: softbox_rect
+    tradeoff: "Softer triangle edges; less defined patch"
+  - if_missing: reflector
+    use: negative_fill
+    tradeoff: "Even moodier; requires dark environment"
+
+use_cases:
+  - portrait
+  - editorial
+  - dramatic_headshot
+  - fine_art
+
+example_photographers:
+  - Yousuf Karsh
+  - Gregory Heisler

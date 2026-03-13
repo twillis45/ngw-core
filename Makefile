@@ -1,4 +1,4 @@
-.PHONY: run test format lint clean install help
+.PHONY: run test format lint clean install help analyze-ref analyze-ref-raw
 
 PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || { command -v python3 || command -v python; })
 HOST   ?= 0.0.0.0
@@ -30,6 +30,12 @@ format: ## Format code with ruff
 
 lint: ## Lint without fixing
 	$(PYTHON) -m ruff check .
+
+analyze-ref: ## 3-layer ref analysis: make analyze-ref IMAGE=path/to/file
+	@TF_CPP_MIN_LOG_LEVEL=3 $(PYTHON) scripts/analyze_ref.py $(IMAGE) --pretty 2>/dev/null
+
+analyze-ref-raw: ## Same as analyze-ref but includes upstream data
+	@TF_CPP_MIN_LOG_LEVEL=3 $(PYTHON) scripts/analyze_ref.py $(IMAGE) --raw --pretty 2>/dev/null
 
 clean: ## Remove caches and build artifacts
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true

@@ -1,0 +1,68 @@
+id: beauty_dish_clean
+name: Beauty Dish Clean
+version: 1
+status: canonical
+
+pattern:
+  primary: butterfly
+  secondary: clamshell
+
+category: beauty
+difficulty: 2
+setup_time_minutes: 8
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 8
+  background: white_or_gray
+  background_distance_ft: 6
+
+subject:
+  distance_from_camera_ft: 6
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-135mm
+  angle_to_subject_deg: 0
+
+lights:
+  - role: key
+    modifier: beauty_dish
+    angle_deg: 0
+    height: above_forehead
+    height_offset_in: 16
+    distance_ft: 4
+    power_ratio: 1.0
+    notes:
+      - Centered above lens, angled down 30-40 degrees
+      - Creates butterfly shadow under nose
+      - Silver dish for more contrast, white for softer
+      - Sock diffuser smooths specular highlights
+
+shadow_signature:
+  expected_pattern: butterfly
+  nose_shadow: directly_below
+  cheek_shadow: cheekbone_accent
+  contrast: medium_high
+  softness: 0.4
+
+failure_modes:
+  - "Dish too high: deep eye socket shadows"
+  - "Dish too far: hard falloff across face"
+  - "No fill below: dark under chin and neck"
+
+substitutions:
+  - if_missing: beauty_dish
+    use: softbox_octa
+    tradeoff: "Softer, less punchy; loses signature contrast"
+
+use_cases:
+  - beauty
+  - cosmetics
+  - editorial_beauty
+  - magazine_cover
+
+example_photographers:
+  - Patrick Demarchelier
+  - Mario Testino

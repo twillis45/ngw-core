@@ -55,7 +55,10 @@ def _is_grayscale_like(img_rgb: "Image.Image") -> bool:
     for (r, g, b) in px:
         total += abs(r - g) + abs(g - b) + abs(r - b)
     avg = total / float(len(px))
-    return avg < 6.0
+    # Threshold 18: warm-toned B&W (sepia, selenium, silver-gelatin) typically
+    # has avg channel-pair diff sum of 10-15.  Pure colour images start at ~20+.
+    # Previous threshold of 6 missed warm B&W entirely.
+    return avg < 18.0
 
 
 def _palette(img_rgb: "Image.Image", k: int = 6) -> List[Dict[str, Any]]:
@@ -82,7 +85,162 @@ def _palette(img_rgb: "Image.Image", k: int = 6) -> List[Dict[str, Any]]:
     return out
 
 
-def describe_image(path: str, describe_mode: str = "basic") -> Dict[str, Any]:
+_MOOD_TO_RECIPE = {
+    "beauty": "beauty-clamshell",
+    "cinematic": "dramatic-rembrandt",
+    "corporate": "corporate-clean",
+    "editorial": "editorial-hard",
+    "natural": "natural-window",
+    "high_key": "high-key-product",
+    "low_key": "low-key-dramatic",
+}
+
+
+def _luminance(r: int, g: int, b: int) -> float:
+    """Perceived luminance (0–255)."""
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def _classify_palette(
+    palette_entries: List[Dict[str, Any]], is_grayscale: bool
+) -> Dict[str, Any]:
+    """Infer mood, recipe, light quality, color temp, and brightness from a 6-color palette."""
+
+    if not palette_entries:
+        return {
+            "mood": "natural",
+            "confidence": 0.3,
+            "suggestedRecipe": None,
+            "lightQuality": "soft",
+            "colorTemperature": "neutral",
+            "colorTemperatureKelvin": 5500,
+            "brightness": "medium",
+        }
+
+    # --- brightness ---
+    total_pct = sum(e["pct"] for e in palette_entries) or 1.0
+    avg_lum = sum(
+        _luminance(*e["rgb"]) * e["pct"] for e in palette_entries
+    ) / total_pct
+    norm_brightness = avg_lum / 255.0  # 0–1
+
+    # --- contrast ---
+    lums = [_luminance(*e["rgb"]) for e in palette_entries]
+    contrast = (max(lums) - min(lums)) / 255.0  # 0–1
+
+    # --- color temperature ---
+    warm_bias = 0.0
+    for e in palette_entries:
+        r, g, b = e["rgb"]
+        warm_bias += (r - b) * e["pct"]
+    warm_bias /= total_pct
+    if warm_bias > 20:
+        color_temp = "warm"
+    elif warm_bias < -20:
+        color_temp = "cool"
+    else:
+        color_temp = "neutral"
+
+    # Approximate Kelvin from warm_bias:
+    #   warm_bias ≈ 0  → 5500K (daylight)
+    #   warm_bias > 0   → lower K (warmer/tungsten)
+    #   warm_bias < 0   → higher K (cooler/shade)
+    color_temp_kelvin = int(max(2000, min(10000, 5500 - warm_bias * 30)))
+
+    # --- mood scoring ---
+    scores: Dict[str, float] = {
+        "beauty": 0.0,
+        "cinematic": 0.0,
+        "corporate": 0.0,
+        "editorial": 0.0,
+        "natural": 0.0,
+        "high_key": 0.0,
+        "low_key": 0.0,
+    }
+
+    # high_key: bright + low contrast
+    if norm_brightness > 0.75:
+        scores["high_key"] += 3.0
+    elif norm_brightness > 0.60:
+        scores["high_key"] += 1.5
+    if contrast < 0.3:
+        scores["high_key"] += 1.0
+
+    # low_key: dark
+    if norm_brightness < 0.30:
+        scores["low_key"] += 3.0
+    elif norm_brightness < 0.40:
+        scores["low_key"] += 1.5
+    if contrast > 0.4:
+        scores["low_key"] += 0.5
+
+    # cinematic: grayscale OR dark + high contrast
+    if is_grayscale:
+        scores["cinematic"] += 2.5
+        scores["editorial"] += 1.0
+    if norm_brightness < 0.45 and contrast > 0.4:
+        scores["cinematic"] += 2.0
+    if contrast > 0.5:
+        scores["cinematic"] += 1.0
+
+    # editorial: high contrast, not grayscale
+    if contrast > 0.5 and not is_grayscale:
+        scores["editorial"] += 2.5
+    if contrast > 0.4:
+        scores["editorial"] += 0.5
+
+    # beauty: medium-high brightness + low contrast + warm
+    if 0.45 < norm_brightness < 0.75 and contrast < 0.4:
+        scores["beauty"] += 2.0
+    if color_temp == "warm":
+        scores["beauty"] += 1.0
+        scores["natural"] += 0.5
+    if contrast < 0.3:
+        scores["beauty"] += 0.5
+
+    # corporate: medium brightness + low contrast + neutral
+    if 0.40 < norm_brightness < 0.65 and contrast < 0.4:
+        scores["corporate"] += 1.5
+    if color_temp == "neutral":
+        scores["corporate"] += 1.5
+
+    # natural: medium brightness + warm + moderate contrast
+    if 0.35 < norm_brightness < 0.65:
+        scores["natural"] += 1.0
+    if color_temp == "warm":
+        scores["natural"] += 1.5
+    if 0.2 < contrast < 0.5:
+        scores["natural"] += 1.0
+
+    # pick winner
+    winner = max(scores, key=lambda k: scores[k])
+    total_score = sum(scores.values()) or 1.0
+    confidence = scores[winner] / total_score
+    confidence = max(0.3, min(0.95, confidence))
+
+    # brightness label
+    if norm_brightness < 0.33:
+        brightness_label = "low"
+    elif norm_brightness < 0.66:
+        brightness_label = "medium"
+    else:
+        brightness_label = "high"
+
+    # light quality
+    light_quality = "hard" if contrast > 0.5 else "soft"
+
+    return {
+        "mood": winner,
+        "confidence": round(confidence, 2),
+        "suggestedRecipe": _MOOD_TO_RECIPE.get(winner),
+        "lightQuality": light_quality,
+        "colorTemperature": color_temp,
+        "colorTemperatureKelvin": color_temp_kelvin,
+        "brightness": brightness_label,
+    }
+
+
+def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = False) -> Dict[str, Any]:
     """
     basic: safe stats + palettes (no subject claims)
     vision: adds segmentation-based palettes + pose guess (opencv+mediapipe)
@@ -130,9 +288,54 @@ def describe_image(path: str, describe_mode: str = "basic") -> Dict[str, Any]:
         ],
     }
 
+    out["classification"] = _classify_palette(overall_palette, grayscale_like)
+
     if describe_mode == "vision":
-        vision = analyze_image_regions(path)
+        vision = analyze_image_regions(path, return_masks=True)
+
+        # ── Visual cue extraction (when masks available) ──
+        cue_report = None
+        if vision.get("ok") and "_masks" in vision:
+            try:
+                from engine.cue_extraction import extract_visual_cues
+
+                classification_with_gs = dict(out.get("classification", {}))
+                classification_with_gs["_is_grayscale_like"] = grayscale_like
+
+                cue_report = extract_visual_cues(
+                    vision["_img_bgr"],
+                    vision,
+                    classification_with_gs,
+                )
+            except Exception:
+                pass  # cue extraction is best-effort
+
+        # Preserve raw image, masks, and face_box for the extended pipeline
+        # and debug overlay generation.  These are stored as underscore-prefixed
+        # keys and stripped before API serialization, just like _cue_report and
+        # _vlm_description.
+        if vision.get("ok"):
+            out["_debug_img_bgr"] = vision.get("_img_bgr")
+            masks = vision.get("_masks", {})
+            out["_debug_masks"] = masks
+            ra = vision.get("region_attribution", {})
+            fb = ra.get("face_box")
+            out["_debug_face_box"] = tuple(fb) if fb else None
+
+        # Strip internal fields before storing in output
+        vision.pop("_masks", None)
+        vision.pop("_img_bgr", None)
         out["vision"] = vision
+
+        # Include cue report summary (not raw numpy data)
+        if cue_report is not None:
+            out["cue_report"] = cue_report.model_dump()
+        else:
+            out["cue_report"] = None
+
+        # Store cue_report object for downstream use (e.g. lighting inference)
+        out["_cue_report"] = cue_report
+
         # bubble up pose if available
         try:
             pose = vision.get("pose", {})
@@ -140,5 +343,21 @@ def describe_image(path: str, describe_mode: str = "basic") -> Dict[str, Any]:
                 out["subject"]["pose"] = pose.get("pose", "unknown")
         except Exception:
             pass
+
+        # ── VLM enrichment (optional, best-effort) ──
+        # Calls an external vision-language model for subject/expression
+        # details that pure CV cannot extract (P2a).
+        vlm_desc = None
+        try:
+            from engine.vlm import describe_reference_image, vlm_available
+            if vlm_available():
+                vlm_desc = describe_reference_image(path)
+        except Exception:
+            pass  # VLM is strictly best-effort
+        if vlm_desc is not None:
+            out["vlm_description"] = vlm_desc.model_dump()
+        else:
+            out["vlm_description"] = None
+        out["_vlm_description"] = vlm_desc
 
     return out

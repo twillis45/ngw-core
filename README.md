@@ -101,3 +101,30 @@ ID, system count, winner, confidence, and processing time.
 ## Environment variables
 
 See `.env.example`. All are optional with sensible defaults.
+
+# NGW Core
+
+NGW Core is a deterministic recommendation engine for evaluating candidate lighting systems, ranking them, generating confidence, and producing a simple lighting diagram spec.
+
+## What it does
+
+- validates lighting system payloads
+- scores systems deterministically
+- ranks candidates and selects a winner
+- generates confidence and reasons
+- produces a diagram spec for key/fill/rim placement
+- exposes a FastAPI `/recommend` endpoint
+
+## Project structure
+
+- `engine/scoring.py` — score computation and confidence
+- `engine/selector.py` — ranking, tie-breaking, top picks
+- `engine/diagram.py` — deterministic diagram generation
+- `engine/normalizer.py` — gear and modifier normalization
+- `engine/rule_engine.py` — orchestration layer
+- `main.py` — FastAPI app
+
+## Run tests
+
+```bash
+pytest -q

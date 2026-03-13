@@ -185,3 +185,238 @@ def test_all_moods_return_results(mood):
     resp = client.post("/api/shoot-match", json=_wizard(mood=mood, environment="Large Studio"))
     # Some mood+env combos may legitimately have no systems — accept 200 or 422
     assert resp.status_code in (200, 422)
+
+
+# ── Lighting intelligence (reference image) ────────────────────────────────
+
+def test_lighting_intelligence_in_response(monkeypatch):
+    """When a reference image has vision data, lightingIntelligence appears."""
+    from api.routes import shoot_match as sm_mod
+
+    fake_result = {
+        "ok": True,
+        "palette": {"overall": []},
+        "orientation": "portrait",
+        "is_grayscale_like": False,
+        "classification": {
+            "mood": "corporate", "confidence": 0.6,
+            "lightQuality": "soft", "colorTemperature": "neutral",
+            "brightness": "medium", "suggestedRecipe": "corporate-loop",
+        },
+        "vision": {
+            "ok": True,
+            "catchlights": {
+                "ok": True,
+                "count": 1,
+                "catchlights": [
+                    {"eye": "left", "position": "10 o'clock", "shape": "round", "intensity": 0.9},
+                    {"eye": "right", "position": "10 o'clock", "shape": "round", "intensity": 0.88},
+                ],
+                "inferred": {
+                    "keyLightPosition": "above, slightly left",
+                    "likelyModifier": "beauty dish or round source",
+                    "lightCount": 1,
+                },
+            },
+            "skin_tone": {
+                "ok": True,
+                "skin_tone_guess": "light",
+                "confidence": "high",
+            },
+            "pose": {"ok": True, "pose": "standing", "angle": "front-ish", "visibility": 0.8},
+            "region_attribution": {
+                "masks": {"person_ratio": 0.5, "background_ratio": 0.4},
+                "palettes": {
+                    "background_palette": [
+                        {"rgb": [80, 80, 80], "hex": "#505050", "name": "gray", "pct": 100},
+                    ],
+                },
+                "face_box": [0.3, 0.1, 0.7, 0.4],
+            },
+        },
+    }
+    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        f.write(b"\xff\xd8\xff\xe0")  # minimal JPEG header bytes
+        tmp_path = f.name
+
+    try:
+        resp = client.post("/api/shoot-match", json=_wizard(referenceImage=tmp_path))
+        assert resp.status_code == 200
+        data = resp.json()
+
+        # lightingIntelligence carries scoring-influence fields
+        assert "lightingIntelligence" in data
+        intel = data["lightingIntelligence"]
+        assert intel["detectedPattern"] == "rembrandt-ish"
+        assert intel["detectedModifier"] == "beauty_dish"
+        assert intel["lightCount"] == 1
+        assert "backgroundLight" in intel
+
+        # referenceImageAnalysis is the full reference evaluation
+        assert "referenceImageAnalysis" in data
+        ref = data["referenceImageAnalysis"]
+        assert "skinTone" in ref
+        assert "catchlights" in ref
+
+        # Top-level background data surfaced from vision pipeline
+        assert "background" in ref
+        assert ref["background"]["ratio"] == 0.4
+        assert len(ref["background"]["palette"]) == 1
+
+        # Diagram lives on the reference evaluation
+        assert "detectedDiagram" in ref
+        dd = ref["detectedDiagram"]
+        assert len(dd["lights"]) == 1
+        assert dd["lights"][0]["position"]  # has position description
+        assert dd["lights"][0]["roleKey"] == "key"  # raw role preserved
+        assert dd["raw"]["system_id"] == "reference_detected"
+        assert dd["raw"]["lights"][0]["angle_deg"] == -45.0  # rembrandt 45° camera-left (10 o'clock catchlight)
+
+        # Each diagram light links back to the catchlights that support it
+        assert "detectedFrom" in dd["lights"][0]
+        detected_from = dd["lights"][0]["detectedFrom"]
+        assert len(detected_from) >= 1
+        assert detected_from[0]["position"] == "10 o'clock"
+
+        # Description section with human-readable narratives
+        assert "description" in ref
+        desc = ref["description"]
+        assert "catchlights" in desc
+        assert "lightQuality" in desc
+        assert "background" in desc
+        assert "pattern" in desc
+        assert "subject" in desc
+        assert isinstance(desc["catchlights"]["summary"], str)
+        assert isinstance(desc["pattern"]["description"], str)
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_background_light_in_diagram(monkeypatch):
+    """When reference image has bright background, background light appears on diagram."""
+    from api.routes import shoot_match as sm_mod
+
+    fake_result = {
+        "ok": True,
+        "palette": {"overall": []},
+        "orientation": "portrait",
+        "is_grayscale_like": False,
+        "classification": {
+            "mood": "corporate", "confidence": 0.6,
+            "lightQuality": "soft", "colorTemperature": "neutral",
+            "brightness": "high", "suggestedRecipe": "corporate-loop",
+        },
+        "vision": {
+            "ok": True,
+            "catchlights": {
+                "ok": True,
+                "count": 1,
+                "catchlights": [
+                    {"eye": "left", "position": "1 o'clock", "shape": "rectangular", "intensity": 0.9},
+                    {"eye": "right", "position": "1 o'clock", "shape": "rectangular", "intensity": 0.88},
+                ],
+                "inferred": {},
+            },
+            "skin_tone": {"ok": True, "skin_tone_guess": "medium", "confidence": "high"},
+            "pose": {"ok": True, "pose": "standing", "angle": "front-ish", "visibility": 0.8},
+            "region_attribution": {
+                "masks": {"person_ratio": 0.4, "background_ratio": 0.55},
+                "palettes": {
+                    "background_palette": [
+                        {"rgb": [240, 240, 240], "hex": "#f0f0f0", "name": "white", "pct": 100},
+                    ],
+                },
+                "face_box": [0.3, 0.1, 0.7, 0.4],
+            },
+        },
+    }
+    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        f.write(b"\xff\xd8\xff\xe0")
+        tmp_path = f.name
+
+    try:
+        resp = client.post("/api/shoot-match", json=_wizard(referenceImage=tmp_path))
+        assert resp.status_code == 200
+        data = resp.json()
+
+        ref = data["referenceImageAnalysis"]
+
+        # Top-level background section includes light detection
+        assert "background" in ref
+        assert ref["background"]["lightDetected"] is True
+        assert ref["background"]["lightConfidence"] > 0.5
+
+        # Diagram includes background light
+        dd = ref["detectedDiagram"]
+        role_keys = [l["roleKey"] for l in dd["lights"]]
+        assert "background" in role_keys
+
+        bg_light = next(l for l in dd["lights"] if l["roleKey"] == "background")
+        assert bg_light["role"] == "Background Light"
+        assert bg_light["position"] == "behind subject"
+        assert "detectedFromNote" in bg_light
+
+        # lightingIntelligence also reports background light
+        intel = data["lightingIntelligence"]
+        assert intel["backgroundLight"] is True
+        assert intel["backgroundLightConfidence"] > 0.5
+        # Light count includes background: 1 pattern light + 1 background = 2
+        assert intel["lightCount"] == 2
+
+        # Description includes background light info
+        desc = ref["description"]
+        assert desc["background"]["backgroundLight"] is not None
+        assert desc["background"]["backgroundLight"]["detected"] is True
+    finally:
+        os.unlink(tmp_path)
+
+
+def test_mood_discrepancy_noted(monkeypatch):
+    """When user mood differs from detected mood, moodDiscrepancy is included."""
+    from api.routes import shoot_match as sm_mod
+
+    fake_result = {
+        "ok": True,
+        "palette": {"overall": []},
+        "orientation": "portrait",
+        "is_grayscale_like": False,
+        "classification": {"mood": "cinematic", "confidence": 0.7},
+        "vision": {
+            "ok": True,
+            "catchlights": {
+                "ok": True,
+                "count": 1,
+                "catchlights": [
+                    {"eye": "left", "position": "10 o'clock", "shape": "round", "intensity": 0.9},
+                ],
+            },
+            "skin_tone": {"ok": False},
+        },
+    }
+    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+
+    import tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
+        f.write(b"\xff\xd8\xff\xe0")
+        tmp_path = f.name
+
+    try:
+        # User selects corporate but image is cinematic
+        resp = client.post("/api/shoot-match", json=_wizard(
+            mood="Clean & Classic",  # maps to "corporate"
+            referenceImage=tmp_path,
+        ))
+        assert resp.status_code == 200
+        data = resp.json()
+        if "lightingIntelligence" in data:
+            intel = data["lightingIntelligence"]
+            if intel.get("detectedMood") and intel["detectedMood"] != "corporate":
+                assert "moodDiscrepancy" in intel
+    finally:
+        os.unlink(tmp_path)

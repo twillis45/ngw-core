@@ -4,6 +4,8 @@ import math
 from typing import Any, Dict, List, Tuple
 
 from models.output_model import Confidence, CriterionComponent, FeatureBonus, ScoreBreakdown
+from engine.patterns import classify_lighting_pattern
+from engine.master_mode import compute_master_mode_bonus
 
 FALLBACK_MODIFIER: float = 1.0
 
@@ -28,6 +30,13 @@ BONUS_RULES: Dict[str, float] = {
     "smart_ready": 5.0,
     "battery": 4.0,
     "waterproof": 3.0,
+}
+
+CONTEXT_BONUS_WEIGHTS: Dict[str, float] = {
+    "mood_match": 8.0,
+    "modifier_match": 6.0,
+    "pattern_match": 5.0,
+    "skin_tone_match": 3.0,
 }
 
 
@@ -85,6 +94,10 @@ def _resolve_modifier(system: Dict[str, Any]) -> Tuple[float, str, List[str], bo
         notes.append("Modifier 0 applied explicitly.")
         return 0.0, "provided", notes, True
 
+    if mod > 10.0:
+        notes.append(f"Modifier {mod} capped at 10.0.")
+        return 10.0, "provided_capped", notes, True
+
     return mod, "provided", notes, True
 
 
@@ -133,6 +146,93 @@ def _build_confidence(
             "bonuses_earned": earned_bonus_count,
         },
     )
+
+
+def _compute_context_bonuses(
+    system: Dict[str, Any],
+    input_ctx: Dict[str, Any],
+) -> Tuple[float, List[FeatureBonus], List[str]]:
+    """Compute additive bonuses when image-derived context matches a system.
+
+    Returns (total_bonus, bonus_list, notes).
+    Called only when input_ctx has ``detected_*`` keys from LightingInference.
+    """
+    bonuses: List[FeatureBonus] = []
+    notes: List[str] = []
+    total = 0.0
+    taxonomy = dict(system.get("taxonomy_refs") or {})
+
+    # 1. Mood match
+    detected_mood = input_ctx.get("detected_mood")
+    if detected_mood:
+        conf = float(input_ctx.get("detected_mood_confidence", 0.5))
+        system_mood = taxonomy.get("mood", "")
+        if detected_mood == system_mood:
+            pts = CONTEXT_BONUS_WEIGHTS["mood_match"] * conf
+            total += pts
+            bonuses.append(FeatureBonus(
+                feature="ctx_mood_match",
+                value=detected_mood,
+                points=round(pts, 3),
+                reason=f"Detected mood '{detected_mood}' matches system (conf {conf:.2f}).",
+            ))
+            notes.append(f"Context mood match: +{pts:.1f}")
+
+    # 2. Modifier match
+    detected_mod = input_ctx.get("detected_modifier")
+    if detected_mod:
+        conf = float(input_ctx.get("detected_modifier_confidence", 0.5))
+        system_mod = taxonomy.get("modifier_family", "")
+        if detected_mod == system_mod:
+            pts = CONTEXT_BONUS_WEIGHTS["modifier_match"] * conf
+            total += pts
+            bonuses.append(FeatureBonus(
+                feature="ctx_modifier_match",
+                value=detected_mod,
+                points=round(pts, 3),
+                reason=f"Detected modifier '{detected_mod}' matches system (conf {conf:.2f}).",
+            ))
+            notes.append(f"Context modifier match: +{pts:.1f}")
+
+    # 3. Pattern match — classify what the system *would* produce, compare
+    detected_pattern = input_ctx.get("detected_pattern")
+    if detected_pattern:
+        conf = float(input_ctx.get("detected_pattern_confidence", 0.5))
+        system_pattern = classify_lighting_pattern(
+            mood=taxonomy.get("mood", ""),
+            modifier_family=taxonomy.get("modifier_family", ""),
+            gear_profile=taxonomy.get("gear_profile", ""),
+            key_position_text=input_ctx.get("detected_key_position", ""),
+            fill_method_text=input_ctx.get("detected_fill_method", ""),
+        )
+        if detected_pattern == system_pattern:
+            pts = CONTEXT_BONUS_WEIGHTS["pattern_match"] * conf
+            total += pts
+            bonuses.append(FeatureBonus(
+                feature="ctx_pattern_match",
+                value=detected_pattern,
+                points=round(pts, 3),
+                reason=f"Detected pattern '{detected_pattern}' matches system's '{system_pattern}' (conf {conf:.2f}).",
+            ))
+            notes.append(f"Context pattern match: +{pts:.1f}")
+
+    # 4. Skin tone match
+    detected_skin = input_ctx.get("detected_skin_tone")
+    if detected_skin:
+        conf = float(input_ctx.get("detected_skin_tone_confidence", 0.5))
+        system_skin = taxonomy.get("skin_tone", "")
+        if detected_skin == system_skin:
+            pts = CONTEXT_BONUS_WEIGHTS["skin_tone_match"] * conf
+            total += pts
+            bonuses.append(FeatureBonus(
+                feature="ctx_skin_tone_match",
+                value=detected_skin,
+                points=round(pts, 3),
+                reason=f"Detected skin tone '{detected_skin}' matches system (conf {conf:.2f}).",
+            ))
+            notes.append(f"Context skin tone match: +{pts:.1f}")
+
+    return round(total, 3), bonuses, notes
 
 
 def score_system(system: Dict[str, Any], *, input_ctx: Dict[str, Any] | None = None) -> ScoreBreakdown:
@@ -186,10 +286,29 @@ def score_system(system: Dict[str, Any], *, input_ctx: Dict[str, Any] | None = N
                 )
             )
 
+    # Context-aware bonuses from image analysis
+    context_bonus = 0.0
+    if input_ctx:
+        context_bonus, ctx_bonuses, ctx_notes = _compute_context_bonuses(system, input_ctx)
+        feature_bonuses.extend(ctx_bonuses)
+        notes.extend(ctx_notes)
+
     modifier, modifier_source, modifier_notes, modifier_provided = _resolve_modifier(system)
     notes.extend(modifier_notes)
 
-    base_score = subtotal + bonus_total
+    # Master mode bonus (additive, 0.0 when no mode selected)
+    mm_bonus = compute_master_mode_bonus(system, input_ctx.get("master_mode") if input_ctx else None)
+    if mm_bonus > 0:
+        feature_bonuses.append(
+            FeatureBonus(
+                feature="master_mode",
+                value=True,
+                points=mm_bonus,
+                reason=f"Master mode affinity bonus ({input_ctx.get('master_mode')}).",
+            )
+        )
+
+    base_score = subtotal + bonus_total + context_bonus + mm_bonus
 
     final_score = base_score * modifier
 

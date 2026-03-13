@@ -1,0 +1,39 @@
+{
+  "reference_id": "lindbergh_overcast_001",
+  "pattern_id": "overcast_natural",
+  "photographer": "Peter Lindbergh",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "overcast",
+  "notes": "Diffuse overcast sky as sole light source creating very soft even illumination",
+  "lights": [
+    {
+      "role": "key",
+      "modifier": "sky",
+      "angle_deg": 0,
+      "height_deg": 60,
+      "distance_ft": 0
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "minimal",
+    "chin_shadow": "very_soft",
+    "cheek_shadow": "minimal"
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 6,
+    "focal_length": 50
+  },
+  "use_cases": [
+    "fashion",
+    "editorial",
+    "lifestyle"
+  ],
+  "light_count": 1,
+  "key_direction_deg": 0,
+  "modifier_family": "sky",
+  "estimated_distance_ft": 0,
+  "shadow_pattern": "overcast_natural",
+  "key_height_relative": "eye_level"
+}

@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "engine_compatibility": "ngw-core-v1.0",
   "taxonomy_version": "1.0.0",
-  "total_systems": 30,
+  "total_systems": 47,
   "systems": [
     {
       "id": "strobe_mono__softbox_octa__studio_large",
-      "name": "Monolight Strobe + Octagonal Softbox (Octa) (Large Studio (>40 m\u00b2))",
+      "name": "Monolight Strobe + Octagonal Softbox (Octa) (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 7500,
         "energy_efficiency": 65,
@@ -46,7 +46,7 @@
     },
     {
       "id": "strobe_mono__beauty_dish__studio_large",
-      "name": "Monolight Strobe + Beauty Dish (Large Studio (>40 m\u00b2))",
+      "name": "Monolight Strobe + Beauty Dish (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 8500,
         "energy_efficiency": 65,
@@ -69,7 +69,7 @@
       },
       "why_this_works": "Beauty dish sculpts dark skin with dimensional contrast while maintaining highlight detail. CRI 96 reveals undertone richness. The 1.05 tone bias rewards high-CRI setups.",
       "failure_modes": [
-        "Silver dish adds too much specular on oily skin \u2014 switch to white dish",
+        "Silver dish adds too much specular on oily skin — switch to white dish",
         "Without fill below, chin shadow goes too deep",
         "Dish must be precisely centered on face axis"
       ],
@@ -85,7 +85,7 @@
     },
     {
       "id": "strobe_pack__diffusion_panel__studio_large",
-      "name": "Pack-and-Head Strobe + Diffusion Panel / Scrim (Large Studio (>40 m\u00b2))",
+      "name": "Pack-and-Head Strobe + Diffusion Panel / Scrim (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 7500,
         "energy_efficiency": 40,
@@ -106,10 +106,10 @@
         "mood": "high_key",
         "skin_tone": "varied"
       },
-      "why_this_works": "Pack system punches through a large diffusion panel to create a wall of soft light. Best setup for group portraits with varied skin tones \u2014 wide dynamic range handled by massive soft source.",
+      "why_this_works": "Pack system punches through a large diffusion panel to create a wall of soft light. Best setup for group portraits with varied skin tones — wide dynamic range handled by massive soft source.",
       "failure_modes": [
         "Panel must be very large (180cm+) or light falls off at edges of group",
-        "Power pack required \u2014 monolight lacks punch through heavy diffusion",
+        "Power pack required — monolight lacks punch through heavy diffusion",
         "Expensive setup; not cost-effective for solo headshots"
       ],
       "substitutions": [
@@ -124,7 +124,7 @@
     },
     {
       "id": "fresnel__grid_spot__studio_large",
-      "name": "Fresnel Spot + Grid / Honeycomb (Large Studio (>40 m\u00b2))",
+      "name": "Fresnel Spot + Grid / Honeycomb (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 6700,
         "energy_efficiency": 70,
@@ -149,7 +149,7 @@
       "failure_modes": [
         "Grid narrows beam so much that subject movement ruins the shot",
         "Color temp can drift on cheaper fresnels",
-        "No fill \u2014 shadow side goes completely black without secondary light"
+        "No fill — shadow side goes completely black without secondary light"
       ],
       "substitutions": [
         {
@@ -163,7 +163,7 @@
     },
     {
       "id": "strobe_mono__bare_bulb__studio_large",
-      "name": "Monolight Strobe + Bare Bulb / No Modifier (Large Studio (>40 m\u00b2))",
+      "name": "Monolight Strobe + Bare Bulb / No Modifier (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 9000,
         "energy_efficiency": 65,
@@ -184,11 +184,11 @@
         "mood": "low_key",
         "skin_tone": "light"
       },
-      "why_this_works": "Bare strobe at distance creates hard, dramatic shadows for low-key portraiture. Light skin's high reflectance makes metering straightforward. Fast setup \u2014 no modifier to mount.",
+      "why_this_works": "Bare strobe at distance creates hard, dramatic shadows for low-key portraiture. Light skin's high reflectance makes metering straightforward. Fast setup — no modifier to mount.",
       "failure_modes": [
         "Blown highlights on forehead and nose bridge if too close",
         "Every skin imperfection is visible",
-        "Spill hits everything \u2014 needs flags or v-flats for background control"
+        "Spill hits everything — needs flags or v-flats for background control"
       ],
       "substitutions": [
         {
@@ -202,7 +202,7 @@
     },
     {
       "id": "led_cob__softbox_rect__studio_large",
-      "name": "LED COB (Chip-on-Board) + Rectangular Softbox (Large Studio (>40 m\u00b2))",
+      "name": "LED COB (Chip-on-Board) + Rectangular Softbox (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 7000,
         "energy_efficiency": 145,
@@ -223,7 +223,7 @@
         "mood": "corporate",
         "skin_tone": "varied"
       },
-      "why_this_works": "COB through rectangular softbox is the repeatable corporate headshot machine. Continuous light means WYSIWYG \u2014 critical when shooting 50+ subjects back-to-back. CRI 96 handles all skin tones.",
+      "why_this_works": "COB through rectangular softbox is the repeatable corporate headshot machine. Continuous light means WYSIWYG — critical when shooting 50+ subjects back-to-back. CRI 96 handles all skin tones.",
       "failure_modes": [
         "Continuous light heats up the modifier over long sessions",
         "Lower flash-freeze capability means motion blur if subject moves",
@@ -241,7 +241,7 @@
     },
     {
       "id": "strobe_mono__softbox_rect__studio_large",
-      "name": "Monolight Strobe + Rectangular Softbox (Large Studio (>40 m\u00b2))",
+      "name": "Monolight Strobe + Rectangular Softbox (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 7500,
         "energy_efficiency": 65,
@@ -265,7 +265,7 @@
       "why_this_works": "Large rectangular softbox wraps light evenly for clean high-key looks. Light skin benefits from the broad diffusion preventing hot spots. Combined with white background and fill, achieves near-shadowless illumination.",
       "failure_modes": [
         "Requires secondary fill or reflector to eliminate chin shadow completely",
-        "Softbox size must match framing \u2014 too small creates visible falloff",
+        "Softbox size must match framing — too small creates visible falloff",
         "White background needs separate lighting to avoid going gray"
       ],
       "substitutions": [
@@ -280,7 +280,7 @@
     },
     {
       "id": "led_cob__beauty_dish__studio_large",
-      "name": "LED COB (Chip-on-Board) + Beauty Dish (Large Studio (>40 m\u00b2))",
+      "name": "LED COB (Chip-on-Board) + Beauty Dish (Large Studio (>40 m²))",
       "criteria": {
         "brightness": 8000,
         "energy_efficiency": 145,
@@ -303,9 +303,9 @@
       },
       "why_this_works": "COB through beauty dish gives the contrasty editorial look while continuous output lets the photographer fine-tune shadow depth in real time. CRI 96 is critical for dark skin undertone rendering.",
       "failure_modes": [
-        "Beauty dish size must be \u226522 inches or light becomes too hard",
+        "Beauty dish size must be ≥22 inches or light becomes too hard",
         "Continuous means ambient contamination in non-blackout studios",
-        "Subject sees the bright light \u2014 causes squinting over long sessions"
+        "Subject sees the bright light — causes squinting over long sessions"
       ],
       "substitutions": [
         {
@@ -319,7 +319,7 @@
     },
     {
       "id": "strobe_mono__umbrella_shoot_through__studio_small",
-      "name": "Monolight Strobe + Shoot-Through Umbrella (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "Monolight Strobe + Shoot-Through Umbrella (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 6500,
         "energy_efficiency": 50,
@@ -342,7 +342,7 @@
       },
       "why_this_works": "The simplest effective portrait setup. Shoot-through umbrella on a monolight creates broad, forgiving light that emulates window light. Perfect for beginners and quick sessions.",
       "failure_modes": [
-        "Umbrella spills light everywhere \u2014 small room becomes a bounce box",
+        "Umbrella spills light everywhere — small room becomes a bounce box",
         "No spill control means background is also lit",
         "Cheap umbrellas yellow with age, shifting color"
       ],
@@ -358,7 +358,7 @@
     },
     {
       "id": "led_panel__bare_bulb__studio_small",
-      "name": "LED Panel (Continuous) + Bare Bulb / No Modifier (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "LED Panel (Continuous) + Bare Bulb / No Modifier (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 5500,
         "energy_efficiency": 165,
@@ -381,15 +381,15 @@
       },
       "why_this_works": "LED panel with no modifier is the fastest corporate headshot setup. Panel's inherent diffusion is already soft enough at close range. Bi-color lets you match any ambient.",
       "failure_modes": [
-        "Panel must be large enough (\u226560cm diagonal) or light goes hard",
+        "Panel must be large enough (≥60cm diagonal) or light goes hard",
         "Budget panels under CRI 90 make skin look sickly",
-        "No modeling lamp \u2014 what you see is what you get, but also no freeze"
+        "No modeling lamp — what you see is what you get, but also no freeze"
       ],
       "substitutions": [
         {
           "if_missing": "bare_bulb",
           "use": "diffusion_panel",
-          "tradeoff": "N/A \u2014 bare_bulb means no modifier; adding diffusion panel softens further but kills output"
+          "tradeoff": "N/A — bare_bulb means no modifier; adding diffusion panel softens further but kills output"
         }
       ],
       "difficulty": 1,
@@ -397,7 +397,7 @@
     },
     {
       "id": "speedlight__softbox_octa__studio_small",
-      "name": "Speedlight / Hot-Shoe Flash + Octagonal Softbox (Octa) (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "Speedlight / Hot-Shoe Flash + Octagonal Softbox (Octa) (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 1500,
         "energy_efficiency": 125,
@@ -420,9 +420,9 @@
       },
       "why_this_works": "Speedlight in a small octa is the budget beauty setup. Small room means short distance, which makes even a small modifier appear large relative to the subject. Light skin's reflectance compensates for limited flash power.",
       "failure_modes": [
-        "Recycle time is slow at full power \u2014 can't shoot rapid sequences",
+        "Recycle time is slow at full power — can't shoot rapid sequences",
         "Batteries drain fast; always have spares",
-        "Small octa still produces harder light than full-size \u2014 visible texture"
+        "Small octa still produces harder light than full-size — visible texture"
       ],
       "substitutions": [
         {
@@ -436,7 +436,7 @@
     },
     {
       "id": "ring_light__bare_bulb__studio_small",
-      "name": "Ring Light + Bare Bulb / No Modifier (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "Ring Light + Bare Bulb / No Modifier (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 3500,
         "energy_efficiency": 145,
@@ -459,15 +459,15 @@
       },
       "why_this_works": "Ring light provides perfectly even facial illumination with the signature doughnut catchlight. On dark skin, the axial light minimizes shadow pockets and reveals even skin tone across the face. Virtually zero setup time.",
       "failure_modes": [
-        "Flat lighting eliminates all facial dimension \u2014 nose and jaw lose definition",
+        "Flat lighting eliminates all facial dimension — nose and jaw lose definition",
         "Creates weird shadow halos on background if subject stands too close to wall",
-        "Limited power \u2014 useless beyond headshot distance"
+        "Limited power — useless beyond headshot distance"
       ],
       "substitutions": [
         {
           "if_missing": "bare_bulb",
           "use": "diffusion_panel",
-          "tradeoff": "N/A \u2014 ring light is self-contained; bare_bulb is the default state"
+          "tradeoff": "N/A — ring light is self-contained; bare_bulb is the default state"
         }
       ],
       "difficulty": 1,
@@ -475,7 +475,7 @@
     },
     {
       "id": "led_cob__grid_spot__studio_small",
-      "name": "LED COB (Chip-on-Board) + Grid / Honeycomb (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "LED COB (Chip-on-Board) + Grid / Honeycomb (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 7200,
         "energy_efficiency": 150,
@@ -496,11 +496,11 @@
         "mood": "low_key",
         "skin_tone": "medium"
       },
-      "why_this_works": "COB with grid in a small dark room creates intense, focused low-key portraits. The small space actually helps \u2014 less stray light to contaminate the dark background. Grid controls spill precisely.",
+      "why_this_works": "COB with grid in a small dark room creates intense, focused low-key portraits. The small space actually helps — less stray light to contaminate the dark background. Grid controls spill precisely.",
       "failure_modes": [
         "Grid must be properly seated or creates asymmetric hot spots",
         "Subject has very little room to move before leaving the beam",
-        "Room reflections from light walls ruin low-key \u2014 needs dark walls or v-flats"
+        "Room reflections from light walls ruin low-key — needs dark walls or v-flats"
       ],
       "substitutions": [
         {
@@ -514,7 +514,7 @@
     },
     {
       "id": "strobe_mono__softbox_octa__studio_small",
-      "name": "Monolight Strobe + Octagonal Softbox (Octa) (Small Studio / Home Studio (<40 m\u00b2))",
+      "name": "Monolight Strobe + Octagonal Softbox (Octa) (Small Studio / Home Studio (<40 m²))",
       "criteria": {
         "brightness": 7000,
         "energy_efficiency": 70,
@@ -537,8 +537,8 @@
       },
       "why_this_works": "Proven corporate headshot setup scaled for home studios. Octa provides round catchlights that read professionally. Strobe's CRI 96 is critical for rendering dark skin undertones accurately in consistent headshot batches.",
       "failure_modes": [
-        "Octa may be too large for very small rooms \u2014 consider 90cm max",
-        "Need to meter carefully \u2014 strobe can overpower at close range",
+        "Octa may be too large for very small rooms — consider 90cm max",
+        "Need to meter carefully — strobe can overpower at close range",
         "Background separation is harder in small spaces"
       ],
       "substitutions": [
@@ -576,7 +576,7 @@
       },
       "why_this_works": "The workhorse location headshot kit. Speedlight in an umbrella fits in a carry bag, sets up in minutes, runs on batteries. Shoot-through umbrella is forgiving enough for varied skin tones in office environments.",
       "failure_modes": [
-        "Low power \u2014 struggles against bright office windows",
+        "Low power — struggles against bright office windows",
         "Mixed ambient color casts (fluorescent + daylight) need gelling",
         "Umbrella can blow over if HVAC vent is overhead"
       ],
@@ -613,7 +613,7 @@
         "mood": "natural",
         "skin_tone": "dark"
       },
-      "why_this_works": "LED panel through a diffusion frame mimics a large window. Continuous output lets you shape light in real time \u2014 essential for dark skin where you need to see exactly how shadows fall before shooting.",
+      "why_this_works": "LED panel through a diffusion frame mimics a large window. Continuous output lets you shape light in real time — essential for dark skin where you need to see exactly how shadows fall before shooting.",
       "failure_modes": [
         "Needs a large frame (120cm+) which is awkward to transport",
         "LED panel alone may lack punch through diffusion; need high-output model",
@@ -655,8 +655,8 @@
       "why_this_works": "Window light through a sheer curtain or diffusion panel is portraiture's oldest technique. Zero electricity, perfect CRI, beautiful soft falloff. Light skin's high reflectance means even weak window light produces usable exposure.",
       "failure_modes": [
         "Completely dependent on weather and time of day",
-        "No repeatable power control \u2014 each session is different",
-        "Falls off rapidly on the shadow side \u2014 needs reflector fill or second light"
+        "No repeatable power control — each session is different",
+        "Falls off rapidly on the shadow side — needs reflector fill or second light"
       ],
       "substitutions": [
         {
@@ -694,7 +694,7 @@
       "why_this_works": "COB in an octa gives studio-quality beauty light in a hotel room or office. Bowens mount means the same modifier you use in studio travels to location. Continuous output is reassuring for subjects unfamiliar with flash.",
       "failure_modes": [
         "COB generates significant heat in enclosed rooms",
-        "Needs AC power \u2014 battery options exist but are heavy and expensive",
+        "Needs AC power — battery options exist but are heavy and expensive",
         "Octa setup takes time and the room needs enough space to position it at proper distance"
       ],
       "substitutions": [
@@ -730,10 +730,10 @@
         "mood": "cinematic",
         "skin_tone": "medium"
       },
-      "why_this_works": "LED tube with a warm CTO gel creates a motivated practical-light look \u2014 as if the subject is lit by a lamp, candle, or fireplace. The tube's linear shape adds an interesting gradient across the face.",
+      "why_this_works": "LED tube with a warm CTO gel creates a motivated practical-light look — as if the subject is lit by a lamp, candle, or fireplace. The tube's linear shape adds an interesting gradient across the face.",
       "failure_modes": [
-        "Very low output \u2014 only works in dark rooms or as accent light",
-        "CTO stacks with the tube's already-warm setting \u2014 can go too orange",
+        "Very low output — only works in dark rooms or as accent light",
+        "CTO stacks with the tube's already-warm setting — can go too orange",
         "Linear source creates unusual shadow patterns that may distract"
       ],
       "substitutions": [
@@ -771,7 +771,7 @@
       },
       "why_this_works": "Ring light in a hotel room or office for quick beauty-style content. Completely self-contained, no light stands needed. Even illumination prevents harsh shadows on light skin that might reveal texture.",
       "failure_modes": [
-        "Flat lighting \u2014 no facial dimension or drama",
+        "Flat lighting — no facial dimension or drama",
         "Limited throw distance; only works for headshots",
         "Competes with ambient overhead lighting; may need to turn room lights off"
       ],
@@ -779,7 +779,7 @@
         {
           "if_missing": "bare_bulb",
           "use": "diffusion_panel",
-          "tradeoff": "N/A \u2014 ring light is self-contained; bare_bulb is default"
+          "tradeoff": "N/A — ring light is self-contained; bare_bulb is default"
         }
       ],
       "difficulty": 1,
@@ -810,7 +810,7 @@
       },
       "why_this_works": "Speedlight bounced into a reflective umbrella fills shadows in outdoor portraits while matching the quality of ambient daylight. Silver umbrella adds catchlight energy; white umbrella gives softer fill.",
       "failure_modes": [
-        "Wind collapses or catches the umbrella \u2014 need sandbag on stand",
+        "Wind collapses or catches the umbrella — need sandbag on stand",
         "Must overpower sun at close range; may need high-sync or ND filter",
         "Batteries drain faster in cold weather"
       ],
@@ -857,7 +857,7 @@
         {
           "if_missing": "bare_bulb",
           "use": "diffusion_panel",
-          "tradeoff": "N/A \u2014 reflector is passive; bare_bulb is its default state; alternatively use diffusion panel OVER subject to soften direct sun instead of bouncing"
+          "tradeoff": "N/A — reflector is passive; bare_bulb is its default state; alternatively use diffusion panel OVER subject to soften direct sun instead of bouncing"
         }
       ],
       "difficulty": 1,
@@ -925,10 +925,10 @@
         "mood": "natural",
         "skin_tone": "varied"
       },
-      "why_this_works": "Diffusion panel held overhead converts direct sunlight into a massive soft source \u2014 essentially creating a portable window. Best outdoor option for group portraits with varied skin tones.",
+      "why_this_works": "Diffusion panel held overhead converts direct sunlight into a massive soft source — essentially creating a portable window. Best outdoor option for group portraits with varied skin tones.",
       "failure_modes": [
         "Needs assistants or C-stands to hold the frame",
-        "Wind makes large frames dangerous \u2014 can sail away",
+        "Wind makes large frames dangerous — can sail away",
         "Only works when sun is high enough to shoot through; useless on overcast days"
       ],
       "substitutions": [
@@ -964,9 +964,9 @@
         "mood": "corporate",
         "skin_tone": "medium"
       },
-      "why_this_works": "Battery-powered LED panel provides consistent fill for outdoor corporate headshots. No flash pops \u2014 subjects stay relaxed. Bi-color dial matches ambient from golden hour to overcast.",
+      "why_this_works": "Battery-powered LED panel provides consistent fill for outdoor corporate headshots. No flash pops — subjects stay relaxed. Bi-color dial matches ambient from golden hour to overcast.",
       "failure_modes": [
-        "Low power \u2014 struggles to fill against direct sun; best in shade",
+        "Low power — struggles to fill against direct sun; best in shade",
         "Wind can topple light panel on stand",
         "Continuous drain on battery; limited shoot duration"
       ],
@@ -974,7 +974,7 @@
         {
           "if_missing": "bare_bulb",
           "use": "diffusion_panel",
-          "tradeoff": "N/A \u2014 panel has no modifier mount; bare_bulb is default; aim to use in open shade where raw output suffices"
+          "tradeoff": "N/A — panel has no modifier mount; bare_bulb is default; aim to use in open shade where raw output suffices"
         }
       ],
       "difficulty": 2,
@@ -1005,7 +1005,7 @@
       },
       "why_this_works": "On-camera or bracket-mounted speedlight is the event photographer's survival tool. TTL metering handles varying distances and skin tones automatically. Fastest possible setup.",
       "failure_modes": [
-        "Direct flash is harsh and unflattering \u2014 bounce off ceiling when possible",
+        "Direct flash is harsh and unflattering — bounce off ceiling when possible",
         "TTL can be fooled by white wedding dresses or dark suits",
         "Recycle time causes missed moments at full power"
       ],
@@ -1042,7 +1042,7 @@
         "mood": "cinematic",
         "skin_tone": "medium"
       },
-      "why_this_works": "CTO-gelled speedlight blends with warm venue lighting (tungsten chandeliers) instead of fighting it. Set camera white balance to tungsten \u2014 gelled flash matches, ambient matches, everything is warm and cohesive.",
+      "why_this_works": "CTO-gelled speedlight blends with warm venue lighting (tungsten chandeliers) instead of fighting it. Set camera white balance to tungsten — gelled flash matches, ambient matches, everything is warm and cohesive.",
       "failure_modes": [
         "Must remember to remove gel when moving to daylight-balanced areas",
         "Reduces flash power by ~1 stop",
@@ -1081,17 +1081,17 @@
         "mood": "editorial",
         "skin_tone": "dark"
       },
-      "why_this_works": "Handheld LED tube as a creative accent light at events. Hold it just out of frame for an editorial rim or edge light. RGB capability lets you match or contrast venue colors. Waterproof \u2014 survives outdoor receptions.",
+      "why_this_works": "Handheld LED tube as a creative accent light at events. Hold it just out of frame for an editorial rim or edge light. RGB capability lets you match or contrast venue colors. Waterproof — survives outdoor receptions.",
       "failure_modes": [
-        "Very low output \u2014 accent only, not a key light",
-        "Must be hand-held or clamped creatively \u2014 no standard mount",
+        "Very low output — accent only, not a key light",
+        "Must be hand-held or clamped creatively — no standard mount",
         "RGB color choices can look gimmicky if overdone"
       ],
       "substitutions": [
         {
           "if_missing": "bare_bulb",
           "use": "gel_cto",
-          "tradeoff": "N/A \u2014 tube is self-contained; use built-in color control instead of external gel"
+          "tradeoff": "N/A — tube is self-contained; use built-in color control instead of external gel"
         }
       ],
       "difficulty": 2,
@@ -1124,7 +1124,7 @@
       "failure_modes": [
         "Umbrella footprint blocks traffic in tight venues",
         "Wind at outdoor receptions collapses it",
-        "Must be tethered to camera via radio trigger \u2014 another failure point"
+        "Must be tethered to camera via radio trigger — another failure point"
       ],
       "substitutions": [
         {
@@ -1159,17 +1159,17 @@
         "mood": "natural",
         "skin_tone": "dark"
       },
-      "why_this_works": "Small LED panel on a bracket gives continuous fill at events. Dark skin benefits from the constant output \u2014 you can see exactly how the light falls before pressing the shutter. No flash pops disturb the event.",
+      "why_this_works": "Small LED panel on a bracket gives continuous fill at events. Dark skin benefits from the constant output — you can see exactly how the light falls before pressing the shutter. No flash pops disturb the event.",
       "failure_modes": [
         "Very limited power for anything beyond close range",
-        "Panel size is small \u2014 light goes hard at distance",
+        "Panel size is small — light goes hard at distance",
         "Battery life is finite; carry spares"
       ],
       "substitutions": [
         {
           "if_missing": "bare_bulb",
           "use": "gel_cto",
-          "tradeoff": "N/A \u2014 panel is self-contained; use built-in bi-color to warm output instead"
+          "tradeoff": "N/A — panel is self-contained; use built-in bi-color to warm output instead"
         }
       ],
       "difficulty": 1,
@@ -1177,7 +1177,7 @@
     },
     {
       "id": "continuous_2_light__softbox_rect__studio_small__dramatic__deep",
-      "name": "2-Light Continuous + Rectangular Softbox (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "2-Light Continuous + Rectangular Softbox (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 4200,
         "energy_efficiency": 75,
@@ -1216,7 +1216,7 @@
     },
     {
       "id": "strobe_mono__beauty_dish__studio_small__dramatic__deep",
-      "name": "Monolight Strobe + Beauty Dish (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "Monolight Strobe + Beauty Dish (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 7200,
         "energy_efficiency": 55,
@@ -1255,7 +1255,7 @@
     },
     {
       "id": "strobe_mono__softbox_strip__studio_small__dramatic__deep",
-      "name": "Monolight Strobe + Strip Softbox (Small Studio) \u2014 Dramatic Rim/Edge (Deep Skin)",
+      "name": "Monolight Strobe + Strip Softbox (Small Studio) — Dramatic Rim/Edge (Deep Skin)",
       "criteria": {
         "brightness": 7000,
         "energy_efficiency": 55,
@@ -1276,7 +1276,7 @@
         "mood": "dramatic",
         "skin_tone": "deep"
       },
-      "why_this_works": "Stripbox makes clean edge separation and shape\u2014ideal for dramatic portraits where you want jawline and cheekbone definition on deep skin.",
+      "why_this_works": "Stripbox makes clean edge separation and shape—ideal for dramatic portraits where you want jawline and cheekbone definition on deep skin.",
       "failure_modes": [
         "Edge light can blow out hair/shoulders if too close or too high power",
         "Spill onto background in small rooms",
@@ -1294,7 +1294,7 @@
     },
     {
       "id": "speedlight_2_light__softbox_rect__studio_small__dramatic__deep",
-      "name": "2-Speedlight + Rect Softbox (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "2-Speedlight + Rect Softbox (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 3600,
         "energy_efficiency": 80,
@@ -1333,7 +1333,7 @@
     },
     {
       "id": "strobe_mono__umbrella_reflective__studio_small__dramatic__deep",
-      "name": "Monolight Strobe + Reflective Umbrella (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "Monolight Strobe + Reflective Umbrella (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 6800,
         "energy_efficiency": 55,
@@ -1354,7 +1354,7 @@
         "mood": "dramatic",
         "skin_tone": "deep"
       },
-      "why_this_works": "Reflective umbrella is punchier than shoot-through and easier to flag. In small rooms it\u2019s a good dramatic fallback when you need more direction without a softbox.",
+      "why_this_works": "Reflective umbrella is punchier than shoot-through and easier to flag. In small rooms it’s a good dramatic fallback when you need more direction without a softbox.",
       "failure_modes": [
         "Still spills light without flags",
         "Hot center if umbrella is cheap",
@@ -1372,7 +1372,7 @@
     },
     {
       "id": "speedlight_2_light__umbrella_reflective__studio_small__dramatic__deep",
-      "name": "2-Speedlight + Reflective Umbrella (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "2-Speedlight + Reflective Umbrella (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 3200,
         "energy_efficiency": 82,
@@ -1395,7 +1395,7 @@
       },
       "why_this_works": "Portable dramatic setup. Reflective umbrella keeps directionality while second speedlight can add separation or subtle fill. Great when space is tight and budget matters.",
       "failure_modes": [
-        "Power ceiling is real\u2014watch ISO/aperture expectations",
+        "Power ceiling is real—watch ISO/aperture expectations",
         "Umbrella spill can reduce drama without flags",
         "TTL can drift; manual is safer"
       ],
@@ -1411,7 +1411,7 @@
     },
     {
       "id": "basic_2_light__softbox_rect__studio_small__dramatic__deep",
-      "name": "Basic 2-Light + Rect Softbox (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "Basic 2-Light + Rect Softbox (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 5000,
         "energy_efficiency": 70,
@@ -1450,7 +1450,7 @@
     },
     {
       "id": "basic_2_light__beauty_dish__studio_small__dramatic__deep",
-      "name": "Basic 2-Light + Beauty Dish (Small Studio) \u2014 Dramatic (Deep Skin)",
+      "name": "Basic 2-Light + Beauty Dish (Small Studio) — Dramatic (Deep Skin)",
       "criteria": {
         "brightness": 5200,
         "energy_efficiency": 65,
@@ -1486,6 +1486,456 @@
       ],
       "difficulty": 3,
       "setup_time_minutes": 14
+    },
+    {
+      "id": "continuous__triangle__studio_medium",
+      "name": "Continuous Triangle (Hurley-style Headshot)",
+      "criteria": {
+        "brightness": 5000,
+        "energy_efficiency": 75,
+        "color_accuracy": 95,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 65
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.25,
+      "taxonomy_refs": {
+        "gear_profile": "continuous_led",
+        "modifier_family": "softbox_rect",
+        "environment": "studio_medium",
+        "mood": "headshot_triangle",
+        "skin_tone": "light"
+      },
+      "why_this_works": "Three continuous lights in a triangle create the signature Hurley-style shadowless headshot. Two symmetric keys wrap the face evenly while the low fill eliminates chin shadow and completes the triangle catchlight. Continuous light gives you real-time feedback — what you see is what you get. This setup flatters virtually every face shape and is extremely fast to shoot once dialed in.",
+      "failure_modes": [
+        "Lights not balanced — one side noticeably brighter; meter both keys independently at subject position",
+        "All lights too close creates hot spots and waxy-looking skin; start at 3–4 ft and move back if needed",
+        "Continuous lights struggle to overpower ambient — kill all room lights and close blinds",
+        "Color temperature drift between units — set all lights to the same Kelvin and verify with a gray card",
+        "Low fill too strong washes out chin and neck definition — keep it at half power of the keys"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "third continuous light",
+          "use": "white reflector or white V-flat below chin",
+          "tradeoff": "Weaker third catchlight. Less even fill under chin. Reflector depends on key spill so less independent control."
+        },
+        {
+          "if_missing": "continuous lights",
+          "use": "three speedlights with modeling lamps on",
+          "tradeoff": "Lose the real-time WYSIWYG advantage. Harder to dial in. Modeling lamps are dimmer than the actual flash output so what you see isn't exactly what you get."
+        },
+        {
+          "if_missing": "softbox modifiers",
+          "use": "shoot-through umbrellas",
+          "tradeoff": "More spill, less control. Catchlights will be rounder and larger. May need more flagging to keep light off background."
+        }
+      ],
+      "difficulty": 2,
+      "setup_time_minutes": 20
+    },
+    {
+      "id": "continuous__triangle__studio_small",
+      "name": "Continuous Triangle — Small Space (Hurley-style Headshot)",
+      "criteria": {
+        "brightness": 4500,
+        "energy_efficiency": 75,
+        "color_accuracy": 95,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 60
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.15,
+      "taxonomy_refs": {
+        "gear_profile": "continuous_led",
+        "modifier_family": "softbox_rect",
+        "environment": "studio_small",
+        "mood": "headshot_triangle",
+        "skin_tone": "light"
+      },
+      "why_this_works": "Same triangle concept adapted for tight spaces. Use smaller modifiers (24-inch or under) and tighten the triangle. In a small room you'll get more bounce off walls which actually helps this look — embrace it. Keep subject 3–4 ft from background minimum.",
+      "failure_modes": [
+        "Small room bounce can flatten the look too much — use black V-flats on the sides to kill bounce if needed",
+        "Smaller modifiers mean harder light — move them closer to compensate but watch for hot spots",
+        "Low ceiling limits the upper lights — angle them down more aggressively",
+        "Background will be harder to blow clean white in a small room — may need a dedicated background light"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "third light",
+          "use": "white foam core below chin",
+          "tradeoff": "Weaker fill, depends on key spill. In a small room this actually works better because there is more ambient bounce."
+        }
+      ],
+      "difficulty": 2,
+      "setup_time_minutes": 15
+    },
+    {
+      "id": "continuous__triangle__dark_skin",
+      "name": "Continuous Triangle — Dark Skin (Hurley-style Headshot)",
+      "criteria": {
+        "brightness": 5500,
+        "energy_efficiency": 75,
+        "color_accuracy": 97,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 65
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.3,
+      "taxonomy_refs": {
+        "gear_profile": "continuous_led",
+        "modifier_family": "softbox_rect",
+        "environment": "studio_medium",
+        "mood": "headshot_triangle",
+        "skin_tone": "dark"
+      },
+      "why_this_works": "Triangle setup tuned for dark skin tones. Higher CRI lights are critical — 95+ minimum, 97+ preferred. The even wrap of the triangle is especially flattering on dark skin because it maintains highlight detail across the face without creating harsh contrast zones. Slightly more power on the low fill helps reveal undertones in the jawline and neck.",
+      "failure_modes": [
+        "Low CRI lights shift undertones — verify CRI 95+ on all three units",
+        "Specular highlights on oily skin — use mattifying spray or reduce power slightly",
+        "Underexposure from metering off dark skin — meter incident at subject, not reflected",
+        "Triangle too tight can create uneven falloff — widen the triangle slightly for dark skin"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "high-CRI continuous lights",
+          "use": "strobe with modeling lamp for positioning, then dial by test frame",
+          "tradeoff": "Lose WYSIWYG. Must chimping carefully. But strobe CRI is typically 95+ which is the key requirement."
+        }
+      ],
+      "difficulty": 3,
+      "setup_time_minutes": 25
+    },
+    {
+      "id": "master__rembrandt_portrait__studio_medium",
+      "name": "Master Rembrandt Portrait (Heisler / Leibovitz)",
+      "criteria": {
+        "brightness": 7500,
+        "energy_efficiency": 65,
+        "color_accuracy": 97,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 75
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.25,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "softbox_rect",
+        "environment": "studio_medium",
+        "mood": "cinematic",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "The universal portrait pattern. Key at 45° creates the diagnostic triangle of light on the shadow cheek. Named for Rembrandt van Rijn's north-facing studio windows. Gregory Heisler and Annie Leibovitz both cite this as their default starting position. The single most-booked pattern in portrait studios worldwide.",
+      "failure_modes": [
+        "No triangle on shadow cheek — key too far forward; move key to 40-50°",
+        "Triangle too large (half-lit face) — key past 60°; move key forward 10-15°",
+        "Nose shadow disconnected from cheek — key too high; lower to forehead level",
+        "Raccoon eyes — key too high; lower key 6 inches",
+        "Flat face, no dimension — fill too strong; pull fill back 2 ft or power down 1 stop",
+        "Double nose shadow — fill too far to the side; move fill to camera axis"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "softbox_rect",
+          "use": "umbrella_reflective",
+          "tradeoff": "Less directional control, more spill; grid the umbrella if possible"
+        },
+        {
+          "if_missing": "softbox_rect",
+          "use": "softbox_octa",
+          "tradeoff": "Rounder catchlights, slightly softer shadow edge; works well"
+        },
+        {
+          "if_missing": "grid_spot",
+          "use": "stripbox",
+          "tradeoff": "Wider rim coverage; good for half-body; harder to control spill"
+        }
+      ],
+      "difficulty": 2,
+      "setup_time_minutes": 15,
+      "master_ref": "Rembrandt van Rijn / Gregory Heisler / Annie Leibovitz",
+      "business_priority": 1
+    },
+    {
+      "id": "master__loop_lighting__studio_medium",
+      "name": "Master Loop Lighting (Penn / Hurley)",
+      "criteria": {
+        "brightness": 7500,
+        "energy_efficiency": 65,
+        "color_accuracy": 97,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 80
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.2,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "softbox_octa",
+        "environment": "studio_medium",
+        "mood": "corporate",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "The safest, most universally flattering portrait pattern. Key at 25-35° creates a small loop shadow beside the nose without crossing to the far cheek. Preferred by corporate headshot studios (Peter Hurley workflow). Irving Penn used a refined loop; Avedon's early editorial work often started from a loop position. Highest reliability score of any pattern.",
+      "failure_modes": [
+        "Nose shadow touching cheek — key past 40°; you have Rembrandt, not Loop; move key toward camera",
+        "No nose shadow at all — key under 15°; you have Butterfly; move key further to the side",
+        "Face looks flat — fill too strong or key too centered; pull fill back 1-2 ft",
+        "Glasses glare — raise key 6 inches, angle subject chin down 5°, or move key 5° wider",
+        "Hot spot on forehead — key too close or not feathered; feather near edge past forehead"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "softbox_octa",
+          "use": "umbrella_shoot_through",
+          "tradeoff": "More spill, less directional control; works fine in small spaces"
+        },
+        {
+          "if_missing": "softbox_octa",
+          "use": "softbox_rect",
+          "tradeoff": "Rectangular catchlights instead of round; no quality difference"
+        },
+        {
+          "if_missing": "strobe_mono",
+          "use": "led_panel",
+          "tradeoff": "Continuous light; WYSIWYG preview; lower power; watch for 60Hz flicker at fast shutters"
+        }
+      ],
+      "difficulty": 1,
+      "setup_time_minutes": 12,
+      "master_ref": "Irving Penn / Richard Avedon / Peter Hurley",
+      "business_priority": 2
+    },
+    {
+      "id": "master__butterfly_beauty__studio_medium",
+      "name": "Master Butterfly / Clamshell Beauty (Penn / Hurrell)",
+      "criteria": {
+        "brightness": 8000,
+        "energy_efficiency": 65,
+        "color_accuracy": 98,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 70
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.22,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "beauty_dish",
+        "environment": "studio_medium",
+        "mood": "beauty",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "Centered key directly above the camera axis creates a symmetrical butterfly shadow under the nose. Named for the Hollywood Paramount studio system. Irving Penn's precise beauty work and modern beauty/cosmetics photography depend on this pattern. The clamshell variant (with reflector fill below chin) is the beauty industry standard worldwide.",
+      "failure_modes": [
+        "Butterfly shadow too long (covers lip) — key too high; lower until shadow is 1/3 nose-to-lip distance",
+        "Raccoon eyes — key too high, no clamshell fill; add reflector below chin and lower key 6 inches",
+        "No butterfly shadow — key too low; raise key to 1-2 ft above forehead",
+        "Asymmetric shadows — key not centered; move to directly above lens with boom arm",
+        "Flat dimensionless face — fill too strong or key too soft; pull reflector back 6 inches"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "beauty_dish",
+          "use": "softbox_octa",
+          "tradeoff": "Softer, less contrasty; loses the beauty dish 'pop'; still works for beauty"
+        },
+        {
+          "if_missing": "beauty_dish",
+          "use": "umbrella_reflective",
+          "tradeoff": "More spill, less controlled; silver umbrella at 3 ft approximates the contrast"
+        },
+        {
+          "if_missing": "reflector",
+          "use": "white_foam_board",
+          "tradeoff": "Same quality fill; tape to a light stand at waist height"
+        }
+      ],
+      "difficulty": 2,
+      "setup_time_minutes": 15,
+      "master_ref": "Irving Penn / George Hurrell / Peter Lindbergh",
+      "business_priority": 3
+    },
+    {
+      "id": "master__caravaggio_chiaroscuro__studio_large",
+      "name": "Master Caravaggio Chiaroscuro (Alton / Heisler)",
+      "criteria": {
+        "brightness": 7000,
+        "energy_efficiency": 65,
+        "color_accuracy": 96,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 85
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.15,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "grid_spot",
+        "environment": "studio_large",
+        "mood": "low_key",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "Extreme contrast from a single directional source. Caravaggio painted with a single skylight in his Roman studio; John Alton codified this for cinema as 'painting with light.' The key is the ONLY source — fill is ambient spill only. Simplest setup but requires the most room control. The highest-drama single-light portrait technique.",
+      "failure_modes": [
+        "Shadows not dark enough — ambient bounce filling shadows; add black v-flats beside subject",
+        "Background not black — subject too close to background; move to 8+ ft; grid the key",
+        "Spill on background creating hot spot — no grid on key; add 20° grid or barn doors",
+        "Face looks harsh, every pore visible — hard light at close range; move key 1-2 ft further back",
+        "Shadow side too deep for sensor — add very subtle reflector at 3+ stops below key on shadow side"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "grid_spot",
+          "use": "bare_bulb",
+          "tradeoff": "More spill; will need black flags; more dramatic point-source quality"
+        },
+        {
+          "if_missing": "grid_spot",
+          "use": "snoot",
+          "tradeoff": "Very tight beam; less coverage; may need to increase distance"
+        },
+        {
+          "if_missing": "strobe_mono",
+          "use": "fresnel",
+          "tradeoff": "Continuous light with WYSIWYG preview; perfect for this style; lower power"
+        }
+      ],
+      "difficulty": 3,
+      "setup_time_minutes": 10,
+      "master_ref": "Caravaggio / John Alton / Gregory Heisler",
+      "business_priority": 4
+    },
+    {
+      "id": "master__vermeer_window__home_studio",
+      "name": "Master Vermeer Window Light (Leibovitz / Lindbergh)",
+      "criteria": {
+        "brightness": 6500,
+        "energy_efficiency": 60,
+        "color_accuracy": 97,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 72
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.18,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "softbox_rect",
+        "environment": "home_studio",
+        "mood": "natural",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "Johannes Vermeer painted with north-facing window light. A very large softbox or diffusion panel at 60-90° placed as close as framing allows creates the same luminous, painterly quality. The size-to-distance ratio is what makes the Vermeer look — the modifier appears as large as the subject. Foundation of 'natural light' portraiture and the look lifestyle/branding photographers replicate.",
+      "failure_modes": [
+        "Shadows too deep, not luminous — source too far away or too small; move softbox closer (2-3 ft)",
+        "Light looks artificial — source too hard or direct; add a layer of diffusion; bounce into white wall",
+        "Color mismatch (warm ambient, cool strobe) — gel strobe with 1/4 CTO; or set WB to strobe temp",
+        "Background too dark — subject too far from bg; allow light to wrap into the scene",
+        "Flat, no dimension — source too large relative to angle; move closer to 90° for more shadow"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "softbox_rect",
+          "use": "diffusion_panel",
+          "tradeoff": "Better quality — closer to real window light; requires strobe behind panel"
+        },
+        {
+          "if_missing": "softbox_rect",
+          "use": "umbrella_shoot_through",
+          "tradeoff": "Wider spill; less directional; works if placed very close to subject"
+        },
+        {
+          "if_missing": "strobe_mono",
+          "use": "led_panel",
+          "tradeoff": "Continuous light is ideal for this style — WYSIWYG, no harsh pops"
+        }
+      ],
+      "difficulty": 1,
+      "setup_time_minutes": 10,
+      "master_ref": "Johannes Vermeer / Annie Leibovitz / Peter Lindbergh",
+      "business_priority": 5
+    },
+    {
+      "id": "master__avedon_high_key__studio_large",
+      "name": "Master Avedon High-Key Clean (Taylor / Schoeller)",
+      "criteria": {
+        "brightness": 8500,
+        "energy_efficiency": 55,
+        "color_accuracy": 98,
+        "lifespan_hours": 50000,
+        "cost_effectiveness": 60
+      },
+      "features": {
+        "dimmable": true,
+        "smart_ready": false,
+        "waterproof": false
+      },
+      "modifier": 1.3,
+      "taxonomy_refs": {
+        "gear_profile": "strobe_mono",
+        "modifier_family": "softbox_rect",
+        "environment": "studio_large",
+        "mood": "high_key",
+        "skin_tone": "medium"
+      },
+      "why_this_works": "Richard Avedon's white-background portraits strip away context to focus on the person. Pure white background requires background lights at +1 to +2 stops over key. Karl Taylor's commercial workflow builds on this for product and corporate photography. Martin Schoeller's close-up portraits use a similar frontal high-key approach. The commercial standard for team pages and casting.",
+      "failure_modes": [
+        "Background not pure white (grey) — bg lights too weak; increase to +1.5 stops over key at background surface",
+        "Subject has light wrap/halo — too close to overlit bg; move to 8+ ft; add black flags behind subject",
+        "Lens flare from background — bg lights visible to lens; flag them; use lens hood",
+        "Subject disappears into white bg — no rim/hair light; add strip boxes from behind at -0.5 stops",
+        "Uneven background hot spots — bg lights not evenly aimed; meter 5 points across; adjust within 1/3 stop"
+      ],
+      "substitutions": [
+        {
+          "if_missing": "bare_bulb",
+          "use": "umbrella_reflective",
+          "tradeoff": "Wider, more even bg coverage; slightly harder to control spill"
+        },
+        {
+          "if_missing": "stripbox",
+          "use": "grid_spot",
+          "tradeoff": "Tighter rim; works for headshot but less coverage for half-body"
+        },
+        {
+          "if_missing": "softbox_rect",
+          "use": "umbrella_shoot_through",
+          "tradeoff": "More spill; harder to keep off the background; add a flag if needed"
+        }
+      ],
+      "difficulty": 3,
+      "setup_time_minutes": 30,
+      "master_ref": "Richard Avedon / Karl Taylor / Martin Schoeller",
+      "business_priority": 6
     }
   ]
 }

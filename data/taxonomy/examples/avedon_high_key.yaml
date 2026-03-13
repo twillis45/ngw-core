@@ -1,0 +1,147 @@
+identity:
+  setup_id: avedon_high_key_v1
+  setup_name: Avedon High-Key Clean
+  use_case: corporate
+  visual_intent: high_key
+  pattern_family: flat_frontal
+  tags:
+    - high_key
+    - corporate
+    - e_commerce
+    - white_background
+    - commercial
+    - clean
+
+subject_fit:
+  subject_types:
+    - male_portrait
+    - female_portrait
+    - seated_portrait
+    - group_portrait
+  skin_or_surface_notes:
+    - even_illumination_across_all_skin_tones
+    - white_background_requires_edge_separation_on_blonde_hair
+    - monitor_for_background_wrap_contaminating_subject_edges
+  pose_assumptions:
+    - square_to_camera
+    - direct_gaze
+    - minimal_expression
+    - open_body_language
+
+environment_fit:
+  minimum_ceiling_height_ft: 9
+  recommended_ceiling_height_ft: 10
+  minimum_room_width_ft: 12
+  minimum_room_depth_ft: 18
+  indoor_outdoor_fit:
+    - indoor
+    - studio
+  portability: low
+  power_requirements: high
+  environment_tags:
+    - tall_ceiling
+    - large_studio
+
+light_architecture:
+  key_source:
+    role: key
+    modifier_family: medium_softbox
+    angle_deg: 15
+    height_relative_to_subject: slightly_above_eye_level
+    distance_ft:
+      min: 3.0
+      max: 4.0
+    feather_direction: even_coverage
+  fill_source:
+    role: fill
+    modifier_family: medium_softbox
+    position: opposite_side_at_camera_axis
+    ratio_to_key_stops: -0.5
+  rim_sources:
+    - role: rim
+      modifier_family: stripbox
+      position: behind_subject_from_both_sides
+      angle_deg: 150
+      ratio_to_key_stops: -0.5
+  background_source:
+    role: background
+    modifier_family: bare_bulb
+    position: two_lights_aimed_at_white_seamless
+    ratio_to_key_stops: 1.5
+    notes: must_blow_background_to_pure_white_250_plus_rgb
+  negative_fill: null
+  bounce: null
+
+camera_architecture:
+  lens_range_mm:
+    min: 85
+    max: 105
+  camera_height_relative_to_subject: eye_level
+  camera_angle: straight_on
+  camera_distance_ft:
+    min: 8
+    max: 10
+
+distance_references:
+  key_to_subject_ft:
+    min: 3.0
+    max: 4.0
+  fill_to_subject_ft:
+    min: 3.5
+    max: 4.5
+  rim_to_subject_ft:
+    min: 4.5
+    max: 5.5
+  subject_to_background_ft:
+    min: 6
+    max: 10
+  camera_to_subject_ft:
+    min: 8
+    max: 10
+  background_light_to_background_ft:
+    min: 3.0
+    max: 5.0
+
+expected_result:
+  shadow_pattern: minimal_shadows_low_contrast_ratio
+  contrast_profile: very_low
+  catchlight_style: dual_at_10_and_2_oclock
+  background_relationship: pure_white_250_to_255_rgb
+  visual_notes:
+    - clean_edge_separation_via_rim_light
+    - even_illumination_across_subject
+    - no_background_shadows_or_spill_patterns
+    - pure_white_background
+
+diagnostics:
+  common_failure_modes:
+    - background_too_bright
+    - no_subject_separation
+    - face_too_flat
+    - double_catchlights
+
+substitutions:
+  modifier_alternatives:
+    - primary: medium_softbox
+      alternatives:
+        - large_octa
+        - umbrella_white
+  gear_alternatives:
+    - primary: strobe_mono
+      alternatives:
+        - led_cob
+  adaptation_variants:
+    - ideal_setup
+    - two_light_version
+    - led_version
+
+reliability:
+  rule_confidence: 82
+  reliability_label: reliable
+  field_verified: false
+  verification_count: 0
+  notes:
+    - reliable_when_properly_metered
+    - main_complexity_is_4_to_5_light_setup
+    - precise_background_metering_required
+    - once_dialed_in_highly_repeatable_for_volume_sessions

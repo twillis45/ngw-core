@@ -1,0 +1,95 @@
+id: tabletop_soft_product
+name: Tabletop Soft Product
+version: 1
+status: canonical
+
+pattern:
+  primary: tabletop_soft_product
+  secondary: high_key
+
+category: product
+difficulty: 2
+setup_time_minutes: 15
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 7
+  background: white_or_gradient
+  background_distance_ft: 2
+  surface: shooting_table_or_sweep
+
+subject:
+  distance_from_camera_ft: 3
+  position: center_on_table
+
+camera:
+  height: slightly_above_product
+  lens: 50-100mm_macro
+  angle_to_subject_deg: 20
+
+lights:
+  - role: key
+    modifier: softbox_rect
+    angle_deg: 45
+    height: overhead_angled
+    height_offset_in: 24
+    distance_ft: 2
+    power_ratio: 1.0
+    notes:
+      - Large softbox angled down from 45 degrees
+      - Creates gradient across product surface
+      - Close distance for maximum softness
+
+  - role: fill
+    modifier: reflector
+    angle_deg: -45
+    height: product_level
+    height_offset_in: 0
+    distance_ft: 1
+    power_ratio: 0.0
+    notes:
+      - White card reflector on shadow side
+      - Controls reflections on glossy surfaces
+      - Move closer/further to adjust fill ratio
+
+  - role: background
+    modifier: bare_or_scrim
+    angle_deg: 180
+    height: below_product
+    height_offset_in: -12
+    distance_ft: 1
+    power_ratio: 0.8
+    notes:
+      - Light from below through acrylic/white surface
+      - Creates clean gradient or pure white base
+      - Optional if using white sweep with overhead key
+
+shadow_signature:
+  expected_pattern: tabletop
+  nose_shadow: null
+  cheek_shadow: null
+  contrast: low
+  softness: 0.75
+
+failure_modes:
+  - "Hot spots on reflective products: reposition or use scrim"
+  - "Background light too bright: product edges disappear"
+  - "Key too far: light too hard for product detail"
+
+substitutions:
+  - if_missing: softbox_rect
+    use: diffusion_panel
+    tradeoff: "Slightly less directional control"
+  - if_missing: scrim
+    use: white_diffusion_fabric
+    tradeoff: "DIY solution that works well at small scale"
+
+use_cases:
+  - product_photography
+  - e_commerce
+  - still_life
+  - food_photography
+
+example_photographers:
+  - Karl Taylor
+  - Photigy

@@ -14,9 +14,11 @@ import pytest
 from engine.scoring import (
     BASE_WEIGHTS,
     BONUS_RULES,
+    CONTEXT_BONUS_WEIGHTS,
     FALLBACK_MODIFIER,
     NORMALISATION_CAPS,
     ScoreBreakdown,
+    _compute_context_bonuses,
     _normalise,
     _was_clamped,
     score_system,
@@ -268,3 +270,86 @@ class TestConfidence:
         b = score_system(s)
         assert a.confidence.score == b.confidence.score
         assert a.confidence.model_dump() == b.confidence.model_dump()
+
+
+# ── Context-aware scoring (image intelligence) ─────────────────────────────
+
+def _system_with_taxonomy(**tax_overrides) -> dict:
+    tax = {
+        "mood": "corporate",
+        "modifier_family": "softbox_rect",
+        "gear_profile": "strobe_mono",
+        "skin_tone": "light",
+    }
+    tax.update(tax_overrides)
+    return _minimal_system(
+        criteria={"brightness": 5000, "color_accuracy": 90},
+        features={"dimmable": True},
+        modifier=1.1,
+        taxonomy_refs=tax,
+    )
+
+
+class TestContextBonuses:
+    def test_mood_match_boosts_score(self):
+        sys = _system_with_taxonomy(mood="cinematic")
+        ctx = {"detected_mood": "cinematic", "detected_mood_confidence": 0.8}
+        total, bonuses, notes = _compute_context_bonuses(sys, ctx)
+        assert total > 0
+        expected = CONTEXT_BONUS_WEIGHTS["mood_match"] * 0.8
+        assert total == pytest.approx(expected, abs=0.01)
+        assert len(bonuses) == 1
+        assert bonuses[0].feature == "ctx_mood_match"
+
+    def test_modifier_match_boosts_score(self):
+        sys = _system_with_taxonomy(modifier_family="beauty_dish")
+        ctx = {"detected_modifier": "beauty_dish", "detected_modifier_confidence": 0.5}
+        total, bonuses, _ = _compute_context_bonuses(sys, ctx)
+        expected = CONTEXT_BONUS_WEIGHTS["modifier_match"] * 0.5
+        assert total == pytest.approx(expected, abs=0.01)
+
+    def test_skin_tone_match_boosts_score(self):
+        sys = _system_with_taxonomy(skin_tone="dark")
+        ctx = {"detected_skin_tone": "dark", "detected_skin_tone_confidence": 0.8}
+        total, bonuses, _ = _compute_context_bonuses(sys, ctx)
+        expected = CONTEXT_BONUS_WEIGHTS["skin_tone_match"] * 0.8
+        assert total == pytest.approx(expected, abs=0.01)
+
+    def test_no_context_no_bonus(self):
+        sys = _system_with_taxonomy()
+        total, bonuses, notes = _compute_context_bonuses(sys, {})
+        assert total == 0.0
+        assert bonuses == []
+        assert notes == []
+
+    def test_mismatched_mood_no_bonus(self):
+        sys = _system_with_taxonomy(mood="corporate")
+        ctx = {"detected_mood": "cinematic", "detected_mood_confidence": 0.9}
+        total, bonuses, _ = _compute_context_bonuses(sys, ctx)
+        assert total == 0.0
+
+    def test_low_confidence_smaller_bonus(self):
+        sys = _system_with_taxonomy(mood="beauty")
+        high_ctx = {"detected_mood": "beauty", "detected_mood_confidence": 0.9}
+        low_ctx = {"detected_mood": "beauty", "detected_mood_confidence": 0.3}
+        high_total, _, _ = _compute_context_bonuses(sys, high_ctx)
+        low_total, _, _ = _compute_context_bonuses(sys, low_ctx)
+        assert high_total > low_total
+
+    def test_backwards_compat_no_ctx(self):
+        """score_system with no input_ctx should work identically to before."""
+        sys = _system_with_taxonomy()
+        a = score_system(sys, input_ctx=None)
+        b = score_system(sys, input_ctx={})
+        assert a.final_score == b.final_score
+
+    def test_context_bonus_in_final_score(self):
+        """Context bonuses should increase final_score."""
+        sys = _system_with_taxonomy(mood="corporate")
+        baseline = score_system(sys, input_ctx={})
+        with_ctx = score_system(sys, input_ctx={
+            "detected_mood": "corporate",
+            "detected_mood_confidence": 0.8,
+        })
+        assert with_ctx.final_score > baseline.final_score
+        assert with_ctx.base_score > baseline.base_score

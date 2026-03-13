@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>NGW — The World's First Lighting Intelligence System</title>
+  <meta name="description" content="Upload a reference photo. Get a complete lighting setup in seconds — power, position, modifier, and diagram."/>
+  <link rel="stylesheet" href="/www/css/marketing.css"/>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────── -->
+<nav class="nav">
+  <div class="container nav__inner">
+    <a href="/" class="nav__brand">
+      <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
+        <rect x="4" y="4" width="40" height="40" rx="12" stroke="currentColor" stroke-width="2" fill="none"/>
+        <path d="M18 14 L24 34 L30 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="24" cy="14" r="3" fill="currentColor"/>
+      </svg>
+      NGW
+    </a>
+
+    <ul class="nav__links">
+      <li><a href="/features">Features</a></li>
+      <li><a href="/pricing">Pricing</a></li>
+      <li><a href="/library">Library</a></li>
+      <li><a href="/blog">Blog</a></li>
+    </ul>
+
+    <div class="nav__cta">
+      <a href="/login" class="btn btn--ghost" style="padding:8px 16px;font-size:.8125rem">Log In</a>
+      <a href="/signup" class="btn btn--primary" style="padding:8px 16px;font-size:.8125rem">Get Started</a>
+    </div>
+
+    <button class="nav__hamburger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="nav__mobile">
+    <a href="/features">Features</a>
+    <a href="/pricing">Pricing</a>
+    <a href="/library">Library</a>
+    <a href="/blog">Blog</a>
+    <a href="/login" class="btn btn--ghost" style="margin-top:8px;text-align:center">Log In</a>
+    <a href="/signup" class="btn btn--primary" style="text-align:center">Get Started</a>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <span class="hero__badge">Now in Beta</span>
+    <h1>The world's first lighting intelligence system.</h1>
+    <p class="hero__sub">Upload a reference photo. Get a complete lighting setup in seconds &mdash; power, position, modifier, and diagram.</p>
+    <div class="hero__actions">
+      <a href="/signup" class="btn btn--primary btn--large">Try It Free</a>
+      <a href="#demo" class="btn btn--ghost btn--large">See How It Works</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Demo Section ────────────────────────────────── -->
+<section id="demo" class="section section--alt section--center">
+  <div class="container">
+    <span class="section__label">See It In Action</span>
+    <h2 class="section__title">From reference photo to complete setup</h2>
+    <p class="section__desc">Upload any lighting reference. NGW's 27-pass vision pipeline analyzes it and delivers a step-by-step recreation guide.</p>
+
+    <div class="demo-grid">
+      <!-- Reference Image -->
+      <div class="demo-card">
+        <div class="demo-card__visual">
+          <svg viewBox="0 0 120 90" fill="none" xmlns="http://www.w3.org/2000/svg" width="100">
+            <rect width="120" height="90" rx="6" fill="#1E2129"/>
+            <circle cx="60" cy="36" r="14" fill="none" stroke="#A9AFBB" stroke-width="1.5"/>
+            <path d="M46 72 Q60 52 74 72" fill="none" stroke="#A9AFBB" stroke-width="1.5"/>
+            <rect x="10" y="6" rx="2" width="20" height="12" fill="#F5B041" fill-opacity="0.2" stroke="#F5B041" stroke-width="0.5"/>
+          </svg>
+        </div>
+        <h3>Reference Image</h3>
+        <p>Upload any portrait with lighting you want to recreate</p>
+      </div>
+
+      <!-- Lighting Diagram -->
+      <div class="demo-card">
+        <div class="demo-card__visual">
+          <img src="/www/img/hero-diagram.svg" alt="Lighting diagram" style="width:100%;height:100%;object-fit:cover;border-radius:8px"/>
+        </div>
+        <h3>Lighting Diagram</h3>
+        <p>Auto-generated top-down diagram with positions and angles</p>
+      </div>
+
+      <!-- Setup Recommendation -->
+      <div class="demo-card">
+        <div class="demo-card__visual" style="flex-direction:column;padding:16px;align-items:stretch;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:1.25rem">&#x1F3AF;</span>
+            <span style="font-size:.875rem;font-weight:600">Rembrandt Key + Fill</span>
+            <span style="margin-left:auto;padding:2px 8px;border-radius:999px;background:rgba(57,217,138,0.12);color:#39D98A;font-size:.6875rem;font-weight:600">92%</span>
+          </div>
+          <div style="font-size:.75rem;color:#A9AFBB;border-top:1px solid #2A2E38;padding-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div><strong style="color:#F4F6F8">Key:</strong> 5' Octa</div>
+            <div><strong style="color:#F4F6F8">Fill:</strong> Reflector</div>
+            <div><strong style="color:#F4F6F8">Distance:</strong> 4.5 ft</div>
+            <div><strong style="color:#F4F6F8">Angle:</strong> 35&deg;</div>
+          </div>
+        </div>
+        <h3>Setup Recommendation</h3>
+        <p>Complete specifications for every light in your scene</p>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="demo-steps">
+      <div class="demo-step">
+        <span class="demo-step__num">1</span>
+        <span>Upload</span>
+      </div>
+      <span class="demo-step__arrow">&rarr;</span>
+      <div class="demo-step">
+        <span class="demo-step__num">2</span>
+        <span>Analyze</span>
+      </div>
+      <span class="demo-step__arrow">&rarr;</span>
+      <div class="demo-step">
+        <span class="demo-step__num">3</span>
+        <span>Build</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Breakdown Example ───────────────────────────── -->
+<section class="section section--center">
+  <div class="container">
+    <span class="section__label">What You Get</span>
+    <h2 class="section__title">Full lighting breakdown in seconds</h2>
+    <p class="section__desc">Every analysis includes pattern detection, key metrics, confidence scoring, and actionable setup instructions.</p>
+
+    <div class="breakdown">
+      <div class="breakdown__header">
+        <span style="font-size:1.25rem">&#x1F4A1;</span>
+        <span class="breakdown__pattern">Rembrandt</span>
+        <span class="breakdown__confidence">92% confidence</span>
+      </div>
+      <div class="breakdown__metrics">
+        <div class="breakdown__metric">
+          <div class="breakdown__metric-label">Direction</div>
+          <div class="breakdown__metric-value">35&deg; camera-left</div>
+        </div>
+        <div class="breakdown__metric">
+          <div class="breakdown__metric-label">Height</div>
+          <div class="breakdown__metric-value">Above eye level</div>
+        </div>
+        <div class="breakdown__metric">
+          <div class="breakdown__metric-label">Ratio</div>
+          <div class="breakdown__metric-value">3:1 key-to-fill</div>
+        </div>
+        <div class="breakdown__metric">
+          <div class="breakdown__metric-label">Modifier</div>
+          <div class="breakdown__metric-value">Large softbox</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Feature Highlights ──────────────────────────── -->
+<section class="section section--alt section--center">
+  <div class="container">
+    <span class="section__label">Core Technology</span>
+    <h2 class="section__title">Precision analysis, not guesswork</h2>
+    <p class="section__desc">NGW combines computer vision, physics simulation, and AI to decode any lighting setup.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-card__icon">&#x1F50D;</div>
+        <h3>27-Pass Vision Pipeline</h3>
+        <p>Analyzes shadow geometry, catchlights, specular surfaces, color temperature, penumbra gradients, and more from a single photo.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">&#x1F916;</div>
+        <h3>AI Reconstruction</h3>
+        <p>Vision-language model extracts what cameras alone cannot detect &mdash; styling nuance, expression context, and framing decisions.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-card__icon">&#x1F4D0;</div>
+        <h3>Lighting Diagrams</h3>
+        <p>Auto-generated top-down diagrams with power, position, height, and modifier for every light in your scene.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Shoot Mode Callout ──────────────────────────── -->
+<section class="section">
+  <div class="container">
+    <div class="split">
+      <div class="split__text">
+        <span class="section__label">Shoot Mode</span>
+        <h2>Match any reference with your own kit</h2>
+        <p>Tell NGW what lights and modifiers you own. When you analyze a reference, Shoot Mode maps the recommendation to your specific gear &mdash; with real distances, angles, and power settings.</p>
+        <a href="/features" class="btn btn--ghost">Learn More</a>
+      </div>
+      <div class="split__visual">
+        <svg viewBox="0 0 200 150" fill="none" width="160">
+          <rect width="200" height="150" rx="8" fill="#1E2129"/>
+          <text x="100" y="70" text-anchor="middle" fill="#A9AFBB" font-family="system-ui" font-size="11">Your Kit</text>
+          <text x="100" y="90" text-anchor="middle" fill="#4DA3FF" font-family="system-ui" font-size="10" font-weight="600">&#x2192; Lighting Setup</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Reference Library Preview ───────────────────── -->
+<section class="section section--alt section--center">
+  <div class="container">
+    <span class="section__label">Reference Library</span>
+    <h2 class="section__title">Master the classic patterns</h2>
+    <p class="section__desc">Browse our curated library of lighting patterns with example setups and analysis breakdowns.</p>
+
+    <div class="library-grid">
+      <div class="library-card">
+        <div class="library-card__thumb">&#x1F3A8;</div>
+        <div class="library-card__label">Rembrandt</div>
+      </div>
+      <div class="library-card">
+        <div class="library-card__thumb">&#x1F98B;</div>
+        <div class="library-card__label">Butterfly</div>
+      </div>
+      <div class="library-card">
+        <div class="library-card__thumb">&#x27B0;</div>
+        <div class="library-card__label">Loop</div>
+      </div>
+      <div class="library-card">
+        <div class="library-card__thumb">&#x25D0;</div>
+        <div class="library-card__label">Split</div>
+      </div>
+      <div class="library-card">
+        <div class="library-card__thumb">&#x2728;</div>
+        <div class="library-card__label">Clamshell</div>
+      </div>
+      <div class="library-card">
+        <div class="library-card__thumb">&#x1F305;</div>
+        <div class="library-card__label">Broad</div>
+      </div>
+    </div>
+
+    <div style="margin-top:28px">
+      <a href="/library" class="btn btn--ghost">Browse All Patterns &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Pricing ─────────────────────────────────────── -->
+<section id="pricing" class="section section--center">
+  <div class="container">
+    <span class="section__label">Pricing</span>
+    <h2 class="section__title">Plans for every photographer</h2>
+    <p class="section__desc">Start free. Upgrade when you need unlimited analyses and professional features.</p>
+
+    <div class="pricing-grid">
+      <!-- Free -->
+      <div class="pricing-card">
+        <div class="pricing-card__name">Free</div>
+        <div class="pricing-card__price">$0 <span>/month</span></div>
+        <div class="pricing-card__desc">Get started with basic lighting analysis</div>
+        <ul class="pricing-card__features">
+          <li>5 analyses per day</li>
+          <li>Basic pattern detection</li>
+          <li>Lighting diagrams</li>
+          <li>Community reference library</li>
+        </ul>
+        <a href="/signup" class="btn btn--ghost">Get Started</a>
+      </div>
+
+      <!-- Pro -->
+      <div class="pricing-card pricing-card--featured">
+        <div class="pricing-card__name">Pro</div>
+        <div class="pricing-card__price">$19 <span>/month</span></div>
+        <div class="pricing-card__desc">Everything you need for professional work</div>
+        <ul class="pricing-card__features">
+          <li>Unlimited analyses</li>
+          <li>All lighting patterns</li>
+          <li>Shoot Mode &amp; kit matching</li>
+          <li>Kit management</li>
+          <li>Quick fixes &amp; recommendations</li>
+          <li>Priority processing</li>
+        </ul>
+        <a href="/signup" class="btn btn--primary">Start Free Trial</a>
+      </div>
+
+      <!-- Studio -->
+      <div class="pricing-card">
+        <div class="pricing-card__name">Studio</div>
+        <div class="pricing-card__price">$49 <span>/month</span></div>
+        <div class="pricing-card__desc">For studios and production teams</div>
+        <ul class="pricing-card__features">
+          <li>Everything in Pro</li>
+          <li>API access</li>
+          <li>Batch processing</li>
+          <li>Team collaboration</li>
+          <li>Custom reference library</li>
+          <li>Dedicated support</li>
+        </ul>
+        <a href="/signup" class="btn btn--ghost">Contact Sales</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Final CTA ───────────────────────────────────── -->
+<section class="section section--alt">
+  <div class="cta-banner">
+    <h2>Ready to stop guessing?</h2>
+    <p>Join photographers who trust NGW to decode and recreate any lighting setup.</p>
+    <a href="/signup" class="btn btn--primary btn--large">Get Started Free</a>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__grid">
+      <div>
+        <div class="footer__brand">NGW</div>
+        <p class="footer__brand-desc">The world's first lighting intelligence system. No guesswork. Just light.</p>
+      </div>
+      <div class="footer__col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="/features">Features</a></li>
+          <li><a href="/pricing">Pricing</a></li>
+          <li><a href="/library">Library</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="/blog">Blog</a></li>
+          <li><a href="#">Docs</a></li>
+          <li><a href="#">API</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="#">About</a></li>
+          <li><a href="#">Contact</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      &copy; 2026 No Guesswork Lighting. All rights reserved.
+    </div>
+  </div>
+</footer>
+
+<script src="/www/js/marketing.js"></script>
+</body>
+</html>

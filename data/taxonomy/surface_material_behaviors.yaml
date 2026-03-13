@@ -1,0 +1,78 @@
+version: "1.0"
+surface_material_behaviors:
+  - id: diffuse_matte
+    description: Light scatters evenly in all directions. No specular highlights. Shadow defines shape.
+    reflection_family: diffuse
+    modifier_preference: any — shadow quality matters more than highlight control
+    angle_sensitivity: low
+    examples: [matte paper, unfinished wood, matte fabric, chalk]
+
+  - id: semi_gloss
+    description: Mix of diffuse and specular reflection. Moderate highlight control needed.
+    reflection_family: mixed
+    modifier_preference: medium_softbox or large_octa
+    angle_sensitivity: medium
+    examples: [satin fabric, semi-gloss paint, brushed wood, eggshell finish]
+
+  - id: highly_specular
+    description: Dominated by specular reflection. Light source shape directly visible in reflections.
+    reflection_family: specular
+    modifier_preference: stripbox or controlled source — reflection shape IS the lighting
+    angle_sensitivity: very_high
+    examples: [polished metal, lacquer, patent leather, wet surfaces]
+
+  - id: transparent
+    description: Light passes through the material. Backlight and edge-light define form.
+    reflection_family: transmissive
+    modifier_preference: backlight diffusion_panel or stripbox from behind
+    angle_sensitivity: high
+    examples: [clear glass, water, acrylic, crystal]
+
+  - id: translucent
+    description: Light partially passes through, partially scatters. Glowing quality when backlit.
+    reflection_family: subsurface_scatter
+    modifier_preference: backlight with front fill — balance glow and detail
+    angle_sensitivity: medium
+    examples: [wax, frosted glass, thin fabric, leaves, skin edges]
+
+  - id: metallic
+    description: Highly reflective with tinted specular highlights. Reflection carries the metal color.
+    reflection_family: specular_tinted
+    modifier_preference: large soft source for broad reflection, strip for edge definition
+    angle_sensitivity: very_high
+    examples: [gold, silver, copper, chrome, brushed aluminum]
+
+  - id: skin_sheen
+    description: Healthy skin with natural oil sheen. Mix of subsurface scatter and surface specular.
+    reflection_family: subsurface_plus_specular
+    modifier_preference: beauty_dish or large_octa — controls specular while preserving skin glow
+    angle_sensitivity: medium
+    examples: [moisturized skin, oily T-zone, glossy beauty makeup]
+
+  - id: matte_skin
+    description: Matte-finished or powdered skin. Minimal specular reflection. Diffuse light response.
+    reflection_family: diffuse
+    modifier_preference: any soft source — forgiving surface
+    angle_sensitivity: low
+    examples: [powdered skin, matte foundation, dry skin]
+
+  - id: reflective_packaging
+    description: Glossy product packaging with printed graphics. Must balance readability and reflection control.
+    reflection_family: mixed_specular
+    modifier_preference: polarized light or large soft source at specific angle
+    angle_sensitivity: high
+    examples: [glossy boxes, shrink wrap, foil packaging, blister packs]
+
+  - id: glass
+    description: Clear or tinted glass requiring edge definition without surface glare.
+    reflection_family: transmissive_specular
+    modifier_preference: dark-field or light-field technique; edge cards for definition
+    angle_sensitivity: very_high
+    examples: [wine bottles, perfume bottles, drinking glasses, vases]
+
+  - id: chrome
+    description: Mirror-finish metal that reflects entire environment. Extreme reflection control needed.
+    reflection_family: mirror
+    modifier_preference: light tent or carefully positioned strip sources; shoot in all-black or all-white environment
+    angle_sensitivity: extreme
+    examples: [chrome bumpers, polished silverware, chrome fixtures, mirror finishes]

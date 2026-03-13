@@ -1,0 +1,124 @@
+version: 1.0
+name: ngw_setup_schema
+
+setup:
+  identity:
+    setup_id: string
+    setup_name: string
+    use_case: string
+    visual_intent: string
+    pattern_family: string
+    tags:
+      type: list
+      item_type: string
+
+  subject_fit:
+    subject_types:
+      type: list
+      item_type: string
+    skin_or_surface_notes:
+      type: list
+      item_type: string
+    pose_assumptions:
+      type: list
+      item_type: string
+
+  environment_fit:
+    minimum_ceiling_height_ft: number
+    recommended_ceiling_height_ft: number
+    minimum_room_width_ft: number
+    minimum_room_depth_ft: number
+    indoor_outdoor_fit:
+      type: list
+      item_type: string
+    portability: string
+    power_requirements: string
+    environment_tags:
+      type: list
+      item_type: string
+
+  light_architecture:
+    key_source:
+      type: object
+    fill_source:
+      type: object
+      nullable: true
+    rim_sources:
+      type: list
+      item_type: object
+    background_source:
+      type: object
+      nullable: true
+    negative_fill:
+      type: object
+      nullable: true
+    bounce:
+      type: object
+      nullable: true
+
+  camera_architecture:
+    lens_range_mm:
+      min: number
+      max: number
+    camera_height_relative_to_subject: string
+    camera_angle: string
+    camera_distance_ft:
+      min: number
+      max: number
+
+  distance_references:
+    key_to_subject_ft:
+      min: number
+      max: number
+    fill_to_subject_ft:
+      min: number
+      max: number
+      nullable: true
+    rim_to_subject_ft:
+      min: number
+      max: number
+      nullable: true
+    subject_to_background_ft:
+      min: number
+      max: number
+    camera_to_subject_ft:
+      min: number
+      max: number
+    background_light_to_background_ft:
+      min: number
+      max: number
+      nullable: true
+
+  expected_result:
+    shadow_pattern: string
+    contrast_profile: string
+    catchlight_style: string
+    background_relationship: string
+    visual_notes:
+      type: list
+      item_type: string
+
+  diagnostics:
+    common_failure_modes:
+      type: list
+      item_type: string
+
+  substitutions:
+    modifier_alternatives:
+      type: list
+      item_type: object
+    gear_alternatives:
+      type: list
+      item_type: object
+    adaptation_variants:
+      type: list
+      item_type: string
+
+  reliability:
+    rule_confidence: number
+    reliability_label: string
+    field_verified: boolean
+    verification_count: integer
+    notes:
+      type: list
+      item_type: string

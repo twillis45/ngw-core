@@ -1,9 +1,12 @@
-export default function IntentCard({ emoji, label, desc, onClick }) {
+export default function IntentCard({ icon, label, desc, onClick }) {
   return (
     <button className="intent-card" onClick={onClick} type="button">
-      <span className="intent-card__emoji">{emoji}</span>
-      <div className="intent-card__label">{label}</div>
-      <div className="intent-card__desc">{desc}</div>
+      <span className="intent-card__icon">{icon}</span>
+      <span className="intent-card__text">
+        <strong>{label}</strong>
+        <small>{desc}</small>
+      </span>
+      <span className="intent-card__arrow">{'\u203A'}</span>
     </button>
   );
 }

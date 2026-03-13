@@ -1,0 +1,91 @@
+version: "1.0"
+visual_intents:
+  - id: clean
+    description: Even, controlled illumination with minimal shadow. Professional and polished.
+    contrast_range: low
+    shadow_depth: shallow
+    mood_mapping: [corporate, high_key]
+
+  - id: soft
+    description: Gentle, diffused light with gradual shadow transitions. Approachable and warm.
+    contrast_range: low_to_medium
+    shadow_depth: shallow_to_medium
+    mood_mapping: [beauty, natural, corporate]
+
+  - id: dramatic
+    description: Strong contrast between highlights and shadows. Bold and intentional.
+    contrast_range: high
+    shadow_depth: deep
+    mood_mapping: [cinematic, low_key, editorial]
+
+  - id: luxurious
+    description: Rich, polished light that emphasizes texture and quality. High production value.
+    contrast_range: medium
+    shadow_depth: medium
+    mood_mapping: [beauty, editorial]
+
+  - id: edgy
+    description: Unconventional light direction or quality. Hard shadows, unusual angles.
+    contrast_range: high
+    shadow_depth: deep
+    mood_mapping: [editorial]
+
+  - id: high_key
+    description: Bright overall exposure, white or near-white background, minimal shadows.
+    contrast_range: very_low
+    shadow_depth: minimal
+    mood_mapping: [high_key]
+
+  - id: low_key
+    description: Dark overall exposure, black or near-black background, selective illumination.
+    contrast_range: very_high
+    shadow_depth: very_deep
+    mood_mapping: [low_key]
+
+  - id: natural
+    description: Emulates daylight or window light. Organic, unforced quality.
+    contrast_range: low_to_medium
+    shadow_depth: medium
+    mood_mapping: [natural]
+
+  - id: cinematic
+    description: Film-inspired with motivated sources, color contrast, intentional falloff.
+    contrast_range: medium_to_high
+    shadow_depth: medium_to_deep
+    mood_mapping: [cinematic]
+
+  - id: commercial
+    description: Clean, reproducible, brand-safe illumination for product or advertising.
+    contrast_range: low
+    shadow_depth: shallow
+    mood_mapping: [corporate, high_key]
+
+  - id: sculptural
+    description: Light used to carve three-dimensional form. Emphasizes shape over detail.
+    contrast_range: medium_to_high
+    shadow_depth: medium_to_deep
+    mood_mapping: [cinematic, editorial]
+
+  - id: glossy
+    description: Specular highlights and controlled reflections for a magazine-cover look.
+    contrast_range: medium
+    shadow_depth: medium
+    mood_mapping: [beauty, editorial]
+
+  - id: moody
+    description: Atmospheric, emotionally charged lighting. Dark tones with selective highlights.
+    contrast_range: high
+    shadow_depth: deep
+    mood_mapping: [low_key, cinematic]
+
+  - id: punchy
+    description: High-energy, high-saturation lighting with strong contrast. Vibrant.
+    contrast_range: medium_to_high
+    shadow_depth: medium
+    mood_mapping: [editorial, cinematic]
+
+  - id: neutral
+    description: Balanced, non-stylized illumination. Accurate color, even exposure.
+    contrast_range: low
+    shadow_depth: shallow
+    mood_mapping: [corporate]

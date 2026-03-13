@@ -146,6 +146,24 @@
         "synonyms": ["Fresnel lens light", "spot", "focusable spot", "cinema fresnel"]
       },
       {
+        "id": "ellipsoidal",
+        "label": "Ellipsoidal / ETC Source Four",
+        "description": "Ellipsoidal reflector spotlight (ERS) with built-in gobo gate, shutters, and sharp focus. The standard fixture for projected patterns, gobo work, and theatrical-style portrait lighting. ETC Source Four is the industry-standard model.",
+        "criteria": {
+          "brightness": 8000,
+          "energy_efficiency": 55,
+          "color_accuracy": 92,
+          "lifespan_hours": 20000,
+          "cost_effectiveness": 40
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["ETC Source Four", "Source Four", "Source 4", "S4", "leko", "ellipsoidal reflector spotlight", "ERS", "profile spot", "theatrical spot"]
+      },
+      {
         "id": "ring_light",
         "label": "Ring Light",
         "description": "Circular light that wraps evenly around the lens axis. Signature catchlight. Popular for beauty/fashion/social-media portraiture.",
@@ -272,6 +290,18 @@
         "synonyms": ["dish", "bbeauty dish with sock", "white dish", "silver dish"]
       },
       {
+        "id": "mola_reflector",
+        "label": "Mola Deep Parabolic Reflector",
+        "description": "Deep parabolic reflector with focused center and soft wrap edge. Produces a unique quality between beauty dish and softbox — specular center with rapid falloff. Mola Setti (28\"), Demi (22\"), Euro (33.5\"), Mantti (40\") are the standard sizes.",
+        "criteria_adjustments": {
+          "brightness": -800,
+          "color_accuracy": 1
+        },
+        "features": {},
+        "skin_tone_notes": "Specular center sculpts cheekbones beautifully on all skin tones. The focused beam with soft edge is especially flattering for dark skin — reveals dimension without the harshness of a standard reflector. The rapid falloff naturally controls spill.",
+        "synonyms": ["mola", "deep parabolic", "parabolic reflector", "Mola Setti", "Mola Demi", "Mola Euro", "Mola Mantti"]
+      },
+      {
         "id": "bare_bulb",
         "label": "Bare Bulb / No Modifier",
         "description": "Raw light source with no diffusion or shaping. Hardest light quality. Maximum output. Used for dramatic high-contrast or editorial work.",
@@ -306,6 +336,30 @@
         "features": {},
         "skin_tone_notes": "Accent use only. Produces hot spots — never use as key on any skin tone without intentional creative purpose.",
         "synonyms": ["conical snoot", "spot snoot", "tube"]
+      },
+      {
+        "id": "gobo",
+        "label": "Gobo / Projection Pattern",
+        "description": "Metal or glass template inserted into an ellipsoidal or optical snoot to project shaped shadows or light patterns. Cross, slit, window, foliage, and custom patterns available. Defines the composition through shaped light.",
+        "criteria_adjustments": {
+          "brightness": -1500,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Projected patterns create high-contrast areas — meter carefully for the illuminated portions. On dark skin, ensure the lit areas are properly exposed; the shadow areas will fall to black regardless of skin tone.",
+        "synonyms": ["gobo pattern", "projection mask", "cookie", "cucoloris", "gobo template"]
+      },
+      {
+        "id": "optical_snoot",
+        "label": "Optical Snoot / Projection Attachment",
+        "description": "Lens-based strobe attachment that focuses the beam into a sharp spot, accepts gobos and masks. Converts any Bowens-mount strobe into a projection light — the strobe-user's alternative to an ETC Source Four.",
+        "criteria_adjustments": {
+          "brightness": -1800,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Creates an extremely focused beam — same metering considerations as gobo work. The tight spot requires precise aiming; even a small shift changes which facial features are illuminated.",
+        "synonyms": ["optical spot", "spotlight attachment", "projection snoot", "gobos snoot", "OT1"]
       },
       {
         "id": "diffusion_panel",
@@ -529,7 +583,7 @@
         "preference_notes": {
           "favor_high_diffusion": true,
           "cri_minimum": 90,
-          "caution": "Watch for blown highlights on forehead/nose bridge. Avoid bare-bulb key without negative fill."
+          "caution": "Watch for blown highlights on forehead/nose bridge. Avoid unmodified key without negative fill."
         },
         "synonyms": ["fair", "pale", "Type I", "Type II"]
       },

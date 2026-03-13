@@ -1,0 +1,46 @@
+{
+  "reference_id": "hurley_clamshell_001",
+  "pattern_id": "clamshell",
+  "photographer": "Peter Hurley",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "studio",
+  "notes": "Classic clamshell with octa key above and reflector fill below chin for even flattering light",
+  "lights": [
+    {
+      "role": "key",
+      "modifier": "octa",
+      "angle_deg": 0,
+      "height_deg": 30,
+      "distance_ft": 5
+    },
+    {
+      "role": "fill",
+      "modifier": "reflector",
+      "position": "below",
+      "angle_deg": 0,
+      "height_deg": -15,
+      "distance_ft": 3
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "minimal",
+    "chin_shadow": "soft",
+    "cheek_shadow": "balanced"
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 6,
+    "focal_length": 85
+  },
+  "use_cases": [
+    "headshot",
+    "actor_portrait"
+  ],
+  "light_count": 2,
+  "key_direction_deg": 0,
+  "modifier_family": "octa",
+  "estimated_distance_ft": 5,
+  "shadow_pattern": "clamshell",
+  "key_height_relative": "eye_level"
+}

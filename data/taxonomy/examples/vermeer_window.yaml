@@ -1,0 +1,139 @@
+identity:
+  setup_id: vermeer_window_v1
+  setup_name: Vermeer Window Light
+  use_case: portrait
+  visual_intent: natural
+  pattern_family: side_key
+  tags:
+    - natural
+    - editorial
+    - lifestyle
+    - window_light
+    - painterly
+    - soft
+
+subject_fit:
+  subject_types:
+    - female_portrait
+    - male_portrait
+    - seated_portrait
+    - group_portrait
+  skin_or_surface_notes:
+    - move_source_6_inches_closer_for_more_wrap_on_dark_skin
+    - use_silver_reflector_instead_of_white_for_fill_on_dark_skin
+    - softness_forgives_posing_errors
+    - very_flattering_for_mature_skin
+  pose_assumptions:
+    - turned_toward_light_source
+    - face_catching_the_window_light
+    - relaxed_natural_posture
+
+environment_fit:
+  minimum_ceiling_height_ft: 8
+  recommended_ceiling_height_ft: 9
+  minimum_room_width_ft: 10
+  minimum_room_depth_ft: 12
+  indoor_outdoor_fit:
+    - indoor
+    - studio
+    - home_studio
+    - on_location
+  portability: medium
+  power_requirements: low_to_medium
+  environment_tags:
+    - standard_ceiling
+    - medium_room
+    - window_available
+
+light_architecture:
+  key_source:
+    role: key
+    modifier_family: diffusion_frame
+    angle_deg: 75
+    height_relative_to_subject: large_source_spanning_head_to_waist
+    distance_ft:
+      min: 2.0
+      max: 3.0
+    feather_direction: full_face_wrap
+  fill_source:
+    role: fill
+    modifier_family: reflector
+    position: opposite_side_white_reflector_or_wall
+    ratio_to_key_stops: -1.5
+  rim_sources: []
+  background_source: null
+  negative_fill: null
+  bounce: null
+
+camera_architecture:
+  lens_range_mm:
+    min: 50
+    max: 85
+  camera_height_relative_to_subject: eye_level
+  camera_angle: straight_on_or_3_4_from_shadow_side
+  camera_distance_ft:
+    min: 6
+    max: 10
+
+distance_references:
+  key_to_subject_ft:
+    min: 2.0
+    max: 3.0
+  fill_to_subject_ft:
+    min: 3.5
+    max: 5.0
+  rim_to_subject_ft: null
+  subject_to_background_ft:
+    min: 3
+    max: 6
+  camera_to_subject_ft:
+    min: 6
+    max: 10
+  background_light_to_background_ft: null
+
+expected_result:
+  shadow_pattern: soft_rolling_transitions_across_face
+  contrast_profile: low_to_medium
+  catchlight_style: large_rectangular_window_shaped
+  background_relationship: environmental_receiving_light_from_same_source
+  visual_notes:
+    - gradual_light_falloff_from_key_to_shadow_side
+    - luminous_skin_quality_with_gentle_shadows
+    - no_hard_shadow_edges_anywhere
+    - background_receives_some_of_the_same_light
+
+diagnostics:
+  common_failure_modes:
+    - shadow_too_hard
+    - face_too_flat
+    - color_cast_mixed
+    - background_too_bright
+
+substitutions:
+  modifier_alternatives:
+    - primary: diffusion_frame
+      alternatives:
+        - medium_softbox
+        - umbrella_white
+  gear_alternatives:
+    - primary: strobe_mono
+      alternatives:
+        - led_cob
+        - panel
+  adaptation_variants:
+    - ideal_setup
+    - small_room_version
+    - one_light_version
+    - led_version
+    - portable_version
+
+reliability:
+  rule_confidence: 90
+  reliability_label: very_reliable
+  field_verified: false
+  verification_count: 0
+  notes:
+    - extremely_reliable_with_large_enough_source
+    - softness_forgives_posing_errors
+    - main_risk_is_artificial_look_if_modifier_too_small_or_too_far
+    - actual_window_light_is_always_preferred_when_available

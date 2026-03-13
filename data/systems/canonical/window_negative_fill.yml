@@ -1,0 +1,81 @@
+id: window_negative_fill
+name: Window Negative Fill
+version: 1
+status: canonical
+
+pattern:
+  primary: window_negative_fill
+  secondary: window_portrait
+
+category: natural
+difficulty: 1
+setup_time_minutes: 5
+
+environment:
+  required: window_light
+  ceiling_height_min_ft: 8
+  background: any_dark
+  background_distance_ft: 4
+
+subject:
+  distance_from_camera_ft: 5
+  distance_from_window_ft: 3
+  position: near_window
+
+camera:
+  height: eye_level
+  lens: 50-85mm
+  angle_to_subject_deg: 0
+
+lights:
+  - role: key
+    modifier: natural_window
+    angle_deg: 70
+    height: window_height
+    height_offset_in: 0
+    distance_ft: 3
+    power_ratio: 1.0
+    notes:
+      - Window as sole light source
+      - Side/back angle creates natural falloff
+      - Overcast or north-facing window preferred for consistency
+
+  - role: negative_fill
+    modifier: v_flat_black
+    angle_deg: -70
+    height: face_height
+    height_offset_in: 0
+    distance_ft: 2
+    power_ratio: 0.0
+    notes:
+      - Black v-flat absorbs bounced light on shadow side
+      - Creates deeper contrast than window alone
+      - Move closer for more dramatic shadow depth
+      - Essential for moody, editorial window look
+
+shadow_signature:
+  expected_pattern: window_portrait
+  nose_shadow: soft_directional
+  cheek_shadow: strong
+  contrast: medium_high
+  softness: 0.5
+
+failure_modes:
+  - "Room too bright: negative fill cannot overcome ambient"
+  - "Subject too far from window: flat, underexposed"
+  - "Direct sun: uncontrollable contrast"
+
+substitutions:
+  - if_missing: v_flat_black
+    use: black_fabric_on_stand
+    tradeoff: "Less rigid but same absorption effect"
+
+use_cases:
+  - portrait
+  - editorial
+  - fine_art
+  - moody_lifestyle
+
+example_photographers:
+  - Sue Bryce
+  - Jerry Ghionis

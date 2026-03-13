@@ -19,6 +19,7 @@ from engine.diagram import (
     SubjectPosition,
     CameraPosition,
     build_diagram,
+    build_reference_diagram,
 )
 
 
@@ -250,3 +251,142 @@ class TestDiagramDeterminism:
         a = build_diagram(s)
         b = build_diagram(s)
         assert a.model_dump() == b.model_dump()
+
+
+# ── Reference diagram (detected lighting) ──────────────────────────────────
+
+class TestReferenceDiagram:
+    def test_triangle_has_three_lights(self):
+        d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect")
+        assert d.system_id == "reference_detected"
+        assert len(d.lights) == 3
+        roles = [l.role for l in d.lights]
+        assert "key_left" in roles
+        assert "key_right" in roles
+        assert "fill_low" in roles
+
+    def test_triangle_symmetric_keys(self):
+        d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect")
+        left = next(l for l in d.lights if l.role == "key_left")
+        right = next(l for l in d.lights if l.role == "key_right")
+        assert left.angle_deg == -right.angle_deg
+        assert left.height_m == right.height_m
+        assert left.distance_m == right.distance_m
+        assert left.modifier == right.modifier == "softbox_rect"
+
+    def test_clamshell_has_two_lights(self):
+        d = build_reference_diagram(pattern="clamshell", modifier_family="beauty_dish")
+        assert len(d.lights) == 2
+        roles = [l.role for l in d.lights]
+        assert "key" in roles
+        assert "fill" in roles
+
+    def test_clamshell_key_above_fill(self):
+        d = build_reference_diagram(pattern="clamshell")
+        key = next(l for l in d.lights if l.role == "key")
+        fill = next(l for l in d.lights if l.role == "fill")
+        assert key.height_m > fill.height_m
+
+    def test_rembrandt_single_key_at_45(self):
+        d = build_reference_diagram(pattern="rembrandt-ish", modifier_family="beauty_dish")
+        assert len(d.lights) == 1
+        assert d.lights[0].angle_deg == 45.0
+        assert d.lights[0].modifier == "beauty_dish"
+
+    def test_loop_single_key_at_30(self):
+        d = build_reference_diagram(pattern="loop")
+        assert len(d.lights) == 1
+        assert d.lights[0].angle_deg == 30.0
+
+    def test_split_single_key_at_90(self):
+        d = build_reference_diagram(pattern="split/short")
+        assert len(d.lights) == 1
+        assert d.lights[0].angle_deg == 90.0
+
+    def test_unknown_fallback(self):
+        d = build_reference_diagram(pattern="unknown")
+        assert len(d.lights) == 1
+        assert d.lights[0].role == "key"
+        # Generic position
+        assert d.lights[0].angle_deg == 20.0
+
+    def test_modifier_none_defaults_to_unknown(self):
+        d = build_reference_diagram(pattern="loop", modifier_family=None)
+        assert d.lights[0].modifier == "unknown"
+
+    def test_all_patterns_produce_valid_spec(self):
+        """Every pattern produces a valid DiagramSpec with sane bounds."""
+        for pat in ["triangle", "clamshell", "rembrandt-ish", "loop", "split/short", "unknown"]:
+            d = build_reference_diagram(pattern=pat)
+            assert isinstance(d, DiagramSpec)
+            assert d.system_id == "reference_detected"
+            for light in d.lights:
+                assert -180.0 <= light.angle_deg <= 180.0
+                assert light.distance_m > 0
+                assert light.height_m >= 0
+                assert light.modifier != ""
+
+
+# ── Background light on reference diagram ────────────────────────────────
+
+class TestReferenceDiagramBackgroundLight:
+    def test_background_light_added_when_flag_true(self):
+        """background_light=True should add a background role light."""
+        d = build_reference_diagram(pattern="rembrandt-ish", background_light=True)
+        roles = [l.role for l in d.lights]
+        assert "background" in roles
+        bg = next(l for l in d.lights if l.role == "background")
+        assert bg.angle_deg == 180.0  # Behind subject
+        assert bg.label == "Detected Background Light"
+        assert any("background" in n.lower() for n in bg.notes)
+
+    def test_no_background_light_by_default(self):
+        """Without background_light flag, no background role should exist."""
+        d = build_reference_diagram(pattern="rembrandt-ish")
+        roles = [l.role for l in d.lights]
+        assert "background" not in roles
+
+    def test_background_light_false_no_bg(self):
+        """Explicit background_light=False → no background role."""
+        d = build_reference_diagram(pattern="loop", background_light=False)
+        roles = [l.role for l in d.lights]
+        assert "background" not in roles
+
+    def test_background_light_with_triangle(self):
+        """Triangle + background light → 4 lights total."""
+        d = build_reference_diagram(pattern="triangle", background_light=True)
+        assert len(d.lights) == 4
+        roles = [l.role for l in d.lights]
+        assert "key_left" in roles
+        assert "key_right" in roles
+        assert "fill_low" in roles
+        assert "background" in roles
+
+    def test_background_light_with_clamshell(self):
+        """Clamshell + background light → 3 lights total."""
+        d = build_reference_diagram(pattern="clamshell", background_light=True)
+        assert len(d.lights) == 3
+        roles = [l.role for l in d.lights]
+        assert "key" in roles
+        assert "fill" in roles
+        assert "background" in roles
+
+    def test_background_light_with_unknown(self):
+        """Unknown + background light → 2 lights (key + background)."""
+        d = build_reference_diagram(pattern="unknown", background_light=True)
+        assert len(d.lights) == 2
+        roles = [l.role for l in d.lights]
+        assert "key" in roles
+        assert "background" in roles
+
+    def test_all_patterns_valid_with_background(self):
+        """Every pattern with background light should produce valid specs."""
+        for pat in ["triangle", "clamshell", "rembrandt-ish", "loop", "split/short", "unknown"]:
+            d = build_reference_diagram(pattern=pat, background_light=True)
+            assert isinstance(d, DiagramSpec)
+            bg_lights = [l for l in d.lights if l.role == "background"]
+            assert len(bg_lights) == 1
+            bg = bg_lights[0]
+            assert -180.0 <= bg.angle_deg <= 180.0
+            assert bg.distance_m > 0
+            assert bg.height_m >= 0

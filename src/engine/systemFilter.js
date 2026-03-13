@@ -31,9 +31,21 @@ const GEAR_MAP = {
   "led cob": "led_cob",
   "ring light": "ring_light",
   fresnel: "fresnel",
+  ellipsoidal: "ellipsoidal",
+  "etc source four": "ellipsoidal",
+  "source four": "ellipsoidal",
+  leko: "ellipsoidal",
   "continuous lights": "continuous_2_light",
   "natural light": "natural_window",
   "reflector only": "reflector_only",
+  trigger: "trigger",
+  "remote trigger": "trigger",
+  "radio trigger": "trigger",
+  pocketwizard: "trigger",
+  "pocket wizard": "trigger",
+  "light meter": "light_meter",
+  sekonic: "light_meter",
+  "flash meter": "light_meter",
 };
 
 /**
