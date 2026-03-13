@@ -2117,18 +2117,64 @@ function RefDetailImage({ patternId, referenceId, hasOverlay }) {
 }
 
 
-/** Collapsible JSON panel */
+/** Collapsible panel — defaults to formatted view, toggle to raw JSON */
 function RefCollapsibleJson({ title, data }) {
   const [open, setOpen] = useState(false);
+  const [raw, setRaw] = useState(false);
+
+  /** Recursively render nested objects as labeled rows */
+  function renderFormatted(obj, prefix) {
+    if (!obj || typeof obj !== 'object') return null;
+    return Object.entries(obj).map(([key, val]) => {
+      const label = prefix ? `${prefix}.${key}` : key;
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        return (
+          <div key={label} className="lab-formatted__group">
+            <div className="lab-formatted__heading">{key}</div>
+            {renderFormatted(val, label)}
+          </div>
+        );
+      }
+      let display;
+      if (val == null) display = '\u2014';
+      else if (typeof val === 'boolean') display = val ? 'Yes' : 'No';
+      else if (Array.isArray(val)) display = val.length ? val.join(', ') : '\u2014';
+      else display = String(val);
+      return (
+        <div key={label} className="ref-analysis__row ref-analysis__row--inline">
+          <span className="ref-analysis__label">{key}</span>
+          <span className="ref-analysis__value">{display}</span>
+        </div>
+      );
+    });
+  }
+
   return (
     <div className="lab-section">
-      <button className="lab-section__title lab-section__title--toggle" onClick={() => setOpen(!open)}>
-        {open ? '\u25BC' : '\u25B6'} {title}
-      </button>
+      <div className="lab-section__header">
+        <button className="lab-section__title lab-section__title--toggle" onClick={() => setOpen(!open)}>
+          {open ? '\u25BC' : '\u25B6'} {title}
+        </button>
+        {open && (
+          <button
+            className="lab-section__view-toggle"
+            onClick={() => setRaw(!raw)}
+            type="button"
+          >
+            {raw ? 'Formatted' : 'JSON'}
+          </button>
+        )}
+      </div>
       {open && (
-        <pre className="lab-json" style={{ maxHeight: '40vh' }}>
-          {JSON.stringify(data, null, 2)}
-        </pre>
+        raw ? (
+          <pre className="lab-json" style={{ maxHeight: '40vh' }}>
+            {JSON.stringify(data, null, 2)}
+          </pre>
+        ) : (
+          <div className="lab-section__grid lab-formatted">
+            {renderFormatted(data, '')}
+          </div>
+        )
       )}
     </div>
   );
