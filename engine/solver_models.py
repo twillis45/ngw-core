@@ -406,16 +406,108 @@ class SolverTraceStep(BaseModel):
     notes: List[str] = Field(default_factory=list)
 
 
+class SignalContribution(BaseModel):
+    """How much a signal contributed to the final reconstruction."""
+    model_config = ConfigDict(extra="forbid")
+
+    pass_name: str = ""
+    dimension: str = ""          # direction | height | modifier | etc.
+    value_reported: Any = None
+    raw_confidence: float = 0.0
+    adjusted_weight: float = 0.0  # after downgrading
+    effective_contribution: float = 0.0  # weight * confidence
+    was_downgraded: bool = False
+    downgrade_reasons: List[str] = Field(default_factory=list)
+    contributed_to_consensus: bool = True  # False if dissenting
+
+
+class ContradictionImpact(BaseModel):
+    """How a contradiction affected the final result."""
+    model_config = ConfigDict(extra="forbid")
+
+    contradiction_id: str = ""
+    dimension: str = ""
+    severity: str = "low"
+    passes_involved: List[str] = Field(default_factory=list)
+    impact_description: str = ""
+    confidence_reduction: float = 0.0  # how much confidence was lowered
+    triggered_alternate: bool = False   # did this cause an alternate candidate
+
+
+class CandidateRanking(BaseModel):
+    """Why the primary candidate ranked highest."""
+    model_config = ConfigDict(extra="forbid")
+
+    hypothesis_id: str = ""
+    rank: int = 0
+    total_score: float = 0.0
+    consistency_score: float = 0.0
+    contradiction_penalty: float = 0.0
+    signal_support_score: float = 0.0
+    ranking_explanation: str = ""
+
+
+class RegionalConfidenceSummary(BaseModel):
+    """Coarse confidence summary per region for LAB/debug display."""
+    model_config = ConfigDict(extra="forbid")
+
+    face_confidence: str = "unknown"       # high | moderate | low | unavailable
+    torso_confidence: str = "unknown"
+    background_confidence: str = "unknown"
+    catchlight_confidence: str = "unknown"
+    shadow_confidence: str = "unknown"
+    highlight_confidence: str = "unknown"
+    summary_notes: List[str] = Field(default_factory=list)
+
+
+class SignalReliabilitySummary(BaseModel):
+    """Coarse per-pass reliability summary for LAB/debug display."""
+    model_config = ConfigDict(extra="forbid")
+
+    pass_summaries: Dict[str, str] = Field(default_factory=dict)  # pass_name → "high"/"moderate"/"low"/"excluded"
+    excluded_passes: List[str] = Field(default_factory=list)
+    exclusion_reasons: Dict[str, str] = Field(default_factory=dict)  # pass_name → reason
+
+
 class SolverTrace(BaseModel):
-    """Full debug trace of the solver run."""
+    """Full debug trace of the solver run.
+
+    Shows which signals contributed most, which were downgraded,
+    which contradictions mattered, and why the primary candidate
+    ranked highest.  Designed for LAB visualization.
+    """
     model_config = ConfigDict(extra="forbid")
 
     steps: List[SolverTraceStep] = Field(default_factory=list)
     total_duration_ms: float = 0.0
+
+    # ── Signal contributions (what drove the result) ──
+    signal_contributions: List[SignalContribution] = Field(default_factory=list)
+    top_contributors: List[str] = Field(default_factory=list)  # pass names, ranked by impact
+    downgraded_signals: List[str] = Field(default_factory=list)  # pass names that were downgraded
+
+    # ── Contradiction impact ──
+    contradiction_impacts: List[ContradictionImpact] = Field(default_factory=list)
+    total_confidence_reduction: float = 0.0
+
+    # ── Candidate ranking ──
+    candidate_rankings: List[CandidateRanking] = Field(default_factory=list)
     candidates_generated: int = 0
     candidates_pruned: int = 0
     final_candidate_count: int = 0
     rejection_reasons: List[str] = Field(default_factory=list)
+    primary_candidate_explanation: str = ""
+
+    # ── Regional confidence ──
+    regional_confidence: Optional[RegionalConfidenceSummary] = None
+
+    # ── Signal reliability ──
+    signal_reliability: Optional[SignalReliabilitySummary] = None
+
+    # ── Needs review flag ──
+    needs_review: bool = False
+    needs_review_reasons: List[str] = Field(default_factory=list)
+
     notes: List[str] = Field(default_factory=list)
 
 
@@ -466,6 +558,12 @@ class SolverResult(BaseModel):
 
     # ── Trace ──
     solver_trace: Optional[SolverTrace] = None
+
+    # ── Review & confidence summary ──
+    needs_review: bool = False
+    needs_review_reasons: List[str] = Field(default_factory=list)
+    regional_confidence: Optional[RegionalConfidenceSummary] = None
+    signal_reliability: Optional[SignalReliabilitySummary] = None
 
     # ── Status ──
     ok: bool = True
