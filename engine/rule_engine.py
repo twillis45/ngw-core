@@ -1,3 +1,19 @@
+"""Legacy rule engine wrapper — convenience layer over engine.selector.
+
+.. deprecated::
+    Production routes now call ``engine.selector.select_best_system()``
+    directly (via ``engine.orchestrator``).  This module is retained for:
+
+    - Validation models (``LightingSystemEntry``, ``LightingSystemsPayload``)
+      used by YAML loaders and validation scripts.
+    - The ``recommend()`` convenience function used by smoke tests and
+      example scripts.
+    - Backward compatibility with external consumers.
+
+    New code should use ``engine.orchestrator.recommend_system()`` or
+    ``engine.selector.select_best_system()`` instead of this module.
+"""
+
 from __future__ import annotations
 
 import json
