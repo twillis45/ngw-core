@@ -275,10 +275,24 @@ class OccluderEstimate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     occluder_id: str = ""
-    occluder_type: str = "unknown"  # body_part | object | architecture | unknown
+    occluder_type: str = "unknown"  # body_part | object | architecture | foliage | unknown
     blocked_direction: Optional[CanonicalDirection] = None
     severity: str = "partial"  # partial | full
+    affected_passes: List[str] = Field(default_factory=list)  # passes whose signals are compromised
+    affected_region: str = ""  # face | torso | background
+    description: str = ""  # human-readable description
     confidence: float = 0.0
+
+
+class OccluderImpact(BaseModel):
+    """How an occluder affects signal reliability and solver confidence."""
+    model_config = ConfigDict(extra="forbid")
+
+    occluder_id: str = ""
+    passes_downgraded: List[str] = Field(default_factory=list)
+    weight_reduction: float = 0.0  # total weight removed across affected passes
+    shadow_direction_compromised: bool = False
+    notes: List[str] = Field(default_factory=list)
 
 
 class BouncePath(BaseModel):
@@ -515,6 +529,9 @@ class SolverTrace(BaseModel):
     final_candidate_count: int = 0
     rejection_reasons: List[str] = Field(default_factory=list)
     primary_candidate_explanation: str = ""
+
+    # ── Occluder impact ──
+    occluder_impacts: List[OccluderImpact] = Field(default_factory=list)
 
     # ── Regional confidence ──
     regional_confidence: Optional[RegionalConfidenceSummary] = None
