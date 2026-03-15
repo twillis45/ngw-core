@@ -861,6 +861,11 @@ class VLMReconstruction(BaseModel):
     signal_reliability_summary: Optional[Dict[str, str]] = None  # pass_name → "high"/"moderate"/"low"/"excluded"
     solver_trace_summary: Optional[Dict[str, Any]] = None  # top_contributors, downgraded_signals, etc.
 
+    # ── Master profile / archetype (from archetype_classifier) ──
+    master_profile: Optional[str] = None            # primary MasterProfile enum value
+    master_profile_confidence: float = 0.0
+    style_family: Optional[str] = None              # StyleFamily enum value
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Scene Context  — computed once, threaded through the reference read

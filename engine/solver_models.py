@@ -469,6 +469,24 @@ class SignalReliabilitySummary(BaseModel):
     exclusion_reasons: Dict[str, str] = Field(default_factory=dict)  # pass_name → reason
 
 
+class MasterProfileSummary(BaseModel):
+    """Structured archetype/master-profile classification for solver output.
+
+    Bridges the archetype classifier output into a compact, typed summary
+    that can be carried through SolverResult and VLMReconstruction.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    primary_profile: str = "unknown"        # MasterProfile enum value
+    primary_confidence: float = 0.0
+    secondary_profile: Optional[str] = None
+    secondary_confidence: float = 0.0
+    style_family: str = "unknown"           # StyleFamily enum value
+    matched_signals: List[str] = Field(default_factory=list)
+    unmatched_signals: List[str] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
+
+
 class SolverTrace(BaseModel):
     """Full debug trace of the solver run.
 
@@ -555,6 +573,9 @@ class SolverResult(BaseModel):
     # ── Ambiguity classification ──
     ambiguity_class: str = "clean"  # clean | minor_conflicts | genuine_ambiguity | insufficient_data | hybrid_lighting
     ambiguity_notes: List[str] = Field(default_factory=list)
+
+    # ── Master profile / archetype ──
+    master_profile: Optional[MasterProfileSummary] = None
 
     # ── Trace ──
     solver_trace: Optional[SolverTrace] = None
