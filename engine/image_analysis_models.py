@@ -852,6 +852,15 @@ class VLMReconstruction(BaseModel):
     ok: bool = True
     notes: List[str] = Field(default_factory=list)
 
+    # ── Review & confidence (populated by solver trace) ──
+    needs_review: bool = False
+    needs_review_reasons: List[str] = Field(default_factory=list)
+    validation_scores: Optional[Dict[str, float]] = None  # direction/height/modifier/distance/environment consistency
+    contradiction_notes: List[str] = Field(default_factory=list)
+    ambiguity_notes: List[str] = Field(default_factory=list)
+    signal_reliability_summary: Optional[Dict[str, str]] = None  # pass_name → "high"/"moderate"/"low"/"excluded"
+    solver_trace_summary: Optional[Dict[str, Any]] = None  # top_contributors, downgraded_signals, etc.
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Scene Context  — computed once, threaded through the reference read
