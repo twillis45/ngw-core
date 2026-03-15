@@ -81,10 +81,10 @@ def build_solver_trace(
         )
         trace.signal_contributions = contributions
         trace.top_contributors = _rank_contributors(contributions)
-        trace.downgraded_signals = (
-            pass_weight_profile.downgraded_passes()
-            if pass_weight_profile else []
-        )
+
+    # ── Downgraded signals (independent of consensus) ──
+    if pass_weight_profile:
+        trace.downgraded_signals = pass_weight_profile.downgraded_passes()
 
     # ── Contradiction impacts ──
     if contradiction_report:
