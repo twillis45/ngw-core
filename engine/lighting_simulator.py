@@ -34,13 +34,29 @@ from engine.solver_models import (
 # Constants
 # ═══════════════════════════════════════════════════════════════════════════
 
-_HARD_MODIFIERS = frozenset({"bare_bulb", "grid_spot", "fresnel", "grid", "sun"})
-_SOFT_MODIFIERS = frozenset({
+HARD_MODIFIERS = frozenset({"bare_bulb", "grid_spot", "fresnel", "grid", "sun"})
+SOFT_MODIFIERS = frozenset({
     "softbox", "small_softbox", "medium_softbox", "large_octa", "octa",
     "umbrella", "umbrella_white", "umbrella_silver", "beauty_dish",
     "diffusion_frame", "window", "panel",
 })
-_MIXED_MODIFIERS = frozenset({"stripbox", "reflector", "tube_light", "ring_light"})
+MIXED_MODIFIERS = frozenset({"stripbox", "reflector", "tube_light", "ring_light"})
+
+
+def modifier_quality(modifier: str) -> str:
+    """Return the source quality for a modifier: 'hard', 'soft', 'mixed', or 'unknown'.
+
+    This is the single canonical mapping — all other modules should import
+    this function rather than maintaining their own lookup tables.
+    """
+    mod = modifier.lower() if modifier else "unknown"
+    if mod in HARD_MODIFIERS:
+        return "hard"
+    if mod in SOFT_MODIFIERS:
+        return "soft"
+    if mod in MIXED_MODIFIERS:
+        return "mixed"
+    return "unknown"
 
 _CLOSE_DISTANCE_FT = 4.0
 _FAR_DISTANCE_FT = 12.0
@@ -132,11 +148,11 @@ def _source_azimuth(source: LightSource) -> Optional[float]:
 
 def _predict_softness(key: LightSource) -> str:
     mod = key.modifier.lower() if key.modifier else "unknown"
-    if mod in _HARD_MODIFIERS:
+    if mod in HARD_MODIFIERS:
         return "hard"
-    if mod in _SOFT_MODIFIERS:
+    if mod in SOFT_MODIFIERS:
         return "soft"
-    if mod in _MIXED_MODIFIERS:
+    if mod in MIXED_MODIFIERS:
         return "mixed"
 
     # Fall back to size class

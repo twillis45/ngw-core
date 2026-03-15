@@ -91,14 +91,13 @@ def _compute_resolution_quality(obj: Any, scorable_fields: tuple) -> str:
 # ─── Helpers ──────────────────────────────────────────────────────────────
 
 
-_MODIFIER_TO_SOURCE_QUALITY = {
-    "softbox": "soft",
-    "umbrella": "soft",
-    "window": "soft",
-    "ambient": "soft",
-    "beauty_dish": "mixed",
-    "hard_source": "hard",
-}
+def _modifier_to_source_quality(modifier: str) -> str:
+    """Map modifier to source quality using canonical mapping."""
+    from engine.lighting_simulator import modifier_quality
+    # Handle legacy aliases not in the canonical enum
+    _LEGACY_ALIASES = {"hard_source": "bare_bulb", "ambient": "window"}
+    canonical = _LEGACY_ALIASES.get(modifier, modifier)
+    return modifier_quality(canonical)
 
 _MODIFIER_TO_PRACTICAL = {
     "softbox": "medium softbox (2x3 or similar)",
@@ -2389,7 +2388,7 @@ def build_lighting_read(
     modifier_fam = "unknown"
     if source_quality_inf:
         modifier_fam = getattr(source_quality_inf, "key_modifier_family", "unknown")
-    sq_text = _MODIFIER_TO_SOURCE_QUALITY.get(modifier_fam, "unknown")
+    sq_text = _modifier_to_source_quality(modifier_fam)
 
     seh = cue_report.shadow_edge_hardness
     if has_shadow_interruption and seh and seh.classification != "unknown":
