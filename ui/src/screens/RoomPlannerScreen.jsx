@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import FloorPlanCanvas from '../components/FloorPlanCanvas';
 import CameraMeasure from '../components/CameraMeasure';
@@ -25,11 +25,13 @@ export default function RoomPlannerScreen() {
   const [cameraPos, setCameraPos] = useState(null);
   const [showCamera, setShowCamera] = useState(false);
 
-  const dims = {
-    lengthFt: parseFloat(lengthFt) || 0,
-    widthFt: parseFloat(widthFt) || 0,
-    ceilingFt: parseFloat(ceilingFt) || 0,
-  };
+  const parsedLength = parseFloat(lengthFt) || 0;
+  const parsedWidth = parseFloat(widthFt) || 0;
+  const parsedCeiling = parseFloat(ceilingFt) || 0;
+  const dims = useMemo(
+    () => ({ lengthFt: parsedLength, widthFt: parsedWidth, ceilingFt: parsedCeiling }),
+    [parsedLength, parsedWidth, parsedCeiling]
+  );
   const dimsValid = dims.lengthFt >= 6 && dims.widthFt >= 6 && dims.ceilingFt >= 6;
 
   // Space needs from current result
@@ -40,8 +42,8 @@ export default function RoomPlannerScreen() {
     ? checkRoomFit(dims, spaceNeeds)
     : null;
 
-  // Diagram spec from result
-  const diagramSpec = result?.diagram?.spec || null;
+  // Diagram spec from result (result.diagram has { lights, subject, camera })
+  const diagramSpec = result?.diagram || null;
 
   /* ── Save dimensions to AppContext ──────────────────── */
 

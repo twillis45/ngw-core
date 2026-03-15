@@ -2117,22 +2117,39 @@ function RefDetailImage({ patternId, referenceId, hasOverlay }) {
 }
 
 
+/** Collapsible nested group for formatted JSON views */
+function CollapsibleGroup({ label, children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="lab-formatted__group">
+      <button
+        className="lab-formatted__heading lab-formatted__heading--toggle"
+        onClick={() => setOpen(o => !o)}
+        type="button"
+      >
+        <span className="lab-formatted__chevron">{open ? '\u25BC' : '\u25B6'}</span>
+        {label}
+      </button>
+      {open && <div className="lab-formatted__group-body">{children}</div>}
+    </div>
+  );
+}
+
 /** Collapsible panel — defaults to formatted view, toggle to raw JSON */
 function RefCollapsibleJson({ title, data }) {
   const [open, setOpen] = useState(false);
   const [raw, setRaw] = useState(false);
 
-  /** Recursively render nested objects as labeled rows */
+  /** Recursively render nested objects as labeled rows; nested groups are collapsible */
   function renderFormatted(obj, prefix) {
     if (!obj || typeof obj !== 'object') return null;
     return Object.entries(obj).map(([key, val]) => {
       const label = prefix ? `${prefix}.${key}` : key;
       if (val && typeof val === 'object' && !Array.isArray(val)) {
         return (
-          <div key={label} className="lab-formatted__group">
-            <div className="lab-formatted__heading">{key}</div>
+          <CollapsibleGroup key={label} label={key}>
             {renderFormatted(val, label)}
-          </div>
+          </CollapsibleGroup>
         );
       }
       let display;

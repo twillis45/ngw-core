@@ -61,6 +61,7 @@ const initialState = {
   spatialWarnings: [],       // string[] — real-time constraint warnings
   skinTone: null,            // 'light' | 'medium' | 'dark'
   masterMode: _loadMasterMode(),  // persisted across sessions
+  gearPreference: 'recommend',   // 'my_gear' | 'recommend' | 'any' — homepage gear toggle
   gearMode: null,           // 'my_gear' | 'best_setup'
   gear: {
     lights: [],             // [{ type: 'speedlight', qty: 2 }, ...]
@@ -164,6 +165,11 @@ function reducer(state, action) {
       } catch { /* ignore */ }
       return { ...state, masterMode: action.masterMode };
     }
+
+    /* -- homepage gear preference -- */
+
+    case 'SET_GEAR_PREFERENCE':
+      return { ...state, gearPreference: action.payload }; // 'my_gear' | 'recommend' | 'any'
 
     /* -- gear mode -- */
 

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import {
   computeAbsolutePositions,
   validateConstraints,
@@ -6,40 +6,57 @@ import {
   autoPlaceSubject,
 } from '../spatial/spatialEngine';
 
-/* ── Theme + constants ────────────────────────────────── */
+/* ── Theme + constants (matching DiagramCard) ────────── */
 
-const LIGHT_COLORS = {
-  key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7',
-  background: '#10b981', hair: '#a855f7',
-};
-function lightColor(role) {
-  if (LIGHT_COLORS[role]) return LIGHT_COLORS[role];
-  if (role?.startsWith('key')) return LIGHT_COLORS.key;
-  if (role?.startsWith('fill')) return LIGHT_COLORS.fill;
-  if (role?.startsWith('rim') || role?.startsWith('hair')) return LIGHT_COLORS.rim;
-  if (role === 'background') return LIGHT_COLORS.background;
-  return '#94a3b8';
-}
+const LIGHT_COLORS_DARK = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#a855f7' };
+const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#7c3aed' };
 
+/** Theme-aware palette for canvas drawing (matches DiagramCard). */
 function getTheme() {
   const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
   return {
     isDark,
-    bg:        isDark ? '#1e293b' : '#f8fafc',
-    wall:      isDark ? '#475569' : '#94a3b8',
-    wallFill:  isDark ? '#0f172a' : '#ffffff',
-    grid:      isDark ? 'rgba(71,85,105,0.2)' : 'rgba(100,116,139,0.15)',
-    text:      isDark ? '#cbd5e1' : '#334155',
-    textDim:   isDark ? '#94a3b8' : '#64748b',
-    subject:   isDark ? '#f1f5f9' : '#475569',
-    camera:    isDark ? '#64748b' : '#94a3b8',
-    distLine:  isDark ? 'rgba(148,163,184,0.3)' : 'rgba(71,85,105,0.3)',
-    warnBg:    'rgba(239,68,68,0.15)',
+    lightColors: isDark ? LIGHT_COLORS_DARK : LIGHT_COLORS_LIGHT,
+    bg:             isDark ? '#1e293b' : '#f8fafc',
+    wall:           isDark ? '#475569' : '#94a3b8',
+    wallFill:       isDark ? '#0f172a' : '#ffffff',
+    grid:           isDark ? 'rgba(71,85,105,0.2)' : 'rgba(100,116,139,0.15)',
+    text:           isDark ? '#cbd5e1' : '#334155',
+    textDim:        isDark ? '#b0bec5' : '#64748b',
+    textFaint:      isDark ? 'rgba(176,190,197,0.55)' : 'rgba(71,85,105,0.5)',
+    subject:        isDark ? '#f1f5f9' : '#e2e8f0',
+    subjectBody:    isDark ? '#cbd5e1' : '#475569',
+    camera:         isDark ? '#64748b' : '#94a3b8',
+    cameraLens:     isDark ? '#94a3b8' : '#64748b',
+    markerDot:      isDark ? '#0f172a' : '#ffffff',
+    connector:      isDark ? 'rgba(148,163,184,0.3)' : 'rgba(71,85,105,0.35)',
+    distLine:       isDark ? 'rgba(148,163,184,0.3)' : 'rgba(71,85,105,0.3)',
+    backdrop:       isDark ? '#334155' : '#cbd5e1',
+    backdropBorder: isDark ? '#475569' : '#94a3b8',
+    backdropText:   isDark ? '#b0bec5' : '#475569',
+    warnBg:         'rgba(239,68,68,0.15)',
   };
 }
 
-const FONT = `"Inter", -apple-system, BlinkMacSystemFont, sans-serif`;
-const MARKER_RADIUS = 14;
+/** Resolve color for any role, including multi-key variants. */
+function lightColor(role, colors) {
+  const lc = colors || LIGHT_COLORS_DARK;
+  if (lc[role]) return lc[role];
+  if (role?.startsWith('key')) return lc.key;
+  if (role?.startsWith('fill')) return lc.fill;
+  if (role?.startsWith('rim') || role?.startsWith('hair')) return lc.rim;
+  if (role === 'background') return lc.background;
+  return colors ? '#64748b' : '#94a3b8';
+}
+
+const SHORT_MOD = {
+  softbox: 'Softbox', softbox_rect: 'Rect Softbox', umbrella: 'Umbrella',
+  beauty_dish: 'Beauty Dish', grid_spot: 'Grid', grid: 'Grid',
+  stripbox: 'Strip', barn_doors: 'Barndoors', snoot: 'Snoot', bare: 'Bare',
+};
+
+const FONT = `"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif`;
+const MARKER_RADIUS = 12;
 const HIT_RADIUS = 28; // touch target
 
 /**
@@ -47,7 +64,7 @@ const HIT_RADIUS = 28; // touch target
  *
  * Props:
  *   roomDims     - { lengthFt, widthFt, ceilingFt }
- *   diagramSpec  - { lights[], camera? } from result.diagram.spec
+ *   diagramSpec  - { lights[], camera? } from result.diagram
  *   subjectPos   - { x, y } or null (auto-placed)
  *   cameraPos    - { x, y } or null (auto-placed)
  *   onSubjectMove - ({ x, y }) => void
@@ -69,9 +86,15 @@ export default function FloorPlanCanvas({
   const [localSubject, setLocalSubject] = useState(null);
   const [localCamera, setLocalCamera] = useState(null);
 
-  if (!roomDims) return null;
+  // Stable ref for onWarnings to avoid triggering re-render cycles
+  const onWarningsRef = useRef(onWarnings);
+  onWarningsRef.current = onWarnings;
 
-  const subjectPos = subjectPosOverride || localSubject || autoPlaceSubject(roomDims);
+  // Memoize subject position to avoid new object every render (prevents infinite useEffect loop)
+  const subjectPos = useMemo(
+    () => subjectPosOverride || localSubject || (roomDims ? autoPlaceSubject(roomDims) : null),
+    [subjectPosOverride, localSubject, roomDims?.widthFt, roomDims?.lengthFt]
+  );
   const cameraDistM = diagramSpec?.camera?.distance_m || 2.0;
 
   /* ── Compute positions and validate ─────────────────── */
@@ -86,7 +109,7 @@ export default function FloorPlanCanvas({
     setPositions(pos);
 
     const { warnings, errors } = validateConstraints(roomDims, pos);
-    onWarnings?.([ ...errors, ...warnings ]);
+    onWarningsRef.current?.([ ...errors, ...warnings ]);
   }, [roomDims, diagramSpec, subjectPos, cameraPosOverride, localCamera]);
 
   /* ── Canvas drawing ─────────────────────────────────── */
@@ -98,6 +121,8 @@ export default function FloorPlanCanvas({
     const tc = getTheme();
     const dpr = window.devicePixelRatio || 1;
     const containerW = canvas.parentElement?.clientWidth || 340;
+    const fs = containerW >= 600 ? 1.2 : containerW >= 450 ? 1.1 : 1.0;
+
     // Scale room to fit canvas with padding
     const pad = 40;
     const availW = containerW - pad * 2;
@@ -126,7 +151,7 @@ export default function FloorPlanCanvas({
     const scaleX = drawW / roomDims.widthFt;
     const scaleY = drawH / roomDims.lengthFt;
     const toCanvasX = (roomX) => pad + roomX * scaleX;
-    // Y is inverted: room Y=0 (back wall) maps to top of canvas
+    // Y is inverted: room Y=0 (back wall) maps to bottom of canvas
     const toCanvasY = (roomY) => pad + (roomDims.lengthFt - roomY) * scaleY;
 
     // ── Room background ──
@@ -157,7 +182,7 @@ export default function FloorPlanCanvas({
 
     // ── Wall labels ──
     ctx.fillStyle = tc.textDim;
-    ctx.font = `11px ${FONT}`;
+    ctx.font = `${Math.round(11 * fs)}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.fillText(`${roomDims.widthFt} ft`, pad + drawW / 2, pad - 8);
     ctx.save();
@@ -165,31 +190,73 @@ export default function FloorPlanCanvas({
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(`${roomDims.lengthFt} ft`, 0, 0);
     ctx.restore();
-    // Label walls
     ctx.fillStyle = tc.textDim;
-    ctx.font = `10px ${FONT}`;
+    ctx.font = `${Math.round(10 * fs)}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.fillText('BACK WALL', pad + drawW / 2, pad + drawH + 14);
     ctx.fillText('FRONT', pad + drawW / 2, pad - 18);
 
-    // ── Distance lines (subject ↔ lights) ──
+    // ── Background/backdrop bar (matching DiagramCard) ──
+    const bgW = drawW * 0.6;
+    const bgH = Math.round(14 * fs);
+    const bgX = pad + drawW / 2;
+    const bgY = pad + drawH - Math.round(12 * fs);
+    ctx.fillStyle = tc.backdrop;
+    ctx.strokeStyle = tc.backdropBorder;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bgX - bgW / 2, bgY - bgH / 2, bgW, bgH, 3);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = tc.backdropText;
+    ctx.font = `${Math.round(10 * fs)}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Background', bgX, bgY + Math.round(3 * fs));
+
+    const sx = toCanvasX(positions.subject.x);
+    const sy = toCanvasY(positions.subject.y);
+
+    // ── Light beams (triangular spread — matching DiagramCard) ──
     for (const light of positions.lights) {
       const lx = toCanvasX(light.x);
       const ly = toCanvasY(light.y);
-      const sx = toCanvasX(positions.subject.x);
-      const sy = toCanvasY(positions.subject.y);
+      const color = lightColor(light.role, tc.lightColors);
+      const isBackground = light.role === 'background';
+      const targetX = isBackground ? bgX : sx;
+      const targetY = isBackground ? bgY : sy;
 
-      // Distance line
-      ctx.strokeStyle = tc.distLine;
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 3]);
+      // Beam spread triangle
+      ctx.save();
+      ctx.globalAlpha = tc.isDark ? 0.10 : 0.08;
+      ctx.fillStyle = color;
+      const dx = targetX - lx;
+      const dy = targetY - ly;
+      const angle = Math.atan2(dy, dx);
+      const spread = isBackground ? 0.35 : 0.22;
+      const beamLen = Math.sqrt(dx * dx + dy * dy) + 20;
       ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(lx, ly);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(lx + Math.cos(angle - spread) * beamLen, ly + Math.sin(angle - spread) * beamLen);
+      ctx.lineTo(lx + Math.cos(angle + spread) * beamLen, ly + Math.sin(angle + spread) * beamLen);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
 
-      // Distance label
+      // Connector line
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(targetX, targetY);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // ── Distance labels on connectors ──
+    for (const light of positions.lights) {
+      const lx = toCanvasX(light.x);
+      const ly = toCanvasY(light.y);
       const dist = Math.sqrt(
         Math.pow(light.x - positions.subject.x, 2) +
         Math.pow(light.y - positions.subject.y, 2)
@@ -197,16 +264,37 @@ export default function FloorPlanCanvas({
       const midX = (sx + lx) / 2;
       const midY = (sy + ly) / 2;
       ctx.fillStyle = tc.textDim;
-      ctx.font = `10px ${FONT}`;
+      ctx.font = `${Math.round(10 * fs)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText(`${dist.toFixed(1)}'`, midX, midY - 4);
     }
+
+    // ── Collision-aware label placement (matching DiagramCard) ──
+    const labelBoxes = [];
+    const LPAD = 4;
+
+    function addBox(cx, cy, w, h) {
+      labelBoxes.push({ x: cx - w / 2 - LPAD, y: cy - h / 2 - LPAD, w: w + LPAD * 2, h: h + LPAD * 2 });
+    }
+    function boxFits(cx, cy, w, h) {
+      const r = { x: cx - w / 2 - LPAD, y: cy - h / 2 - LPAD, w: w + LPAD * 2, h: h + LPAD * 2 };
+      for (const b of labelBoxes) {
+        if (r.x < b.x + b.w && r.x + r.w > b.x && r.y < b.y + b.h && r.y + r.h > b.y) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // Reserve subject and camera label areas
+    addBox(sx, sy - 16, 50, 14);
+    addBox(bgX, bgY, 70, 14);
 
     // ── Light markers ──
     for (const light of positions.lights) {
       const lx = toCanvasX(light.x);
       const ly = toCanvasY(light.y);
-      const color = lightColor(light.role);
+      const color = lightColor(light.role, tc.lightColors);
 
       // Warning glow if near wall or out of room
       const nearWall =
@@ -223,62 +311,138 @@ export default function FloorPlanCanvas({
         ctx.fill();
       }
 
-      // Marker circle
+      // Marker circle (matching DiagramCard style — colored circle + inner dot)
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(lx, ly, MARKER_RADIUS, 0, Math.PI * 2);
       ctx.fill();
-
-      // Role label
-      ctx.fillStyle = '#fff';
-      ctx.font = `bold 9px ${FONT}`;
-      ctx.textAlign = 'center';
-      const roleText = (light.role || '').substring(0, 3).toUpperCase();
-      ctx.fillText(roleText, lx, ly + 3);
-
-      // Height label below marker
-      if (light.heightFt) {
-        ctx.fillStyle = tc.textDim;
-        ctx.font = `9px ${FONT}`;
-        const heightLabel = `${light.heightFt}'h`;
-        const ceilWarn = light.heightFt > roomDims.ceilingFt ? ' \u26A0' : '';
-        ctx.fillText(heightLabel + ceilWarn, lx, ly + MARKER_RADIUS + 12);
-      }
+      ctx.fillStyle = tc.markerDot;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
 
+    // ── Light labels (collision-aware, matching DiagramCard) ──
+    const sortedLights = [...positions.lights].sort((a, b) => {
+      const others = positions.lights;
+      const minGapA = others.reduce((min, o) => o === a ? min : Math.min(min, Math.abs(a.angleDeg - o.angleDeg)), 360);
+      const minGapB = others.reduce((min, o) => o === b ? min : Math.min(min, Math.abs(b.angleDeg - o.angleDeg)), 360);
+      return minGapB - minGapA;
+    });
+
+    sortedLights.forEach(light => {
+      const lx = toCanvasX(light.x);
+      const ly = toCanvasY(light.y);
+      const color = lightColor(light.role, tc.lightColors);
+      const modText = SHORT_MOD[light.modifier] || (light.modifier || '').replace(/_/g, ' ');
+      const roleName = light.label || (light.role?.charAt(0).toUpperCase() + light.role?.slice(1));
+      const heightText = light.heightFt ? `${light.heightFt}'h` : '';
+      const ceilWarn = light.heightFt > roomDims.ceilingFt ? ' \u26A0' : '';
+      const detailParts = [modText, heightText + ceilWarn].filter(Boolean);
+      const line2 = detailParts.join(' \u00b7 ');
+
+      ctx.font = `bold ${Math.round(11 * fs)}px ${FONT}`;
+      const nameW = ctx.measureText(roleName).width;
+      ctx.font = `${Math.round(10 * fs)}px ${FONT}`;
+      const detailW = line2 ? ctx.measureText(line2).width : 0;
+      const boxW = Math.max(nameW, detailW);
+      const boxH = Math.round(24 * fs);
+
+      // Candidate positions for label placement
+      const dx = lx - sx;
+      const dy = ly - sy;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = dx / len;
+      const ny = dy / len;
+      const px = -ny;
+      const py = nx;
+
+      const offsets = [
+        { x: nx * 28,  y: ny * 28 },
+        { x: nx * 16 + px * (boxW / 2 + 24), y: ny * 16 + py * (boxW / 2 + 24) },
+        { x: nx * 16 - px * (boxW / 2 + 24), y: ny * 16 - py * (boxW / 2 + 24) },
+        { x: nx * 48,  y: ny * 48 },
+        { x: 0, y: -28 },
+        { x: 0, y: 34 },
+        { x: boxW / 2 + 30, y: 0 },
+        { x: -(boxW / 2 + 30), y: 0 },
+      ];
+
+      let labelX = lx + offsets[0].x;
+      let labelY = ly + offsets[0].y;
+
+      for (const off of offsets) {
+        const tx = lx + off.x;
+        const ty = ly + off.y;
+        const cy = ty + 5;
+        if (tx - boxW / 2 > 4 && tx + boxW / 2 < canvasW - 4 && ty - 4 > 4 && ty + boxH < canvasH - 4) {
+          if (boxFits(tx, cy, boxW, boxH)) {
+            labelX = tx;
+            labelY = ty;
+            break;
+          }
+        }
+      }
+
+      // Connector line from marker to label
+      ctx.strokeStyle = tc.connector;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+      ctx.lineTo(labelX, labelY + 5);
+      ctx.stroke();
+
+      // Role name
+      ctx.fillStyle = color;
+      ctx.font = `bold ${Math.round(11 * fs)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(roleName, labelX, labelY);
+
+      // Detail line (modifier · height)
+      if (line2) {
+        ctx.fillStyle = tc.textDim;
+        ctx.font = `${Math.round(10 * fs)}px ${FONT}`;
+        ctx.fillText(line2, labelX, labelY + Math.round(12 * fs));
+      }
+
+      addBox(labelX, labelY + 5, boxW, boxH);
+    });
+
     // ── Subject marker ──
-    const sx = toCanvasX(positions.subject.x);
-    const sy = toCanvasY(positions.subject.y);
     ctx.fillStyle = tc.subject;
     ctx.beginPath();
     ctx.arc(sx, sy, 10, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = tc.isDark ? '#0f172a' : '#ffffff';
-    ctx.font = `bold 8px ${FONT}`;
-    ctx.textAlign = 'center';
-    ctx.fillText('S', sx, sy + 3);
+    ctx.fillStyle = tc.markerDot;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+    ctx.fill();
     // Label
     ctx.fillStyle = tc.text;
-    ctx.font = `10px ${FONT}`;
+    ctx.font = `bold ${Math.round(11 * fs)}px ${FONT}`;
+    ctx.textAlign = 'center';
     ctx.fillText('Subject', sx, sy - 16);
 
     // ── Camera marker ──
     if (positions.camera) {
       const cx = toCanvasX(positions.camera.x);
       const cy = toCanvasY(positions.camera.y);
-      // Triangle pointing toward subject
+      // Rectangle with lens circle (matching DiagramCard)
       ctx.fillStyle = tc.camera;
       ctx.beginPath();
-      ctx.moveTo(cx, cy - 10);
-      ctx.lineTo(cx - 8, cy + 6);
-      ctx.lineTo(cx + 8, cy + 6);
-      ctx.closePath();
+      ctx.roundRect(cx - 10, cy - 6, 20, 12, 3);
+      ctx.fill();
+      ctx.fillStyle = tc.cameraLens;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 4, 0, Math.PI * 2);
       ctx.fill();
       // Label
-      ctx.fillStyle = tc.text;
-      ctx.font = `10px ${FONT}`;
+      ctx.fillStyle = tc.textDim;
+      ctx.font = `${Math.round(11 * fs)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillText('Camera', cx, cy + 22);
+
+      addBox(cx, cy + 22, 50, 14);
     }
 
     // Store transform for hit testing
@@ -302,13 +466,10 @@ export default function FloorPlanCanvas({
     const canvas = canvasRef.current;
     if (!canvas || !canvas._spatialTransform) return null;
     const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
     const cx = (e.clientX - rect.left);
     const cy = (e.clientY - rect.top);
     const t = canvas._spatialTransform;
-    // Invert: canvasX = pad + roomX * scaleX → roomX = (canvasX - pad) / scaleX
     const roomX = (cx - t.pad) / t.scaleX;
-    // canvasY = pad + (lengthFt - roomY) * scaleY → roomY = lengthFt - (canvasY - pad) / scaleY
     const roomY = roomDims.lengthFt - (cy - t.pad) / t.scaleY;
     return { x: roomX, y: roomY };
   }
@@ -365,8 +526,13 @@ export default function FloorPlanCanvas({
     setDragging(null);
   }
 
-  /* ── Legend ──────────────────────────────────────────── */
+  /* ── Guard ──────────────────────────────────────────── */
 
+  if (!roomDims) return null;
+
+  /* ── Legend (matching DiagramCard format) ───────────── */
+
+  const tc = getTheme();
   const lightRoles = positions?.lights?.map(l => l.role) || [];
   const uniqueRoles = [...new Set(lightRoles)];
 
@@ -380,20 +546,26 @@ export default function FloorPlanCanvas({
         onPointerUp={handlePointerUp}
         style={{ touchAction: 'none', cursor: dragging ? 'grabbing' : 'default' }}
       />
-      {/* Legend */}
+      {/* Legend — matching DiagramCard structure */}
       <div className="floor-plan__legend">
-        <span className="floor-plan__legend-item">
-          <span className="floor-plan__legend-dot" style={{ background: getTheme().subject }} /> Subject (drag)
-        </span>
-        <span className="floor-plan__legend-item">
-          <span className="floor-plan__legend-dot floor-plan__legend-dot--tri" style={{ background: getTheme().camera }} /> Camera (drag)
-        </span>
         {uniqueRoles.map(role => (
           <span key={role} className="floor-plan__legend-item">
-            <span className="floor-plan__legend-dot" style={{ background: lightColor(role) }} />
-            {(role || '').charAt(0).toUpperCase() + (role || '').slice(1)}
+            <span className="floor-plan__legend-dot" style={{ background: lightColor(role, tc.lightColors) }} />
+            {(role || '').charAt(0).toUpperCase() + (role || '').slice(1).replace(/_/g, ' ')}
           </span>
         ))}
+        <span className="floor-plan__legend-item">
+          <span className="floor-plan__legend-dot" style={{ background: tc.camera }} />
+          Camera (drag)
+        </span>
+        <span className="floor-plan__legend-item">
+          <span className="floor-plan__legend-dot" style={{ background: tc.subject, border: `1px solid ${tc.subjectBody}` }} />
+          Subject (drag)
+        </span>
+        <span className="floor-plan__legend-item">
+          <span className="floor-plan__legend-dot" style={{ background: tc.backdrop, border: `1px solid ${tc.backdropBorder}` }} />
+          Backdrop
+        </span>
       </div>
     </div>
   );

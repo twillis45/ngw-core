@@ -11,13 +11,13 @@ function getThemeColors() {
     isDark,
     lightColors: isDark ? LIGHT_COLORS_DARK : LIGHT_COLORS_LIGHT,
     text:           isDark ? '#cbd5e1' : '#334155',
-    textDim:        isDark ? '#94a3b8' : '#64748b',
-    textFaint:      isDark ? 'rgba(148,163,184,0.35)' : 'rgba(71,85,105,0.5)',
+    textDim:        isDark ? '#b0bec5' : '#64748b',
+    textFaint:      isDark ? 'rgba(176,190,197,0.55)' : 'rgba(71,85,105,0.5)',
     subjectHead:    isDark ? '#f1f5f9' : '#e2e8f0',
     subjectBody:    isDark ? '#cbd5e1' : '#475569',
     backdrop:       isDark ? '#334155' : '#cbd5e1',
     backdropBorder: isDark ? '#475569' : '#94a3b8',
-    backdropText:   isDark ? '#94a3b8' : '#475569',
+    backdropText:   isDark ? '#b0bec5' : '#475569',
     gridLine:       isDark ? 'rgba(71,85,105,0.25)' : 'rgba(100,116,139,0.2)',
     connector:      isDark ? 'rgba(148,163,184,0.3)' : 'rgba(71,85,105,0.35)',
     camera:         isDark ? '#64748b' : '#94a3b8',
@@ -25,7 +25,7 @@ function getThemeColors() {
     markerDot:      isDark ? '#0f172a' : '#ffffff',
     floorLine:      isDark ? 'rgba(71,85,105,0.4)' : 'rgba(100,116,139,0.35)',
     eyeLevel:       isDark ? 'rgba(148,163,184,0.25)' : 'rgba(100,116,139,0.2)',
-    eyeLevelText:   isDark ? 'rgba(148,163,184,0.3)' : 'rgba(71,85,105,0.45)',
+    eyeLevelText:   isDark ? 'rgba(176,190,197,0.45)' : 'rgba(71,85,105,0.45)',
   };
 }
 

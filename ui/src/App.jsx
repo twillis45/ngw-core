@@ -18,9 +18,11 @@ import ShotMatchScreen from './screens/ShotMatchScreen';
 import LabScreen from './screens/LabScreen';
 import RoomPlannerScreen from './screens/RoomPlannerScreen';
 import SettingsScreen from './screens/SettingsScreen';
+import WelcomeScreenV2 from './screens/WelcomeScreenV2';
 
 const SCREENS = {
   welcome: WelcomeScreen,
+  welcome_v2: WelcomeScreenV2,
   wizard:  SetupWizard,
   loading: LoadingScreen,
   results: ResultsScreen,
@@ -109,11 +111,13 @@ export default function App() {
     }
   }
 
+  const isV2 = screen === 'welcome_v2';
+
   return (
     <>
-      <AppHeader />
+      {!isV2 && <AppHeader />}
       <Screen />
-      <BottomNav onShare={handleShare} />
+      {!isV2 && <BottomNav onShare={handleShare} />}
       <Toast message={toast} visible={!!toast} onDone={dismissToast} />
 
       {shareOpen && (

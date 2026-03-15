@@ -21,7 +21,7 @@ export default function CameraMeasure({ onEstimate, onClose }) {
   const streamRef = useRef(null);
   const capturedDataUrl = useRef(null);
 
-  const [phase, setPhase] = useState('init');  // init | live | captured | marking | result | error
+  const [phase, setPhase] = useState('prompt');  // prompt | init | live | captured | marking | result | error
   const [error, setError] = useState(null);
   const [refType, setRefType] = useState(0);   // index into REFERENCE_OBJECTS
   const [customHeight, setCustomHeight] = useState('');
@@ -69,10 +69,8 @@ export default function CameraMeasure({ onEstimate, onClose }) {
     }
   }, []);
 
-  useEffect(() => {
-    startCamera();
-    return stopCamera;
-  }, [startCamera, stopCamera]);
+  // Clean up stream on unmount (don't auto-start — requires user gesture on iOS/Safari)
+  useEffect(() => stopCamera, [stopCamera]);
 
   /* ── Capture frame ──────────────────────────────────── */
 
@@ -241,6 +239,18 @@ export default function CameraMeasure({ onEstimate, onClose }) {
         <span className="camera-measure__title">{'\uD83D\uDCF7'} Camera Measure</span>
         <button className="camera-measure__close" onClick={onClose}>{'\u2715'}</button>
       </div>
+
+      {/* Permission prompt — shown before camera starts */}
+      {phase === 'prompt' && (
+        <div className="camera-measure__prompt">
+          <p>Camera access is needed to estimate room dimensions.</p>
+          <p className="camera-measure__prompt-note">Your browser will ask for permission.</p>
+          <div className="camera-measure__actions">
+            <button className="btn btn--secondary" onClick={onClose}>Enter Manually</button>
+            <button className="btn btn--primary" onClick={startCamera}>Allow Camera</button>
+          </div>
+        </div>
+      )}
 
       {/* Error state */}
       {phase === 'error' && (

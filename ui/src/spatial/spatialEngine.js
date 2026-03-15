@@ -83,6 +83,7 @@ export function lightToRoomCoords(light, subjectPos) {
     heightFt,
     role: light.role,
     label: light.label || light.role,
+    modifier: light.modifier || '',
     angleDeg,
     distanceFt: distFt,
   };
