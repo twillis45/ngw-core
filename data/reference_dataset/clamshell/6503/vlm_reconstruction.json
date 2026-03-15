@@ -9,15 +9,15 @@
     "modifier_family_candidates": [
       {
         "type": "reflector_hard",
-        "confidence": 0.55
+        "confidence": 0.6
       },
       {
         "type": "bare_bulb",
-        "confidence": 0.25
+        "confidence": 0.3
       },
       {
         "type": "unknown",
-        "confidence": 0.2
+        "confidence": 0.1
       }
     ],
     "environment": "studio",
@@ -54,14 +54,14 @@
     },
     "reconstruction_confidence": 0.62,
     "ambiguity_notes": [
-      "No catchlights detected; catchlight geometry unavailable.",
-      "Pose and self-shadow interference reduce highlight/shadow certainty.",
-      "Window light environment class detected but with low confidence; studio cues stronger.",
-      "Modifier shape evidence is weak; only apparent source size and penumbra support hard modifier."
+      "No catchlights detected; eye highlight/angle ambiguous.",
+      "Pose and self-shadow interference reduce certainty of light direction and height.",
+      "Environment pass suggests window light but with low confidence; studio background and controlled bounce suggest studio.",
+      "Modifier shape not directly detected; small source inferred from penumbra and highlight."
     ],
     "contradiction_notes": [
-      "Environment_pass suggests window_light (conf=0.15) but background and lighting cues support studio.",
-      "No direct evidence for window or sun; modifier unknown."
+      "Environment pass classifies as window_light (low confidence) but background and bounce evidence support studio.",
+      "No direct modifier evidence; small source inferred from penumbra and highlight."
     ]
   },
   "candidates": [
@@ -76,15 +76,15 @@
       "modifier_family_candidates": [
         {
           "type": "reflector_hard",
-          "confidence": 0.55
+          "confidence": 0.6
         },
         {
           "type": "bare_bulb",
-          "confidence": 0.25
+          "confidence": 0.3
         },
         {
           "type": "unknown",
-          "confidence": 0.2
+          "confidence": 0.1
         }
       ],
       "environment": "studio",
@@ -121,15 +121,15 @@
       },
       "confidence_score": 0.62,
       "ambiguity_notes": [
-        "No catchlights detected; catchlight geometry unavailable.",
-        "Pose and self-shadow interference reduce highlight/shadow certainty.",
-        "Window light environment class detected but with low confidence; studio cues stronger.",
-        "Modifier shape evidence is weak; only apparent source size and penumbra support hard modifier."
+        "No catchlights detected; eye highlight/angle ambiguous.",
+        "Pose and self-shadow interference reduce certainty of light direction and height.",
+        "Environment pass suggests window light but with low confidence; studio background and controlled bounce suggest studio.",
+        "Modifier shape not directly detected; small source inferred from penumbra and highlight."
       ]
     },
     {
       "candidate_id": "candidate_2",
-      "key_light_angle_deg": -98.7,
+      "key_light_angle_deg": 92.3,
       "key_light_height_class": "eye_level",
       "key_light_height_deg_estimate": 2.3,
       "key_light_distance_class": "close",
@@ -137,12 +137,16 @@
       "source_size_class": "small",
       "modifier_family_candidates": [
         {
-          "type": "window",
-          "confidence": 0.15
+          "type": "bare_bulb",
+          "confidence": 0.5
+        },
+        {
+          "type": "reflector_hard",
+          "confidence": 0.4
         },
         {
           "type": "unknown",
-          "confidence": 0.85
+          "confidence": 0.1
         }
       ],
       "environment": "window",
@@ -177,11 +181,11 @@
           "confidence": 1.0
         }
       },
-      "confidence_score": 0.41,
+      "confidence_score": 0.48,
       "ambiguity_notes": [
-        "Environment_pass suggests window_light but with low confidence.",
-        "No direct window reflections or rectangular catchlights.",
-        "Lighting characteristics could fit small window source or hard studio modifier."
+        "Shadow and LDF direction differ by ~190\u00b0, possible pose interference.",
+        "Environment pass suggests window light but with low confidence.",
+        "No direct modifier evidence; small source inferred from penumbra and highlight."
       ]
     }
   ],
