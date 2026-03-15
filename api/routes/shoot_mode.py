@@ -156,7 +156,7 @@ def _build_light_step(
     room: Optional["RoomDimensionsFt"] = None,
 ) -> Dict[str, Any]:
     """Build a single light-placement step from a mapped light dict."""
-    role_key = light.get("roleKey", "key")
+    role_key = light.get("roleKey") or light.get("role") or "key"
     warnings: List[str] = []
 
     # Ceiling check — need raw height_m for comparison
@@ -177,7 +177,7 @@ def _build_light_step(
     tips.extend(room_tips)
 
     return {
-        "id": f"light_{role_key}",
+        "id": f"light_{role_key}_{step_num}",
         "stepNumber": step_num,
         "title": light.get("role", role_key.title()),
         "subtitle": light.get("modifier", ""),
@@ -246,7 +246,7 @@ def _build_steps(
         role_order = {"key": 0, "fill": 1, "rim": 2, "background": 3}
         sorted_lights = sorted(
             lights,
-            key=lambda l: role_order.get(l.get("roleKey", ""), 99),
+            key=lambda l: role_order.get(l.get("roleKey") or l.get("role", ""), 99),
         )
         for light in sorted_lights:
             step = _build_light_step(light, step_num, ceiling_m, room=room)
@@ -402,8 +402,8 @@ async def evaluate_test_shot(req: EvaluateTestShotRequest) -> Dict[str, Any]:
     }
 
     try:
-        from engine.image_analysis import describe_image
-        raw = describe_image(str(image_path), describe_mode="vision")
+        from engine.orchestrator import evaluate_test_shot as _evaluate
+        raw = _evaluate(str(image_path))
         if raw and raw.get("ok"):
             vision = raw.get("vision", {})
             if vision and vision.get("ok"):

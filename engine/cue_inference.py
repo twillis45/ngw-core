@@ -209,10 +209,12 @@ def _infer_shadow_pattern(
     # Also apply when triangle was rejected (extra catchlights are reflections,
     # not separate lights — direction-based pattern is the correct classification).
     if light_count <= 2 or _triangle_rejected:
-        if key_direction in ("upper_left", "left"):
+        # Shadow pattern is side-independent — a key at upper_left
+        # creates the same pattern (mirrored) as upper_right.
+        if key_direction in ("upper_left", "upper_right"):
             return "rembrandt"
-        if key_direction in ("upper_right", "right"):
-            return "loop"
+        if key_direction in ("left", "right"):
+            return "split"
         if key_direction == "unknown" and key_height == "high":
             return "butterfly"
 

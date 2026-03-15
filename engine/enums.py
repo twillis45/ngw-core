@@ -160,6 +160,7 @@ class ModifierFamily(_LabelMixin, str, Enum):
     MEDIUM_SOFTBOX = "medium_softbox"
     LARGE_OCTA = "large_octa"
     SOFTBOX = "softbox"
+    SOFTBOX_STRIP = "softbox_strip"
     STRIPBOX = "stripbox"
     UMBRELLA_SILVER = "umbrella_silver"
     UMBRELLA_WHITE = "umbrella_white"
@@ -186,6 +187,7 @@ _register_labels(ModifierFamily, {
 "small_softbox": "Small Softbox",
 "medium_softbox": "Medium Softbox",
 "large_octa": "Large Octabox",
+"softbox_strip": "Strip Softbox",
 "stripbox": "Stripbox",
 "umbrella_silver": "Silver Umbrella",
 "umbrella_white": "White Umbrella",

@@ -781,8 +781,8 @@ class TestSourceDirectionFallback:
         intel = _FakeLightingIntel()
 
         lr = build_lighting_read(cue_report, cue_inference, intel)
-        # upper_left shadow → key is upper_right
-        assert "camera-right" in lr.source_direction
+        # key_light_direction="upper_left" → key IS at camera-left
+        assert "camera-left" in lr.source_direction
 
     def test_direction_fallback_from_lighting_intel(self):
         """When geometry is undetermined, fall back to lighting_intel."""

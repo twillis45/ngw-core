@@ -26,6 +26,22 @@ htmlcov/
 !.env.example
 static/uploads/
 *.log
+*.jsonl
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# User uploads
+data/uploads/
+
+# Built UI assets (Vite output — regenerate with npm run build)
+static/ui/assets/
+
+# Debug output
+static/debug/
 
 # Build / packaging
 dist/
