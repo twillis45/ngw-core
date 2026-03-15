@@ -191,7 +191,7 @@ def test_all_moods_return_results(mood):
 
 def test_lighting_intelligence_in_response(monkeypatch):
     """When a reference image has vision data, lightingIntelligence appears."""
-    from api.routes import shoot_match as sm_mod
+    import engine.image_analysis as ia_mod
 
     fake_result = {
         "ok": True,
@@ -235,7 +235,7 @@ def test_lighting_intelligence_in_response(monkeypatch):
             },
         },
     }
-    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+    monkeypatch.setattr(ia_mod, "describe_image", lambda *a, **kw: fake_result)
 
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
@@ -297,7 +297,7 @@ def test_lighting_intelligence_in_response(monkeypatch):
 
 def test_background_light_in_diagram(monkeypatch):
     """When reference image has bright background, background light appears on diagram."""
-    from api.routes import shoot_match as sm_mod
+    import engine.image_analysis as ia_mod
 
     fake_result = {
         "ok": True,
@@ -333,7 +333,7 @@ def test_background_light_in_diagram(monkeypatch):
             },
         },
     }
-    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+    monkeypatch.setattr(ia_mod, "describe_image", lambda *a, **kw: fake_result)
 
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:
@@ -379,7 +379,7 @@ def test_background_light_in_diagram(monkeypatch):
 
 def test_mood_discrepancy_noted(monkeypatch):
     """When user mood differs from detected mood, moodDiscrepancy is included."""
-    from api.routes import shoot_match as sm_mod
+    import engine.image_analysis as ia_mod
 
     fake_result = {
         "ok": True,
@@ -399,7 +399,7 @@ def test_mood_discrepancy_noted(monkeypatch):
             "skin_tone": {"ok": False},
         },
     }
-    monkeypatch.setattr(sm_mod, "describe_image", lambda *a, **kw: fake_result)
+    monkeypatch.setattr(ia_mod, "describe_image", lambda *a, **kw: fake_result)
 
     import tempfile, os
     with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as f:

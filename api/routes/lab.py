@@ -107,85 +107,32 @@ async def lab_analyze(
     with open(fpath, "wb") as f:
         shutil.copyfileobj(image.file, f)
 
-    # Run full analysis pipeline (vision mode)
+    # Run full analysis pipeline via orchestrator
     try:
-        from engine.image_analysis import describe_image
-        from engine.lighting_inference import infer_lighting_from_vision
-        from engine.reference_read import build_reference_photo_analysis
+        from engine.orchestrator import analyze_image
 
-        # Step 1: Full image analysis with CV + optional VLM
-        raw = describe_image(str(fpath), "vision", debug=debug)
+        ar = analyze_image(str(fpath), run_extended=True, debug=debug)
 
-        # Step 2: Extract intermediates
-        cue_report = raw.get("_cue_report")
-        vlm_desc = raw.get("_vlm_description")
-        vision_data = raw.get("vision", {})
-        classification = raw.get("classification", {})
-
-        # Step 3: Lighting inference
-        lighting_intel = infer_lighting_from_vision(
-            vision_data, classification=classification, cue_report=cue_report,
-        )
-
-        # Step 4: Three-layer reference read
-        analysis = build_reference_photo_analysis(
-            vision_data=vision_data,
-            classification=classification,
-            cue_report=cue_report,
-            lighting_intel=lighting_intel,
-            image_analysis=raw,
-            vlm_description=vlm_desc,
-        )
-
-        # ── Extended pipeline (runs all signal + synthesis passes) ──
-        pipeline_results = None
-        vlm_recon_data = None
-        try:
-            import numpy as np
-            from engine.vision_passes import run_extended_pipeline
-
-            img_bgr = raw.get("_debug_img_bgr")
-            masks = raw.get("_debug_masks", {})
-            face_box = raw.get("_debug_face_box")
-
-            if img_bgr is not None:
-                person_mask = masks.get("person") if isinstance(masks, dict) else None
-                skin_mask = masks.get("skin") if isinstance(masks, dict) else None
-                background_mask = masks.get("background") if isinstance(masks, dict) else None
-                existing_catchlights = vision_data.get("catchlights")
-                existing_geometry = vision_data.get("pose")
-
-                pipeline_results = run_extended_pipeline(
-                    img_bgr,
-                    person_mask=person_mask,
-                    skin_mask=skin_mask,
-                    background_mask=background_mask,
-                    face_box=face_box,
-                    existing_catchlights=existing_catchlights,
-                    existing_geometry=existing_geometry,
-                )
-
-                vlm_recon_data = pipeline_results.get("vlm_reconstruction")
-        except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning("Extended pipeline failed: %s", exc)
+        if not ar.ok:
+            raise HTTPException(status_code=500, detail="; ".join(ar.notes))
 
         # ── Debug overlay generation (diagnostic only) ──
         debug_overlay_url = None
-        if debug and pipeline_results is not None:
+        if debug and ar.pipeline_results is not None:
             try:
                 from engine.vision_debug import generate_analysis_overlay
 
+                img_bgr = ar.debug_data.get("img_bgr")
+                face_box = ar.debug_data.get("face_box")
+                masks = ar.debug_data.get("masks", {})
+                person_mask = masks.get("person") if isinstance(masks, dict) else None
+
                 overlay_filename = f"overlay_{fpath.stem}_{uuid.uuid4().hex[:8]}.jpg"
                 overlay_path = Path("static/debug") / overlay_filename
-                img_bgr = raw.get("_debug_img_bgr")
-                face_box = raw.get("_debug_face_box")
-                masks = raw.get("_debug_masks", {})
-                person_mask = masks.get("person") if isinstance(masks, dict) else None
 
                 saved_path = generate_analysis_overlay(
                     img_bgr,
-                    pipeline_results,
+                    ar.pipeline_results,
                     face_box=face_box,
                     person_mask=person_mask,
                     output_path=str(overlay_path),
@@ -196,11 +143,9 @@ async def lab_analyze(
                 import logging
                 logging.getLogger(__name__).warning("Debug overlay failed: %s", exc)
 
-        # Strip non-serializable internal objects from description
-        description = {k: v for k, v in raw.items() if not k.startswith("_")}
-
         # Serialize VLM description for comparison view
         vlm_data = None
+        vlm_desc = ar.vlm_description
         if vlm_desc and getattr(vlm_desc, "ok", False):
             vlm_data = vlm_desc.model_dump() if hasattr(vlm_desc, "model_dump") else vlm_desc.__dict__
 
@@ -212,25 +157,28 @@ async def lab_analyze(
             vlm_is_available = False
 
         # Serialize CV vision data (strip numpy arrays)
-        cv_data = {}
-        for k, v in vision_data.items():
-            if not k.startswith("_"):
-                cv_data[k] = v
+        cv_data = {k: v for k, v in ar.vision_data.items() if not k.startswith("_")}
 
         # Lighting inference data
-        lighting_data = lighting_intel.model_dump() if hasattr(lighting_intel, "model_dump") else {}
+        lighting_data = ar.lighting_intel.model_dump() if hasattr(ar.lighting_intel, "model_dump") else {}
+
+        # Solver result (new — enrichment from solver chain)
+        solver_data = None
+        if ar.solver_result and hasattr(ar.solver_result, "model_dump"):
+            solver_data = ar.solver_result.model_dump()
 
         response = {
             "status": "ok",
             "image_path": str(fpath),
-            "description": description,
-            "reference_analysis": analysis.model_dump(),
+            "description": ar.description,
+            "reference_analysis": ar.reference_analysis.model_dump() if ar.reference_analysis else {},
             "vlm": vlm_data,
             "vlm_available": vlm_is_available,
-            "vlm_reconstruction": vlm_recon_data,
+            "vlm_reconstruction": ar.vlm_reconstruction,
             "cv": cv_data,
-            "classification": classification,
+            "classification": ar.classification,
             "lighting_inference": lighting_data,
+            "solver": solver_data,
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
         }
@@ -398,34 +346,20 @@ async def evaluate_gold_set(
             continue
 
         try:
-            from engine.image_analysis import describe_image
-            from engine.lighting_inference import infer_lighting_from_vision
-            from engine.reference_read import build_reference_photo_analysis
+            from engine.orchestrator import analyze_image
 
-            raw = describe_image(image_path, "vision")
-            cue_report = raw.get("_cue_report")
-            vlm_desc = raw.get("_vlm_description")
-            vision_data = raw.get("vision", {})
-            classification = raw.get("classification", {})
+            ar = analyze_image(image_path, run_extended=False, run_solver=False)
+            if not ar.ok:
+                raise RuntimeError("; ".join(ar.notes))
 
-            lighting_intel = infer_lighting_from_vision(
-                vision_data, classification=classification, cue_report=cue_report,
-            )
-            actual = build_reference_photo_analysis(
-                vision_data=vision_data,
-                classification=classification,
-                cue_report=cue_report,
-                lighting_intel=lighting_intel,
-                image_analysis=raw,
-                vlm_description=vlm_desc,
-            )
+            actual_data = ar.reference_analysis.model_dump() if ar.reference_analysis else {}
 
             results.append({
                 "entry_id": entry["id"],
                 "image_path": image_path,
                 "status": "analyzed",
                 "expected": entry.get("expected_analysis", {}),
-                "actual": actual.model_dump(),
+                "actual": actual_data,
             })
         except Exception as e:
             results.append({

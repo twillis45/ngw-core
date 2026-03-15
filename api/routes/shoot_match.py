@@ -11,12 +11,11 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
-from engine.image_analysis import describe_image
 from engine.lighting_inference import (
-    infer_lighting_from_vision,
     build_reference_description,
     match_catchlights_to_diagram,
 )
+from engine.orchestrator import analyze_image
 from engine.patterns import (
     catchlight_plan_for,
     classify_lighting_pattern,
@@ -278,15 +277,19 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
     analysis = None
     lighting_intel = None
     try:
-        raw = describe_image(str(dest), describe_mode="vision")
-        if raw and raw.get("ok"):
+        ar = analyze_image(str(dest), run_extended=False, run_solver=False)
+        if ar.ok:
+            raw = ar.description
+            vision = ar.vision_data
+            lighting_intel = ar.lighting_intel
+
             analysis = {
                 "palette": raw.get("palette", {}),
                 "orientation": raw.get("orientation"),
                 "isGrayscale": raw.get("is_grayscale_like", False),
-                "classification": raw.get("classification"),
+                "classification": ar.classification,
             }
-            vision = raw.get("vision", {})
+
             if vision and vision.get("ok"):
                 analysis["skinTone"] = vision.get("skin_tone")
                 catchlights = vision.get("catchlights")
@@ -303,17 +306,6 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
                         "palette": bg_palette,
                         "ratio": masks.get("background_ratio"),
                     }
-
-                # Run lighting inference
-                try:
-                    classification = raw.get("classification", {})
-                    cue_report_obj = raw.get("_cue_report")
-                    lighting_intel = infer_lighting_from_vision(
-                        vision, classification=classification,
-                        cue_report=cue_report_obj,
-                    )
-                except Exception:
-                    lighting_intel = None
 
                 if lighting_intel is not None:
                     # Enrich background with light detection
@@ -372,14 +364,13 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
                     }
 
                     # Build descriptions
-                    vlm_desc_obj = raw.get("_vlm_description")
                     ref_description = build_reference_description(
                         vision_data=vision,
-                        classification=raw.get("classification"),
+                        classification=ar.classification,
                         image_analysis=raw,
                         inference=lighting_intel,
-                        cue_report=cue_report_obj,
-                        vlm_description=vlm_desc_obj,
+                        cue_report=ar.cue_report,
+                        vlm_description=ar.vlm_description,
                     )
                     analysis["description"] = ref_description
 
@@ -427,27 +418,20 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
     # Analyze reference image if provided (vision mode for full intelligence)
     image_analysis = None
     lighting_intel = None
+    ref_cue_report = None
+    ref_vlm_description = None
     if req.referenceImage:
         image_path = Path(req.referenceImage)
         if image_path.exists():
             try:
-                image_analysis = describe_image(str(image_path), describe_mode="vision")
+                ar = analyze_image(str(image_path), run_extended=False, run_solver=False)
+                if ar.ok:
+                    image_analysis = ar.description
+                    lighting_intel = ar.lighting_intel
+                    ref_cue_report = ar.cue_report
+                    ref_vlm_description = ar.vlm_description
             except Exception:
                 image_analysis = None
-
-            # Run lighting inference on vision data
-            if image_analysis and image_analysis.get("ok"):
-                vision_data = image_analysis.get("vision", {})
-                classification = image_analysis.get("classification", {})
-                if vision_data and vision_data.get("ok"):
-                    try:
-                        cue_report_obj = image_analysis.get("_cue_report")
-                        lighting_intel = infer_lighting_from_vision(
-                            vision_data, classification=classification,
-                            cue_report=cue_report_obj,
-                        )
-                    except Exception:
-                        lighting_intel = None
 
     # Strip to engine-safe fields
     engine_systems = [
@@ -693,15 +677,13 @@ def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
             }
 
             # Build rich human-readable descriptions of the reference image
-            cue_report_for_desc = image_analysis.get("_cue_report")
-            vlm_desc_for_desc = image_analysis.get("_vlm_description")
             ref_description = build_reference_description(
                 vision_data=vision,
                 classification=image_analysis.get("classification"),
                 image_analysis=image_analysis,
                 inference=lighting_intel,
-                cue_report=cue_report_for_desc,
-                vlm_description=vlm_desc_for_desc,
+                cue_report=ref_cue_report,
+                vlm_description=ref_vlm_description,
             )
             ref_analysis["description"] = ref_description
 
