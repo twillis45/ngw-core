@@ -56,15 +56,41 @@ export const POWER_DISPLAY_OPTIONS = [
 
 /** Default settings */
 const DEFAULTS = {
-  // Appearance (applied via data-attributes on <html> for CSS)
-  fontSize: 'medium',         // 'xs' | 'small' | 'medium' | 'large' | 'xl'
-  fontFamily: 'system',       // 'system' | 'inter' | 'source' | 'mono' | 'serif'
-  density: 'comfortable',     // 'compact' | 'comfortable' | 'spacious'
-  // Shooting preferences (consumed by components via useSettings hook)
-  units: 'imperial',          // 'imperial' | 'metric'
-  powerDisplay: 'fraction',   // 'fraction' | 'stops' | 'percent'
-  showConfidenceScore: true,  // show numeric confidence in results
-  autoSaveSetups: false,      // auto-save after every recommendation
+  // ── Appearance (applied via data-attributes on <html> for CSS) ──────────
+  fontSize: 'medium',             // 'xs' | 'small' | 'medium' | 'large' | 'xl'
+  fontFamily: 'system',           // 'system' | 'inter' | 'source' | 'mono' | 'serif'
+  density: 'comfortable',         // 'compact' | 'comfortable' | 'spacious'
+
+  // ── Shooting preferences (legacy, preserved for hook consumers) ──────────
+  units: 'imperial',              // 'imperial' | 'metric'
+  powerDisplay: 'fraction',       // 'fraction' | 'stops' | 'percent'
+  showConfidenceScore: true,      // legacy: show numeric confidence in results
+  autoSaveSetups: false,          // legacy: auto-save after every recommendation
+
+  // ── Experience ───────────────────────────────────────────────────────────
+  viewMode: 'full',               // 'quick' | 'full'
+  guidanceLevel: 'guided',        // 'minimal' | 'guided' | 'full'
+  confidenceDisplay: 'simple',    // 'simple' | 'numeric' | 'detailed'
+  comparisonPrompts: 'auto',      // 'auto' | 'low_conf_only' | 'off'
+  shootModeStyle: 'step',         // 'checklist' | 'step'
+
+  // ── Intelligence ─────────────────────────────────────────────────────────
+  autonomyLevel: 'manual',        // 'manual' | 'assisted' | 'adaptive'
+  fixGuidanceStyle: 'balanced',   // 'quick' | 'balanced' | 'detailed'
+  patternSensitivity: 'balanced', // 'strict' | 'balanced' | 'flexible'
+  explanationDepth: 'standard',   // 'brief' | 'standard' | 'technical'
+
+  // ── Privacy ──────────────────────────────────────────────────────────────
+  allowLearning: true,            // contribute session data to improvement
+  allowAnalytics: true,           // allow anonymous usage analytics
+  sessionStorage: 'auto',         // 'auto' | 'manual' | 'off'
+  imageHandling: 'store',         // 'store' | 'delete'
+
+  // ── Advanced ─────────────────────────────────────────────────────────────
+  uiSelfTuning: false,            // allow UI to adjust layout/flow automatically
+  experimentParticipation: false, // opt in to A/B experiments
+  showDebugSignals: false,        // show vision signal debug overlay
+  stabilityMode: true,            // prevent auto-adjustments from stacking
 };
 
 /** Load all settings, merged with defaults. */

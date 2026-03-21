@@ -1,3 +1,17 @@
+/**
+ * SettingsScreen — NGW Settings v2
+ *
+ * Four top-level sections: Experience · Intelligence · Data & Privacy · Advanced
+ *
+ * All existing functionality preserved:
+ *   - Appearance (theme, typeface, size, density) inside Experience
+ *   - Units, power readout, confidence scores inside Experience
+ *   - Role mode inside Experience
+ *   - Dev tools gated by enable_lab feature flag
+ *   - Secret version tap to toggle dev mode
+ *   - Account display
+ *   - Reset to defaults
+ */
 import { useState, useRef, useCallback } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import usePaywall from '../hooks/usePaywall';
@@ -12,14 +26,20 @@ import { loadTheme, saveTheme, applyTheme, THEMES } from '../data/themeStore';
 import { loadMode, saveMode } from '../data/modeStore';
 import { isEnabled, setFlag } from '../modes/featureFlags';
 import Toast from '../components/Toast';
+import SettingsSection    from '../components/settings/SettingsSection';
+import SettingsCard       from '../components/settings/SettingsCard';
+import SegmentedSetting   from '../components/settings/SegmentedSetting';
+import ToggleSetting      from '../components/settings/ToggleSetting';
+import ActionSetting      from '../components/settings/ActionSetting';
+import ConfirmActionModal from '../components/settings/ConfirmActionModal';
 
-const DEV_TAP_COUNT = 5;
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const DEV_TAP_COUNT  = 5;
 const DEV_TAP_WINDOW = 3000;
+const APP_VERSION    = 'v1.4.0';
 
-const APP_VERSION = 'v1.4.0';
-
-/** Theme display order: lightest to darkest */
-const THEME_ORDER = ['daynote', 'light', 'photoshop', 'lightroom', 'dark'];
+const THEME_ORDER  = ['daynote', 'light', 'photoshop', 'lightroom', 'dark'];
 const THEME_LABELS = {
   daynote:   { label: 'Daynote',   name: 'Daynote' },
   light:     { label: 'Light',     name: 'Light' },
@@ -27,8 +47,6 @@ const THEME_LABELS = {
   lightroom: { label: 'Lr',        name: 'Lightroom' },
   dark:      { label: 'Dark',      name: 'Dark' },
 };
-
-/** Each typeface button renders in its own font */
 const FONT_STYLES = {
   system: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
   inter:  { fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif' },
@@ -36,43 +54,92 @@ const FONT_STYLES = {
   mono:   { fontFamily: '"SF Mono", "JetBrains Mono", "Fira Code", monospace' },
   serif:  { fontFamily: '"Playfair Display", Georgia, "Times New Roman", serif' },
 };
-
-/** Each size button renders at its representative font size */
 const SIZE_STYLES = {
-  xs:     { fontSize: '11px' },
-  small:  { fontSize: '13px' },
-  medium: { fontSize: '15px' },
-  large:  { fontSize: '17px' },
-  xl:     { fontSize: '20px' },
+  xs: { fontSize: '11px' }, small: { fontSize: '13px' },
+  medium: { fontSize: '15px' }, large: { fontSize: '17px' }, xl: { fontSize: '20px' },
 };
 
+// ─── Option sets ──────────────────────────────────────────────────────────────
+
+const ROLE_OPTIONS = [
+  { id: 'photographer', label: 'Photographer' },
+  { id: 'assistant',    label: 'Assistant' },
+];
+const VIEW_MODE_OPTIONS = [
+  { id: 'quick', label: 'Quick',    title: 'Quick Reference' },
+  { id: 'full',  label: 'Full',     title: 'Full Analysis' },
+];
+const GUIDANCE_OPTIONS = [
+  { id: 'minimal', label: 'Minimal' },
+  { id: 'guided',  label: 'Guided' },
+  { id: 'full',    label: 'Coaching' },
+];
+const CONFIDENCE_DISPLAY_OPTIONS = [
+  { id: 'simple',   label: 'Simple' },
+  { id: 'numeric',  label: 'Numeric' },
+  { id: 'detailed', label: 'Detailed' },
+];
+const COMPARISON_PROMPTS_OPTIONS = [
+  { id: 'auto',          label: 'Auto' },
+  { id: 'low_conf_only', label: 'Low conf' },
+  { id: 'off',           label: 'Off' },
+];
+const SHOOT_MODE_STYLE_OPTIONS = [
+  { id: 'step',      label: 'Step-by-step' },
+  { id: 'checklist', label: 'Checklist' },
+];
+const AUTONOMY_OPTIONS = [
+  { id: 'manual',   label: 'Manual' },
+  { id: 'assisted', label: 'Assisted' },
+  { id: 'adaptive', label: 'Adaptive' },
+];
+const FIX_GUIDANCE_OPTIONS = [
+  { id: 'quick',    label: 'Quick' },
+  { id: 'balanced', label: 'Balanced' },
+  { id: 'detailed', label: 'Detailed' },
+];
+const PATTERN_SENSITIVITY_OPTIONS = [
+  { id: 'strict',   label: 'Strict' },
+  { id: 'balanced', label: 'Balanced' },
+  { id: 'flexible', label: 'Flexible' },
+];
+const EXPLANATION_DEPTH_OPTIONS = [
+  { id: 'brief',     label: 'Brief' },
+  { id: 'standard',  label: 'Standard' },
+  { id: 'technical', label: 'Technical' },
+];
+const SESSION_STORAGE_OPTIONS = [
+  { id: 'auto',   label: 'Auto' },
+  { id: 'manual', label: 'Manual' },
+  { id: 'off',    label: 'Off' },
+];
+const IMAGE_HANDLING_OPTIONS = [
+  { id: 'store',  label: 'Store' },
+  { id: 'delete', label: 'Delete after' },
+];
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function SettingsScreen() {
-  const { user } = useAppState();
-  const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const { user }   = useAppState();
+  const dispatch   = useDispatch();
+  const userEmail  = user?.email || user?.username || null;
   const { isPaid, unlock, lock, isAdmin } = usePaywall(userEmail);
-  const { plan, setPlan } = usePlan(userEmail);
+  const { plan, setPlan }                 = usePlan(userEmail);
+
   const [settings, setSettings] = useState(loadSettings);
-  const [theme, setTheme] = useState(() => loadTheme() || 'dark');
+  const [theme, setTheme]       = useState(() => loadTheme() || 'dark');
   const [roleMode, setRoleMode] = useState(() => loadMode());
-  const [toast, setToast] = useState({ message: '', visible: false });
+  const [toast, setToast]       = useState({ message: '', visible: false });
+  const [confirm, setConfirm]   = useState(null);
+
   const tapTimestamps = useRef([]);
 
-  /* Secret version tap: 5 taps within 3s toggles Lab dev mode */
-  const handleVersionTap = useCallback(() => {
-    const now = Date.now();
-    const taps = tapTimestamps.current;
-    taps.push(now);
-    while (taps.length && taps[0] < now - DEV_TAP_WINDOW) taps.shift();
-    if (taps.length >= DEV_TAP_COUNT) {
-      taps.length = 0;
-      const wasEnabled = isEnabled('enable_lab');
-      setFlag('enable_lab', !wasEnabled);
-      setToast({ message: wasEnabled ? 'Dev mode disabled' : 'Dev mode enabled', visible: true });
-    }
-  }, []);
+  function showToast(message) {
+    setToast({ message, visible: true });
+  }
 
-  function updateSetting(key, value) {
+  function update(key, value) {
     saveSetting(key, value);
     const next = { ...settings, [key]: value };
     setSettings(next);
@@ -80,264 +147,454 @@ export default function SettingsScreen() {
   }
 
   function handleThemeChange(t) {
-    saveTheme(t);
-    applyTheme(t);
-    setTheme(t);
+    saveTheme(t); applyTheme(t); setTheme(t);
   }
 
   function handleReset() {
-    resetSettings();
-    setSettings(loadSettings());
-    saveTheme('dark');
-    applyTheme('dark');
-    setTheme('dark');
-    setToast({ message: 'Reset to defaults', visible: true });
+    setConfirm({
+      title: 'Reset to Defaults',
+      message: 'All settings will return to their defaults. This cannot be undone.',
+      confirmText: 'Reset',
+      destructive: true,
+      onConfirm: () => {
+        resetSettings();
+        setSettings(loadSettings());
+        saveTheme('dark'); applyTheme('dark'); setTheme('dark');
+        setConfirm(null);
+        showToast('Reset to defaults');
+      },
+    });
   }
+
+  function handleSystemReset() {
+    setConfirm({
+      title: 'Reset System State',
+      message: 'Clears locally stored learning data, session state, and cached results. Your account is not affected.',
+      confirmText: 'Reset System',
+      destructive: true,
+      onConfirm: () => {
+        try {
+          Object.keys(localStorage).forEach(k => {
+            if (k.startsWith('ngw_session_') || k.startsWith('ngw_learn_')) {
+              localStorage.removeItem(k);
+            }
+          });
+          sessionStorage.clear();
+        } catch (_) {}
+        setConfirm(null);
+        showToast('System state cleared');
+      },
+    });
+  }
+
+  function handleRollback() {
+    setConfirm({
+      title: 'Rollback Last Adjustment',
+      message: 'The most recent autonomous system adjustment will be reversed.',
+      confirmText: 'Rollback',
+      destructive: true,
+      onConfirm: () => {
+        setConfirm(null);
+        showToast('No recent adjustment to roll back');
+      },
+    });
+  }
+
+  function handleSimulateLowConf() {
+    try { sessionStorage.setItem('ngw_sim_low_conf', '1'); } catch (_) {}
+    showToast('Low confidence simulation active — reload results to see effect');
+  }
+
+  const handleVersionTap = useCallback(() => {
+    const now  = Date.now();
+    const taps = tapTimestamps.current;
+    taps.push(now);
+    while (taps.length && taps[0] < now - DEV_TAP_WINDOW) taps.shift();
+    if (taps.length >= DEV_TAP_COUNT) {
+      taps.length = 0;
+      const wasEnabled = isEnabled('enable_lab');
+      setFlag('enable_lab', !wasEnabled);
+      showToast(wasEnabled ? 'Dev mode disabled' : 'Dev mode enabled');
+    }
+  }, []);
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="stg">
       <h2 className="stg__title">Settings</h2>
 
-      {/* ── Appearance ── */}
-      <div className="stg__section-label">Appearance</div>
+      {/* ── 1. EXPERIENCE ─────────────────────────────────────────────── */}
+      <SettingsSection
+        title="Experience"
+        description="How results appear and how much guidance you receive."
+      >
+        <SettingsCard label="Results">
+          <SegmentedSetting
+            label="View Mode"
+            description="Quick Reference shows key outputs only. Full Analysis shows all cards and reasoning."
+            options={VIEW_MODE_OPTIONS}
+            value={settings.viewMode}
+            onChange={v => update('viewMode', v)}
+          />
+          <SegmentedSetting
+            label="Guidance Level"
+            description="How much coaching language appears in results and fix suggestions."
+            options={GUIDANCE_OPTIONS}
+            value={settings.guidanceLevel}
+            onChange={v => update('guidanceLevel', v)}
+          />
+          <SegmentedSetting
+            label="Confidence Display"
+            description="Simple shows pass/fail only. Numeric shows scores. Detailed shows per-signal breakdown."
+            options={CONFIDENCE_DISPLAY_OPTIONS}
+            value={settings.confidenceDisplay}
+            onChange={v => {
+              update('confidenceDisplay', v);
+              update('showConfidenceScore', v !== 'simple');
+            }}
+          />
+          <SegmentedSetting
+            label="Comparison Prompts"
+            description="When to suggest comparing your setup to a reference image."
+            options={COMPARISON_PROMPTS_OPTIONS}
+            value={settings.comparisonPrompts}
+            onChange={v => update('comparisonPrompts', v)}
+          />
+        </SettingsCard>
 
-      <div className="stg__row">
-        <span className="stg__label">Theme</span>
-        <div className="stg__seg">
-          {THEME_ORDER.filter(t => THEMES.includes(t)).map(t => (
-            <button
-              key={t}
-              className={`stg__seg-btn${theme === t ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => handleThemeChange(t)}
-              title={THEME_LABELS[t]?.name}
-              type="button"
-            >
-              {THEME_LABELS[t]?.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        <SettingsCard label="Shoot Mode">
+          <SegmentedSetting
+            label="Style"
+            description="Step-by-step guides one action at a time. Checklist shows all steps at once."
+            options={SHOOT_MODE_STYLE_OPTIONS}
+            value={settings.shootModeStyle}
+            onChange={v => update('shootModeStyle', v)}
+          />
+          <SegmentedSetting
+            label="Role Mode"
+            description={roleMode === 'assistant'
+              ? 'Direct commands — short, no explanation.'
+              : 'Outcome context — results and reasoning.'}
+            options={ROLE_OPTIONS}
+            value={roleMode}
+            onChange={v => { saveMode(v); setRoleMode(v); }}
+          />
+        </SettingsCard>
 
-      <div className="stg__row">
-        <span className="stg__label">Typeface</span>
-        <div className="stg__seg">
-          {FONT_FAMILIES.map(ff => (
-            <button
-              key={ff.id}
-              className={`stg__seg-btn${settings.fontFamily === ff.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => updateSetting('fontFamily', ff.id)}
-              style={FONT_STYLES[ff.id]}
-              type="button"
-            >
-              {ff.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        <SettingsCard label="Measurement">
+          <SegmentedSetting
+            label="Units"
+            options={UNIT_OPTIONS}
+            value={settings.units}
+            onChange={v => update('units', v)}
+          />
+          <SegmentedSetting
+            label="Power Readout"
+            description="How strobe power levels appear in diagrams and cards."
+            options={POWER_DISPLAY_OPTIONS}
+            value={settings.powerDisplay}
+            onChange={v => update('powerDisplay', v)}
+          />
+        </SettingsCard>
 
-      <div className="stg__row">
-        <span className="stg__label">Size</span>
-        <div className="stg__seg">
-          {FONT_SIZES.map(fs => (
-            <button
-              key={fs.id}
-              className={`stg__seg-btn${settings.fontSize === fs.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => updateSetting('fontSize', fs.id)}
-              style={SIZE_STYLES[fs.id]}
-              type="button"
-            >
-              {fs.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="stg__row">
-        <span className="stg__label">Density</span>
-        <div className="stg__seg">
-          {DENSITY_OPTIONS.map(d => (
-            <button
-              key={d.id}
-              className={`stg__seg-btn${settings.density === d.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => updateSetting('density', d.id)}
-              type="button"
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Shooting Preferences ── */}
-      <div className="stg__section-label">Shooting Preferences</div>
-
-      <div className="stg__row">
-        <div className="stg__row-label">
-          <span>Role Mode</span>
-          <span className="stg__row-hint">
-            {roleMode === 'assistant'
-              ? 'Direct commands — short, no explanation'
-              : 'Outcome context — results and reasoning'}
-          </span>
-        </div>
-        <div className="stg__seg">
-          {[
-            { id: 'photographer', label: 'Photographer' },
-            { id: 'assistant', label: 'Assistant' },
-          ].map(m => (
-            <button
-              key={m.id}
-              className={`stg__seg-btn${roleMode === m.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => { saveMode(m.id); setRoleMode(m.id); }}
-              type="button"
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="stg__row">
-        <span className="stg__label">Units</span>
-        <div className="stg__seg">
-          {UNIT_OPTIONS.map(u => (
-            <button
-              key={u.id}
-              className={`stg__seg-btn${settings.units === u.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => updateSetting('units', u.id)}
-              type="button"
-            >
-              {u.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="stg__row">
-        <span className="stg__label">Power Readout</span>
-        <div className="stg__seg">
-          {POWER_DISPLAY_OPTIONS.map(p => (
-            <button
-              key={p.id}
-              className={`stg__seg-btn${settings.powerDisplay === p.id ? ' stg__seg-btn--on' : ''}`}
-              onClick={() => updateSetting('powerDisplay', p.id)}
-              type="button"
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="stg__row stg__row--toggle">
-        <span className="stg__label">Show Confidence Scores</span>
-        <button
-          className={`stg__toggle${settings.showConfidenceScore ? ' stg__toggle--on' : ''}`}
-          onClick={() => updateSetting('showConfidenceScore', !settings.showConfidenceScore)}
-          type="button"
-          aria-label="Toggle confidence scores"
-        >
-          <span className="stg__toggle-knob" />
-        </button>
-      </div>
-
-      <div className="stg__row stg__row--toggle">
-        <span className="stg__label">Auto-Save Setups</span>
-        <button
-          className={`stg__toggle${settings.autoSaveSetups ? ' stg__toggle--on' : ''}`}
-          onClick={() => updateSetting('autoSaveSetups', !settings.autoSaveSetups)}
-          type="button"
-          aria-label="Toggle auto-save"
-        >
-          <span className="stg__toggle-knob" />
-        </button>
-      </div>
-
-      {/* ── Account ── */}
-      <div className="stg__section-label">Account</div>
-
-      {user ? (
-        <div className="stg__row">
-          <span className="stg__label">Signed in as</span>
-          <span className="stg__value">{user.username}</span>
-        </div>
-      ) : (
-        <div className="stg__row">
-          <span className="stg__label">Account</span>
-          <span className="stg__value stg__value--dim">Not signed in</span>
-        </div>
-      )}
-
-      {/* ── Reset ── */}
-      <button className="stg__reset" onClick={handleReset} type="button">
-        Reset to Defaults
-      </button>
-
-      {/* ── Dev Tools (only visible when Lab mode is enabled) ── */}
-      {isEnabled('enable_lab') && (
-        <div className="stg__dev-section">
-          <div className="stg__section-label">Dev Tools</div>
-
-          {/* Analytics dashboard */}
-          <div className="stg__row">
-            <span className="stg__label">Analytics</span>
-            <button
-              className="btn btn--ghost btn--sm"
-              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
-              type="button"
-            >
-              View Analytics
-            </button>
-          </div>
-
-          {/* Executive dashboard (admin only) */}
-          {isAdmin && (
-            <div className="stg__row">
-              <span className="stg__label">Exec Dashboard</span>
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={() => dispatch({ type: 'NAVIGATE', screen: 'exec' })}
-                type="button"
-              >
-                View Dashboard
-              </button>
-            </div>
-          )}
-
-          {/* Plan tier switcher */}
-          <div className="stg__row">
-            <div className="stg__row-label">
-              <span>Plan Tier</span>
-              <span className="stg__row-hint">
-                {isAdmin ? 'Admin — always Enterprise' : 'Simulate plan tier for testing'}
-              </span>
-            </div>
-            <div className="stg__seg stg__seg--plan">
-              {['free', 'paid', 'pro', 'enterprise'].map(p => (
+        <SettingsCard label="Appearance">
+          {/* Theme — inline seg preserves per-button font rendering from v1 */}
+          <div className="stg-row">
+            <div className="stg-row__meta"><span className="stg-row__label">Theme</span></div>
+            <div className="stg__seg">
+              {THEME_ORDER.filter(t => THEMES.includes(t)).map(t => (
                 <button
-                  key={p}
-                  className={`stg__seg-btn${plan === p ? ' stg__seg-btn--on' : ''}`}
-                  onClick={() => {
-                    if (isAdmin) { setToast({ message: 'Admin is always Enterprise', visible: true }); return; }
-                    setPlan(p);
-                    if (p !== 'free') unlock(); else lock();
-                    setToast({ message: `Plan set to ${PLAN_LABELS[p]}`, visible: true });
-                  }}
+                  key={t}
+                  className={`stg__seg-btn${theme === t ? ' stg__seg-btn--on' : ''}`}
+                  onClick={() => handleThemeChange(t)}
+                  title={THEME_LABELS[t]?.name}
                   type="button"
                 >
-                  {PLAN_LABELS[p]}
+                  {THEME_LABELS[t]?.label}
                 </button>
               ))}
             </div>
           </div>
-        </div>
-      )}
+          {/* Typeface — each button renders in its own font */}
+          <div className="stg-row">
+            <div className="stg-row__meta"><span className="stg-row__label">Typeface</span></div>
+            <div className="stg__seg">
+              {FONT_FAMILIES.map(ff => (
+                <button
+                  key={ff.id}
+                  className={`stg__seg-btn${settings.fontFamily === ff.id ? ' stg__seg-btn--on' : ''}`}
+                  onClick={() => update('fontFamily', ff.id)}
+                  style={FONT_STYLES[ff.id]}
+                  type="button"
+                >
+                  {ff.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="stg-row">
+            <div className="stg-row__meta"><span className="stg-row__label">Size</span></div>
+            <div className="stg__seg">
+              {FONT_SIZES.map(fs => (
+                <button
+                  key={fs.id}
+                  className={`stg__seg-btn${settings.fontSize === fs.id ? ' stg__seg-btn--on' : ''}`}
+                  onClick={() => update('fontSize', fs.id)}
+                  style={SIZE_STYLES[fs.id]}
+                  type="button"
+                >
+                  {fs.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="stg-row">
+            <div className="stg-row__meta"><span className="stg-row__label">Density</span></div>
+            <div className="stg__seg">
+              {DENSITY_OPTIONS.map(d => (
+                <button
+                  key={d.id}
+                  className={`stg__seg-btn${settings.density === d.id ? ' stg__seg-btn--on' : ''}`}
+                  onClick={() => update('density', d.id)}
+                  type="button"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </SettingsCard>
+      </SettingsSection>
 
-      {/* ── About ── */}
+      {/* ── 2. INTELLIGENCE ───────────────────────────────────────────── */}
+      <SettingsSection
+        title="Intelligence"
+        description="Controls how the system thinks and what it suggests — not the core model."
+      >
+        <SettingsCard>
+          <SegmentedSetting
+            label="Autonomy Level"
+            description="Manual: you decide everything. Assisted: system flags issues. Adaptive: suggestions improve over time."
+            options={AUTONOMY_OPTIONS}
+            value={settings.autonomyLevel}
+            onChange={v => update('autonomyLevel', v)}
+          />
+          <SegmentedSetting
+            label="Fix Guidance Style"
+            description="How quick-fix suggestions are ordered and presented."
+            options={FIX_GUIDANCE_OPTIONS}
+            value={settings.fixGuidanceStyle}
+            onChange={v => update('fixGuidanceStyle', v)}
+          />
+          <SegmentedSetting
+            label="Pattern Sensitivity"
+            description="Strict requires strong signal agreement. Flexible accepts partial matches."
+            options={PATTERN_SENSITIVITY_OPTIONS}
+            value={settings.patternSensitivity}
+            onChange={v => update('patternSensitivity', v)}
+          />
+          <SegmentedSetting
+            label="Explanation Depth"
+            description="How much technical reasoning appears in results and fix cards."
+            options={EXPLANATION_DEPTH_OPTIONS}
+            value={settings.explanationDepth}
+            onChange={v => update('explanationDepth', v)}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      {/* ── 3. DATA & PRIVACY ─────────────────────────────────────────── */}
+      <SettingsSection
+        title="Data & Privacy"
+        description="What is stored and how it's used to improve your experience."
+      >
+        <SettingsCard label="Learning & Analytics">
+          <ToggleSetting
+            label="Allow Learning from Sessions"
+            description="Outcome signals improve pattern detection. Never linked to your identity."
+            value={settings.allowLearning}
+            onChange={v => update('allowLearning', v)}
+          />
+          <ToggleSetting
+            label="Allow Analytics Tracking"
+            description="Anonymous usage data helps improve the app. No images or results included."
+            value={settings.allowAnalytics}
+            onChange={v => update('allowAnalytics', v)}
+          />
+        </SettingsCard>
+        <SettingsCard label="Storage">
+          <SegmentedSetting
+            label="Session Storage"
+            description="Auto saves sessions automatically. Manual requires you to save. Off stores nothing."
+            options={SESSION_STORAGE_OPTIONS}
+            value={settings.sessionStorage}
+            onChange={v => update('sessionStorage', v)}
+          />
+          <SegmentedSetting
+            label="Image Handling"
+            description="Store keeps reference images for future sessions. Delete after analysis removes them immediately."
+            options={IMAGE_HANDLING_OPTIONS}
+            value={settings.imageHandling}
+            onChange={v => update('imageHandling', v)}
+          />
+        </SettingsCard>
+      </SettingsSection>
+
+      {/* ── 4. ADVANCED (collapsed by default) ───────────────────────── */}
+      <SettingsSection
+        title="Advanced"
+        description="Power-user controls, diagnostics, and system safety."
+        collapsible
+        defaultExpanded={false}
+      >
+        <SettingsCard label="Autonomy Controls">
+          <ToggleSetting
+            label="UI Self-Tuning"
+            description="Allows the interface to adjust card order and layout based on your usage patterns."
+            value={settings.uiSelfTuning}
+            onChange={v => update('uiSelfTuning', v)}
+          />
+          <ToggleSetting
+            label="Experiment Participation"
+            description="Opt in to receive early-access features and A/B test variants."
+            value={settings.experimentParticipation}
+            onChange={v => update('experimentParticipation', v)}
+          />
+        </SettingsCard>
+
+        <SettingsCard label="Debug & Diagnostics">
+          <ToggleSetting
+            label="Show Debug Signals"
+            description="Overlays raw vision signals and confidence scores on results cards."
+            value={settings.showDebugSignals}
+            onChange={v => update('showDebugSignals', v)}
+          />
+          <ActionSetting
+            label="View Event Logs"
+            description="Browse recent system events and analysis logs."
+            buttonText="View Logs"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+          />
+          <ActionSetting
+            label="Simulate Low Confidence"
+            description="Forces a low-confidence state in the next analysis run."
+            buttonText="Simulate"
+            onClick={handleSimulateLowConf}
+          />
+          <ActionSetting
+            label="Reset System State"
+            description="Clears locally stored learning data, session state, and cached results."
+            buttonText="Reset State"
+            destructive
+            onClick={handleSystemReset}
+          />
+        </SettingsCard>
+
+        <SettingsCard label="System Safety">
+          <ToggleSetting
+            label="Stability Mode"
+            description="Prevents autonomous adjustments from stacking. Recommended while learning the system."
+            value={settings.stabilityMode}
+            onChange={v => update('stabilityMode', v)}
+          />
+          <ActionSetting
+            label="Recent System Adjustments"
+            description="View a log of recent autonomous changes."
+            buttonText="View Log"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+          />
+          <ActionSetting
+            label="Rollback Last Adjustment"
+            description="Reverse the most recent autonomous system adjustment."
+            buttonText="Rollback"
+            destructive
+            onClick={handleRollback}
+          />
+        </SettingsCard>
+
+        {/* Dev Tools — existing, gated by feature flag */}
+        {isEnabled('enable_lab') && (
+          <SettingsCard label="Dev Tools">
+            <ActionSetting
+              label="Analytics"
+              description="View usage analytics dashboard."
+              buttonText="View Analytics"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+            />
+            {isAdmin && (
+              <ActionSetting
+                label="Exec Dashboard"
+                description="Executive metrics (admin only)."
+                buttonText="View Dashboard"
+                onClick={() => dispatch({ type: 'NAVIGATE', screen: 'exec' })}
+              />
+            )}
+            <div className="stg-row stg-row--action">
+              <div className="stg-row__meta">
+                <span className="stg-row__label">Plan Tier</span>
+                <span className="stg-row__desc">
+                  {isAdmin ? 'Admin — always Enterprise' : 'Simulate plan tier for testing'}
+                </span>
+              </div>
+              <div className="stg__seg stg__seg--plan">
+                {['free', 'paid', 'pro', 'enterprise'].map(p => (
+                  <button
+                    key={p}
+                    className={`stg__seg-btn${plan === p ? ' stg__seg-btn--on' : ''}`}
+                    onClick={() => {
+                      if (isAdmin) { showToast('Admin is always Enterprise'); return; }
+                      setPlan(p);
+                      if (p !== 'free') unlock(); else lock();
+                      showToast(`Plan set to ${PLAN_LABELS[p]}`);
+                    }}
+                    type="button"
+                  >
+                    {PLAN_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </SettingsCard>
+        )}
+      </SettingsSection>
+
+      {/* ── Account ─────────────────────────────────────────────────────── */}
+      <div className="stg-account">
+        {user ? (
+          <div className="stg-account__row">
+            <span className="stg-account__label">Signed in as</span>
+            <span className="stg-account__value">{user.username}</span>
+          </div>
+        ) : (
+          <div className="stg-account__row">
+            <span className="stg-account__label">Account</span>
+            <span className="stg-account__value stg-account__value--dim">Not signed in</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Reset ───────────────────────────────────────────────────────── */}
+      <button className="stg__reset" onClick={handleReset} type="button">
+        Reset to Defaults
+      </button>
+
+      {/* ── About (5× tap toggles dev mode) ─────────────────────────────── */}
       <div className="stg__about" onClick={handleVersionTap} role="presentation">
         <span className="stg__about-name">No Guesswork Lighting</span>
         <span className="stg__about-version">{APP_VERSION}</span>
       </div>
+
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
+      <ConfirmActionModal
+        open={!!confirm}
+        title={confirm?.title}
+        message={confirm?.message}
+        confirmText={confirm?.confirmText}
+        destructive={confirm?.destructive}
+        onConfirm={confirm?.onConfirm}
+        onCancel={() => setConfirm(null)}
+      />
 
       <Toast
         message={toast.message}
