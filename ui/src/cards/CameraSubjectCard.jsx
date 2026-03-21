@@ -1,10 +1,27 @@
+import CardIcon from '../components/CardIcon';
+import useSettings from '../hooks/useSettings';
+import { formatDistance } from '../utils/units';
+
+/** Convert a pre-formatted distance string (e.g. "7 ft") to metric if needed. */
+function convertDist(val, units) {
+  if (!val || units !== 'metric') return val;
+  // Try to extract a numeric feet value and convert
+  const match = val.match(/^([\d.]+)\s*(?:ft|feet|')/i);
+  if (match) {
+    const m = parseFloat(match[1]) * 0.3048;
+    return formatDistance(m, 'metric');
+  }
+  return val;
+}
+
 export default function CameraSubjectCard({ camera, subject, background }) {
+  const { units } = useSettings();
   if (!camera) return null;
 
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\u{1F4F7}'}</span>
+        <CardIcon name="camera" />
         <span>Camera & Subject</span>
       </div>
 
@@ -51,7 +68,7 @@ export default function CameraSubjectCard({ camera, subject, background }) {
         {camera.distanceFromSubject && (
           <div className="setup-light__row">
             <span className="setup-light__key">Distance</span>
-            <span className="setup-light__val">{camera.distanceFromSubject}</span>
+            <span className="setup-light__val">{convertDist(camera.distanceFromSubject, units)}</span>
           </div>
         )}
 
@@ -65,7 +82,7 @@ export default function CameraSubjectCard({ camera, subject, background }) {
           {subject.distanceFromBackground && (
             <div className="setup-light__row">
               <span className="setup-light__key">Distance from Background</span>
-              <span className="setup-light__val">{subject.distanceFromBackground}</span>
+              <span className="setup-light__val">{convertDist(subject.distanceFromBackground, units)}</span>
             </div>
           )}
           {subject.poseNote && (
@@ -84,7 +101,7 @@ export default function CameraSubjectCard({ camera, subject, background }) {
           {background.lightDistance && (
             <div className="setup-light__row">
               <span className="setup-light__key">Light Distance</span>
-              <span className="setup-light__val">{background.lightDistance}</span>
+              <span className="setup-light__val">{convertDist(background.lightDistance, units)}</span>
             </div>
           )}
           {background.intendedLook && (

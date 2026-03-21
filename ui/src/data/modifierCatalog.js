@@ -37,41 +37,41 @@ export const MODIFIER_CATALOG = [
     moodAffinity: { beauty: 0.7, cinematic: 0.4, corporate: 0.7, editorial: 0.3, natural: 0.8, high_key: 0.8, low_key: 0.3 } },
 
   // ── Beauty Dishes — Profoto ──
-  { value: 'profoto_softlight',     label: 'Profoto Softlight 20.5"',     category: 'beauty_dishes', size: '20.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'profoto_softlight',     label: 'Softlight 20.5"',     category: 'beauty_dishes', vendor: 'Profoto',      size: '20.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.6, editorial: 0.7, natural: 0.4, high_key: 0.5, low_key: 0.5 } },
-  { value: 'profoto_ocf_beauty',    label: 'Profoto OCF Beauty 24"',      category: 'beauty_dishes', size: '24"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'profoto_ocf_beauty',    label: 'OCF Beauty 24"',      category: 'beauty_dishes', vendor: 'Profoto',      size: '24"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.6, editorial: 0.6, natural: 0.5, high_key: 0.5, low_key: 0.5 } },
   // ── Beauty Dishes — Broncolor ──
-  { value: 'broncolor_beauty',      label: 'Broncolor Beauty Dish 20"',   category: 'beauty_dishes', size: '20"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'broncolor_beauty',      label: 'Beauty Dish 20"',     category: 'beauty_dishes', vendor: 'Broncolor',    size: '20"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.6, editorial: 0.7, natural: 0.4, high_key: 0.5, low_key: 0.5 } },
-  { value: 'broncolor_beautybox',   label: 'Broncolor Beautybox 65',      category: 'beauty_dishes', size: '25.6"', shape: 'round', qualityTag: 'soft',   sizeClass: 'medium',
+  { value: 'broncolor_beautybox',   label: 'Beautybox 65',        category: 'beauty_dishes', vendor: 'Broncolor',    size: '25.6"', shape: 'round', qualityTag: 'soft',   sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.6, corporate: 0.7, editorial: 0.5, natural: 0.5, high_key: 0.6, low_key: 0.4 } },
   // ── Beauty Dishes — Paul C. Buff ──
-  { value: 'buff_beauty_22',        label: 'Paul C. Buff 22"',            category: 'beauty_dishes', size: '22"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'buff_beauty_22',        label: 'Beauty Dish 22"',     category: 'beauty_dishes', vendor: 'Paul C. Buff', size: '22"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.5, editorial: 0.6, natural: 0.3, high_key: 0.4, low_key: 0.5 } },
   // ── Beauty Dishes — Godox ──
-  { value: 'godox_beauty_16',       label: 'Godox BDR 16.5"',            category: 'beauty_dishes', size: '16.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'small',
+  { value: 'godox_beauty_16',       label: 'BDR 16.5"',           category: 'beauty_dishes', vendor: 'Godox',        size: '16.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'small',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.5, editorial: 0.7, natural: 0.3, high_key: 0.4, low_key: 0.5 } },
-  { value: 'godox_beauty_21',       label: 'Godox BDR Pro 21"',          category: 'beauty_dishes', size: '21"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'godox_beauty_21',       label: 'BDR Pro 21"',         category: 'beauty_dishes', vendor: 'Godox',        size: '21"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.5, editorial: 0.6, natural: 0.4, high_key: 0.5, low_key: 0.5 } },
   // ── Beauty Dishes — Westcott ──
-  { value: 'westcott_beauty_24',    label: 'Westcott Switch 24"',         category: 'beauty_dishes', size: '24"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'westcott_beauty_24',    label: 'Switch 24"',          category: 'beauty_dishes', vendor: 'Westcott',     size: '24"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.6, corporate: 0.6, editorial: 0.5, natural: 0.5, high_key: 0.5, low_key: 0.4 } },
-  { value: 'westcott_beauty_36',    label: 'Westcott Switch 36"',         category: 'beauty_dishes', size: '36"',   shape: 'round', qualityTag: 'soft',   sizeClass: 'large',
+  { value: 'westcott_beauty_36',    label: 'Switch 36"',          category: 'beauty_dishes', vendor: 'Westcott',     size: '36"',   shape: 'round', qualityTag: 'soft',   sizeClass: 'large',
     moodAffinity: { beauty: 0.8, cinematic: 0.5, corporate: 0.6, editorial: 0.4, natural: 0.6, high_key: 0.6, low_key: 0.3 } },
   // ── Beauty Dishes — Elinchrom ──
-  { value: 'elinchrom_softlite_17', label: 'Elinchrom Softlite 17"',     category: 'beauty_dishes', size: '17"',   shape: 'round', qualityTag: 'medium', sizeClass: 'small',
+  { value: 'elinchrom_softlite_17', label: 'Softlite 17"',        category: 'beauty_dishes', vendor: 'Elinchrom',    size: '17"',   shape: 'round', qualityTag: 'medium', sizeClass: 'small',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.5, editorial: 0.7, natural: 0.3, high_key: 0.4, low_key: 0.5 } },
-  { value: 'elinchrom_softlite_27', label: 'Elinchrom Softlite 27"',     category: 'beauty_dishes', size: '27"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'elinchrom_softlite_27', label: 'Softlite 27"',        category: 'beauty_dishes', vendor: 'Elinchrom',    size: '27"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.6, editorial: 0.6, natural: 0.4, high_key: 0.5, low_key: 0.5 } },
   // ── Beauty Dishes — Mola (deep parabolic) ──
-  { value: 'mola_demi',             label: 'Mola Demi 22"',              category: 'beauty_dishes', size: '22"',   shape: 'round', qualityTag: 'medium', sizeClass: 'small',
+  { value: 'mola_demi',             label: 'Demi 22"',            category: 'beauty_dishes', vendor: 'Mola',         size: '22"',   shape: 'round', qualityTag: 'medium', sizeClass: 'small',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.5, editorial: 0.8, natural: 0.3, high_key: 0.4, low_key: 0.6 } },
-  { value: 'mola_setti',            label: 'Mola Setti 28"',             category: 'beauty_dishes', size: '28"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'mola_setti',            label: 'Setti 28"',           category: 'beauty_dishes', vendor: 'Mola',         size: '28"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.8, corporate: 0.5, editorial: 0.8, natural: 0.4, high_key: 0.5, low_key: 0.6 } },
-  { value: 'mola_euro',             label: 'Mola Euro 33.5"',            category: 'beauty_dishes', size: '33.5"', shape: 'round', qualityTag: 'soft',   sizeClass: 'medium',
+  { value: 'mola_euro',             label: 'Euro 33.5"',          category: 'beauty_dishes', vendor: 'Mola',         size: '33.5"', shape: 'round', qualityTag: 'soft',   sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.6, editorial: 0.7, natural: 0.5, high_key: 0.6, low_key: 0.5 } },
-  { value: 'mola_mantti',           label: 'Mola Mantti 40"',            category: 'beauty_dishes', size: '40"',   shape: 'round', qualityTag: 'soft',   sizeClass: 'large',
+  { value: 'mola_mantti',           label: 'Mantti 40"',          category: 'beauty_dishes', vendor: 'Mola',         size: '40"',   shape: 'round', qualityTag: 'soft',   sizeClass: 'large',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.7, editorial: 0.6, natural: 0.6, high_key: 0.7, low_key: 0.4 } },
 
   // ── Control ──

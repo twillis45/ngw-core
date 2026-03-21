@@ -25,8 +25,8 @@
     "pose_highlight_interference": true,
     "occluded_regions": [
       "waist_right",
-      "torso_left",
-      "leg_crossing"
+      "leg_crossing",
+      "torso_left"
     ],
     "self_shadow_regions": [
       "waist_right",
@@ -91,7 +91,8 @@
     "catchlight_shape": "unknown",
     "catchlight_position": "unknown",
     "catchlight_size_ratio": 0.493,
-    "catchlight_intensity": 0.988
+    "catchlight_intensity": 0.988,
+    "catchlight_circularity": 0.2
   },
   "catchlight_topology": {
     "ok": true,
@@ -280,17 +281,24 @@
   },
   "light_structure": {
     "ok": true,
-    "nose_shadow_shape": "minimal",
+    "nose_shadow_shape": "minimal_centered",
     "nose_shadow_length_ratio": 0.149,
-    "nose_shadow_angle_deg": 92.3,
+    "nose_shadow_angle_deg": 215.9,
     "triangle_detected": false,
     "triangle_cheek": null,
     "triangle_completeness": 0.0,
-    "pattern_name": "broad",
+    "pattern_name": "butterfly",
     "confidence": 0.75,
     "notes": [
-      "high symmetry with minimal shadow \u2192 broad/flat lighting"
-    ]
+      "very low shadow density (0.000) + symmetric \u2192 on-axis/butterfly"
+    ],
+    "nose_shadow_centroid_angle_deg": 215.9,
+    "nose_shadow_centroid_distance": 0.649,
+    "left_right_asymmetry": 0.0,
+    "top_bottom_ratio": 0.0,
+    "shadow_density": 0.0,
+    "triangle_isolation": 0.0,
+    "highlight_width_ratio": 0.493
   },
   "background": {
     "ok": true,
@@ -850,14 +858,14 @@
     "primary_reconstruction": {
       "dominant_source_direction_deg": -98.7,
       "dominant_source_height_class": "eye_level",
-      "dominant_source_height_deg_estimate": null,
-      "dominant_source_distance_class": "close",
+      "dominant_source_height_deg_estimate": 2.3,
+      "dominant_source_distance_class": "near",
       "dominant_source_distance_ft": 2.0,
       "source_size_class": "small",
       "modifier_family_candidates": [
         {
           "type": "reflector_hard",
-          "confidence": 0.6
+          "confidence": 0.5
         },
         {
           "type": "bare_bulb",
@@ -865,7 +873,7 @@
         },
         {
           "type": "unknown",
-          "confidence": 0.1
+          "confidence": 0.2
         }
       ],
       "environment": "studio",
@@ -902,14 +910,14 @@
       },
       "reconstruction_confidence": 0.62,
       "ambiguity_notes": [
-        "No catchlights detected; eye highlight/angle ambiguous.",
-        "Pose and self-shadow interference reduce certainty of light direction and height.",
-        "Environment pass suggests window light but with low confidence; studio background and controlled bounce suggest studio.",
-        "Modifier shape not directly detected; small source inferred from penumbra and highlight."
+        "No catchlights detected; catchlight geometry unavailable.",
+        "Pose and self-shadow interference reduce highlight/shadow certainty.",
+        "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
+        "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
       ],
       "contradiction_notes": [
-        "Environment pass classifies as window_light (low confidence) but background and bounce evidence support studio.",
-        "No direct modifier evidence; small source inferred from penumbra and highlight."
+        "Environment_pass suggests window_light (low confidence), but other signals (background, bounce, CCT) favor studio.",
+        "Occlusion_pass detects foliage pattern, but with low confidence (0.5) and no supporting reflection evidence."
       ]
     },
     "candidates": [
@@ -918,13 +926,13 @@
         "key_light_angle_deg": -98.7,
         "key_light_height_class": "eye_level",
         "key_light_height_deg_estimate": 2.3,
-        "key_light_distance_class": "close",
+        "key_light_distance_class": "near",
         "key_light_distance_ft_estimate": 2.0,
         "source_size_class": "small",
         "modifier_family_candidates": [
           {
             "type": "reflector_hard",
-            "confidence": 0.6
+            "confidence": 0.5
           },
           {
             "type": "bare_bulb",
@@ -932,7 +940,7 @@
           },
           {
             "type": "unknown",
-            "confidence": 0.1
+            "confidence": 0.2
           }
         ],
         "environment": "studio",
@@ -969,10 +977,10 @@
         },
         "confidence_score": 0.62,
         "ambiguity_notes": [
-          "No catchlights detected; eye highlight/angle ambiguous.",
-          "Pose and self-shadow interference reduce certainty of light direction and height.",
-          "Environment pass suggests window light but with low confidence; studio background and controlled bounce suggest studio.",
-          "Modifier shape not directly detected; small source inferred from penumbra and highlight."
+          "No catchlights detected; catchlight geometry unavailable.",
+          "Pose and self-shadow interference reduce highlight/shadow certainty.",
+          "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
+          "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
         ]
       },
       {
@@ -980,21 +988,21 @@
         "key_light_angle_deg": 92.3,
         "key_light_height_class": "eye_level",
         "key_light_height_deg_estimate": 2.3,
-        "key_light_distance_class": "close",
+        "key_light_distance_class": "near",
         "key_light_distance_ft_estimate": 2.0,
         "source_size_class": "small",
         "modifier_family_candidates": [
           {
             "type": "bare_bulb",
-            "confidence": 0.5
-          },
-          {
-            "type": "reflector_hard",
             "confidence": 0.4
           },
           {
+            "type": "reflector_hard",
+            "confidence": 0.3
+          },
+          {
             "type": "unknown",
-            "confidence": 0.1
+            "confidence": 0.3
           }
         ],
         "environment": "window",
@@ -1031,104 +1039,24 @@
         },
         "confidence_score": 0.48,
         "ambiguity_notes": [
-          "Shadow and LDF direction differ by ~190\u00b0, possible pose interference.",
-          "Environment pass suggests window light but with low confidence.",
-          "No direct modifier evidence; small source inferred from penumbra and highlight."
+          "Environment_pass weakly suggests window light (conf=0.15), but supporting evidence is limited.",
+          "Shadow and LDF direction differ by ~6\u00b0, possibly due to pose interference.",
+          "No catchlights; modifier shape unknown."
         ]
       }
     ],
     "ok": true,
-    "notes": []
-  },
-  "pattern_matches": {
-    "pattern_matches": [
-      {
-        "pattern": "split",
-        "name": "Split Lighting",
-        "confidence": 0.725,
-        "category": "dramatic",
-        "description": "Key at 90 degrees, illuminating exactly half the face.",
-        "use_cases": [
-          "dramatic_portrait",
-          "editorial",
-          "film_noir"
-        ],
-        "example_photographers": [
-          "Greg Heisler",
-          "Dan Winters"
-        ]
-      },
-      {
-        "pattern": "window_negative_fill",
-        "name": "Window Negative Fill",
-        "confidence": 0.701,
-        "category": "natural",
-        "description": "Window light with black v-flat on shadow side for deeper contrast and editorial mood.",
-        "use_cases": [
-          "portrait",
-          "editorial",
-          "fine_art",
-          "moody_lifestyle"
-        ],
-        "example_photographers": [
-          "Sue Bryce",
-          "Jerry Ghionis"
-        ]
-      },
-      {
-        "pattern": "window_portrait",
-        "name": "Window Light Portrait",
-        "confidence": 0.685,
-        "category": "natural",
-        "description": "Natural window light as key, soft directional quality with gentle falloff.",
-        "use_cases": [
-          "portrait",
-          "lifestyle",
-          "boudoir",
-          "editorial"
-        ],
-        "example_photographers": [
-          "Sue Bryce",
-          "Emily Soto"
-        ]
-      },
-      {
-        "pattern": "low_key",
-        "name": "Low Key Lighting",
-        "confidence": 0.574,
-        "category": "dramatic",
-        "description": "Dramatic, high-contrast lighting with predominantly dark tones.",
-        "use_cases": [
-          "dramatic_portrait",
-          "editorial",
-          "film_noir"
-        ],
-        "example_photographers": [
-          "Yousuf Karsh",
-          "Albert Watson"
-        ]
-      },
-      {
-        "pattern": "strip_dramatic",
-        "name": "Strip Light Dramatic",
-        "confidence": 0.503,
-        "category": "editorial",
-        "description": "Narrow stripbox creating thin band of light, often used as accent or dramatic key.",
-        "use_cases": [
-          "editorial",
-          "fashion",
-          "dramatic_portrait",
-          "fitness"
-        ],
-        "example_photographers": [
-          "Peter Lindbergh",
-          "Albert Watson"
-        ]
-      }
-    ],
-    "top_pattern": "split",
-    "top_confidence": 0.725,
-    "category": "dramatic"
+    "notes": [],
+    "needs_review": false,
+    "needs_review_reasons": [],
+    "validation_scores": null,
+    "contradiction_notes": [],
+    "ambiguity_notes": [],
+    "signal_reliability_summary": null,
+    "solver_trace_summary": null,
+    "master_profile": null,
+    "master_profile_confidence": 0.0,
+    "style_family": null
   },
   "reference_matches": {
     "closest_references": [
@@ -1170,107 +1098,6 @@
     ],
     "top_reference": "bryce_window_negfill_001",
     "top_similarity": 0.634
-  },
-  "lighting_knowledge": {
-    "ok": true,
-    "pattern_matches": [
-      {
-        "pattern": "split",
-        "name": "Split Lighting",
-        "confidence": 0.725,
-        "category": "dramatic",
-        "description": "Key at 90 degrees, illuminating exactly half the face.",
-        "use_cases": [
-          "dramatic_portrait",
-          "editorial",
-          "film_noir"
-        ],
-        "example_photographers": [
-          "Greg Heisler",
-          "Dan Winters"
-        ]
-      },
-      {
-        "pattern": "window_negative_fill",
-        "name": "Window Negative Fill",
-        "confidence": 0.701,
-        "category": "natural",
-        "description": "Window light with black v-flat on shadow side for deeper contrast and editorial mood.",
-        "use_cases": [
-          "portrait",
-          "editorial",
-          "fine_art",
-          "moody_lifestyle"
-        ],
-        "example_photographers": [
-          "Sue Bryce",
-          "Jerry Ghionis"
-        ]
-      },
-      {
-        "pattern": "window_portrait",
-        "name": "Window Light Portrait",
-        "confidence": 0.685,
-        "category": "natural",
-        "description": "Natural window light as key, soft directional quality with gentle falloff.",
-        "use_cases": [
-          "portrait",
-          "lifestyle",
-          "boudoir",
-          "editorial"
-        ],
-        "example_photographers": [
-          "Sue Bryce",
-          "Emily Soto"
-        ]
-      },
-      {
-        "pattern": "low_key",
-        "name": "Low Key Lighting",
-        "confidence": 0.574,
-        "category": "dramatic",
-        "description": "Dramatic, high-contrast lighting with predominantly dark tones.",
-        "use_cases": [
-          "dramatic_portrait",
-          "editorial",
-          "film_noir"
-        ],
-        "example_photographers": [
-          "Yousuf Karsh",
-          "Albert Watson"
-        ]
-      },
-      {
-        "pattern": "strip_dramatic",
-        "name": "Strip Light Dramatic",
-        "confidence": 0.503,
-        "category": "editorial",
-        "description": "Narrow stripbox creating thin band of light, often used as accent or dramatic key.",
-        "use_cases": [
-          "editorial",
-          "fashion",
-          "dramatic_portrait",
-          "fitness"
-        ],
-        "example_photographers": [
-          "Peter Lindbergh",
-          "Albert Watson"
-        ]
-      }
-    ],
-    "top_pattern": "split",
-    "top_pattern_confidence": 0.725,
-    "master_reference": [
-      "Greg Heisler",
-      "Dan Winters",
-      "Sue Bryce",
-      "Jerry Ghionis",
-      "Emily Soto"
-    ],
-    "notes": [
-      "Top pattern: split (0.72)",
-      "Close second: window_negative_fill (0.70)"
-    ]
   },
   "validation": {
     "ok": true,

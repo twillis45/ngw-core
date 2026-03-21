@@ -47,7 +47,7 @@
     <h1>Create your account</h1>
     <p>Start analyzing lighting in seconds</p>
 
-    <form action="/api/auth/register" method="POST">
+    <form id="signupForm">
       <div class="auth__field">
         <label for="name">Name</label>
         <input type="text" id="name" name="name" placeholder="Your name" required autocomplete="name"/>
@@ -58,9 +58,10 @@
       </div>
       <div class="auth__field">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Create a password" required autocomplete="new-password" minlength="8"/>
+        <input type="password" id="password" name="password" placeholder="Create a password" required autocomplete="new-password" minlength="6"/>
       </div>
-      <button type="submit" class="btn btn--primary">Create Account</button>
+      <div id="signupError" style="color:#ff6b6b;font-size:.875rem;margin-bottom:12px;display:none"></div>
+      <button type="submit" class="btn btn--primary" id="signupBtn">Create Account</button>
     </form>
 
     <div class="auth__footer">
@@ -70,5 +71,36 @@
 </main>
 
 <script src="/www/js/marketing.js"></script>
+<script>
+document.getElementById('signupForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  var btn = document.getElementById('signupBtn');
+  var errEl = document.getElementById('signupError');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Creating account...';
+  try {
+    var res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        username: document.getElementById('name').value,
+        password: document.getElementById('password').value
+      })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Registration failed');
+    localStorage.setItem('ngw_auth_token', data.token);
+    localStorage.setItem('ngw_auth_user', JSON.stringify(data.user));
+    window.location.href = '/ui';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Create Account';
+  }
+});
+</script>
 </body>
 </html>

@@ -270,6 +270,13 @@ class TONAL:
     HCG_TONAL_RANGE_MIN = 230     # luminance range > this → high-contrast candidate
     HCG_SATURATION_MAX = 60       # saturation < this → high-contrast (not vibrant)
 
+    # ── Crushed shadows / clipped highlights (colour-graded images) ──
+    CRUSH_P5_DELTA = 3            # p5 - p1 < this → shadows crushed
+    CRUSH_P1_MAX = 15             # p1 must be < this for shadow crush
+    CLIP_P99_DELTA = 3            # p99 - p95 < this → highlights clipped
+    CLIP_P99_MIN = 240            # p99 must be > this for highlight clip
+    CRUSH_RANGE_MIN = 200         # p99 - p1 > this → wide-range crush grade
+
     # ── Desaturated processing ──
     DESATURATED_SAT = 30          # mean saturation < this (not B&W) → desaturated
 

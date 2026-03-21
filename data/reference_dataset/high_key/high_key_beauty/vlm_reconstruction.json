@@ -1,0 +1,129 @@
+{
+  "primary_reconstruction": {
+    "dominant_source_direction_deg": -53.4,
+    "dominant_source_height_class": "high",
+    "dominant_source_height_deg_estimate": 49.8,
+    "dominant_source_distance_class": "far",
+    "dominant_source_distance_ft": 14.0,
+    "source_size_class": "medium",
+    "modifier_family_candidates": [
+      {
+        "type": "unknown",
+        "confidence": 0.0
+      }
+    ],
+    "environment": "studio",
+    "likely_light_count": 1,
+    "roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15
+      },
+      "negative_fill": {
+        "present": true,
+        "confidence": 0.45
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 1.0
+      }
+    },
+    "reconstruction_confidence": 0.56,
+    "ambiguity_notes": [
+      "No catchlights detected; catchlight geometry unavailable.",
+      "Modifier family unknown due to lack of catchlight and reflection evidence.",
+      "Pose and occlusion introduce moderate uncertainty.",
+      "Environment confidence is moderate (0.3).",
+      "Bounce fill is strong but not a direct fill source."
+    ],
+    "contradiction_notes": [
+      "Shadow and highlight axes are not perfectly aligned.",
+      "Occlusion foliage pattern detected, but environment classified as studio with low confidence."
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "candidate_1",
+      "key_light_angle_deg": -53.4,
+      "key_light_height_class": "high",
+      "key_light_height_deg_estimate": 49.8,
+      "key_light_distance_class": "far",
+      "key_light_distance_ft_estimate": 14.0,
+      "source_size_class": "medium",
+      "modifier_family_candidates": [
+        {
+          "type": "unknown",
+          "confidence": 0.0
+        }
+      ],
+      "environment": "studio",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": true,
+          "confidence": 0.45
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 1.0
+        }
+      },
+      "confidence_score": 0.56,
+      "ambiguity_notes": [
+        "No catchlights detected; catchlight geometry unavailable.",
+        "Modifier family unknown due to lack of catchlight and reflection evidence.",
+        "Pose and occlusion introduce moderate uncertainty.",
+        "Environment confidence is moderate (0.3).",
+        "Bounce fill is strong but not a direct fill source."
+      ]
+    }
+  ],
+  "ok": true,
+  "notes": [],
+  "needs_review": false,
+  "needs_review_reasons": [],
+  "validation_scores": null,
+  "contradiction_notes": [],
+  "ambiguity_notes": [],
+  "signal_reliability_summary": null,
+  "solver_trace_summary": null,
+  "master_profile": null,
+  "master_profile_confidence": 0.0,
+  "style_family": null
+}

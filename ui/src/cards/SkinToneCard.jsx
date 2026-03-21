@@ -1,3 +1,5 @@
+import CardIcon from '../components/CardIcon';
+
 export default function SkinToneCard({ data }) {
   if (!data) return null;
 
@@ -6,7 +8,7 @@ export default function SkinToneCard({ data }) {
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\u{1F3A8}'}</span>
+        <CardIcon name="palette" />
         <span>Skin Tone Adjustments</span>
         <span className="skin-tone-badge">{toneLabels[data.skinTone] || data.skinTone}</span>
       </div>

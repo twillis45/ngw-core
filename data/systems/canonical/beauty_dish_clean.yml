@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/8-f/11
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Stop down for razor-sharp skin texture that beauty retouching demands
+    - Meter the specular highlight on the forehead to avoid blown skin
+
 lights:
   - role: key
     modifier: beauty_dish

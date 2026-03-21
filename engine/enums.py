@@ -88,6 +88,7 @@ class LightingPattern(_LabelMixin, str, Enum):
     REMBRANDT = "rembrandt"
     SPLIT = "split"
     BUTTERFLY = "butterfly"
+    TRIANGLE = "triangle"
     BROAD = "broad"
     SHORT = "short"
     RIM_ONLY = "rim_only"
@@ -113,6 +114,7 @@ class LightingPattern(_LabelMixin, str, Enum):
 
 _register_labels(LightingPattern, {
 "clamshell": "Clamshell",
+"triangle": "Triangle (Hurley)",
 "butterfly": "Butterfly / Paramount",
 "rim_only": "Rim / Edge Light",
 "high_key": "High Key",

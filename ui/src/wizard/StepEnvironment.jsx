@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import ChipSelect from '../components/ChipSelect';
-import { ENVIRONMENTS } from '../data/environments';
+import { ENVIRONMENTS, NON_STUDIO_ENVIRONMENTS } from '../data/environments';
 import { ROOM_PRESETS } from '../data/roomPresets';
 import CameraMeasure from '../components/CameraMeasure';
 
@@ -12,13 +12,23 @@ const INDOOR_CEILING = [
   { value: '12_plus', label: '12+ ft' },
 ];
 
-const OUTDOOR_ENVIRONMENTS = ['outdoors', 'on_location'];
+/** Sensible ceiling defaults per environment so users can click through faster. */
+const DEFAULT_CEILING = {
+  studio_small:  'under_8',
+  home_studio:   '8_9',
+  studio_medium: '10_12',
+  studio_large:  '12_plus',
+  // legacy
+  studio:        '10_12',
+  office:        '8_9',
+  small_room:    'under_8',
+};
 
 export default function StepEnvironment() {
   const { environment, ceilingHeight, roomDimensions } = useAppState();
   const dispatch = useDispatch();
 
-  const isOutdoor = OUTDOOR_ENVIRONMENTS.includes(environment);
+  const isOutdoor = NON_STUDIO_ENVIRONMENTS.includes(environment);
 
   const [showRoomDims, setShowRoomDims] = useState(!!roomDimensions);
   const [lengthFt, setLengthFt] = useState(roomDimensions?.lengthFt || '');
@@ -32,6 +42,13 @@ export default function StepEnvironment() {
       dispatch({ type: 'SET_CEILING_HEIGHT', ceilingHeight: '12_plus' });
     }
   }, [isOutdoor, ceilingHeight, dispatch]);
+
+  // Auto-default ceiling height for indoor environments (user can still change it)
+  useEffect(() => {
+    if (environment && !isOutdoor && !ceilingHeight && DEFAULT_CEILING[environment]) {
+      dispatch({ type: 'SET_CEILING_HEIGHT', ceilingHeight: DEFAULT_CEILING[environment] });
+    }
+  }, [environment, isOutdoor, ceilingHeight, dispatch]);
 
   // Save exact room dimensions when all three are valid
   useEffect(() => {

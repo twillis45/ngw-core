@@ -26,6 +26,15 @@ camera:
   lens: 85-200mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/5.6-f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Meter the rim highlight on the shoulder — it should be the brightest element
+    - Use a lens hood to prevent flare from the rear strip lights
+
 lights:
   - role: key
     modifier: softbox_rect

@@ -46,13 +46,13 @@ class TestPatternFromCatchlights:
 
     def test_single_at_10_rembrandt(self):
         result = _infer_pattern_from_catchlights([_c("left", "10"), _c("right", "10")])
-        assert result["pattern"] == "rembrandt-ish"
+        assert result["pattern"] == "rembrandt"
         assert result["key_position_text"] == "45 off-axis"
         assert result["light_count"] == 1
 
     def test_single_at_11_rembrandt(self):
         result = _infer_pattern_from_catchlights([_c("left", "11")])
-        assert result["pattern"] == "rembrandt-ish"
+        assert result["pattern"] == "rembrandt"
 
     def test_single_at_1_loop(self):
         result = _infer_pattern_from_catchlights([_c("left", "1"), _c("right", "1")])
@@ -70,12 +70,12 @@ class TestPatternFromCatchlights:
 
     def test_single_at_3_split(self):
         result = _infer_pattern_from_catchlights([_c("left", "3"), _c("right", "3")])
-        assert result["pattern"] == "split/short"
+        assert result["pattern"] == "split"
         assert result["key_position_text"] == "90"
 
     def test_single_at_9_split(self):
         result = _infer_pattern_from_catchlights([_c("left", "9")])
-        assert result["pattern"] == "split/short"
+        assert result["pattern"] == "split"
 
     def test_clamshell_both_eyes(self):
         result = _infer_pattern_from_catchlights([
@@ -176,7 +176,7 @@ class TestMergeWithClassification:
     def test_mood_disagrees_with_pattern(self):
         """corporate + split/short → lowered confidence."""
         classification = {"mood": "corporate", "confidence": 0.7}
-        pattern = {"pattern": "split/short", "pattern_confidence": 0.6}
+        pattern = {"pattern": "split", "pattern_confidence": 0.6}
         result = _merge_with_classification(classification, pattern)
         assert result["detected_mood"] == "corporate"
         # Lowered: 0.4 * 0.7 + 0.2 * 0.6 = 0.40
@@ -282,7 +282,7 @@ class TestInferLightingFromVision:
             "skin_tone": {"ok": False},
         }
         result = infer_lighting_from_vision(vision_data, classification={"mood": "cinematic", "confidence": 0.7})
-        assert result.pattern == "rembrandt-ish"
+        assert result.pattern == "rembrandt"
         assert result.modifier_family == "beauty_dish"
         assert result.detected_mood == "cinematic"
         assert result.detected_skin_tone is None
@@ -334,7 +334,7 @@ class TestMatchCatchlightsToDiagram:
             _c("left", "10"),
             _c("right", "10"),
         ]
-        result = match_catchlights_to_diagram(lights, catchlights, "rembrandt-ish")
+        result = match_catchlights_to_diagram(lights, catchlights, "rembrandt")
         assert len(result) == 1
         assert len(result[0]["detectedFrom"]) == 2  # both eyes matched
         assert result[0]["detectedFrom"][0]["position"] == "10 o'clock"
@@ -381,7 +381,7 @@ class TestMatchCatchlightsToDiagram:
     def test_no_catchlights_empty_matches(self):
         """No catchlights → all detectedFrom lists empty."""
         lights = [{"role": "key", "angle_deg": 45.0, "modifier": "grid"}]
-        result = match_catchlights_to_diagram(lights, [], "rembrandt-ish")
+        result = match_catchlights_to_diagram(lights, [], "rembrandt")
         assert len(result) == 1
         assert result[0]["detectedFrom"] == []
 
@@ -396,13 +396,13 @@ class TestMatchCatchlightsToDiagram:
         """9 o'clock catchlight → split key."""
         lights = [{"role": "key", "angle_deg": 90.0, "modifier": "grid"}]
         catchlights = [_c("left", "9")]
-        result = match_catchlights_to_diagram(lights, catchlights, "split/short")
+        result = match_catchlights_to_diagram(lights, catchlights, "split")
         assert len(result[0]["detectedFrom"]) == 1
 
     def test_original_light_data_preserved(self):
         """Matching should preserve all original light fields."""
         lights = [{"role": "key", "angle_deg": 45.0, "modifier": "beauty_dish", "extra": "value"}]
-        result = match_catchlights_to_diagram(lights, [], "rembrandt-ish")
+        result = match_catchlights_to_diagram(lights, [], "rembrandt")
         assert result[0]["angle_deg"] == 45.0
         assert result[0]["modifier"] == "beauty_dish"
         assert result[0]["extra"] == "value"
@@ -436,7 +436,7 @@ class TestDescribeCatchlights:
                 "lightCount": 1,
             },
         }
-        inf = LightingInference(pattern="rembrandt-ish", pattern_confidence=0.7)
+        inf = LightingInference(pattern="rembrandt", pattern_confidence=0.7)
         result = describe_catchlights(data, inf)
         assert "One" in result["summary"] or "one" in result["summary"]
         assert "round" in result["summary"]
@@ -577,7 +577,7 @@ class TestDescribeBackground:
 class TestDescribePattern:
     def test_known_pattern(self):
         inf = LightingInference(
-            pattern="rembrandt-ish",
+            pattern="rembrandt",
             pattern_confidence=0.7,
             light_count=1,
             key_position_text="45 off-axis",
@@ -587,7 +587,7 @@ class TestDescribePattern:
             mood_confidence=0.6,
         )
         result = describe_pattern(inf)
-        assert result["name"] == "rembrandt-ish"
+        assert result["name"] == "rembrandt"
         assert "Rembrandt" in result["description"]
         assert result["confidenceLabel"] == "high confidence"
         assert result["lightCount"] == 1
@@ -608,7 +608,7 @@ class TestDescribePattern:
         assert result["confidenceLabel"] == "moderate confidence"
 
     def test_all_patterns_have_descriptions(self):
-        for pat in ["triangle", "clamshell", "rembrandt-ish", "loop", "split/short", "unknown"]:
+        for pat in ["triangle", "clamshell", "rembrandt", "loop", "split", "unknown"]:
             inf = LightingInference(pattern=pat)
             result = describe_pattern(inf)
             assert len(result["description"]) > 20, f"No description for pattern: {pat}"
@@ -741,7 +741,7 @@ class TestBuildReferenceDescription:
             "vision": vision_data,
         }
         inference = LightingInference(
-            pattern="rembrandt-ish",
+            pattern="rembrandt",
             pattern_confidence=0.7,
             modifier_family="beauty_dish",
             modifier_confidence=0.5,
@@ -779,7 +779,7 @@ class TestBuildReferenceDescription:
         assert "dark" in result["background"]["summary"].lower()
 
         # Pattern
-        assert result["pattern"]["name"] == "rembrandt-ish"
+        assert result["pattern"]["name"] == "rembrandt"
         assert "Rembrandt" in result["pattern"]["description"]
 
         # Subject

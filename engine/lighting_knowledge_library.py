@@ -1,5 +1,14 @@
 """Lighting Knowledge Library — maps reconstruction output to named lighting patterns.
 
+.. deprecated::
+    This module is no longer called by the production pipeline.
+    The extended pipeline (vision_passes.py) no longer invokes
+    ``lighting_knowledge_library_pass()``.  Authoritative pattern
+    resolution is handled by ``engine.orchestrator.resolve_pattern_candidates()``.
+
+    Retained for backward compatibility with existing tests. Do not add
+    new callers.
+
 Delegates pattern matching to engine/pattern_matcher.py, which uses the
 structured dataset in data/lighting_patterns.json.  This module adds
 physics-consistency adjustments, photographer references, and the

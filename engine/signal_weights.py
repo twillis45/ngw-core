@@ -426,3 +426,115 @@ def filter_by_weight_and_confidence(
         results.append((pass_name, output, effective_weight))
 
     return results
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Solver Feedback Loop
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Multipliers applied per contradiction involving a pass.
+_FEEDBACK_SEVERITY_MULTIPLIERS = {
+    "high": 0.65,
+    "medium": 0.80,
+    "low": 0.92,
+}
+
+# Floor — never reduce a pass weight below this fraction of its base.
+_FEEDBACK_WEIGHT_FLOOR = 0.15
+
+
+def apply_contradiction_feedback(
+    pass_weights: PassWeightProfile,
+    contradiction_report: Any,
+    consensus_result: Any = None,
+) -> PassWeightProfile:
+    """Adjust pass weights based on solver contradiction findings.
+
+    For each contradiction, identify which pass(es) disagree with the
+    consensus on that dimension.  Penalise the dissenting pass by a
+    severity-dependent multiplier.  When no consensus is available to
+    arbitrate, both sides of the contradiction receive a smaller penalty.
+
+    Parameters
+    ----------
+    pass_weights : PassWeightProfile
+        Current weights (mutated in-place and returned).
+    contradiction_report : ContradictionReport
+        Output of ``find_contradictions()``.
+    consensus_result : ConsensusResult or None
+        If available, used to identify which side of each contradiction
+        is the dissenting side.
+
+    Returns
+    -------
+    PassWeightProfile
+        Same object with adjusted weights and added downgrade reasons.
+    """
+    contradictions = getattr(contradiction_report, "contradictions", [])
+    if not contradictions:
+        return pass_weights
+
+    # Build set of dissenting pass names per dimension from consensus.
+    dissenters: Dict[str, set] = {}  # dimension → {pass_name, ...}
+    if consensus_result is not None:
+        dims = getattr(consensus_result, "dimensions", {})
+        for dim_name, dim_consensus in (dims.items() if isinstance(dims, dict) else []):
+            dissenting_votes = getattr(dim_consensus, "dissenting_votes", [])
+            dissenters[dim_name] = {
+                getattr(v, "pass_name", "") for v in dissenting_votes
+            }
+
+    adjustments = 0
+    for contradiction in contradictions:
+        severity = getattr(contradiction, "severity", "low")
+        multiplier = _FEEDBACK_SEVERITY_MULTIPLIERS.get(severity, 0.92)
+        dimension = getattr(contradiction, "dimension", "")
+        pa = getattr(contradiction, "pass_a", "")
+        pb = getattr(contradiction, "pass_b", "")
+        dim_dissenters = dissenters.get(dimension, set())
+
+        # Determine which pass(es) to penalise.
+        if dim_dissenters:
+            # Penalise only the pass(es) that dissented from consensus.
+            targets = []
+            if pa in dim_dissenters:
+                targets.append(pa)
+            if pb in dim_dissenters:
+                targets.append(pb)
+            # If neither is a known dissenter (e.g., both contributed
+            # to a split consensus), apply a softer penalty to both.
+            if not targets:
+                targets = [pa, pb]
+                multiplier = 1.0 - (1.0 - multiplier) * 0.5  # half penalty
+        else:
+            # No consensus data for this dimension — penalise both lightly.
+            targets = [pa, pb]
+            multiplier = 1.0 - (1.0 - multiplier) * 0.5
+
+        for pass_name in targets:
+            sw = pass_weights.weights.get(pass_name)
+            if sw is None:
+                continue
+            old_w = sw.adjusted_weight
+            new_w = max(
+                sw.base_weight * _FEEDBACK_WEIGHT_FLOOR,
+                round(old_w * multiplier, 4),
+            )
+            if new_w < old_w:
+                reason = (
+                    f"contradiction_feedback({severity}) on {dimension}: "
+                    f"{pa} vs {pb} → {pass_name} ×{multiplier:.2f} "
+                    f"(was {old_w:.3f}, now {new_w:.3f})"
+                )
+                sw.adjusted_weight = new_w
+                sw.downgrade_reasons.append(reason)
+                adjustments += 1
+
+    if adjustments:
+        pass_weights.total_downgrades += adjustments
+        pass_weights.notes.append(
+            f"Contradiction feedback: {adjustments} weight adjustment(s) "
+            f"from {len(contradictions)} contradiction(s)"
+        )
+
+    return pass_weights

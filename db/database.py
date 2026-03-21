@@ -131,6 +131,12 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_rule_candidates_status ON rule_candidates(status);
         """)
+    from db.analytics import init_analytics_table
+    init_analytics_table()
+    from db.learning import init_learning_tables
+    init_learning_tables()
+    from db.provenance import init_provenance_table
+    init_provenance_table()
 
 
 # ── User CRUD ──────────────────────────────────────────────

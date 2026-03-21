@@ -104,6 +104,12 @@ def simulate_hypothesis(hypothesis: LightingHypothesis) -> SimulationPrediction:
     # ── Background illumination ──
     pred.predicted_background_illumination = _predict_background(bg, key, hypothesis)
 
+    # ── Contrast ratio (key:fill power) ──
+    pred.predicted_contrast_ratio = _predict_contrast_ratio(fill, key)
+
+    # ── Color temperature ──
+    pred.predicted_color_temp_kelvin = _predict_cct(key, hypothesis)
+
     # ── Confidence ──
     conf_factors = []
     if key_az is not None:
@@ -113,6 +119,8 @@ def simulate_hypothesis(hypothesis: LightingHypothesis) -> SimulationPrediction:
     else:
         conf_factors.append(0.3)
         notes.append("Key modifier unknown — softness prediction unreliable")
+    if fill is not None:
+        conf_factors.append(0.7)
 
     pred.confidence = sum(conf_factors) / max(len(conf_factors), 1)
     pred.notes = notes
@@ -227,3 +235,35 @@ def _predict_background(
         return "gradient"
 
     return "dark"
+
+
+def _predict_contrast_ratio(
+    fill: Optional[LightSource],
+    key: Optional[LightSource],
+) -> Optional[float]:
+    """Predict the key:fill contrast ratio (0.0–1.0 scale).
+
+    0.0 = no fill (maximum contrast), 1.0 = equal fill (flat).
+    """
+    if fill is None or key is None:
+        return None
+    # intensity_relative is fill power relative to key (key=1.0)
+    return max(0.0, min(1.0, fill.intensity_relative))
+
+
+def _predict_cct(
+    key: Optional[LightSource],
+    hyp: LightingHypothesis,
+) -> Optional[int]:
+    """Predict dominant color temperature from key light and environment."""
+    if key and key.color_temp_kelvin:
+        return key.color_temp_kelvin
+
+    env = hyp.environment.lower() if hyp.environment else "unknown"
+    # Environmental defaults
+    _ENV_CCT = {
+        "studio": 5500,
+        "natural": 5600,
+        "outdoor": 5500,
+    }
+    return _ENV_CCT.get(env)

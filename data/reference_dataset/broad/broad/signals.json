@@ -1,0 +1,1247 @@
+{
+  "geometry": {},
+  "pose_solver": {
+    "ok": true,
+    "torso_rotation_deg": 0.0,
+    "head_rotation_deg": -40.0,
+    "shoulder_line_angle_deg": -170.9,
+    "hip_line_angle_deg": -177.7,
+    "chin_pitch": "neutral",
+    "chin_yaw_deg": -8.4,
+    "subject_lean": "none",
+    "arm_occlusion_regions": [
+      "torso_left"
+    ],
+    "leg_occlusion_regions": [
+      "leg_crossing"
+    ],
+    "body_surface_normals_estimate": {
+      "chest_axis_deg": 0.0,
+      "abdomen_axis_deg": 0.0,
+      "face_axis_deg": -32.0
+    },
+    "pose_shadow_interference": true,
+    "pose_highlight_interference": true,
+    "occluded_regions": [
+      "leg_crossing",
+      "torso_left"
+    ],
+    "self_shadow_regions": [
+      "torso_left"
+    ],
+    "pose_complexity_score": 0.592,
+    "pose_confidence_adjustment": "moderate_caution"
+  },
+  "surface_class": {
+    "ok": true,
+    "dominant_surfaces": [
+      {
+        "region": "face",
+        "surface_class": "face_skin",
+        "confidence": 0.5
+      },
+      {
+        "region": "hair",
+        "surface_class": "matte_fabric",
+        "confidence": 0.5
+      },
+      {
+        "region": "body_upper",
+        "surface_class": "matte_fabric",
+        "confidence": 0.5
+      },
+      {
+        "region": "body_lower",
+        "surface_class": "hair",
+        "confidence": 0.65
+      },
+      {
+        "region": "background",
+        "surface_class": "background_paper",
+        "confidence": 0.8
+      }
+    ],
+    "global_surface_bias": "matte_fabric",
+    "surface_complexity_score": 0.4,
+    "surface_confidence_adjustment": "moderate_caution",
+    "reflection_dominant_regions": []
+  },
+  "shadow": {
+    "ok": true,
+    "shadow_vector_deg": 46.2,
+    "shadow_vertical_angle_deg": 43.8,
+    "shadow_softness": 0.392,
+    "shadow_length_ratio": 0.405,
+    "shadow_edge_gradient": 1.0
+  },
+  "highlight": {
+    "ok": true,
+    "highlight_width_ratio": 0.568,
+    "highlight_rolloff_rate": 0.449,
+    "highlight_edge_gradient": 0.139,
+    "highlight_axis_deg": 171.7,
+    "highlight_specularity": 0.674
+  },
+  "catchlight": {
+    "ok": true,
+    "catchlight_count": 0,
+    "catchlight_shape": "unknown",
+    "catchlight_position": "unknown",
+    "catchlight_size_ratio": 0.5,
+    "catchlight_intensity": 0.883,
+    "catchlight_circularity": 0.493
+  },
+  "catchlight_topology": {
+    "ok": true,
+    "catchlight_count": 3,
+    "cluster_geometry": "triangular",
+    "cluster_spread_deg": 130.7,
+    "inter_catchlight_spacing": [
+      129.8,
+      99.5,
+      130.7
+    ],
+    "bilateral_symmetry_score": 0.15,
+    "primary": {
+      "clock_deg": 234.2,
+      "shape": "round",
+      "size_ratio": 0.5,
+      "intensity": 0.874,
+      "eye": "right",
+      "area": 289
+    },
+    "secondary": {
+      "clock_deg": 104.4,
+      "shape": "round",
+      "size_ratio": 0.5,
+      "intensity": 0.869,
+      "eye": "left",
+      "area": 384
+    },
+    "tertiary": {
+      "clock_deg": 333.7,
+      "shape": "round",
+      "size_ratio": 0.028,
+      "intensity": 0.851,
+      "eye": "right",
+      "area": 11
+    },
+    "confidence": 0.8,
+    "notes": []
+  },
+  "highlight_axis_map": {
+    "ok": true,
+    "regions": {
+      "forehead": {
+        "axis_deg": -100.5,
+        "width_ratio": 0.291,
+        "intensity": 0.522
+      },
+      "left_cheek": {
+        "axis_deg": 7.9,
+        "width_ratio": 0.299,
+        "intensity": 0.396
+      },
+      "right_cheek": {
+        "axis_deg": 103.8,
+        "width_ratio": 0.297,
+        "intensity": 0.633
+      },
+      "nose_bridge": {
+        "axis_deg": 91.4,
+        "width_ratio": 0.282,
+        "intensity": 0.701
+      },
+      "jawline_left": {
+        "axis_deg": -7.4,
+        "width_ratio": 0.298,
+        "intensity": 0.292
+      },
+      "jawline_right": {
+        "axis_deg": -162.8,
+        "width_ratio": 0.294,
+        "intensity": 0.577
+      },
+      "chin": {
+        "axis_deg": -20.1,
+        "width_ratio": 0.289,
+        "intensity": 0.561
+      }
+    },
+    "dominant_axis_deg": -13.7,
+    "axis_count": 5,
+    "axis_consistency": 0.286,
+    "wrap_ratio": 0.383,
+    "confidence": 0.9,
+    "notes": []
+  },
+  "highlight_symmetry": {
+    "ok": true,
+    "left_intensity": 0.375,
+    "right_intensity": 0.604,
+    "symmetry_score": 0.621,
+    "dominant_side": "right",
+    "intensity_ratio": 1.611,
+    "fill_detected": true,
+    "fill_side": "left",
+    "underfill_ev": 0.69,
+    "confidence": 0.7,
+    "notes": []
+  },
+  "continuous_source": {
+    "ok": true,
+    "likely_technology": "continuous_panel",
+    "technology_confidence": 1.0,
+    "evidence": [
+      "triangular_cluster \u2192 multi-panel continuous (Hurley-type)"
+    ],
+    "specular_edge_sharpness": 0.5,
+    "color_temp_consistency": 0.5,
+    "confidence": 0.9,
+    "notes": []
+  },
+  "bounce_contributor": {
+    "ok": true,
+    "contributors": [
+      {
+        "type": "white_reflector",
+        "warmth_delta": 0.0,
+        "side": "right"
+      }
+    ],
+    "primary_fill_type": "white_reflector",
+    "fill_to_key_ratio": 0.626,
+    "total_bounce_contribution": 0.501,
+    "confidence": 0.8,
+    "notes": [
+      "neutral fill with good ratio (0.63) \u2192 white reflector/foam"
+    ]
+  },
+  "separation_light": {
+    "ok": true,
+    "has_hair_light": false,
+    "hair_light_direction_deg": null,
+    "hair_light_intensity": 0.0,
+    "hair_light_width_ratio": 0.0,
+    "has_rim_light": false,
+    "rim_side": null,
+    "has_background_spill": false,
+    "spill_vs_intentional_confidence": 0.5,
+    "confidence": 0.45,
+    "notes": []
+  },
+  "off_axis_key": {
+    "ok": true,
+    "key_azimuth_deg": -85.8,
+    "key_elevation_deg": 45.0,
+    "is_off_axis": false,
+    "off_axis_angle_deg": 0.0,
+    "detection_method": "shadow_vector+highlight_axis",
+    "confidence": 0.4,
+    "notes": [
+      "shadow_vector_deg=46.2 \u2192 key azimuth=-133.8",
+      "highlight_axis_deg=-13.7 \u2192 azimuth=-13.7"
+    ]
+  },
+  "light_structure": {
+    "ok": true,
+    "nose_shadow_shape": "half_face",
+    "nose_shadow_length_ratio": 0.405,
+    "nose_shadow_angle_deg": 96.2,
+    "triangle_detected": false,
+    "triangle_cheek": null,
+    "triangle_completeness": 0.0,
+    "pattern_name": "split",
+    "confidence": 0.75,
+    "notes": [
+      "strong left/right asymmetry \u2192 split lighting"
+    ],
+    "nose_shadow_centroid_angle_deg": 96.2,
+    "nose_shadow_centroid_distance": 0.569,
+    "left_right_asymmetry": 0.658,
+    "top_bottom_ratio": 0.849,
+    "shadow_density": 0.335,
+    "triangle_isolation": 0.0,
+    "highlight_width_ratio": 0.395
+  },
+  "background": {
+    "ok": true,
+    "background_gradient_center_x": 0.447,
+    "background_gradient_center_y": 0.481,
+    "background_gradient_spread": 0.067,
+    "background_intensity_ratio": 0.517,
+    "background_direction": "center"
+  },
+  "specular_surface": {
+    "ok": true,
+    "specular_highlight_count": 5,
+    "specular_highlight_size": 0.143,
+    "specular_highlight_spread": 0.38,
+    "specular_axis_deg": 171.2
+  },
+  "light_direction_field": {
+    "ok": true,
+    "ldf_vectors": [
+      {
+        "region": "r0_c1",
+        "angle_deg": -3.6,
+        "magnitude": 24.21,
+        "confidence": 0.48425265958433195
+      },
+      {
+        "region": "r0_c2",
+        "angle_deg": -142.9,
+        "magnitude": 47.72,
+        "confidence": 0.954364310489142
+      },
+      {
+        "region": "r0_c3",
+        "angle_deg": 112.3,
+        "magnitude": 12.18,
+        "confidence": 0.24354645190693536
+      },
+      {
+        "region": "r1_c1",
+        "angle_deg": 0.9,
+        "magnitude": 37.95,
+        "confidence": 0.7589976598762336
+      },
+      {
+        "region": "r1_c2",
+        "angle_deg": 151.6,
+        "magnitude": 46.94,
+        "confidence": 0.9387296966549198
+      },
+      {
+        "region": "r1_c3",
+        "angle_deg": -168.4,
+        "magnitude": 57.04,
+        "confidence": 1.0
+      },
+      {
+        "region": "r2_c1",
+        "angle_deg": 7.4,
+        "magnitude": 11.94,
+        "confidence": 0.23877747294350374
+      },
+      {
+        "region": "r2_c2",
+        "angle_deg": 8.4,
+        "magnitude": 28.25,
+        "confidence": 0.5649961331129043
+      },
+      {
+        "region": "r2_c3",
+        "angle_deg": 170.7,
+        "magnitude": 39.43,
+        "confidence": 0.7886669083940177
+      },
+      {
+        "region": "r3_c0",
+        "angle_deg": 46.8,
+        "magnitude": 4.11,
+        "confidence": 0.08228993858960151
+      },
+      {
+        "region": "r3_c1",
+        "angle_deg": -18.3,
+        "magnitude": 16.1,
+        "confidence": 0.3220589842950455
+      },
+      {
+        "region": "r3_c2",
+        "angle_deg": -127.4,
+        "magnitude": 17.13,
+        "confidence": 0.34250898317489586
+      },
+      {
+        "region": "r3_c3",
+        "angle_deg": -145.0,
+        "magnitude": 12.35,
+        "confidence": 0.2470604164929945
+      }
+    ],
+    "dominant_light_vector_deg": 11.7,
+    "vector_consistency": 0.013,
+    "ldf_cell_count": 13,
+    "notes": [
+      "Analyzed 13 cells, dominant direction 11.7\u00b0."
+    ]
+  },
+  "inverse_square": {
+    "ok": true,
+    "distance_estimate_ft": 1.9,
+    "distance_class": "near",
+    "falloff_gradient": 0.627,
+    "falloff_direction": "right_to_left",
+    "isq_confidence": 1.0,
+    "notes": [
+      "Horizontal falloff (0.63) dominates vertical (0.12)."
+    ]
+  },
+  "solar": {
+    "ok": true,
+    "sun_candidate": false,
+    "sun_azimuth_deg": null,
+    "sun_elevation_deg": 46.2,
+    "parallel_shadow_score": 0.0,
+    "color_warmth_score": 0.0,
+    "notes": [
+      "Insufficient shadow edges for parallelism analysis.",
+      "Highlight warmth: R/B=1.00 \u2192 warmth=0.00."
+    ]
+  },
+  "window": {
+    "ok": true,
+    "window_candidate": false,
+    "window_direction": null,
+    "rectangular_reflection_score": 1.0,
+    "gradient_directionality": 0.058,
+    "window_confidence": 0.517,
+    "notes": [
+      "Gradient directionality=0.06, rect_reflections=5, softness=0.65."
+    ]
+  },
+  "bounce": {
+    "ok": true,
+    "bounce_sources": [
+      {
+        "direction": "left",
+        "intensity": 0.621,
+        "color_cast": "neutral",
+        "confidence": 0.93
+      },
+      {
+        "direction": "below",
+        "intensity": 0.415,
+        "color_cast": "neutral",
+        "confidence": 0.5
+      }
+    ],
+    "dominant_bounce_direction": "left",
+    "bounce_fill_ratio": 0.621,
+    "notes": [
+      "Bounce fill from left: ratio=0.62, cast=neutral.",
+      "Possible floor/reflector bounce from below."
+    ]
+  },
+  "reflection": {
+    "ok": true,
+    "reflection_regions": [
+      {
+        "contour_bbox": [
+          263,
+          346,
+          71,
+          74
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.04,
+        "brightness": 202.8,
+        "area_px": 3397
+      },
+      {
+        "contour_bbox": [
+          211,
+          286,
+          18,
+          8
+        ],
+        "shape": "rectangular",
+        "aspect_ratio": 2.25,
+        "brightness": 201.7,
+        "area_px": 56
+      },
+      {
+        "contour_bbox": [
+          206,
+          234,
+          35,
+          25
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.4,
+        "brightness": 196.1,
+        "area_px": 510
+      },
+      {
+        "contour_bbox": [
+          195,
+          177,
+          85,
+          53
+        ],
+        "shape": "rectangular",
+        "aspect_ratio": 1.6,
+        "brightness": 189.2,
+        "area_px": 2380
+      },
+      {
+        "contour_bbox": [
+          218,
+          94,
+          59,
+          57
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.04,
+        "brightness": 210.0,
+        "area_px": 2467
+      }
+    ],
+    "reflection_count": 5,
+    "dominant_reflection_shape": "ring",
+    "reflection_axis_deg": 81.1,
+    "notes": [
+      "Found 5 reflection regions, dominant shape=ring."
+    ]
+  },
+  "penumbra": {
+    "ok": true,
+    "penumbra_width_px": 29.3,
+    "penumbra_width_ratio": 0.1662,
+    "apparent_source_size": "large",
+    "penumbra_uniformity": 0.902,
+    "notes": [
+      "Mean penumbra width=29.3px (ratio=0.166), uniformity=0.90 \u2192 large."
+    ]
+  },
+  "occlusion": {
+    "ok": true,
+    "occlusion_detected": true,
+    "occlusion_type": "foliage",
+    "pattern_frequency": 1.0,
+    "pattern_regularity": 0.005,
+    "occlusion_confidence": 0.503,
+    "notes": [
+      "Pattern frequency=1.00, regularity=0.01 \u2192 foliage."
+    ]
+  },
+  "color_temp": {
+    "ok": true,
+    "dominant_cct_kelvin": 6500,
+    "cct_sources": [
+      {
+        "cct_kelvin": 6500,
+        "region": "highlight",
+        "intensity_pct": 27.8,
+        "confidence": 0.5005701145427062,
+        "rb_ratio": 0.999
+      },
+      {
+        "cct_kelvin": 6500,
+        "region": "shadow",
+        "intensity_pct": 41.6,
+        "confidence": 0.5103614711664524,
+        "rb_ratio": 0.979
+      }
+    ],
+    "mixed_lighting": false,
+    "cct_spread_kelvin": 0,
+    "notes": [
+      "Dominant CCT=6500K from 2 regions."
+    ]
+  },
+  "environment": {
+    "ok": true,
+    "environment_class": "window_light",
+    "environment_confidence": 0.253,
+    "indoor_outdoor": "indoor",
+    "controlled_lighting": false,
+    "environment_evidence": [
+      "Strong bounce fill (ratio=0.62).",
+      "Even background suggests controlled environment."
+    ],
+    "notes": [
+      "Environment: window_light (conf=0.25), indoor."
+    ]
+  },
+  "modifier_shape": {
+    "ok": true,
+    "modifier_candidates": [
+      {
+        "modifier_type": "ring_light",
+        "shape_evidence": "reflection_ring",
+        "confidence": 0.5
+      }
+    ],
+    "primary_modifier": "ring_light",
+    "primary_modifier_confidence": 0.5,
+    "reflection_regions": [
+      {
+        "contour_bbox": [
+          263,
+          346,
+          71,
+          74
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.04,
+        "brightness": 202.8,
+        "area_px": 3397
+      },
+      {
+        "contour_bbox": [
+          211,
+          286,
+          18,
+          8
+        ],
+        "shape": "rectangular",
+        "aspect_ratio": 2.25,
+        "brightness": 201.7,
+        "area_px": 56
+      },
+      {
+        "contour_bbox": [
+          206,
+          234,
+          35,
+          25
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.4,
+        "brightness": 196.1,
+        "area_px": 510
+      },
+      {
+        "contour_bbox": [
+          195,
+          177,
+          85,
+          53
+        ],
+        "shape": "rectangular",
+        "aspect_ratio": 1.6,
+        "brightness": 189.2,
+        "area_px": 2380
+      },
+      {
+        "contour_bbox": [
+          218,
+          94,
+          59,
+          57
+        ],
+        "shape": "ring",
+        "aspect_ratio": 1.04,
+        "brightness": 210.0,
+        "area_px": 2467
+      }
+    ],
+    "notes": [
+      "Reflection shape 'ring' suggests ['ring_light'].",
+      "Large apparent source (large) supports soft modifier."
+    ]
+  },
+  "hypothesis": {
+    "ok": true,
+    "hypotheses": [
+      {
+        "lights": [
+          {
+            "role": "key",
+            "direction_deg": 46.2,
+            "height": "high",
+            "distance_ft": 1.9,
+            "modifier": "ring_light",
+            "color_temp_k": 6500
+          }
+        ],
+        "environment": "window_light",
+        "confidence": 0.352,
+        "evidence": [
+          "key: ['Primary light source assumed.']",
+          "bounce: ['Bounce sources detected.']"
+        ]
+      }
+    ],
+    "best_hypothesis_index": 0,
+    "likely_light_count": "one",
+    "light_count_confidence": 0.44,
+    "roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9,
+        "evidence": [
+          "Primary light source assumed."
+        ]
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": [
+          "Bounce fill detected."
+        ]
+      },
+      "negative_fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": []
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 0.9315,
+        "evidence": [
+          "Bounce sources detected."
+        ]
+      },
+      "unknown_secondary": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      }
+    },
+    "multi_light_evidence_score": 0.0,
+    "false_multi_light_risk": 0.1,
+    "light_role_notes": [
+      "Light count: one (conf=0.44)",
+      "key: conf=0.90",
+      "bounce: conf=0.93"
+    ],
+    "notes": []
+  },
+  "light_role": {
+    "ok": true,
+    "hypotheses": [
+      {
+        "lights": [
+          {
+            "role": "key",
+            "direction_deg": 46.2,
+            "height": "high",
+            "distance_ft": 1.9,
+            "modifier": "ring_light",
+            "color_temp_k": 6500
+          }
+        ],
+        "environment": "window_light",
+        "confidence": 0.352,
+        "evidence": [
+          "key: ['Primary light source assumed.']",
+          "bounce: ['Bounce sources detected.']"
+        ]
+      }
+    ],
+    "best_hypothesis_index": 0,
+    "likely_light_count": "one",
+    "light_count_confidence": 0.44,
+    "roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9,
+        "evidence": [
+          "Primary light source assumed."
+        ]
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": [
+          "Bounce fill detected."
+        ]
+      },
+      "negative_fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": []
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 0.9315,
+        "evidence": [
+          "Bounce sources detected."
+        ]
+      },
+      "unknown_secondary": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      }
+    },
+    "multi_light_evidence_score": 0.0,
+    "false_multi_light_risk": 0.1,
+    "light_role_notes": [
+      "Light count: one (conf=0.44)",
+      "key: conf=0.90",
+      "bounce: conf=0.93"
+    ],
+    "notes": []
+  },
+  "physics": {
+    "ok": true,
+    "scored_hypotheses": [
+      {
+        "hypothesis": {
+          "lights": [
+            {
+              "role": "key",
+              "direction_deg": 46.2,
+              "height": "high",
+              "distance_ft": 1.9,
+              "modifier": "ring_light",
+              "color_temp_k": 6500
+            }
+          ],
+          "environment": "window_light",
+          "confidence": 0.352,
+          "evidence": [
+            "key: ['Primary light source assumed.']",
+            "bounce: ['Bounce sources detected.']"
+          ]
+        },
+        "physics_score": 0.43,
+        "violations": [
+          "Shadow direction (46\u00b0) inconsistent with key (46\u00b0)."
+        ],
+        "checks": {
+          "shadow_alignment": 0.0,
+          "highlight_axis": 0.0,
+          "catchlight_geometry": 0.5,
+          "falloff_consistency": 1.0,
+          "penumbra_width": 0.5,
+          "color_temperature": 1.0,
+          "direction_field": 0.013
+        }
+      }
+    ],
+    "best_hypothesis_index": 0,
+    "best_physics_score": 0.43,
+    "violation_summary": [
+      "Shadow direction (46\u00b0) inconsistent with key (46\u00b0)."
+    ],
+    "notes": [
+      "Scored 1 hypotheses, best=0 (score=0.430)."
+    ]
+  },
+  "reconstruction": {
+    "ok": true,
+    "key_light_angle_deg_raw": 46.2,
+    "key_light_angle_deg_pose_corrected": 71.0,
+    "key_light_angle_deg": 71.0,
+    "key_light_height": "eye_level",
+    "modifier_size_class": "large",
+    "modifier_size_class_raw": "large",
+    "modifier_size_class_surface_corrected": "large",
+    "modifier_certainty": "moderate",
+    "modifier_distance_ft": 7.0,
+    "fill_present": null,
+    "negative_fill": false,
+    "background_light": false,
+    "background_distance_ft": 8.0,
+    "camera_height_relative_to_subject": "eye_level",
+    "pose_complexity_score": 0.592,
+    "surface_complexity_score_from_surface": 0.4,
+    "likely_light_count": "one",
+    "light_roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9,
+        "evidence": [
+          "Primary light source assumed."
+        ]
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": [
+          "Bounce fill detected."
+        ]
+      },
+      "negative_fill": {
+        "present": false,
+        "confidence": 0.15,
+        "evidence": []
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 0.9315,
+        "evidence": [
+          "Bounce sources detected."
+        ]
+      },
+      "unknown_secondary": {
+        "present": false,
+        "confidence": 0.0,
+        "evidence": []
+      }
+    },
+    "light_role_notes": [
+      "Light count: one (conf=0.44)",
+      "key: conf=0.90",
+      "bounce: conf=0.93"
+    ],
+    "light_direction_consistency": 0.013,
+    "estimated_source_distance_ft": 3.9,
+    "distance_class": "near",
+    "environment_class": "window_light",
+    "sun_candidate": false,
+    "window_candidate": false,
+    "occlusion_detected": true,
+    "dominant_cct_kelvin": 6500,
+    "mixed_lighting": false,
+    "modifier_candidates": [
+      {
+        "modifier_type": "ring_light",
+        "shape_evidence": "reflection_ring",
+        "confidence": 0.5
+      }
+    ],
+    "primary_modifier_hypothesis": "ring_light",
+    "hypotheses": [
+      {
+        "lights": [
+          {
+            "role": "key",
+            "direction_deg": 46.2,
+            "height": "high",
+            "distance_ft": 1.9,
+            "modifier": "ring_light",
+            "color_temp_k": 6500
+          }
+        ],
+        "environment": "window_light",
+        "confidence": 0.352,
+        "evidence": [
+          "key: ['Primary light source assumed.']",
+          "bounce: ['Bounce sources detected.']"
+        ]
+      }
+    ],
+    "best_hypothesis": {
+      "lights": [
+        {
+          "role": "key",
+          "direction_deg": 46.2,
+          "height": "high",
+          "distance_ft": 1.9,
+          "modifier": "ring_light",
+          "color_temp_k": 6500
+        }
+      ],
+      "environment": "window_light",
+      "confidence": 0.352,
+      "evidence": [
+        "key: ['Primary light source assumed.']",
+        "bounce: ['Bounce sources detected.']"
+      ]
+    },
+    "physics_score": 0.43,
+    "physics_violations": [
+      "Shadow direction (46\u00b0) inconsistent with key (46\u00b0)."
+    ],
+    "notes": [
+      "shadow weight halved: pose_shadow_interference in ['torso_left']",
+      "key_angle from shadow_vector: 46.2\u00b0",
+      "pose correction: -24.8\u00b0 (head=-24.0, torso=+0.0, chin=-0.8)",
+      "highlight_interference: upweighting catchlights + rolloff",
+      "key_height from shadow_vertical: 43.8\u00b0",
+      "modifier_size from weighted softness=0.61",
+      "distance from specular_spread: 0.38",
+      "distance refined by inverse_square: 7.0 \u2192 3.9 ft",
+      "modifier size upgraded for window_light: large \u2192 very_large",
+      "penumbra refinement: very_large \u2192 large (apparent_source_size=large)"
+    ]
+  },
+  "vlm_reconstruction": {
+    "primary_reconstruction": {
+      "dominant_source_direction_deg": 11.7,
+      "dominant_source_height_class": "slightly_above_eye",
+      "dominant_source_height_deg_estimate": 43.8,
+      "dominant_source_distance_class": "near",
+      "dominant_source_distance_ft": 1.9,
+      "source_size_class": "large",
+      "modifier_family_candidates": [
+        {
+          "type": "ring_light",
+          "confidence": 0.5
+        },
+        {
+          "type": "softbox",
+          "confidence": 0.3
+        },
+        {
+          "type": "octa",
+          "confidence": 0.2
+        }
+      ],
+      "environment": "window",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 0.93
+        }
+      },
+      "reconstruction_confidence": 0.52,
+      "ambiguity_notes": [
+        "Catchlights absent; catchlight geometry unavailable.",
+        "Reflection ring suggests ring light but confidence is moderate.",
+        "Window light environment signal is weak (conf=0.25).",
+        "Bounce fill is strong and may influence perceived fill."
+      ],
+      "contradiction_notes": [
+        "Physics consistency is low (0.43).",
+        "Shadow direction (46\u00b0) and dominant light vector (11.7\u00b0) are not fully aligned.",
+        "Window candidate is not strongly supported."
+      ]
+    },
+    "candidates": [
+      {
+        "candidate_id": "candidate_1",
+        "key_light_angle_deg": 11.7,
+        "key_light_height_class": "slightly_above_eye",
+        "key_light_height_deg_estimate": 43.8,
+        "key_light_distance_class": "near",
+        "key_light_distance_ft_estimate": 1.9,
+        "source_size_class": "large",
+        "modifier_family_candidates": [
+          {
+            "type": "ring_light",
+            "confidence": 0.5
+          },
+          {
+            "type": "softbox",
+            "confidence": 0.3
+          },
+          {
+            "type": "octa",
+            "confidence": 0.2
+          }
+        ],
+        "environment": "window",
+        "likely_light_count": 1,
+        "roles": {
+          "key": {
+            "present": true,
+            "confidence": 0.9
+          },
+          "fill": {
+            "present": false,
+            "confidence": 0.15
+          },
+          "negative_fill": {
+            "present": false,
+            "confidence": 0.15
+          },
+          "rim": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "kicker": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "background": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "bounce": {
+            "present": true,
+            "confidence": 0.93
+          }
+        },
+        "confidence_score": 0.52,
+        "ambiguity_notes": [
+          "Reflection ring suggests ring light but not conclusive.",
+          "Bounce fill is strong and may influence fill perception.",
+          "Window light environment signal is weak."
+        ]
+      },
+      {
+        "candidate_id": "candidate_2",
+        "key_light_angle_deg": 46.2,
+        "key_light_height_class": "slightly_above_eye",
+        "key_light_height_deg_estimate": 43.8,
+        "key_light_distance_class": "near",
+        "key_light_distance_ft_estimate": 1.9,
+        "source_size_class": "large",
+        "modifier_family_candidates": [
+          {
+            "type": "softbox",
+            "confidence": 0.4
+          },
+          {
+            "type": "octa",
+            "confidence": 0.3
+          },
+          {
+            "type": "ring_light",
+            "confidence": 0.3
+          }
+        ],
+        "environment": "studio",
+        "likely_light_count": 1,
+        "roles": {
+          "key": {
+            "present": true,
+            "confidence": 0.9
+          },
+          "fill": {
+            "present": false,
+            "confidence": 0.15
+          },
+          "negative_fill": {
+            "present": false,
+            "confidence": 0.15
+          },
+          "rim": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "kicker": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "background": {
+            "present": false,
+            "confidence": 0.0
+          },
+          "bounce": {
+            "present": true,
+            "confidence": 0.93
+          }
+        },
+        "confidence_score": 0.41,
+        "ambiguity_notes": [
+          "Shadow direction supports alternate key angle.",
+          "Studio environment possible due to even background.",
+          "Ring reflection could be from octa or softbox with central reflection."
+        ]
+      }
+    ],
+    "ok": true,
+    "notes": [],
+    "needs_review": false,
+    "needs_review_reasons": [],
+    "validation_scores": null,
+    "contradiction_notes": [],
+    "ambiguity_notes": [],
+    "signal_reliability_summary": null,
+    "solver_trace_summary": null,
+    "master_profile": null,
+    "master_profile_confidence": 0.0,
+    "style_family": null
+  },
+  "reference_matches": {
+    "closest_references": [
+      {
+        "reference_id": "bryce_window_negfill_001",
+        "photographer": "Sue Bryce",
+        "lighting_pattern": "window_negative_fill",
+        "similarity": 0.652,
+        "dataset_tier": "gold"
+      },
+      {
+        "reference_id": "bryce_window_001",
+        "photographer": "Sue Bryce",
+        "lighting_pattern": "window_portrait",
+        "similarity": 0.638,
+        "dataset_tier": "gold"
+      },
+      {
+        "reference_id": "watson_split_001",
+        "photographer": "Albert Watson",
+        "lighting_pattern": "split",
+        "similarity": 0.526,
+        "dataset_tier": "gold"
+      },
+      {
+        "reference_id": "lindbergh_soft_editorial_001",
+        "photographer": "Peter Lindbergh",
+        "lighting_pattern": "soft_editorial_key",
+        "similarity": 0.507,
+        "dataset_tier": "gold"
+      },
+      {
+        "reference_id": "butterfly_adler_01",
+        "photographer": "Lindsay Adler",
+        "lighting_pattern": "butterfly",
+        "similarity": 0.5,
+        "dataset_tier": "gold"
+      }
+    ],
+    "top_reference": "bryce_window_negfill_001",
+    "top_similarity": 0.652
+  },
+  "validation": {
+    "ok": true,
+    "valid": false,
+    "confidence": 0.693,
+    "warnings": [
+      "moderate pose complexity (0.59), confidence slightly reduced",
+      "Large pose correction: raw=46.2\u00b0 \u2192 corrected=71.0\u00b0 (delta=25\u00b0)"
+    ],
+    "pose_adjusted": true,
+    "surface_adjusted": true
+  }
+}

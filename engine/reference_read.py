@@ -23,6 +23,7 @@ from engine.constants import (
 )
 
 from engine.image_analysis_models import (
+    ColorPalette,
     DramaticLightSignals,
     ImageRead,
     LightingRead,
@@ -414,27 +415,38 @@ def _background_is_likely_key_spill(
     not a dedicated background light.
 
     Indicators:
-      - Background is very bright and evenly lit (not spot/gradient)
+      - Background is bright and evenly lit or shows gradient consistent
+        with key light falloff (not a tight spot pattern)
       - Subject-background separation is low/moderate (subject is close)
-      - Background avg luminance > 230 (near-white)
+      - Background avg luminance > 200 (bright wall or seamless)
     When the subject is close to a white wall/seamless and the key light
     is the only source, the background will be bright from spill.
+    A gradient on a close background is consistent with inverse-square
+    falloff from the key, not a dedicated background light.
     """
     bg = cue_report.background_illumination
     if not bg:
         return False
 
-    # Only applies to even/bright backgrounds — spots and gradients are deliberate
-    if bg.pattern not in ("even",):
+    # Spots are deliberate — a tight circular or shaped pattern on the
+    # background is a dedicated background light, not spill.
+    if bg.pattern == "spot":
         return False
 
-    # Check if background is brighter than subject — typical of white
-    # seamless or wall where key light spills
-    if bg.brightness_relative in ("brighter", "similar"):
-        # Low/moderate separation = subject is close to background
-        sep = cue_report.subject_background_separation
+    sep = cue_report.subject_background_separation
+
+    # Even backgrounds: typical white seamless / wall
+    if bg.pattern == "even" and bg.brightness_relative in ("brighter", "similar"):
         if sep and sep.luminance_delta is not None and sep.luminance_delta < 0.45:
             return True
+
+    # Gradient backgrounds: key light falloff across a close wall/backdrop.
+    # When the subject is close to the background (low separation) AND the
+    # background is bright, the gradient is from the key, not a bg light.
+    if bg.pattern == "gradient" and bg.brightness_relative in ("brighter", "similar"):
+        if sep and sep.luminance_delta is not None and sep.luminance_delta < 0.35:
+            return True
+
     return False
 
 
@@ -565,6 +577,7 @@ def _collect_visual_devices(
     lighting_intel: Any,
     vision_data: Optional[Dict[str, Any]] = None,
     sip_marginal: bool = False,
+    sip_suppressed: bool = False,
     scene_ctx: Optional[SceneContext] = None,
 ) -> List[str]:
     devices: List[str] = []
@@ -573,6 +586,9 @@ def _collect_visual_devices(
     sip_detected = sip is not None and sip.detected
     # Don't report gobo/slit if catchlights show soft modifier shapes
     if sip_detected and _catchlights_contradict_hard_source(vision_data):
+        sip_detected = False
+    # P3d: caller already determined this SIP is a false positive
+    if sip_suppressed:
         sip_detected = False
     if sip_detected:
         # P1a: When parallelism is marginal, hedge the gobo language
@@ -1158,7 +1174,7 @@ def _derive_background_strategy(
     if bg.pattern == "dark" or effectively_dark:
         if bg_light:
             return "dark background with subtle background light for separation"
-        return "unlit dark background, 6+ feet behind subject"
+        return "unlit dark background — distance varies (may be close wall or distant backdrop)"
     if bg.pattern == "spot":
         return "background light with grid or snoot for spot effect"
     if bg.pattern == "gradient":
@@ -1216,6 +1232,7 @@ def build_image_read(
     image_analysis: Optional[Dict[str, Any]],
     vlm_description: Optional[Any] = None,
     scene_ctx: Optional[SceneContext] = None,
+    lighting_read: Optional[Any] = None,
 ) -> ImageRead:
     """Build the 'what is happening in the image' layer."""
     # Notes collect VLM learning annotations — when VLM overrides or
@@ -1252,10 +1269,31 @@ def build_image_read(
         has_gobo_or_slit = False
         _sip_marginal = False
 
+    # P3d (image read): marginal SIP parallelism without geometry corroboration.
+    # Suppress gobo unless geometry *explicitly* identifies a gobo/slit/projected
+    # pattern — standard patterns (loop, rembrandt, etc.) and "unknown" both mean
+    # the parallel lines are noise, not a real projected shadow.
+    _sip_suppressed = False
+    if has_gobo_or_slit and sip is not None:
+        _sip_par_ir = getattr(sip, "line_parallelism", 1.0) or 1.0
+        if _sip_par_ir < 0.70:
+            _geo_ir = cue_inference.get("geometry")
+            _geo_sp_ir = (getattr(_geo_ir, "shadow_pattern", "unknown") if _geo_ir else "unknown") or "unknown"
+            _geo_says_gobo_ir = any(tok in _geo_sp_ir for tok in ("gobo", "slit", "project"))
+            if not _geo_says_gobo_ir:
+                has_gobo_or_slit = False
+                _sip_marginal = False
+                _sip_suppressed = True
+
     # Early heuristic check: when SIP didn't fire but dramatic-hard signals
     # converge, treat the framing as gobo-like (pose/framing unreliable).
+    # Blueprint oracle: if lighting_read resolved a soft/mixed source, the
+    # dramatic-hard heuristic is firing on contrast editing — trust blueprint.
+    # Also suppressed when SIP was already determined to be a false positive.
+    _lr_sq_ir = (getattr(lighting_read, "source_quality", "") or "").lower() if lighting_read else ""
+    _blueprint_says_soft_ir = _lr_sq_ir in ("soft", "mixed", "ambient")
     _early_inferred_dh = False
-    if not has_gobo_or_slit:
+    if not has_gobo_or_slit and not _sip_suppressed and not _blueprint_says_soft_ir:
         _early_inferred_dh = _detect_dramatic_hard_light(
             classification, vision_data, cue_report, lighting_intel,
             scene_ctx=scene_ctx,
@@ -1354,6 +1392,12 @@ def build_image_read(
             _masks_fr = _region_fr.get("masks", {}) if isinstance(_region_fr, dict) else {}
             _person_ratio = _masks_fr.get("person_ratio", 0.0) or 0.0
 
+    # Face box from vision pipeline — used to gate framing when landmarks fail
+    _face_box = None
+    if vision_data:
+        _region_fb = vision_data.get("region_attribution", {})
+        _face_box = _region_fb.get("face_box") if isinstance(_region_fb, dict) else None
+
     if has_gobo_or_slit or _early_inferred_dh:
         # Gobo/slit (confirmed or inferred): framing is obscured by the lighting pattern.
         # Distinguish extreme close-up when very little of the subject is visible.
@@ -1394,7 +1438,27 @@ def build_image_read(
         # P2b: Thresholds lowered — person_ratio of 0.35+ in landscape
         # images means full body; 0.40 threshold was too high for horizontal crops.
         if not cam_subj or cam_subj.lower() in ("unknown", ""):
-            if _person_ratio > FRAMING.FULL_BODY:
+            # Face-box gate: if a detected face covers >5% of frame,
+            # the subject is close — person_ratio alone can't distinguish
+            # headshot (large face) from full body (small face).
+            _face_ratio = 0.0
+            if _face_box and len(_face_box) == 4:
+                _fb = _face_box
+                _img_h = 1
+                _img_w = 1
+                if vision_data:
+                    _masks_dims = vision_data.get("region_attribution", {}).get("masks", {})
+                    _img_h = _masks_dims.get("_image_h", 1) or 1
+                    _img_w = _masks_dims.get("_image_w", 1) or 1
+                _face_area = max(0, _fb[2] - _fb[0]) * max(0, _fb[3] - _fb[1])
+                if _img_h > 1 and _img_w > 1:
+                    _face_ratio = _face_area / (_img_h * _img_w)
+
+            if _face_ratio > 0.10:
+                cam_subj = "headshot"
+            elif _face_ratio > 0.05:
+                cam_subj = "close-up"
+            elif _person_ratio > FRAMING.FULL_BODY:
                 cam_subj = "full body or wide framing"
             elif _person_ratio > FRAMING.THREE_QUARTER:
                 cam_subj = "three-quarter or medium shot"
@@ -1472,14 +1536,15 @@ def build_image_read(
 
     # Visual devices
     has_gobo = has_gobo_or_slit
-    devices = _collect_visual_devices(cue_report, lighting_intel, vision_data, sip_marginal=_sip_marginal, scene_ctx=scene_ctx)
+    devices = _collect_visual_devices(cue_report, lighting_intel, vision_data, sip_marginal=_sip_marginal, sip_suppressed=_sip_suppressed, scene_ctx=scene_ctx)
 
     # Fallback: if cue-level SIP didn't fire (e.g. face not detected) but
     # the inference-level dramatic-hard heuristic did, surface the gobo device
     # so image_read and lighting_read agree.
-    # Use projected_pattern_shape (cross/slit detection from person_mask) for
-    # shape-aware device text when available.
-    if not has_gobo:
+    # Blueprint oracle: if the blueprint resolved soft/mixed source quality,
+    # the dramatic-hard heuristic is a false positive on contrast editing.
+    # Also suppressed when SIP was already determined to be a false positive.
+    if not has_gobo and not _sip_suppressed and not _blueprint_says_soft_ir:
         _inferred_dh = _detect_dramatic_hard_light(
             classification, vision_data, cue_report, lighting_intel,
             scene_ctx=scene_ctx,
@@ -1925,6 +1990,16 @@ def build_image_read(
                         f"VLM resolved to '{vlm_framing}'."
                         + (f" VLM derivation: {_framing_deriv2}" if _framing_deriv2 else "")
                     )
+            elif _vlm_framing_lc in ("headshot", "head-and-shoulders", "close-up", "tight close-up") and "full body" in _cam_lc:
+                # VLM says close framing but CV says full body — VLM is more
+                # accurate for distinguishing headshots from full body when
+                # person_ratio heuristics are misleading.
+                cam_subj = vlm_framing
+                notes.append(
+                    f"VLM override [framing]: CV said '{_cv_framing_old}' "
+                    f"(person_ratio heuristic), VLM sees '{vlm_framing}'. "
+                    f"Face detection confirms close framing."
+                )
 
         # Mood: VLM captures emotional register better than classification
         # (which produces single-word labels like "editorial" or "dramatic").
@@ -2375,6 +2450,18 @@ def build_lighting_read(
     if has_shadow_interruption and _catchlights_contradict_hard_source(vision_data):
         has_shadow_interruption = False
 
+    # P3d: marginal SIP (<0.70 parallelism) without geometry corroboration.
+    # Suppress unless geometry *explicitly* corroborates gobo/slit/projected.
+    # Standard patterns (loop, rembrandt, etc.) and "unknown" both indicate the
+    # parallel lines are texture noise — reset early so fill/count/family are clean.
+    if has_shadow_interruption and sip is not None:
+        _sip_par_lr = getattr(sip, "line_parallelism", 1.0) or 1.0
+        if _sip_par_lr < 0.70:
+            _geo_sp_lr = (getattr(geometry, "shadow_pattern", "unknown") if geometry else "unknown") or "unknown"
+            _geo_says_gobo_lr = any(tok in _geo_sp_lr for tok in ("gobo", "slit", "project"))
+            if not _geo_says_gobo_lr:
+                has_shadow_interruption = False
+
     # Heuristic fallback: dramatic hard light without formal gobo detection
     inferred_dramatic_hard = False
     if not has_shadow_interruption:
@@ -2505,7 +2592,48 @@ def build_lighting_read(
         direction_text = "unknown"
 
     # Shadow pattern — for gobo/slit, include shape when detectable
-    if has_shadow_interruption:
+    # Low-parallelism SIP override: when SIP fires with very low parallelism
+    # (< 0.3) AND cue_inference already identified a standard shadow pattern,
+    # the SIP is likely a false positive from natural textures (tree shadows,
+    # foliage, fabric patterns).  Trust the geometry-based pattern instead.
+    _STANDARD_PATTERNS_SIP = {"split", "rembrandt", "loop", "butterfly", "clamshell", "triangle", "broad", "short"}
+    _sip_par_val = getattr(sip, "line_parallelism", 1.0) or 1.0 if sip else 1.0
+    _geo_sp = (getattr(geometry, "shadow_pattern", "unknown") if geometry else "unknown") or "unknown"
+    _sip_cls = getattr(sip, "classification", "unknown") if sip else "unknown"
+    if has_shadow_interruption and _sip_par_val < 0.3 and _geo_sp in _STANDARD_PATTERNS_SIP:
+        # Low-confidence SIP + reliable geometry → skip gobo, use geometry pattern
+        shadow_pattern = _geo_sp
+    elif has_shadow_interruption and _sip_cls == "unknown" and _geo_sp in _STANDARD_PATTERNS_SIP:
+        # SIP fired but couldn't classify the pattern type (unknown classification).
+        # This is weak gobo evidence — natural contrast boundaries, rim light
+        # falloff, or hard shadow edges can trigger SIP without an actual gobo.
+        # When geometry confidently identifies a standard named pattern, trust
+        # the geometric classification over the ambiguous SIP detection.
+        shadow_pattern = _geo_sp
+    elif (has_shadow_interruption and _sip_par_val < 0.5
+          and _geo_sp in _STANDARD_PATTERNS_SIP):
+        # P3c: Marginal SIP (parallelism 0.3–0.49) — geometry wins.
+        # The code comments on _sip_marginal flag define 0.35–0.49 as marginal;
+        # high-contrast editorial grading creates shadow-line edges at this
+        # confidence level that look like projected patterns but are editing
+        # artifacts.  When geometry clearly resolves a named standard pattern
+        # (rembrandt, loop, split, etc.) for the same image, trust geometry.
+        shadow_pattern = _geo_sp
+    elif (has_shadow_interruption and _sip_par_val < 0.70
+          and _geo_sp == "unknown"):
+        # P3d: Marginal SIP (<0.70 parallelism) + geometry has no corroboration.
+        # Hair, clothing texture, and high-contrast edits often trigger SIP at
+        # this confidence without an actual projected pattern.  When geometry
+        # has no competing named pattern ("unknown"), we have insufficient
+        # evidence to commit to "gobo".  Fall to "unknown" so _build_lighting_family
+        # does not label this a gobo setup.
+        shadow_pattern = "unknown"
+    elif (has_shadow_interruption and _sip_par_val < 0.70
+          and _geo_sp in _STANDARD_PATTERNS_SIP):
+        # P3e: Marginal SIP (0.50–0.69) AND geometry resolves a standard named
+        # pattern.  The standard pattern *disproves* gobo — use geometry.
+        shadow_pattern = _geo_sp
+    elif has_shadow_interruption:
         # Shape from SIP classification
         _lc = getattr(sip, "line_count", 0) or 0
         if sip.classification == "patterned_projection" and _lc == 2:
@@ -2518,8 +2646,19 @@ def build_lighting_read(
             shadow_pattern = "gobo"
     elif inferred_dramatic_hard:
         # Strong dramatic hard-light signals — likely gobo or chiaroscuro.
-        # Check image_read devices AND projected_pattern_shape for shape hints.
-        _heur_base = lighting_intel.pattern if (lighting_intel and lighting_intel.pattern != "unknown") else "gobo"
+        # BUT: if cue_inference geometry already identified a standard named
+        # pattern (split, rembrandt, etc.) from shadow direction, trust that
+        # over defaulting to "gobo".  Hard light ≠ gobo — split lighting is
+        # hard by nature but isn't a projected pattern.
+        _geo_pattern_dh = (getattr(geometry, "shadow_pattern", "unknown") if geometry else "unknown") or "unknown"
+        _intel_pattern_dh = lighting_intel.pattern if (lighting_intel and lighting_intel.pattern != "unknown") else "unknown"
+        _STANDARD_PATTERNS = {"split", "rembrandt", "loop", "butterfly", "clamshell", "triangle", "broad", "short"}
+        if _geo_pattern_dh in _STANDARD_PATTERNS:
+            _heur_base = _geo_pattern_dh
+        elif _intel_pattern_dh in _STANDARD_PATTERNS:
+            _heur_base = _intel_pattern_dh
+        else:
+            _heur_base = _intel_pattern_dh if _intel_pattern_dh != "unknown" else "gobo"
         if _heur_base == "gobo":
             # First check: projected_pattern_shape from person_mask analysis
             _pps = cue_report.projected_pattern_shape
@@ -2540,6 +2679,40 @@ def build_lighting_read(
                     elif "slit" in _dl:
                         _heur_base = "slit / flag projection"
                         break
+        # After all gobo sub-type checks: if _heur_base is still generic "gobo"
+        # (no projected_pattern_shape, no gobo device text) AND geometry
+        # identified "low_key", trust the geometric classification.  Low-key is
+        # dramatic hard light by nature (single key, dark background, high
+        # contrast) and shouldn't be called "gobo" absent actual projection
+        # evidence.  This prevents false gobo labels on dramatic portraits.
+        if _heur_base == "gobo" and _geo_pattern_dh == "low_key":
+            _heur_base = "low_key"
+
+        # P3b: High-contrast editorial grading creates "mixed edge" shadows and
+        # dramatic luminance ratios that trigger inferred_dramatic_hard — but
+        # these are post-processing artifacts, not actual projected light patterns.
+        # When no SIP fired (no real projected shadows detected) and the tonal
+        # processing is a high-contrast grade, a "gobo" classification is almost
+        # certainly wrong.  Use key-light direction to derive a standard directional
+        # pattern (rembrandt → corrected to loop if source quality is soft/mixed
+        # by the P2f guard below) rather than calling it a gobo.
+        if _heur_base == "gobo":
+            _tp_dh = getattr(cue_report, "tonal_processing", None)
+            _is_hcg = getattr(_tp_dh, "is_high_contrast_grade", False) if _tp_dh else False
+            if _is_hcg:
+                # Derive direction-based pattern from geometry key_light_direction.
+                # ~45° lateral (upper_left/upper_right) → "rembrandt" as starting
+                # point; the P2f guard at line ~2653 will downgrade to "loop" if
+                # source quality is soft or mixed.
+                _dir_dh = getattr(geometry, "key_light_direction", "unknown") if geometry else "unknown"
+                _lateral_dirs = {"upper_left", "upper_right", "left", "right",
+                                  "lower_left", "lower_right"}
+                if _dir_dh in _lateral_dirs:
+                    _heur_base = "rembrandt"
+                else:
+                    # Overhead or unknown direction → loop is safest default
+                    _heur_base = "loop"
+
         shadow_pattern = _heur_base
     else:
         # Prefer cue_inference geometry's shadow_pattern (uses deduped
@@ -2558,6 +2731,49 @@ def build_lighting_read(
         _deduped_lc = getattr(geometry, "light_count_estimate", 0) if geometry else 0
         if shadow_pattern == "triangle" and _deduped_lc < 3:
             shadow_pattern = "unknown"
+
+        # P2f: Rembrandt requires hard light to form the triangle cheek highlight.
+        # When geometry infers "rembrandt" but the modifier evidence says "soft"
+        # (softbox, octagonal, large umbrella → gradual falloff), the cheek
+        # triangle is unlikely to be distinct.  The lighting angle is still ~45°
+        # off-axis, which produces "loop" under soft modifiers — so downgrade.
+        # Only applies in the standard non-gobo, non-dramatic-hard path.
+        if shadow_pattern == "rembrandt" and sq_text in ("soft", "mixed"):
+            shadow_pattern = "loop"
+
+    # P2f-global: Apply the same rembrandt→loop correction regardless of which
+    # branch set shadow_pattern = "rembrandt".  The marginal-SIP rescue path
+    # (P3c above) can also produce "rembrandt" from geometry — it must receive
+    # the same softness/mixed correction to avoid calling mixed-edge editorial
+    # portraits "Rembrandt" when a true Rembrandt requires hard cheek highlight.
+    # Condition: rembrandt + non-hard source quality.
+    if shadow_pattern == "rembrandt" and sq_text in ("soft", "mixed"):
+        shadow_pattern = "loop"
+
+    # ── Normalize shadow_pattern to canonical enum values ──────────────
+    # The gobo sub-types above are descriptive ("grid/window gobo",
+    # "cross-shaped gobo", "slit / flag projection") but downstream
+    # consumers (resolve_pattern_candidates, scoring) expect canonical
+    # LightingPattern enum values.  Preserve detail in shadow_pattern_detail,
+    # collapse to "gobo" for the canonical field.
+    _CANONICAL_PATTERNS = {
+        "split", "rembrandt", "loop", "butterfly", "clamshell", "triangle",
+        "broad", "short", "gobo", "flat", "unknown",
+        # Extended enum values
+        "rim_only", "high_key", "low_key", "flat_fashion", "window_portrait",
+        "golden_hour", "overcast_natural", "ring_light", "bare_bulb_editorial",
+        "strip_dramatic", "short_fashion_key", "soft_editorial_key",
+        "editorial_rim_key", "tabletop_soft_product", "bottle_backlight",
+        "athletic_rim_sculpt", "window_negative_fill", "hybrid",
+    }
+    shadow_pattern_detail = shadow_pattern  # preserve the descriptive version
+    if shadow_pattern not in _CANONICAL_PATTERNS:
+        # Map gobo variants to canonical "gobo"
+        if "gobo" in shadow_pattern.lower():
+            shadow_pattern = "gobo"
+        elif "slit" in shadow_pattern.lower() or "flag" in shadow_pattern.lower():
+            shadow_pattern = "gobo"
+        # else: leave as-is (unknown consumer can handle it)
 
     # Clamshell direction correction: the standard direction mapping produces
     # "camera-left, ~45 degrees, elevated" (or right) for any upper_left/right
@@ -2855,6 +3071,7 @@ def build_lighting_read(
         source_quality=sq_text,
         source_direction=direction_text,
         shadow_pattern=shadow_pattern,
+        shadow_pattern_detail=shadow_pattern_detail,
         fill_presence=fill_presence,
         rim_presence=rim_presence,
         light_count=light_count,
@@ -2905,6 +3122,14 @@ def build_recreation_setup(
             scene_ctx=scene_ctx,
         )
 
+    # Blueprint oracle: if lighting_read already resolved a soft or mixed source
+    # quality, the dramatic-hard heuristic fired on contrast/shadow cues that
+    # the blueprint already accounted for.  Trust the blueprint — suppress the
+    # dramatic_hard override so recreation follows the blueprint's determination.
+    _lr_sq = (getattr(lighting_read, "source_quality", "") or "").lower()
+    if inferred_dramatic_hard and _lr_sq in ("soft", "mixed", "ambient"):
+        inferred_dramatic_hard = False
+
     # If cue_inference produced a gobo/slit family but we voided the shadow
     # interruption (catchlights contradict hard source), reset to unknown so
     # the standard logic derives it from the corrected lighting_read instead.
@@ -2913,23 +3138,57 @@ def build_recreation_setup(
             and not has_shadow_interruption and not inferred_dramatic_hard:
         family = "unknown"
 
-    # When shadow interruption IS confirmed, set a descriptive family that
-    # reflects what the image actually is — don't force a database match.
-    # These are their own setups, not variants of Rembrandt/Loop/etc.
+    # When shadow interruption IS confirmed, classify as gobo/slit.
+    # Guard: a confident VLM portrait-family classification + weak line
+    # parallelism means the sip fired on hair/clothing shadows, not a real
+    # gobo. Require either (a) no competing portrait classification, or
+    # (b) high parallelism (≥ 0.70) before overriding the VLM hypothesis.
+    _GOBO_FAMILIES = {
+        "gobo_projection", "slit_projection", "hard_key_gobo",
+        "slit_cut_light", "slit_flag_projection", "projected_shadow_pattern",
+        "unknown",
+    }
+    # Cross-check lighting_read: if the lighting analysis (which already has
+    # catchlight contradiction + geometry corrections) does NOT describe a
+    # gobo/slit/projected setup, a marginal shadow interruption is almost
+    # certainly a false positive from hair or clothing texture.
+    _lighting_fam_lc = (getattr(lighting_read, "lighting_family", "") or "").lower()
+    _lighting_says_gobo = any(
+        tok in _lighting_fam_lc for tok in ("gobo", "slit", "projected", "projection")
+    )
     if has_shadow_interruption:
-        if sip.classification == "geometric_bar":
-            family = "slit_flag_projection"
-        elif sip.classification == "patterned_projection":
-            family = "gobo_projection"
+        _sip_parallelism = getattr(sip, "line_parallelism", 1.0) or 1.0
+        _vlm_conf = getattr(setup_family_inf, "primary_confidence", 0.0) \
+            if setup_family_inf else 0.0
+        _has_portrait_family = family not in _GOBO_FAMILIES
+        # Suppress false-positive when:
+        # (a) VLM setup inference says portrait + high confidence + marginal parallelism
+        # (b) lighting_read says non-gobo + marginal parallelism (strongest oracle)
+        _suppress_fp = (
+            (_has_portrait_family and _vlm_conf >= 0.50 and _sip_parallelism < 0.70)
+            or (not _lighting_says_gobo and _sip_parallelism < 0.70)
+        )
+        if _suppress_fp:
+            has_shadow_interruption = False
+            # Also reset family if VLM had incorrectly guessed gobo
+            if family in _GOBO_FAMILIES:
+                family = "unknown"  # will be properly re-derived below
         else:
-            family = "projected_shadow_pattern"
+            if sip.classification == "geometric_bar":
+                family = "slit_flag_projection"
+            elif sip.classification == "patterned_projection":
+                family = "gobo_projection"
+            else:
+                family = "projected_shadow_pattern"
 
     # Override family when dramatic hard light is inferred.
-    # When the lighting_read already identified a gobo shadow pattern,
-    # the setup IS a gobo projection — that's the defining feature, not
-    # just "dramatic chiaroscuro" which is a lighting character, not a setup.
+    # Only set gobo_projection when the shadow_pattern unambiguously names
+    # gobo as the primary device (starts with "gobo" or "slit").
+    # "gobo" appearing elsewhere in the description (e.g. "no gobo detected")
+    # must not trigger this branch — use a prefix match instead.
     elif inferred_dramatic_hard and family == "unknown":
-        if "gobo" in lighting_read.shadow_pattern:
+        _sp = (getattr(lighting_read, "shadow_pattern", "") or "").lower().strip()
+        if _sp.startswith("gobo") or _sp.startswith("slit"):
             family = "gobo_projection"
         else:
             family = "dramatic_chiaroscuro"
@@ -3827,6 +4086,64 @@ def build_reference_photo_analysis(
     # signals are weak (e.g. person_ratio ≈ 0, bg_env empty).
     scene_ctx = _build_scene_context(vision_data, cue_report, vlm_description=vlm_description)
 
+    # ── Blueprint first: lighting_read is the single authority ──────────
+    # All downstream builders (image_read, recreation_setup) read from it
+    # rather than independently re-deriving lighting character from raw CV.
+    lighting_read = build_lighting_read(
+        cue_report=cue_report,
+        cue_inference=cue_inference,
+        lighting_intel=lighting_intel,
+        classification=classification,
+        vision_data=vision_data,
+        scene_ctx=scene_ctx,
+    )
+
+    # Phase 3: Environmental scene corrections (consolidated)
+    lighting_read = _apply_environmental_strategy(lighting_read, scene_ctx, cue_report)
+
+    # Studio degraded-mode corrections: when studio is detected but face
+    # mesh is unavailable (B&W, extreme contrast, obscured face), fill in
+    # fields that would otherwise stay "unknown".
+    lighting_read = _apply_studio_degraded_strategy(lighting_read, scene_ctx, cue_report)
+
+    # Outdoor/unknown scene corrections: use shadow angle on ground/walls,
+    # shadow edge properties, and specular data for outdoor images without
+    # face mesh where no other strategy has fired.
+    lighting_read = _apply_unknown_scene_strategy(lighting_read, scene_ctx, cue_report)
+
+    # ── VLW Reconciliation: compare VLM hypothesis vs CV evidence ──
+    vlw_result = None
+    if vlm_description is not None and getattr(vlm_description, "ok", False):
+        from engine.vlw_reconciliation import (
+            reconcile_vlw, apply_confirmed_boosts, apply_vlm_overrides,
+        )
+
+        vlw_result = reconcile_vlw(
+            vlm_description=vlm_description,
+            lighting_read=lighting_read,
+            scene_ctx=scene_ctx,
+            cue_report=cue_report,
+            classification=classification,
+        )
+
+        # Auto-override: apply VLM values for known CV false-positive patterns
+        # (e.g. high-contrast grade making soft light read as hard in CV).
+        # This is the single-decider path — blueprint reflects VLM where CV
+        # has a predictable systematic error.
+        lighting_read = apply_vlm_overrides(lighting_read, vlw_result)
+
+        # SAFE PATH: only apply confidence boosts from confirmed dimensions.
+        if vlw_result.confirmed_count > 0:
+            lighting_read = apply_confirmed_boosts(lighting_read, vlw_result)
+
+        # Log remaining conflicts for human review.
+        if vlw_result.conflict_count > 0:
+            for reason in vlw_result.human_review_reasons:
+                lighting_read.ambiguity_notes.append(f"[VLW CONFLICT] {reason}")
+
+    # ── image_read runs after blueprint is fully resolved ────────────
+    # lighting_read is passed as the oracle so image_read doesn't need to
+    # re-derive source quality, gobo, or hard-light from raw CV signals.
     image_read = build_image_read(
         vision_data=vision_data,
         classification=classification,
@@ -3836,6 +4153,7 @@ def build_reference_photo_analysis(
         image_analysis=image_analysis,
         vlm_description=vlm_description,
         scene_ctx=scene_ctx,
+        lighting_read=lighting_read,
     )
 
     # Log VLM corrections to improvement table for CV learning
@@ -3856,52 +4174,6 @@ def build_reference_photo_analysis(
             )
         except Exception:
             pass  # best-effort
-
-    lighting_read = build_lighting_read(
-        cue_report=cue_report,
-        cue_inference=cue_inference,
-        lighting_intel=lighting_intel,
-        classification=classification,
-        vision_data=vision_data,
-        image_read_devices=image_read.notable_visual_devices,
-        scene_ctx=scene_ctx,
-    )
-
-    # Phase 3: Environmental scene corrections (consolidated)
-    lighting_read = _apply_environmental_strategy(lighting_read, scene_ctx, cue_report)
-
-    # Studio degraded-mode corrections: when studio is detected but face
-    # mesh is unavailable (B&W, extreme contrast, obscured face), fill in
-    # fields that would otherwise stay "unknown".
-    lighting_read = _apply_studio_degraded_strategy(lighting_read, scene_ctx, cue_report)
-
-    # Outdoor/unknown scene corrections: use shadow angle on ground/walls,
-    # shadow edge properties, and specular data for outdoor images without
-    # face mesh where no other strategy has fired.
-    lighting_read = _apply_unknown_scene_strategy(lighting_read, scene_ctx, cue_report)
-
-    # ── VLW Reconciliation: compare VLM hypothesis vs CV evidence ──
-    vlw_result = None
-    if vlm_description is not None and getattr(vlm_description, "ok", False):
-        from engine.vlw_reconciliation import reconcile_vlw, apply_confirmed_boosts
-
-        vlw_result = reconcile_vlw(
-            vlm_description=vlm_description,
-            lighting_read=lighting_read,
-            scene_ctx=scene_ctx,
-            cue_report=cue_report,
-            classification=classification,
-        )
-
-        # SAFE PATH: only apply confidence boosts from confirmed dimensions.
-        # Conflicting dimensions require human approval before changes.
-        if vlw_result.confirmed_count > 0:
-            lighting_read = apply_confirmed_boosts(lighting_read, vlw_result)
-
-        # Log conflicts for human review — NEVER silently modify values.
-        if vlw_result.conflict_count > 0:
-            for reason in vlw_result.human_review_reasons:
-                lighting_read.ambiguity_notes.append(f"[VLW CONFLICT] {reason}")
 
     recreation_setup = build_recreation_setup(
         image_read=image_read,
@@ -3997,10 +4269,18 @@ def build_reference_photo_analysis(
     if vlm_description is not None and getattr(vlm_description, "ok", False):
         vlm_dump = vlm_description
 
+    # Extract color palette from VLM signals when available
+    color_palette: Optional[ColorPalette] = None
+    if vlm_description is not None:
+        _sigs = getattr(vlm_description, "signals", None)
+        if _sigs is not None:
+            color_palette = getattr(_sigs, "color_palette", None)
+
     return ReferencePhotoAnalysis(
         image_read=image_read,
         lighting_read=lighting_read,
         recreation_setup=recreation_setup,
+        color_palette=color_palette,
         vlm_description=vlm_dump,
         vlw_reconciliation=vlw_result,
         ok=True,

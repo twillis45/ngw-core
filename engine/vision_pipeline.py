@@ -523,6 +523,31 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     left_r = iris_radius(468, [469, 470, 471, 472])
     right_r = iris_radius(473, [474, 475, 476, 477])
 
+    # ── Eye-open check ───────────────────────────────────────────────────
+    # MediaPipe places iris landmarks even for CLOSED eyes. When eyes are
+    # closed, the eyelid skin and makeup create specular highlights in the
+    # iris crop region that the algorithm incorrectly registers as catchlights.
+    #
+    # Detect eye-open state by measuring the vertical aperture between upper
+    # and lower eyelid landmarks relative to iris radius:
+    #   Left eye:  upper mid=159, lower mid=145
+    #   Right eye: upper mid=386, lower mid=374
+    # If aperture < EYE_OPEN_RATIO × iris_radius, skip that eye.
+    #
+    # Threshold: 0.35 × iris_radius. Open iris aperture is typically
+    # 0.8–1.2 × iris_radius; squinting is 0.4–0.6; closed is <0.3.
+    _EYE_OPEN_RATIO = 0.35
+
+    def _eye_is_open(upper_idx: int, lower_idx: int, iris_r: float) -> bool:
+        """Return True if the eye aperture suggests the eye is open."""
+        _, uy = px(upper_idx)
+        _, ly = px(lower_idx)
+        aperture = abs(ly - uy)
+        return aperture >= _EYE_OPEN_RATIO * iris_r
+
+    _left_open = _eye_is_open(159, 145, left_r)
+    _right_open = _eye_is_open(386, 374, right_r)
+
     def clock_position(dx: float, dy: float) -> str:
         angle_rad = math.atan2(-dy, dx)  # negate dy (image y-axis inverted)
         angle_deg = math.degrees(angle_rad)
@@ -610,12 +635,34 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
 
         return results
 
-    left_catchlights = analyze_eye(left_center, left_r, "left")
-    right_catchlights = analyze_eye(right_center, right_r, "right")
+    # Only analyze an eye if it appears to be open.
+    # Closed eyes produce eyelid specular highlights that are misread as
+    # catchlights. When an eye is closed we skip it entirely so it doesn't
+    # pollute the light-count inference.
+    left_catchlights = analyze_eye(left_center, left_r, "left") if _left_open else []
+    right_catchlights = analyze_eye(right_center, right_r, "right") if _right_open else []
     all_catchlights = left_catchlights + right_catchlights
 
+    # ── Face yaw estimation from landmark geometry ────────────────────
+    # Compare the distance from nose tip to left vs right face edges.
+    # A face turned right (nose toward camera-right) shows more of the
+    # left face → nose-to-left-edge > nose-to-right-edge → positive yaw.
+    # Yaw is in [-1, 1]: negative = turned left, positive = turned right,
+    # ~0 = facing camera.
+    _nose_tip = px(1)          # nose tip
+    _left_edge = px(234)       # left face contour
+    _right_edge = px(454)      # right face contour
+    _nose_to_left = math.hypot(_nose_tip[0] - _left_edge[0], _nose_tip[1] - _left_edge[1])
+    _nose_to_right = math.hypot(_nose_tip[0] - _right_edge[0], _nose_tip[1] - _right_edge[1])
+    _face_width = math.hypot(_left_edge[0] - _right_edge[0], _left_edge[1] - _right_edge[1])
+    if _face_width > 0:
+        # Asymmetry ratio: >0 = turned right, <0 = turned left
+        _face_yaw = round((_nose_to_left - _nose_to_right) / _face_width, 3)
+    else:
+        _face_yaw = 0.0
+
     if not all_catchlights:
-        return {"ok": True, "count": 0, "catchlights": [], "inferred": {
+        return {"ok": True, "count": 0, "catchlights": [], "face_yaw": _face_yaw, "inferred": {
             "keyLightPosition": "not detected",
             "likelyModifier": "unknown",
             "lightCount": 0,
@@ -664,6 +711,7 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         "ok": True,
         "count": light_count,
         "catchlights": all_catchlights,
+        "face_yaw": _face_yaw,
         "inferred": {
             "keyLightPosition": key_pos,
             "likelyModifier": likely_mod,
@@ -717,6 +765,7 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
 
     # Face detection for better skin region targeting
     face_box = None
+    face_detection_score: float = 0.0
     fd_model = _MODEL_DIR / "face_detector.tflite"
     if fd_model.exists():
         fd_opts = mp.tasks.vision.FaceDetectorOptions(
@@ -732,6 +781,7 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
 
         if fd_res.detections:
             det = fd_res.detections[0]
+            face_detection_score = det.categories[0].score if det.categories else 0.0
             bb = det.bounding_box
             x0 = bb.origin_x
             y0 = bb.origin_y
@@ -840,6 +890,8 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
                 "skin_ratio": float(np.mean(skin_mask)),
                 "clothing_ratio": float(np.mean(clothing_mask)),
                 "background_ratio": float(np.mean(background_mask)),
+                "_image_h": int(h),
+                "_image_w": int(w),
             },
             "palettes": {
                 "skin_palette": skin_pal,
@@ -847,6 +899,7 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
                 "background_palette": bg_pal,
             },
             "face_box": list(face_box) if face_box else None,
+            "face_detection_score": round(face_detection_score, 4) if face_box else None,
             "notes": [
                 "Skin/clothing/background palettes come from actual masked pixels (not guesses).",
                 "Clothing mask is 'person minus skin' (hair may be included).",

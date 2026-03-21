@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/8-f/11
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Meter for highlights and expose slightly right to preserve the high-key feel
+    - Check histogram to ensure skin highlights stay below 240 RGB to retain detail
+
 lights:
   - role: key
     modifier: softbox_octa

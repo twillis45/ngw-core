@@ -1,0 +1,66 @@
+{
+  "run_timestamp": "2026-03-21T18:49:26.440447+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "hurley_triangle",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "clamshell",
+          "expected": "triangle",
+          "acceptable": [
+            "triangle",
+            "clamshell",
+            "rembrandt",
+            "butterfly",
+            "loop"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 3,
+          "expected": 3
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "clamshell",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.91,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "diagnostics": {
+        "face_quality": "good",
+        "face_detected": true,
+        "signals_available": 24,
+        "signals_total": 24,
+        "signal_strength": 0.59,
+        "weak_signals": [
+          "environmental_shadow_continuity",
+          "shadow_interruption_pattern"
+        ],
+        "missing_signals": [],
+        "ambiguity_flags": [],
+        "pattern_reasoning": "Pattern 'clamshell' selected by reference_read (confidence 91%). light structure indicates loop.",
+        "edge_cases": [
+          "blown_highlights"
+        ]
+      },
+      "timing_s": 1.3
+    }
+  ]
+}

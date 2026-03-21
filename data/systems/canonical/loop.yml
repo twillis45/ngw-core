@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/5.6-f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Versatile general-portrait settings; adjust aperture for desired background separation
+    - f/8 is safest for group consistency, f/5.6 for single-subject headshots
+
 lights:
   - role: key
     modifier: softbox_octa

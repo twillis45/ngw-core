@@ -316,6 +316,7 @@ class TestGenerateAnalysisOverlay:
 # describe_image debug flag tests
 # ═══════════════════════════════════════════════════════════════════════════
 
+@pytest.mark.slow_visual
 @pytest.mark.skipif(not HAS_CV2, reason="cv2 not available")
 class TestDescribeImageDebugFlag:
     """Test that describe_image preserves/strips debug data correctly."""

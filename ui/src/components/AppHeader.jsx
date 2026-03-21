@@ -4,6 +4,8 @@ import { loadTheme, saveTheme, applyTheme, getSystemTheme, THEMES } from '../dat
 import { getUser, logout as apiLogout } from '../data/authApi';
 import { probeAndEnableLab } from '../data/labApi';
 import { isEnabled } from '../modes/featureFlags';
+import { pullKitFromServer } from '../data/kitStore';
+import { pullSetupsFromServer } from '../data/setupStore';
 import MasterModeSelector, { MASTER_MODE_MAP } from './MasterModeSelector';
 
 function resolvedTheme() {
@@ -26,6 +28,9 @@ export default function AppHeader() {
     if (saved && !user) {
       dispatch({ type: 'SET_USER', user: saved });
       probeAndEnableLab().then(() => forceUpdate(n => n + 1));
+      // Sync server data down to localStorage
+      pullKitFromServer();
+      pullSetupsFromServer();
     }
   }, []);
 
@@ -118,6 +123,22 @@ export default function AppHeader() {
           </svg>
         )}
       </button>
+      {isEnabled('enable_lab') && (
+        <button
+          className="app-header__lab-btn"
+          onClick={() => {
+            dispatch({ type: 'SET_APP_MODE', mode: 'lab' });
+            dispatch({ type: 'NAVIGATE', screen: 'lab' });
+          }}
+          aria-label="NGW Lab"
+          title="NGW Lab"
+          type="button"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 3h6M12 3v7M5.2 21h13.6c1 0 1.7-1 1.2-1.9L14 12V3h-4v9L3.9 19.1c-.5.9.2 1.9 1.3 1.9z"/>
+          </svg>
+        </button>
+      )}
       <button
         className="app-header__settings-btn"
         onClick={() => dispatch({ type: 'NAVIGATE', screen: 'settings' })}

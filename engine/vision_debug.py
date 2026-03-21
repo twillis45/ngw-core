@@ -39,22 +39,44 @@ def _ensure_output_dir() -> None:
 
 
 # ── Color palette for overlays ────────────────────────────────────────────
+# NOTE: All colors are in OpenCV BGR order. Browser displays JPEG in RGB,
+# so BGR (B, G, R) displays as the RGB color (R, G, B).
+# Legend (browser display color → annotation meaning):
+#   Blue         → Shadow direction arrow
+#   Green        → Catchlight circles
+#   Yellow       → Highlight heatmap
+#   Magenta      → Background gradient center
+#   Orange/gold  → Raw pose axis (head rotation)
+#   Cyan         → Specular highlights
+#   Orange       → Shoulder axis
+#   Purple       → Hip axis
+#   Chartreuse   → Corrected key-light arrow (pose-adjusted)
+#   Red          → Self-shadow region tint
+#   Salmon       → Occluded regions
+#   Steel blue   → Surface class labels
+#   Yellow-green → Light role indicators
 
-_SHADOW_COLOR = (255, 100, 0)      # Orange-red for shadow arrow
-_HIGHLIGHT_COLOR = (0, 255, 255)    # Yellow for highlights
-_CATCHLIGHT_COLOR = (0, 255, 0)     # Green for catchlights
-_BG_CENTER_COLOR = (255, 0, 255)    # Magenta for background gradient center
-_POSE_COLOR = (0, 200, 255)         # Gold for pose axis
-_SPECULAR_COLOR = (255, 255, 0)     # Cyan for specular highlights
-_SHOULDER_COLOR = (0, 165, 255)    # Orange for shoulder axis
-_HIP_COLOR = (128, 0, 128)        # Purple for hip axis
-_POSE_CORR_COLOR = (0, 255, 128)  # Spring green for corrected light arrow
-_SELF_SHADOW_COLOR = (0, 0, 200)  # Dark red for self-shadow regions
-_OCCLUSION_COLOR = (100, 100, 255)  # Light red for occlusion regions
-_SURFACE_CLASS_COLOR = (200, 150, 50)  # Light blue-ish for surface labels
-_LIGHT_ROLE_COLOR = (50, 200, 150)     # Teal for light role indicators
-_TEXT_COLOR = (255, 255, 255)       # White for labels
-_TEXT_BG = (0, 0, 0)               # Black for text background
+_SHADOW_COLOR        = (255, 100,   0)  # BGR → displays blue
+_HIGHLIGHT_COLOR     = (  0, 255, 255)  # BGR → displays yellow
+_CATCHLIGHT_COLOR    = (  0, 255,   0)  # BGR → displays green
+_BG_CENTER_COLOR     = (255,   0, 255)  # BGR → displays magenta
+_POSE_COLOR          = (  0, 200, 255)  # BGR → displays orange/gold
+_SPECULAR_COLOR      = (255, 255,   0)  # BGR → displays cyan
+_SHOULDER_COLOR      = (  0, 165, 255)  # BGR → displays orange
+_HIP_COLOR           = (128,   0, 128)  # BGR → displays purple
+_POSE_CORR_COLOR     = (  0, 255, 128)  # BGR → displays chartreuse
+_SELF_SHADOW_COLOR   = (  0,   0, 200)  # BGR → displays red
+_OCCLUSION_COLOR     = (100, 100, 255)  # BGR → displays salmon
+_SURFACE_CLASS_COLOR = (200, 150,  50)  # BGR → displays steel blue
+_LIGHT_ROLE_COLOR    = ( 50, 200, 150)  # BGR → displays yellow-green
+_TEXT_COLOR          = (255, 255, 255)  # White — label text
+_TEXT_BG             = (  0,   0,   0)  # Black — label background box
+
+# Dynamic font scale — set by generate_analysis_overlay based on image width.
+# Targets ~14px text height when overlay is viewed at 600px wide in browser.
+# Formula: (image_width / 600) * 0.55, clamped to [0.55, 3.0].
+_FONT_SCALE: float = 0.55
+_FONT_THICKNESS: int = 1
 
 
 def _put_label(
@@ -62,13 +84,19 @@ def _put_label(
     text: str,
     pos: Tuple[int, int],
     color: Tuple[int, int, int] = _TEXT_COLOR,
-    scale: float = 0.5,
+    scale: float | None = None,
 ) -> None:
-    """Draw a label with background on the image."""
-    (tw, th), baseline = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, 1)
-    x, y = pos
-    cv2.rectangle(img, (x - 2, y - th - 4), (x + tw + 2, y + 4), _TEXT_BG, -1)
-    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, scale, color, 1, cv2.LINE_AA)
+    """Draw a label with background on the image, clamped to stay inside bounds."""
+    s = scale if scale is not None else _FONT_SCALE
+    thickness = max(1, round(_FONT_THICKNESS))
+    (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, s, thickness)
+    ih, iw = img.shape[:2]
+    pad_x, pad_y = max(3, round(s * 5)), max(4, round(s * 7))
+    # Clamp so the background rect stays within the image
+    x = max(pad_x, min(pos[0], iw - tw - pad_x * 2))
+    y = max(th + pad_y, min(pos[1], ih - pad_y))
+    cv2.rectangle(img, (x - pad_x, y - th - pad_y), (x + tw + pad_x, y + pad_y), _TEXT_BG, -1)
+    cv2.putText(img, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, s, color, thickness, cv2.LINE_AA)
 
 
 # ── Individual overlay functions ──────────────────────────────────────────
@@ -102,7 +130,8 @@ def _draw_shadow_vector(
 
     softness = shadow_data.get("shadow_softness")
     if softness is not None:
-        _put_label(overlay, f"Soft: {softness:.2f}", (cx + 5, cy + 20), _SHADOW_COLOR)
+        line_h = max(20, round(_FONT_SCALE * 30))
+        _put_label(overlay, f"Soft: {softness:.2f}", (cx + 5, cy + line_h), _SHADOW_COLOR)
 
 
 def _draw_highlight_heatmap(
@@ -260,7 +289,8 @@ def _draw_specular_highlights(
             radius = max(5, int(math.sqrt(cv2.contourArea(contour) / math.pi)))
             cv2.circle(overlay, (cx, cy), radius, _SPECULAR_COLOR, 2)
 
-    _put_label(overlay, f"Spec: {count}", (10, h - 30), _SPECULAR_COLOR)
+    line_h = max(20, round(_FONT_SCALE * 30))
+    _put_label(overlay, f"Spec: {count}", (10, h - line_h * 2), _SPECULAR_COLOR)
 
 
 def _draw_pose_solver(
@@ -313,7 +343,7 @@ def _draw_pose_solver(
         _put_label(
             overlay,
             f"Head: {head_rot:.0f}° Yaw: {chin_yaw:.0f}°",
-            (face_box[2] + 5, face_box[1] + 15),
+            (face_box[2] + 5, face_box[1] + max(15, round(_FONT_SCALE * 20))),
             _POSE_COLOR,
         )
 
@@ -334,23 +364,25 @@ def _draw_pose_solver(
                 sub = overlay[ry0:ry1, rx0:rx1]
                 if sub.size > 0:
                     red_tint = np.full_like(sub, _SELF_SHADOW_COLOR)
-                    blended = cv2.addWeighted(sub, 0.7, red_tint, 0.3, 0)
+                    blended = cv2.addWeighted(sub, 0.82, red_tint, 0.18, 0)
                     overlay[ry0:ry1, rx0:rx1] = blended
 
+        _lh = max(20, round(_FONT_SCALE * 30))
         _put_label(
             overlay,
             f"Self-shadow: {', '.join(self_shadow)}",
-            (10, h - 50),
+            (10, h - _lh * 3),
             _SELF_SHADOW_COLOR,
         )
 
     # ── Occlusion regions ───────────────────────────────────────────
     occluded = pose_data.get("occluded_regions", [])
     if occluded:
+        _lh = max(20, round(_FONT_SCALE * 30))
         _put_label(
             overlay,
             f"Occluded: {', '.join(occluded)}",
-            (10, h - 70),
+            (10, h - _lh * 4),
             _OCCLUSION_COLOR,
         )
 
@@ -382,10 +414,11 @@ def _draw_pose_solver(
         # Raw vs corrected label
         delta = abs(raw_angle - corrected_angle)
         if delta > 2:
+            _lh = max(20, round(_FONT_SCALE * 30))
             _put_label(
                 overlay,
                 f"Raw: {raw_angle:.0f}° → Corr: {corrected_angle:.0f}° (Δ{delta:.0f}°)",
-                (10, h - 90),
+                (10, h - _lh * 5),
                 _POSE_CORR_COLOR,
             )
 
@@ -396,10 +429,12 @@ def _draw_pose_solver(
         badge_color = (0, 255, 0) if adjustment == "normal" else (
             (0, 200, 255) if adjustment == "moderate_caution" else (0, 0, 255)
         )
+        _lh = max(20, round(_FONT_SCALE * 30))
+        badge_x = max(10, w - round(_FONT_SCALE * 340))
         _put_label(
             overlay,
             f"Pose: {complexity:.2f} ({adjustment})",
-            (w - 250, 20),
+            (badge_x, _lh * 1),
             badge_color,
         )
 
@@ -449,10 +484,11 @@ def _draw_surface_classes(
     # Reflection-dominant regions
     reflection_regions = surface_data.get("reflection_dominant_regions", [])
     if reflection_regions:
+        _lh = max(20, round(_FONT_SCALE * 30))
         _put_label(
             overlay,
             f"REFLECTIVE: {', '.join(reflection_regions)}",
-            (10, h - 110),
+            (10, h - _lh * 6),
             (0, 100, 255),
         )
 
@@ -465,10 +501,12 @@ def _draw_surface_classes(
             (0, 200, 255) if adj == "moderate_caution" else
             (0, 0, 255)
         )
+        _lh = max(20, round(_FONT_SCALE * 30))
+        badge_x = max(10, w - round(_FONT_SCALE * 340))
         _put_label(
             overlay,
             f"Surface: {complexity:.2f} ({adj})",
-            (w - 280, 45),
+            (badge_x, _lh * 2),
             badge_color,
         )
 
@@ -482,19 +520,24 @@ def _draw_light_roles(
     """Draw light role legend and light count badge."""
     h, w = overlay.shape[:2]
 
-    # Light count badge
+    # Shared line height for this function
+    line_h = max(20, round(_FONT_SCALE * 30))
+    badge_x = max(10, w - round(_FONT_SCALE * 340))
+
+    # Light count badge — top-right slot 3
     count = light_role_data.get("likely_light_count", "?")
     count_conf = light_role_data.get("light_count_confidence", 0.0)
     _put_label(
         overlay,
         f"Lights: {count} (conf={count_conf:.0%})",
-        (w - 280, 70),
+        (badge_x, line_h * 3),
         _LIGHT_ROLE_COLOR,
     )
 
-    # Roles legend
+    # Roles legend — start high enough to never conflict with the bottom fixed labels.
+    # Bottom slots 1-7 are reserved; start roles at h - line_h * 16 going downward.
     roles = light_role_data.get("roles", {})
-    y_start = h - 180
+    y_start = h - line_h * 16
     for role_name, role_info in roles.items():
         if role_info.get("present"):
             conf = role_info.get("confidence", 0.0)
@@ -502,7 +545,7 @@ def _draw_light_roles(
             ev_str = ", ".join(evidence[:2]) if evidence else ""
             label = f"  {role_name}: {conf:.0%} [{ev_str}]"
             _put_label(overlay, label, (10, y_start), _LIGHT_ROLE_COLOR)
-            y_start += 18
+            y_start += line_h
 
     # False multi-light risk
     false_risk = light_role_data.get("false_multi_light_risk", 0.0)
@@ -543,6 +586,12 @@ def generate_analysis_overlay(
     try:
         overlay = img_bgr.copy()
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+        # Adaptive font scale — keeps text ~14 px tall when viewed at 600 px wide
+        global _FONT_SCALE, _FONT_THICKNESS
+        img_w = img_bgr.shape[1]
+        _FONT_SCALE = max(0.55, min(3.0, (img_w / 600) * 0.55))
+        _FONT_THICKNESS = max(1, round(_FONT_SCALE))
 
         # Shadow vector
         shadow = pipeline_results.get("shadow", {})
@@ -592,7 +641,8 @@ def generate_analysis_overlay(
 
         # Reconstruction summary in corner
         if recon.get("ok"):
-            y_pos = 20
+            line_h = max(20, round(_FONT_SCALE * 30))
+            y_pos = line_h
             summary_keys = [
                 "key_light_angle_deg_raw",
                 "key_light_angle_deg_pose_corrected",
@@ -607,7 +657,7 @@ def generate_analysis_overlay(
                 val = recon.get(key)
                 if val is not None:
                     _put_label(overlay, f"{key}: {val}", (10, y_pos))
-                    y_pos += 20
+                    y_pos += line_h
 
         # Validation status
         validation = pipeline_results.get("validation", {})
@@ -622,7 +672,8 @@ def generate_analysis_overlay(
             if surf_adj:
                 status += " [surf-adj]"
             color = (0, 255, 0) if valid else (0, 0, 255)
-            _put_label(overlay, f"{status} (conf={conf:.2f})", (10, overlay.shape[0] - 10), color)
+            _lh = max(20, round(_FONT_SCALE * 30))
+            _put_label(overlay, f"{status} (conf={conf:.2f})", (10, overlay.shape[0] - _lh), color)
 
         # Save output
         _ensure_output_dir()

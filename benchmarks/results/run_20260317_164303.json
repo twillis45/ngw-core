@@ -1,0 +1,50 @@
+{
+  "run_timestamp": "2026-03-17T16:43:03.163697+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 0,
+    "FAIL": 1,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "clamshell_clean",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "clamshell",
+          "acceptable": [
+            "clamshell",
+            "butterfly"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 0,
+          "expected": 2,
+          "range": [
+            2,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 0,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.76
+    }
+  ]
+}

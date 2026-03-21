@@ -366,13 +366,19 @@ class TestGeometryInference:
         return VisualCueReport(**kwargs)
 
     def test_triangle_from_reflections(self):
-        """Triangle requires 3+ catchlights per eye AND low/medium contrast.
-        Real triangle lighting wraps from 3 directions → low contrast."""
+        """Triangle requires 3+ catchlights per eye AND low/medium contrast
+        AND triangle geometry (two upper + one lower catchlight positions)."""
         report = self._report(
             reflection_architecture=ReflectionArchitecture(
                 total_catchlights=6,
                 per_eye_counts={"left": 3, "right": 3},
                 symmetry_score=1.0,
+                confidence=0.7,
+            ),
+            catchlight_position=CatchlightPosition(
+                left_eye=["10 o'clock", "2 o'clock", "6 o'clock"],
+                right_eye=["10 o'clock", "2 o'clock", "6 o'clock"],
+                symmetry="symmetric",
                 confidence=0.7,
             ),
             vertical_light_angle=VerticalLightAngle(
@@ -585,12 +591,19 @@ class TestSetupFamilyInference:
         return infer_setup_family(geo, sq, env, report)
 
     def test_triangle_hypothesis(self):
-        """Triangle requires low/medium contrast — 3-light wrap produces even illumination."""
+        """Triangle requires low/medium contrast, 3+ catchlights per eye,
+        AND triangle geometry (two upper + one lower)."""
         report = VisualCueReport(
             reflection_architecture=ReflectionArchitecture(
                 total_catchlights=6,
                 per_eye_counts={"left": 3, "right": 3},
                 symmetry_score=1.0,
+                confidence=0.7,
+            ),
+            catchlight_position=CatchlightPosition(
+                left_eye=["10 o'clock", "2 o'clock", "6 o'clock"],
+                right_eye=["10 o'clock", "2 o'clock", "6 o'clock"],
+                symmetry="symmetric",
                 confidence=0.7,
             ),
             contrast_ratio=ContrastRatio(

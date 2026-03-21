@@ -44,20 +44,91 @@ function positionText(light) {
   return `${side}, ${height}`;
 }
 
-function powerHint(role, pattern) {
-  if (role === 'key') return 'Start at 1/4 power, adjust to taste';
+/**
+ * Power hint data keyed by role + pattern.
+ * Each returns { fraction, stops, percent, tip }.
+ * The `tip` is extra context appended in all modes.
+ */
+function powerHintData(role, pattern) {
+  if (role === 'key') {
+    // Key is the reference — "stops" means stops below full (strobe) power, not below exposure
+    return { fraction: '1/4 power', stops: '\u20132 stops from full', percent: '25%', tip: 'adjust to taste' };
+  }
   if (role === 'fill') {
-    if (pattern === 'Clamshell' || pattern === 'Butterfly') return '1\u20132 stops below key for ratio control';
-    if (pattern === 'Split') return '3 stops below key (or none) for deep shadow';
-    return '2 stops below key';
+    if (pattern === 'Clamshell' || pattern === 'Butterfly')
+      return { fraction: '1/8\u20131/16', stops: '1\u20132 stops below key', percent: '12\u201306%', tip: 'ratio control' };
+    if (pattern === 'Split')
+      return { fraction: '1/32', stops: '3 stops below key', percent: '3%', tip: 'deep shadow (or none)' };
+    return { fraction: '1/16', stops: '2 stops below key', percent: '6%', tip: '' };
   }
   if (role === 'rim' || role === 'hair') {
-    if (pattern === 'Clamshell' || pattern === 'Butterfly') return '1\u20132 stops below key for subtle separation';
-    if (pattern === 'Split') return 'Match key or \u00BD stop below for crisp edge';
-    if (pattern === 'Rembrandt' || pattern === 'Loop') return '1 stop below key for edge separation';
-    return '1 stop below key, adjust for separation';
+    if (pattern === 'Clamshell' || pattern === 'Butterfly')
+      return { fraction: '1/8\u20131/16', stops: '1\u20132 stops below key', percent: '12\u201306%', tip: 'subtle separation' };
+    if (pattern === 'Split')
+      return { fraction: 'match key or \u00BD stop below', stops: 'match key or \u00BD stop below', percent: 'match key or \u00BD stop below', tip: 'crisp edge' };
+    if (pattern === 'Rembrandt' || pattern === 'Loop')
+      return { fraction: '1/8', stops: '1 stop below key', percent: '12%', tip: 'edge separation' };
+    return { fraction: '1/8', stops: '1 stop below key', percent: '12%', tip: 'adjust for separation' };
   }
-  return 'Start at 1/4 power';
+  return { fraction: '1/4 power', stops: '\u20132 stops from full', percent: '25%', tip: '' };
+}
+
+/**
+ * Format a power hint for the selected display mode.
+ * Exported so cards can call it reactively with useSettings().
+ * @param {string} role - light role
+ * @param {string} pattern - lighting pattern name
+ * @param {'fraction'|'stops'|'percent'} [mode='fraction']
+ * @returns {string}
+ */
+export function powerHint(role, pattern, mode, fStop) {
+  const d = powerHintData(role, pattern);
+  const display = mode || 'fraction';
+
+  // In stops mode with a meter-reading f-stop, show the concrete aperture value
+  // as the primary reference — far more actionable than abstract strobe fractions.
+  if (display === 'stops' && fStop) {
+    if (role === 'key') return `${fStop} target · adjust to taste`;
+    const stopsText = d.stops; // e.g. "2 stops below key"
+    return d.tip ? `${fStop} · ${stopsText} for ${d.tip}` : `${fStop} · ${stopsText}`;
+  }
+
+  let base;
+  if (display === 'stops') base = d.stops;
+  else if (display === 'percent') base = d.percent;
+  else base = d.fraction;
+
+  if (role === 'key') return `Start at ${base}, ${d.tip}`;
+  return d.tip ? `${base} for ${d.tip}` : base;
+}
+
+/**
+ * Convert an engine-generated power_hint string to the user's preferred display format.
+ * Used for diagram spec power_hint values that come from the backend.
+ * @param {string} hint - raw power hint text (e.g. "f/8 · match right key", "½ key power")
+ * @param {'fraction'|'stops'|'percent'} mode
+ * @returns {string}
+ */
+export function formatEnginePowerHint(hint, mode) {
+  if (!hint || !mode || mode === 'fraction') return hint;
+  // Engine hints use fraction notation — convert common patterns
+  const conversions = [
+    { re: /1\/1\b/g, stops: 'full (0 stops)', percent: '100%' },
+    { re: /1\/2\b/g, stops: '\u20131 stop', percent: '50%' },
+    { re: /½/g,      stops: '\u20131 stop', percent: '50%' },
+    { re: /1\/4\b/g, stops: '\u20132 stops', percent: '25%' },
+    { re: /¼/g,      stops: '\u20132 stops', percent: '25%' },
+    { re: /1\/8\b/g, stops: '\u20133 stops', percent: '12%' },
+    { re: /1\/16\b/g, stops: '\u20134 stops', percent: '6%' },
+    { re: /1\/32\b/g, stops: '\u20135 stops', percent: '3%' },
+    { re: /1\/64\b/g, stops: '\u20136 stops', percent: '1.5%' },
+    { re: /1\/128\b/g, stops: '\u20137 stops', percent: '0.8%' },
+  ];
+  let out = hint;
+  for (const c of conversions) {
+    out = out.replace(c.re, mode === 'stops' ? c.stops : c.percent);
+  }
+  return out;
 }
 
 const F_STOPS = ['f/1.4', 'f/2', 'f/2.8', 'f/4', 'f/5.6', 'f/8', 'f/11', 'f/16', 'f/22'];
@@ -98,11 +169,11 @@ function meterReading(role, pattern, keyFStopIdx) {
 }
 
 function reliabilityFromConfidence(score) {
-  if (score >= 90) return { dots: 5, label: 'Very Reliable' };
-  if (score >= 75) return { dots: 4, label: 'Reliable' };
-  if (score >= 55) return { dots: 3, label: 'Good Option' };
-  if (score >= 35) return { dots: 2, label: 'Experimental' };
-  return { dots: 1, label: 'Not Ideal' };
+  if (score >= 90) return { dots: 5, label: 'Consistent' };
+  if (score >= 75) return { dots: 4, label: 'Consistent' };
+  if (score >= 55) return { dots: 3, label: 'Partial' };
+  if (score >= 35) return { dots: 2, label: 'Weak' };
+  return { dots: 1, label: 'Weak' };
 }
 
 /* ── ceiling category conversion ───────────────────────── */
@@ -213,34 +284,6 @@ function buildKeyDistances(coaching, specLights) {
   return Object.keys(distances).length > 0 ? distances : null;
 }
 
-/* ── lighting pattern detection ────────────────────────── */
-
-function detectLightingPattern(lights, mood) {
-  if (!lights || lights.length === 0) return null;
-  const key = lights.find(l => l.role === 'key');
-  const fill = lights.find(l => l.role === 'fill');
-  const rim = lights.find(l => l.role === 'rim' || l.role === 'hair');
-  if (!key) return null;
-
-  const keyAngle = Math.abs(key.angle_deg || 0);
-
-  // Clamshell: key above + fill below (or both near center)
-  if (fill && keyAngle < 20 && Math.abs(fill.angle_deg || 0) < 20 && mood === 'beauty') {
-    return 'Clamshell';
-  }
-  // Rembrandt: key at 30-50° with fill
-  if (keyAngle >= 30 && keyAngle <= 50 && fill) return 'Rembrandt';
-  // Loop: key at 20-35°
-  if (keyAngle >= 20 && keyAngle < 35) return 'Loop';
-  // Split: key at 80-100°
-  if (keyAngle >= 80 && keyAngle <= 100) return 'Split';
-  // Butterfly/Paramount: key near 0° overhead
-  if (keyAngle < 15 && (mood === 'beauty' || mood === 'high_key')) return 'Butterfly';
-  // Broad: key at 40-70° with camera opposite
-  if (keyAngle >= 40 && keyAngle <= 70) return 'Broad';
-  return null;
-}
-
 /* ── photographer-friendly rationale ───────────────────── */
 
 const MOOD_RATIONALE = {
@@ -288,7 +331,7 @@ const MOOD_RATIONALE = {
   },
 };
 
-function buildRationale(winner, mood, spec) {
+function buildRationale(winner, mood, spec, pattern) {
   const name = winner.system_name || winner.system_id;
   const moodKey = mood || 'corporate';
   const templates = MOOD_RATIONALE[moodKey] || MOOD_RATIONALE.corporate;
@@ -303,7 +346,7 @@ function buildRationale(winner, mood, spec) {
   else if (lights.length === 2) variant = 'two_light';
   else if (lights.length >= 3 && hasRim) variant = 'full';
 
-  const pattern = detectLightingPattern(lights, moodKey);
+  // Pattern comes from the backend — frontend does not classify
   const patternText = pattern ? ` This is a ${pattern} lighting pattern.` : '';
 
   const template = templates[variant] || templates.default;
@@ -413,34 +456,34 @@ export function buildRefTestSteps(lightingRead, recreationSetup) {
   const rs = recreationSetup || {};
   const steps = [];
 
-  steps.push('Turn on your key light only \u2014 all other lights off.');
+  steps.push('Key only \u2014 all other lights off');
 
   if (lr.source_quality === 'hard') {
-    steps.push('Check that the shadow edges are clean and sharp. If they look soft, move the source further back or use a smaller modifier.');
+    steps.push('Shadows should be sharp \u2014 move source back or use smaller modifier if soft');
   } else if (lr.source_quality === 'soft') {
-    steps.push('Check that the shadow transitions are smooth and gradual. If they look too harsh, bring the source closer or use a larger modifier.');
+    steps.push('Shadows should be gradual \u2014 bring source closer or use larger modifier if harsh');
   }
 
   if (lr.shadow_pattern && lr.shadow_pattern !== 'unknown') {
     const pat = lr.shadow_pattern.replace(/[-_]/g, ' ');
-    steps.push(`Compare the shadow shape to the reference \u2014 you\u2019re looking for a ${pat} pattern. Adjust key position until the shadows match.`);
+    steps.push(`Match ${pat} pattern \u2014 adjust key position until shadows match ref`);
   }
 
   if (lr.fill_presence === 'none') {
-    steps.push('This setup uses no fill. Verify the shadow side goes dark like the reference. If you want slightly more detail, add a white card far from the subject.');
+    steps.push('No fill \u2014 shadow side should go dark like ref');
   } else if (lr.fill_presence === 'subtle' || lr.fill_presence === 'moderate') {
-    steps.push('Add your fill now. Compare shadow depth to the reference \u2014 adjust distance until the contrast ratio matches.');
+    steps.push('Add fill \u2014 match shadow depth to ref, adjust distance for ratio');
   }
 
   if (typeof lr.light_count === 'number' && lr.light_count >= 2) {
-    steps.push('Add accent lights one at a time. Check each against the reference before adding the next.');
+    steps.push('Add accent lights one at a time, check each against ref');
   }
 
   if (rs.background_strategy) {
-    steps.push(`Background: ${rs.background_strategy}. Compare background brightness to the reference.`);
+    steps.push(`Background: ${rs.background_strategy}`);
   }
 
-  steps.push('Take a test shot and compare side-by-side with the reference. Focus on shadow shape, contrast ratio, and overall mood.');
+  steps.push('Test shot \u2014 compare shadow shape, contrast & mood to ref');
 
   return steps;
 }
@@ -510,7 +553,7 @@ export function buildRefQuickFixes(lightingRead, recreationSetup) {
 
 /* ── main transform ─────────────────────────────────────── */
 
-export function transformForUI(apiResponse, mood, skinTone) {
+export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {}) {
   const sel = apiResponse.result.structured.selection;
   const winner = sel.winner;
   const picks = sel.top_picks || [];
@@ -520,8 +563,8 @@ export function transformForUI(apiResponse, mood, skinTone) {
   const coaching = getCoaching(mood);
   const keyDistances = buildKeyDistances(coaching, spec.lights);
 
-  // Detect classic lighting pattern
-  const lightingPattern = detectLightingPattern(spec.lights, mood);
+  // Pattern comes from the backend — no frontend inference fallback
+  const lightingPattern = apiResponse.result?.authoritative_pattern || null;
 
   // Build modifier summary for each light
   const modifierSummary = (spec.lights || []).map(l => ({
@@ -529,12 +572,8 @@ export function transformForUI(apiResponse, mood, skinTone) {
     modifier: modifierLabel(l.modifier),
   }));
 
-  // Boost confidence for classic/recognized patterns
+  // Engine confidence is the source of truth (solver-informed)
   let adjustedConf = confScore;
-  if (lightingPattern) adjustedConf = Math.max(adjustedConf, 75);
-  if (lightingPattern && (mood === 'beauty' || mood === 'corporate' || mood === 'natural')) {
-    adjustedConf = Math.max(adjustedConf, 85);
-  }
   const reliability = reliabilityFromConfidence(adjustedConf);
 
   // Best Match card
@@ -544,7 +583,7 @@ export function transformForUI(apiResponse, mood, skinTone) {
     reliabilityScore: adjustedConf,
     reliabilityDots: reliability.dots,
     reliabilityLabel: reliability.label,
-    rationale: buildRationale(winner, mood, spec),
+    rationale: buildRationale(winner, mood, spec, lightingPattern),
     keyDistances,
     lightingPattern,
     modifierSummary,
@@ -570,7 +609,9 @@ export function transformForUI(apiResponse, mood, skinTone) {
       modifier: modDetails ? modDetails.label : modifierLabel(l.modifier),
       modifierSize: modDetails?.size || null,
       modifierSizeNote,
-      powerHint: powerHint(l.role, lightingPattern),
+      powerHint: powerHint(l.role, lightingPattern, powerDisplay),
+      _role: l.role,                 // kept for reactive re-render in cards
+      _lightingPattern: lightingPattern, // kept for reactive re-render in cards
       meterReading: meterReading(l.role, lightingPattern, keyFStopIdx),
       notes: l.notes || [],
     };
@@ -619,12 +660,15 @@ export function transformShootMatch(apiResponse, ctx = {}) {
   const c = apiResponse.cards;
   const mood = ctx.mood || 'corporate';
   const skinTone = ctx.skinTone || null;
+  const powerDisplay = ctx.powerDisplay || 'fraction';
 
   // Re-use coaching data for subject/background/camera guidance
   const coaching = getCoaching(mood);
 
-  // Detect lighting pattern from the diagram spec
-  const lightingPattern = detectLightingPattern(c.diagram?.lights || [], mood);
+  // Pattern comes from the backend — no frontend inference fallback
+  const lightingPattern = apiResponse.authoritative_pattern
+    || c.howToTest?.pattern
+    || null;
 
   // Modifier summary for each light
   const modifierSummary = (c.diagram?.lights || []).map(l => ({
@@ -632,18 +676,38 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     modifier: modifierLabel(l.modifier),
   }));
 
-  // Boost confidence for classic/recognized patterns
+  // Engine confidence is the source of truth (solver-informed)
   const confScore = c.bestMatch.reliability || 0;
   let adjustedConf = confScore;
-  if (lightingPattern) adjustedConf = Math.max(adjustedConf, 75);
-  if (lightingPattern && (mood === 'beauty' || mood === 'corporate' || mood === 'natural')) {
-    adjustedConf = Math.max(adjustedConf, 85);
-  }
   const reliability = reliabilityFromConfidence(adjustedConf);
 
   const keyFStopIdx = parseKeyFStop(c.cameraSettings?.aperture);
 
+  // Derive background distance from reference analysis when available.
+  // The recreation_setup.background_strategy describes the actual background
+  // relationship from the reference image — use it to override coaching defaults.
+  const refAnalysis = apiResponse.referenceImageAnalysis?.description?.referenceAnalysis;
+  const bgStrategy = refAnalysis?.recreation_setup?.background_strategy || '';
+  const bgRelationship = refAnalysis?.image_read?.background_relationship || '';
+  const bgHint = (bgStrategy + ' ' + bgRelationship).toLowerCase();
+  // VLM background_distance_category: "close" | "moderate" | "far" | "infinity"
+  const vlmBgDist = apiResponse.vlmReconstruction?.primary?.background_distance_category
+    || apiResponse.vlmReconstruction?.background_distance_category || '';
+  let subjectToBackground = c.spaceCheck?.subjectToBackground || (coaching.subject?.distanceFromBackground || null);
+  if (bgHint.includes('against') || bgHint.includes('directly behind') || bgHint.includes('flush')
+      || bgHint.includes('touching') || bgHint.includes('zero distance') || bgHint.includes('on the wall')
+      || vlmBgDist === 'close') {
+    subjectToBackground = '0–2 ft (subject against background)';
+  } else if (bgHint.includes('close behind') || bgHint.includes('near the background') || bgHint.includes('close to')) {
+    subjectToBackground = '1–3 ft (close to background)';
+  } else if (vlmBgDist === 'moderate') {
+    subjectToBackground = '4–8 ft';
+  } else if (vlmBgDist === 'far' || vlmBgDist === 'infinity') {
+    subjectToBackground = '10+ ft (far background)';
+  }
+
   return {
+    gearMatch: apiResponse.gearMatch || null,
     bestMatch: {
       name: c.bestMatch.name,
       systemId: c.diagram?.systemId,
@@ -660,7 +724,7 @@ export function transformShootMatch(apiResponse, ctx = {}) {
       masterModeIcon: c.bestMatch.masterModeIcon || null,
       lightsGuide: c.bestMatch.lightsGuide || null,
       keyDistances: {
-        subjectToBackground: c.spaceCheck?.subjectToBackground || (coaching.subject?.distanceFromBackground || null),
+        subjectToBackground,
         keyLightToSubject: c.spaceCheck?.maxDistanceFt ? `${c.spaceCheck.maxDistanceFt} ft` : null,
         cameraToSubject: coaching.camera?.distanceFromSubject || null,
       },
@@ -669,14 +733,23 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     setup: {
       lights: (c.shootThisSetup.lights || []).map(l => {
         const role = (l.role || 'key').toLowerCase().replace(/ light$/, '');
+        // When the engine returns 'unknown' for modifier, fall back to the
+        // reference analysis modifier_suggestion if available (it knows more).
+        const BARE_MOD_TOKENS = ['unknown', 'bare', 'bare_bulb', 'direct', 'none', ''];
+        const rawMod = (l.modifier || '').toLowerCase().trim();
+        const modifier = BARE_MOD_TOKENS.includes(rawMod) && role === 'key'
+          ? (refAnalysis?.recreation_setup?.modifier_suggestion || l.modifier || '')
+          : l.modifier;
         return {
           role,
           label: l.role,
           positionText: `${l.position}, ${l.height}`,
           distanceFt: l.distance,
           distanceM: l.distance,
-          modifier: l.modifier,
-          powerHint: l.notes?.[0] || powerHint(role, lightingPattern),
+          modifier,
+          powerHint: l.notes?.[0] || powerHint(role, lightingPattern, powerDisplay),
+          _role: role,
+          _lightingPattern: lightingPattern,
           meterReading: meterReading(role, lightingPattern, keyFStopIdx),
           notes: l.notes || [],
         };
@@ -730,5 +803,16 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     ),
     catchlights: c.whatToLookFor?.catchlights || {},
     mood,
+
+    // VLM enrichment — surface when available
+    vlmDescription: apiResponse.vlmDescription || null,
+    vlmReconstruction: apiResponse.vlmReconstruction || null,
+    referenceImageAnalysis: apiResponse.referenceImageAnalysis || null,
+    lightingIntelligence: apiResponse.lightingIntelligence || null,
+
+    // Perception / robustness layer (Phase 6–9)
+    faceValidation: apiResponse.faceValidation || null,
+    signalReliability: apiResponse.signalReliability || null,
+    edgeCaseFlags: apiResponse.edgeCaseFlags || null,
   };
 }

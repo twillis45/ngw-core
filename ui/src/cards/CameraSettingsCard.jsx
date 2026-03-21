@@ -1,10 +1,12 @@
+import CardIcon from '../components/CardIcon';
+
 export default function CameraSettingsCard({ settings }) {
   if (!settings) return null;
 
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\u{1F4F7}'}</span>
+        <CardIcon name="camera" />
         <span>Camera Settings</span>
       </div>
 

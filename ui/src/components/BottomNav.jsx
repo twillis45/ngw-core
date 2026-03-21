@@ -21,7 +21,7 @@ export default function BottomNav({ onShare }) {
           <path d="M3 12L12 3l9 9"/>
           <path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/>
         </svg>
-        <span>Home</span>
+        <span className="bottom-nav__label">Home</span>
       </button>
 
       <button
@@ -33,7 +33,7 @@ export default function BottomNav({ onShare }) {
           <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
         </svg>
-        <span>Recipes</span>
+        <span className="bottom-nav__label">Recipes</span>
       </button>
 
       <button
@@ -45,7 +45,7 @@ export default function BottomNav({ onShare }) {
           <rect x="2" y="9" width="20" height="12" rx="2"/>
           <path d="M8 9V6a4 4 0 0 1 8 0v2"/>
         </svg>
-        <span>My Kit</span>
+        <span className="bottom-nav__label">My Kit</span>
       </button>
 
       <button
@@ -56,7 +56,7 @@ export default function BottomNav({ onShare }) {
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
         </svg>
-        <span>Saved</span>
+        <span className="bottom-nav__label">Saved</span>
       </button>
 
       <button
@@ -69,7 +69,7 @@ export default function BottomNav({ onShare }) {
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 8v8M8 12h8"/>
         </svg>
-        <span>New</span>
+        <span className="bottom-nav__label">New</span>
       </button>
 
       {isResults && (
@@ -83,7 +83,7 @@ export default function BottomNav({ onShare }) {
             <path d="M4 4l7.586 7.586a2 2 0 010 2.828L7 19"/>
             <path d="M14 15h6v-6"/>
           </svg>
-          <span>Edit</span>
+          <span className="bottom-nav__label">Edit</span>
         </button>
       )}
 
@@ -98,7 +98,7 @@ export default function BottomNav({ onShare }) {
             <polyline points="16 6 12 2 8 6"/>
             <line x1="12" y1="2" x2="12" y2="15"/>
           </svg>
-          <span>Share</span>
+          <span className="bottom-nav__label">Share</span>
         </button>
       )}
     </nav>

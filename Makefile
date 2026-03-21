@@ -1,9 +1,10 @@
-.PHONY: run test format lint clean install help analyze-ref analyze-ref-raw
+.PHONY: run run-https run-prod ui ui-https test format lint clean install help analyze-ref analyze-ref-raw
 
-PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || { command -v python3 || command -v python; })
-HOST   ?= 0.0.0.0
-PORT   ?= 8000
-PYARGS ?=
+PYTHON  ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || { command -v python3 || command -v python; })
+UVICORN ?= $(shell [ -x .venv/bin/uvicorn ] && echo .venv/bin/uvicorn || echo uvicorn)
+HOST    ?= 0.0.0.0
+PORT    ?= 8000
+PYARGS  ?=
 
 help: ## Show this help
 	@grep -E '^[a-z][a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -13,10 +14,21 @@ install: ## Install dependencies into active env
 	pip install -r requirements.txt
 
 run: ## Start dev server (auto-reload)
-	uvicorn main:app --host $(HOST) --port $(PORT) --reload
+	$(UVICORN) main:app --host $(HOST) --port $(PORT) --reload
+
+run-https: ## Start dev server with HTTPS (required for camera on LAN/mobile)
+	$(UVICORN) main:app --host $(HOST) --port $(PORT) --reload \
+		--ssl-keyfile certs/local-key.pem \
+		--ssl-certfile certs/local.pem
+
+ui: ## Start Vite dev server (use with make run)
+	npm run dev --prefix ui
+
+ui-https: ## Start Vite dev server with HTTPS proxy (use with make run-https)
+	BACKEND_HTTPS=1 npm run dev --prefix ui
 
 run-prod: ## Start production server (no reload)
-	uvicorn main:app --host $(HOST) --port $(PORT) --workers 2
+	$(UVICORN) main:app --host $(HOST) --port $(PORT) --workers 2
 
 test: ## Run full test suite
 	$(PYTHON) -m pytest tests/ -v --tb=short $(PYARGS)

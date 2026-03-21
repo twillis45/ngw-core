@@ -22,24 +22,32 @@ Decision chain::
 
 Pattern classification precedence::
 
-    Four pattern classifiers exist, each serving a different pipeline stage:
+    Three active classifiers feed ``resolve_pattern_candidates()``:
 
-    1. pattern_matcher.match_lighting_patterns()
-       Primary — scores patterns against vision pass outputs + cue report.
-       Data-driven; used by lighting_inference and reference_read.
+    1. reference_read.build_lighting_read()  (priority 0)
+       Primary — three-layer analysis integrating shadow, highlight, gobo.
+       Highest confidence; used when a reference image is available.
 
-    2. lighting_inference._infer_pattern_from_catchlights()
+    2. lighting_inference._infer_pattern_from_catchlights()  (priority 1)
        Secondary — catchlight topology analysis (position, shape, count).
        Used when vision passes provide catchlight data.
 
-    3. cue_inference._infer_shadow_pattern()
+    3. cue_inference._infer_shadow_pattern()  (priority 2)
        Tertiary — shadow direction + height → pattern name.
        Side-independent: upper_left/upper_right both → rembrandt.
 
+    One standalone fallback (not fed through resolve_pattern_candidates):
+
     4. patterns.classify_lighting_pattern()
-       Fallback — rule-based from mood + modifier + gear profile.
-       Used by scoring.py for system recommendation cards.
-       Returns photographer-facing names (may differ from enum values).
+       Rule-based from mood + modifier + gear profile.
+       Used by scoring.py for no-image (build-from-scratch) flows only.
+
+    Deprecated (no longer called in production):
+
+    5. pattern_matcher.match_lighting_patterns()
+       Physics-based scorer against data/lighting_patterns.json.
+       Was called during the extended pipeline but output was never consumed
+       by resolve_pattern_candidates() or any API response.
 
 Data architecture::
 
@@ -55,6 +63,13 @@ Data architecture::
       specs for named patterns (clamshell, rembrandt, loop, etc.).
       Used by diagram.py and reference matching.
 
+Field naming convention::
+
+    - ``pattern`` = authoritative lighting pattern name (preferred for new code)
+    - ``shadow_pattern`` = legacy name in cue_inference / reference_read (same concept)
+    - ``pattern_name`` = used by LightingHypothesis in solver (same concept)
+    - ``authoritative_pattern`` = resolved single pattern from all classifiers (on AnalysisResult)
+
 Usage::
 
     from engine.orchestrator import analyze_image, recommend_system
@@ -66,9 +81,643 @@ Usage::
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Solver quality extraction
+# ═══════════════════════════════════════════════════════════════════════════
+
+def extract_solver_quality(solver_result: Any) -> Dict[str, Any]:
+    """Extract key quality signals from a SolverResult for confidence modulation.
+
+    Returns a flat dict with signals that scoring.py uses to penalize
+    confidence when the analysis is ambiguous or contradictory.
+    """
+    if solver_result is None or not getattr(solver_result, "ok", False):
+        return {}
+
+    high_count = 0
+    cr = getattr(solver_result, "contradiction_report", None)
+    if cr is not None:
+        for c in getattr(cr, "contradictions", []):
+            if getattr(c, "severity", "") == "high":
+                high_count += 1
+
+    return {
+        "overall_consistency": getattr(solver_result, "overall_consistency", 1.0),
+        "high_contradiction_count": high_count,
+        "ambiguity_class": getattr(solver_result, "ambiguity_class", "clean"),
+        "needs_review": getattr(solver_result, "needs_review", False),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Authoritative pattern resolution (candidate-first)
+# ═══════════════════════════════════════════════════════════════════════════
+
+from dataclasses import dataclass, field as dc_field
+
+
+@dataclass
+class PatternCandidate:
+    """A single pattern candidate from one classifier."""
+    pattern: str
+    source: str          # classifier that produced it
+    confidence: float    # 0-1 range
+    rank: int = 0        # 1-based rank within candidate list
+
+
+@dataclass
+class PatternCandidates:
+    """Candidate-first pattern output — preserves alternates for downstream use.
+
+    This is the ONLY structure that determines authoritative pattern ranking.
+    Individual classifiers contribute evidence; this structure ranks them.
+    """
+    primary: PatternCandidate
+    alternates: list = dc_field(default_factory=list)
+    needs_review: bool = False
+    contradictions: list = dc_field(default_factory=list)
+
+    @property
+    def authoritative_pattern(self) -> str:
+        return self.primary.pattern
+
+    @property
+    def authoritative_source(self) -> str:
+        return self.primary.source
+
+    @property
+    def confidence_label(self) -> str:
+        """Human-readable confidence tier: strong / partial / weak."""
+        c = self.primary.confidence
+        if c > 0.75:
+            return "strong"
+        if c >= 0.50:
+            return "partial"
+        return "weak"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize for API response."""
+        return {
+            "primary_candidate": {
+                "pattern": self.primary.pattern,
+                "source": self.primary.source,
+                "confidence": self.primary.confidence,
+                "confidence_label": self.confidence_label,
+            },
+            "alternate_candidates": [
+                {"pattern": c.pattern, "source": c.source, "confidence": c.confidence}
+                for c in self.alternates
+            ],
+            "needs_review": self.needs_review,
+            "contradictions": self.contradictions,
+        }
+
+
+@dataclass
+class FaceValidation:
+    """Face detection quality assessment."""
+    face_detected: bool = False
+    face_confidence: float = 0.0        # MediaPipe detection score
+    face_quality: str = "none"           # "good" | "partial" | "none"
+    face_yaw: Optional[float] = None
+    face_box_area_ratio: float = 0.0     # face_area / image_area
+
+
+@dataclass
+class SignalReliability:
+    """Signal extraction reliability assessment."""
+    signals_available: int = 0           # populated cues
+    signals_total: int = 24              # total cue fields on VisualCueReport
+    face_dependent_signals_available: int = 0
+    overall_signal_strength: float = 0.0
+    weak_signals: list = dc_field(default_factory=list)    # confidence < 0.3
+    missing_signals: list = dc_field(default_factory=list) # returned None
+
+
+@dataclass
+class PerceptionExplanation:
+    """Pattern selection reasoning and ambiguity assessment."""
+    supporting_signals: list = dc_field(default_factory=list)
+    contradicting_signals: list = dc_field(default_factory=list)
+    ambiguity_flags: list = dc_field(default_factory=list)
+    pattern_reasoning: str = ""
+
+
+@dataclass
+class EdgeCaseFlags:
+    """Lightweight edge-case detection flags (no new classifiers)."""
+    blown_highlights: bool = False
+    mixed_color_temperature: bool = False
+    outdoor_foliage_shadows: bool = False
+    window_light_gradient: bool = False
+    extreme_low_key: bool = False
+    bw_processing: bool = False
+    no_face: bool = False
+
+
+def _apply_signal_confidence(
+    candidates: List[PatternCandidate],
+    result: "AnalysisResult",
+) -> None:
+    """Adjust candidate confidence based on enhanced vision signals.
+
+    Reads structured signals from ``LightStructureDetection`` (cue_report)
+    and applies small confidence deltas (±0.02 to ±0.08) to each candidate
+    based on how well the signals support or contradict its pattern.
+
+    These adjustments act as tiebreakers when multiple classifiers produce
+    different patterns at similar confidence levels.  They do NOT create
+    new pattern classifications — only nudge existing candidates.
+    """
+    cr = getattr(result, "cue_report", None)
+    ls = getattr(cr, "light_structure", None) if cr else None
+    if ls is None:
+        return
+
+    # Read v2 signal fields (defaulting to 0 if absent)
+    triangle_isolation = getattr(ls, "triangle_isolation", 0.0)
+    centroid_dist = getattr(ls, "nose_shadow_centroid_distance", 0.0)
+    lr_asym = getattr(ls, "left_right_asymmetry", 0.0)
+    shadow_density = getattr(ls, "shadow_density", 0.0)
+    highlight_width = getattr(ls, "highlight_width_ratio", 0.0)
+    top_bottom = getattr(ls, "top_bottom_ratio", 0.0)
+
+    for c in candidates:
+        adj = 0.0
+        p = c.pattern
+
+        # ── Triangle isolation signal → rembrandt ────────────────
+        if p == "rembrandt":
+            if triangle_isolation > 0.12:
+                adj += 0.06  # well-isolated triangle: strong rembrandt
+            elif triangle_isolation > 0.06:
+                adj += 0.02  # moderate isolation: mild boost
+            elif triangle_isolation < 0.02 and centroid_dist > 0.05:
+                adj -= 0.05  # no triangle isolation: penalize rembrandt
+        elif p == "loop":
+            # If triangle_isolation is high, loop is less likely
+            if triangle_isolation > 0.12:
+                adj -= 0.04
+            # Moderate asymmetry with diagonal centroid supports loop
+            if 0.10 < lr_asym < 0.25 and centroid_dist > 0.1:
+                adj += 0.03
+
+        # ── Shadow density signal ────────────────────────────────
+        if p == "butterfly":
+            # Butterfly expects low shadow density (on-axis light)
+            if shadow_density < 0.10:
+                adj += 0.04
+            elif shadow_density > 0.30:
+                adj -= 0.05  # high shadow density contradicts butterfly
+        elif p == "split":
+            # Split expects strong shadow density and asymmetry
+            if shadow_density > 0.30 and lr_asym > 0.35:
+                adj += 0.05
+            elif lr_asym < 0.15:
+                adj -= 0.06  # low asymmetry contradicts split
+
+        # ── Left/right asymmetry signal ──────────────────────────
+        if p in ("butterfly", "clamshell"):
+            # On-axis patterns expect symmetric shadows
+            if lr_asym < 0.10:
+                adj += 0.03
+            elif lr_asym > 0.25:
+                adj -= 0.04
+
+        # ── Highlight width signal ───────────────────────────────
+        if p == "broad":
+            if highlight_width > 0.55:
+                adj += 0.04  # wide highlight supports broad
+            elif highlight_width < 0.30:
+                adj -= 0.04
+        elif p == "short":
+            if highlight_width < 0.40:
+                adj += 0.03  # narrow highlight supports short
+            elif highlight_width > 0.60:
+                adj -= 0.03
+
+        # ── Bottom-heavy shadow → supports loop/butterfly over split ──
+        if p in ("loop", "butterfly") and top_bottom > 1.5:
+            adj += 0.02
+        elif p == "split" and top_bottom > 2.0:
+            adj -= 0.03  # bottom-heavy shadow unlikely for pure split
+
+        # Apply bounded adjustment
+        if adj != 0.0:
+            c.confidence = round(max(0.0, min(1.0, c.confidence + adj)), 3)
+
+
+def _signal_contradiction_score(
+    pattern: str,
+    result: "AnalysisResult",
+) -> float:
+    """Compute how strongly vision signals contradict a candidate pattern.
+
+    Returns a score in [0, 1] where:
+        0.0 = no contradiction (signals support or are neutral)
+        0.3+ = moderate contradiction
+        0.6+ = strong contradiction (reference_read should be demoted)
+
+    Contradiction rules are pattern-specific and use only the structured
+    signals from LightStructureDetection — no new classification logic.
+    """
+    cr = getattr(result, "cue_report", None)
+    ls = getattr(cr, "light_structure", None) if cr else None
+    if ls is None:
+        return 0.0
+
+    tri_iso = getattr(ls, "triangle_isolation", 0.0)
+    lr_asym = getattr(ls, "left_right_asymmetry", 0.0)
+    shadow_den = getattr(ls, "shadow_density", 0.0)
+    hl_width = getattr(ls, "highlight_width_ratio", 0.0)
+    tb_ratio = getattr(ls, "top_bottom_ratio", 0.0)
+
+    score = 0.0
+
+    if pattern == "rembrandt":
+        # Rembrandt requires: asymmetry (shadow side) + triangle of light
+        # on cheek.  Low asymmetry OR no triangle isolation = contradiction.
+        if lr_asym < 0.10 and tri_iso < 0.03:
+            score += 0.4  # symmetric face + no triangle → not rembrandt
+        if shadow_den < 0.05:
+            score += 0.3  # near-zero shadow → can't form rembrandt pattern
+
+    elif pattern == "clamshell":
+        # Clamshell requires two distinct sources creating visible
+        # secondary shadows.  Zero shadow density = single on-axis source
+        # → butterfly, not clamshell.
+        if shadow_den < 0.01 and lr_asym < 0.02:
+            score += 0.7  # no shadow at all → strong butterfly signal
+
+    elif pattern == "butterfly":
+        # Butterfly = on-axis, minimal shadow, symmetric.
+        if shadow_den > 0.40:
+            score += 0.4  # too much shadow for on-axis
+        if lr_asym > 0.25:
+            score += 0.3  # too asymmetric for centered source
+        # Deep shadows (sd > 0.40) combined with a confirmed Rembrandt triangle
+        # is a strong contradiction for butterfly: true butterfly images have
+        # near-zero shadow density and no directional triangle.
+        # Guard: sd > 0.40 required — prevents triggering on genuine butterfly
+        # images (which have shadow_density ≈ 0.0–0.15).
+        _sc_but = getattr(cr, "shadow_continuity", None)
+        if (
+            shadow_den > 0.40
+            and _sc_but is not None
+            and getattr(_sc_but, "triangle_connected", False)
+            and getattr(_sc_but, "connectivity_score", 0.0) > 0.70
+            and getattr(_sc_but, "confidence", 0.0) > 0.40
+        ):
+            score += 0.50  # deep shadows + confirmed triangle = directional, not butterfly
+
+    elif pattern == "split":
+        # Split = half-face shadow, high asymmetry.
+        if lr_asym < 0.15:
+            score += 0.5  # too symmetric for split
+        if hl_width > 0.60 and lr_asym < 0.25:
+            score += 0.2  # wide highlights inconsistent with split
+
+    elif pattern == "loop":
+        # Loop = diagonal nose shadow, moderate asymmetry.
+        # Very high asymmetry (> 0.5) suggests split, not loop.
+        if lr_asym > 0.50:
+            score += 0.4
+        # Shadow continuity directly confirms a Rembrandt cheek triangle →
+        # pattern is rembrandt, not loop.  The P4 shadow_continuity signal
+        # uses connected-component analysis to confirm the triangle geometry
+        # that distinguishes rembrandt from loop; when it fires with high
+        # connectivity the reference_read "loop" label is contradicted.
+        _sc_loop = getattr(cr, "shadow_continuity", None)
+        if (
+            _sc_loop is not None
+            and getattr(_sc_loop, "triangle_connected", False)
+            and getattr(_sc_loop, "connectivity_score", 0.0) > 0.70
+            and getattr(_sc_loop, "confidence", 0.0) > 0.40
+        ):
+            score += 0.65  # direct cheek-triangle confirmation → not loop
+
+    elif pattern == "broad":
+        # Broad = camera-side highlight, wide lit area.
+        if hl_width < 0.25:
+            score += 0.4  # too narrow for broad
+        if lr_asym > 0.50:
+            score += 0.2  # extreme asymmetry → split
+
+    elif pattern in ("triangle", "rembrandt"):
+        # Rembrandt/triangle requires a visible cheek triangle and asymmetry.
+        # Low triangle_isolation = no distinct cheek triangle → contradiction.
+        # Also check triangle_detected directly when available.
+        tri_detected = getattr(ls, "triangle_detected", None)
+        if tri_iso < 0.05:
+            if tri_detected is False:
+                score += 0.65  # CV explicitly says no triangle — strong contradiction
+            else:
+                score += 0.40  # very low isolation — likely not rembrandt
+        elif tri_iso < 0.10 and lr_asym < 0.15:
+            score += 0.30  # weak triangle signal + near-symmetric face
+
+    return min(1.0, score)
+
+
+# Threshold above which reference_read primary is demoted (priority shifted
+# from 0 to 2) and its confidence is halved.  This allows competing
+# candidates from other sources — including the signal-derived
+# light_structure_pass — to win.
+_CONTRADICTION_DEMOTION_THRESHOLD = 0.6
+
+
+def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
+    """Resolve ranked pattern candidates from all available classifiers.
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │ AUTHORITATIVE PATTERN SELECTION HAPPENS HERE.               │
+    │ This is the single function that ranks pattern candidates.  │
+    │ Other modules contribute evidence; this module ranks them.  │
+    └─────────────────────────────────────────────────────────────┘
+
+    Precedence (normal ranking):
+        1. reference_read lighting_read.shadow_pattern (richest analysis)
+        2. lighting_inference pattern (vision-based catchlight topology)
+        3. cue_inference shadow_pattern (shadow direction + height)
+        4. light_structure (direct signal-derived pattern from nose shadow geometry)
+        5. "unknown" (no classifier produced a result)
+
+    Signal contradiction demotion:
+        When vision signals (triangle_isolation, shadow_density, lr_asymmetry,
+        etc.) strongly contradict the reference_read primary, its effective
+        priority is demoted from 0 to 2 and confidence halved.  This allows
+        competing candidates that align with raw signals to win.
+
+    Contradiction detection:
+        When classifiers disagree, the contradictions list is populated
+        and needs_review may be set.
+    """
+    candidates: List[PatternCandidate] = []
+    contradictions: List[str] = []
+
+    # Canonical pattern normalization — reference_read sometimes returns
+    # descriptive free-text patterns (e.g. "grid/window gobo",
+    # "hard shadows — face-mesh unavailable").  Collapse these to the
+    # closest canonical LightingPattern enum value so downstream consumers
+    # (scoring, benchmarks, API responses) get consistent values.
+    _CANONICAL = {
+        "split", "rembrandt", "loop", "butterfly", "clamshell", "triangle",
+        "broad", "short", "gobo", "flat", "rim_only", "high_key", "low_key",
+        "flat_fashion", "window_portrait", "golden_hour", "overcast_natural",
+        "ring_light", "bare_bulb_editorial", "strip_dramatic",
+        "short_fashion_key", "soft_editorial_key", "editorial_rim_key",
+        "tabletop_soft_product", "bottle_backlight", "athletic_rim_sculpt",
+        "window_negative_fill", "hybrid", "unknown",
+    }
+
+    def _normalize_pattern(raw: str) -> str:
+        if raw in _CANONICAL:
+            return raw
+        low = raw.lower()
+        if "gobo" in low or "slit" in low or "flag" in low:
+            return "gobo"
+        if "face-mesh unavailable" in low or "face mesh" in low:
+            return "unknown"
+        if "environmental" in low or "outdoor" in low:
+            return "unknown"
+        # Strip anything after " — " or " - " to see if the prefix is canonical
+        for sep in (" — ", " - ", " – "):
+            if sep in raw:
+                prefix = raw.split(sep)[0].strip().lower()
+                if prefix in _CANONICAL:
+                    return prefix
+        # Canonical rescue: check if any canonical pattern name appears as a
+        # whole word in the free-text description.  Catches phrases like
+        # "directional rembrandt", "soft clamshell setup", "contrasty loop".
+        # Sort by length descending so "flat_fashion" wins before "flat".
+        _padded = f" {low} "
+        for _canon in sorted(_CANONICAL - {"unknown"}, key=len, reverse=True):
+            _canon_space = _canon.replace("_", " ")
+            if f" {_canon} " in _padded or f" {_canon_space} " in _padded:
+                return _canon
+        # Free-text descriptions from non-portrait shots (product, etc.)
+        if "shadow" in low or "contrast" in low or "directional" in low:
+            return "unknown"
+        return raw  # leave as-is if no rule matched
+
+    # Source 1: reference_read — three-layer analysis (richest context)
+    ref_pattern = None
+    if result.reference_analysis is not None:
+        lr = getattr(result.reference_analysis, "lighting_read", None)
+        sp = getattr(lr, "shadow_pattern", None) if lr else None
+        if sp and sp != "unknown":
+            sp = _normalize_pattern(sp)
+        if sp and sp != "unknown":
+            # Confidence from reference_read's pattern_confidence if available
+            conf = getattr(lr, "pattern_confidence", 0.85)
+            ref_pattern = sp
+            candidates.append(PatternCandidate(
+                pattern=sp, source="reference_read",
+                confidence=float(conf) if conf else 0.85,
+            ))
+
+    # Source 2: lighting_inference — vision-based catchlight/pattern
+    li_pattern = None
+    if result.lighting_intel is not None:
+        p = getattr(result.lighting_intel, "pattern", None)
+        if p and p != "unknown":
+            conf = getattr(result.lighting_intel, "pattern_confidence", 0.7)
+            li_pattern = p
+            candidates.append(PatternCandidate(
+                pattern=p, source="lighting_inference",
+                confidence=float(conf) if conf else 0.7,
+            ))
+
+    # Source 3: cue_inference shadow_pattern (from GeometryInference)
+    cue_inf = getattr(result, "cue_inference_result", None)
+    if cue_inf is not None:
+        geo = cue_inf.get("geometry") if isinstance(cue_inf, dict) else None
+        sp = getattr(geo, "shadow_pattern", None) if geo else None
+        if sp and sp != "unknown":
+            # Use real confidence from GeometryInference instead of hardcoded 0.5
+            geo_conf = getattr(geo, "confidence", 0.5)
+            candidates.append(PatternCandidate(
+                pattern=sp, source="cue_inference",
+                confidence=float(geo_conf),
+            ))
+
+    # Source 4: light_structure_pass — direct signal-derived pattern
+    # This is the pattern computed from nose shadow geometry, triangle
+    # detection, and asymmetry in vision_passes.py.  It gives the raw
+    # vision signals a competing candidate when all three higher-priority
+    # classifiers agree on the wrong pattern.
+    ls_pattern = None
+    cr = getattr(result, "cue_report", None)
+    ls = getattr(cr, "light_structure", None) if cr else None
+    if ls is not None:
+        lsp = getattr(ls, "pattern_name", None)
+        if lsp and lsp != "unknown":
+            ls_pattern = lsp
+            # Confidence derived from shadow density + centroid distance:
+            # stronger signals → higher confidence.
+            _sd = getattr(ls, "shadow_density", 0.0)
+            _cd = getattr(ls, "nose_shadow_centroid_distance", 0.0)
+            _ls_conf = round(min(0.65, 0.30 + 0.2 * _sd + 0.15 * _cd), 3)
+            candidates.append(PatternCandidate(
+                pattern=lsp, source="light_structure",
+                confidence=_ls_conf,
+            ))
+
+    # Detect contradictions between top classifiers
+    if ref_pattern and li_pattern and ref_pattern != li_pattern:
+        contradictions.append(
+            f"reference_read says '{ref_pattern}' but "
+            f"lighting_inference says '{li_pattern}'"
+        )
+
+    # Apply signal-based confidence adjustments from v2 vision signals.
+    # This nudges candidate confidence based on triangle_isolation,
+    # shadow_density, left_right_asymmetry, etc. without creating new
+    # classification paths.
+    _apply_signal_confidence(candidates, result)
+
+    # ── Signal contradiction demotion ────────────────────────────
+    # When reference_read is the top candidate but vision signals strongly
+    # contradict its pattern, demote its effective priority so competing
+    # candidates can win.  This is the mechanism by which improved signals
+    # influence the final outcome — not just confidence scores.
+    SOURCE_PRIORITY = {
+        "reference_read": 0, "lighting_inference": 1,
+        "cue_inference": 2, "light_structure": 3,
+    }
+    ref_candidates = [c for c in candidates if c.source == "reference_read"]
+    if ref_candidates:
+        ref_c = ref_candidates[0]
+        contradiction_score = _signal_contradiction_score(ref_c.pattern, result)
+        if contradiction_score >= _CONTRADICTION_DEMOTION_THRESHOLD:
+            # Demote reference_read: shift priority to 2 (same as cue_inference)
+            # and halve confidence.  This lets competing candidates that are
+            # consistent with signals win the ranking.
+            ref_c.source = "reference_read_demoted"
+            ref_c.confidence = round(ref_c.confidence * 0.5, 3)
+            contradictions.append(
+                f"signal contradiction ({contradiction_score:.2f}) demoted "
+                f"reference_read '{ref_c.pattern}'"
+            )
+            SOURCE_PRIORITY["reference_read_demoted"] = 2
+            SOURCE_PRIORITY["lighting_inference_demoted"] = 3
+            SOURCE_PRIORITY["cue_inference_demoted"] = 3
+
+            # ── Cascade demotion ──────────────────────────────────────────
+            # When reference_read is demoted for pattern P, other sources
+            # (lighting_inference, cue_inference) that independently agree on
+            # the same pattern AND pass the same contradiction test are also
+            # demoted.  This prevents a "unanimously wrong" result when
+            # reference_read and a second classifier both mislabel the image
+            # with the same contradicted pattern.
+            #
+            # When cascade fires (another source confirms the same wrong
+            # pattern), reference_read_demoted is pushed further to priority 3
+            # (same as light_structure) so that any remaining consistent
+            # candidate can win even at lower confidence.
+            _demoted_pat = ref_c.pattern  # captured before source rename
+            _any_cascade = False
+            for _casc_c in list(candidates):
+                if _casc_c.source not in ("lighting_inference", "cue_inference"):
+                    continue
+                if _casc_c.pattern != _demoted_pat:
+                    continue
+                _casc_score = _signal_contradiction_score(_casc_c.pattern, result)
+                if _casc_score >= _CONTRADICTION_DEMOTION_THRESHOLD:
+                    _orig_src = _casc_c.source
+                    _casc_c.source = f"{_casc_c.source}_demoted"
+                    _casc_c.confidence = round(_casc_c.confidence * 0.5, 3)
+                    contradictions.append(
+                        f"cascade ({_casc_score:.2f}) demoted {_orig_src} "
+                        f"'{_demoted_pat}'"
+                    )
+                    _any_cascade = True
+            if _any_cascade:
+                # Multiple sources unanimously agreed on a contradicted pattern.
+                # Push reference_read_demoted to the same low-priority tier as
+                # light_structure so that the highest-confidence consistent
+                # candidate wins regardless of source.
+                SOURCE_PRIORITY["reference_read_demoted"] = 3
+
+    # Rank by precedence (source priority, then confidence)
+    candidates.sort(key=lambda c: (SOURCE_PRIORITY.get(c.source, 99), -c.confidence))
+    for i, c in enumerate(candidates):
+        c.rank = i + 1
+
+    if not candidates:
+        # ── Clamshell rescue from zero candidates ────────────────────────
+        # When no classifier produced a named pattern but hardware signals
+        # (2+ lights + vertical symmetry or fill-below evidence + shadow
+        # density confirming dual source) indicate a clamshell setup,
+        # resolve to clamshell at weak confidence rather than "unknown".
+        _cr_rescue = getattr(result, "cue_report", None)
+        _ls_rescue = getattr(_cr_rescue, "light_structure", None) if _cr_rescue else None
+        _li_rescue = getattr(result, "lighting_intel", None)
+        _li_count_rescue = getattr(_li_rescue, "light_count", 0) if _li_rescue else 0
+        # multi_shadow_detection is face-independent — uses full-image shadow
+        # geometry, so it fires even when catchlight analysis had no face to work
+        # from.  Take the max of both counts so either path can unlock the guard.
+        _msd_rescue = getattr(_cr_rescue, "multi_shadow_detection", None) if _cr_rescue else None
+        _msd_count_rescue = getattr(_msd_rescue, "shadow_count", 0) if _msd_rescue else 0
+        _li_count_rescue = max(_li_count_rescue, _msd_count_rescue)
+        _shadow_ok_rescue = True
+        if _ls_rescue is not None:
+            _rsd = getattr(_ls_rescue, "shadow_density", 0.1)
+            _rlr = getattr(_ls_rescue, "left_right_asymmetry", 0.1)
+            if _rsd < 0.02 and _rlr < 0.02:
+                _shadow_ok_rescue = False
+        if _li_count_rescue >= 2 and _shadow_ok_rescue:
+            _hs_rescue = getattr(_cr_rescue, "highlight_symmetry", None) if _cr_rescue else None
+            _vert_rescue = getattr(_hs_rescue, "vertical_symmetry", None) if _hs_rescue else None
+            _fill_rescue = (
+                getattr(_li_rescue, "fill_method_text", "") or ""
+                if _li_rescue else ""
+            )
+            _clam_evidence = (
+                (_vert_rescue is not None and _vert_rescue > 0.3)
+                or "reflector" in _fill_rescue.lower()
+                or ("fill" in _fill_rescue.lower() and "below" in _fill_rescue.lower())
+            )
+            if _clam_evidence:
+                return PatternCandidates(
+                    primary=PatternCandidate(
+                        pattern="clamshell", source="clamshell_guard",
+                        confidence=0.40, rank=1,
+                    ),
+                    needs_review=True,
+                    contradictions=["clamshell inferred from hardware signals — no classifier confirmed"],
+                )
+
+        return PatternCandidates(
+            primary=PatternCandidate(pattern="unknown", source="none", confidence=0.0, rank=1),
+            needs_review=False,
+        )
+
+    primary = candidates[0]
+    alternates = candidates[1:]
+    needs_review = len(contradictions) > 0
+
+    return PatternCandidates(
+        primary=primary,
+        alternates=alternates,
+        needs_review=needs_review,
+        contradictions=contradictions,
+    )
+
+
+def _resolve_authoritative_pattern(result: "AnalysisResult") -> Tuple[str, str]:
+    """Legacy wrapper — resolves single authoritative pattern.
+
+    Delegates to resolve_pattern_candidates() and returns only the primary.
+    Existing callers that only need (pattern, source) still work unchanged.
+    """
+    pc = resolve_pattern_candidates(result)
+    return (pc.authoritative_pattern, pc.authoritative_source)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -80,9 +729,14 @@ class AnalysisResult:
 
     __slots__ = (
         "ok", "description", "vision_data", "classification",
-        "cue_report", "lighting_intel", "reference_analysis",
+        "cue_report", "cue_inference_result", "lighting_intel",
+        "reference_analysis",
         "pipeline_results", "vlm_description", "vlm_reconstruction",
         "solver_result", "debug_data", "notes",
+        "authoritative_pattern", "authoritative_pattern_source",
+        "pattern_candidates", "pattern_confidence", "pattern_confidence_label",
+        "face_validation", "signal_reliability",
+        "perception_explanation", "edge_case_flags",
     )
 
     def __init__(self) -> None:
@@ -91,6 +745,7 @@ class AnalysisResult:
         self.vision_data: Dict[str, Any] = {}
         self.classification: Dict[str, Any] = {}
         self.cue_report: Any = None
+        self.cue_inference_result: Optional[Dict[str, Any]] = None
         self.lighting_intel: Any = None
         self.reference_analysis: Any = None
         self.pipeline_results: Optional[Dict[str, Any]] = None
@@ -99,6 +754,547 @@ class AnalysisResult:
         self.solver_result: Any = None
         self.debug_data: Dict[str, Any] = {}
         self.notes: List[str] = []
+        self.authoritative_pattern: str = "unknown"
+        self.authoritative_pattern_source: str = "none"
+        self.pattern_candidates: Optional[PatternCandidates] = None
+        self.pattern_confidence: float = 0.0
+        self.pattern_confidence_label: str = "weak"
+        self.face_validation: Optional[FaceValidation] = None
+        self.signal_reliability: Optional[SignalReliability] = None
+        self.perception_explanation: Optional[PerceptionExplanation] = None
+        self.edge_case_flags: Optional[EdgeCaseFlags] = None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Specialty pattern post-classification
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
+    """Check environmental/tonal/structural signals to upgrade a geometric
+    pattern to a specialty pattern name.
+
+    Returns the specialty pattern name if conditions are met, else None.
+    The caller keeps the geometric pattern as a fallback.
+
+    Specialty patterns are contextual overlays on top of standard geometric
+    patterns.  A "rembrandt" shadow from a window is "window_portrait";
+    a "split" in a dark studio with extreme contrast is "low_key".
+
+    CONSERVATIVE: only fires when multiple independent signals converge.
+    A single signal (e.g. dark background alone) is never sufficient.
+    """
+    base = result.authoritative_pattern
+    if not base:
+        return None
+
+    cr = result.cue_report
+    cls = result.classification
+    ci = result.cue_inference_result  # dict with geometry, environment, etc.
+    li = result.lighting_intel
+
+    if not cr or not cls:
+        return None
+
+    # Guard: cue_report must be a real VisualCueReport, not a dict stub
+    if not hasattr(cr, "contrast_ratio"):
+        return None
+
+    env = ci.get("environment") if ci else None
+    geo = ci.get("geometry") if ci else None
+
+    brightness = (cls.get("brightness") or "").lower()
+    cr_label = ""
+    if cr.contrast_ratio:
+        cr_label = getattr(cr.contrast_ratio, "label", "").lower()
+    bg = cr.background_illumination
+    bg_bright = bg and getattr(bg, "brightness_relative", "") == "brighter" if bg else False
+    bg_dark = bg and getattr(bg, "brightness_relative", "") in ("darker", "dark") if bg else False
+    mood = (cls.get("mood") or "").lower()
+
+    # ── High-key: mood classifier says "high_key" ───────────────────
+    # Pixel-level brightness/contrast are unreliable for high-key detection
+    # (high-key images can have extreme pixel contrast from dark hair against
+    # white bg, and the bg_relative may report "similar" instead of "brighter").
+    # The mood classifier is the most reliable signal — when it explicitly
+    # classifies the mood as "high_key", trust that.
+    # Only apply when a geometric base pattern was detected (not "unknown") —
+    # high-key images are well-lit studio shots that should have identifiable
+    # shadow patterns.  base="unknown" + mood=high_key is more likely
+    # flat/commercial lighting where no dominant key shadow is visible.
+    bg_pat = getattr(bg, "pattern", "") if bg else ""
+    # "clamshell" is excluded: it describes a specific 2-source geometric
+    # setup (key above + fill below) that is orthogonal to the high_key
+    # tonal descriptor.  Upgrading clamshell → high_key loses the setup
+    # geometry and produces wrong light-count corrections downstream.
+    if mood == "high_key" and base not in ("unknown", "clamshell"):
+        return "high_key"
+
+    # ── High-key fallback: bright background + high brightness + soft base
+    # When the mood classifier says "editorial" or "beauty" instead of
+    # "high_key" but the image is clearly high-key (bright background +
+    # high overall brightness), promote to high_key.  Only fire for
+    # soft/flat base patterns that are compatible with multi-light
+    # high-key setups — exclude dramatic/directional patterns like
+    # rembrandt, triangle, split, short.  Also exclude clamshell: see above.
+    if bg_bright and brightness in ("high", "very_high") and \
+       base in ("loop", "butterfly", "broad", "flat_fashion"):
+        return "high_key"
+
+    # ── Flat fashion: unknown pattern + bright + even background ──────
+    # Flat fashion / catalog lighting produces minimal directional shadows.
+    # The geometric classifier returns "unknown" (no clear key direction)
+    # but the image is bright with an even, controlled background.
+    if base == "unknown" and brightness in ("high", "very_high", "medium"):
+        bg_even_or_similar = bg_pat == "even" or (
+            bg and getattr(bg, "brightness_relative", "") == "similar"
+        )
+        if bg_even_or_similar:
+            # Ensure it's not outdoor — flat_fashion is a studio concept
+            is_natural = getattr(env, "is_natural_light", False) if env else False
+            if not is_natural:
+                return "flat_fashion"
+
+    # ── Low-key: handled by cue_inference when key_direction="unknown" ──
+    # NOT applied as a post-classification specialty because the signals
+    # (extreme contrast + dark background + dramatic mood) are too common
+    # in standard studio portraits.  The cue_inference low_key detection
+    # at _infer_shadow_pattern() line 344 is the reliable path.
+
+    # ── Window portrait: indoor natural light + soft source ───────────
+    # Requires: indoor environment + natural light + no studio catchlights.
+    # "outdoor_shade" is excluded — that's outdoor, not window.
+    if env and getattr(env, "is_natural_light", False):
+        env_type = getattr(env, "environment_type", "")
+        special = getattr(env, "special_cases", []) or []
+
+        if env_type == "indoor_ambient" and "direct_sunlight" not in special:
+            # Must also be soft light (window light is inherently soft/diffused)
+            sq = ci.get("source_quality") if ci else None
+            modifier_fam = getattr(sq, "key_modifier_family", "") if sq else ""
+            seh = cr.shadow_edge_hardness
+            is_soft = (modifier_fam in ("softbox", "umbrella", "window") or
+                       (seh and getattr(seh, "classification", "") == "soft"))
+            if is_soft and base in ("loop", "rembrandt", "broad", "short"):
+                return "window_portrait"
+
+    # ── Golden hour: warm CCT + outdoor sun ───────────────────────────
+    # Primary: actual detected warm CCT + outdoor sun.
+    # Fallback: when CCT detection is unavailable, use converging warm
+    # color hints from the environmental shadow analysis.  The combination
+    # of natural light + outdoor + warm_overall + bg=brighter (sun behind
+    # subject) is unique to golden hour across the full benchmark set.
+    if env and getattr(env, "is_natural_light", False):
+        env_type = getattr(env, "environment_type", "")
+        cct = getattr(li, "detected_cct_kelvin", None) if li else None
+        if cct and cct < 4000 and env_type == "outdoor_sun":
+            return "golden_hour"
+        # Fallback: warm color convergence without explicit CCT
+        if env_type in ("outdoor_sun", "outdoor_shade") and bg_bright:
+            _esc = getattr(cr, "environmental_shadow_continuity", None)
+            _env_hints = getattr(_esc, "environment_hints", []) if _esc else []
+            if "warm_overall" in _env_hints and "warm_background" in _env_hints:
+                return "golden_hour"
+
+    # ── Overcast natural: outdoor shade + soft + low contrast ─────────
+    # Requires: outdoor_shade + soft shadows + low contrast.
+    # Exception: when "high_contrast_grade" is in special_cases, the pixel
+    # contrast reflects post-processing, not the actual lighting.  In that
+    # case, relax the contrast requirement — BUT require medium+ brightness
+    # to distinguish overcast (diffused outdoor light, even exposure) from
+    # intentional dramatic setups (dark mood, low brightness) that also
+    # happen to be outdoors with graded contrast.
+    if env and getattr(env, "is_natural_light", False):
+        env_type = getattr(env, "environment_type", "")
+        special = getattr(env, "special_cases", []) or []
+        if env_type == "outdoor_shade" and "direct_sunlight" not in special:
+            seh = cr.shadow_edge_hardness
+            is_soft = seh and getattr(seh, "classification", "") == "soft"
+            contrast_ok = cr_label in ("low", "very_low")
+            graded = "high_contrast_grade" in special and brightness in (
+                "medium", "high", "very_high",
+            )
+            if is_soft and (contrast_ok or graded):
+                return "overcast_natural"
+
+    # ── Editorial rim key: loop + no face shadow + very narrow highlight ──
+    # Edge/rim lighting from behind creates a sliver of highlight on the
+    # face edge with NO nose/cheek shadows (light doesn't reach the front).
+    # Distinctive signal combination: loop or butterfly geometry (butterfly
+    # fires when the face front is uniformly dark and appears symmetric to
+    # the shadow analyzer) + shadow_density ≈ 0 + highlight width < 15%.
+    # P1b: accept both "loop" and "butterfly" as base — rim-key images with
+    # a fully shadowed face front produce either base depending on the face
+    # orientation; the highlight_width + shadow_density signals are the
+    # authoritative discriminators regardless of base.
+    if base in ("loop", "butterfly") and bg_dark and brightness == "low":
+        ls_data = getattr(cr, "light_structure", None) if cr else None
+        _erk_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
+        _erk_sd = getattr(ls_data, "shadow_density", 0.5) if ls_data else 0.5
+        if _erk_hl < 0.15 and _erk_sd < 0.02:
+            return "editorial_rim_key"
+
+    # ── Ring light: round/circular catchlights + symmetric base ─────
+    # Ring lights produce distinctive large circular catchlights.  When the
+    # catchlight shape analysis detects round catchlights, upgrade compatible
+    # base patterns (broad, butterfly, loop — all on-axis/symmetric) to
+    # ring_light.  Require the image to NOT be outdoor/natural light.
+    # P1a: exclude images with very narrow highlights (highlight_width < 0.15).
+    # Ring lights produce broad, symmetric illumination across the face;
+    # a narrow highlight sliver indicates a hard off-axis backlight (rim key),
+    # not a ring — even if the specular catchlight looks circular.
+    cs = getattr(cr, "catchlight_shape", None)
+    if cs and getattr(cs, "dominant_shape", "") == "round":
+        is_natural = getattr(env, "is_natural_light", False) if env else False
+        ls_data = getattr(cr, "light_structure", None) if cr else None
+        _rl_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
+        if not is_natural and _rl_hl >= 0.15 and base in ("broad", "butterfly", "loop", "clamshell"):
+            return "ring_light"
+
+    # ── Low-key: mood=low_key + dramatic base + very narrow highlight ──
+    # Low-key lighting is a high-ratio setup where most of the face is in
+    # shadow with only a narrow sliver of light.  mood=low_key alone is
+    # too common (fires on 12/32 benchmarks), so we require:
+    #   - mood explicitly classified as "low_key"
+    #   - base pattern is a dramatic geometric type (split or rembrandt)
+    #   - dark background (intentional)
+    #   - very narrow highlight width (< 15% of face) — the distinctive
+    #     signal that separates low_key from standard dramatic setups
+    if mood == "low_key" and base in ("split", "rembrandt") and bg_dark:
+        ls_data = getattr(cr, "light_structure", None) if cr else None
+        hl_w = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
+        if hl_w < 0.15:
+            return "low_key"
+
+    # ── Athletic rim sculpt: split-like rim from two strip lights ──────
+    # Athletic/fitness rim sculpting uses two strip lights (or gridded
+    # edges) from behind to carve body definition.  The face shadow
+    # density is high (mostly dark) with moderate highlight width from
+    # the rim wrapping around the edges.  Distinguished from rim_only
+    # by wider highlights (0.25-0.35 vs <0.25) and from standard split
+    # by higher shadow density (>0.3 vs <0.15 for well-lit split).
+    if base == "split" and brightness == "low" and bg_dark:
+        _esc_ars = getattr(cr, "environmental_shadow_continuity", None)
+        _ars_hints = getattr(_esc_ars, "environment_hints", []) if _esc_ars else []
+        if "controlled_background" in _ars_hints:
+            ls_data = getattr(cr, "light_structure", None) if cr else None
+            _ars_sd = getattr(ls_data, "shadow_density", 0.0) if ls_data else 0.0
+            _ars_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
+            if _ars_sd > 0.3 and 0.25 <= _ars_hl < 0.35:
+                return "athletic_rim_sculpt"
+
+    # ── Rim-only: face mostly in shadow, only edge/rim highlights ─────
+    # Rim lighting illuminates only the edges of the subject with no
+    # frontal key.  The face is predominantly dark (high shadow_density)
+    # with very narrow highlights along the contour.  Distinguished from
+    # standard rembrandt/split by the highlight_width_ratio being too
+    # narrow for a frontal key but wider than a razor-thin editorial rim.
+    if base in ("rembrandt", "split") and brightness == "low" and bg_dark:
+        ls_data = getattr(cr, "light_structure", None) if cr else None
+        _rim_sd = getattr(ls_data, "shadow_density", 0.0) if ls_data else 0.0
+        _rim_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
+        if _rim_sd > 0.45 and _rim_hl < 0.25 and _rim_hl >= 0.15:
+            return "rim_only"
+
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Perception & robustness layer (read-only diagnostics)
+# ═══════════════════════════════════════════════════════════════════════════
+# These functions compute diagnostic fields AFTER all pattern resolution is
+# complete.  They are purely additive — they never modify authoritative_pattern,
+# pattern_candidates, or lighting_intel.  Any failure leaves the field as None.
+
+_CUE_FIELD_NAMES = [
+    "shadow_edge_hardness", "primary_shadow_direction", "vertical_light_angle",
+    "catchlight_position", "catchlight_shape", "catchlight_topology",
+    "highlight_axis_map", "highlight_symmetry", "continuous_source_signals",
+    "bounce_contributor", "separation_light", "off_axis_key",
+    "light_structure", "highlight_to_shadow_transition", "contrast_ratio",
+    "subject_background_separation", "background_illumination",
+    "specular_highlight_behavior", "reflection_architecture",
+    "multi_shadow_detection", "environmental_shadow_continuity",
+    "pose_induced_shadow_interference", "tonal_processing_estimation",
+    "shadow_interruption_pattern",
+]
+
+_FACE_DEPENDENT_CUES = {
+    "primary_shadow_direction", "vertical_light_angle",
+    "pose_induced_shadow_interference", "shadow_interruption_pattern",
+    "light_structure",
+}
+
+
+def _compute_face_validation(result: "AnalysisResult") -> FaceValidation:
+    """Assess face detection quality from vision_data."""
+    fv = FaceValidation()
+
+    face_box = result.debug_data.get("face_box") if result.debug_data else None
+    fv.face_detected = face_box is not None
+
+    # Face yaw from catchlight pipeline
+    cl_info = result.vision_data.get("catchlights", {}) if result.vision_data else {}
+    fv.face_yaw = cl_info.get("face_yaw")
+
+    # Detection score from MediaPipe
+    ra = result.vision_data.get("region_attribution", {}) if result.vision_data else {}
+    score = ra.get("face_detection_score")
+    fv.face_confidence = score if score is not None else (0.8 if fv.face_detected else 0.0)
+
+    # Face area ratio
+    if face_box is not None:
+        fb = face_box if not isinstance(face_box, list) else tuple(face_box)
+        x0, y0, x1, y1 = fb
+        face_area = max(0, (x1 - x0)) * max(0, (y1 - y0))
+        # Get image dimensions from region_attribution masks or vision_data
+        img_h = ra.get("_image_h", 0)
+        img_w = ra.get("_image_w", 0)
+        if img_h == 0 or img_w == 0:
+            # Fallback: estimate from face_box bounds
+            img_h = max(y1, 1)
+            img_w = max(x1, 1)
+        img_area = img_h * img_w
+        fv.face_box_area_ratio = round(face_area / img_area, 4) if img_area > 0 else 0.0
+
+    # Quality assessment
+    if fv.face_detected and fv.face_box_area_ratio > 0.02 and fv.face_yaw is not None:
+        fv.face_quality = "good"
+    elif fv.face_detected:
+        fv.face_quality = "partial"
+    else:
+        fv.face_quality = "none"
+
+    return fv
+
+
+def _compute_signal_reliability(result: "AnalysisResult") -> SignalReliability:
+    """Assess signal extraction completeness and confidence."""
+    sr = SignalReliability()
+    sr.signals_total = len(_CUE_FIELD_NAMES)
+
+    cr = result.cue_report
+    if cr is None:
+        sr.missing_signals = list(_CUE_FIELD_NAMES)
+        return sr
+
+    for name in _CUE_FIELD_NAMES:
+        cue = getattr(cr, name, None)
+        if cue is None:
+            sr.missing_signals.append(name)
+        else:
+            sr.signals_available += 1
+            if name in _FACE_DEPENDENT_CUES:
+                conf = getattr(cue, "confidence", 0.0)
+                if conf > 0:
+                    sr.face_dependent_signals_available += 1
+            conf = getattr(cue, "confidence", None)
+            if conf is not None and conf < 0.3:
+                sr.weak_signals.append(name)
+
+    sr.overall_signal_strength = round(cr.overall_confidence(), 3) if hasattr(cr, "overall_confidence") else 0.0
+    return sr
+
+
+def _compute_edge_case_flags(
+    result: "AnalysisResult", fv: FaceValidation,
+) -> EdgeCaseFlags:
+    """Detect edge cases from existing signals (no new classifiers)."""
+    ecf = EdgeCaseFlags()
+    ecf.no_face = not fv.face_detected
+
+    cr = result.cue_report
+    cls = result.classification or {}
+
+    if cr is None:
+        return ecf
+
+    # B&W processing
+    tpe = getattr(cr, "tonal_processing_estimation", None)
+    if tpe and getattr(tpe, "is_bw", False):
+        ecf.bw_processing = True
+
+    # Blown highlights — high contrast ratio as proxy
+    ctr = getattr(cr, "contrast_ratio", None)
+    if ctr and getattr(ctr, "ratio", 0.0) > 8.0:
+        ecf.blown_highlights = True
+
+    # Environment hints
+    esc = getattr(cr, "environmental_shadow_continuity", None)
+    hints = getattr(esc, "environment_hints", []) if esc else []
+
+    # Mixed color temperature: both warm and cool hints present
+    has_warm = any(h.startswith("warm") for h in hints)
+    has_cool = any(h.startswith("cool") for h in hints)
+    if has_warm and has_cool:
+        ecf.mixed_color_temperature = True
+
+    # Outdoor foliage shadows
+    if "dappled_foliage" in hints:
+        ecf.outdoor_foliage_shadows = True
+
+    # Window light gradient
+    bg_ill = getattr(cr, "background_illumination", None)
+    bg_pattern = getattr(bg_ill, "pattern", "") if bg_ill else ""
+    has_natural = getattr(esc, "has_natural_indicators", False) if esc else False
+    if bg_pattern == "gradient" and has_natural:
+        ecf.window_light_gradient = True
+
+    # Extreme low-key
+    brightness = (cls.get("brightness") or "").lower()
+    ls = getattr(cr, "light_structure", None)
+    sd = getattr(ls, "shadow_density", 0.0) if ls else 0.0
+    if brightness == "low" and sd > 0.5:
+        ecf.extreme_low_key = True
+
+    return ecf
+
+
+def _compute_perception_explanation(
+    result: "AnalysisResult", fv: FaceValidation, sr: SignalReliability,
+) -> PerceptionExplanation:
+    """Build structured explanation of pattern selection."""
+    pe = PerceptionExplanation()
+    cr = result.cue_report
+    pc = result.pattern_candidates
+    pattern = result.authoritative_pattern
+    source = result.authoritative_pattern_source
+
+    # ── Supporting signals ───────────────────────────────────────────
+    supporting = []
+    if cr is not None:
+        ls = getattr(cr, "light_structure", None)
+        if ls and getattr(ls, "pattern_name", "unknown") != "unknown":
+            supporting.append({
+                "signal": "light_structure",
+                "value": ls.pattern_name,
+                "confidence": round(getattr(ls, "confidence", 0.0), 3),
+            })
+
+        psd = getattr(cr, "primary_shadow_direction", None)
+        if psd and getattr(psd, "direction", "unknown") != "unknown":
+            supporting.append({
+                "signal": "primary_shadow_direction",
+                "value": psd.direction,
+                "confidence": round(getattr(psd, "confidence", 0.0), 3),
+            })
+
+        cs = getattr(cr, "catchlight_shape", None)
+        if cs and getattr(cs, "dominant_shape", "unknown") != "unknown":
+            supporting.append({
+                "signal": "catchlight_shape",
+                "value": cs.dominant_shape,
+                "confidence": round(getattr(cs, "confidence", 0.0), 3),
+            })
+
+        esc = getattr(cr, "environmental_shadow_continuity", None)
+        if esc and getattr(esc, "confidence", 0.0) > 0.3:
+            hints = getattr(esc, "environment_hints", [])
+            if hints:
+                supporting.append({
+                    "signal": "environmental_shadow_continuity",
+                    "value": ", ".join(hints[:3]),
+                    "confidence": round(esc.confidence, 3),
+                })
+
+        seh = getattr(cr, "shadow_edge_hardness", None)
+        if seh and getattr(seh, "classification", "unknown") != "unknown":
+            supporting.append({
+                "signal": "shadow_edge_hardness",
+                "value": seh.classification,
+                "confidence": round(getattr(seh, "confidence", 0.0), 3),
+            })
+
+    # Sort by confidence desc, cap at 5
+    supporting.sort(key=lambda s: s["confidence"], reverse=True)
+    pe.supporting_signals = supporting[:5]
+
+    # ── Contradicting signals ────────────────────────────────────────
+    contradicting = []
+    if pc and pc.contradictions:
+        for c in pc.contradictions:
+            contradicting.append({"signal": "classifier_disagreement", "value": c, "confidence": 0.0})
+
+    # Light structure pattern differs from authoritative
+    if cr is not None:
+        ls = getattr(cr, "light_structure", None)
+        ls_pat = getattr(ls, "pattern_name", "unknown") if ls else "unknown"
+        if ls_pat != "unknown" and ls_pat != pattern:
+            contradicting.append({
+                "signal": "light_structure",
+                "value": f"detected '{ls_pat}' but authoritative is '{pattern}'",
+                "confidence": round(getattr(ls, "confidence", 0.0), 3),
+            })
+
+    pe.contradicting_signals = contradicting
+
+    # ── Ambiguity flags ──────────────────────────────────────────────
+    flags = []
+    if not fv.face_detected:
+        flags.append("no_face_detected")
+    if fv.face_box_area_ratio > 0 and fv.face_box_area_ratio < 0.01:
+        flags.append("tiny_face")
+    if pc and pc.alternates:
+        primary_conf = pc.primary.confidence if pc.primary else 0.0
+        for alt in pc.alternates:
+            if abs(alt.confidence - primary_conf) < 0.15:
+                flags.append("multiple_patterns_close_confidence")
+                break
+    if cr is not None:
+        tpe = getattr(cr, "tonal_processing_estimation", None)
+        if tpe and getattr(tpe, "is_bw", False):
+            flags.append("bw_limits_color_cues")
+    if sr.signals_available < 10:
+        flags.append("low_signal_count")
+
+    pe.ambiguity_flags = flags
+
+    # ── Pattern reasoning ────────────────────────────────────────────
+    conf = 0.0
+    if pc and pc.primary:
+        conf = pc.primary.confidence
+    detail = ""
+    if pe.supporting_signals:
+        top = pe.supporting_signals[0]
+        detail = f"{top['signal'].replace('_', ' ')} indicates {top['value']}."
+    pe.pattern_reasoning = (
+        f"Pattern '{pattern}' selected by {source} "
+        f"(confidence {conf:.0%}). {detail}"
+    ).strip()
+
+    return pe
+
+
+def _compute_perception_layer(result: "AnalysisResult") -> None:
+    """Compute all perception/robustness diagnostics.
+
+    Called after all pattern resolution is complete.  This function is
+    purely read-only — it never modifies authoritative_pattern,
+    pattern_candidates, or lighting_intel.  Any sub-computation failure
+    leaves the corresponding field as None.
+    """
+    try:
+        fv = _compute_face_validation(result)
+        result.face_validation = fv
+    except Exception:
+        fv = FaceValidation()
+        logger.debug("Face validation computation failed", exc_info=True)
+
+    try:
+        sr = _compute_signal_reliability(result)
+        result.signal_reliability = sr
+    except Exception:
+        sr = SignalReliability()
+        logger.debug("Signal reliability computation failed", exc_info=True)
+
+    try:
+        result.edge_case_flags = _compute_edge_case_flags(result, fv)
+    except Exception:
+        logger.debug("Edge case flags computation failed", exc_info=True)
+
+    try:
+        result.perception_explanation = _compute_perception_explanation(result, fv, sr)
+    except Exception:
+        logger.debug("Perception explanation computation failed", exc_info=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -156,7 +1352,11 @@ def analyze_image(
         result.vision_data = raw.get("vision", {})
         result.classification = raw.get("classification", {})
 
-        if debug:
+        # Always populate debug_data when running extended pipeline — it
+        # provides img_bgr, masks, and face_box that the vision passes need.
+        # When debug=False but run_extended=True, we still need these for the
+        # pipeline to function; they just won't be retained in the final result.
+        if debug or run_extended:
             result.debug_data = {
                 "img_bgr": raw.get("_debug_img_bgr"),
                 "masks": raw.get("_debug_masks", {}),
@@ -176,6 +1376,65 @@ def analyze_image(
     # ── Step 2: Extended pipeline (signal + synthesis passes) ───────
     if run_extended:
         result.pipeline_results = _run_extended_pipeline(result)
+
+        # Merge light_structure from extended pipeline into cue_report.
+        # The cue_report was built in Step 1 (describe_image) before the
+        # extended pipeline ran.  light_structure_pass requires face_box
+        # and shadow_data that only become available in the extended pipeline.
+        if result.pipeline_results and result.cue_report:
+            _ls_data = result.pipeline_results.get("light_structure")
+            if isinstance(_ls_data, dict) and _ls_data.get("ok"):
+                try:
+                    from engine.cue_extraction import extract_light_structure
+                    result.cue_report.light_structure = extract_light_structure(_ls_data)
+                except Exception:
+                    pass  # best-effort; cue_inference will use other signals
+
+            # Merge catchlight shape from catchlight_pass (contour-based) into
+            # the cue_report.  The vision-based circularity analysis overrides
+            # the text-hint shape when it detects round catchlights.
+            _cl_data = result.pipeline_results.get("catchlight")
+            if isinstance(_cl_data, dict) and _cl_data.get("ok"):
+                _cl_shape = _cl_data.get("catchlight_shape")
+                _cl_circ = _cl_data.get("catchlight_circularity")
+                if _cl_shape and _cl_shape != "unknown" and result.cue_report.catchlight_shape:
+                    result.cue_report.catchlight_shape.dominant_shape = _cl_shape
+                    if _cl_shape not in (result.cue_report.catchlight_shape.shapes_seen or []):
+                        result.cue_report.catchlight_shape.shapes_seen.append(_cl_shape)
+                # Store circularity for downstream use
+                if _cl_circ is not None and result.cue_report.catchlight_shape is not None:
+                    result.cue_report.catchlight_shape.notes = [
+                        f"circularity={_cl_circ}"
+                    ]
+
+        # ── Full cue-report enrichment from extended pipeline ───────
+        # enrich_cue_report_from_pipeline wires topology, highlight axis,
+        # highlight symmetry, continuous source, bounce, separation,
+        # off-axis key, light structure, and shadow penumbra into the
+        # cue_report so all signals are available for cue inference.
+        if result.pipeline_results and result.cue_report:
+            try:
+                # P6: Propagate face_yaw from vision_data.catchlights into
+                # pipeline_results["catchlights"] so enrich_cue_report_from_pipeline
+                # can build a FaceOrientation cue from it.
+                _vy_cl = (result.vision_data or {}).get("catchlights", {})
+                _face_yaw_val = _vy_cl.get("face_yaw") if isinstance(_vy_cl, dict) else None
+                if _face_yaw_val is not None:
+                    if not isinstance(result.pipeline_results.get("catchlights"), dict):
+                        result.pipeline_results["catchlights"] = {}
+                    result.pipeline_results["catchlights"]["face_yaw"] = _face_yaw_val
+
+                from engine.cue_extraction import enrich_cue_report_from_pipeline
+                result.cue_report = enrich_cue_report_from_pipeline(
+                    result.cue_report, result.pipeline_results
+                )
+            except Exception as _enrich_exc:
+                logger.warning("enrich_cue_report_from_pipeline failed: %s", _enrich_exc)
+
+        # When debug=False, free heavy image data now that the pipeline is done.
+        if not debug:
+            result.debug_data.pop("img_bgr", None)
+            result.debug_data.pop("masks", None)
 
     # ── Step 3: Lighting inference ──────────────────────────────────
     try:
@@ -197,6 +1456,7 @@ def analyze_image(
             from engine.cue_inference import run_cue_inference_pipeline
 
             cue_inference_result = run_cue_inference_pipeline(result.cue_report)
+            result.cue_inference_result = cue_inference_result
         except Exception as exc:
             logger.warning("Cue inference failed: %s", exc)
             result.notes.append(f"cue_inference skipped: {exc}")
@@ -230,6 +1490,241 @@ def analyze_image(
     if result.pipeline_results:
         result.vlm_reconstruction = result.pipeline_results.get("vlm_reconstruction")
 
+    # ── Resolve authoritative pattern across all classifiers ──────
+    # Candidate-first: preserve all classifier outputs, rank them.
+    pc = resolve_pattern_candidates(result)
+    result.pattern_candidates = pc
+    result.authoritative_pattern = pc.authoritative_pattern
+    result.authoritative_pattern_source = pc.authoritative_source
+    result.pattern_confidence = pc.primary.confidence
+    result.pattern_confidence_label = pc.confidence_label
+
+    # ── Butterfly → Clamshell upgrade ─────────────────────────────
+    # Clamshell IS butterfly + fill from below.  If the pattern resolved
+    # to butterfly but we detect 2+ lights, upgrade to clamshell.
+    # This catches cases where cue_inference's clamshell guard missed
+    # due to light_count disagreement between classifiers.
+    #
+    # Signal guard: a real clamshell creates visible secondary shadows from
+    # two distinct sources.  If shadow_density ≈ 0 and asymmetry ≈ 0,
+    # the "extra lights" are likely specular reflections (e.g. from glasses,
+    # jewelry), not actual fill sources.  Keep butterfly in that case.
+    _cr = getattr(result, "cue_report", None)
+    _ls = getattr(_cr, "light_structure", None) if _cr else None
+    _clam_shadow_ok = True
+    if _ls is not None:
+        _clam_sd = getattr(_ls, "shadow_density", 0.1)
+        _clam_lr = getattr(_ls, "left_right_asymmetry", 0.1)
+        if _clam_sd < 0.02 and _clam_lr < 0.02:
+            _clam_shadow_ok = False  # no shadow evidence of dual-source setup
+    if pc.authoritative_pattern == "butterfly":
+        li_count = getattr(result.lighting_intel, "light_count", 0) if result.lighting_intel else 0
+        if li_count >= 2 and _clam_shadow_ok:
+            pc.primary = PatternCandidate(
+                pattern="clamshell", source=pc.primary.source,
+                confidence=pc.primary.confidence, rank=1,
+            )
+            result.pattern_candidates = pc
+            result.authoritative_pattern = "clamshell"
+
+    # ── Loop/Rembrandt → Triangle upgrade ────────────────────────────
+    # Triangle setup = exactly 3 lights arranged around the face.  The shadow
+    # geometry looks like loop or rembrandt (single dominant key creates
+    # the nose shadow), but the catchlights reveal 3 distinct sources.
+    # Guards:
+    #   1. Use deduped catchlight count from reflection_architecture, NOT the
+    #      raw lighting_intel.light_count (raw counts floor reflections, window
+    #      glints, and false-positive SIP lines as separate sources).
+    #   2. Only upgrade when lighting_intel.pattern_confidence >= 0.5 — low
+    #      confidence means the catchlight analysis couldn't resolve the scene,
+    #      so the count is unreliable (e.g. chair stripes, fabric patterns).
+    if pc.authoritative_pattern in ("loop", "rembrandt"):
+        li_count = getattr(result.lighting_intel, "light_count", 0) if result.lighting_intel else 0
+        li_conf = getattr(result.lighting_intel, "pattern_confidence", 0.0) if result.lighting_intel else 0.0
+        # Prefer deduped count from reflection_architecture when available
+        _cr_tri = getattr(result, "cue_report", None)
+        _ra = getattr(_cr_tri, "reflection_architecture", None) if _cr_tri else None
+        _deduped_count = getattr(_ra, "total_catchlights", None)
+        if _deduped_count is not None:
+            li_count = _deduped_count
+        if li_count == 3 and li_conf >= 0.5:
+            pc.primary = PatternCandidate(
+                pattern="triangle", source=pc.primary.source,
+                confidence=pc.primary.confidence, rank=1,
+            )
+            result.pattern_candidates = pc
+            result.authoritative_pattern = "triangle"
+
+    # ── Face-yaw-based broad/short refinement ──────────────────────
+    # Broad and short are *face-pose-relative* variants of split and
+    # rembrandt respectively.  The shadow geometry is indistinguishable
+    # from the base pattern; only face turn direction disambiguates:
+    #   • split + moderate face turn → broad (lit side faces camera)
+    #   • rembrandt + strong face turn → short (key on narrow/far side)
+    # Guard: only apply in studio-like settings (controlled_background)
+    # to avoid reclassifying window-lit portraits as broad/short.
+    _cl_info = result.vision_data.get("catchlights", {}) if result.vision_data else {}
+    _face_yaw = _cl_info.get("face_yaw")
+    _esc_bs = getattr(_cr, "environmental_shadow_continuity", None) if _cr else None
+    _env_hints_bs = getattr(_esc_bs, "environment_hints", []) if _esc_bs else []
+    _studio_bg = "controlled_background" in _env_hints_bs
+    if _face_yaw is not None and _studio_bg:
+        _abs_yaw = abs(_face_yaw)
+        if pc.authoritative_pattern == "split" and _abs_yaw > 0.2:
+            pc.primary = PatternCandidate(
+                pattern="broad", source=pc.primary.source,
+                confidence=pc.primary.confidence, rank=1,
+            )
+            result.pattern_candidates = pc
+            result.authoritative_pattern = "broad"
+        elif pc.authoritative_pattern == "rembrandt" and _abs_yaw > 0.5:
+            pc.primary = PatternCandidate(
+                pattern="short", source=pc.primary.source,
+                confidence=pc.primary.confidence, rank=1,
+            )
+            result.pattern_candidates = pc
+            result.authoritative_pattern = "short"
+
+    # ── Specialty pattern post-classification ───────────────────────
+    # Check environmental/tonal signals to upgrade geometric patterns
+    # to specialty names (high_key, low_key, window_portrait, etc.).
+    # The geometric pattern is preserved in pattern_candidates; the
+    # specialty name becomes the authoritative pattern.
+    specialty = _apply_specialty_pattern(result)
+    if specialty:
+        result.authoritative_pattern = specialty
+        result.authoritative_pattern_source = f"specialty:{result.authoritative_pattern_source}"
+
+    # ── Sync pattern_confidence after all upgrades ───────────────────
+    # Pattern upgrades (butterfly→clamshell, loop→triangle, specialty) may
+    # change the authoritative pattern but the PatternCandidates.primary was
+    # updated in-place.  Re-sync the scalar fields so callers get consistent
+    # values without needing to reach into pattern_candidates.
+    if result.pattern_candidates and result.pattern_candidates.primary:
+        result.pattern_confidence = result.pattern_candidates.primary.confidence
+        result.pattern_confidence_label = result.pattern_candidates.confidence_label
+
+    # ── Signal-based light_count correction ─────────────────────────
+    # When vision signals strongly indicate a single light source but the
+    # catchlight pipeline over-counted (specular reflections in glasses,
+    # jewelry, or high-contrast makeup), correct the count.
+    # Condition: on-axis pattern (butterfly) + zero shadow evidence of
+    # additional sources.  This is the same signal logic as the
+    # butterfly→clamshell guard but applied to light_count.
+    if result.lighting_intel is not None and _ls is not None:
+        _corr_sd = getattr(_ls, "shadow_density", 0.5)
+        _corr_lr = getattr(_ls, "left_right_asymmetry", 0.5)
+        _corr_pat = result.authoritative_pattern
+        _corr_lc = getattr(result.lighting_intel, "light_count", 0)
+        if _corr_pat == "butterfly" and _corr_sd < 0.02 and _corr_lr < 0.02 and _corr_lc > 1:
+            result.lighting_intel.light_count = 1
+
+    # ── High-key / flat_fashion catchlight-based light_count floor ────
+    # High-key and flat_fashion setups inherently use multiple lights
+    # (key + fill + background minimum).  When catchlights confirm
+    # symmetric multi-source illumination (≥2 per eye), ensure the
+    # light_count reflects this even if the lighting_inference under-counted.
+    if result.lighting_intel is not None:
+        _hk_pat = result.authoritative_pattern
+        _hk_lc = getattr(result.lighting_intel, "light_count", 0)
+        if _hk_pat in ("high_key", "flat_fashion") and _hk_lc < 2:
+            _ra = getattr(result.cue_report, "reflection_architecture", None) if result.cue_report else None
+            if _ra and _ra.per_eye_counts:
+                _hk_left = _ra.per_eye_counts.get("left", 0)
+                _hk_right = _ra.per_eye_counts.get("right", 0)
+                # Symmetric ≥2 per eye, or total ≥3 with at least 1 per eye
+                if (_hk_left >= 2 and _hk_right >= 2) or \
+                   (_ra.total_catchlights >= 3 and _hk_left >= 1 and _hk_right >= 1):
+                    result.lighting_intel.light_count = 2
+            # Flat-fashion with mood=high_key but zero catchlights (common in
+            # overfill setups where specular highlights wash out): the pattern
+            # itself is the strongest evidence of multi-source lighting.
+            if _hk_pat == "flat_fashion" and _hk_lc < 2:
+                _hk_mood = (result.classification.get("mood", "") or "").lower() if result.classification else ""
+                if _hk_mood == "high_key":
+                    result.lighting_intel.light_count = 2
+
+    # ── High-key light_count cap when shadow evidence is absent ────────
+    # In high-key setups with near-zero shadow density, multiple catchlights
+    # are reflections of fill panels / white surfaces, not distinct directional
+    # sources.  Cap at 2 (key + fill) when the shadow analysis confirms even
+    # illumination (sd < 0.1).  This corrects over-counting from specular
+    # reflections in beauty/editorial high-key lighting.
+    if result.lighting_intel is not None and result.authoritative_pattern == "high_key":
+        _hk_cap_lc = getattr(result.lighting_intel, "light_count", 0)
+        if _hk_cap_lc > 2 and _ls is not None:
+            _hk_cap_sd = getattr(_ls, "shadow_density", 0.5)
+            if _hk_cap_sd < 0.1:
+                result.lighting_intel.light_count = 2
+
+    # ── Athletic rim sculpt: 2-strip minimum ───────────────────────────
+    # Athletic rim sculpting physically requires at least 2 edge/strip
+    # lights to create the bilateral rim effect.  Catchlight counting
+    # under-reports because the lights are behind the subject.
+    if result.lighting_intel is not None:
+        if result.authoritative_pattern == "athletic_rim_sculpt":
+            if getattr(result.lighting_intel, "light_count", 0) < 2:
+                result.lighting_intel.light_count = 2
+
+    # ── Ring light: always a single source ────────────────────────────
+    # Ring lights produce multiple catchlight reflections (the ring
+    # shape creates several bright spots) but it's physically one light.
+    # Override any over-counted light_count.
+    if result.lighting_intel is not None:
+        if result.authoritative_pattern == "ring_light":
+            result.lighting_intel.light_count = 1
+
+    # ── Catchlight-inferred light_count floor (final pass) ───────────
+    # The basic vision pass infers light count directly from distinct
+    # catchlight positions across both eyes and stores the result in
+    # vision_data["catchlights"]["inferred"]["lightCount"].  This count
+    # is authoritative for lights that cast no visible face shadow —
+    # hair lights, rim lights, background fill — which the shadow-geometry
+    # pipeline systematically under-counts.
+    # Placed AFTER all pattern-specific caps so that ring_light (always 1)
+    # and over-counting corrections are already applied before this floor.
+    # Guards:
+    #   - Exempt ring_light: the ring cap above already set count=1 and
+    #     a ring's circular reflection pattern creates many false catchlights.
+    #   - Cap inferred count at 4: no common portrait setup uses more than
+    #     4 distinct sources; higher counts indicate specular noise.
+    #   - Only raises (never lowers) the count.
+    #   - Only fires when the shadow pipeline already confirmed >= 2 sources
+    #     (current_lc >= 2).  Single-light portraits (rembrandt_classic,
+    #     broad, etc.) return current_lc=1 and must not be boosted by
+    #     false catchlights from specular noise in high-contrast images.
+    #     Multi-source setups (hurley_triangle: key + fill + hair/rim)
+    #     return current_lc=2 and ARE eligible — the hair light that casts
+    #     no face shadow is correctly picked up here.
+    if result.lighting_intel is not None and result.vision_data:
+        _cl_auth = result.authoritative_pattern
+        if _cl_auth != "ring_light":
+            _cl_raw = result.vision_data.get("catchlights", {})
+            _cl_inferred = _cl_raw.get("inferred", {}) if isinstance(_cl_raw, dict) else {}
+            _cl_inferred_count = _cl_inferred.get("lightCount") if isinstance(_cl_inferred, dict) else None
+            if isinstance(_cl_inferred_count, int) and 0 < _cl_inferred_count <= 4:
+                _cur_lc = getattr(result.lighting_intel, "light_count", 0)
+                if _cl_inferred_count > _cur_lc >= 2:
+                    result.lighting_intel.light_count = _cl_inferred_count
+
+    # ── Pattern-based direction enrichment ──────────────────────────
+    # Some patterns have inherent key positions.  When the catchlight
+    # and shadow pipelines both failed to resolve a direction, use the
+    # authoritative pattern as a weak signal.
+    _PATTERN_IMPLIED_SIDE = {
+        "butterfly": "center",   # overhead / on-axis
+        "clamshell": "center",   # overhead key + below fill
+    }
+    if result.lighting_intel is not None:
+        _intel = result.lighting_intel
+        if getattr(_intel, "key_side", "unknown") == "unknown":
+            implied = _PATTERN_IMPLIED_SIDE.get(pc.authoritative_pattern)
+            if implied:
+                _intel.key_side = implied
+
+    # ── Perception layer (read-only diagnostics) ─────────────────────
+    _compute_perception_layer(result)
+
     return result
 
 
@@ -242,6 +1737,7 @@ def recommend_system(
     *,
     input_ctx: Optional[Dict[str, Any]] = None,
     modifiers_available: Optional[List[str]] = None,
+    solver_result: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Recommend best lighting system — wraps the rule engine.
 
@@ -253,6 +1749,9 @@ def recommend_system(
         User input context (mood, environment, gear, skin_tone).
     modifiers_available : list of str or None
         Modifier names available to the user.
+    solver_result : SolverResult or None
+        When provided, solver quality signals (consistency, contradictions,
+        ambiguity) modulate the recommendation confidence score.
 
     Returns
     -------
@@ -261,10 +1760,13 @@ def recommend_system(
     """
     from engine.selector import select_best_system, as_public_selection
 
+    sq = extract_solver_quality(solver_result) if solver_result else None
+
     outcome = select_best_system(
         list(systems),
         input_ctx=input_ctx,
         modifiers_available=modifiers_available or [],
+        solver_quality=sq,
     )
     return as_public_selection(outcome)
 
@@ -339,7 +1841,11 @@ def _run_solver_chain(
     cue_inference or reference_read outputs.
     """
     try:
-        from engine.signal_weights import compute_pass_weights, compute_region_reliability
+        from engine.signal_weights import (
+            apply_contradiction_feedback,
+            compute_pass_weights,
+            compute_region_reliability,
+        )
         from engine.consensus_solver import solve_dominant_source
         from engine.consistency_engine import score_consistency
         from engine.contradiction_engine import find_contradictions
@@ -377,6 +1883,22 @@ def _run_solver_chain(
             cue_report=cue_report,
             cue_inference=cue_inference_result,
         )
+
+        # ── Feedback loop: contradictions → weight adjustment → re-consensus ──
+        if contradiction_report.contradictions:
+            pass_weights = apply_contradiction_feedback(
+                pass_weights, contradiction_report, consensus,
+            )
+            # Re-run consensus with adjusted weights for more accurate result
+            consensus = solve_dominant_source(
+                pass_outputs, pass_weights, cue_inference=cue_inference_result,
+            )
+            # Re-score consistency with adjusted weights
+            consistency_scores = score_consistency(pass_outputs, pass_weights)
+            overall_consistency = (
+                sum(cs.overall_score for cs in consistency_scores) / len(consistency_scores)
+                if consistency_scores else 0.0
+            )
 
         # ── Hypothesis candidates (from synthesis passes) ──
         candidates = _extract_candidates(pass_outputs)

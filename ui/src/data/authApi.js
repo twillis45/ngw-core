@@ -1,3 +1,5 @@
+import { apiFetch as baseApiFetch } from '../lib/apiClient';
+
 const TOKEN_KEY = 'ngw_auth_token';
 const USER_KEY = 'ngw_auth_user';
 
@@ -28,7 +30,7 @@ function authHeaders() {
 }
 
 async function apiFetch(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
+  const res = await baseApiFetch(`/api${path}`, {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...options.headers },
     ...options,
   });

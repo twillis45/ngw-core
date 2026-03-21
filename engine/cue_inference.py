@@ -72,11 +72,89 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
             notes.append(f"Catchlight positions: {all_positions}")
 
     # -- Key light height --
+    # Two independent signals: vertical_light_angle pass (gradient-based)
+    # and catchlight clock position (geometric — where the light reflection
+    # sits in the eye directly encodes source elevation).
+    # Clock mapping:
+    #   11, 12, 1        → high  (directly above or near-above)
+    #   10, 2            → high  (typical portrait upper-key position)
+    #   9, 3             → eye_level
+    #   4, 5, 6, 7, 8   → low   (clamshell / beauty below)
     key_height = "unknown"
     vl = cue_report.vertical_light_angle
     if vl and vl.confidence > 0.3:
         key_height = vl.angle
-        notes.append(f"Vertical angle: {key_height} ({vl.confidence:.2f})")
+        notes.append(f"Vertical angle pass: {key_height} ({vl.confidence:.2f})")
+
+    cl_pos = cue_report.catchlight_position
+    if cl_pos and cl_pos.confidence > 0.3:
+        all_positions = cl_pos.left_eye + cl_pos.right_eye
+        clock_hours: List[int] = []
+        for pos in all_positions:
+            try:
+                clock_hours.append(int(str(pos).split()[0]))
+            except (ValueError, IndexError):
+                pass
+        if clock_hours:
+            high_count = sum(1 for h in clock_hours if h in (10, 11, 12, 1, 2))
+            eye_count = sum(1 for h in clock_hours if h in (3, 9))
+            low_count = sum(1 for h in clock_hours if h in (4, 5, 6, 7, 8))
+            total = len(clock_hours)
+            if high_count / total >= 0.5:
+                cl_height = "high"
+            elif low_count / total >= 0.5:
+                cl_height = "low"
+            elif eye_count / total >= 0.5:
+                cl_height = "eye_level"
+            else:
+                cl_height = "unknown"
+
+            if cl_height != "unknown":
+                notes.append(
+                    f"Catchlight clock positions {clock_hours} → key height: {cl_height} "
+                    f"(conf {cl_pos.confidence:.2f})"
+                )
+                # Catchlight clock position is more reliable than gradient-based
+                # vertical angle when confident, as it directly encodes source geometry.
+                if key_height == "unknown" or cl_pos.confidence >= (vl.confidence if vl else 0):
+                    key_height = cl_height
+
+    # P8: Eye socket shadow depth — third key-height signal.
+    # Measures the dark band above the iris created when a high key casts the
+    # brow ridge shadow downward.  Fires when key_height is still "unknown"
+    # OR when both previous signals agree for reinforcement.  Only uses the
+    # eye socket signal when it has decent confidence (≥0.40) and the label
+    # differs from the existing estimate only if socket confidence > existing.
+    ess = cue_report.eye_socket_shadow
+    if ess and ess.confidence >= 0.40 and ess.height_label != "unknown":
+        if key_height == "unknown":
+            key_height = ess.height_label
+            notes.append(
+                f"Eye socket shadow: depth_ratio={ess.depth_ratio:.3f} → "
+                f"key height={ess.height_label} (conf {ess.confidence:.2f})"
+            )
+        elif ess.height_label == key_height:
+            notes.append(
+                f"Eye socket shadow confirms key height={ess.height_label} "
+                f"(depth_ratio={ess.depth_ratio:.3f}, conf {ess.confidence:.2f})"
+            )
+        else:
+            # Conflict: only override if ess is substantially more confident
+            existing_conf = (vl.confidence if vl else 0.0)
+            if ess.confidence > existing_conf + 0.15:
+                notes.append(
+                    f"Eye socket shadow overrides key height: "
+                    f"{key_height} → {ess.height_label} "
+                    f"(depth_ratio={ess.depth_ratio:.3f}, "
+                    f"socket conf {ess.confidence:.2f} > prior {existing_conf:.2f})"
+                )
+                key_height = ess.height_label
+            else:
+                notes.append(
+                    f"Eye socket shadow ({ess.height_label}, conf {ess.confidence:.2f}) "
+                    f"conflicts with existing estimate ({key_height}) — "
+                    f"insufficient margin to override."
+                )
 
     # -- Light count (P2e: conservative dedup-aware estimation) --
     light_count = 0
@@ -88,26 +166,59 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
         light_count = max(per_eye.get("left", 0), per_eye.get("right", 0))
 
     multi = cue_report.multi_shadow_detection
+    catchlights_found = refl and refl.total_catchlights > 0
     if multi and multi.shadow_count > 1:
         # P2e: Only trust multi-shadow over catchlights when multi-shadow
         # confidence is decent and the counts aren't wildly different.
         # A shadow_count of 2 on low confidence could be pose shadows.
-        if multi.confidence >= 0.4 and light_count < multi.shadow_count:
+        # When catchlights are absent (eyes obscured, sunglasses, etc.) the
+        # multi-shadow detector is our only signal — but it also has more
+        # false positives from colour/luminance gradients, so require higher
+        # confidence to override the 1-light default.
+        min_multi_conf = 0.4 if catchlights_found else 0.6
+        if multi.confidence >= min_multi_conf and light_count < multi.shadow_count:
             notes.append(
                 f"Multi-shadow suggests {multi.shadow_count} lights "
-                f"(conf {multi.confidence:.2f}), "
+                f"(conf {multi.confidence:.2f}, "
+                f"threshold {min_multi_conf:.1f}), "
                 f"catchlights show {light_count} — using higher estimate."
             )
             light_count = max(light_count, multi.shadow_count)
+        elif not catchlights_found and multi.confidence < min_multi_conf:
+            notes.append(
+                f"Multi-shadow suggests {multi.shadow_count} lights "
+                f"(conf {multi.confidence:.2f}) but no catchlights found — "
+                f"confidence below {min_multi_conf:.1f} threshold, ignoring."
+            )
 
     if light_count == 0:
         light_count = 1  # assume at least one
         notes.append("No catchlights detected — assuming single light source.")
 
-    # -- Fill detection --
+    # -- Fill detection (P5: fill_ratio luminance measurement as primary signal) --
     has_fill = False
     fill_position = None
-    if light_count >= 2:
+
+    fr = cue_report.fill_ratio
+    if fr and fr.confidence > 0.35:
+        if fr.fill_label in ("flat", "soft_fill", "moderate_fill"):
+            has_fill = True
+            fill_position = "opposite key (reflector or fill light)"
+            notes.append(
+                f"Fill ratio={fr.ratio:.2f} ({fr.fill_label}) — "
+                f"lit_mean={fr.lit_side_mean:.0f}, shadow_mean={fr.shadow_side_mean:.0f}."
+            )
+        elif fr.fill_label in ("low_fill",):
+            has_fill = True
+            fill_position = "minimal — possible bounce or reflector"
+            notes.append(
+                f"Fill ratio={fr.ratio:.2f} ({fr.fill_label}) — low fill detected."
+            )
+        else:
+            # no_fill
+            notes.append(f"Fill ratio={fr.ratio:.2f} (no_fill) — shadow side unlit.")
+
+    if not has_fill and light_count >= 2:
         has_fill = True
         fill_position = "near camera axis"  # safe default for multi-light
         notes.append("Multiple lights detected — fill likely present.")
@@ -135,6 +246,75 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
         confidence=round(confidence, 2),
         notes=notes,
     )
+
+
+def _has_triangle_catchlights(cue_report: VisualCueReport) -> bool:
+    """Check if catchlight positions form a Hurley-style triangle.
+
+    True triangle requires at least ONE eye showing:
+      - Two upper catchlights (10, 11, 12, 1, 2 o'clock) AND
+      - One lower catchlight (4, 5, 6, 7, 8 o'clock)
+    forming the signature inverted-triangle pattern from two flanking
+    keys above + one fill below.
+
+    Both eyes should show ≥3 catchlights total (after dedup), but the
+    geometric check needs only one eye with clear upper+lower to confirm
+    the triangle shape — the other eye may be partially occluded by pose.
+    """
+    cp = cue_report.catchlight_position
+    if not cp:
+        return False
+
+    def _is_triangle(positions: list) -> bool:
+        hours = []
+        for pos in positions:
+            try:
+                h = int(str(pos).split()[0])
+                hours.append(h)
+            except (ValueError, IndexError):
+                continue
+        upper = [h for h in hours if h in (10, 11, 12, 1, 2)]
+        lower = [h for h in hours if h in (4, 5, 6, 7, 8)]
+        # Need at least 2 distinct upper positions + 1 lower
+        return len(set(upper)) >= 2 and len(lower) >= 1
+
+    left_ok = _is_triangle(cp.left_eye) if cp.left_eye else False
+    right_ok = _is_triangle(cp.right_eye) if cp.right_eye else False
+    return left_ok or right_ok
+
+
+def _has_bilateral_symmetric_catchlights(cue_report: VisualCueReport) -> bool:
+    """Check if both eyes show bilateral symmetric upper catchlights (10 + 2 o'clock).
+
+    This is the Hurley Triangle twin-key signature without a lower fill catchlight.
+    Lower fill (V-flat, reflector, low panel) is often too dim to register at
+    typical image resolutions; the flanking upper keys are the diagnostic signal.
+
+    Requires:
+      - Both eyes have ≥2 catchlights
+      - Both eyes have at least one upper_left (10/11 o'clock) AND one upper_right (1/2 o'clock)
+      - Neither eye has a lower catchlight (which would indicate clamshell instead)
+    """
+    cp = cue_report.catchlight_position
+    if not cp or not cp.left_eye or not cp.right_eye:
+        return False
+
+    def _is_bilateral(positions: list) -> bool:
+        hours = []
+        for pos in positions:
+            try:
+                h = int(str(pos).split()[0])
+                hours.append(h)
+            except (ValueError, IndexError):
+                continue
+        if len(hours) < 2:
+            return False
+        has_upper_left = any(h in (10, 11) for h in hours)
+        has_upper_right = any(h in (1, 2) for h in hours)
+        has_lower = any(h in (4, 5, 6, 7, 8) for h in hours)
+        return has_upper_left and has_upper_right and not has_lower
+
+    return _is_bilateral(cp.left_eye) and _is_bilateral(cp.right_eye)
 
 
 def _has_clamshell_catchlights(cue_report: VisualCueReport) -> bool:
@@ -181,46 +361,265 @@ def _infer_shadow_pattern(
     if refl and refl.total_catchlights >= 3:
         per_eye_max = max(refl.per_eye_counts.get("left", 0), refl.per_eye_counts.get("right", 0))
         if per_eye_max >= 3:
-            # Contrast gate: triangle lighting = wrapping 3-source setup = low contrast
+            # Contrast gate: triangle lighting = wrapping 3-source setup = low face contrast.
+            # Use face_contrast when available (face-region only, not clothing).
+            # Fall back to overall contrast if face_contrast is absent.
             cr = cue_report.contrast_ratio
-            cr_label = (cr.label if cr else "unknown").lower()
+            face_cr_label = getattr(cr, "face_label", None) if cr else None
+            cr_label = (face_cr_label or (cr.label if cr else "unknown")).lower()
             if cr_label in ("low", "medium"):
-                return "triangle"
+                # Geometry gate: verify catchlights actually form a triangle
+                # (two upper + one lower) — not just 3 random reflections.
+                if _has_triangle_catchlights(cue_report):
+                    return "triangle"
+                # 3+ catchlights, low contrast, but positions don't form
+                # a triangle — fall through to direction-based patterns.
             # High/extreme contrast with 3+ catchlights per eye →
             # NOT triangle.  Extra catchlights are reflections from
             # glasses, jewellery, or specular skin surfaces.
             # Allow direction-based patterns to fire below.
             _triangle_rejected = True
 
-    # Clamshell: 2 lights, vertical alignment, key high.
+    # Bilateral symmetric keys (Hurley without lower fill catchlight resolved).
+    # When per_eye_max == 2 AND both eyes show bilateral upper catchlights at
+    # ~10 and ~2 o'clock, the lower V-flat/reflector fill is likely too dim
+    # to register.  Contrast gate still required — single-key setups produce
+    # high contrast that would not reach here.
+    if not _triangle_rejected and refl and refl.total_catchlights >= 2:
+        per_eye_max_2 = max(refl.per_eye_counts.get("left", 0), refl.per_eye_counts.get("right", 0))
+        if per_eye_max_2 >= 2:
+            cr = cue_report.contrast_ratio
+            cr_label = (cr.label if cr else "unknown").lower()
+            if cr_label in ("low", "medium"):
+                if _has_bilateral_symmetric_catchlights(cue_report):
+                    return "triangle"
+
+    # Clamshell: 2 lights, vertical alignment, key high, direction on-axis.
     # BUT — require catchlight evidence of upper + lower in BOTH eyes.
     # Without both-eye verification, a high 2-light setup could be
     # key + side fill, key + rim, or costume reflections creating
     # false lower catchlights.
-    if light_count == 2 and key_height == "high":
-        if _has_clamshell_catchlights(cue_report):
-            return "clamshell"
+    # Direction guard: real clamshell has the key roughly centered/on-axis.
+    # If direction is upper_left or upper_right, that's a single 45° key
+    # (Rembrandt/loop territory) — the "lower" catchlights are likely
+    # eye wetness or specular reflections, not a dedicated fill.
+    if light_count >= 2 and key_height == "high":
+        if key_direction not in ("upper_left", "upper_right", "left", "right"):
+            if _has_clamshell_catchlights(cue_report):
+                return "clamshell"
         # else: fall through to direction-based patterns
 
-    # Single/key-light patterns — also apply when count == 2, since a fill
-    # or bounce source doesn't change the shadow PATTERN (only the depth).
-    # P2c: Extended from "light_count <= 1" to "<= 2" so that direction-based
-    # pattern classification works when a passive fill is detected.
-    # Also apply when triangle was rejected (extra catchlights are reflections,
-    # not separate lights — direction-based pattern is the correct classification).
-    if light_count <= 2 or _triangle_rejected:
-        # Shadow pattern is side-independent — a key at upper_left
-        # creates the same pattern (mirrored) as upper_right.
-        if key_direction in ("upper_left", "upper_right"):
-            return "rembrandt"
-        if key_direction in ("left", "right"):
-            return "split"
-        if key_direction == "unknown" and key_height == "high":
+    # ── High-key / flat detection ──
+    # High-key scenes have bright backgrounds + low contrast.  Detect before
+    # direction-based patterns because even high-key images can have a slight
+    # directional shadow that would incorrectly trigger rembrandt/loop.
+    contrast = cue_report.contrast_ratio
+    cr_label = (contrast.label if contrast else "unknown").lower()
+    bg = cue_report.background_illumination
+    bg_bright = bg and bg.brightness_relative == "brighter" if bg else False
+
+    if cr_label == "low" and bg_bright:
+        return "high_key"
+
+    # ── Butterfly detection (enhanced) ──
+    # Butterfly = key directly above, centered.  Classic test: symmetric
+    # highlight on both cheeks + shadow under nose going straight down.
+    # The shadow-direction extractor sometimes picks a slight lateral bias
+    # on a centered key, so also check highlight symmetry as confirmation.
+    hs = cue_report.highlight_symmetry
+    high_symmetry = hs and hs.symmetry_score > 0.7 if hs else False
+
+    if key_height == "high":
+        # Strong path: shadow detector says centered (unknown direction)
+        if key_direction == "unknown":
+            return "butterfly"
+        # Weak path: shadow says slightly off-axis, but highlights are
+        # symmetric — the key is actually near-center, not truly off-axis.
+        if high_symmetry and key_direction in ("upper_left", "upper_right"):
             return "butterfly"
 
-    # Flat: low contrast, frontal
-    contrast = cue_report.contrast_ratio
-    if contrast and contrast.label == "low" and key_direction == "unknown":
+    # ── P3: Nose shadow length → butterfly / loop disambiguation ──────────
+    # When CV directly measures that the nose shadow barely drops below the
+    # nose tip, it is near-definitive evidence of butterfly/paramount (key
+    # centered above, not off to the side).  This fires before direction-based
+    # patterns so that high-symmetry + short-drop images skip the loop/rembrandt
+    # branch entirely.
+    nsl = cue_report.nose_shadow_length
+    if nsl and nsl.confidence > 0.4 and nsl.shadow_label == "butterfly":
+        # Short drop + current context: if direction is roughly centered or
+        # unknown, call butterfly.  Off-axis keys can still produce a short
+        # drop on the near-camera side, so require direction evidence too.
+        if key_direction in ("unknown", "top_center") or high_symmetry:
+            return "butterfly"
+
+    # ── Light-structure-informed pattern refinement ──
+    # light_structure_pass() in vision_passes.py performs nose-shadow-shape
+    # analysis including triangle detection on the cheek.  When available
+    # and confident, use it to distinguish loop from rembrandt (and
+    # potentially confirm butterfly/split).
+    ls = cue_report.light_structure
+    _ls_pattern = getattr(ls, "pattern_name", "unknown") if ls else "unknown"
+    _ls_conf = getattr(ls, "confidence", 0.0) if ls else 0.0
+    _ls_triangle = getattr(ls, "triangle_detected", False) if ls else False
+
+    # ── P4: Shadow continuity → Rembrandt triangle confirmation ──────────
+    # Merge shadow_continuity into the triangle signal used by the
+    # loop/rembrandt decision.  If CV directly measures the nose shadow
+    # connecting to the cheek shadow, treat it as triangle_detected=True
+    # regardless of what light_structure_pass found.
+    sc = cue_report.shadow_continuity
+    if sc and sc.confidence > 0.4:
+        if sc.triangle_connected and sc.connectivity_score > 0.6:
+            _ls_triangle = True  # CV confirmed the connection
+        elif not sc.triangle_connected and sc.gap_width_ratio > 0.05:
+            # CV confirmed there IS a gap → suppress any light_structure triangle claim
+            _ls_triangle = False
+
+    # ── Direction-based patterns ──
+    # The dominant key light creates the shadow pattern regardless of how
+    # many fill/accent/rim lights are present.  A 3-light setup with a 45°
+    # key still produces a Rembrandt shadow; the extra lights only affect
+    # shadow depth/fill, not the pattern name.
+
+    # ── P6 setup: Broad vs Short disambiguation helpers ───────────────────
+    # Precompute face orientation signals once; used in both the
+    # upper_left/upper_right branch and the left/right branch below.
+    #
+    # "short" lighting = key illuminates the LESS visible (turned-away) cheek.
+    # "broad" lighting = key illuminates the MORE visible (camera-facing) cheek.
+    #
+    # P6 fires AFTER Rembrandt is evaluated — rembrandt is more specific than
+    # "short" (a Rembrandt portrait IS short-lit but carries richer information).
+    # When rembrandt is confirmed, keep "rembrandt".  When the shadow is a
+    # generic loop, qualify it as "short" or "broad" based on face orientation.
+    fo = cue_report.face_orientation
+    _fo_conf = fo.confidence if fo else 0.0
+    _fo_broad = fo.broad_side if fo else "unknown"
+    _fo_short = fo.short_side if fo else "unknown"
+
+    # Natural light / window guard: bright background or environmental shadow
+    # continuity indicating outdoors → do NOT override with broad/short.
+    _bg_is_bright = bg and bg.brightness_relative == "brighter"
+    _env_sc = cue_report.environmental_shadow_continuity
+    _env_is_natural = (
+        _env_sc is not None
+        and getattr(_env_sc, "source_type", "") == "environmental"
+    )
+    _p6_blocked = _bg_is_bright or _env_is_natural
+
+    def _p6_qualify_loop(key_dir: str) -> str:
+        """If face orientation is confident enough, convert 'loop' → 'short'/'broad'.
+
+        Returns "short", "broad", or "loop" (unchanged).
+        """
+        if _p6_blocked or _fo_conf < 0.45 or _fo_broad == "unknown":
+            return "loop"
+        _LEFT_DIRS = ("left", "upper_left", "lower_left")
+        _RIGHT_DIRS = ("right", "upper_right", "lower_right")
+        _side = "left" if key_dir in _LEFT_DIRS else ("right" if key_dir in _RIGHT_DIRS else None)
+        if _side is None:
+            return "loop"
+        if _side == _fo_short:
+            return "short"
+        if _side == _fo_broad:
+            return "broad"
+        return "loop"
+
+    # ── Direction-based patterns ──
+    if key_direction in ("upper_left", "upper_right"):
+        # Loop vs Rembrandt: both have ~45° off-axis key.
+        # Rembrandt = nose shadow connects to cheek shadow, forming triangle.
+        # Loop = nose shadow falls beside nose without touching cheek.
+        #
+        # P6 fires AFTER this block: if the result would be "loop", we
+        # check face orientation to potentially qualify as "short" or "broad".
+        # Rembrandt is not overridden — it carries richer information than
+        # the orientation label and is what experienced photographers expect.
+        #
+        # High-contrast-grade (HCG) awareness:
+        # Crushed shadows can make isolated dark areas connect to cheek even
+        # when actual light never produced a triangle.  Under HCG, require
+        # explicit triangle_detected=True with higher light_structure confidence
+        # before calling rembrandt.  Without that evidence, prefer "loop" —
+        # the more common soft-portrait pattern and the safer assumption.
+        tp = cue_report.tonal_processing_estimation
+        _is_hcg = (tp is not None and (tp.is_high_contrast_grade or tp.is_bw))
+        _rembrandt_conf_threshold = 0.65 if _is_hcg else 0.5
+        _loop_conf_threshold = 0.35 if _is_hcg else 0.5  # lower bar for loop under HCG
+
+        # P4 exception: when shadow_continuity directly confirms the triangle
+        # with high connectivity (not just a tonal gradient), lower the HCG
+        # rembrandt threshold — geometric CV measurement is not affected by
+        # tone-curve editing the way shadow-shape heuristics are.
+        _sc_direct_triangle = (
+            sc is not None
+            and sc.confidence > 0.4
+            and sc.triangle_connected
+            and sc.connectivity_score > 0.7
+        )
+        if _sc_direct_triangle and _is_hcg:
+            _rembrandt_conf_threshold = 0.50  # relax HCG threshold for direct CV evidence
+
+        if _ls_conf >= _loop_conf_threshold and _ls_pattern == "loop" and not _ls_triangle:
+            return _p6_qualify_loop(key_direction)
+
+        if _ls_triangle and _ls_conf >= _rembrandt_conf_threshold:
+            # P6 priority rule: a SIGNIFICANT face turn (conf ≥ 0.65) indicates
+            # the subject is in a strong 3/4 or near-profile position.  In that
+            # case the shadow triangle is incidental to the face position rather
+            # than defining the lighting style.  Return "short"/"broad" instead
+            # of "rembrandt".  A SLIGHT face turn (conf < 0.65) should still
+            # defer to the shadow triangle — the rembrandt pattern is then the
+            # dominant descriptor, as in classic slight-turn rembrandt portraits.
+            _p6_override = _p6_qualify_loop(key_direction)
+            if _fo_conf >= 0.65 and _p6_override in ("short", "broad"):
+                return _p6_override
+            return "rembrandt"
+
+        if not _ls_triangle and _ls_pattern == "rembrandt" and _ls_conf >= _rembrandt_conf_threshold:
+            # light_structure says rembrandt without triangle evidence
+            # Under HCG this is unreliable — fall through to loop default
+            if not _is_hcg:
+                return "rembrandt"
+
+        if _ls_conf >= 0.6 and _ls_pattern in ("butterfly", "split", "broad"):
+            return _ls_pattern
+
+        # Default: loop for soft/ambiguous off-axis patterns.
+        # Rembrandt is a *specific* diagnostic that requires the triangle;
+        # loop is the general category.  Under HCG this is especially true.
+        _default = "loop" if _is_hcg else "rembrandt"
+        # P6: qualify the default "loop" → "short"/"broad" when face is turned;
+        # but don't downgrade "rembrandt" to "short" — keep rembrandt as is.
+        if _default == "loop":
+            return _p6_qualify_loop(key_direction)
+        return _default  # "rembrandt" stays rembrandt
+
+    if key_direction in ("left", "right"):
+        # Hard side light: split unless light_structure disagrees
+        if _ls_conf >= 0.5 and _ls_pattern in ("rembrandt", "loop"):
+            return _ls_pattern  # Not truly 90° — closer to 45°
+        return "split"
+
+    # ── Light-structure fallback for unknown key direction ──
+    # When shadow direction extraction failed (key_direction == "unknown") but
+    # light_structure_pass produced a confident facial shadow classification,
+    # trust the nose-shadow-shape analysis.  This catches butterfly, loop,
+    # rembrandt, split, and broad patterns that shadow-direction missed.
+    if key_direction == "unknown" and _ls_conf >= 0.6 and _ls_pattern != "unknown":
+        return _ls_pattern
+
+    # ── Low-key detection ──
+    # Low-key = high/extreme contrast + dark background + no clear directional
+    # key (direction is unknown).  Placed AFTER direction-based patterns because
+    # most dramatic rembrandt/split/loop portraits also have high contrast +
+    # dark backgrounds — those should keep their geometric pattern names.
+    bg_dark = bg and bg.brightness_relative == "darker" if bg else False
+    if cr_label in ("high", "extreme") and bg_dark and key_direction == "unknown":
+        return "low_key"
+
+    # ── Flat: low contrast, no directional shadow ──
+    if contrast and cr_label == "low" and key_direction == "unknown":
         return "flat"
 
     return "unknown"
@@ -252,16 +651,21 @@ def infer_source_quality(cue_report: VisualCueReport) -> SourceQualityInference:
             modifier_hints.append("window")
             notes.append("Mixed shadow edges — natural light or gridded modifier.")
 
-    # -- Catchlight shape → modifier hint --
+    # -- Catchlight shape → dominant modifier signal --
+    # Catchlight geometry is the single most reliable modifier indicator:
+    # the shape of a reflection in the eye directly encodes the modifier shape.
+    # Weight 3x for rectangular/octagonal (near-definitive), 2x for round/large.
     cs = cue_report.catchlight_shape
     if cs and cs.confidence > 0.3:
-        if cs.dominant_shape == "round":
-            modifier_hints.append("beauty_dish")
-            modifier_hints.append("umbrella")
-            notes.append(f"Round catchlights → beauty dish or umbrella.")
-        elif cs.dominant_shape == "rectangular":
+        if cs.dominant_shape == "rectangular":
+            modifier_hints.extend(["softbox", "softbox", "softbox"])
+            notes.append("Rectangular catchlights → softbox (3× weight, near-definitive).")
+        elif cs.dominant_shape in ("round", "octagonal"):
+            modifier_hints.extend(["beauty_dish", "umbrella", "umbrella"])
+            notes.append(f"{cs.dominant_shape.capitalize()} catchlights → beauty dish / umbrella (2× weight).")
+        elif cs.dominant_shape == "mixed":
             modifier_hints.append("softbox")
-            notes.append("Rectangular catchlights → softbox.")
+            notes.append("Mixed catchlight shapes → likely soft modifier.")
 
     # -- Transition rate --
     transition = "unknown"
@@ -283,6 +687,60 @@ def infer_source_quality(cue_report: VisualCueReport) -> SourceQualityInference:
         elif spec.intensity == "subtle" or spec.spread == "broad":
             modifier_hints.append("softbox")
 
+    # -- Shadow penumbra (apparent source angular size) --
+    # Independent of catchlight shape — measures the transition zone width
+    # at the shadow edge, which encodes how large the source appears.
+    # Gated: not added under high-contrast grade (HCG inflates apparent
+    # penumbra width from tone-curve contrast, not actual source size).
+    pen = cue_report.shadow_penumbra
+    if pen and pen.confidence > 0.3:
+        tp_check = cue_report.tonal_processing_estimation
+        _pen_is_hcg = tp_check is not None and (
+            tp_check.is_high_contrast_grade or tp_check.is_bw
+        )
+        if not _pen_is_hcg:
+            _sz = pen.apparent_source_size
+            if _sz == "point":
+                modifier_hints.append("hard_source")
+                notes.append("Penumbra: point source size → bare bulb / direct flash.")
+            elif _sz == "small":
+                modifier_hints.append("hard_source")
+                notes.append("Penumbra: small source → small fresnel / gridded modifier.")
+            elif _sz == "medium":
+                modifier_hints.append("umbrella")
+                notes.append("Penumbra: medium source → umbrella / medium softbox.")
+            elif _sz in ("large", "very_large"):
+                modifier_hints.append("softbox")
+                modifier_hints.append("softbox")
+                notes.append(
+                    f"Penumbra: {_sz} source → large softbox / umbrella / scrim (2× weight)."
+                )
+        else:
+            notes.append(
+                "Penumbra signal skipped — tonal processing (HCG/B&W) inflates "
+                "apparent shadow width independently of source size."
+            )
+
+    # -- Catchlight size class (modifier size corroboration) --
+    # catchlight size_ratio encodes how large the reflection is relative to
+    # the iris — large reflections = large modifier.  Combined with shape
+    # to give a composite modifier size estimate.
+    cs_size = cue_report.catchlight_shape
+    if cs_size and cs_size.size_class not in ("unknown", None) and cs_size.confidence > 0.3:
+        _sc = cs_size.size_class
+        if _sc == "point":
+            modifier_hints.append("hard_source")
+            notes.append("Catchlight size: point → bare bulb / direct source.")
+        elif _sc == "small":
+            modifier_hints.append("hard_source")
+            notes.append("Catchlight size: small → small modifier / gridded head.")
+        elif _sc == "medium":
+            modifier_hints.append("umbrella")
+            notes.append("Catchlight size: medium → octa / medium softbox.")
+        elif _sc in ("large", "very_large"):
+            modifier_hints.append("softbox")
+            notes.append(f"Catchlight size: {_sc} → large softbox / umbrella.")
+
     # -- Tonal processing caveat --
     tp = cue_report.tonal_processing_estimation
     if tp and (tp.is_bw or tp.is_high_contrast_grade):
@@ -290,6 +748,49 @@ def infer_source_quality(cue_report: VisualCueReport) -> SourceQualityInference:
             "CAUTION: Tonal processing detected — shadow hardness and contrast "
             "may reflect editing rather than actual light modifier."
         )
+        # Remove ALL hard_source votes under tonal processing.
+        # High-contrast grade inflates shadow edge density and transition
+        # sharpness uniformly — every shadow-based hard signal is suspect.
+        # Removing one vote (old behaviour) left residual hard majorities.
+        hard_count = modifier_hints.count("hard_source")
+        if hard_count > 0:
+            while "hard_source" in modifier_hints:
+                modifier_hints.remove("hard_source")
+            modifier_hints.append("softbox")  # one neutral counterweight
+            notes.append(
+                f"Removed {hard_count} hard_source vote(s) due to tonal "
+                "processing — shadow edges unreliable under contrast grade."
+            )
+
+    # -- Catchlight-absent skepticism --
+    # When eyes are not visible (no catchlights), shadow edge density can be
+    # inflated by occluding objects (flowers, hands, sunglasses, props, etc.)
+    # creating sharp physical edges that mimic hard light.  Without catchlights
+    # we have no modifier-shape evidence to corroborate.  Require at least one
+    # other signal (specular highlights or sharp transition) before trusting
+    # the shadow-edge "hard" vote.
+    refl = cue_report.reflection_architecture
+    catchlights_found = refl and refl.total_catchlights > 0
+    if not catchlights_found and seh and seh.classification == "hard":
+        has_hard_corroboration = False
+        # Specular highlights: strong + tight = genuine hard source
+        if spec and spec.confidence > 0.3 and spec.intensity == "strong" and spec.spread == "tight":
+            has_hard_corroboration = True
+        # Transition rate: sharp = genuine hard source
+        if hst and hst.confidence > 0.3 and hst.rate == "sharp":
+            has_hard_corroboration = True
+        if not has_hard_corroboration:
+            # No corroborating evidence — shadow edges are unreliable
+            # without catchlights (could be occlusion artefacts from props,
+            # hands, hair, accessories, etc.)
+            if "hard_source" in modifier_hints:
+                modifier_hints.remove("hard_source")
+            modifier_hints.append("window")  # neutral — don't presume soft or hard
+            notes.append(
+                "No catchlights and no corroborating hard-source signals "
+                "(specular/transition) — shadow edge 'hard' may be from face "
+                "occlusion artefacts; downweighted to neutral."
+            )
 
     # -- Vote on modifier family --
     modifier = _vote_modifier(modifier_hints)
@@ -416,15 +917,26 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
     # -- P2d: Rectangular/octagonal catchlights are strong evidence of a studio
     # modifier (softbox, octabox, etc.).  Suppress natural-light classification
     # and sunlight detection when catchlights clearly indicate studio gear.
+    # EXCEPTION: In B&W images, catchlight shape classification is unreliable —
+    # grayscale compression removes the color/texture cues that distinguish
+    # studio modifiers from window reflections.  Window panes produce rectangular
+    # reflections that look identical to softbox catchlights in B&W.
     _has_studio_catchlights = False
+    _is_bw = "bw_processing" in special_cases
     cs = cue_report.catchlight_shape
     if cs and cs.confidence > 0.3 and cs.dominant_shape in ("rectangular", "octagonal", "square"):
-        _has_studio_catchlights = True
-        if is_natural:
-            is_natural = False
+        if not _is_bw:
+            _has_studio_catchlights = True
+            if is_natural:
+                is_natural = False
+                notes.append(
+                    "P2d: Rectangular/octagonal catchlights override natural-light "
+                    "indicators — studio modifier detected."
+                )
+        else:
             notes.append(
-                "P2d: Rectangular/octagonal catchlights override natural-light "
-                "indicators — studio modifier detected."
+                "P2d: Rectangular catchlights detected but B&W processing makes "
+                "catchlight shape unreliable — not overriding natural-light indicators."
             )
 
     # -- Shadow edge hardness → sunlight hint --
@@ -434,7 +946,13 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
         env_type = "outdoor_sun"
         notes.append("Hard shadows + natural indicators → direct sunlight likely.")
     elif is_natural and env_type == "unknown":
-        env_type = "outdoor_shade"
+        # For B&W images, we can't reliably distinguish indoor window light
+        # from outdoor shade — both produce soft shadows and environmental
+        # backgrounds.  Leave env_type as "unknown" so the refinement block
+        # below assigns "indoor_ambient", which allows the window_portrait
+        # specialty rule to evaluate the image on other signals.
+        if not _is_bw:
+            env_type = "outdoor_shade"
 
     # -- Refine environment type --
     if env_type == "unknown":
@@ -469,11 +987,11 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
 # Setup families map to the existing lighting pattern vocabulary
 SETUP_FAMILIES = {
     "single_key_rembrandt": {
-        "pattern": "rembrandt-ish",
+        "pattern": "rembrandt",
         "description": "Single key light at ~45 degrees creating Rembrandt triangle",
     },
     "single_key_split": {
-        "pattern": "split/short",
+        "pattern": "split",
         "description": "Single key light at ~90 degrees creating split lighting",
     },
     "single_key_loop": {
@@ -501,7 +1019,7 @@ SETUP_FAMILIES = {
         "description": "Natural ambient light — no dominant artificial source",
     },
     "dramatic_chiaroscuro": {
-        "pattern": "rembrandt-ish",
+        "pattern": "rembrandt",
         "description": "High-contrast single-source dramatic lighting",
     },
     "gobo_projection": {

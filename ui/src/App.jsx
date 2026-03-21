@@ -5,9 +5,11 @@ import AppHeader from './components/AppHeader';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
 import WelcomeScreen from './screens/WelcomeScreen';
+import HomeScreenV2 from './screens/HomeScreenV2';
 import SetupWizard from './screens/SetupWizard';
 import LoadingScreen from './screens/LoadingScreen';
 import ResultsScreen from './screens/ResultsScreen';
+import ResultsScreenV2 from './screens/ResultsScreenV2';
 import RecipeScreen from './screens/RecipeScreen';
 import MyKitScreen from './screens/MyKitScreen';
 import SavedSetupsScreen from './screens/SavedSetupsScreen';
@@ -19,13 +21,18 @@ import LabScreen from './screens/LabScreen';
 import RoomPlannerScreen from './screens/RoomPlannerScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import WelcomeScreenV2 from './screens/WelcomeScreenV2';
+import AnalyticsDashboard from './screens/AnalyticsDashboard';
+import ExecDashboard from './screens/ExecDashboard';
+import SymptomPage from './screens/SymptomPage';
 
 const SCREENS = {
-  welcome: WelcomeScreen,
+  welcome: HomeScreenV2,
+  welcome_v1: WelcomeScreen,
   welcome_v2: WelcomeScreenV2,
   wizard:  SetupWizard,
   loading: LoadingScreen,
-  results: ResultsScreen,
+  results: ResultsScreenV2,
+  results_v1: ResultsScreen,
   recipes: RecipeScreen,
   my_kit:  MyKitScreen,
   saved_setups: SavedSetupsScreen,
@@ -36,6 +43,9 @@ const SCREENS = {
   lab: LabScreen,
   room_planner: RoomPlannerScreen,
   settings: SettingsScreen,
+  analytics: AnalyticsDashboard,
+  exec: ExecDashboard,
+  symptom: SymptomPage,
 };
 
 function buildShareText(result) {
@@ -116,8 +126,10 @@ export default function App() {
   return (
     <>
       {!isV2 && <AppHeader />}
-      <Screen />
-      {!isV2 && <BottomNav onShare={handleShare} />}
+      <div className="app-layout">
+        {!isV2 && <BottomNav onShare={handleShare} />}
+        <Screen />
+      </div>
       <Toast message={toast} visible={!!toast} onDone={dismissToast} />
 
       {shareOpen && (

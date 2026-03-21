@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+import hashlib
+import json
+import os
+import tempfile
+from concurrent.futures import ThreadPoolExecutor, Future
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from PIL import Image, ImageOps
@@ -9,6 +14,44 @@ except Exception:  # pragma: no cover
     ImageOps = None  # type: ignore
 
 from engine.vision_pipeline import analyze_image_regions
+
+
+# ── VLM result cache ─────────────────────────────────────────────────────────
+# Cache by SHA-256 of image bytes → avoids repeat API calls during testing.
+# Stored in a temp dir so it survives the process but not reboots.
+_VLM_CACHE_DIR = os.path.join(tempfile.gettempdir(), "ngw_vlm_cache")
+os.makedirs(_VLM_CACHE_DIR, exist_ok=True)
+
+
+def _image_hash(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _vlm_cache_path(img_hash: str) -> str:
+    return os.path.join(_VLM_CACHE_DIR, f"{img_hash}.json")
+
+
+def _load_vlm_cache(img_hash: str) -> Optional[Dict[str, Any]]:
+    p = _vlm_cache_path(img_hash)
+    try:
+        if os.path.exists(p):
+            with open(p) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+
+def _save_vlm_cache(img_hash: str, data: Dict[str, Any]) -> None:
+    try:
+        with open(_vlm_cache_path(img_hash), "w") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
 
 
 BASIC_COLOR_NAMES = [
@@ -291,6 +334,24 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
     out["classification"] = _classify_palette(overall_palette, grayscale_like)
 
     if describe_mode == "vision":
+        # ── Fire VLM in parallel with CV pipeline ────────────────────
+        # VLM only needs the image path — completely independent of CV.
+        # Starting it here lets the API round-trip overlap with MediaPipe,
+        # cue extraction, and the 30+ vision passes, cutting wall time ~40%.
+        _vlm_future: Optional[Future] = None
+        _vlm_executor: Optional[ThreadPoolExecutor] = None
+        _img_hash = _image_hash(path)
+        _vlm_cached = _load_vlm_cache(_img_hash)
+
+        if _vlm_cached is None:
+            try:
+                from engine.vlm import describe_reference_image, vlm_available
+                if vlm_available():
+                    _vlm_executor = ThreadPoolExecutor(max_workers=1)
+                    _vlm_future = _vlm_executor.submit(describe_reference_image, path)
+            except Exception:
+                pass
+
         vision = analyze_image_regions(path, return_masks=True)
 
         # ── Visual cue extraction (when masks available) ──
@@ -344,16 +405,26 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
         except Exception:
             pass
 
-        # ── VLM enrichment (optional, best-effort) ──
-        # Calls an external vision-language model for subject/expression
-        # details that pure CV cannot extract (P2a).
+        # ── Collect VLM result (started in parallel above) ───────────
         vlm_desc = None
-        try:
-            from engine.vlm import describe_reference_image, vlm_available
-            if vlm_available():
-                vlm_desc = describe_reference_image(path)
-        except Exception:
-            pass  # VLM is strictly best-effort
+        if _vlm_cached is not None:
+            # Cache hit — reconstruct from disk
+            try:
+                from engine.image_analysis_models import VLMDescription
+                vlm_desc = VLMDescription.model_validate(_vlm_cached)
+            except Exception:
+                pass
+        elif _vlm_future is not None:
+            try:
+                vlm_desc = _vlm_future.result(timeout=60)
+                if vlm_desc is not None:
+                    _save_vlm_cache(_img_hash, vlm_desc.model_dump())
+            except Exception as _vlm_exc:
+                import logging as _log
+                _log.getLogger(__name__).warning("VLM call failed: %s", _vlm_exc)
+        if _vlm_executor is not None:
+            _vlm_executor.shutdown(wait=False)
+
         if vlm_desc is not None:
             out["vlm_description"] = vlm_desc.model_dump()
         else:

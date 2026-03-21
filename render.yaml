@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ngw-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard          # standard = 2 GB RAM — needed for mediapipe + opencv
+    healthCheckPath: /health
+    envVars:
+      - key: NGW_JWT_SECRET
+        generateValue: true   # Render auto-generates a secure secret
+      - key: ALLOWED_ORIGINS
+        sync: false           # Set in Render dashboard: https://your-app.onrender.com
+      - key: OPENAI_API_KEY
+        sync: false           # Optional — only needed for VLM features
+      - key: PORT
+        value: 8000
+    disk:
+      name: ngw-data
+      mountPath: /app/data   # SQLite DB persists here across deploys
+      sizeGB: 1

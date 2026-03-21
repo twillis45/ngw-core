@@ -4,6 +4,7 @@
  */
 
 import { getToken } from './authApi';
+import { apiFetch } from '../lib/apiClient';
 
 function authHeaders() {
   const token = getToken();
@@ -16,13 +17,26 @@ async function labFetch(path, options = {}) {
   if (!(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
-  const res = await fetch(`/api/lab${path}`, { headers, ...options });
+  const res = await apiFetch(`/api/lab${path}`, { headers, ...options });
   const data = await res.json();
   if (!res.ok) {
     const msg = data.detail || `Lab API error (${res.status})`;
     throw new Error(msg);
   }
   return data;
+}
+
+/**
+ * Fetch a binary resource (image) from a lab endpoint with auth headers.
+ * Returns a blob URL suitable for use in <img src>.
+ * Caller is responsible for revoking the URL via URL.revokeObjectURL when done.
+ */
+export async function labFetchBlob(path) {
+  const headers = authHeaders();
+  const res = await apiFetch(`/api/lab${path}`, { headers });
+  if (!res.ok) throw new Error(`Lab image fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }
 
 
@@ -73,6 +87,10 @@ export async function listGoldSet(status = null, limit = 50) {
 
 export async function getGoldSetEntry(entryId) {
   return labFetch(`/gold-set/${entryId}`);
+}
+
+export async function getGoldSetImageUrl(entryId) {
+  return labFetchBlob(`/gold-set/${entryId}/image`);
 }
 
 export async function createGoldSetEntry(data) {
@@ -188,10 +206,226 @@ export async function reprocessReference(patternId, referenceId, { runVlm = true
   return labFetch(`/reference-dataset/${patternId}/${referenceId}/reprocess?${params}`, { method: 'POST' });
 }
 
+export async function updateReferenceMetadata(patternId, referenceId, updates) {
+  return labFetch(`/reference-dataset/${patternId}/${referenceId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates),
+  });
+}
+
 export async function getDatasetVersion() {
   return labFetch('/reference-dataset/version');
 }
 
+
+// ── Learning Ops ─────────────────────────────────────
+
+export async function getLearningOps() {
+  return labFetch('/learning/ops');
+}
+
+export async function triggerIngestion(days = 30) {
+  return labFetch('/learning/ingest', {
+    method: 'POST',
+    body: JSON.stringify({ days }),
+  });
+}
+
+export async function listFailureClusters({ status, severity, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (severity) params.set('severity', severity);
+  params.set('limit', limit);
+  return labFetch(`/learning/clusters?${params}`);
+}
+
+export async function getFailureCluster(clusterId) {
+  return labFetch(`/learning/clusters/${clusterId}`);
+}
+
+export async function updateClusterStatus(clusterId, status, notes = '') {
+  return labFetch(`/learning/clusters/${clusterId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status, notes }),
+  });
+}
+
+export async function generateCandidateFromCluster(clusterId) {
+  return labFetch(`/learning/clusters/${clusterId}/generate-candidate`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+}
+
+export async function evaluateCandidate(candidateId) {
+  return labFetch(`/learning/candidates/${candidateId}/evaluate`, {
+    method: 'POST',
+  });
+}
+
+export async function getCandidateEvaluations(candidateId) {
+  return labFetch(`/learning/candidates/${candidateId}/evaluations`);
+}
+
+export async function recordRelease(candidateId, { releaseVersion, expectedLift = {} } = {}) {
+  return labFetch(`/learning/candidates/${candidateId}/release`, {
+    method: 'POST',
+    body: JSON.stringify({ release_version: releaseVersion, expected_lift: expectedLift }),
+  });
+}
+
+export async function getMonitoringSummary() {
+  return labFetch('/learning/monitoring');
+}
+
+export async function triggerMonitoringSweep(windowDays = 30) {
+  return labFetch('/learning/monitoring/sweep', {
+    method: 'POST',
+    body: JSON.stringify({ window_days: windowDays }),
+  });
+}
+
 export async function getDatasetManifest() {
   return labFetch('/reference-dataset/manifest');
+}
+
+// ── Benchmark System v2 ────────────────────────────────────────────────────
+
+/** List all benchmark cases. */
+export async function listBenchmarkCases({ patternId, difficulty, limit = 100 } = {}) {
+  const params = new URLSearchParams();
+  if (patternId)  params.set('pattern_id', patternId);
+  if (difficulty) params.set('difficulty',  difficulty);
+  params.set('limit', String(limit));
+  return labFetch(`/benchmarks/cases?${params}`);
+}
+
+/** Get a single benchmark case by ID. */
+export async function getBenchmarkCase(caseId) {
+  return labFetch(`/benchmarks/cases/${caseId}`);
+}
+
+/** Create a benchmark case. */
+export async function createBenchmarkCase(data) {
+  return labFetch('/benchmarks/cases', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Update a benchmark case. */
+export async function updateBenchmarkCase(caseId, data) {
+  return labFetch(`/benchmarks/cases/${caseId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Delete a benchmark case. */
+export async function deleteBenchmarkCase(caseId) {
+  return labFetch(`/benchmarks/cases/${caseId}`, { method: 'DELETE' });
+}
+
+/** Promote a gold set entry to a benchmark case. */
+export async function promoteGoldSetToBenchmark(entryId, difficulty = 'medium') {
+  return labFetch(`/benchmarks/cases/from-gold-set/${entryId}?difficulty=${difficulty}`, {
+    method: 'POST',
+  });
+}
+
+/** Score history for a single case across runs. */
+export async function getBenchmarkCaseHistory(caseId, limit = 10) {
+  return labFetch(`/benchmarks/cases/${caseId}/history?limit=${limit}`);
+}
+
+/** List benchmark runs. */
+export async function listBenchmarkRuns(limit = 20) {
+  return labFetch(`/benchmarks/runs?limit=${limit}`);
+}
+
+/** Get a single benchmark run. */
+export async function getBenchmarkRun(runId) {
+  return labFetch(`/benchmarks/runs/${runId}`);
+}
+
+/** Get all per-case results for a run. */
+export async function getBenchmarkRunResults(runId) {
+  return labFetch(`/benchmarks/runs/${runId}/results`);
+}
+
+/**
+ * Trigger a benchmark run.
+ * @param {object} opts
+ * @param {string} [opts.runType='manual']
+ * @param {string} [opts.trigger='manual']
+ * @param {number|null} [opts.caseLimit]
+ * @param {string|null} [opts.notes]
+ */
+export async function triggerBenchmarkRun({ runType = 'manual', trigger = 'manual', caseLimit = null, notes = null } = {}) {
+  return labFetch('/benchmarks/run', {
+    method: 'POST',
+    body: JSON.stringify({
+      run_type:   runType,
+      trigger,
+      case_limit: caseLimit,
+      notes,
+    }),
+  });
+}
+
+/** Pattern-level performance metrics with delta vs previous run. */
+export async function getBenchmarkPatternMetrics(patternId) {
+  const params = patternId ? `?pattern_id=${encodeURIComponent(patternId)}` : '';
+  return labFetch(`/benchmarks/pattern-metrics${params}`);
+}
+
+/** Compact latest-run summary for the dashboard header. */
+export async function getBenchmarkSummary() {
+  return labFetch('/benchmarks/summary');
+}
+
+/** Trigger a nightly-style drift detection run from the Lab UI. */
+export async function triggerDriftCheck() {
+  return labFetch('/benchmarks/drift-check', { method: 'POST' });
+}
+
+/** Return current drift check schedule and threshold configuration. */
+export async function getDriftConfig() {
+  return labFetch('/benchmarks/drift-config');
+}
+
+// ── Intelligence / Learning Insights ─────────────────────
+
+/** VLM correction summary — which CV fields VLM overrides most. */
+export async function getVlmCorrections() {
+  return labFetch('/vlm-corrections');
+}
+
+/** Gold set suggestions from high-confidence live nailed_it signals. */
+export async function getGoldSetSuggestions(days = 90, limit = 20) {
+  return labFetch(`/signals/gold-set-suggestions?days=${days}&limit=${limit}`);
+}
+
+/** Concrete per-pattern recalibration hints (reduce X by Ypp). */
+export async function getRecalibrationHints(days = 30) {
+  return labFetch(`/signals/recalibration-hints?days=${days}`);
+}
+
+/** Per-(pattern, environment) calibration breakdown. */
+export async function getCalibrationByEnvironment(days = 30) {
+  return labFetch(`/signals/calibration-env?days=${days}`);
+}
+
+/** Sweep monitoring across all three windows (7d, 14d, 30d). */
+export async function triggerSweepAll() {
+  return labFetch('/learning/monitoring/sweep-all', { method: 'POST' });
+}
+
+/** Apply an accepted confidence_recalibration candidate to the engine. */
+export async function applyCandidate(candidateId, notes = '') {
+  return labFetch(`/learning/candidates/${candidateId}/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  });
 }

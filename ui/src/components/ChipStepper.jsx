@@ -1,7 +1,19 @@
-export default function ChipStepper({ label, qty, onAdd, onIncrement, onDecrement }) {
+export default function ChipStepper({ label, qty, onAdd, onIncrement, onDecrement, highlighted, reason }) {
   if (!qty) {
+    // When highlighted and a reason is available, wrap in a column so the reason
+    // appears as a sub-line directly under the chip (not added yet state).
+    if (highlighted && reason) {
+      return (
+        <div className="chip-wrapper">
+          <button className="chip chip--recommended" onClick={onAdd} type="button">
+            + {label}
+          </button>
+          <span className="chip__reason">{reason}</span>
+        </div>
+      );
+    }
     return (
-      <button className="chip" onClick={onAdd} type="button">
+      <button className={`chip${highlighted ? ' chip--recommended' : ''}`} onClick={onAdd} type="button">
         + {label}
       </button>
     );

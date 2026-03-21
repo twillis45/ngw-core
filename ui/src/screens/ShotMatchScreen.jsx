@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import ZoomOverlay from '../cards/ZoomOverlay';
 
@@ -28,22 +28,45 @@ export default function ShotMatchScreen() {
   const [comparing, setComparing] = useState(false);
   const [comparisonResult, setComparisonResult] = useState(null);
   const [zoomSrc, setZoomSrc] = useState(null);
+  const [refDragging, setRefDragging] = useState(false);
+  const [attemptDragging, setAttemptDragging] = useState(false);
 
-  function handleRefUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function loadPreview(file, setter) {
+    if (!file || !file.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = () => setRefPreview(reader.result);
+    reader.onload = () => setter(reader.result);
     reader.readAsDataURL(file);
   }
 
-  function handleAttemptUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setAttemptPreview(reader.result);
-    reader.readAsDataURL(file);
+  function handleRefUpload(e) { loadPreview(e.target.files?.[0], setRefPreview); }
+  function handleAttemptUpload(e) { loadPreview(e.target.files?.[0], setAttemptPreview); }
+
+  function handleRefDrop(e) {
+    e.preventDefault(); setRefDragging(false);
+    loadPreview(e.dataTransfer.files?.[0], setRefPreview);
   }
+  function handleAttemptDrop(e) {
+    e.preventDefault(); setAttemptDragging(false);
+    loadPreview(e.dataTransfer.files?.[0], setAttemptPreview);
+  }
+
+  // Paste: fills reference first, then attempt
+  useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!refPreview) { loadPreview(file, setRefPreview); }
+          else if (!attemptPreview) { loadPreview(file, setAttemptPreview); }
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [refPreview, attemptPreview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleCompare() {
     if (!refPreview || !attemptPreview) return;
@@ -83,7 +106,12 @@ export default function ShotMatchScreen() {
       {/* ── Dual Upload Area ── */}
       <div className="shot-match__compare">
         {/* Reference */}
-        <div className="shot-match__upload-area">
+        <div
+          className={`shot-match__upload-area${refDragging ? ' shot-match__upload-area--dragging' : ''}`}
+          onDragOver={e => { e.preventDefault(); setRefDragging(true); }}
+          onDragLeave={() => setRefDragging(false)}
+          onDrop={handleRefDrop}
+        >
           <span className="shot-match__area-label">Reference</span>
           {refPreview ? (
             <div className="shot-match__image-wrap">
@@ -110,9 +138,10 @@ export default function ShotMatchScreen() {
                 <circle cx="8.5" cy="8.5" r="1.5" />
                 <polyline points="21 15 16 10 5 21" />
               </svg>
-              <span>Upload Reference</span>
+              <span>{refDragging ? 'Drop here' : 'Click, drop, or paste reference'}</span>
             </button>
           )}
+          {!refPreview && <p className="shot-match__upload-hint">JPEG · PNG · HEIC · 10 MB max · face filling the frame gives best results</p>}
           <input
             ref={refUploadRef}
             type="file"
@@ -126,7 +155,12 @@ export default function ShotMatchScreen() {
         <div className="shot-match__vs">VS</div>
 
         {/* Attempt */}
-        <div className="shot-match__upload-area">
+        <div
+          className={`shot-match__upload-area${attemptDragging ? ' shot-match__upload-area--dragging' : ''}`}
+          onDragOver={e => { e.preventDefault(); setAttemptDragging(true); }}
+          onDragLeave={() => setAttemptDragging(false)}
+          onDrop={handleAttemptDrop}
+        >
           <span className="shot-match__area-label">Your Attempt</span>
           {attemptPreview ? (
             <div className="shot-match__image-wrap">
@@ -152,9 +186,10 @@ export default function ShotMatchScreen() {
                 <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
                 <circle cx="12" cy="13" r="4" />
               </svg>
-              <span>Upload Your Shot</span>
+              <span>{attemptDragging ? 'Drop here' : 'Click, drop, or paste your shot'}</span>
             </button>
           )}
+          {!attemptPreview && <p className="shot-match__upload-hint">Same scene, same subject — face filling the frame matches best</p>}
           <input
             ref={attemptRef}
             type="file"

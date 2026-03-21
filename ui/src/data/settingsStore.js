@@ -35,12 +35,36 @@ export const FONT_FAMILIES = [
   { id: 'serif',  label: 'Serif' },
 ];
 
+/** Available unit systems */
+export const UNIT_OPTIONS = [
+  { id: 'imperial', label: 'Feet / Inches' },
+  { id: 'metric',   label: 'Meters / cm' },
+];
+
+/** Available diagram style options */
+export const DIAGRAM_STYLE_OPTIONS = [
+  { id: 'standard', label: 'Standard' },
+  { id: 'minimal',  label: 'Minimal' },
+];
+
+/** Available power display options */
+export const POWER_DISPLAY_OPTIONS = [
+  { id: 'fraction', label: '1/4, 1/2' },
+  { id: 'stops',    label: 'Stops' },
+  { id: 'percent',  label: 'Percent' },
+];
+
 /** Default settings */
 const DEFAULTS = {
-  fontSize: 'medium',      // 'small' | 'medium' | 'large'
-  fontFamily: 'system',    // 'system' | 'inter' | 'source' | 'mono' | 'serif'
-  density: 'comfortable',  // 'compact' | 'comfortable' | 'spacious'
-  showBuildInfo: true,      // show version in welcome screen
+  // Appearance (applied via data-attributes on <html> for CSS)
+  fontSize: 'medium',         // 'xs' | 'small' | 'medium' | 'large' | 'xl'
+  fontFamily: 'system',       // 'system' | 'inter' | 'source' | 'mono' | 'serif'
+  density: 'comfortable',     // 'compact' | 'comfortable' | 'spacious'
+  // Shooting preferences (consumed by components via useSettings hook)
+  units: 'imperial',          // 'imperial' | 'metric'
+  powerDisplay: 'fraction',   // 'fraction' | 'stops' | 'percent'
+  showConfidenceScore: true,  // show numeric confidence in results
+  autoSaveSetups: false,      // auto-save after every recommendation
 };
 
 /** Load all settings, merged with defaults. */
@@ -53,22 +77,35 @@ export function loadSettings() {
   }
 }
 
+/** Notify hook subscribers — lazy-imported to avoid circular deps. */
+let _notifyFn = null;
+function _notify() {
+  if (_notifyFn) { _notifyFn(); return; }
+  import('../hooks/useSettings.js').then(m => {
+    _notifyFn = m.notifySettingsChanged;
+    _notifyFn();
+  }).catch(() => {});
+}
+
 /** Save a single setting. */
 export function saveSetting(key, value) {
   const settings = loadSettings();
   settings[key] = value;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  _notify();
 }
 
 /** Save all settings at once. */
 export function saveSettings(settings) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULTS, ...settings }));
+  _notify();
 }
 
 /** Reset to defaults. */
 export function resetSettings() {
   localStorage.removeItem(STORAGE_KEY);
   applySettings(DEFAULTS);
+  _notify();
 }
 
 /**

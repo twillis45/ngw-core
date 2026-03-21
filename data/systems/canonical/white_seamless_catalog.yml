@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/11
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Small aperture ensures edge-to-edge sharpness for catalog/e-commerce requirements
+    - Meter face and background separately; background should read 1.5-2 stops above key
+
 lights:
   - role: key
     modifier: softbox_rect

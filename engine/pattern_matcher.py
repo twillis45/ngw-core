@@ -1,5 +1,15 @@
 """Pattern Matcher — matches reconstruction output against named lighting patterns.
 
+.. deprecated::
+    This module is no longer called by the production pipeline.
+    Authoritative pattern resolution is handled by
+    ``engine.orchestrator.resolve_pattern_candidates()``, which consumes
+    evidence directly from reference_read, lighting_inference, and
+    cue_inference — not from this physics-based scorer.
+
+    Retained for its sub-scorer functions (used by tests and potentially
+    useful for future confidence-weighted ranking). Do not add new callers.
+
 Compares physics-based reconstruction results against the lighting pattern
 dataset in data/lighting_patterns.json.  Returns ranked pattern matches with
 confidence scores and photographer-language descriptions.

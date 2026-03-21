@@ -27,6 +27,15 @@ camera:
   lens: 50-85mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 400-800
+  aperture: f/2.8-f/4
+  shutter: 1/125
+  white_balance: daylight
+  notes:
+    - Expose for the lit side of the face; let the shadow side fall naturally
+    - Overcast daylight WB around 5500K; adjust if window faces warm afternoon light
+
 lights:
   - role: key
     modifier: natural_window

@@ -1,0 +1,51 @@
+{
+  "run_timestamp": "2026-03-18T00:14:26.736723+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "short_fashion_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "low_key",
+          "expected": "short",
+          "acceptable": [
+            "short",
+            "split",
+            "rembrandt",
+            "rim_only",
+            "low_key",
+            "gobo",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "low_key",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.95
+    }
+  ]
+}

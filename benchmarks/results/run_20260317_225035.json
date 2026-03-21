@@ -1,0 +1,42 @@
+{
+  "run_timestamp": "2026-03-17T22:50:35.382011+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 1,
+    "SOFT_PASS": 0,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "clamshell_clean",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "clamshell",
+          "expected": "clamshell"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "center",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "clamshell",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "center"
+      },
+      "timing_s": 0.8
+    }
+  ]
+}

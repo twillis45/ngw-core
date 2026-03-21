@@ -14,9 +14,9 @@ export function defaultLight() {
 
 /* -- wizard step sequences ----------------------------- */
 
-const MOOD_STEPS      = ['master_mode', 'mood', 'subject', 'environment', 'gear_question'];
-const KIT_STEPS       = ['gear_entry', 'mood', 'subject', 'environment'];
-const REF_MATCH_STEPS = ['subject', 'environment', 'gear_question'];
+const MOOD_STEPS      = ['the_shot', 'the_space'];
+const KIT_STEPS       = ['gear_entry', 'the_shot', 'the_space'];
+const REF_MATCH_STEPS = ['the_shot', 'the_space'];
 const EDIT_KIT_STEPS  = ['gear_entry'];
 
 /* -- initial state ------------------------------------- */
@@ -45,8 +45,9 @@ function _ceilingFtToCategory(ft) {
 }
 
 const initialState = {
-  screen: 'welcome',       // 'welcome' | 'wizard' | 'loading' | 'results' | 'auth' | ...
+  screen: 'welcome',       // 'welcome' | 'wizard' | 'loading' | 'results' | 'symptom' | 'auth' | ...
   history: [],
+  symptomSlug: null,       // active symptom slug when screen === 'symptom'
   user: null,               // { id, email, username } when logged in
   appMode: null,            // 'build' | 'match' | 'shot_match' | 'shoot' | 'lab'
   intent: null,             // 'mood' | 'kit'
@@ -71,6 +72,8 @@ const initialState = {
   referenceImage: null,        // { file, preview, serverPath } — primary image
   referenceImages: [],         // [{ file, preview, serverPath }] — all uploaded images
   refAnalysis: null,           // analysis from reference image upload
+  labPendingImage: null,       // { file, preview, serverPath } — set by "Open in Lab" to pre-load WorkbenchTab
+  pendingFix: null,            // { symptomSlug, fix, patternId, confidence, startedAt } — active fix flow
   shootRole: null,             // 'photographer' | 'assistant' | 'second_shooter'
   loading: false,
   apiResponse: null,
@@ -361,6 +364,17 @@ function reducer(state, action) {
     case 'SET_REF_ANALYSIS':
       return { ...state, refAnalysis: action.analysis };
 
+    case 'SET_LAB_PENDING_IMAGE':
+      return { ...state, labPendingImage: action.payload };
+
+    case 'START_FIX_FLOW':
+      return { ...state, pendingFix: action.payload };
+    case 'COMPLETE_FIX_FLOW':
+      return { ...state, pendingFix: null };
+
+    case 'CLEAR_LAB_PENDING_IMAGE':
+      return { ...state, labPendingImage: null };
+
     /* -- shoot mode -- */
 
     case 'SET_SHOOT_ROLE':
@@ -418,6 +432,15 @@ function reducer(state, action) {
         error: null,
       };
 
+    case 'NAVIGATE_SYMPTOM':
+      return {
+        ...state,
+        symptomSlug: action.slug,
+        screen: 'symptom',
+        history: [...state.history, state.screen],
+        error: null,
+      };
+
     case 'GO_BACK': {
       const hist = [...state.history];
       const prev = hist.pop() || 'welcome';
@@ -444,8 +467,130 @@ function reducer(state, action) {
 const StateCtx = createContext(null);
 const DispatchCtx = createContext(null);
 
+/* -- dev demo state presets ------------------------------------------- */
+
+const DEMO_RESULT = {
+  bestMatch: {
+    name: 'Loop',
+    lightingPattern: 'Loop',
+    reliabilityScore: 0.58,
+    description: 'Loop lighting — a small downward shadow drops from the nose at roughly 45°, cheek fully lit, minimal fill.',
+  },
+  setup: {
+    lights: [
+      { label: 'Key Light',  modifier: '90cm Octabox',  positionText: '45° camera left, high', distanceFt: '4 ft', powerHint: '1/4 power' },
+      { label: 'Hair Light', modifier: 'Grid Spot',     positionText: 'Behind, upper right',   distanceFt: '5 ft', powerHint: '1/8 power' },
+    ],
+  },
+  cameraSettings: { aperture: 'f/2.8', iso: '400', shutter: '1/200s', wb: 'Daylight' },
+  signalReliability: {
+    overallSignalStrength: 0.55,
+    signalsAvailable: ['catchlight_position', 'shadow_direction', 'nose_shadow'],
+    ambiguityFlags: { multiple_patterns_close_confidence: true },
+  },
+  edgeCaseFlags: { blown_highlights: false, mixed_color_temperature: true, extreme_low_key: false },
+  alternatives: [{ name: 'Split Lighting', score: 0.51 }],
+  patternCandidates: [],
+};
+
+const DEMO_REF_IMAGE = {
+  preview: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&q=80',
+  file: null,
+  serverPath: '/static/demo/ref_sample.jpg',
+};
+
+const DEMO_ANALYSIS = {
+  classification: {
+    lightingPattern: 'loop',
+    mood: 'cinematic',
+    confidence: 0.74,
+    suggestedRecipe: null,
+  },
+  palette: {
+    overall: [
+      { hex: '#c9a07a', name: 'Warm Sand',    pct: 34 },
+      { hex: '#4a3728', name: 'Deep Umber',   pct: 28 },
+      { hex: '#f0e8d8', name: 'Cream Highlight', pct: 22 },
+      { hex: '#1a1008', name: 'Near Black',   pct: 16 },
+    ],
+  },
+  description: {
+    subject: 'Solo portrait — woman, medium-warm skin tone, facing 3/4 left',
+    referenceAnalysis: {
+      image_read: {
+        narrative: 'A dramatic 3/4 portrait with strong directional light from camera-left. Shadows fall cleanly across the far cheek with a defined loop shadow beneath the nose — classic loop lighting with a short shadow drop.',
+        pose_notes: 'Subject turned slightly away, chin angled down — classic contemplative framing.',
+        scene_description: 'Studio or controlled environment. Single dominant source, no apparent fill.',
+        lighting_style: 'dramatic / chiaroscuro',
+        likely_photographer: 'Yousuf Karsh / classic studio portraiture',
+        notable_visual_devices: ['leading shadow line', 'eye catchlight at 10 o\u2019clock'],
+      },
+      lighting_read: {
+        lighting_family: 'loop',
+        source_quality: 'soft',
+        source_direction: 'camera-left high',
+        shadow_detail: 'Clean loop shadow drops from the nose at roughly 45°. Soft fill keeps shadow detail — jawline defined but not harsh.',
+        contrast_level: 'high',
+        color_temperature: '5500K — daylight balanced',
+      },
+      recreation_setup: {
+        setup_family: 'single key + optional hair',
+        modifier_suggestion: '90cm octabox or 70cm beauty dish with diffuser',
+        light_count: 2,
+        key_placement: '45° camera-left, elevated 15–20° above eye level',
+        fill_strategy: 'No fill, or faint reflector at 1:8 ratio to hold shadow detail',
+        background_strategy: 'Dark seamless or black vinyl — adds depth without distraction',
+        focal_length: '85mm–135mm',
+        aperture: 'f/2.0–f/2.8',
+        setup_notes: [
+          'Set key at 4–5 ft for tight control with the octabox.',
+          'Flag the key light to prevent spill on the background.',
+          'Hair light optional — grid spot behind subject at 1/8 power.',
+        ],
+      },
+    },
+  },
+};
+
+function _buildDemoInit(devModeUser) {
+  if (!import.meta.env.DEV) return null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const demo = params.get('_demo');
+    const base = { ...initialState, ...(devModeUser ? { user: devModeUser } : {}) };
+    if (demo === 'results') {
+      return { ...base, screen: 'results', result: DEMO_RESULT, apiResponse: {} };
+    }
+    if (demo === 'ref_eval') {
+      // Use admin user so AdminCorrectionPanel renders; pass ?admin=0 to see user panel instead
+      const adminUser = params.get('admin') === '0'
+        ? (devModeUser || null)
+        : { id: 'dev-admin', email: 'todd@toddwillisphoto.com', username: 'Todd Willis' };
+      return {
+        ...base,
+        user: adminUser,
+        screen: 'ref_eval',
+        referenceImage: DEMO_REF_IMAGE,
+        referenceImages: [DEMO_REF_IMAGE],
+        refAnalysis: DEMO_ANALYSIS,
+      };
+    }
+    if (demo === 'symptom') {
+      return { ...base, screen: 'symptom', symptomSlug: params.get('slug') || 'mixed-temperature' };
+    }
+    if (demo === 'analytics') {
+      return { ...base, screen: 'analytics' };
+    }
+    if (demo === 'exec') {
+      return { ...base, screen: 'exec' };
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 export function AppProvider({ children, devModeUser }) {
-  const init = devModeUser ? { ...initialState, user: devModeUser } : initialState;
+  const demoInit = _buildDemoInit(devModeUser);
+  const init = demoInit || (devModeUser ? { ...initialState, user: devModeUser } : initialState);
   const [state, dispatch] = useReducer(reducer, init);
   return (
     <StateCtx.Provider value={state}>

@@ -15,36 +15,45 @@
   --space-7xl: 120px;
 
   /* ── Radius ─────────────────────────── */
-  --radius-sm:   8px;
-  --radius-md:   12px;
-  --radius-lg:   16px;
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   7px;
+  --radius-lg:   10px;
   --radius-full: 999px;
 
-  /* ── Typography ─────────────────────── */
-  /* Fluid type scale — balanced for every device for readability.
-     clamp(min, preferred, max) scales between small mobile → large desktop.
-     Min sizes ensure readability on compact screens; max prevents
-     oversized text on wide monitors. */
+  /* ── Typography ─────────────────────────── */
   --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
                  "Segoe UI", Roboto, sans-serif;
   --font-mono:   "SF Mono", "Fira Code", monospace;
 
-  --text-xs:   clamp(0.75rem,   0.72rem  + 0.15vw, 0.8125rem);
-  --text-sm:   clamp(0.8125rem, 0.78rem  + 0.15vw, 0.875rem);
-  --text-base: clamp(0.9375rem, 0.9rem   + 0.15vw, 1rem);
-  --text-md:   clamp(1rem,      0.96rem  + 0.15vw, 1.0625rem);
-  --text-lg:   clamp(1.0625rem, 1.02rem  + 0.18vw, 1.125rem);
-  --text-xl:   clamp(1.25rem,   1.2rem   + 0.2vw,  1.375rem);
-  --text-2xl:  clamp(1.5rem,    1.44rem  + 0.25vw, 1.625rem);
-  --text-3xl:  clamp(1.75rem,   1.68rem  + 0.3vw,  1.875rem);
-  --text-4xl:  clamp(2.25rem,   2rem    + 1vw,    2.75rem);
-  --text-5xl:  clamp(2.75rem,   2.2rem  + 2vw,    3.5rem);
+  /* Type scale — fluid, mobile-first.
+     Gaps are intentionally large enough to create clear visual hierarchy:
+     xs=caption, sm=label, base=body, md=body-lead, lg=card-heading,
+     xl=section-heading, 2xl=screen-title, 3xl=display */
+  --text-xs:   clamp(0.75rem,   0.72rem  + 0.12vw, 0.8125rem); /* 12–13px — captions, metadata  */
+  --text-sm:   clamp(0.875rem,  0.85rem  + 0.1vw,  0.9375rem); /* 14–15px — labels, tags        */
+  --text-base: clamp(1rem,      0.96rem  + 0.2vw,  1.0625rem); /* 16–17px — body copy           */
+  --text-md:   clamp(1.125rem,  1.08rem  + 0.22vw, 1.1875rem); /* 18–19px — lead / body-large   */
+  --text-lg:   clamp(1.3125rem, 1.26rem  + 0.22vw, 1.4375rem); /* 21–23px — card headings       */
+  --text-xl:   clamp(1.5625rem, 1.5rem   + 0.25vw, 1.6875rem); /* 25–27px — section headings    */
+  --text-2xl:  clamp(1.875rem,  1.8rem   + 0.3vw,  2rem);      /* 30–32px — screen titles       */
+  --text-3xl:  clamp(2.25rem,   2.1rem   + 0.6vw,  2.625rem);  /* 36–42px — display             */
+  --text-4xl:  clamp(2.75rem,   2.4rem   + 1.2vw,  3.25rem);   /* 44–52px — hero display        */
+  --text-5xl:  clamp(3.25rem,   2.6rem   + 2.5vw,  4rem);      /* 52–64px — max hero            */
 
-  /* Line-height tokens for readability across contexts */
-  --leading-tight:   1.3;
-  --leading-normal:  1.5;
-  --leading-relaxed: 1.65;
+  /* Leading (line-height) */
+  --leading-tight:   1.15;
+  --leading-snug:    1.3;
+  --leading-normal:  1.55;
+  --leading-relaxed: 1.7;
 
+  /* Letter-spacing helpers */
+  --tracking-tight:  -0.025em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.05em;
+  --tracking-wider:   0.08em;
+
+  /* Weights */
   --weight-normal:   400;
   --weight-medium:   500;
   --weight-semibold: 600;
@@ -72,12 +81,16 @@
   --color-surface:         #17191F;
   --color-surface-elevated:#1E2129;
   --color-text:            #F4F6F8;
-  --color-text-secondary:  #A9AFBB;
+  --color-text-secondary:  #8C94A6;
+  --color-text-dim:        #6E7789;
   --color-border:          #2A2E38;
+  --border-subtle:         rgba(42, 46, 56, 0.6);
+  --border-faint:          rgba(42, 46, 56, 0.38);
 
   --color-accent:          #4DA3FF;
   --color-accent-hover:    #3B8EE6;
   --color-accent-subtle:   rgba(77, 163, 255, 0.12);
+  --color-accent-subtle-border: rgba(77, 163, 255, 0.22);
 
   --color-success:         #39D98A;
   --color-success-subtle:  rgba(57, 217, 138, 0.12);
@@ -88,17 +101,25 @@
   --color-creative:        #9B7CFF;
   --color-creative-subtle: rgba(155, 124, 255, 0.10);
 
-  --color-key:     #F5B041;
-  --color-fill:    #4DA3FF;
-  --color-rim:     #9B7CFF;
-  --color-bg-light:#39D98A;
-  --color-hair:    #FF5D5D;
+  --color-key:     #f59e0b;
+  --color-fill:    #3b82f6;
+  --color-rim:     #a855f7;
+  --color-bg-light:#10b981;
+  --color-hair:    #ec4899;
 
-  --color-icon:            var(--color-accent);
+  --color-icon:            #A89060;  /* warm brass — instrument panel, not SaaS blue */
 
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+  /* CTA buttons — authoritative dark blue, not neon */
+  --color-cta:             #2870CC;
+  --color-cta-hover:       #1D60B8;
+  /* Paid / commerce badge — always a recognisable gold-amber */
+  --color-paid:            #f59e0b;
+  --color-paid-subtle:     rgba(245, 158, 11, 0.12);
+
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,0.5);
+  --shadow-card: 0 1px 4px rgba(0,0,0,0.28);
 }
 
 /* ── Light Theme ───────────────────────────────────── */
@@ -108,11 +129,15 @@
   --color-surface-elevated:#F0F2F5;
   --color-text:            #1A1D24;
   --color-text-secondary:  #5A6070;
+  --color-text-dim:        #9CA3AF;
   --color-border:          #D8DCE3;
+  --border-subtle:         rgba(216, 220, 227, 0.65);
+  --border-faint:          rgba(216, 220, 227, 0.40);
 
   --color-accent:          #2B7DE9;
   --color-accent-hover:    #1A6DD4;
   --color-accent-subtle:   rgba(43, 125, 233, 0.08);
+  --color-accent-subtle-border: rgba(43, 125, 233, 0.22);
 
   --color-success:         #1FAA5C;
   --color-success-subtle:  rgba(31, 170, 92, 0.08);
@@ -123,17 +148,23 @@
   --color-creative:        #7C5CDB;
   --color-creative-subtle: rgba(124, 92, 219, 0.06);
 
-  --color-key:     #D4930A;
-  --color-fill:    #2B7DE9;
-  --color-rim:     #7C5CDB;
-  --color-bg-light:#1FAA5C;
-  --color-hair:    #DC3545;
+  --color-key:     #b45309;
+  --color-fill:    #1d4ed8;
+  --color-rim:     #7c3aed;
+  --color-bg-light:#059669;
+  --color-hair:    #be185d;
 
-  --color-icon:            var(--color-accent);
+  --color-icon:            #8B6E3A;  /* warm brass on light bg */
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --color-cta:             #1D68CC;
+  --color-cta-hover:       #1558B0;
+  --color-paid:            #b45309;
+  --color-paid-subtle:     rgba(180, 83, 9, 0.10);
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md:   0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg:   0 8px 24px rgba(0,0,0,0.12);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.07);
 }
 
 /* ── Photoshop Theme ─────────────────────────────────── */
@@ -146,10 +177,13 @@
   --color-text:             #E0E0E0;
   --color-text-secondary:   #999999;
   --color-border:           #3E3E3E;
+  --border-subtle:          rgba(62, 62, 62, 0.6);
+  --border-faint:           rgba(62, 62, 62, 0.38);
 
   --color-accent:           #2D9CDB;
   --color-accent-hover:     #2489C2;
   --color-accent-subtle:    rgba(45, 156, 219, 0.15);
+  --color-accent-subtle-border: rgba(45, 156, 219, 0.28);
 
   --color-success:          #4CAF50;
   --color-success-subtle:   rgba(76, 175, 80, 0.12);
@@ -164,13 +198,19 @@
   --color-fill:             #2D9CDB;
   --color-rim:              #AB7AFF;
   --color-bg-light:         #4CAF50;
-  --color-hair:             #F44336;
+  --color-hair:             #f472b6;
 
   --color-icon:            var(--color-accent);
 
-  --shadow-sm:  0 1px 2px rgba(0,0,0,0.4);
-  --shadow-md:  0 2px 8px rgba(0,0,0,0.5);
-  --shadow-lg:  0 4px 16px rgba(0,0,0,0.6);
+  --color-cta:             #2D9CDB;
+  --color-cta-hover:       #2489C2;
+  --color-paid:            #E6A817;
+  --color-paid-subtle:     rgba(230, 168, 23, 0.12);
+
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md:   0 2px 8px rgba(0,0,0,0.5);
+  --shadow-lg:   0 4px 16px rgba(0,0,0,0.6);
+  --shadow-card: 0 1px 4px rgba(0,0,0,0.42);
 }
 
 /* ── Lightroom Theme ────────────────────────────────────── */
@@ -184,10 +224,13 @@
   --color-text:             #D1D1D1;
   --color-text-secondary:   #8E8E8E;
   --color-border:           #484848;
+  --border-subtle:          rgba(72, 72, 72, 0.6);
+  --border-faint:           rgba(72, 72, 72, 0.38);
 
   --color-accent:           #1473E6;
   --color-accent-hover:     #0D66D0;
   --color-accent-subtle:    rgba(20, 115, 230, 0.15);
+  --color-accent-subtle-border: rgba(20, 115, 230, 0.28);
 
   --color-success:          #2DA562;
   --color-success-subtle:   rgba(45, 165, 98, 0.12);
@@ -202,13 +245,19 @@
   --color-fill:             #1473E6;
   --color-rim:              #9256D9;
   --color-bg-light:         #2DA562;
-  --color-hair:             #D7373F;
+  --color-hair:             #db2777;
 
   --color-icon:            var(--color-accent);
 
-  --shadow-sm:  0 1px 3px rgba(0,0,0,0.35);
-  --shadow-md:  0 3px 10px rgba(0,0,0,0.45);
-  --shadow-lg:  0 6px 20px rgba(0,0,0,0.55);
+  --color-cta:             #1473E6;
+  --color-cta-hover:       #0D66D0;
+  --color-paid:            #E8A100;
+  --color-paid-subtle:     rgba(232, 161, 0, 0.12);
+
+  --shadow-sm:   0 1px 3px rgba(0,0,0,0.35);
+  --shadow-md:   0 3px 10px rgba(0,0,0,0.45);
+  --shadow-lg:   0 6px 20px rgba(0,0,0,0.55);
+  --shadow-card: 0 1px 4px rgba(0,0,0,0.36);
 }
 
 /* ── DailyNote Theme ────────────────────────────────────── */
@@ -224,34 +273,50 @@
   --color-surface-elevated: #F2F2F2;
   --color-text:             #2C2C2C;
   --color-text-secondary:   #8A8A8A;
+  --color-text-dim:         #AEAEAE;   /* tertiary / placeholder text */
   --color-border:           #E5E5E5;
+  --border-subtle:          rgba(229, 229, 229, 0.65);
+  --border-faint:           rgba(229, 229, 229, 0.40);
 
-  /* Grayscale accent — no color, pure minimalism */
+  /* Grayscale accent — pure minimalism for UI chrome */
   --color-accent:           #6B7280;
   --color-accent-hover:     #4B5563;
   --color-accent-subtle:    rgba(107, 114, 128, 0.08);
+  --color-accent-subtle-border: rgba(107, 114, 128, 0.22);
 
-  --color-success:          #6B7280;
-  --color-success-subtle:   rgba(107, 114, 128, 0.06);
-  --color-warning:          #9CA3AF;
-  --color-warning-subtle:   rgba(156, 163, 175, 0.06);
-  --color-error:            #4B5563;
-  --color-error-subtle:     rgba(75, 85, 99, 0.06);
-  --color-creative:         #9CA3AF;
-  --color-creative-subtle:  rgba(156, 163, 175, 0.06);
+  /* Semantic data colors — readable hues on light background.
+     Charts, tables, signal indicators, and status badges need real colors
+     so information is visually distinguishable, even in the minimal theme. */
+  --color-success:          #1FAA5C;
+  --color-success-subtle:   rgba(31, 170, 92, 0.08);
+  --color-warning:          #D4930A;
+  --color-warning-subtle:   rgba(212, 147, 10, 0.06);
+  --color-error:            #DC3545;
+  --color-error-subtle:     rgba(220, 53, 69, 0.06);
+  --color-creative:         #7C5CDB;
+  --color-creative-subtle:  rgba(124, 92, 219, 0.06);
 
-  --color-key:              #4B5563;
-  --color-fill:             #9CA3AF;
-  --color-rim:              #6B7280;
-  --color-bg-light:         #D1D5DB;
-  --color-hair:             #374151;
+  /* Light-role colors — desaturated for the minimal palette */
+  --color-key:              #b45309;
+  --color-fill:             #2B7DE9;
+  --color-rim:              #7C5CDB;
+  --color-bg-light:         #1FAA5C;
+  --color-hair:             #be185d;
 
-  /* Softer gray icons instead of blue — matches DailyNote's muted aesthetic */
+  /* Softer gray icons — matches DailyNote's muted aesthetic */
   --color-icon:             #9CA3AF;
 
-  --shadow-sm:  0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md:  0 2px 8px rgba(0,0,0,0.06);
-  --shadow-lg:  0 4px 16px rgba(0,0,0,0.08);
+  /* CTAs always blue — they're calls to action */
+  --color-cta:              #2B7DE9;
+  --color-cta-hover:        #1A6DD4;
+  /* Paid badge — warm amber works on light bg */
+  --color-paid:             #b45309;
+  --color-paid-subtle:      rgba(180, 83, 9, 0.10);
+
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:   0 2px 8px rgba(0,0,0,0.06);
+  --shadow-lg:   0 4px 16px rgba(0,0,0,0.08);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.05);
 }
 
 /* ── Font Size Scale ─────────────────────────────────── */
@@ -259,47 +324,62 @@
 /* "medium" is the default (uses :root values above).    */
 
 [data-font-size="xs"] {
-  --text-xs:   clamp(0.625rem,  0.6rem   + 0.12vw, 0.6875rem);
-  --text-sm:   clamp(0.6875rem, 0.66rem  + 0.12vw, 0.75rem);
-  --text-base: clamp(0.75rem,   0.72rem  + 0.12vw, 0.8125rem);
-  --text-md:   clamp(0.8125rem, 0.78rem  + 0.12vw, 0.875rem);
-  --text-lg:   clamp(0.875rem,  0.84rem  + 0.15vw, 0.9375rem);
-  --text-xl:   clamp(1rem,      0.96rem  + 0.18vw, 1.125rem);
-  --text-2xl:  clamp(1.25rem,   1.2rem   + 0.2vw,  1.375rem);
-  --text-3xl:  clamp(1.375rem,  1.32rem  + 0.25vw, 1.5rem);
+  --text-xs:   clamp(0.6875rem, 0.66rem  + 0.12vw, 0.75rem);
+  --text-sm:   clamp(0.8125rem, 0.78rem  + 0.12vw, 0.875rem);
+  --text-base: clamp(0.875rem,  0.84rem  + 0.15vw, 0.9375rem);
+  --text-md:   clamp(0.9375rem, 0.9rem   + 0.15vw, 1rem);
+  --text-lg:   clamp(1.0625rem, 1.02rem  + 0.18vw, 1.125rem);
+  --text-xl:   clamp(1.25rem,   1.2rem   + 0.2vw,  1.375rem);
+  --text-2xl:  clamp(1.5rem,    1.44rem  + 0.25vw, 1.625rem);
+  --text-3xl:  clamp(1.75rem,   1.68rem  + 0.3vw,  1.875rem);
 }
 
 [data-font-size="small"] {
-  --text-xs:   clamp(0.6875rem, 0.65rem  + 0.15vw, 0.75rem);
-  --text-sm:   clamp(0.75rem,   0.72rem  + 0.15vw, 0.8125rem);
-  --text-base: clamp(0.8125rem, 0.78rem  + 0.15vw, 0.875rem);
-  --text-md:   clamp(0.875rem,  0.84rem  + 0.15vw, 0.9375rem);
-  --text-lg:   clamp(0.9375rem, 0.9rem   + 0.18vw, 1rem);
-  --text-xl:   clamp(1.125rem,  1.08rem  + 0.2vw,  1.25rem);
-  --text-2xl:  clamp(1.375rem,  1.32rem  + 0.25vw, 1.5rem);
-  --text-3xl:  clamp(1.5rem,    1.44rem  + 0.3vw,  1.625rem);
-}
-
-[data-font-size="large"] {
-  --text-xs:   clamp(0.8125rem, 0.78rem  + 0.15vw, 0.875rem);
-  --text-sm:   clamp(0.9375rem, 0.9rem   + 0.15vw, 1rem);
-  --text-base: clamp(1.0625rem, 1.02rem  + 0.15vw, 1.125rem);
-  --text-md:   clamp(1.125rem,  1.08rem  + 0.15vw, 1.1875rem);
-  --text-lg:   clamp(1.1875rem, 1.14rem  + 0.18vw, 1.25rem);
+  --text-xs:   clamp(0.75rem,   0.72rem  + 0.12vw, 0.8125rem);
+  --text-sm:   clamp(0.875rem,  0.84rem  + 0.15vw, 0.9375rem);
+  --text-base: clamp(0.9375rem, 0.9rem   + 0.15vw, 1rem);
+  --text-md:   clamp(1rem,      0.96rem  + 0.15vw, 1.0625rem);
+  --text-lg:   clamp(1.125rem,  1.08rem  + 0.18vw, 1.25rem);
   --text-xl:   clamp(1.375rem,  1.32rem  + 0.2vw,  1.5rem);
   --text-2xl:  clamp(1.625rem,  1.56rem  + 0.25vw, 1.75rem);
   --text-3xl:  clamp(1.875rem,  1.8rem   + 0.3vw,  2rem);
 }
 
-[data-font-size="xl"] {
-  --text-xs:   clamp(0.875rem,  0.84rem  + 0.15vw, 0.9375rem);
-  --text-sm:   clamp(1rem,      0.96rem  + 0.15vw, 1.0625rem);
+[data-font-size="large"] {
+  --text-xs:   clamp(0.9375rem, 0.9rem   + 0.15vw, 1rem);
+  --text-sm:   clamp(1.0625rem, 1.02rem  + 0.15vw, 1.125rem);
   --text-base: clamp(1.1875rem, 1.14rem  + 0.18vw, 1.25rem);
   --text-md:   clamp(1.25rem,   1.2rem   + 0.18vw, 1.3125rem);
-  --text-lg:   clamp(1.3125rem, 1.26rem  + 0.2vw,  1.375rem);
-  --text-xl:   clamp(1.5rem,    1.44rem  + 0.25vw, 1.625rem);
-  --text-2xl:  clamp(1.75rem,   1.68rem  + 0.3vw,  1.875rem);
-  --text-3xl:  clamp(2rem,      1.92rem  + 0.35vw, 2.125rem);
+  --text-lg:   clamp(1.4375rem, 1.38rem  + 0.2vw,  1.5625rem);
+  --text-xl:   clamp(1.6875rem, 1.62rem  + 0.25vw, 1.8125rem);
+  --text-2xl:  clamp(2rem,      1.92rem  + 0.3vw,  2.125rem);
+  --text-3xl:  clamp(2.375rem,  2.28rem  + 0.35vw, 2.625rem);
+}
+
+[data-font-size="xl"] {
+  --text-xs:   clamp(1rem,      0.96rem  + 0.15vw, 1.0625rem);
+  --text-sm:   clamp(1.125rem,  1.08rem  + 0.15vw, 1.25rem);
+  --text-base: clamp(1.3125rem, 1.26rem  + 0.18vw, 1.4375rem);
+  --text-md:   clamp(1.4375rem, 1.38rem  + 0.18vw, 1.5625rem);
+  --text-lg:   clamp(1.625rem,  1.56rem  + 0.2vw,  1.75rem);
+  --text-xl:   clamp(1.875rem,  1.8rem   + 0.25vw, 2rem);
+  --text-2xl:  clamp(2.25rem,   2.16rem  + 0.3vw,  2.375rem);
+  --text-3xl:  clamp(2.625rem,  2.52rem  + 0.35vw, 2.875rem);
+}
+
+/* ── Mobile Font Size Boost (≤ 479px) ───────────────── */
+/* Each step bumped ~1 level up on narrow screens.       */
+@media (max-width: 479px) {
+  :root {
+    --text-xs:   clamp(0.8125rem, 0.78rem  + 0.1vw,  0.875rem);   /* 13–14px */
+    --text-sm:   clamp(0.9375rem, 0.9rem   + 0.1vw,  1rem);       /* 15–16px */
+    --text-base: clamp(1.0625rem, 1.02rem  + 0.1vw,  1.125rem);   /* 17–18px */
+    --text-md:   clamp(1.1875rem, 1.14rem  + 0.12vw, 1.25rem);    /* 19–20px */
+    --text-lg:   clamp(1.375rem,  1.32rem  + 0.15vw, 1.5rem);     /* 22–24px */
+    --text-xl:   clamp(1.625rem,  1.56rem  + 0.2vw,  1.75rem);    /* 26–28px */
+    --text-2xl:  clamp(1.9375rem, 1.86rem  + 0.25vw, 2.0625rem);  /* 31–33px */
+    --text-3xl:  clamp(2.3125rem, 2.22rem  + 0.35vw, 2.5625rem);  /* 37–41px */
+  }
 }
 
 /* ── Density Scale ───────────────────────────────────── */
@@ -315,9 +395,9 @@
   --space-2xl: 20px;
   --space-3xl: 24px;
   --space-4xl: 32px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 3px;
+  --radius-md: 5px;
+  --radius-lg: 7px;
 }
 
 [data-density="spacious"] {
@@ -329,9 +409,9 @@
   --space-2xl: 32px;
   --space-3xl: 40px;
   --space-4xl: 48px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
 }
 
 /* ── Font Family Scale ───────────────────────────────── */

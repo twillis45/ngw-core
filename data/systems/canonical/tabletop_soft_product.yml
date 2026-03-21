@@ -27,6 +27,15 @@ camera:
   lens: 50-100mm_macro
   angle_to_subject_deg: 20
 
+capture_settings:
+  iso: 100
+  aperture: f/11-f/16
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Small aperture maximizes depth of field across the entire product
+    - Use a cable release or timer to avoid vibration at these sharp apertures
+
 lights:
   - role: key
     modifier: softbox_rect

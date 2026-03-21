@@ -4,6 +4,7 @@
  * Only renders when there is meaningful ambiguity to display.
  */
 import CollapsibleCard from './CollapsibleCard';
+import CardIcon from '../components/CardIcon';
 
 export default function RefInterpretationsCard({ lightingRead, recreationSetup }) {
   const ambiguity = lightingRead?.ambiguity_notes || [];
@@ -13,7 +14,7 @@ export default function RefInterpretationsCard({ lightingRead, recreationSetup }
   if (ambiguity.length === 0 && alternates.length === 0) return null;
 
   return (
-    <CollapsibleCard icon={'\uD83E\uDD14'} title="Other Reads" className="ref-card--interpretations">
+    <CollapsibleCard icon={<CardIcon name="layers" />} title="Other Reads" className="ref-card--interpretations">
       <p className="ref-card__intro">
         Every reference image has more than one plausible lighting read.
         Here are the alternatives worth considering.

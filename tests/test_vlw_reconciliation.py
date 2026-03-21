@@ -156,9 +156,9 @@ class TestReconcilePattern:
         assert result.confidence_boost > 0
 
     def test_confirmed_variant_match(self):
-        """rembrandt-ish should match rembrandt."""
+        """Exact rembrandt match should be confirmed."""
         vlm = _map_vlm_style("rembrandt")
-        result = _reconcile_pattern(vlm, "rembrandt-ish")
+        result = _reconcile_pattern(vlm, "rembrandt")
         assert result.agreement == "confirmed"
 
     def test_conflicting(self):

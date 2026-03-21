@@ -176,6 +176,11 @@ def _build_light_step(
     room_tips = _room_guidance_for_light(light, room)
     tips.extend(room_tips)
 
+    # Simple initial placement hint for key light — direction is inferred live
+    initial_placement = None
+    if role_key == "key":
+        initial_placement = "Place key slightly left and above eye level"
+
     return {
         "id": f"light_{role_key}_{step_num}",
         "stepNumber": step_num,
@@ -186,6 +191,7 @@ def _build_light_step(
             "roleKey": role_key,
             "roleColor": ROLE_COLORS.get(role_key, "#A9AFBB"),
             "modifier": light.get("modifier", ""),
+            "initialPlacement": initial_placement,
             "position": light.get("position", ""),
             "height": light.get("height", ""),
             "distance": distance_str,

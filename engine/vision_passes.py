@@ -1109,9 +1109,12 @@ def catchlight_pass(
     elif "strip" in modifier_hint.lower():
         shape = "strip"
 
-    # -- Enhanced: size ratio and intensity --
+    # -- Enhanced: size ratio, intensity, and contour-based shape --
     catchlight_size_ratio = None
     catchlight_intensity = None
+    # Collect per-eye circularity measurements for vision-based shape override
+    _eye_circularities: list = []
+    _eye_contour_areas: list = []
 
     if face_box is not None:
         x0, y0, x1, y1 = face_box
@@ -1161,6 +1164,40 @@ def catchlight_pass(
                 if len(bright_values) > 0:
                     catchlight_intensity = float(np.mean(bright_values)) / 255.0
 
+                # ── Contour-based shape analysis ──────────────────────
+                # Measure circularity of the largest bright contour in
+                # each eye.  Ring lights produce large, highly circular
+                # catchlights (circularity > 0.55).  Rectangular softboxes
+                # are typically < 0.4.
+                # Use a lower threshold (200) for shape analysis when
+                # the P95 threshold is very high (bright images like
+                # high-key or B&W).  The P95 fragments ring reflections
+                # that fill large portions of the eye.
+                _shape_thresh = min(thresh_val, 200)
+                _, _shape_bright = cv2.threshold(eye_roi, _shape_thresh, 255, cv2.THRESH_BINARY)
+                contours, _ = cv2.findContours(
+                    _shape_bright, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE,
+                )
+                if contours:
+                    largest = max(contours, key=cv2.contourArea)
+                    area = cv2.contourArea(largest)
+                    perimeter = cv2.arcLength(largest, True)
+                    if perimeter > 0 and area > 5:
+                        circularity = 4.0 * np.pi * area / (perimeter * perimeter)
+                        _eye_circularities.append(circularity)
+                        _eye_contour_areas.append(area)
+
+    # ── Vision-based shape override ──────────────────────────────────
+    # When modifier-hint shape is unknown or rectangular, check if
+    # contour circularity indicates a round/ring catchlight.
+    # Only override when we have consistent evidence from both eyes.
+    if _eye_circularities and shape in ("unknown", "rectangular"):
+        _mean_circ = sum(_eye_circularities) / len(_eye_circularities)
+        _max_area = max(_eye_contour_areas) if _eye_contour_areas else 0
+        # Circular catchlights: circularity > 0.55 and reasonably large
+        if _mean_circ > 0.55 and _max_area > 20:
+            shape = "round"
+
     return {
         "ok": True,
         "catchlight_count": count,
@@ -1168,6 +1205,7 @@ def catchlight_pass(
         "catchlight_position": position,
         "catchlight_size_ratio": round(catchlight_size_ratio, 3) if catchlight_size_ratio is not None else None,
         "catchlight_intensity": round(catchlight_intensity, 3) if catchlight_intensity is not None else None,
+        "catchlight_circularity": round(sum(_eye_circularities) / len(_eye_circularities), 3) if _eye_circularities else None,
     }
 
 
@@ -2460,6 +2498,7 @@ def light_structure_pass(
     triangle_detected = False
     triangle_cheek: Optional[str] = None
     triangle_completeness = 0.0
+    _triangle_isolation = 0.0
     pattern_name = "unknown"
 
     h, w = img_bgr.shape[:2]
@@ -2541,6 +2580,24 @@ def light_structure_pass(
     top_shadow = float(np.mean(shadow_mask[:nr_h // 2, :]))
     bottom_shadow = float(np.mean(shadow_mask[nr_h // 2:, :]))
 
+    # ── Nose-specific shadow centroid vector ──────────────────────
+    # Instead of relying on shadow_pass's whole-face Sobel gradient,
+    # compute the shadow direction directly from the centroid of shadow
+    # pixels in the nose region relative to the nose center.  This is
+    # more precise for nose shadow angle classification.
+    _centroid_angle = 0.0
+    _centroid_dist = 0.0
+    shadow_ys, shadow_xs = np.where(shadow_mask > 0)
+    if len(shadow_xs) > 5:
+        _scx = float(np.mean(shadow_xs)) - nr_w / 2.0
+        _scy = float(np.mean(shadow_ys)) - nr_h / 2.0
+        import math as _math
+        _cdist_px = _math.hypot(_scx, _scy)
+        _centroid_dist = min(1.0, _cdist_px / max(nr_w, nr_h) * 2.0)
+        # Angle: 0=up, 90=right, 180=down, 270=left (clock convention)
+        _rad = _math.atan2(_scx, _scy)  # atan2(x, y) because y-down
+        _centroid_angle = (_math.degrees(_rad) + 360) % 360
+
     # ── Nose shadow length ratio (use shadow_data if available) ──
     if shadow_data and isinstance(shadow_data, dict) and shadow_data.get("ok"):
         sl = shadow_data.get("shadow_length_ratio")
@@ -2552,6 +2609,12 @@ def light_structure_pass(
     else:
         nose_shadow_length_ratio = round(shadow_ratio, 3)
 
+    # Use the nose-centroid angle as the primary angle when it's valid
+    # and the shadow_pass angle is likely imprecise (whole-face gradient).
+    # The centroid angle directly measures where the nose shadow mass is.
+    if _centroid_dist > 0.05 and len(shadow_xs) > 10:
+        nose_shadow_angle_deg = round(_centroid_angle, 1)
+
     # ── Pattern classification ───────────────────────────────────
     symmetry_score = 0.5
     if highlight_symmetry_data and isinstance(highlight_symmetry_data, dict):
@@ -2559,11 +2622,50 @@ def light_structure_pass(
         if not isinstance(symmetry_score, (int, float)):
             symmetry_score = 0.5
 
-    # Butterfly: symmetric shadow below nose
-    if abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3:
+    # ── Compute near-vertical angle using centroid when available ──
+    # The centroid angle measures where shadow mass sits relative to nose
+    # center: 0°=below, 90°=right, 180°=above, 270°=left.
+    # Butterfly: shadow falls straight DOWN → centroid near 0°/360°.
+    # shadow_pass convention: 0°=up, 180°=down.
+    # Convert centroid → shadow_pass convention: add 180°.
+    if _centroid_dist > 0.05:
+        _centroid_in_sp_convention = (_centroid_angle + 180.0) % 360.0
+        _angle_near_vertical = (160 < _centroid_in_sp_convention < 200)
+    elif nose_shadow_angle_deg > 0:
+        _angle_near_vertical = (160 < nose_shadow_angle_deg < 200)
+    else:
+        _angle_near_vertical = True  # no angle data → don't constrain
+
+    # ── Very low shadow: on-axis source (butterfly / beauty dish) ──
+    # When shadow_density is extremely low (< 5%), the nose region has
+    # essentially no shadow pixels.  Shadow distribution metrics (left/right,
+    # top/bottom) are running on noise.  Minimal shadow = centered, on-axis
+    # source — classify as butterfly.  This catches beauty dish and ring
+    # light setups that produce almost no nose shadow.
+    # Guard: a dark face (face_mean < 80) likely means backlighting/rim light,
+    # not an on-axis source.  Low shadow_ratio on a dark face is noise.
+    _face_bright_enough = face_mean > 80
+    if shadow_ratio < 0.05 and abs(left_shadow - right_shadow) < 0.15 and _face_bright_enough:
+        pattern_name = "butterfly"
+        nose_shadow_shape = "minimal_centered"
+        notes.append(f"very low shadow density ({shadow_ratio:.3f}) + symmetric → on-axis/butterfly")
+
+    # Butterfly: symmetric shadow below nose AND shadow angle near-vertical.
+    elif abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3 and _angle_near_vertical:
         pattern_name = "butterfly"
         nose_shadow_shape = "butterfly_below"
         notes.append("symmetric shadow below nose → butterfly pattern")
+
+    # Loop: would match butterfly thresholds (symmetric + bottom-heavy) but
+    # the shadow direction is diagonal, not vertical.  This catches cases
+    # where the key is ~30-45° off-axis and the nose shadow falls diagonally
+    # but doesn't create enough L/R asymmetry for the rembrandt zone.
+    # Use the SAME thresholds as butterfly to avoid catching rembrandt images
+    # that merely have low nose-region asymmetry.
+    elif abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3 and not _angle_near_vertical:
+        pattern_name = "loop"
+        nose_shadow_shape = "short_angled"
+        notes.append(f"symmetric shadow distribution with diagonal angle ({nose_shadow_angle_deg:.0f}°) → loop pattern")
 
     # Split: half face in shadow
     elif abs(left_shadow - right_shadow) > 0.5:
@@ -2574,18 +2676,35 @@ def light_structure_pass(
     # Rembrandt: triangle on shadow-side cheek
     elif abs(left_shadow - right_shadow) > 0.2:
         shadow_side = "left" if left_shadow > right_shadow else "right"
-        # Check for triangle: look at the cheek area on shadow side
+        # Check for triangle: look at the cheek area on shadow side.
+        # The Rembrandt triangle is an ISOLATED bright patch on an otherwise
+        # shadowed cheek — mere "above threshold" brightness isn't enough.
         cheek_top = 2 * fh // 3
         cheek_bottom = fh
         if shadow_side == "left":
             cheek_region = face_roi[cheek_top:cheek_bottom, :fw // 3]
+            # Surrounding shadow: above the cheek on the same side
+            surround_region = face_roi[fh // 2:cheek_top, :fw // 3]
         else:
             cheek_region = face_roi[cheek_top:cheek_bottom, 2 * fw // 3:]
+            surround_region = face_roi[fh // 2:cheek_top, 2 * fw // 3:]
 
         if cheek_region.size > 20:
             cheek_brightness = float(np.mean(cheek_region))
-            # Triangle = bright patch on shadow cheek below eye
-            if cheek_brightness > shadow_threshold:
+            surround_brightness = float(np.mean(surround_region)) if surround_region.size > 20 else cheek_brightness
+            # Triangle isolation: how much brighter is the cheek triangle
+            # compared to its surrounding shadow?  A genuine Rembrandt triangle
+            # should be significantly brighter than the shadow area above it.
+            _triangle_isolation = 0.0
+            if face_mean > 0:
+                _triangle_isolation = (cheek_brightness - surround_brightness) / max(face_mean, 1.0)
+
+            # Triangle = bright patch on shadow cheek.  Brightness above the
+            # shadow threshold is sufficient for classification here;
+            # isolation strength (_triangle_isolation) is stored as a signal
+            # for downstream confidence scoring in the orchestrator.
+            _above_threshold = cheek_brightness > shadow_threshold
+            if _above_threshold:
                 triangle_detected = True
                 triangle_cheek = shadow_side
                 triangle_completeness = round(
@@ -2595,17 +2714,65 @@ def light_structure_pass(
                 nose_shadow_shape = "angled_with_triangle"
                 notes.append(
                     f"illuminated triangle on {shadow_side} cheek "
-                    f"(completeness={triangle_completeness:.2f}) → Rembrandt"
+                    f"(completeness={triangle_completeness:.2f}, "
+                    f"isolation={_triangle_isolation:.2f}) → Rembrandt"
                 )
             else:
-                pattern_name = "loop"
-                nose_shadow_shape = "short_angled"
-                notes.append(
-                    f"angled shadow without triangle on {shadow_side} → loop lighting"
-                )
+                # Check nose shadow angle: if near-horizontal (80-100° or
+                # 260-280°), light is coming from the side → split, not loop.
+                # Loop has a diagonal (~45°) nose shadow from above-and-side.
+                _nsa = nose_shadow_angle_deg
+                _is_horizontal = (70 <= _nsa <= 110) or (250 <= _nsa <= 290)
+                if _is_horizontal and abs(left_shadow - right_shadow) > 0.25:
+                    pattern_name = "split"
+                    nose_shadow_shape = "half_face"
+                    notes.append(
+                        f"horizontal nose shadow angle ({_nsa:.0f}°) + asymmetry "
+                        f"→ split lighting (not loop)"
+                    )
+                else:
+                    pattern_name = "loop"
+                    nose_shadow_shape = "short_angled"
+                    notes.append(
+                        f"angled shadow without triangle on {shadow_side} → loop lighting"
+                    )
         else:
             pattern_name = "loop"
             nose_shadow_shape = "short_angled"
+
+    # ── Indeterminate zone: 0.15 ≤ asymmetry < 0.2 ─────────────
+    # Falls between butterfly/loop (< 0.15) and rembrandt (> 0.2).
+    # Use centroid angle as tiebreaker: diagonal shadow direction
+    # from upper quadrant is consistent with loop (off-axis key).
+    elif abs(left_shadow - right_shadow) >= 0.15:
+        # Moderate asymmetry — could be loop or weak rembrandt.
+        # Check centroid direction: upper-diagonal = loop, lower = rembrandt
+        _ca = _centroid_angle
+        _is_diagonal_upper = (20 < _ca < 80) or (280 < _ca < 340)
+        if _centroid_dist > 0.05 and _is_diagonal_upper:
+            pattern_name = "loop"
+            nose_shadow_shape = "short_angled"
+            notes.append(
+                f"indeterminate asymmetry ({abs(left_shadow - right_shadow):.2f}) "
+                f"+ diagonal centroid ({_ca:.0f}°) → loop"
+            )
+        elif bottom_shadow > top_shadow * 1.2:
+            # Shadow mass below nose center — ambiguous without strong
+            # directional evidence.  Leave as unknown so reference_read's
+            # richer analysis (with full-face geometry) can resolve it.
+            pattern_name = "unknown"
+            nose_shadow_shape = "indeterminate"
+            notes.append(
+                f"indeterminate asymmetry ({abs(left_shadow - right_shadow):.2f}) "
+                f"+ bottom-heavy shadow → unknown (deferred to reference_read)"
+            )
+        else:
+            pattern_name = "unknown"
+            nose_shadow_shape = "indeterminate"
+            notes.append(
+                f"indeterminate zone: asymmetry={abs(left_shadow - right_shadow):.2f}, "
+                f"centroid={_ca:.0f}°/{_centroid_dist:.2f}"
+            )
 
     # Broad lighting: symmetry > 0.7, wide highlight side
     elif symmetry_score > 0.7 and shadow_ratio < 0.2:
@@ -2630,6 +2797,17 @@ def light_structure_pass(
         confidence += 0.1
     confidence = round(min(0.9, confidence), 3)
 
+    # ── Highlight width ratio ────────────────────────────────────
+    # Compute from the full face ROI: what fraction of columns are
+    # brighter than 115% of the face mean?  This is a proxy for how
+    # broad the lit side is.
+    _highlight_width_ratio = 0.0
+    col_means = np.mean(face_roi, axis=0).astype(float)
+    if len(col_means) > 5:
+        _hl_threshold = face_mean * 1.15
+        _hl_cols = col_means > _hl_threshold
+        _highlight_width_ratio = round(float(np.sum(_hl_cols)) / len(col_means), 3)
+
     return {
         "ok": True,
         "nose_shadow_shape": nose_shadow_shape,
@@ -2641,6 +2819,14 @@ def light_structure_pass(
         "pattern_name": pattern_name,
         "confidence": confidence,
         "notes": notes,
+        # ── Enhanced signals (v2) ──
+        "nose_shadow_centroid_angle_deg": round(_centroid_angle, 1),
+        "nose_shadow_centroid_distance": round(_centroid_dist, 3),
+        "left_right_asymmetry": round(abs(left_shadow - right_shadow), 3),
+        "top_bottom_ratio": round(bottom_shadow / max(top_shadow, 0.01), 3),
+        "shadow_density": round(shadow_ratio, 3),
+        "triangle_isolation": round(_triangle_isolation, 3),
+        "highlight_width_ratio": _highlight_width_ratio,
     }
 
 
@@ -5987,8 +6173,6 @@ def run_extended_pipeline(
     ``results["light_role"]`` is aliased to ``results["hypothesis"]`` for
     backward compatibility.
     """
-    from engine.lighting_knowledge_library import lighting_knowledge_library_pass
-    from engine.pattern_matcher import match_lighting_patterns as pattern_match_fn
     from engine.reference_matcher import match_reference_images as reference_match_fn
 
     results: Dict[str, Any] = {}
@@ -6403,15 +6587,6 @@ def run_extended_pipeline(
         logger.warning("vlm_reconstruct failed: %s", exc)
         results["vlm_reconstruction"] = None
 
-    # ── Pattern matching ────────────────────────────────────────────
-    try:
-        results["pattern_matches"] = pattern_match_fn(
-            results.get("reconstruction", {}),
-        )
-    except Exception as exc:
-        logger.warning("match_lighting_patterns failed: %s", exc)
-        results["pattern_matches"] = {"pattern_matches": [], "top_pattern": "unknown", "top_confidence": 0.0}
-
     # ── Reference matching ───────────────────────────────────────────
     try:
         results["reference_matches"] = reference_match_fn(
@@ -6420,17 +6595,6 @@ def run_extended_pipeline(
     except Exception as exc:
         logger.warning("match_reference_images failed: %s", exc)
         results["reference_matches"] = {"closest_references": [], "top_reference": None, "top_similarity": 0.0}
-
-    # ── Lighting knowledge library (enriched pattern matching) ───────
-    try:
-        results["lighting_knowledge"] = lighting_knowledge_library_pass(
-            reconstruction=results.get("reconstruction", {}),
-            hypothesis=results.get("hypothesis"),
-            physics=results.get("physics"),
-        )
-    except Exception as exc:
-        logger.warning("lighting_knowledge_library_pass failed: %s", exc)
-        results["lighting_knowledge"] = {"ok": False, "error": str(exc)}
 
     # ── Validation pass (enhanced with hypothesis/physics/environment)
     try:

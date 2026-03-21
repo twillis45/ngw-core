@@ -27,6 +27,15 @@ camera:
   lens: 100mm_macro
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/11-f/16
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Small aperture keeps the entire bottle and label in sharp focus
+    - Meter the backlight through the liquid separately to control glow intensity
+
 lights:
   - role: backlight
     modifier: stripbox

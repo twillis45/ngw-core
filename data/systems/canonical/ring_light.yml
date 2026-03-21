@@ -1,0 +1,82 @@
+id: ring_light
+name: Ring Light
+version: 1
+status: canonical
+
+pattern:
+  primary: ring_light
+  secondary: flat_fashion
+
+category: beauty
+difficulty: 1
+setup_time_minutes: 5
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 8
+  background: any
+  background_distance_ft: 4
+
+subject:
+  distance_from_camera_ft: 4
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-105mm
+  angle_to_subject_deg: 0
+
+capture_settings:
+  iso: 100-200
+  aperture: f/5.6-f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Ring light power determines your working aperture; adjust ISO if needed
+    - Keep subject close to ring for maximum wrap and signature circular catchlights
+
+lights:
+  - role: key
+    modifier: ring_light
+    angle_deg: 0
+    height: eye_level
+    height_offset_in: 0
+    distance_ft: 3
+    power_ratio: 1.0
+    notes:
+      - Camera shoots through center of ring
+      - Subject centered in ring opening
+      - Distance affects shadow intensity — closer = softer falloff
+      - Creates signature circular catchlights
+
+shadow_signature:
+  expected_pattern: flat_fashion
+  nose_shadow: directly_below
+  cheek_shadow: minimal
+  contrast: low
+  softness: 0.85
+
+failure_modes:
+  - "Subject too far from ring: loses wrap effect, shadows appear"
+  - "Camera off-center: asymmetric lighting, uneven catchlights"
+  - "Background too close: ring shadow halo visible behind subject"
+  - "Ring too powerful: blown highlights on nose and forehead"
+
+substitutions:
+  - if_missing: ring_light
+    use: beauty_dish
+    tradeoff: "Loses circular catchlight; more shadow definition"
+  - if_missing: ring_light
+    use: softbox_rect
+    tradeoff: "Rectangular catchlight; add fill from below for similar flatness"
+
+use_cases:
+  - beauty
+  - social_media_portrait
+  - fashion_close_up
+  - makeup_photography
+  - vlogging
+
+example_photographers:
+  - Fashion/beauty photographers
+  - Social media content creators

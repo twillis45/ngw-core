@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AppProvider } from './context/AppContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import { loadTheme, applyTheme } from './data/themeStore';
 import { applySettings } from './data/settingsStore';
 import { setFlag } from './modes/featureFlags';
@@ -43,8 +44,10 @@ export { _devModeUser };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AppProvider devModeUser={_devModeUser}>
-      <App />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider devModeUser={_devModeUser}>
+        <App />
+      </AppProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

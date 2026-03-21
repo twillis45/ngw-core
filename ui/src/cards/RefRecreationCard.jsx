@@ -3,6 +3,7 @@
  * Consumes recreation_setup from ReferencePhotoAnalysis.
  */
 import CollapsibleCard from './CollapsibleCard';
+import CardIcon from '../components/CardIcon';
 
 export default function RefRecreationCard({ recreationSetup }) {
   if (!recreationSetup) return null;
@@ -15,7 +16,7 @@ export default function RefRecreationCard({ recreationSetup }) {
     : null;
 
   return (
-    <CollapsibleCard icon={'\uD83D\uDEE0\uFE0F'} title="How To Recreate It" className="ref-card--recreation">
+    <CollapsibleCard icon={<CardIcon name="wrench" />} title="How To Recreate It" className="ref-card--recreation">
       <div className="ref-card__grid">
         {familyLabel && (
           <Row label="Setup Style" value={capitalize(familyLabel)} />

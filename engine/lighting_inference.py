@@ -105,6 +105,37 @@ def _infer_pattern_from_catchlights(
             "notes": ["Triangle catchlight pattern detected in one eye only."],
         }
 
+    # ── Bilateral symmetric keys: upper_left + upper_right in both eyes ──
+    # Hurley Triangle lower fill (V-flat, reflector, low panel) often produces
+    # catchlights too small/dim to register at typical image resolutions.
+    # Two flanking upper keys at ~10 and ~2 o'clock are the dominant diagnostic
+    # signal and sufficient to identify a Hurley-style setup.
+    # Guard: skip when any lower catchlight IS present — that case is handled
+    # by the full triangle path above or clamshell below.
+    def _is_bilateral_symmetric(quads: List[str]) -> bool:
+        return (
+            any(q == "upper_left" for q in quads)
+            and any(q == "upper_right" for q in quads)
+        )
+
+    _any_lower = any(q == "lower" for q in left_quads + right_quads)
+    if not _any_lower and max_per_eye >= 2:
+        left_bil = len(left_quads) >= 2 and _is_bilateral_symmetric(left_quads)
+        right_bil = len(right_quads) >= 2 and _is_bilateral_symmetric(right_quads)
+        if left_bil and right_bil:
+            return {
+                "pattern": "triangle",
+                "pattern_confidence": 0.65,
+                "key_position_text": "triangle",
+                "fill_method_text": "",
+                "light_count": 3,
+                "unrecognized_details": [],
+                "notes": [
+                    "Bilateral symmetric upper catchlights in both eyes (10 + 2 o'clock) "
+                    "— Hurley-style twin keys confirmed; lower fill not resolved."
+                ],
+            }
+
     # ── Clamshell: 2 per eye — one upper, one lower (vertically aligned) ──
     # Floor-bounce filter: lower catchlights that are significantly dimmer
     # than upper ones are likely reflections from the ground/floor, not a
@@ -225,7 +256,7 @@ def _infer_pattern_from_catchlights(
 
         if dominant_quad == "upper_left" or dominant_hour in (10, 11):
             return {
-                "pattern": "rembrandt-ish",
+                "pattern": "rembrandt",
                 "pattern_confidence": 0.5 + conf_boost,
                 "key_position_text": "45 off-axis",
                 "fill_method_text": "",
@@ -259,13 +290,13 @@ def _infer_pattern_from_catchlights(
 
         if dominant_quad in ("hard_left", "hard_right"):
             return {
-                "pattern": "split/short",
+                "pattern": "split",
                 "pattern_confidence": 0.6 + conf_boost,
                 "key_position_text": "90",
                 "fill_method_text": "",
                 "light_count": 1,
                 "unrecognized_details": [],
-                "notes": [f"Single catchlight at {dominant_hour} o'clock → split/short."],
+                "notes": [f"Single catchlight at {dominant_hour} o'clock → split."],
             }
 
         # Unusual position
@@ -348,9 +379,9 @@ def _merge_with_classification(
         "triangle": {"beauty", "high_key", "corporate"},
         "clamshell": {"beauty", "high_key"},
         "butterfly": {"beauty", "editorial", "high_key"},
-        "rembrandt-ish": {"cinematic", "editorial", "low_key"},
+        "rembrandt": {"cinematic", "editorial", "low_key"},
         "loop": {"corporate", "natural"},
-        "split/short": {"cinematic", "low_key", "editorial"},
+        "split": {"cinematic", "low_key", "editorial"},
     }
 
     notes: List[str] = []
@@ -411,6 +442,9 @@ class LightingInference:
     skin_tone_confidence: float = 0.0
     background_light_detected: bool = False
     background_light_confidence: float = 0.0
+    detected_cct_kelvin: Optional[int] = None
+    detected_distance_class: Optional[str] = None  # near | medium | far
+    detected_environment: Optional[str] = None  # studio | outdoor_sun | outdoor_shade | window_light | etc.
     unrecognized_details: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
     cue_report: Optional[Any] = None  # VisualCueReport when cue pipeline ran
@@ -441,6 +475,12 @@ class LightingInference:
         if self.background_light_detected:
             out["detected_background_light"] = True
             out["detected_background_light_confidence"] = self.background_light_confidence
+        if self.detected_cct_kelvin is not None:
+            out["detected_cct_kelvin"] = self.detected_cct_kelvin
+        if self.detected_distance_class:
+            out["detected_distance_class"] = self.detected_distance_class
+        if self.detected_environment:
+            out["detected_environment"] = self.detected_environment
         if self.cue_report is not None:
             out["cue_analysis_available"] = True
             out["cue_confidence"] = self.cue_report.overall_confidence()
@@ -451,12 +491,17 @@ class LightingInference:
 
 def _infer_background_light(
     vision_data: Dict[str, Any],
+    cue_report: Any = None,
 ) -> Dict[str, Any]:
     """Detect whether a dedicated background light was used.
 
     Background lights don't create catchlights in the eyes — they illuminate
     the backdrop behind the subject.  Detection relies on the brightness of the
     segmented background palette produced by the vision pipeline.
+
+    When cue_report is available, subject-background separation is used to
+    distinguish key-light spill (subject close to wall/backdrop) from a
+    dedicated background light.
 
     Returns dict with ``detected`` (bool) and ``confidence`` (float 0–1).
     """
@@ -484,9 +529,41 @@ def _infer_background_light(
 
     notes: List[str] = []
 
+    # Check if subject is close to the background (low separation).
+    # When subject is against a wall/backdrop, bright background is likely
+    # key-light spill, not a dedicated background light.
+    subject_close_to_bg = False
+    if cue_report is not None:
+        sep = getattr(cue_report, "subject_background_separation", None)
+        if sep is not None:
+            lum_delta = getattr(sep, "luminance_delta", None)
+            edge_sharpness = getattr(sep, "edge_sharpness", "unknown")
+            # Low luminance delta = subject and background at similar depth
+            if lum_delta is not None and lum_delta < 0.3:
+                subject_close_to_bg = True
+                notes.append(
+                    f"Low subject-background separation (delta={lum_delta:.2f}) "
+                    "— subject likely close to or against the background."
+                )
+            # Sharp boundary = no DoF blur = physically close
+            elif edge_sharpness == "sharp":
+                subject_close_to_bg = True
+                notes.append(
+                    "Sharp subject-background boundary "
+                    "— subject likely close to the background."
+                )
+
     if avg_luma > 220:
-        # Very bright — almost certainly a dedicated background light or
-        # blown-out white sweep with intentional overexposure.
+        if subject_close_to_bg:
+            # Bright but subject is against the background — likely key spill
+            # on a white wall/seamless, not a dedicated light.
+            notes.append(
+                f"Very bright background (avg luma {round(avg_luma)}) but "
+                "subject close to background — likely key light spill, "
+                "not a dedicated background light."
+            )
+            return {"detected": False, "confidence": 0.2, "notes": notes}
+        # Very bright + separated — almost certainly a dedicated background light
         notes.append(
             f"Very bright background (avg luma {round(avg_luma)}) — "
             "dedicated background light or intentionally overexposed sweep."
@@ -494,8 +571,12 @@ def _infer_background_light(
         return {"detected": True, "confidence": 0.85, "notes": notes}
 
     if avg_luma > 180:
-        # Bright background — likely a background light at reduced power
-        # or significant spill from the key light.
+        if subject_close_to_bg:
+            notes.append(
+                f"Bright background (avg luma {round(avg_luma)}) but "
+                "subject close to background — likely key light spill."
+            )
+            return {"detected": False, "confidence": 0.15, "notes": notes}
         notes.append(
             f"Bright background (avg luma {round(avg_luma)}) — "
             "likely a background light or significant key-light spill."
@@ -579,7 +660,7 @@ def infer_lighting_from_vision(
         skin_tone_conf = {"high": 0.8, "medium": 0.5, "low": 0.3}.get(conf_label, 0.3)
 
     # ── Background light ──
-    bg_result = _infer_background_light(vision_data)
+    bg_result = _infer_background_light(vision_data, cue_report=cue_report)
     all_notes.extend(bg_result.get("notes", []))
 
     # If background light detected, include it in the total light count
@@ -693,6 +774,38 @@ def infer_lighting_from_vision(
         except Exception:
             pass
 
+    # Pattern-based direction fallback: some patterns have inherent key
+    # positions.  When neither catchlights nor shadow analysis resolved
+    # a direction, use the pattern itself as a weak signal.
+    _pat = pattern_result.get("pattern", "unknown")
+    if key_side == "unknown" and _pat in ("butterfly", "clamshell"):
+        key_side = "center"   # overhead / on-axis
+        all_notes.append(
+            f"Key direction inferred as center from {_pat} pattern."
+        )
+
+    # ── Extract CCT, distance, environment from cue report ──
+    _detected_cct = None
+    _detected_distance = None
+    _detected_env = None
+
+    if cue_report is not None and cue_report.ok:
+        # Color temperature from classification or cue report
+        if classification and classification.get("colorTemperature"):
+            ct = classification["colorTemperature"]
+            if isinstance(ct, (int, float)) and ct > 0:
+                _detected_cct = int(ct)
+
+        # Environment from cue-based inference (already ran above)
+        if cue_report.cues_computed > 0:
+            try:
+                from engine.cue_inference import infer_environment
+                env_result = infer_environment(cue_report)
+                if env_result.environment_type != "unknown":
+                    _detected_env = env_result.environment_type
+            except Exception:
+                pass
+
     # Phase 2: Detect whether face mesh was available
     _cl_reason = (catchlight_data.get("reason") or "").lower() if isinstance(catchlight_data, dict) else ""
     _has_face_mesh = "no_face_mesh" not in _cl_reason
@@ -713,6 +826,9 @@ def infer_lighting_from_vision(
         skin_tone_confidence=skin_tone_conf,
         background_light_detected=bg_result["detected"],
         background_light_confidence=bg_result["confidence"],
+        detected_cct_kelvin=_detected_cct,
+        detected_distance_class=_detected_distance,
+        detected_environment=_detected_env,
         unrecognized_details=pattern_result.get("unrecognized_details", []),
         notes=all_notes,
         cue_report=cue_report,
@@ -724,15 +840,15 @@ def infer_lighting_from_vision(
 def _map_setup_family_to_pattern(setup_family: str) -> str:
     """Map setup family names to existing pattern vocabulary."""
     mapping = {
-        "single_key_rembrandt": "rembrandt-ish",
-        "single_key_split": "split/short",
+        "single_key_rembrandt": "rembrandt",
+        "single_key_split": "split",
         "single_key_loop": "loop",
         "clamshell_beauty": "clamshell",
         "triangle_headshot": "triangle",
         "butterfly_paramount": "loop",
         "window_light": "loop",
         "natural_ambient": "unknown",
-        "dramatic_chiaroscuro": "rembrandt-ish",
+        "dramatic_chiaroscuro": "rembrandt",
         "gobo_projection": "unknown",
         "slit_cut_light": "unknown",
     }
@@ -769,13 +885,13 @@ _ROLE_QUADRANT_MAP: Dict[str, Dict[str, set]] = {
     "butterfly": {
         "key": {"upper_left", "upper_right", "top_center"},
     },
-    "rembrandt-ish": {
+    "rembrandt": {
         "key": {"upper_left"},
     },
     "loop": {
         "key": {"upper_right", "top_center"},
     },
-    "split/short": {
+    "split": {
         "key": {"hard_left", "hard_right"},
     },
 }
@@ -844,7 +960,7 @@ _PATTERN_DESCRIPTIONS: Dict[str, str] = {
         "the nose. Named for the butterfly-shaped shadow it produces. A hallmark "
         "of classic Hollywood glamour and beauty photography."
     ),
-    "rembrandt-ish": (
+    "rembrandt": (
         "Rembrandt-style lighting — a single key light placed roughly 45° off-axis "
         "and above the subject, creating the signature triangle of light on the "
         "shadow-side cheek. Named after the painter's use of this dramatic yet "
@@ -856,7 +972,7 @@ _PATTERN_DESCRIPTIONS: Dict[str, str] = {
         "reaching the lip. Versatile, flattering for most face shapes, and the "
         "most commonly used portrait lighting pattern."
     ),
-    "split/short": (
+    "split": (
         "Split lighting — the key light is placed at roughly 90° to the subject, "
         "illuminating exactly half the face while leaving the other half in deep "
         "shadow. Creates maximum drama and dimension. Often used in cinematic "

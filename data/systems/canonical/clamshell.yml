@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/8-f/11
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Stop down to f/11 for maximum skin detail and sharpness
+    - Use a gray card to nail flash white balance for consistent skin tones
+
 lights:
   - role: key
     modifier: beauty_dish

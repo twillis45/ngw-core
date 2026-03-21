@@ -1,0 +1,46 @@
+{
+  "reference_id": "hurley_triangle",
+  "pattern_id": "triangle",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 3,
+  "key_direction_deg": null,
+  "shadow_pattern": "triangle",
+  "notes": "Hurley triangle setup \u2014 3 lights, two upper and one lower, even wrap",
+  "ground_truth": {
+    "expected_pattern": "triangle",
+    "acceptable_patterns": [
+      "triangle",
+      "clamshell",
+      "rembrandt",
+      "butterfly"
+    ],
+    "expected_light_count": 3,
+    "acceptable_light_count_range": [
+      3,
+      4
+    ],
+    "expected_key_direction": "unknown"
+  },
+  "benchmark_metadata": {
+    "category": "headshot",
+    "difficulty": "standard",
+    "known_challenges": [
+      "contrast gate may reject triangle if contrast is higher than expected"
+    ],
+    "added_date": "2026-03-16",
+    "promoted_to_dataset": "2026-03-17T22:27:21.180159+00:00"
+  },
+  "image_dimensions": {
+    "width": 879,
+    "height": 719
+  },
+  "ingested_at": "2026-03-17T22:27:21.180227+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

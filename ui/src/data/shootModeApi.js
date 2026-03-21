@@ -3,6 +3,8 @@
  * Calls the /api/shoot-mode/* endpoints.
  */
 
+import { apiFetch } from '../lib/apiClient';
+
 const BASE = '/api';
 
 /**
@@ -24,7 +26,7 @@ export async function startShootMode(result, ceilingHeight = null, role = 'photo
       ceilingFt: roomDimensions.ceilingFt,
     };
   }
-  const res = await fetch(`${BASE}/shoot-mode/start`, {
+  const res = await apiFetch(`${BASE}/shoot-mode/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -44,7 +46,7 @@ export async function startShootMode(result, ceilingHeight = null, role = 'photo
  * @returns {Promise<object>} { status, notes[], ... }
  */
 export async function evaluateTestShot(testShotPath, setupId = null) {
-  const res = await fetch(`${BASE}/shoot-mode/evaluate-test-shot`, {
+  const res = await apiFetch(`${BASE}/shoot-mode/evaluate-test-shot`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ testShotPath, setupId }),

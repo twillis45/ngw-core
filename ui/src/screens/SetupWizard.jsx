@@ -2,27 +2,22 @@ import { useAppState, useDispatch } from '../context/AppContext';
 import { fetchShootMatch, uploadReferenceImage } from '../api';
 import { transformShootMatch } from '../transform';
 import WizardProgress from '../wizard/WizardProgress';
-import StepMood from '../wizard/StepMood';
-import StepSubject from '../wizard/StepSubject';
-import StepEnvironment from '../wizard/StepEnvironment';
-import StepGearQuestion from '../wizard/StepGearQuestion';
+import StepTheShot from '../wizard/StepTheShot';
+import StepTheSpace from '../wizard/StepTheSpace';
 import StepGearEntry from '../wizard/StepGearEntry';
-import StepMasterMode from '../wizard/StepMasterMode';
 import StickyBottomBar from '../components/StickyBottomBar';
 import { criteriaForGear } from '../gearPresets';
 import { LIGHT_CATALOG, getGearProfile, getQualityTier } from '../data/lightCatalog';
 import { saveKit } from '../data/kitStore';
+import { loadSettings } from '../data/settingsStore';
 
 const STEP_COMPONENTS = {
-  master_mode: StepMasterMode,
-  mood: StepMood,
-  subject: StepSubject,
-  environment: StepEnvironment,
-  gear_question: StepGearQuestion,
+  the_shot: StepTheShot,
+  the_space: StepTheSpace,
   gear_entry: StepGearEntry,
 };
 
-const OUTDOOR_ENVIRONMENTS = ['outdoors', 'on_location'];
+const OUTDOOR_ENVIRONMENTS = ['on_location_outdoor', 'on_location_indoor', 'event'];
 
 const MOOD_LABELS = {
   beauty: 'Beauty', cinematic: 'Cinematic', corporate: 'Corporate',
@@ -45,15 +40,18 @@ function friendlyLightName(lightType) {
 
 function canAdvance(stepName, state) {
   switch (stepName) {
-    case 'master_mode': return true;  // optional — user can skip
-    case 'mood': return !!state.mood;
-    case 'subject': return !!state.subjectType;
-    case 'environment':
+    case 'the_shot': return !!state.mood && !!state.subjectType;
+    case 'the_space':
+      // If gear question is shown (no gearMode), cards auto-advance — no Next button
+      if (!state.gearMode) return false;
+      // Kit flow: need environment + ceiling
       if (!state.environment) return false;
-      // Outdoor auto-sets ceiling; indoor needs explicit selection
       return OUTDOOR_ENVIRONMENTS.includes(state.environment) || !!state.ceilingHeight;
-    case 'gear_question': return false; // auto-advances on card tap
-    case 'gear_entry': return state.gear.lights.length > 0;
+    case 'gear_entry': {
+      // Natural-light kits have 0 lights — allow proceeding with any gear (mods, support)
+      const { lights, modifiers, support } = state.gear;
+      return lights.length > 0 || modifiers.length > 0 || support.length > 0;
+    }
     default: return true;
   }
 }
@@ -134,7 +132,8 @@ export default function SetupWizard() {
   const currentStepName = wizardSteps[wizardStep] || 'mood';
   const StepComponent = STEP_COMPONENTS[currentStepName];
   const isLastStep = wizardStep === wizardSteps.length - 1;
-  const showNextButton = currentStepName !== 'gear_question';
+  // Hide Next when gear cards handle navigation (the_space without gearMode set)
+  const showNextButton = !(currentStepName === 'the_space' && !state.gearMode);
 
   async function handleNext() {
     if (isLastStep) {
@@ -173,8 +172,16 @@ export default function SetupWizard() {
           }
         }
 
+        // Pass pre-computed ref eval analysis so shoot-match anchors to the same
+        // pattern detection instead of re-deriving it from a fresh analysis run.
+        // This prevents divergence between what ref eval showed and the returned setup.
+        if (state.refAnalysis) {
+          shootMatchPayload.priorAnalysis = state.refAnalysis;
+        }
+
         const apiResponse = await fetchShootMatch(shootMatchPayload);
-        const result = transformShootMatch(apiResponse, { mood: effectiveMood, skinTone: state.skinTone });
+        const { powerDisplay } = loadSettings();
+        const result = transformShootMatch(apiResponse, { mood: effectiveMood, skinTone: state.skinTone, powerDisplay });
 
         // Attach reference image preview and full analysis from shoot-match response
         if (state.referenceImage?.preview) {
@@ -193,6 +200,7 @@ export default function SetupWizard() {
       }
     } else {
       dispatch({ type: 'WIZARD_NEXT' });
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
   }
 
@@ -214,7 +222,7 @@ export default function SetupWizard() {
             disabled={!canAdvance(currentStepName, state)}
             onClick={handleNext}
           >
-            {isLastStep ? (state.intent === 'edit_kit' ? 'Save Kit \u2192' : 'Get My Setup \u2192') : 'Next \u2192'}
+            {isLastStep ? (state.intent === 'edit_kit' ? 'Save Kit \u2192' : 'Run this setup \u2192') : 'Next \u2192'}
           </button>
         </StickyBottomBar>
       )}

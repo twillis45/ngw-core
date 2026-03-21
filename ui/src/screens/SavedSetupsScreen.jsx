@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { loadSetups, deleteSetup } from '../data/setupStore';
+import { trackEvent } from '../data/analytics';
 
 const FILTERS = [
   { value: 'all', label: 'All' },
@@ -13,11 +14,22 @@ export default function SavedSetupsScreen() {
   const [setups, setSetups] = useState(() => loadSetups());
   const [filter, setFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
+  const [recreateId, setRecreateId] = useState(null);
 
   const filtered = filter === 'all' ? setups : setups.filter(s => s.tag === filter);
 
   function handleLoad(setup) {
     dispatch({ type: 'SET_RESULT', result: setup.result, apiResponse: null });
+    dispatch({ type: 'NAVIGATE', screen: 'results' });
+    trackEvent('SETUP_LOADED', { setupId: setup.id, name: setup.name });
+  }
+
+  // Phase 7: Recreate flow — load the saved result and enter Shoot Mode
+  function handleRecreate(setup) {
+    dispatch({ type: 'SET_RESULT', result: setup.result, apiResponse: null });
+    dispatch({ type: 'SET_APP_MODE', mode: 'shoot' });
+    dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+    trackEvent('SETUP_RECREATED', { setupId: setup.id, name: setup.name });
   }
 
   function handleDelete(id) {
@@ -44,7 +56,7 @@ export default function SavedSetupsScreen() {
           </svg>
           <p>No saved setups yet.</p>
           <p style={{ fontSize: 'var(--text-sm)', marginTop: 8 }}>
-            After getting results, tap "Save Setup" to bookmark it here.
+            Lock a setup after dialing it in — run it again on your next shoot.
           </p>
         </div>
       </div>
@@ -86,6 +98,20 @@ export default function SavedSetupsScreen() {
               <span className="saved-setup-card__date">{formatDate(setup.timestamp)}</span>
             </div>
           </div>
+
+          {/* Run again — enter Shoot Mode with this saved result */}
+          <button
+            className="saved-setup-card__recreate"
+            onClick={(e) => { e.stopPropagation(); handleRecreate(setup); }}
+            type="button"
+            title="Run this setup again in Shoot Mode"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Run again
+          </button>
+
           <button
             className="saved-setup-card__delete"
             onClick={(e) => { e.stopPropagation(); handleDelete(setup.id); }}

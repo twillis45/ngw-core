@@ -1,0 +1,74 @@
+{
+  "run_timestamp": "2026-03-21T18:55:56.412062+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 0,
+    "FAIL": 1,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "editorial_rim_key",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "ring_light",
+          "expected": "editorial_rim_key",
+          "acceptable": [
+            "editorial_rim_key",
+            "rim_only",
+            "split",
+            "short",
+            "low_key",
+            "gobo",
+            "loop",
+            "rembrandt",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "ring_light",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.92,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "diagnostics": {
+        "face_quality": "partial",
+        "face_detected": true,
+        "signals_available": 22,
+        "signals_total": 24,
+        "signal_strength": 0.621,
+        "weak_signals": [],
+        "missing_signals": [
+          "catchlight_position",
+          "reflection_architecture"
+        ],
+        "ambiguity_flags": [
+          "multiple_patterns_close_confidence",
+          "bw_limits_color_cues"
+        ],
+        "pattern_reasoning": "Pattern 'ring_light' selected by specialty:reference_read (confidence 92%). shadow edge hardness indicates soft.",
+        "edge_cases": [
+          "bw_processing",
+          "blown_highlights"
+        ]
+      },
+      "timing_s": 1.56
+    }
+  ]
+}

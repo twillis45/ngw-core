@@ -466,25 +466,28 @@ def _call_openai_recon(signal_json: str) -> Dict[str, Any]:
     except ImportError:
         raise RuntimeError("openai package not installed. Run: pip install openai")
 
-    from engine.vlm import _VLM_PROVIDER, _VLM_MODEL
+    from engine.vlm import _VLM_MODEL, _call_with_retry
 
     client = OpenAI()
-    response = client.chat.completions.create(
-        model=_VLM_MODEL,
-        messages=[
-            {"role": "system", "content": _RECON_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": f"{_RECON_USER_PROMPT}\n\n{signal_json}",
-            },
-        ],
-        max_tokens=3000,
-        temperature=0.15,
-        response_format={"type": "json_object"},
-    )
 
-    raw_text = response.choices[0].message.content or "{}"
-    return json.loads(raw_text)
+    def _do_call(_unused: str) -> Dict[str, Any]:
+        response = client.chat.completions.create(
+            model=_VLM_MODEL,
+            messages=[
+                {"role": "system", "content": _RECON_SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"{_RECON_USER_PROMPT}\n\n{signal_json}",
+                },
+            ],
+            max_tokens=3000,
+            temperature=0.15,
+            response_format={"type": "json_object"},
+        )
+        raw_text = response.choices[0].message.content or "{}"
+        return json.loads(raw_text)
+
+    return _call_with_retry(_do_call, signal_json, "OpenAI")
 
 
 def _call_anthropic_recon(signal_json: str) -> Dict[str, Any]:
@@ -494,28 +497,31 @@ def _call_anthropic_recon(signal_json: str) -> Dict[str, Any]:
     except ImportError:
         raise RuntimeError("anthropic package not installed. Run: pip install anthropic")
 
-    from engine.vlm import _VLM_MODEL
+    from engine.vlm import _VLM_MODEL, _call_with_retry
 
     client = Anthropic()
-    response = client.messages.create(
-        model=_VLM_MODEL,
-        max_tokens=3000,
-        system=_RECON_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"{_RECON_USER_PROMPT}\n\n{signal_json}",
-            },
-        ],
-    )
 
-    raw_text = response.content[0].text or "{}"
-    # Strip markdown fencing if present
-    if raw_text.startswith("```"):
-        lines = raw_text.split("\n")
-        lines = [line for line in lines if not line.strip().startswith("```")]
-        raw_text = "\n".join(lines)
-    return json.loads(raw_text)
+    def _do_call(_unused: str) -> Dict[str, Any]:
+        response = client.messages.create(
+            model=_VLM_MODEL,
+            max_tokens=3000,
+            system=_RECON_SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{_RECON_USER_PROMPT}\n\n{signal_json}",
+                },
+            ],
+        )
+        raw_text = response.content[0].text or "{}"
+        # Strip markdown fencing if present
+        if raw_text.startswith("```"):
+            lines = raw_text.split("\n")
+            lines = [line for line in lines if not line.strip().startswith("```")]
+            raw_text = "\n".join(lines)
+        return json.loads(raw_text)
+
+    return _call_with_retry(_do_call, signal_json, "Anthropic")
 
 
 # ── Response parser ───────────────────────────────────────────────────────

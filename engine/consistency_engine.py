@@ -233,9 +233,11 @@ def score_consistency(
 
         if len(signals) < 2:
             # Need at least 2 passes to compare
+            _s = 1.0 if len(signals) == 1 else 0.0
             scores.append(ConsistencyScore(
                 dimension=dimension,
-                score=1.0 if len(signals) == 1 else 0.0,
+                score=_s,
+                overall_score=_s,
                 total_pairs=0,
                 agreeing_pairs=0,
                 notes=[f"Only {len(signals)} pass(es) report {dimension}"],
@@ -255,6 +257,7 @@ def score_consistency(
         scores.append(ConsistencyScore(
             dimension=dimension,
             score=round(score, 3),
+            overall_score=round(score, 3),
             total_pairs=total_pairs,
             agreeing_pairs=agreeing_pairs,
             agreements=agreements,

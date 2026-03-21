@@ -1,3 +1,5 @@
+import CardIcon from '../components/CardIcon';
+
 export default function OtherSetupsCard({ alternatives, substitutions }) {
   const hasAlts = alternatives && alternatives.length > 0;
   const hasSubs = substitutions && substitutions.length > 0;
@@ -6,7 +8,7 @@ export default function OtherSetupsCard({ alternatives, substitutions }) {
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\u{1F504}'}</span>
+        <CardIcon name="refresh" />
         <span>Alternative Setups</span>
       </div>
 

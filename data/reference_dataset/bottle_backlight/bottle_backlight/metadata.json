@@ -1,0 +1,49 @@
+{
+  "reference_id": "bottle_backlight",
+  "pattern_id": "bottle_backlight",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "community",
+  "entry_trust_score": 0.7,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 2,
+  "key_direction_deg": null,
+  "shadow_pattern": "bottle_backlight",
+  "notes": "Bottle backlight product shot \u2014 perfume bottle backlit on black, light transmits through glass, reflective surface",
+  "ground_truth": {
+    "expected_pattern": "bottle_backlight",
+    "acceptable_patterns": [
+      "bottle_backlight",
+      "rim_only",
+      "low_key",
+      "unknown"
+    ],
+    "expected_light_count": 2,
+    "acceptable_light_count_range": [
+      1,
+      4
+    ],
+    "expected_key_direction": "unknown"
+  },
+  "benchmark_metadata": {
+    "category": "product",
+    "difficulty": "hard",
+    "known_challenges": [
+      "no face \u2014 face mesh and catchlight analysis unavailable",
+      "product photography pattern not in core portrait classifiers",
+      "translucent glass creates complex light transmission",
+      "reflective surface on base adds specular complexity"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.091161+00:00"
+  },
+  "image_dimensions": {
+    "width": 473,
+    "height": 605
+  },
+  "ingested_at": "2026-03-17T22:27:21.091231+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

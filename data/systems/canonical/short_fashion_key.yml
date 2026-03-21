@@ -26,6 +26,15 @@ camera:
   lens: 85-200mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/5.6-f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - f/5.6 isolates subject for fashion look; meter the narrow lit cheek for exposure
+    - Sync speed of 1/160 kills ambient to keep background dark and controlled
+
 lights:
   - role: key
     modifier: softbox_octa

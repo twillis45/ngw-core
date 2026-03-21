@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { uploadReferenceImage } from '../api';
 
 function comparePalettes(testPalette, refPalette) {
@@ -33,6 +33,27 @@ export default function TestShotCard({ setupName, refAnalysis }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef(null);
+
+  // Paste support
+  useEffect(() => {
+    if (preview) return; // already have a shot loaded
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            const fakeEvent = { target: { files: [file] } };
+            handleFile(fakeEvent);
+          }
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleFile(e) {
     const file = e.target.files?.[0];
@@ -105,18 +126,23 @@ export default function TestShotCard({ setupName, refAnalysis }) {
       />
 
       {!preview ? (
-        <button
-          className="btn btn--ghost"
-          onClick={() => inputRef.current?.click()}
-          style={{ width: '100%', marginTop: 'var(--space-sm)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          Upload a test shot from your camera
-        </button>
+        <>
+          <button
+            className="btn btn--ghost"
+            onClick={() => inputRef.current?.click()}
+            style={{ width: '100%', marginTop: 'var(--space-sm)' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Upload, drop, or paste a test shot
+          </button>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', textAlign: 'center', marginTop: 6 }}>
+            Same scene, same subject · JPEG · PNG · HEIC · 10 MB max · face filling the frame compares best
+          </p>
+        </>
       ) : (
         <>
           <div style={{

@@ -288,7 +288,7 @@ class TestReferenceDiagram:
         assert key.height_m > fill.height_m
 
     def test_rembrandt_single_key_at_45(self):
-        d = build_reference_diagram(pattern="rembrandt-ish", modifier_family="beauty_dish")
+        d = build_reference_diagram(pattern="rembrandt", modifier_family="beauty_dish")
         assert len(d.lights) == 1
         assert d.lights[0].angle_deg == 45.0
         assert d.lights[0].modifier == "beauty_dish"
@@ -299,7 +299,7 @@ class TestReferenceDiagram:
         assert d.lights[0].angle_deg == 30.0
 
     def test_split_single_key_at_90(self):
-        d = build_reference_diagram(pattern="split/short")
+        d = build_reference_diagram(pattern="split")
         assert len(d.lights) == 1
         assert d.lights[0].angle_deg == 90.0
 
@@ -316,7 +316,7 @@ class TestReferenceDiagram:
 
     def test_all_patterns_produce_valid_spec(self):
         """Every pattern produces a valid DiagramSpec with sane bounds."""
-        for pat in ["triangle", "clamshell", "rembrandt-ish", "loop", "split/short", "unknown"]:
+        for pat in ["triangle", "clamshell", "rembrandt", "loop", "split", "unknown"]:
             d = build_reference_diagram(pattern=pat)
             assert isinstance(d, DiagramSpec)
             assert d.system_id == "reference_detected"
@@ -332,7 +332,7 @@ class TestReferenceDiagram:
 class TestReferenceDiagramBackgroundLight:
     def test_background_light_added_when_flag_true(self):
         """background_light=True should add a background role light."""
-        d = build_reference_diagram(pattern="rembrandt-ish", background_light=True)
+        d = build_reference_diagram(pattern="rembrandt", background_light=True)
         roles = [l.role for l in d.lights]
         assert "background" in roles
         bg = next(l for l in d.lights if l.role == "background")
@@ -342,7 +342,7 @@ class TestReferenceDiagramBackgroundLight:
 
     def test_no_background_light_by_default(self):
         """Without background_light flag, no background role should exist."""
-        d = build_reference_diagram(pattern="rembrandt-ish")
+        d = build_reference_diagram(pattern="rembrandt")
         roles = [l.role for l in d.lights]
         assert "background" not in roles
 
@@ -381,7 +381,7 @@ class TestReferenceDiagramBackgroundLight:
 
     def test_all_patterns_valid_with_background(self):
         """Every pattern with background light should produce valid specs."""
-        for pat in ["triangle", "clamshell", "rembrandt-ish", "loop", "split/short", "unknown"]:
+        for pat in ["triangle", "clamshell", "rembrandt", "loop", "split", "unknown"]:
             d = build_reference_diagram(pattern=pat, background_light=True)
             assert isinstance(d, DiagramSpec)
             bg_lights = [l for l in d.lights if l.role == "background"]

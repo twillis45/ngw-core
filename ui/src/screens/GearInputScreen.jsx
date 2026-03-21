@@ -7,6 +7,7 @@ import GearModeToggle from '../components/GearModeToggle';
 import LightEntry from '../components/LightEntry';
 import ModifierChips from '../components/ModifierChips';
 import StickyBottomBar from '../components/StickyBottomBar';
+import { loadSettings } from '../data/settingsStore';
 
 /** Build a photographer-friendly name for each light system.
  *  Priority: user-entered brand → gear-type short name.
@@ -85,13 +86,15 @@ export default function GearInputScreen() {
           } catch (_) { /* proceed without image */ }
         }
         const apiResponse = await fetchShootMatch(wizardState);
-        const result = transformShootMatch(apiResponse);
+        const { powerDisplay } = loadSettings();
+        const result = transformShootMatch(apiResponse, { powerDisplay });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       } else {
         // Fallback: legacy /recommend flow
         const payload = buildPayload(state);
         const apiResponse = await fetchRecommendation(payload);
-        const result = transformForUI(apiResponse, state.mood || 'corporate');
+        const { powerDisplay } = loadSettings();
+        const result = transformForUI(apiResponse, state.mood || 'corporate', null, { powerDisplay });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       }
     } catch (err) {

@@ -21,6 +21,7 @@ import base64
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -32,6 +33,7 @@ from engine.image_analysis_models import (
     VLMHighlightSignals,
     VLMCatchlightSignals,
     VLMReconstructionEstimates,
+    ColorPalette,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,11 +43,12 @@ logger = logging.getLogger(__name__)
 _VLM_PROVIDER = os.environ.get("VLM_PROVIDER", "auto").lower().strip()
 _VLM_MODEL = os.environ.get("VLM_MODEL", "")
 
-# Auto-detect provider: use OpenAI if key is set, otherwise disable.
-# No fallback to Anthropic — provider must be set explicitly.
+# Auto-detect provider: prefer OpenAI, fall back to Anthropic, then disable.
 if _VLM_PROVIDER == "auto":
     if os.environ.get("OPENAI_API_KEY"):
         _VLM_PROVIDER = "openai"
+    elif os.environ.get("ANTHROPIC_API_KEY"):
+        _VLM_PROVIDER = "anthropic"
     else:
         _VLM_PROVIDER = "none"
 
@@ -151,6 +154,24 @@ Return a JSON object with two sections:
       "background_distance_category": "<'close' (2-4ft) | 'moderate' (5-10ft) | 'far' (10ft+) | 'infinity' (outdoor/sky) | null>",
       "confidence": <float 0.0-1.0>,
       "notes": ["<reasoning for your reconstruction estimates>"]
+    },
+    "color_palette": {
+      "dominant_colors": ["<list ALL significant colors in the scene — minimum 4, up to 8 — ordered by visual weight. MUST include clothing/garment colors, prop colors, skin tone, background. Use specific names: 'vivid red', 'deep crimson', 'warm caramel skin', 'dark teal', etc. Do not skip saturated accent colors even if small.>"],
+      "dominant_color_hexes": ["<one approximate hex code per dominant_color in the same order — e.g. '#C14B3E', '#3A2E2B'. Best-effort estimate. Must have same count as dominant_colors.>"],
+      "contrasting_pairs": ["<list ALL notable color contrasts — e.g. 'red garment vs green background (complementary)', 'warm skin vs cool teal backdrop (warm/cool split)', 'bright highlight vs deep shadow (value contrast)', 'saturated clothing vs neutral background'>"],
+      "color_temperature_key": "<describe key light color: 'Warm (tungsten/gold, ~3200-4000K)' | 'Neutral (daylight strobe, ~5500K)' | 'Cool (shade/HMI, ~6500K+)' | 'Mixed' or null>",
+      "color_temperature_shadows": "<describe shadow/fill color: same options as color_temperature_key, or 'Neutral grey' | null>",
+      "warm_cool_split": <true if there is a deliberate warm key vs cool shadow or vice versa, else false>,
+      "background_color": "<describe background color and tone — e.g. 'dark teal', 'white', 'warm grey', 'graduated black-to-grey', 'black' or null>",
+      "color_harmony": "<PRIMARY harmony — best single label: 'analogous' | 'complementary' | 'split_complementary' | 'triadic' | 'monochromatic' | 'neutral' | 'warm_cool_split' | 'unknown'>",
+      "alternate_harmonies": ["<list any OTHER applicable harmony labels from the same set — e.g. if primary is 'complementary' and there is also a warm/cool split, include 'warm_cool_split'. May be empty.>"],
+      "harmony_swatches": {
+        "<harmony_name e.g. 'complementary'>": ["<2-4 hex codes from dominant_color_hexes that BEST represent this harmony — e.g. the complementary pair, the analogous cluster, the triadic trio. Use hex codes, not names.>"]
+      },
+      "palette_character": "<1-sentence description of the palette character — e.g. 'Muted, desaturated — dark tones with one vivid accent' or 'Saturated bold complementary contrast — red garment vs green tones'>",
+      "color_grading_notes": "<any visible post-processing colour treatment — e.g. 'Shadows lifted with blue-teal cast' or 'High contrast, minimal colour grading' or null>",
+      "confidence": <float 0.0-1.0>,
+      "notes": ["<brief reasoning for color observations>"]
     }
   }
 }
@@ -199,6 +220,47 @@ def _guess_mime(image_path: str) -> str:
     }.get(ext, "image/jpeg")
 
 
+# ── Retry helper ─────────────────────────────────────────────────────────
+
+_RETRY_DELAYS = (2, 5, 15)  # seconds between attempts (3 retries = 4 total attempts)
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    """Return True if the exception is a 429 rate-limit error from any provider."""
+    # OpenAI SDK raises openai.RateLimitError (status_code 429)
+    # Anthropic SDK raises anthropic.RateLimitError (status_code 429)
+    # Both inherit from their SDK's APIStatusError which has a .status_code attr.
+    # We also catch generic HTTP errors that carry a 429 in their message.
+    cls_name = type(exc).__name__
+    if "RateLimit" in cls_name:
+        return True
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+        return True
+    return "429" in str(exc)
+
+
+def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
+    """Call fn(image_path) with exponential back-off on 429 rate-limit errors."""
+    last_exc: Exception = RuntimeError("unreachable")
+    for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+        try:
+            return fn(image_path)
+        except Exception as exc:
+            last_exc = exc
+            if _is_rate_limit_error(exc) and delay is not None:
+                logger.warning(
+                    "%s VLM rate-limited (429) on attempt %d — retrying in %ds",
+                    provider_name, attempt, delay,
+                )
+                time.sleep(delay)
+            else:
+                raise
+    # All retries exhausted
+    logger.error("%s VLM still rate-limited after %d attempts", provider_name, len(_RETRY_DELAYS) + 1)
+    raise last_exc
+
+
 # ── Provider: OpenAI ─────────────────────────────────────────────────────
 
 def _call_openai(image_path: str) -> Dict[str, Any]:
@@ -214,31 +276,33 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
 
-    response = client.chat.completions.create(
-        model=_VLM_MODEL,
-        messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": _USER_PROMPT},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime};base64,{b64}",
-                            "detail": "high",
+    def _do_call(_image_path: str) -> Dict[str, Any]:
+        response = client.chat.completions.create(
+            model=_VLM_MODEL,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": _USER_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime};base64,{b64}",
+                                "detail": "high",
+                            },
                         },
-                    },
-                ],
-            },
-        ],
-        max_tokens=2200,
-        temperature=0.2,
-        response_format={"type": "json_object"},
-    )
+                    ],
+                },
+            ],
+            max_tokens=2200,
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        raw_text = response.choices[0].message.content or "{}"
+        return json.loads(raw_text)
 
-    raw_text = response.choices[0].message.content or "{}"
-    return json.loads(raw_text)
+    return _call_with_retry(_do_call, image_path, "OpenAI")
 
 
 # ── Provider: Anthropic ──────────────────────────────────────────────────
@@ -256,36 +320,37 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
 
-    response = client.messages.create(
-        model=_VLM_MODEL,
-        max_tokens=2200,
-        system=_SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime,
-                            "data": b64,
+    def _do_call(_image_path: str) -> Dict[str, Any]:
+        response = client.messages.create(
+            model=_VLM_MODEL,
+            max_tokens=2200,
+            system=_SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": mime,
+                                "data": b64,
+                            },
                         },
-                    },
-                    {"type": "text", "text": _USER_PROMPT},
-                ],
-            },
-        ],
-    )
+                        {"type": "text", "text": _USER_PROMPT},
+                    ],
+                },
+            ],
+        )
+        raw_text = response.content[0].text or "{}"
+        # Strip markdown fencing if present
+        if raw_text.startswith("```"):
+            lines = raw_text.split("\n")
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            raw_text = "\n".join(lines)
+        return json.loads(raw_text)
 
-    raw_text = response.content[0].text or "{}"
-    # Strip markdown fencing if present
-    if raw_text.startswith("```"):
-        lines = raw_text.split("\n")
-        # Remove first and last lines (```json and ```)
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        raw_text = "\n".join(lines)
-    return json.loads(raw_text)
+    return _call_with_retry(_do_call, image_path, "Anthropic")
 
 
 # ── Signal parsing ───────────────────────────────────────────────────────
@@ -317,9 +382,10 @@ def _parse_signals(raw_signals: Dict[str, Any]) -> Optional[VLMSignals]:
     reconstruction = _try_model(
         VLMReconstructionEstimates, raw_signals.get("reconstruction")
     )
+    color_palette = _try_model(ColorPalette, raw_signals.get("color_palette"))
 
     # If everything is None, don't create a VLMSignals wrapper
-    if all(v is None for v in (geometry, shadows, highlights, catchlights, reconstruction)):
+    if all(v is None for v in (geometry, shadows, highlights, catchlights, reconstruction, color_palette)):
         return None
 
     return VLMSignals(
@@ -328,6 +394,7 @@ def _parse_signals(raw_signals: Dict[str, Any]) -> Optional[VLMSignals]:
         highlights=highlights,
         catchlights=catchlights,
         reconstruction=reconstruction,
+        color_palette=color_palette,
     )
 
 
@@ -352,8 +419,17 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         return None
 
     try:
+        raw = None
         if _VLM_PROVIDER == "openai":
-            raw = _call_openai(image_path)
+            try:
+                raw = _call_openai(image_path)
+            except Exception as openai_exc:
+                # Fallback to Anthropic if OpenAI fails (quota, rate limit, etc.)
+                if os.environ.get("ANTHROPIC_API_KEY"):
+                    logger.warning("OpenAI VLM failed (%s), falling back to Anthropic", openai_exc)
+                    raw = _call_anthropic(image_path)
+                else:
+                    raise openai_exc
         elif _VLM_PROVIDER == "anthropic":
             raw = _call_anthropic(image_path)
         else:

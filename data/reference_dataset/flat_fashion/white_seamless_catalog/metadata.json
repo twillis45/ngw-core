@@ -1,0 +1,50 @@
+{
+  "reference_id": "white_seamless_catalog",
+  "pattern_id": "flat_fashion",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 2,
+  "key_direction_deg": null,
+  "shadow_pattern": "flat_fashion",
+  "notes": "White seamless catalog \u2014 full body on white seamless, even studio lighting, e-commerce/catalog style",
+  "ground_truth": {
+    "expected_pattern": "flat_fashion",
+    "acceptable_patterns": [
+      "flat_fashion",
+      "high_key",
+      "butterfly",
+      "rembrandt",
+      "loop",
+      "unknown"
+    ],
+    "expected_light_count": 2,
+    "acceptable_light_count_range": [
+      1,
+      4
+    ],
+    "expected_key_direction": "unknown"
+  },
+  "benchmark_metadata": {
+    "category": "catalog",
+    "difficulty": "standard",
+    "known_challenges": [
+      "full body shot \u2014 face is small relative to frame",
+      "white seamless creates blown edges",
+      "catalog lighting is intentionally pattern-less \u2014 minimal shadows"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.278239+00:00"
+  },
+  "image_dimensions": {
+    "width": 640,
+    "height": 960
+  },
+  "ingested_at": "2026-03-17T22:27:21.278307+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

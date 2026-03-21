@@ -75,6 +75,7 @@ def select_best_system(
     *,
     input_ctx: Optional[Dict[str, Any]] = None,
     modifiers_available: Optional[List[str]] = None,
+    solver_quality: Optional[Dict[str, Any]] = None,
 ) -> SelectorOutcome:
     if not systems:
         raise ValueError("systems must be non-empty")
@@ -83,7 +84,7 @@ def select_best_system(
 
     picks: List[SelectionPick] = []
     for rank_seed, system in enumerate(systems, start=1):
-        breakdown = score_system(system, input_ctx=input_ctx)
+        breakdown = score_system(system, input_ctx=input_ctx, solver_quality=solver_quality)
         diagram_spec = build_diagram_spec(system, modifiers_available=modifiers_available, master_mode=master_mode)
         picks.append(
             SelectionPick(

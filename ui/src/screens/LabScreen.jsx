@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
+import LearningOpsTab from '../components/lab/LearningOpsTab';
+import BenchmarkTab from '../components/lab/BenchmarkTab';
+import SignalsTab from '../components/lab/SignalsTab';
 import {
   analyzeImage,
   listGoldSet,
@@ -7,6 +10,7 @@ import {
   updateGoldSetEntry,
   deleteGoldSetEntry,
   evaluateGoldSet,
+  getGoldSetImageUrl,
   listCandidates,
   createCandidate,
   updateCandidate,
@@ -20,25 +24,83 @@ import {
   approveReference,
   rejectReference,
   reprocessReference,
+  updateReferenceMetadata,
+  labFetchBlob,
 } from '../data/labApi';
+
+/**
+ * AuthImage — fetches a lab image endpoint with Bearer auth and renders it.
+ * Handles object URL lifecycle (create on mount, revoke on unmount/change).
+ */
+function AuthImage({ path, alt, className, style }) {
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!path) return;
+    let objectUrl = null;
+    setError(false);
+    setSrc(null);
+    labFetchBlob(path)
+      .then(url => { objectUrl = url; setSrc(url); })
+      .catch(() => setError(true));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [path]);
+
+  if (error) {
+    return (
+      <div className={className} style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-surface)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)' }}>
+        Image unavailable
+      </div>
+    );
+  }
+  if (!src) {
+    return (
+      <div className={className} style={{ ...style, background: 'var(--color-surface-elevated)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+    );
+  }
+  return <img src={src} alt={alt} className={className} style={style} />;
+}
 
 /**
  * NGW Lab — internal dev tools.
  * Protected by enable_lab feature flag + logged-in user.
- * Three tabs: Workbench, Gold Set, Candidates.
+ * Tabs: Workbench, Gold Set, Candidates, Reference Dataset, Learning Ops.
  */
 export default function LabScreen() {
-  const { user } = useAppState();
+  const { user, labPendingImage } = useAppState();
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('workbench');
   const [goldSetPrefill, setGoldSetPrefill] = useState(null);
   const [candidatePrefill, setCandidatePrefill] = useState(null);
+  // Track what's currently loaded in WorkbenchTab so Gold Set can mirror it
+  const [workbenchSnapshot, setWorkbenchSnapshot] = useState(null);
+
+  // Intercept all tab switches so we can auto-populate Gold Set from workbench
+  function handleTabSwitch(tabId) {
+    if (tabId === 'gold_set' && workbenchSnapshot && !goldSetPrefill) {
+      setGoldSetPrefill({
+        image_path:        workbenchSnapshot.imagePath || '',
+        expected_analysis: workbenchSnapshot.result
+          ? (workbenchSnapshot.result.reference_analysis || workbenchSnapshot.result.description || {})
+          : {},
+        notes:             workbenchSnapshot.imagePath
+          ? `Workbench analysis ${new Date().toLocaleDateString()}`
+          : '',
+        imagePreview: workbenchSnapshot.preview,
+        imageFile:    workbenchSnapshot.file,
+      });
+    }
+    setActiveTab(tabId);
+  }
 
   function handleSaveToGoldSet(result) {
     setGoldSetPrefill({
       image_path: result.image_path || '',
       expected_analysis: result.reference_analysis || result.description || {},
       notes: `Workbench analysis ${new Date().toLocaleDateString()}`,
+      imagePreview: workbenchSnapshot?.preview || null,
+      imageFile:    workbenchSnapshot?.file    || null,
     });
     setActiveTab('gold_set');
   }
@@ -77,10 +139,13 @@ export default function LabScreen() {
   }
 
   const tabs = [
-    { id: 'workbench', label: 'Workbench' },
-    { id: 'gold_set', label: 'Gold Set' },
-    { id: 'candidates', label: 'Candidates' },
+    { id: 'workbench',   label: 'Workbench' },
+    { id: 'gold_set',    label: 'Gold Set' },
+    { id: 'candidates',  label: 'Candidates' },
     { id: 'ref_dataset', label: 'Reference Dataset' },
+    { id: 'signals',     label: 'Signals' },
+    { id: 'learning',    label: 'Learning Ops' },
+    { id: 'benchmarks',  label: 'Benchmarks' },
   ];
 
   return (
@@ -96,34 +161,53 @@ export default function LabScreen() {
           <button
             key={tab.id}
             className={`lab-tab${activeTab === tab.id ? ' lab-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabSwitch(tab.id)}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ── Tab Content ── */}
+      {/* ── Tab Content ──
+           All tabs stay mounted once the lab screen loads so:
+           - Tab switches are instant (no re-fetch, no skeleton flash)
+           - Workbench result is preserved when checking Signals and back
+           - Data-heavy tabs (Benchmark, LearningOps) pre-load in background
+      ── */}
       <div className="lab-content">
-        {activeTab === 'workbench' && (
+        <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
           <WorkbenchTab
             onSaveToGoldSet={handleSaveToGoldSet}
             onProposeRule={handleProposeRule}
+            pendingImage={labPendingImage}
+            onPendingConsumed={() => dispatch({ type: 'CLEAR_LAB_PENDING_IMAGE' })}
+            onWorkbenchChange={setWorkbenchSnapshot}
           />
-        )}
-        {activeTab === 'gold_set' && (
+        </div>
+        <div style={{ display: activeTab === 'gold_set' ? 'block' : 'none' }}>
           <GoldSetTab
             prefill={goldSetPrefill}
             onPrefillConsumed={() => setGoldSetPrefill(null)}
           />
-        )}
-        {activeTab === 'candidates' && (
+        </div>
+        <div style={{ display: activeTab === 'candidates' ? 'block' : 'none' }}>
           <CandidatesTab
             prefill={candidatePrefill}
             onPrefillConsumed={() => setCandidatePrefill(null)}
           />
-        )}
-        {activeTab === 'ref_dataset' && <ReferenceDatasetTab />}
+        </div>
+        <div style={{ display: activeTab === 'ref_dataset' ? 'block' : 'none' }}>
+          <ReferenceDatasetTab />
+        </div>
+        <div style={{ display: activeTab === 'signals' ? 'block' : 'none' }}>
+          <SignalsTab />
+        </div>
+        <div style={{ display: activeTab === 'learning' ? 'block' : 'none' }}>
+          <LearningOpsTab />
+        </div>
+        <div style={{ display: activeTab === 'benchmarks' ? 'block' : 'none' }}>
+          <BenchmarkTab />
+        </div>
       </div>
 
       {/* Back */}
@@ -142,29 +226,176 @@ export default function LabScreen() {
 
 
 /* ═══════════════════════════════════════════════════════════
+   JsonTree — collapsible JSON explorer
+   ═══════════════════════════════════════════════════════════ */
+
+const JsonTree_INDENT = 16; // px per level
+
+function JsonNode({ k, value, depth, defaultOpen }) {
+  const isObj = value !== null && typeof value === 'object';
+  const isArr = Array.isArray(value);
+  const childCount = isObj ? Object.keys(value).length : 0;
+  const [open, setOpen] = useState(defaultOpen ?? depth < 2);
+
+  const keyStyle = { color: 'var(--color-text-secondary)', userSelect: 'text' };
+  const bracket = isArr ? ['[', `] (${childCount})`] : ['{', `} (${childCount})`];
+
+  if (isObj && childCount === 0) {
+    return (
+      <div style={{ paddingLeft: depth * JsonTree_INDENT }}>
+        {k !== null && <span style={keyStyle}>{k}: </span>}
+        <span style={{ color: 'var(--color-text-secondary)' }}>{isArr ? '[]' : '{}'}</span>
+      </div>
+    );
+  }
+
+  if (isObj) {
+    return (
+      <div style={{ paddingLeft: depth * JsonTree_INDENT }}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          style={{ background: 'none', border: 'none', padding: '1px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', fontSize: 'inherit', color: 'inherit', width: '100%', textAlign: 'left' }}
+        >
+          <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', width: 10, flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
+          {k !== null && <span style={keyStyle}>{k}:&nbsp;</span>}
+          <span style={{ color: 'var(--color-text-secondary)' }}>
+            {open ? bracket[0] : `${bracket[0]}…${bracket[1]}`}
+          </span>
+        </button>
+        {open && (
+          <>
+            {(isArr ? value : Object.entries(value)).map((item, i) => {
+              const [ck, cv] = isArr ? [i, item] : item;
+              return <JsonNode key={ck} k={ck} value={cv} depth={depth + 1} />;
+            })}
+            <div style={{ paddingLeft: 14, color: 'var(--color-text-secondary)' }}>{isArr ? ']' : '}'}</div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // Primitive
+  let valStyle;
+  if (value === null || value === undefined)   valStyle = { color: 'var(--color-text-secondary)' };
+  else if (typeof value === 'boolean')          valStyle = { color: '#FBBF24' };
+  else if (typeof value === 'number')           valStyle = { color: '#60A5FA' };
+  else                                          valStyle = { color: '#4ADE80' };
+
+  const display = value === null ? 'null'
+    : typeof value === 'string' ? `"${value}"`
+    : String(value);
+
+  return (
+    <div style={{ paddingLeft: depth * JsonTree_INDENT, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {k !== null && <span style={keyStyle}>{k}:&nbsp;</span>}
+      <span style={{ ...valStyle, wordBreak: 'break-all', userSelect: 'text' }}>{display}</span>
+    </div>
+  );
+}
+
+function JsonTree({ data, defaultOpen }) {
+  return (
+    <div style={{
+      fontFamily: 'var(--font-mono, monospace)',
+      fontSize: 'var(--text-xs)',
+      lineHeight: 1.7,
+      padding: 'var(--space-sm)',
+      background: 'var(--color-surface)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 'var(--radius-md)',
+      overflow: 'auto',
+    }}>
+      <JsonNode k={null} value={data} depth={0} defaultOpen={defaultOpen} />
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    Workbench Tab — image upload + full pipeline analysis
    ═══════════════════════════════════════════════════════════ */
 
-function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
+function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingConsumed, onWorkbenchChange }) {
   const fileRef = useRef(null);
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [viewMode, setViewMode] = useState('formatted'); // 'formatted' | 'compare' | 'json'
-  const [vlmDirty, setVlmDirty] = useState(false); // true after any VLM accept
-  const [debugMode, setDebugMode] = useState(false); // generate debug overlay
+  const [file,      setFile]      = useState(null);
+  const [preview,   setPreview]   = useState(null);
+  const [loading,   setLoading]   = useState(false);
+  const [result,    setResult]    = useState(null);
+  const [error,     setError]     = useState(null);
+  const [viewMode,       setViewMode]       = useState('formatted'); // 'formatted' | 'compare' | 'json' | 'overlay'
+  const [vlmDirty,       setVlmDirty]       = useState(false);       // true after any VLM accept
+  const [debugMode,      setDebugMode]      = useState(false);        // generate debug overlay
+  const [dragging,       setDragging]       = useState(false);
+  const [overlayZoomed,  setOverlayZoomed]  = useState(false);        // fullscreen overlay lightbox
 
-  function handleFile(e) {
-    const f = e.target.files?.[0];
+  // Revoke object URL when preview changes or component unmounts
+  useEffect(() => {
+    return () => { if (preview) URL.revokeObjectURL(preview); };
+  }, [preview]);
+
+  // Consume a pending image forwarded from "Open in Lab" on ReferenceEvalScreen
+  useEffect(() => {
+    if (!pendingImage) return;
+    onPendingConsumed?.();
+    if (pendingImage.file) {
+      // Real File object — load directly
+      applyFile(pendingImage.file);
+    } else if (pendingImage.preview) {
+      // URL-only (demo or Unsplash preview) — fetch as blob, create a File
+      fetch(pendingImage.preview)
+        .then(r => r.blob())
+        .then(blob => {
+          const ext  = blob.type.includes('png') ? 'png' : 'jpg';
+          const name = pendingImage.serverPath
+            ? pendingImage.serverPath.split('/').pop()
+            : `reference.${ext}`;
+          applyFile(new File([blob], name, { type: blob.type || 'image/jpeg' }));
+        })
+        .catch(() => {
+          // Network blocked — at minimum show the preview URL so user sees the image
+          setPreview(pendingImage.preview);
+        });
+    }
+  }, [pendingImage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyFile(f) {
     if (!f) return;
     setFile(f);
-    setPreview(URL.createObjectURL(f));
+    const url = URL.createObjectURL(f);
+    setPreview(url);
     setResult(null);
     setError(null);
     setVlmDirty(false);
+    onWorkbenchChange?.({ file: f, preview: url, imagePath: null, result: null });
   }
+
+  function handleFileInput(e) {
+    applyFile(e.target.files?.[0]);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f && f.type.startsWith('image/')) applyFile(f);
+  }
+
+  // Paste support — pick up clipboard images
+  useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          applyFile(item.getAsFile());
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleAnalyze() {
     if (!file) return;
@@ -173,6 +404,7 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
     try {
       const data = await analyzeImage(file, { debug: debugMode });
       setResult(data);
+      onWorkbenchChange?.({ file, preview, imagePath: data.image_path || null, result: data });
     } catch (err) {
       setError(err.message || 'Analysis failed');
     } finally {
@@ -182,28 +414,38 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
 
   function handleReset() {
     setFile(null);
-    setPreview(null);
+    setPreview(null); // triggers useEffect revoke
     setResult(null);
     setError(null);
     setVlmDirty(false);
     if (fileRef.current) fileRef.current.value = '';
+    onWorkbenchChange?.(null);
   }
 
-  // No file selected — upload prompt
+  // No file selected — upload prompt (supports click + drag-and-drop)
   if (!file) {
     return (
-      <div className="lab-content__placeholder">
+      <div
+        className={`lab-content__placeholder${dragging ? ' lab-content__placeholder--dragging' : ''}`}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+      >
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5, marginBottom: 'var(--space-md)' }}>
-          <path d="M9 3h6" />
-          <path d="M10 3v7.4a2 2 0 01-.6 1.4L4 17.2A2 2 0 005.4 21h13.2A2 2 0 0020 17.2l-5.4-5.4a2 2 0 01-.6-1.4V3" />
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
         <h3>Analysis Workbench</h3>
-        <p>Upload an image for full pipeline analysis with debug output.</p>
+        <p>{dragging ? 'Drop to analyze' : 'Drop, paste, or click to select an image.'}</p>
+        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 'var(--space-xs)' }}>
+          JPEG · PNG · WebP · HEIC · up to 10 MB · best results when the face fills the frame
+        </p>
         <input
           ref={fileRef}
           type="file"
           accept="image/*"
-          onChange={handleFile}
+          onChange={handleFileInput}
           style={{ display: 'none' }}
         />
         <button
@@ -222,12 +464,14 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
       {/* Image preview */}
       {preview && (
         <div className="lab-workbench__preview">
-          <img src={preview} alt="Selected for analysis" />
-          {loading && (
-            <div className="ref-scan-overlay">
-              <div className="ref-scan-overlay__line" />
-            </div>
-          )}
+          <div className={`lab-workbench__img-shell${loading ? ' lab-workbench__img-shell--analyzing' : ''}`}>
+            <img src={preview} alt="Selected for analysis" />
+            {loading && (
+              <div className="ref-scan-overlay">
+                <div className="ref-scan-overlay__line" />
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -235,7 +479,7 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
       <div className="lab-workbench__actions">
         <span className="lab-workbench__filename">{file.name}</span>
         <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center' }}>
-          {!loading && !result && (
+          {!loading && (
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
               <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} />
               Debug Overlay
@@ -244,6 +488,11 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
           {!loading && !result && (
             <button className="btn btn--primary btn--sm" onClick={handleAnalyze}>
               Analyze
+            </button>
+          )}
+          {!loading && result && (
+            <button className="btn btn--sm btn--ghost" onClick={handleAnalyze} title="Re-run analysis with current settings">
+              ↻ Re-analyze
             </button>
           )}
           <button className="btn btn--ghost btn--sm" onClick={handleReset} disabled={loading}>
@@ -309,19 +558,57 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
             )}
           </div>
 
+          {/* Color legend — only on the overlay tab */}
+          {viewMode === 'overlay' && result.debug_overlay_url && (
+            <div className="lab-overlay-legend">
+              {[
+                { color: '#0064ff', label: 'Shadow direction' },
+                { color: '#00ff00', label: 'Catchlights' },
+                { color: '#ffff00', label: 'Highlights' },
+                { color: '#ffa500', label: 'Shoulder / pose axis' },
+                { color: '#800080', label: 'Hip axis' },
+                { color: '#80ff00', label: 'Corrected key light' },
+                { color: '#ff0000', label: 'Self-shadow (tint)' },
+                { color: '#3296c8', label: 'Surface classes' },
+                { color: '#96c832', label: 'Light roles' },
+              ].map(({ color, label }) => (
+                <span key={label} className="lab-overlay-legend__item">
+                  <span className="lab-overlay-legend__swatch" style={{ background: color }} />
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
+
           {viewMode === 'overlay' && result.debug_overlay_url ? (
             <div className="lab-workbench__overlay">
+              <div className="lab-overlay-hint">
+                Original above · <span className="lab-overlay-zoom-hint">click overlay to zoom</span>
+              </div>
               <img
                 src={result.debug_overlay_url}
                 alt="Debug overlay"
-                style={{ width: '100%', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}
+                className="lab-overlay-img lab-overlay-img--clickable"
+                onClick={() => setOverlayZoomed(true)}
               />
-              <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)', textAlign: 'center' }}>
-                Debug overlay — shadows, highlights, catchlights, surface classes, light roles, reconstruction
-              </p>
+              {/* Lightbox */}
+              {overlayZoomed && (
+                <div className="lab-overlay-lightbox" onClick={() => setOverlayZoomed(false)}>
+                  <div className="lab-overlay-lightbox__inner" onClick={e => e.stopPropagation()}>
+                    <button className="lab-overlay-lightbox__close" onClick={() => setOverlayZoomed(false)}>✕</button>
+                    <img src={result.debug_overlay_url} alt="Debug overlay (fullscreen)" />
+                  </div>
+                </div>
+              )}
+
+              {/* ── Solver values legend ── */}
+              <OverlaySolverLegend result={result} />
+
+              {/* ── Warnings / edge-case flags ── */}
+              <OverlayWarnings result={result} />
             </div>
           ) : viewMode === 'json' ? (
-            <pre className="lab-json">{JSON.stringify(result, null, 2)}</pre>
+            <JsonTree data={result} defaultOpen={1} />
           ) : viewMode === 'compare' ? (
             <VlmCvCompare data={result} onAccept={(updated) => { setResult(updated); setVlmDirty(true); }} />
           ) : (
@@ -345,6 +632,113 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Solver values legend (shown under overlay image) ─────────────────────
+
+const SOLVER_VALUE_GLOSSARY = [
+  {
+    key: 'key_light_angle_deg_pose_corrected',
+    label: 'Key light angle (corrected)',
+    explain: 'Compass direction the main light comes FROM, after adjusting for how the subject is turned. 0° = directly above, 90° = from camera-right, 180° = from below.',
+  },
+  {
+    key: 'key_light_angle_deg_raw',
+    label: 'Key light angle (raw)',
+    explain: 'Same angle without pose correction. Compare with corrected to see how much the subject\'s pose skewed the apparent shadow direction.',
+  },
+  {
+    key: 'key_light_height',
+    label: 'Key light height',
+    explain: '"raised" = light above eye level creating downward shadows (most common). "neutral" = at eye level. "low" = below eye level (horror look).',
+  },
+  {
+    key: 'modifier_size_class',
+    label: 'Modifier size (corrected)',
+    explain: 'Estimated softbox/modifier size after pose adjustment: "small" = hard/specular (bare bulb, small reflector), "medium" = beauty dish / mid-size softbox, "large" = large softbox / natural window.',
+  },
+  {
+    key: 'modifier_certainty',
+    label: 'Modifier certainty',
+    explain: '"high" = clear shadow-edge falloff, strong signal. "medium" = some ambiguity. "low" = inconclusive (often due to pose angle, reflective surfaces, or blown highlights).',
+  },
+  {
+    key: 'pose_complexity_score',
+    label: 'Pose complexity',
+    explain: '0–1 scale. Low (<0.2) = subject facing camera, shoulders level, minimal correction needed. High (>0.6) = strong rotation, tilts, or occlusions — angle estimates are less reliable.',
+  },
+  {
+    key: 'likely_light_count',
+    label: 'Likely light count',
+    explain: 'Estimated number of distinct light sources in the scene. 1 = single key only. 2 = key + fill or rim. 3+ = multi-light setup. May under-count when lights are similar in quality/direction.',
+  },
+];
+
+function OverlaySolverLegend({ result }) {
+  const [open, setOpen] = useState(false);
+  const recon = result?.reconstruction || result?.cv?.reconstruction || {};
+  const entries = SOLVER_VALUE_GLOSSARY.filter(g => recon[g.key] != null);
+  if (entries.length === 0) return null;
+
+  return (
+    <div className="lab-overlay-glossary">
+      <button
+        className="lab-overlay-glossary__toggle"
+        onClick={() => setOpen(o => !o)}
+        type="button"
+      >
+        <span>{open ? '▼' : '▶'}</span>
+        <span>Solver values explained</span>
+      </button>
+      {open && (
+        <div className="lab-overlay-glossary__body">
+          {entries.map(g => (
+            <div key={g.key} className="lab-overlay-glossary__row">
+              <div className="lab-overlay-glossary__head">
+                <code className="lab-overlay-glossary__key">{g.key}</code>
+                <span className="lab-overlay-glossary__val">
+                  {String(recon[g.key])}
+                </span>
+              </div>
+              <p className="lab-overlay-glossary__desc">{g.explain}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Warnings / edge-case flags ────────────────────────────────────────────
+
+const EDGE_CASE_EXPLAIN = {
+  blown_highlights:         'Clipped highlights — bright areas have lost detail. Catchlight shape and shadow edge signals are less reliable.',
+  mixed_color_temperature:  'Mixed color temps detected — likely two different light sources (e.g. daylight window + tungsten). Lighting-family classification may be ambiguous.',
+  outdoor_foliage_shadows:  'Dappled leaf shadows detected — the irregular pattern can confuse the shadow-vector direction. Take the angle reading with caution.',
+  window_light_gradient:    'Window-light gradient — broad soft gradient from a large window. Modifier size is harder to estimate; expect "large" with lower certainty.',
+  extreme_low_key:          'Extremely dark scene — most signal extractors have less to work with. Confidence scores across the board are reduced.',
+  bw_processing:            'Black & white image — color temperature, color-graded warmth, and color-cast signals are unavailable.',
+  no_face:                  'No face detected — all face-dependent signals (catchlight position, shadow direction relative to face, eye specular) are missing.',
+};
+
+function OverlayWarnings({ result }) {
+  const flags = result?.edge_case_flags || result?.cv?.edge_case_flags || {};
+  const activeFlags = Object.entries(EDGE_CASE_EXPLAIN).filter(([k]) => flags[k] === true);
+  if (activeFlags.length === 0) return null;
+
+  return (
+    <div className="lab-overlay-warnings">
+      <div className="lab-overlay-warnings__title">
+        ⚠ {activeFlags.length} signal warning{activeFlags.length > 1 ? 's' : ''}
+      </div>
+      {activeFlags.map(([key, explain]) => (
+        <div key={key} className="lab-overlay-warnings__item">
+          <code className="lab-overlay-warnings__flag">{key.replace(/_/g, ' ')}</code>
+          <span className="lab-overlay-warnings__text">{explain}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -450,7 +844,7 @@ function WorkbenchFormatted({ data }) {
       {!desc.subject && Object.keys(lightingRead).length === 0 && Object.keys(recreationSetup).length === 0 && (
         <div className="lab-section">
           <h4 className="lab-section__title">Analysis Output</h4>
-          <pre className="lab-json">{JSON.stringify(data, null, 2)}</pre>
+          <JsonTree data={data} />
         </div>
       )}
     </div>
@@ -522,7 +916,8 @@ function VlmCvCompare({ data, onAccept }) {
   const cvFraming = fmt(cv.subject?.framing || cv.pose?.framing || imageRead.camera_subject_relationship);
   const vlmFraming = fmt(vlm.framing);
   if (cvFraming || vlmFraming)
-    rows.push({ section: 'Subject & Scene', label: 'Framing', cv: cvFraming, vlm: vlmFraming, path: 'image_read.camera_subject_relationship' });
+    rows.push({ section: 'Subject & Scene', label: 'Framing', cv: cvFraming, vlm: vlmFraming, path: 'image_read.camera_subject_relationship',
+      options: ['close_up', 'medium_close_up', 'medium', 'medium_full', 'full_length', 'environmental'] });
 
   const cvPose = fmt(cv.subject?.pose || cv.pose?.pose || imageRead.pose_notes);
   const vlmPose = fmt(vlm.pose);
@@ -587,7 +982,8 @@ function VlmCvCompare({ data, onAccept }) {
   const cvLightFamily = fmt(lightingRead.lighting_family);
   const vlmLighting = fmt(vlm.lighting_style);
   if (cvLightFamily || vlmLighting)
-    rows.push({ section: 'Lighting', label: 'Lighting Family', cv: cvLightFamily, vlm: vlmLighting, path: 'lighting_read.lighting_family' });
+    rows.push({ section: 'Lighting', label: 'Lighting Family', cv: cvLightFamily, vlm: vlmLighting, path: 'lighting_read.lighting_family',
+      options: KNOWN_PATTERNS });
 
   const cvShadowPattern = fmt(lightingRead.shadow_pattern);
   if (cvShadowPattern)
@@ -619,13 +1015,17 @@ function VlmCvCompare({ data, onAccept }) {
 
   // ── Classification ──
   if (classification.confidence)
-    rows.push({ section: 'Classification', label: 'Confidence', cv: fmt(classification.confidence), vlm: '', path: '_cls.confidence' });
+    rows.push({ section: 'Classification', label: 'Confidence', cv: fmt(classification.confidence), vlm: '', path: '_cls.confidence',
+      options: ['very_high', 'high', 'medium', 'low', 'very_low'] });
   if (classification.lightQuality)
-    rows.push({ section: 'Classification', label: 'Light Quality', cv: fmt(classification.lightQuality), vlm: '', path: '_cls.lightQuality' });
+    rows.push({ section: 'Classification', label: 'Light Quality', cv: fmt(classification.lightQuality), vlm: '', path: '_cls.lightQuality',
+      options: ['hard', 'soft', 'mixed'] });
   if (classification.colorTemperature)
-    rows.push({ section: 'Classification', label: 'Color Temperature', cv: fmt(classification.colorTemperature), vlm: '', path: '_cls.colorTemperature' });
+    rows.push({ section: 'Classification', label: 'Color Temperature', cv: fmt(classification.colorTemperature), vlm: '', path: '_cls.colorTemperature',
+      options: ['warm', 'cool', 'neutral', 'mixed'] });
   if (classification.brightness)
-    rows.push({ section: 'Classification', label: 'Brightness', cv: fmt(classification.brightness), vlm: '', path: '_cls.brightness' });
+    rows.push({ section: 'Classification', label: 'Brightness', cv: fmt(classification.brightness), vlm: '', path: '_cls.brightness',
+      options: ['high_key', 'normal', 'low_key', 'silhouette'] });
 
   // ── Recreation Setup (CV only) ──
   if (recreationSetup.setup_family)
@@ -822,6 +1222,7 @@ function VlmCvCompare({ data, onAccept }) {
                     initial={hasEdit ? edits[row.label] : row.cv}
                     onCommit={(val) => handleEditCommit(row, val)}
                     onCancel={() => setEditingCell(null)}
+                    options={row.options}
                   />
                 ) : (
                   <span
@@ -842,6 +1243,7 @@ function VlmCvCompare({ data, onAccept }) {
                     initial={row.vlm}
                     onCommit={(val) => handleEditCommit(row, val)}
                     onCancel={() => setEditingCell(null)}
+                    options={row.options}
                   />
                 ) : (
                   <span
@@ -905,12 +1307,29 @@ function VlmCvCompare({ data, onAccept }) {
 }
 
 
-/** Inline editable cell — shows input, commits on Enter/blur, cancels on Escape */
-function EditableCell({ initial, onCommit, onCancel }) {
+/** Inline editable cell — shows input or select, commits on Enter/blur, cancels on Escape */
+function EditableCell({ initial, onCommit, onCancel, options }) {
   const [value, setValue] = useState(initial || '');
   const inputRef = useRef(null);
-  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
   function commit() { onCommit(value.trim()); }
+
+  if (options?.length) {
+    return (
+      <select
+        ref={inputRef}
+        className="lab-compare__edit-input"
+        value={value}
+        onChange={e => { setValue(e.target.value); onCommit(e.target.value); }}
+        onKeyDown={e => { if (e.key === 'Escape') onCancel(); }}
+        onBlur={() => onCommit(value)}
+      >
+        {value && !options.includes(value) && <option value={value}>{value}</option>}
+        {options.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
+    );
+  }
+
   return (
     <input
       ref={inputRef}
@@ -940,8 +1359,8 @@ function WorkbenchScanStatus() {
   }, []);
   return (
     <div className="ref-scan-status">
-      <div className="ref-scan-status__bar"><div className="ref-scan-status__fill" /></div>
-      <p className="ref-scan-status__text">{WORKBENCH_PHASES[phase]}</p>
+      <span className="ref-scan-status__dot" />
+      <span className="ref-scan-status__text">{WORKBENCH_PHASES[phase]}</span>
     </div>
   );
 }
@@ -1097,7 +1516,7 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
             </div>
           )}
           {evalResult.results && (
-            <pre className="lab-json" style={{ maxHeight: '30vh' }}>{JSON.stringify(evalResult.results, null, 2)}</pre>
+            <JsonTree data={evalResult.results} />
           )}
         </div>
       )}
@@ -1147,6 +1566,15 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [imageSrc, setImageSrc] = useState(null);
+
+  useEffect(() => {
+    let objectUrl = null;
+    getGoldSetImageUrl(entry.id)
+      .then(url => { objectUrl = url; setImageSrc(url); })
+      .catch(() => {}); // image may not exist for older entries
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [entry.id]);
 
   async function handleSave() {
     setSaving(true);
@@ -1196,10 +1624,17 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
         <span className="lab-detail__label">ID</span>
         <span className="lab-detail__value lab-detail__value--mono">{entry.id}</span>
       </div>
-      <div className="lab-detail__field">
-        <span className="lab-detail__label">Image Path</span>
-        <span className="lab-detail__value">{entry.image_path}</span>
-      </div>
+      {/* Image preview */}
+      {imageSrc ? (
+        <div className="lab-detail__image-box">
+          <img src={imageSrc} alt="Gold set" className="lab-detail__image" />
+        </div>
+      ) : (
+        <div className="lab-detail__field">
+          <span className="lab-detail__label">Image Path</span>
+          <span className="lab-detail__value lab-detail__value--dim">{entry.image_path || '—'}</span>
+        </div>
+      )}
 
       {/* Notes — editable */}
       <div className="lab-detail__field">
@@ -1234,7 +1669,7 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
             rows={8}
           />
         ) : (
-          <pre className="lab-json">{JSON.stringify(entry.expected_analysis || {}, null, 2)}</pre>
+          <JsonTree data={entry.expected_analysis || {}} />
         )}
       </div>
 
@@ -1282,13 +1717,39 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
 
 /** Gold Set create form */
 function GoldSetForm({ onSave, onCancel, prefill }) {
+  const fileRef = useRef(null);
   const [imagePath, setImagePath] = useState(prefill?.image_path || '');
+  const [imagePreview, setImagePreview] = useState(prefill?.imagePreview || null);
   const [notes, setNotes] = useState(prefill?.notes || '');
   const [expectedJson, setExpectedJson] = useState(
     prefill?.expected_analysis ? JSON.stringify(prefill.expected_analysis, null, 2) : '{}'
   );
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+
+  async function handleFileSelect(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    // Show local preview immediately
+    const url = URL.createObjectURL(f);
+    setImagePreview(url);
+    // Upload via analyze endpoint to get server-side path
+    setUploading(true);
+    setError(null);
+    try {
+      const result = await analyzeImage(f, { debug: false });
+      setImagePath(result.image_path || '');
+      // Pre-fill expected analysis if not already set from prefill
+      if (result.reference_analysis && expectedJson === '{}') {
+        setExpectedJson(JSON.stringify(result.reference_analysis, null, 2));
+      }
+    } catch (err) {
+      setError(`Upload failed: ${err.message}`);
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -1318,16 +1779,59 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
 
       {error && <div className="lab-form__error">{error}</div>}
 
-      <label className="lab-form__label">
-        Image Path
+      <div className="lab-form__label">
+        Image
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={handleFileSelect}
+        />
+        {imagePreview ? (
+          <div style={{ position: 'relative', marginTop: 'var(--space-xs)' }}>
+            <img
+              src={imagePreview}
+              alt="Selected"
+              style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block', background: 'var(--color-bg)' }}
+            />
+            {uploading && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)' }}>
+                <span style={{ color: '#fff', fontSize: 'var(--text-sm)' }}>Uploading…</span>
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn btn--xs btn--ghost"
+              onClick={() => fileRef.current?.click()}
+              style={{ marginTop: 'var(--space-xs)' }}
+            >
+              Change image
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => fileRef.current?.click()}
+            style={{ width: '100%', marginTop: 'var(--space-xs)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Browse image file
+          </button>
+        )}
+        {/* Editable path for manual override or confirmation */}
         <input
           className="lab-form__input"
           value={imagePath}
           onChange={e => setImagePath(e.target.value)}
-          placeholder="e.g. data/uploads/lab/image.jpg"
+          placeholder="Server path auto-filled after upload"
           required
+          style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
         />
-      </label>
+      </div>
 
       <label className="lab-form__label">
         Notes
@@ -1434,79 +1938,16 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
     );
   }
 
-  // ── Detail view ──
+  // ── Detail view (with inline edit mode) ──
   if (view === 'detail' && selected) {
     return (
-      <div className="lab-detail">
-        <button className="btn btn--ghost btn--sm" onClick={() => { setView('list'); setSelected(null); }}>
-          {'\u2190'} Back to list
-        </button>
-
-        <div className="lab-detail__header">
-          <h4>{selected.title}</h4>
-          <StatusBadge status={selected.status} />
-        </div>
-
-        <div className="lab-detail__field">
-          <span className="lab-detail__label">ID</span>
-          <span className="lab-detail__value lab-detail__value--mono">{selected.id}</span>
-        </div>
-        <div className="lab-detail__field">
-          <span className="lab-detail__label">Description</span>
-          <span className="lab-detail__value">{selected.description}</span>
-        </div>
-        {selected.rationale && (
-          <div className="lab-detail__field">
-            <span className="lab-detail__label">Rationale</span>
-            <span className="lab-detail__value">{selected.rationale}</span>
-          </div>
-        )}
-        {selected.source_gold_set_id && (
-          <div className="lab-detail__field">
-            <span className="lab-detail__label">Source Gold Set</span>
-            <span className="lab-detail__value lab-detail__value--mono">{selected.source_gold_set_id}</span>
-          </div>
-        )}
-        {selected.proposed_change && (
-          <div className="lab-detail__field">
-            <span className="lab-detail__label">Proposed Change</span>
-            <pre className="lab-json">{JSON.stringify(selected.proposed_change, null, 2)}</pre>
-          </div>
-        )}
-        {selected.created_at && (
-          <div className="lab-detail__field">
-            <span className="lab-detail__label">Created</span>
-            <span className="lab-detail__value">{new Date(selected.created_at * 1000).toLocaleString()}</span>
-          </div>
-        )}
-
-        {/* Status workflow controls */}
-        <div className="lab-detail__controls">
-          {selected.status === 'proposed' && (
-            <>
-              <button className="btn btn--primary btn--sm" onClick={() => handleStatusChange(selected.id, 'accepted')}>
-                Accept
-              </button>
-              <button className="btn btn--ghost btn--sm" onClick={() => handleStatusChange(selected.id, 'rejected')}>
-                Reject
-              </button>
-            </>
-          )}
-          {selected.status === 'accepted' && (
-            <button className="btn btn--primary btn--sm" onClick={() => handleStatusChange(selected.id, 'implemented')}>
-              Mark Implemented
-            </button>
-          )}
-          {selected.status === 'rejected' && (
-            <button className="btn btn--ghost btn--sm" onClick={() => handleStatusChange(selected.id, 'proposed')}>
-              Reopen
-            </button>
-          )}
-          <button className="btn btn--ghost btn--sm" style={{ color: 'var(--color-error)' }} onClick={() => handleDelete(selected.id)}>
-            Delete
-          </button>
-        </div>
-      </div>
+      <CandidateDetailView
+        selected={selected}
+        onBack={() => { setView('list'); setSelected(null); }}
+        onStatusChange={handleStatusChange}
+        onDelete={handleDelete}
+        onUpdated={(updated) => { setSelected(updated); fetchItems(); }}
+      />
     );
   }
 
@@ -1571,6 +2012,191 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
   );
 }
 
+/** Candidate detail view with inline edit mode */
+function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpdated }) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editRationale, setEditRationale] = useState('');
+  const [editJson, setEditJson] = useState('');
+  const [jsonErr, setJsonErr] = useState(null);
+
+  function startEdit() {
+    setEditTitle(selected.title || '');
+    setEditDesc(selected.description || '');
+    setEditRationale(selected.rationale || '');
+    setEditJson(selected.proposed_change ? JSON.stringify(selected.proposed_change, null, 2) : '{}');
+    setJsonErr(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setJsonErr(null);
+  }
+
+  async function saveEdit() {
+    let parsed;
+    try {
+      parsed = JSON.parse(editJson);
+    } catch {
+      setJsonErr('Invalid JSON — fix before saving.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updateCandidate(selected.id, {
+        title: editTitle,
+        description: editDesc,
+        rationale: editRationale || undefined,
+        proposed_change: parsed,
+      });
+      setEditing(false);
+      onUpdated(updated);
+    } catch (err) {
+      setJsonErr(err.message || 'Save failed.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="lab-detail">
+      <button className="btn btn--ghost btn--sm" onClick={onBack}>
+        {'\u2190'} Back to list
+      </button>
+
+      <div className="lab-detail__header">
+        {editing ? (
+          <input
+            className="lab-form__input"
+            value={editTitle}
+            onChange={e => setEditTitle(e.target.value)}
+            placeholder="Candidate title"
+            style={{ flex: 1 }}
+          />
+        ) : (
+          <h4 style={{ flex: 1 }}>{selected.title}</h4>
+        )}
+        <StatusBadge status={selected.status} />
+        {!editing && (
+          <button className="btn btn--ghost btn--sm" onClick={startEdit} title="Edit candidate">
+            ✎ Edit
+          </button>
+        )}
+      </div>
+
+      <div className="lab-detail__field">
+        <span className="lab-detail__label">ID</span>
+        <span className="lab-detail__value lab-detail__value--mono">{selected.id}</span>
+      </div>
+
+      <div className="lab-detail__field">
+        <span className="lab-detail__label">Description</span>
+        {editing ? (
+          <textarea
+            className="lab-form__textarea"
+            value={editDesc}
+            onChange={e => setEditDesc(e.target.value)}
+            rows={4}
+          />
+        ) : (
+          <span className="lab-detail__value">{selected.description}</span>
+        )}
+      </div>
+
+      <div className="lab-detail__field">
+        <span className="lab-detail__label">Rationale</span>
+        {editing ? (
+          <textarea
+            className="lab-form__textarea"
+            value={editRationale}
+            onChange={e => setEditRationale(e.target.value)}
+            rows={3}
+            placeholder="Why this change? (optional)"
+          />
+        ) : (
+          <span className="lab-detail__value">{selected.rationale || '—'}</span>
+        )}
+      </div>
+
+      {selected.source_gold_set_id && (
+        <div className="lab-detail__field">
+          <span className="lab-detail__label">Source Gold Set</span>
+          <span className="lab-detail__value lab-detail__value--mono">{selected.source_gold_set_id}</span>
+        </div>
+      )}
+
+      <div className="lab-detail__field">
+        <span className="lab-detail__label">Proposed Change</span>
+        {editing ? (
+          <>
+            <textarea
+              className="lab-form__textarea lab-form__textarea--code"
+              value={editJson}
+              onChange={e => { setEditJson(e.target.value); setJsonErr(null); }}
+              rows={14}
+              spellCheck={false}
+            />
+            {jsonErr && <div className="lab-form__error">{jsonErr}</div>}
+          </>
+        ) : (
+          <JsonTree data={selected.proposed_change} />
+        )}
+      </div>
+
+      {selected.created_at && (
+        <div className="lab-detail__field">
+          <span className="lab-detail__label">Created</span>
+          <span className="lab-detail__value">{new Date(selected.created_at * 1000).toLocaleString()}</span>
+        </div>
+      )}
+
+      {/* Edit save / cancel */}
+      {editing && (
+        <div className="lab-detail__controls">
+          <button className="btn btn--primary btn--sm" onClick={saveEdit} disabled={saving}>
+            {saving ? 'Saving…' : 'Save Changes'}
+          </button>
+          <button className="btn btn--ghost btn--sm" onClick={cancelEdit} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Status workflow controls — hidden while editing */}
+      {!editing && (
+        <div className="lab-detail__controls">
+          {selected.status === 'proposed' && (
+            <>
+              <button className="btn btn--primary btn--sm" onClick={() => onStatusChange(selected.id, 'accepted')}>
+                Accept
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={() => onStatusChange(selected.id, 'rejected')}>
+                Reject
+              </button>
+            </>
+          )}
+          {selected.status === 'accepted' && (
+            <button className="btn btn--primary btn--sm" onClick={() => onStatusChange(selected.id, 'implemented')}>
+              Mark Implemented
+            </button>
+          )}
+          {selected.status === 'rejected' && (
+            <button className="btn btn--ghost btn--sm" onClick={() => onStatusChange(selected.id, 'proposed')}>
+              Reopen
+            </button>
+          )}
+          <button className="btn btn--ghost btn--sm" style={{ color: 'var(--color-error)' }} onClick={() => onDelete(selected.id)}>
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Candidate create form */
 function CandidateForm({ onSave, onCancel, prefill }) {
   const [title, setTitle] = useState(prefill?.title || '');
@@ -1619,9 +2245,13 @@ function CandidateForm({ onSave, onCancel, prefill }) {
           className="lab-form__input"
           value={title}
           onChange={e => setTitle(e.target.value)}
-          placeholder="Candidate title"
+          placeholder="[pattern_id] action — brief context"
           required
         />
+        <span className="lab-form__hint">
+          Format: <code>[pattern_id] action — brief context</code>
+          {' · '}e.g. <code>[rembrandt] Raise threshold — studio portrait edge case</code>
+        </span>
       </label>
 
       <label className="lab-form__label">
@@ -1701,7 +2331,12 @@ function ReferenceDatasetTab() {
   const [view, setView] = useState('list'); // list | import | detail
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null);
   const [reprocessing, setReprocessing] = useState(false);
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [editFields, setEditFields] = useState({});
+  const [saveError, setSaveError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const fetchEntries = useCallback(async () => {
     setLoading(true);
@@ -1721,8 +2356,10 @@ function ReferenceDatasetTab() {
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
-  async function handleSelectEntry(entry) {
+  async function handleSelectEntry(entry, index) {
     setSelectedEntry(entry);
+    setSelectedDetail(null);
+    setSelectedIndex(index ?? entries.indexOf(entry));
     setView('detail');
     try {
       const detail = await getReferenceEntry(entry.pattern_id, entry.reference_id);
@@ -1730,6 +2367,12 @@ function ReferenceDatasetTab() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function handleNavigate(delta) {
+    const nextIndex = selectedIndex + delta;
+    if (nextIndex < 0 || nextIndex >= entries.length) return;
+    await handleSelectEntry(entries[nextIndex], nextIndex);
   }
 
   async function handleApprove(patternId, refId) {
@@ -1771,6 +2414,61 @@ function ReferenceDatasetTab() {
     }
   }
 
+  function handleStartEdit(meta) {
+    setEditFields({
+      photographer: meta.photographer || '',
+      title: meta.title || '',
+      dataset_tier: meta.dataset_tier || 'community',
+      entry_trust_score: meta.entry_trust_score ?? 0.5,
+      source_type: meta.source_type || '',
+      source_url: meta.source_url || '',
+      environment: meta.environment || '',
+      light_count: meta.light_count ?? '',
+      key_direction_deg: meta.key_direction_deg ?? '',
+      key_height_relative: meta.key_height_relative || '',
+      shadow_pattern: meta.shadow_pattern || '',
+      modifier_family: meta.modifier_family || '',
+      estimated_distance_ft: meta.estimated_distance_ft ?? '',
+      notes: meta.notes || '',
+      tags: (meta.tags || []).join(', '),
+      style_family: meta.style_family || '',
+      catchlight_pattern: meta.catchlight_pattern || '',
+      underfill_ev: meta.underfill_ev ?? '',
+      separation_light_type: meta.separation_light_type || '',
+      light_technology: meta.light_technology || '',
+      master_profile_id: meta.master_profile_id || '',
+    });
+    setSaveError(null);
+    setEditingMeta(true);
+  }
+
+  async function handleSaveMeta(patternId, refId) {
+    setSaving(true);
+    setSaveError(null);
+    // Build update payload — only non-empty strings / valid numbers
+    const raw = editFields;
+    const updates = {};
+    const strFields = ['photographer', 'title', 'source_url', 'shadow_pattern', 'modifier_family', 'notes', 'master_profile_id'];
+    strFields.forEach(f => { if (raw[f] !== '') updates[f] = raw[f]; });
+    const enumFields = ['dataset_tier', 'source_type', 'environment', 'key_height_relative', 'style_family', 'catchlight_pattern', 'separation_light_type', 'light_technology'];
+    enumFields.forEach(f => { if (raw[f] !== '') updates[f] = raw[f]; });
+    const numFields = ['entry_trust_score', 'key_direction_deg', 'estimated_distance_ft', 'underfill_ev'];
+    numFields.forEach(f => { if (raw[f] !== '') { const n = Number(raw[f]); if (!isNaN(n)) updates[f] = n; } });
+    if (raw.light_count !== '') { const n = parseInt(raw.light_count, 10); if (!isNaN(n)) updates.light_count = n; }
+    if (raw.tags !== '') updates.tags = raw.tags.split(',').map(t => t.trim()).filter(Boolean);
+    try {
+      const res = await updateReferenceMetadata(patternId, refId, updates);
+      setSelectedDetail(prev => prev ? { ...prev, metadata: res.metadata } : prev);
+      setSelectedEntry(prev => prev ? { ...prev, metadata: res.metadata } : prev);
+      setEditingMeta(false);
+      fetchEntries();
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // ── Import View ──
   if (view === 'import') {
     return (
@@ -1789,36 +2487,200 @@ function ReferenceDatasetTab() {
 
     return (
       <div className="lab-detail">
-        <button className="btn btn--ghost btn--sm" onClick={() => { setView('list'); setSelectedEntry(null); setSelectedDetail(null); }}>
-          {'\u2190'} Back to list
-        </button>
+        <div className="lab-detail__nav">
+          <button className="btn btn--ghost btn--sm" onClick={() => { setView('list'); setSelectedEntry(null); setSelectedDetail(null); }}>
+            {'\u2190'} List
+          </button>
+          <div className="lab-detail__nav-pager">
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleNavigate(-1)}
+              disabled={selectedIndex <= 0}
+              aria-label="Previous image"
+            >
+              {'\u2190'}
+            </button>
+            <span className="lab-detail__nav-count">
+              {selectedIndex + 1} / {entries.length}
+            </span>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleNavigate(1)}
+              disabled={selectedIndex >= entries.length - 1}
+              aria-label="Next image"
+            >
+              {'\u2192'}
+            </button>
+          </div>
+        </div>
 
         <div className="lab-detail__header">
           <h4>{meta.reference_id || refId}</h4>
-          <StatusBadge status={meta.approval_status || 'draft'} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+            <StatusBadge status={meta.approval_status || 'draft'} />
+            {!editingMeta && (
+              <button className="btn btn--ghost btn--sm" onClick={() => handleStartEdit(meta)}>
+                ✎ Edit
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Image + overlay toggle */}
         <RefDetailImage patternId={patternId} referenceId={refId} hasOverlay={selectedDetail?.has_debug_overlay} />
 
-        {/* Metadata */}
+        {/* Metadata — read or edit */}
         <div className="lab-section">
           <h4 className="lab-section__title">Metadata</h4>
-          <div className="lab-section__grid">
-            <AnalysisRow label="Pattern" value={meta.pattern_id} />
-            <AnalysisRow label="Photographer" value={meta.photographer} />
-            <AnalysisRow label="Tier" value={meta.dataset_tier} />
-            <AnalysisRow label="Trust Score" value={meta.entry_trust_score} />
-            {meta.environment && <AnalysisRow label="Environment" value={meta.environment} />}
-            {meta.light_count != null && <AnalysisRow label="Light Count" value={meta.light_count} />}
-            {meta.key_direction_deg != null && <AnalysisRow label="Key Direction" value={`${meta.key_direction_deg}\u00B0`} />}
-            {meta.modifier_family && <AnalysisRow label="Modifier" value={meta.modifier_family} />}
-            {meta.shadow_pattern && <AnalysisRow label="Shadow Pattern" value={meta.shadow_pattern} />}
-            {meta.notes && <AnalysisRow label="Notes" value={meta.notes} />}
-            {meta.ingested_at && <AnalysisRow label="Ingested" value={new Date(meta.ingested_at).toLocaleString()} />}
-            {meta.approved_by && <AnalysisRow label="Approved By" value={meta.approved_by} />}
-          </div>
+
+          {editingMeta ? (
+            <div className="ref-meta-edit">
+              {saveError && <p className="lab-form__error">{saveError}</p>}
+
+              <div className="ref-meta-edit__grid">
+                {/* Free-text fields */}
+                <label className="ref-meta-edit__label">Photographer
+                  <input className="lab-form__input" value={editFields.photographer} onChange={e => setEditFields(p => ({ ...p, photographer: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Title
+                  <input className="lab-form__input" value={editFields.title} onChange={e => setEditFields(p => ({ ...p, title: e.target.value }))} />
+                </label>
+
+                {/* Enum fields — dropdowns prevent invalid values */}
+                <label className="ref-meta-edit__label">Tier
+                  <select className="lab-form__select" value={editFields.dataset_tier} onChange={e => setEditFields(p => ({ ...p, dataset_tier: e.target.value }))}>
+                    {['gold','community','synthetic'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Environment
+                  <select className="lab-form__select" value={editFields.environment} onChange={e => setEditFields(p => ({ ...p, environment: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['studio','natural','window_light','outdoor','mixed','unknown'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Source Type
+                  <select className="lab-form__select" value={editFields.source_type} onChange={e => setEditFields(p => ({ ...p, source_type: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['original_photo','screenshot','studio_test','found_online','book_scan','ai_generated'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Key Height
+                  <select className="lab-form__select" value={editFields.key_height_relative} onChange={e => setEditFields(p => ({ ...p, key_height_relative: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['below_eye_level','eye_level','above_eye_level','high','overhead'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Style Family
+                  <select className="lab-form__select" value={editFields.style_family} onChange={e => setEditFields(p => ({ ...p, style_family: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['beauty','editorial','dramatic','natural','high_key','low_key'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Catchlight Pattern
+                  <select className="lab-form__select" value={editFields.catchlight_pattern} onChange={e => setEditFields(p => ({ ...p, catchlight_pattern: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['single','dual','triangular','strip','ring'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Separation Light
+                  <select className="lab-form__select" value={editFields.separation_light_type} onChange={e => setEditFields(p => ({ ...p, separation_light_type: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['hair','rim','kicker','none'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <label className="ref-meta-edit__label">Light Technology
+                  <select className="lab-form__select" value={editFields.light_technology} onChange={e => setEditFields(p => ({ ...p, light_technology: e.target.value }))}>
+                    <option value="">— none —</option>
+                    {['continuous_led','continuous_panel','strobe','flash','mixed'].map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+
+                {/* Numeric fields */}
+                <label className="ref-meta-edit__label">Trust Score (0–1)
+                  <input className="lab-form__input" type="number" min="0" max="1" step="0.05" value={editFields.entry_trust_score} onChange={e => setEditFields(p => ({ ...p, entry_trust_score: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Light Count
+                  <input className="lab-form__input" type="number" min="0" step="1" value={editFields.light_count} onChange={e => setEditFields(p => ({ ...p, light_count: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Key Direction (deg)
+                  <input className="lab-form__input" type="number" min="0" max="360" value={editFields.key_direction_deg} onChange={e => setEditFields(p => ({ ...p, key_direction_deg: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Distance (ft)
+                  <input className="lab-form__input" type="number" min="0" step="0.5" value={editFields.estimated_distance_ft} onChange={e => setEditFields(p => ({ ...p, estimated_distance_ft: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Underfill EV
+                  <input className="lab-form__input" type="number" step="0.25" value={editFields.underfill_ev} onChange={e => setEditFields(p => ({ ...p, underfill_ev: e.target.value }))} />
+                </label>
+
+                {/* Remaining free-text */}
+                <label className="ref-meta-edit__label">Shadow Pattern
+                  <input className="lab-form__input" value={editFields.shadow_pattern} onChange={e => setEditFields(p => ({ ...p, shadow_pattern: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Modifier Family
+                  <input className="lab-form__input" value={editFields.modifier_family} onChange={e => setEditFields(p => ({ ...p, modifier_family: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Master Profile ID
+                  <input className="lab-form__input" value={editFields.master_profile_id} onChange={e => setEditFields(p => ({ ...p, master_profile_id: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label">Source URL
+                  <input className="lab-form__input" value={editFields.source_url} onChange={e => setEditFields(p => ({ ...p, source_url: e.target.value }))} />
+                </label>
+                <label className="ref-meta-edit__label ref-meta-edit__label--full">Tags (comma-separated)
+                  <input className="lab-form__input" value={editFields.tags} onChange={e => setEditFields(p => ({ ...p, tags: e.target.value }))} placeholder="e.g. dramatic, low-key, editorial" />
+                </label>
+                <label className="ref-meta-edit__label ref-meta-edit__label--full">Notes
+                  <textarea className="lab-form__textarea" rows={3} value={editFields.notes} onChange={e => setEditFields(p => ({ ...p, notes: e.target.value }))} />
+                </label>
+              </div>
+
+              <div className="ref-meta-edit__actions">
+                <button className="btn btn--primary btn--sm" onClick={() => handleSaveMeta(patternId, refId)} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button className="btn btn--ghost btn--sm" onClick={() => { setEditingMeta(false); setSaveError(null); }} disabled={saving}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="lab-section__grid">
+              <AnalysisRow label="Pattern" value={meta.pattern_id} />
+              <AnalysisRow label="Photographer" value={meta.photographer} />
+              <AnalysisRow label="Tier" value={meta.dataset_tier} />
+              <AnalysisRow label="Trust Score" value={meta.entry_trust_score} />
+              {meta.title && <AnalysisRow label="Title" value={meta.title} />}
+              {meta.environment && <AnalysisRow label="Environment" value={meta.environment} />}
+              {meta.light_count != null && <AnalysisRow label="Light Count" value={meta.light_count} />}
+              {meta.key_direction_deg != null && <AnalysisRow label="Key Direction" value={`${meta.key_direction_deg}\u00B0`} />}
+              {meta.key_height_relative && <AnalysisRow label="Key Height" value={meta.key_height_relative} />}
+              {meta.modifier_family && <AnalysisRow label="Modifier" value={meta.modifier_family} />}
+              {meta.shadow_pattern && <AnalysisRow label="Shadow Pattern" value={meta.shadow_pattern} />}
+              {meta.style_family && <AnalysisRow label="Style Family" value={meta.style_family} />}
+              {meta.catchlight_pattern && <AnalysisRow label="Catchlight" value={meta.catchlight_pattern} />}
+              {meta.separation_light_type && <AnalysisRow label="Separation Light" value={meta.separation_light_type} />}
+              {meta.light_technology && <AnalysisRow label="Technology" value={meta.light_technology} />}
+              {meta.underfill_ev != null && <AnalysisRow label="Underfill EV" value={meta.underfill_ev} />}
+              {meta.master_profile_id && <AnalysisRow label="Master Profile" value={meta.master_profile_id} />}
+              {meta.source_type && <AnalysisRow label="Source Type" value={meta.source_type} />}
+              {meta.notes && <AnalysisRow label="Notes" value={meta.notes} />}
+              {meta.tags?.length > 0 && <AnalysisRow label="Tags" value={meta.tags.join(', ')} />}
+              {meta.ingested_at && <AnalysisRow label="Ingested" value={new Date(meta.ingested_at).toLocaleString()} />}
+              {meta.approved_by && <AnalysisRow label="Approved By" value={meta.approved_by} />}
+            </div>
+          )}
         </div>
+
+        {/* Loading indicator while detail fetches */}
+        {!selectedDetail && (
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', textAlign: 'center', padding: 'var(--space-md)' }}>
+            Loading analysis{'\u2026'}
+          </p>
+        )}
+
+        {/* Reference Analysis (collapsible, open by default) */}
+        {selectedDetail?.reference_analysis && (
+          <RefCollapsibleJson title="Reference Analysis" data={selectedDetail.reference_analysis} defaultOpen />
+        )}
 
         {/* Pipeline Signals (collapsible) */}
         {selectedDetail?.signals && (
@@ -1908,14 +2770,13 @@ function ReferenceDatasetTab() {
               <button
                 key={`${entry.pattern_id}/${entry.reference_id}-${i}`}
                 className="ref-grid__card"
-                onClick={() => handleSelectEntry(entry)}
+                onClick={() => handleSelectEntry(entry, i)}
               >
                 {entry.has_thumbnail ? (
-                  <img
-                    className="ref-grid__thumb"
-                    src={getReferenceThumbnailUrl(entry.pattern_id, entry.reference_id)}
+                  <AuthImage
+                    path={`/reference-dataset/${entry.pattern_id}/${entry.reference_id}/thumbnail`}
                     alt={entry.reference_id}
-                    loading="lazy"
+                    className="ref-grid__thumb"
                   />
                 ) : (
                   <div className="ref-grid__thumb ref-grid__thumb--empty">
@@ -1957,21 +2818,44 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
   const [environment, setEnvironment] = useState('');
   const [notes, setNotes] = useState('');
   const [ingesting, setIngesting] = useState(false);
+  const [dropzoneActive, setDropzoneActive] = useState(false);
   const [progress, setProgress] = useState('');
   const [error, setError] = useState(null);
 
-  function handleFile(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  function applyRefFile(f) {
+    if (!f || !f.type.startsWith('image/')) return;
     setFile(f);
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result);
     reader.readAsDataURL(f);
-    // Auto-generate reference_id from filename
     if (!refId) {
       const name = f.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
       setRefId(name);
     }
+  }
+
+  function handleFile(e) { applyRefFile(e.target.files?.[0]); }
+
+  // Paste support for ref image
+  useEffect(() => {
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          applyRefFile(item.getAsFile());
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleDropzoneDrop(e) {
+    e.preventDefault();
+    setDropzoneActive(false);
+    applyRefFile(e.dataTransfer.files?.[0]);
   }
 
   async function handleSubmit(e) {
@@ -2011,8 +2895,11 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
 
       {/* Image upload */}
       <div
-        className="ref-import__dropzone"
+        className={`ref-import__dropzone${dropzoneActive ? ' ref-import__dropzone--active' : ''}`}
         onClick={() => fileRef.current?.click()}
+        onDragOver={e => { e.preventDefault(); setDropzoneActive(true); }}
+        onDragLeave={() => setDropzoneActive(false)}
+        onDrop={handleDropzoneDrop}
       >
         {preview ? (
           <img src={preview} className="ref-import__preview" alt="Preview" />
@@ -2023,7 +2910,10 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
               <circle cx="8.5" cy="8.5" r="1.5" />
               <polyline points="21 15 16 10 5 21" />
             </svg>
-            <span>Click to select image</span>
+            <span>{dropzoneActive ? 'Drop to import' : 'Click or drop image here'}</span>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 4 }}>
+              JPEG · PNG · WebP · HEIC · up to 10 MB · face filling the frame gives best results
+            </span>
           </div>
         )}
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{ display: 'none' }} />
@@ -2089,19 +2979,20 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
 }
 
 
-/** Image viewer with debug overlay toggle */
+/** Image viewer with debug overlay toggle — uses AuthImage for JWT-gated endpoints */
 function RefDetailImage({ patternId, referenceId, hasOverlay }) {
   const [showOverlay, setShowOverlay] = useState(false);
 
-  const imageUrl = getReferenceImageUrl(patternId, referenceId);
-  const overlayUrl = getReferenceDebugOverlayUrl(patternId, referenceId);
+  // Strip /api/lab prefix — AuthImage prepends it via labFetchBlob
+  const imagePath = `/reference-dataset/${patternId}/${referenceId}/image`;
+  const overlayPath = `/reference-dataset/${patternId}/${referenceId}/debug-overlay`;
 
   return (
     <div className="ref-detail-image">
-      <img
-        className="ref-detail-image__img"
-        src={showOverlay && hasOverlay ? overlayUrl : imageUrl}
+      <AuthImage
+        path={showOverlay && hasOverlay ? overlayPath : imagePath}
         alt={referenceId}
+        className="ref-detail-image__img"
       />
       {hasOverlay && (
         <button
@@ -2136,8 +3027,8 @@ function CollapsibleGroup({ label, children }) {
 }
 
 /** Collapsible panel — defaults to formatted view, toggle to raw JSON */
-function RefCollapsibleJson({ title, data }) {
-  const [open, setOpen] = useState(false);
+function RefCollapsibleJson({ title, data, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [raw, setRaw] = useState(false);
 
   /** Recursively render nested objects as labeled rows; nested groups are collapsible */
@@ -2155,7 +3046,11 @@ function RefCollapsibleJson({ title, data }) {
       let display;
       if (val == null) display = '\u2014';
       else if (typeof val === 'boolean') display = val ? 'Yes' : 'No';
-      else if (Array.isArray(val)) display = val.length ? val.join(', ') : '\u2014';
+      else if (Array.isArray(val)) {
+        if (!val.length) display = '\u2014';
+        else if (val.some(v => v !== null && typeof v === 'object')) display = JSON.stringify(val, null, 2);
+        else display = val.join(', ');
+      }
       else display = String(val);
       return (
         <div key={label} className="ref-analysis__row ref-analysis__row--inline">
@@ -2184,9 +3079,7 @@ function RefCollapsibleJson({ title, data }) {
       </div>
       {open && (
         raw ? (
-          <pre className="lab-json" style={{ maxHeight: '40vh' }}>
-            {JSON.stringify(data, null, 2)}
-          </pre>
+          <JsonTree data={data} />
         ) : (
           <div className="lab-section__grid lab-formatted">
             {renderFormatted(data, '')}

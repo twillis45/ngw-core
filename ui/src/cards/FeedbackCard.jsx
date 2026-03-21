@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { saveFeedback } from '../data/feedbackStore';
+import CardIcon from '../components/CardIcon';
 
 export default function FeedbackCard({ setupId, mood, pattern }) {
   const [submitted, setSubmitted] = useState(false);
@@ -15,13 +16,13 @@ export default function FeedbackCard({ setupId, mood, pattern }) {
     return (
       <div className="result-card">
         <div className="result-card__header">
-          <span className="result-card__icon">{'\u2705'}</span>
-          <span>Thanks for the Feedback</span>
+          <CardIcon name="check" />
+          <span>Feedback Recorded</span>
         </div>
         <p style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-secondary)' }}>
-          {selected === 'perfect' && 'Glad it worked. This setup is now marked as verified.'}
-          {selected === 'tweaks' && 'Good to know. We\u2019ll factor this in for future recommendations.'}
-          {selected === 'didnt_work' && 'Sorry about that. This helps us improve recommendations.'}
+          {selected === 'perfect' && 'Noted. Setup marked as verified.'}
+          {selected === 'tweaks' && 'Noted. Flagged for calibration.'}
+          {selected === 'didnt_work' && 'Noted. Flagged for review.'}
         </p>
       </div>
     );
@@ -30,22 +31,22 @@ export default function FeedbackCard({ setupId, mood, pattern }) {
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\uD83D\uDCAC'}</span>
-        <span>How Did This Setup Work?</span>
+        <CardIcon name="chat" />
+        <span>Rate This Setup</span>
       </div>
       <p style={{
         fontSize: 'var(--text-base)',
         color: 'var(--color-text-secondary)',
         marginBottom: 'var(--space-md)',
       }}>
-        Your feedback helps build a verified database of what works.
+        Builds a verified record of what holds across shoots.
       </p>
       <div className="feedback-buttons">
         <button
           className="btn btn--sm btn--ghost feedback-btn feedback-btn--perfect"
           onClick={() => handleRate('perfect')}
         >
-          Nailed It
+          Matched
         </button>
         <button
           className="btn btn--sm btn--ghost feedback-btn feedback-btn--tweaks"

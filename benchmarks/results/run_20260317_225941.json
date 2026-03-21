@@ -1,0 +1,51 @@
+{
+  "run_timestamp": "2026-03-17T22:59:41.491582+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "editorial_rim_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "gobo",
+          "expected": "editorial_rim_key",
+          "acceptable": [
+            "editorial_rim_key",
+            "rim_only",
+            "split",
+            "short",
+            "low_key",
+            "gobo",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.9
+    }
+  ]
+}

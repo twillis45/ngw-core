@@ -1,4 +1,5 @@
 import { RECIPES } from '../data/recipes';
+import CardIcon from '../components/CardIcon';
 
 const MOOD_LABELS = {
   beauty: 'Beauty', cinematic: 'Cinematic', corporate: 'Corporate',
@@ -388,7 +389,7 @@ export default function ReferenceImageCard({ imageUrl, analysis, mood, lightingI
   return (
     <div className="result-card">
       <div className="result-card__header">
-        <span className="result-card__icon">{'\uD83D\uDCF7'}</span>
+        <CardIcon name="camera" />
         <span>Your Reference</span>
       </div>
       <div style={{

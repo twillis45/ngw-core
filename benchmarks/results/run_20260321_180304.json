@@ -1,0 +1,68 @@
+{
+  "run_timestamp": "2026-03-21T18:03:04.197293+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "rembrandt_classic",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "loop",
+          "expected": "rembrandt",
+          "acceptable": [
+            "rembrandt",
+            "loop",
+            "short"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "loop",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "diagnostics": {
+        "face_quality": "good",
+        "face_detected": true,
+        "signals_available": 24,
+        "signals_total": 24,
+        "signal_strength": 0.608,
+        "weak_signals": [
+          "shadow_interruption_pattern"
+        ],
+        "missing_signals": [],
+        "ambiguity_flags": [
+          "multiple_patterns_close_confidence",
+          "bw_limits_color_cues"
+        ],
+        "pattern_reasoning": "Pattern 'loop' selected by reference_read (confidence 85%). primary shadow direction indicates upper_right.",
+        "edge_cases": [
+          "bw_processing",
+          "blown_highlights",
+          "extreme_low_key"
+        ]
+      },
+      "timing_s": 1.24
+    }
+  ]
+}

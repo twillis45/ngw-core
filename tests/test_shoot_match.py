@@ -99,14 +99,19 @@ def test_my_gear_filters_systems():
 
 # ── Edge cases ───────────────────────────────────────────────────────────────
 
-def test_no_matching_systems_returns_422():
+def test_progressive_gear_matching_returns_adapted_setup():
+    """Progressive gear matching should always return a setup, never 422."""
     resp = client.post("/api/shoot-match", json=_wizard(
         mood="High Fashion",
         environment="Outdoor",
         gearMode="myGear",
         gear=["ring light"],
     ))
-    assert resp.status_code == 422
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "gearMatch" in data
+    assert "tier" in data["gearMatch"]
+    assert "label" in data["gearMatch"]
 
 
 def test_missing_mood_still_works():
@@ -250,7 +255,7 @@ def test_lighting_intelligence_in_response(monkeypatch):
         # lightingIntelligence carries scoring-influence fields
         assert "lightingIntelligence" in data
         intel = data["lightingIntelligence"]
-        assert intel["detectedPattern"] == "rembrandt-ish"
+        assert intel["detectedPattern"] == "rembrandt"
         assert intel["detectedModifier"] == "beauty_dish"
         assert intel["lightCount"] == 1
         assert "backgroundLight" in intel

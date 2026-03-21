@@ -57,3 +57,4 @@ node_modules/
 # Jupyter / temp
 .ipynb_checkpoints/
 tmp/
+certs/*.pem

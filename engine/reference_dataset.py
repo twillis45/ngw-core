@@ -570,6 +570,93 @@ def get_entry(
     return result
 
 
+# Fields that only the system may write — never writable via API
+_SYSTEM_LOCKED_FIELDS = {
+    "reference_id", "pattern_id", "approval_status", "approved_by",
+    "approved_at", "ingested_at", "rejection_reason",
+}
+
+# Enum constraints for user-editable fields
+_ENUM_CONSTRAINTS: Dict[str, set] = {
+    "dataset_tier": {"gold", "community", "synthetic"},
+    "source_type": {"original_photo", "screenshot", "studio_test", "found_online", "book_scan", "ai_generated"},
+    "environment": {"studio", "natural", "window_light", "outdoor", "mixed", "unknown"},
+    "key_height_relative": {"below_eye_level", "eye_level", "above_eye_level", "high", "overhead"},
+    "style_family": {"beauty", "editorial", "dramatic", "natural", "high_key", "low_key"},
+    "catchlight_pattern": {"single", "dual", "triangular", "strip", "ring"},
+    "separation_light_type": {"hair", "rim", "kicker", "none"},
+    "light_technology": {"continuous_led", "continuous_panel", "strobe", "flash", "mixed"},
+}
+
+
+def update_reference_metadata(
+    pattern_id: str,
+    reference_id: str,
+    updates: Dict[str, Any],
+    *,
+    dataset_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Apply a partial metadata update to an existing reference entry.
+
+    Validates enum fields before writing.  System-locked fields
+    (reference_id, pattern_id, approval_status, ingested_at, etc.) are
+    silently ignored even if present in ``updates``.
+
+    Returns the updated metadata dict.
+
+    Raises:
+        FileNotFoundError — entry does not exist
+        ValueError — one or more enum constraints violated (message lists all errors)
+    """
+    root = dataset_root or DATASET_ROOT
+    entry_path = root / pattern_id / reference_id
+    meta_path = entry_path / "metadata.json"
+
+    if not meta_path.exists():
+        raise FileNotFoundError(f"No metadata for {pattern_id}/{reference_id}")
+
+    with open(meta_path, "r") as f:
+        metadata: Dict[str, Any] = json.load(f)
+
+    # Strip system-locked fields from the incoming update
+    cleaned = {k: v for k, v in updates.items() if k not in _SYSTEM_LOCKED_FIELDS}
+
+    # Validate enum fields
+    errors: List[str] = []
+    for field, valid_values in _ENUM_CONSTRAINTS.items():
+        if field in cleaned and cleaned[field] is not None:
+            if cleaned[field] not in valid_values:
+                errors.append(
+                    f"'{field}' must be one of {sorted(valid_values)}, got '{cleaned[field]}'"
+                )
+
+    # Validate numeric range fields
+    trust = cleaned.get("entry_trust_score")
+    if trust is not None:
+        if not isinstance(trust, (int, float)) or not (0.0 <= float(trust) <= 1.0):
+            errors.append(f"'entry_trust_score' must be 0.0–1.0, got {trust!r}")
+
+    key_dir = cleaned.get("key_direction_deg")
+    if key_dir is not None:
+        if not isinstance(key_dir, (int, float)) or not (0 <= float(key_dir) <= 360):
+            errors.append(f"'key_direction_deg' must be 0–360, got {key_dir!r}")
+
+    light_count = cleaned.get("light_count")
+    if light_count is not None:
+        if not isinstance(light_count, int) or light_count < 0:
+            errors.append(f"'light_count' must be a non-negative integer, got {light_count!r}")
+
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    # Merge and persist
+    metadata.update(cleaned)
+    _save_json(meta_path, metadata)
+
+    logger.info("Updated metadata for %s/%s: fields=%s", pattern_id, reference_id, list(cleaned.keys()))
+    return metadata
+
+
 def list_entries(
     pattern_id: Optional[str] = None,
     status: Optional[str] = None,

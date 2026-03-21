@@ -1,0 +1,71 @@
+{
+  "run_timestamp": "2026-03-21T18:14:10.902880+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "corporate_soft_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "butterfly",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "split",
+            "flat_fashion",
+            "butterfly",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "butterfly",
+        "pattern_source": "cue_inference",
+        "pattern_confidence": 0.71,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "diagnostics": {
+        "face_quality": "good",
+        "face_detected": true,
+        "signals_available": 24,
+        "signals_total": 24,
+        "signal_strength": 0.607,
+        "weak_signals": [
+          "environmental_shadow_continuity"
+        ],
+        "missing_signals": [],
+        "ambiguity_flags": [],
+        "pattern_reasoning": "Pattern 'butterfly' selected by cue_inference (confidence 71%). primary shadow direction indicates upper_right.",
+        "edge_cases": [
+          "blown_highlights",
+          "extreme_low_key"
+        ]
+      },
+      "timing_s": 5.48
+    }
+  ]
+}

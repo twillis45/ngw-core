@@ -485,7 +485,7 @@ class TestRunExtendedPipelineV2:
             # New synthesis passes
             "modifier_shape", "hypothesis", "physics",
             # Enhanced existing
-            "reconstruction", "lighting_knowledge", "validation",
+            "reconstruction", "validation",
             # Backward compat alias
             "light_role",
         ]
@@ -519,11 +519,9 @@ class TestRunExtendedPipelineV2:
         assert "reconstruction" in results
         assert "validation" in results
 
-    def test_lighting_knowledge_in_pipeline(self):
+    def test_lighting_knowledge_removed_from_pipeline(self):
+        """lighting_knowledge pass was removed — key should not be present."""
         img = _make_test_image()
         results = run_extended_pipeline(img, face_box=_make_face_box())
-        lk = results.get("lighting_knowledge", {})
-        if lk.get("ok"):
-            assert "pattern_matches" in lk
-            assert "top_pattern" in lk
-            assert "master_reference" in lk
+        assert "lighting_knowledge" not in results
+        assert "pattern_matches" not in results

@@ -26,6 +26,15 @@ camera:
   lens: 85-135mm
   angle_to_subject_deg: 0
 
+capture_settings:
+  iso: 100
+  aperture: f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Lock exposure and WB for consistent results across batch headshot sessions
+    - f/8 provides enough DOF for slight subject movement between frames
+
 lights:
   - role: key
     modifier: softbox_rect

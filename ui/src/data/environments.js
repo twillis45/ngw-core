@@ -1,8 +1,16 @@
 export const ENVIRONMENTS = [
-  { value: 'studio',       label: 'Studio' },
-  { value: 'home_studio',  label: 'Home Studio' },
-  { value: 'office',       label: 'Office' },
-  { value: 'on_location',  label: 'On Location' },
-  { value: 'outdoors',     label: 'Outdoors' },
-  { value: 'small_room',   label: 'Small Room' },
+  { value: 'studio_small',       label: 'Small Room',            desc: 'Bedroom, tight space, or office' },
+  { value: 'home_studio',        label: 'Home Studio',           desc: 'Garage, spare room, or home backdrop' },
+  { value: 'studio_medium',      label: 'Studio — Medium',       desc: 'Shared studio or rental space' },
+  { value: 'studio_large',       label: 'Studio — Large',        desc: 'Full commercial studio' },
+  { value: 'on_location_indoor', label: 'On Location (Indoor)',  desc: 'Office, venue, warehouse, home' },
+  { value: 'on_location_outdoor',label: 'On Location (Outdoor)', desc: 'Park, street, rooftop, natural light' },
+  { value: 'event',              label: 'Event',                 desc: 'Wedding, corporate event, run-and-gun' },
+];
+
+/** Environments where ceiling height is not applicable */
+export const NON_STUDIO_ENVIRONMENTS = [
+  'on_location_outdoor',
+  'on_location_indoor',
+  'event',
 ];

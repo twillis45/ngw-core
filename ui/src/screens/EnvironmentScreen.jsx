@@ -1,14 +1,16 @@
+import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import StickyBottomBar from '../components/StickyBottomBar';
+import { trackEvent } from '../data/analytics';
 
 const ENVIRONMENTS = [
-  { value: 'Small Room',    label: 'Small Room',    desc: 'Bedroom, office, tight space' },
-  { value: 'Home Studio',   label: 'Home Studio',   desc: 'Garage, spare room with backdrop' },
-  { value: 'Medium Studio', label: 'Medium Studio',  desc: 'Shared studio or rental' },
-  { value: 'Large Studio',  label: 'Large Studio',   desc: 'Full commercial studio' },
-  { value: 'Outdoor',       label: 'Outdoor',        desc: 'Park, street, rooftop' },
-  { value: 'Window Light',  label: 'Window Light',   desc: 'Natural light from a window' },
-  { value: 'Office',        label: 'Office',          desc: 'Corporate headshot on-location' },
+  { value: 'studio_small',        label: 'Small Room',            desc: 'Bedroom, tight space, or office' },
+  { value: 'home_studio',         label: 'Home Studio',           desc: 'Garage, spare room, or home backdrop' },
+  { value: 'studio_medium',       label: 'Studio — Medium',       desc: 'Shared studio or rental space' },
+  { value: 'studio_large',        label: 'Studio — Large',        desc: 'Full commercial studio' },
+  { value: 'on_location_indoor',  label: 'On Location (Indoor)',  desc: 'Office, venue, warehouse, home' },
+  { value: 'on_location_outdoor', label: 'On Location (Outdoor)', desc: 'Park, street, rooftop, natural light' },
+  { value: 'event',               label: 'Event',                 desc: 'Wedding, corporate event, run-and-gun' },
 ];
 
 const SKIN_TONES = [
@@ -20,6 +22,8 @@ const SKIN_TONES = [
 export default function EnvironmentScreen() {
   const { environment, skinTone, referenceImage } = useAppState();
   const dispatch = useDispatch();
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
 
   function selectEnv(value) {
     dispatch({ type: 'SET_ENVIRONMENT', environment: value });
@@ -29,16 +33,42 @@ export default function EnvironmentScreen() {
     dispatch({ type: 'SET_SKIN_TONE', skinTone: value });
   }
 
+  function applyFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    dispatch({ type: 'SET_REFERENCE_IMAGE', file });
+    trackEvent('IMAGE_UPLOADED', { size: file.size, type: file.type });
+  }
+
   function handleImageUpload(e) {
-    const file = e.target.files?.[0];
-    if (file) {
-      dispatch({ type: 'SET_REFERENCE_IMAGE', file });
-    }
+    applyFile(e.target.files?.[0]);
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragging(false);
+    applyFile(e.dataTransfer.files?.[0]);
   }
 
   function clearImage() {
     dispatch({ type: 'SET_REFERENCE_IMAGE', file: null });
   }
+
+  // Paste support
+  useEffect(() => {
+    if (referenceImage) return; // already have one
+    function onPaste(e) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          applyFile(item.getAsFile());
+          break;
+        }
+      }
+    }
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [referenceImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function next() {
     if (!environment) return;
@@ -88,15 +118,26 @@ export default function EnvironmentScreen() {
       </p>
 
       {!referenceImage ? (
-        <label className="upload-zone">
+        <div
+          className={`upload-zone${dragging ? ' upload-zone--dragging' : ''}`}
+          onClick={() => inputRef.current?.click()}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          style={{ flexDirection: 'column', gap: 6, cursor: 'pointer' }}
+        >
           <input
+            ref={inputRef}
             type="file"
             accept="image/*"
             onChange={handleImageUpload}
             style={{ display: 'none' }}
           />
-          <span className="upload-zone__text">Tap to upload a reference photo</span>
-        </label>
+          <span className="upload-zone__text">
+            {dragging ? 'Drop to upload' : 'Tap, drop, or paste a reference photo'}
+          </span>
+          <span className="upload-zone__hint">JPEG · PNG · HEIC · max 10 MB · best results when the face fills the frame</span>
+        </div>
       ) : (
         <div className="upload-preview">
           <span className="upload-preview__name">{referenceImage.name}</span>

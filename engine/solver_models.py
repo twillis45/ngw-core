@@ -212,6 +212,7 @@ class ConsistencyScore(BaseModel):
 
     dimension: str = ""
     score: float = 0.0  # 0.0-1.0 (1.0 = all passes agree)
+    overall_score: float = 0.0  # alias for score — used by orchestrator aggregation
     total_pairs: int = 0
     agreeing_pairs: int = 0
     agreements: List[PairwiseAgreement] = Field(default_factory=list)

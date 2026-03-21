@@ -26,6 +26,8 @@ class LightPlacement(BaseModel):
     height_m: float
     distance_m: float
     modifier: str
+    power_hint: str = ""       # e.g. "f/8", "1/2 power", "match key"
+    ratio_hint: str = ""       # e.g. "2:1 key-to-fill"
     notes: List[str] = Field(default_factory=list)
 
 
@@ -53,6 +55,7 @@ class DiagramSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     system_id: str
+    pattern: Optional[str] = None
     lights: List[LightPlacement]
     subject: SubjectPosition
     camera: CameraPosition
@@ -180,6 +183,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 height_m=1.75,
                 distance_m=1.0,
                 modifier=key_modifier,
+                power_hint="f/8 · match right key",
                 notes=["Left key light. Symmetric with right. Continuous recommended."],
             )
         )
@@ -191,6 +195,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 height_m=1.75,
                 distance_m=1.0,
                 modifier=key_modifier,
+                power_hint="f/8 · match left key",
                 notes=["Right key light. Symmetric with left. Match power to left key."],
             )
         )
@@ -202,6 +207,8 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 height_m=1.2,
                 distance_m=0.8,
                 modifier=_choose_modifier(available, ["softbox", "softbox_rect", "umbrella"], "softbox"),
+                power_hint="½ key power",
+                ratio_hint="2:1 key-to-fill",
                 notes=[
                     "Below chin level, angled up toward face.",
                     "Lower power than keys — just enough to complete the triangle catchlight and lift chin shadow.",
@@ -212,6 +219,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
 
         return DiagramSpec(
             system_id=system_id,
+            pattern="triangle",
             lights=lights,
             subject=SubjectPosition(
                 position=SubjectAnchor.CENTER,
@@ -250,6 +258,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
             height_m=1.8,
             distance_m=key_distance,
             modifier=key_modifier,
+            power_hint="f/8 metered at subject",
             notes=["Primary shaping light."],
         )
     )
@@ -279,6 +288,17 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
             fill_angle, fill_height, fill_dist = -15.0, 1.6, 1.4
             fill_note = "Fill placed opposite key for contrast control."
 
+        # Fill power relative to key
+        if is_beauty:
+            fill_power = "1–2 stops below key"
+            fill_ratio = "2:1 key-to-fill"
+        elif mood in ("dramatic", "cinematic", "editorial", "low_key", "lowkey"):
+            fill_power = "2–3 stops below key"
+            fill_ratio = "4:1 key-to-fill"
+        else:
+            fill_power = "1–1.5 stops below key"
+            fill_ratio = "2:1 key-to-fill"
+
         lights.append(
             LightPlacement(
                 role="fill",
@@ -287,6 +307,8 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 height_m=fill_height,
                 distance_m=fill_dist,
                 modifier=fill_mod,
+                power_hint=fill_power,
+                ratio_hint=fill_ratio,
                 notes=[fill_note],
             )
         )
@@ -309,6 +331,7 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 height_m=2.0,
                 distance_m=1.8,
                 modifier=rim_mod,
+                power_hint="match key or +½ stop",
                 notes=[rim_note],
             )
         )
@@ -321,6 +344,11 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
             if mood in ("high key", "highkey")
             else "Background light for clean, even backdrop illumination."
         )
+        bg_power = (
+            "+1–2 stops over key"
+            if mood in ("high key", "highkey")
+            else "−1 stop from key"
+        )
         lights.append(
             LightPlacement(
                 role="background",
@@ -328,7 +356,8 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
                 angle_deg=180.0,
                 height_m=1.0,
                 distance_m=1.5,
-                modifier="bare_bulb",
+                modifier="bare",
+                power_hint=bg_power,
                 notes=[bg_note],
             )
         )
@@ -339,8 +368,12 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
     cam_dist = mm_cam_dist if mm_cam_dist is not None else 2.0
     pose = mm_pose if mm_pose is not None else "neutral"
 
+    # Derive pattern from force_pattern or leave for caller to set
+    diagram_pattern = force_pattern if force_pattern else None
+
     return DiagramSpec(
         system_id=system_id,
+        pattern=diagram_pattern,
         lights=lights,
         subject=SubjectPosition(
             position=SubjectAnchor.CENTER,
@@ -459,7 +492,7 @@ def build_reference_diagram(
         ]
 
     # ── Rembrandt-ish ─────────────────────────────────────────────────────
-    elif pattern == "rembrandt-ish":
+    elif pattern == "rembrandt":
         lights = [
             LightPlacement(
                 role="key",
@@ -487,7 +520,7 @@ def build_reference_diagram(
         ]
 
     # ── Split / Short ────────────────────────────────────────────────────
-    elif pattern == "split/short":
+    elif pattern == "split":
         lights = [
             LightPlacement(
                 role="key",
@@ -538,6 +571,7 @@ def build_reference_diagram(
 
     return DiagramSpec(
         system_id="reference_detected",
+        pattern=pattern if pattern != "unknown" else None,
         lights=lights,
         subject=SubjectPosition(
             position=SubjectAnchor.CENTER,

@@ -81,11 +81,15 @@ class CatchlightShape(BaseModel):
     """Cue 5: What shape are the catchlights (modifier signature)?
 
     Repackages existing catchlight shape data from the vision pipeline.
+    size_ratio_mean is the mean catchlight area relative to iris area (0–0.5).
+    size_class maps that ratio to a modifier size estimate.
     """
     model_config = ConfigDict(extra="forbid")
 
     dominant_shape: str = "unknown"  # round | rectangular | mixed | unknown
     shapes_seen: List[str] = Field(default_factory=list)
+    size_ratio_mean: Optional[float] = None  # mean(catchlight_area / iris_area), 0–0.5
+    size_class: str = "unknown"              # point | small | medium | large | very_large
     confidence: float = 0.0
     notes: List[str] = Field(default_factory=list)
 
@@ -228,6 +232,26 @@ class LightStructureDetection(BaseModel):
     notes: List[str] = Field(default_factory=list)
     ok: bool = True
 
+    # ── Enhanced signal fields (v2) ──────────────────────────────────
+    # Nose shadow vector: computed from nose-tip shadow centroid, not
+    # whole-face Sobel gradient.  More precise for pattern classification.
+    nose_shadow_centroid_angle_deg: float = 0.0   # 0-360, nose-specific
+    nose_shadow_centroid_distance: float = 0.0    # normalized 0-1
+
+    # Shadow distribution: raw metrics before pattern thresholds
+    left_right_asymmetry: float = 0.0             # |left - right| shadow density
+    top_bottom_ratio: float = 0.0                 # bottom / max(top, 0.01)
+    shadow_density: float = 0.0                   # overall shadow pixel ratio in nose region
+
+    # Triangle isolation: how well the bright triangle stands out from
+    # surrounding shadow.  High isolation = genuine Rembrandt triangle.
+    # Low isolation = ambient spill or soft fill, not a real triangle.
+    triangle_isolation: float = 0.0               # (triangle_bright - surround_dark) / face_mean
+
+    # Highlight width ratio: fraction of face width that is highlight-lit.
+    # > 0.5 suggests broad lighting; < 0.3 suggests short/narrow key.
+    highlight_width_ratio: float = 0.0
+
 
 class HighlightToShadowTransition(BaseModel):
     """Cue 6: How quickly do highlights transition to shadow?"""
@@ -245,6 +269,7 @@ class ContrastRatio(BaseModel):
 
     ratio: Optional[float] = None  # numeric ratio if measurable
     label: str = "unknown"  # low | medium | high | extreme | unknown
+    face_label: Optional[str] = None  # face-region-only contrast label (excludes clothing)
     confidence: float = 0.0
     notes: List[str] = Field(default_factory=list)
 
@@ -380,6 +405,143 @@ class ShadowInterruptionPattern(BaseModel):
     notes: List[str] = Field(default_factory=list)
 
 
+class NoseShadowLength(BaseModel):
+    """Nose shadow drop length — disambiguates butterfly / loop / rembrandt.
+
+    Measures how far below the nose tip the cast shadow extends,
+    normalised to face height so it is scale-invariant.
+
+    length_ratio thresholds:
+      < 0.10  → butterfly / paramount (shadow barely drops below tip)
+      0.10–0.30 → loop (shadow drops to upper-lip level)
+      0.30–0.50 → loop / rembrandt transition
+      > 0.50  → rembrandt / dramatic (shadow extends to chin region)
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    length_ratio: float = 0.0        # shadow_extension_px / face_height
+    shadow_label: str = "unknown"    # butterfly | loop | loop_rembrandt | rembrandt | dramatic
+    nose_tip_y_ratio: float = 0.0    # nose tip y / face_height (sanity check)
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
+class ShadowContinuity(BaseModel):
+    """Shadow connectivity — confirms or denies the Rembrandt triangle.
+
+    A true Rembrandt triangle requires that the nose shadow connects
+    continuously to the cheek shadow.  Disconnected shadows → loop.
+
+    Measures a connectivity score in the lower-nose / upper-cheek region.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    triangle_connected: bool = False      # nose shadow joins cheek shadow
+    connectivity_score: float = 0.0      # 0=fully disconnected, 1=fully merged
+    gap_width_ratio: float = 0.0         # gap between shadows / face width (0=connected)
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
+class FillRatio(BaseModel):
+    """Shadow-side vs key-side luminance ratio — quantifies fill light level.
+
+    Computed by splitting the face box into lit and shadow halves and
+    comparing their mean luminance in the skin region.
+
+    ratio interpretation:
+      > 0.75   → flat / very soft fill (nearly equal sides)
+      0.55–0.75 → gentle fill, 1:2 to 1:3 ratio
+      0.35–0.55 → moderate fill, 1:4 ratio
+      0.20–0.35 → low fill, 1:8 ratio
+      < 0.20   → no fill / dramatic / low-key
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    ratio: float = 0.0               # shadow_side_mean / lit_side_mean (0–1)
+    fill_label: str = "unknown"      # flat | soft_fill | moderate_fill | low_fill | no_fill
+    lit_side_mean: float = 0.0
+    shadow_side_mean: float = 0.0
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
+class ShadowPenumbra(BaseModel):
+    """Shadow penumbra width — proxy for apparent source angular size.
+
+    Wider penumbra → larger apparent source (bigger or closer modifier).
+    Derived from ``shadow_penumbra_pass`` in the extended vision pipeline.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    penumbra_width_px: float = 0.0          # mean transition zone width in pixels
+    penumbra_width_ratio: float = 0.0       # width / face dimension (normalised)
+    apparent_source_size: str = "unknown"   # point | small | medium | large | very_large
+    penumbra_uniformity: float = 0.0        # 0=variable edges, 1=all same width
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
+class EyeSocketShadow(BaseModel):
+    """Eye socket shadow depth — secondary key-height signal from brow ridge.
+
+    A high key light casts the brow ridge shadow downward into the eye socket,
+    creating a dark band above the iris.  Measuring that region's relative
+    luminance directly encodes key elevation without requiring catchlights.
+
+    depth_ratio: (face_mean_lum - socket_mean_lum) / face_mean_lum
+        High values (>0.20) → significant shadow above iris → high key
+        Low values (<0.10)  → little or no shadow → eye-level or low key
+
+    height_label:
+        "high"       depth_ratio > 0.25
+        "eye_level"  0.10 – 0.25
+        "low"        depth_ratio < 0.10
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    depth_ratio: float = 0.0          # (face_mean - socket_mean) / face_mean
+    socket_mean_lum: float = 0.0      # mean luminance in the brow/socket band
+    face_mean_lum: float = 0.0        # mean luminance of the broader face region
+    height_label: str = "unknown"     # high | eye_level | low | unknown
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
+class FaceOrientation(BaseModel):
+    """Face yaw (turn angle) — disambiguates broad from short lighting.
+
+    Computed from landmark geometry by comparing nose-to-left-edge vs
+    nose-to-right-edge distances relative to total face width.
+
+    yaw range [-1, 1]:
+        > 0   → face turned toward image-right (camera sees more of image-left side)
+        < 0   → face turned toward image-left  (camera sees more of image-right side)
+        ~0    → frontal (cannot distinguish broad from short)
+
+    broad_side: the image-direction where the key light would need to come
+                from in order to illuminate the MORE visible (wider) cheek.
+                This is the "broad lighting" position.
+    short_side: the image-direction where the key illuminates the LESS visible
+                (narrower / turned-away) cheek = short lighting.
+
+    Thresholds:
+        |yaw| < 0.12   → frontal — can't reliably distinguish broad/short
+        0.12–0.25      → slight turn
+        0.25–0.40      → moderate turn (typical 3/4 portrait)
+        > 0.40         → significant turn
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    yaw: float = 0.0                     # -1 to 1 (see above)
+    yaw_label: str = "frontal"           # frontal | slight_right | moderate_right | significant_right
+                                         # | slight_left | moderate_left | significant_left
+    broad_side: str = "unknown"          # left | right | unknown — which image-direction = broad
+    short_side: str = "unknown"          # left | right | unknown — which image-direction = short
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Aggregate Cue Report
 # ═══════════════════════════════════════════════════════════════════════════
@@ -418,6 +580,12 @@ class VisualCueReport(BaseModel):
     tonal_processing_estimation: Optional[TonalProcessingEstimation] = None
     shadow_interruption_pattern: Optional[ShadowInterruptionPattern] = None
     projected_pattern_shape: Optional[str] = None  # cross | vertical_slit | horizontal_slit | None
+    shadow_penumbra: Optional[ShadowPenumbra] = None
+    nose_shadow_length: Optional[NoseShadowLength] = None
+    shadow_continuity: Optional[ShadowContinuity] = None
+    fill_ratio: Optional[FillRatio] = None
+    face_orientation: Optional[FaceOrientation] = None
+    eye_socket_shadow: Optional[EyeSocketShadow] = None
 
     cues_computed: int = 0
     ok: bool = True
@@ -563,6 +731,7 @@ class LightingRead(BaseModel):
     source_quality: str = "unknown"  # hard | soft | mixed | unknown
     source_direction: str = "unknown"
     shadow_pattern: str = "unknown"  # rembrandt | loop | split | butterfly | flat | gobo | unknown
+    shadow_pattern_detail: str = ""  # descriptive detail (e.g. "grid/window gobo") when available
     fill_presence: str = "unknown"  # none | subtle | moderate | strong | unknown
     rim_presence: str = "unknown"  # none | subtle | strong | unknown
     light_count: int = 0
@@ -664,6 +833,54 @@ class VLMReconstructionEstimates(BaseModel):
     notes: List[str] = Field(default_factory=list)
 
 
+class ColorPalette(BaseModel):
+    """Color analysis for a reference photo — dominant palette, contrasting pairs, light temperature."""
+    model_config = ConfigDict(extra="forbid")
+
+    dominant_colors: List[str] = Field(default_factory=list)
+    # e.g. ["deep teal", "jade green", "warm amber skin", "black"]
+
+    dominant_color_hexes: List[str] = Field(default_factory=list)
+    # Approximate hex code per dominant_color, same order — e.g. ["#2E6B6A", "#4A8C5C", "#C9956A", "#1A1A1A"]
+
+    contrasting_pairs: List[str] = Field(default_factory=list)
+    # e.g. ["green qipao vs red parrot (complementary)", "warm skin vs cool teal background (warm/cool split)"]
+
+    color_temperature_key: str = ""
+    # Warm (~3200-4500K) | Neutral (~5500K) | Cool (~6500K+) | Mixed
+    # e.g. "Neutral — consistent 5600K strobe"
+
+    color_temperature_shadows: str = ""
+    # e.g. "Cool — blue shadow fill from ambient bounce"
+
+    warm_cool_split: bool = False
+    # True when there is a deliberate warm/cool contrast between key light and shadows
+
+    background_color: str = ""
+    # e.g. "dark teal" | "white seamless" | "warm grey" | "black"
+
+    color_harmony: str = ""
+    # Primary harmony: analogous | complementary | split_complementary | triadic | monochromatic | neutral | warm_cool_split | unknown
+
+    alternate_harmonies: List[str] = Field(default_factory=list)
+    # Additional applicable harmonies beyond the primary — e.g. ["warm_cool_split", "triadic"]
+    # UI shows these as selectable palette views
+
+    harmony_swatches: Dict[str, List[str]] = Field(default_factory=dict)
+    # Per-harmony color subsets from dominant_colors, keyed by harmony name.
+    # e.g. {"complementary": ["vivid red", "deep teal"], "warm_cool_split": ["warm skin", "cool grey bg"]}
+    # UI swaps displayed swatches when user picks a harmony tab.
+
+    palette_character: str = ""
+    # e.g. "Muted, desaturated — dark tones dominate with one vivid accent"
+
+    color_grading_notes: str = ""
+    # Any notable post-processing colour treatment observed
+
+    confidence: float = 0.0
+    notes: List[str] = Field(default_factory=list)
+
+
 class VLMSignals(BaseModel):
     """Container for all VLM-extracted physical signals.
 
@@ -678,6 +895,7 @@ class VLMSignals(BaseModel):
     highlights: Optional[VLMHighlightSignals] = None
     catchlights: Optional[VLMCatchlightSignals] = None
     reconstruction: Optional[VLMReconstructionEstimates] = None
+    color_palette: Optional[ColorPalette] = None
 
 
 class VLMDescription(BaseModel):
@@ -761,6 +979,7 @@ class ReferencePhotoAnalysis(BaseModel):
     image_read: Optional[ImageRead] = None
     lighting_read: Optional[LightingRead] = None
     recreation_setup: Optional[RecreationSetup] = None
+    color_palette: Optional[ColorPalette] = None
     vlm_description: Optional[VLMDescription] = None
     vlw_reconciliation: Optional[VLWReconciliation] = None
     ok: bool = True

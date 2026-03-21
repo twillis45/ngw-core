@@ -16,10 +16,11 @@ def classify_lighting_pattern(
     This is NOT computer vision; it's classification based on the planned setup.
 
     Returns: one of:
+      - "triangle"
       - "clamshell"
-      - "rembrandt-ish"
+      - "rembrandt"
       - "loop"
-      - "split/short"
+      - "split"
       - "unknown"
     """
     m = (mood or "").lower()
@@ -41,11 +42,11 @@ def classify_lighting_pattern(
 
     # Split/Short: key pushed far to the side (often ~90°) and dramatic
     if "dramatic" in m and ("90" in kp or "profile" in kp or "split" in kp or "short" in kp):
-        return "split/short"
+        return "split"
 
     # Rembrandt-ish: dramatic, key 30–60° off axis, slightly above eye line
     if "dramatic" in m and ("30" in kp or "45" in kp or "60" in kp or "off-axis" in kp):
-        return "rembrandt-ish"
+        return "rembrandt"
 
     # Loop: common portrait default 25–45° off axis without calling it rembrandt
     if ("natural" in m or "classic" in m or "portrait" in m) and ("30" in kp or "35" in kp or "45" in kp):
@@ -53,21 +54,21 @@ def classify_lighting_pattern(
 
     # Fallbacks by modifier + mood
     if "beauty_dish" in mod and "dramatic" in m:
-        return "rembrandt-ish"
+        return "rembrandt"
     if "beauty_dish" in mod and ("beauty" in m or "natural" in m):
         return "loop"
 
     # If it's a 2-light portrait kit and dramatic, rembrandt-ish is the safest default
     if gear in ("basic_2_light", "speedlight_2_light") and "dramatic" in m:
-        return "rembrandt-ish"
+        return "rembrandt"
 
     # Mood-based defaults when position/fill data isn't available
     if m in ("cinematic", "low_key", "lowkey"):
-        return "split/short"
+        return "split"
     if m in ("corporate",):
         return "loop"
     if m in ("editorial",):
-        return "rembrandt-ish"
+        return "rembrandt"
     if m in ("high_key", "highkey"):
         return "clamshell"
 
@@ -104,7 +105,7 @@ def shadow_expectations_for(pattern: str) -> Dict[str, Any]:
             ],
         }
 
-    if p == "rembrandt-ish":
+    if p in ("rembrandt", "rembrandt-ish"):
         return {
             "pattern": "Rembrandt-ish",
             "what_you_should_see": [
@@ -146,7 +147,7 @@ def shadow_expectations_for(pattern: str) -> Dict[str, Any]:
             ],
         }
 
-    if p == "split/short":
+    if p in ("split", "split/short", "short"):
         return {
             "pattern": "Split / Short Lighting",
             "what_you_should_see": [

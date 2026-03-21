@@ -1,4 +1,10 @@
+import useSettings from '../hooks/useSettings';
+
 export default function ReliabilityDots({ dots, label }) {
+  const { showConfidenceScore } = useSettings();
+
+  if (!showConfidenceScore) return null;
+
   return (
     <div className="reliability">
       <div className="reliability__dots">

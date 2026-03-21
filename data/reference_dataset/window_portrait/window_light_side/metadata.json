@@ -1,0 +1,45 @@
+{
+  "reference_id": "window_light_side",
+  "pattern_id": "window_portrait",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "window_light",
+  "source_type": "found_online",
+  "light_count": 1,
+  "key_direction_deg": 270.0,
+  "shadow_pattern": "window_portrait",
+  "notes": "Natural window light from the side \u2014 soft falloff, single large source",
+  "ground_truth": {
+    "expected_pattern": "window_portrait",
+    "acceptable_patterns": [
+      "window_portrait",
+      "loop",
+      "rembrandt"
+    ],
+    "expected_light_count": 1,
+    "acceptable_light_count_range": [
+      1,
+      4
+    ],
+    "expected_key_direction": "left"
+  },
+  "benchmark_metadata": {
+    "category": "natural",
+    "difficulty": "standard",
+    "known_challenges": [
+      "window light may be classified as studio if catchlights are absent"
+    ],
+    "added_date": "2026-03-16",
+    "promoted_to_dataset": "2026-03-17T22:27:21.282632+00:00"
+  },
+  "image_dimensions": {
+    "width": 1024,
+    "height": 682
+  },
+  "ingested_at": "2026-03-17T22:27:21.282739+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

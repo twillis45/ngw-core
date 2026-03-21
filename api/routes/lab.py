@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from auth.dev_guard import get_dev_user
@@ -39,6 +40,31 @@ router = APIRouter(prefix="/lab", tags=["lab"])
 
 UPLOAD_DIR = Path("data/uploads/lab")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+_MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+_ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tiff", ".tif"}
+_ALLOWED_CONTENT_TYPES = {
+    "image/jpeg", "image/png", "image/webp",
+    "image/heic", "image/heif", "image/tiff",
+}
+
+
+async def _validate_upload(upload: UploadFile) -> bytes:
+    """Read file contents and validate size + MIME type. Returns raw bytes."""
+    content = await upload.read()
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum allowed size is {_MAX_UPLOAD_BYTES // (1024*1024)} MB.",
+        )
+    ext = Path(upload.filename or "image.jpg").suffix.lower()
+    ct = (upload.content_type or "").split(";")[0].strip().lower()
+    if ext not in _ALLOWED_IMAGE_EXTS and ct not in _ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{ext or ct}'. Please upload a JPEG, PNG, WebP, HEIC, or TIFF image.",
+        )
+    return content
 
 
 # ── Models ────────────────────────────────────────────────
@@ -99,19 +125,20 @@ async def lab_analyze(
     When debug=True, also generates a visual debug overlay showing
     all detected signals and returns the overlay URL.
     """
+    content = await _validate_upload(image)
     # Save uploaded file
-    ext = Path(image.filename or "image.jpg").suffix or ".jpg"
+    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
     fname = f"lab_{uuid.uuid4().hex[:12]}{ext}"
     fpath = UPLOAD_DIR / fname
 
     with open(fpath, "wb") as f:
-        shutil.copyfileobj(image.file, f)
+        f.write(content)
 
     # Run full analysis pipeline via orchestrator
     try:
         from engine.orchestrator import analyze_image
 
-        ar = analyze_image(str(fpath), run_extended=True, debug=debug)
+        ar = analyze_image(str(fpath), run_extended=True, run_vlm=True, debug=debug)
 
         if not ar.ok:
             raise HTTPException(status_code=500, detail="; ".join(ar.notes))
@@ -167,6 +194,25 @@ async def lab_analyze(
         if ar.solver_result and hasattr(ar.solver_result, "model_dump"):
             solver_data = ar.solver_result.model_dump()
 
+        # Extract reconstruction + edge_case_flags from pipeline_results for the UI
+        pipeline_recon = None
+        pipeline_edge_flags = None
+        if ar.pipeline_results:
+            recon_pass = ar.pipeline_results.get("reconstruction", {})
+            if recon_pass.get("ok"):
+                pipeline_recon = {k: v for k, v in recon_pass.items() if k != "ok"}
+            edge_flags = ar.pipeline_results.get("edge_case_flags")
+            if edge_flags:
+                pipeline_edge_flags = edge_flags if isinstance(edge_flags, dict) else {}
+
+        # Also pull edge_case_flags from the AnalysisResult dataclass if available
+        if pipeline_edge_flags is None and ar.edge_case_flags is not None:
+            pipeline_edge_flags = (
+                ar.edge_case_flags.model_dump()
+                if hasattr(ar.edge_case_flags, "model_dump")
+                else vars(ar.edge_case_flags)
+            )
+
         response = {
             "status": "ok",
             "image_path": str(fpath),
@@ -179,6 +225,8 @@ async def lab_analyze(
             "classification": ar.classification,
             "lighting_inference": lighting_data,
             "solver": solver_data,
+            "reconstruction": pipeline_recon,
+            "edge_case_flags": pipeline_edge_flags,
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
         }
@@ -309,6 +357,26 @@ async def update_gold_set(
 
     entry = update_gold_set_entry(entry_id, **updates)
     return entry
+
+
+@router.get("/gold-set/{entry_id}/image")
+async def get_gold_set_image(entry_id: str, user: Dict = Depends(get_dev_user)):
+    """Serve the image file associated with a gold set entry."""
+    entry = get_gold_set_entry(entry_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail="Gold set entry not found")
+    image_path = Path(entry.get("image_path", ""))
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found on disk")
+    # Detect media type from suffix
+    suffix = image_path.suffix.lower()
+    media_type_map = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".webp": "image/webp",
+        ".heic": "image/heic", ".heif": "image/heif",
+    }
+    media_type = media_type_map.get(suffix, "image/jpeg")
+    return FileResponse(str(image_path), media_type=media_type)
 
 
 @router.delete("/gold-set/{entry_id}")
@@ -496,6 +564,8 @@ async def ingest_reference_image(
     from engine.reference_ingestion import ingest_reference as _ingest
     from engine.reference_matcher import reload_references
 
+    image_content = await _validate_upload(image)
+
     # Parse metadata
     try:
         meta_raw = json.loads(metadata_json)
@@ -505,12 +575,12 @@ async def ingest_reference_image(
         raise HTTPException(status_code=400, detail=f"Invalid metadata JSON: {exc}")
 
     # Save uploaded image to temp location
-    ext = Path(image.filename or "image.jpg").suffix or ".jpg"
+    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
     fname = f"{metadata.get('reference_id', 'unknown')}{ext}"
     tmp_path = REFERENCE_UPLOAD_DIR / fname
 
     with open(tmp_path, "wb") as f:
-        shutil.copyfileobj(image.file, f)
+        f.write(image_content)
 
     try:
         result = _ingest(
@@ -913,6 +983,8 @@ async def ingest_dataset_reference(
     """
     from engine.reference_dataset import ingest_reference_image as _ingest
 
+    image_content = await _validate_upload(image)
+
     # Parse metadata
     try:
         meta_raw = json.loads(metadata_json)
@@ -922,12 +994,12 @@ async def ingest_dataset_reference(
         raise HTTPException(status_code=400, detail=f"Invalid metadata JSON: {exc}")
 
     # Save uploaded image to temp location
-    ext = Path(image.filename or "image.jpg").suffix or ".jpg"
+    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
     fname = f"{metadata.get('reference_id', 'unknown')}{ext}"
     tmp_path = DATASET_UPLOAD_DIR / fname
 
     with open(tmp_path, "wb") as f:
-        shutil.copyfileobj(image.file, f)
+        f.write(image_content)
 
     try:
         result = _ingest(
@@ -1084,6 +1156,71 @@ async def reject_dataset_entry(
         return {"status": "rejected", "metadata": meta}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/vlm-corrections")
+async def vlm_corrections(user: Dict = Depends(get_dev_user)):
+    """Summary of VLM overrides/enrichments vs CV — reveals systematic CV gaps."""
+    from engine.vlm_improvement_log import read_improvement_summary
+    return read_improvement_summary()
+
+
+class ReferenceDatasetMetadataUpdate(BaseModel):
+    """Partial metadata update for a reference dataset entry.
+
+    Only user-owned fields are accepted.  System-managed fields
+    (reference_id, pattern_id, approval_status, ingested_at, etc.)
+    are stripped server-side even if submitted.
+    """
+    photographer: Optional[str] = None
+    title: Optional[str] = None
+    dataset_tier: Optional[str] = None          # gold | community | synthetic
+    entry_trust_score: Optional[float] = None   # 0.0 – 1.0
+    source_type: Optional[str] = None           # original_photo | screenshot | studio_test | found_online | book_scan | ai_generated
+    source_url: Optional[str] = None
+    environment: Optional[str] = None           # studio | natural | window_light | outdoor | mixed | unknown
+    light_count: Optional[int] = None
+    key_direction_deg: Optional[float] = None   # 0 – 360
+    key_height_relative: Optional[str] = None   # below_eye_level | eye_level | above_eye_level | high | overhead
+    shadow_pattern: Optional[str] = None
+    modifier_family: Optional[str] = None
+    estimated_distance_ft: Optional[float] = None
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+    # Archetype
+    style_family: Optional[str] = None          # beauty | editorial | dramatic | natural | high_key | low_key
+    catchlight_pattern: Optional[str] = None    # single | dual | triangular | strip | ring
+    underfill_ev: Optional[float] = None
+    separation_light_type: Optional[str] = None # hair | rim | kicker | none
+    light_technology: Optional[str] = None      # continuous_led | continuous_panel | strobe | flash | mixed
+    master_profile_id: Optional[str] = None
+
+
+@router.patch("/reference-dataset/{pattern_id}/{reference_id}")
+async def update_dataset_entry_metadata(
+    pattern_id: str,
+    reference_id: str,
+    body: ReferenceDatasetMetadataUpdate,
+    user: Dict = Depends(get_dev_user),
+):
+    """Partially update user-owned metadata fields for a reference dataset entry.
+
+    Enum fields are validated server-side.  System fields are ignored.
+    """
+    from engine.reference_dataset import update_reference_metadata
+
+    # Only send fields that were explicitly set (not None by default)
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+
+    try:
+        updated = update_reference_metadata(pattern_id, reference_id, updates)
+        return {"ok": True, "metadata": updated, "updated_by": user.get("email")}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Update failed: {exc}")
 
 
 @router.post("/reference-dataset/{pattern_id}/{reference_id}/reprocess")

@@ -8,6 +8,7 @@
  */
 import { useState } from 'react';
 import CollapsibleCard from './CollapsibleCard';
+import CardIcon from '../components/CardIcon';
 
 export default function RefImageReadCard({ imageRead }) {
   if (!imageRead) return null;
@@ -27,7 +28,7 @@ export default function RefImageReadCard({ imageRead }) {
     || hasDevices;
 
   return (
-    <CollapsibleCard icon={'\uD83D\uDCF8'} title="The Shot">
+    <CollapsibleCard icon={<CardIcon name="camera" />} title="The Shot">
       {/* Primary rows — always visible */}
       <div className="ref-card__grid">
         {ir.genre && ir.genre !== 'unknown' && (

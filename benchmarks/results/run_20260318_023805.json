@@ -1,0 +1,1077 @@
+{
+  "run_timestamp": "2026-03-18T02:38:05.818498+00:00",
+  "benchmark_count": 32,
+  "summary": {
+    "PASS": 17,
+    "SOFT_PASS": 15,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "athletic_rim_sculpt",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "split",
+          "expected": "athletic_rim_sculpt",
+          "acceptable": [
+            "athletic_rim_sculpt",
+            "rim_only",
+            "split",
+            "short",
+            "low_key",
+            "rembrandt",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "center",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "split",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "center"
+      },
+      "timing_s": 8.85
+    },
+    {
+      "benchmark_id": "beauty_dish_clean",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "butterfly",
+          "expected": "butterfly"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "butterfly",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.92,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 13.52
+    },
+    {
+      "benchmark_id": "bottle_backlight",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "low_key",
+          "expected": "bottle_backlight",
+          "acceptable": [
+            "bottle_backlight",
+            "rim_only",
+            "low_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "low_key",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 2.41
+    },
+    {
+      "benchmark_id": "broad",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "split",
+          "expected": "broad",
+          "acceptable": [
+            "broad",
+            "split",
+            "loop",
+            "rembrandt",
+            "short"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "split",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "right"
+      },
+      "timing_s": 2.83
+    },
+    {
+      "benchmark_id": "butterfly",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "butterfly",
+          "expected": "butterfly"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "butterfly",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.94,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 2.48
+    },
+    {
+      "benchmark_id": "clamshell_clean",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "clamshell",
+          "expected": "clamshell"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "center",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "clamshell",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.94,
+        "light_count": 2,
+        "key_direction": "center"
+      },
+      "timing_s": 1.8
+    },
+    {
+      "benchmark_id": "corporate_soft_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "split",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "split",
+            "flat_fashion",
+            "butterfly",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "split",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 29.79
+    },
+    {
+      "benchmark_id": "editorial_rim_key",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "editorial_rim_key",
+          "expected": "editorial_rim_key"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "editorial_rim_key",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 3.12
+    },
+    {
+      "benchmark_id": "gobo",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "gobo",
+          "expected": "gobo"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 2.21
+    },
+    {
+      "benchmark_id": "golden_hour",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "golden_hour",
+          "expected": "golden_hour"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "golden_hour",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 2.53
+    },
+    {
+      "benchmark_id": "high_key",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "high_key",
+          "expected": "high_key"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "high_key",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 2,
+        "key_direction": "left"
+      },
+      "timing_s": 2.55
+    },
+    {
+      "benchmark_id": "high_key_beauty",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "high_key",
+          "expected": "high_key"
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 5,
+          "expected": 2,
+          "range": [
+            1,
+            6
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "high_key",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 5,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.67
+    },
+    {
+      "benchmark_id": "hurley_triangle",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "triangle",
+          "expected": "triangle"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 3,
+          "expected": 3
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "triangle",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 3.45
+    },
+    {
+      "benchmark_id": "loop_standard",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "loop",
+          "expected": "loop"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "loop",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "right"
+      },
+      "timing_s": 6.88
+    },
+    {
+      "benchmark_id": "low_key",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "low_key",
+          "expected": "low_key"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "low_key",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.63
+    },
+    {
+      "benchmark_id": "mixed_light_failure",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "unknown",
+          "acceptable": [
+            "unknown",
+            "flat_fashion",
+            "hybrid",
+            "rembrandt",
+            "loop",
+            "split",
+            "gobo",
+            "grid/window gobo"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.91,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.27
+    },
+    {
+      "benchmark_id": "overcast_natural",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "overcast_natural",
+          "expected": "overcast_natural"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "overcast_natural",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.34
+    },
+    {
+      "benchmark_id": "overfill_flat",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "flat_fashion",
+          "expected": "flat_fashion"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "flat_fashion",
+        "pattern_source": "specialty:none",
+        "pattern_confidence": 0.0,
+        "light_count": 2,
+        "key_direction": "unknown"
+      },
+      "timing_s": 2.84
+    },
+    {
+      "benchmark_id": "reflector_fill",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "loop",
+          "expected": "loop"
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 2,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "loop",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.88,
+        "light_count": 2,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 5.1
+    },
+    {
+      "benchmark_id": "rembrandt_classic",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "rembrandt",
+          "expected": "rembrandt"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 3.4
+    },
+    {
+      "benchmark_id": "rim_only",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "rim_only",
+          "acceptable": [
+            "rim_only",
+            "low_key",
+            "split",
+            "rembrandt",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.14
+    },
+    {
+      "benchmark_id": "ring_light",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "ring_light",
+          "expected": "ring_light"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "ring_light",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "right"
+      },
+      "timing_s": 3.08
+    },
+    {
+      "benchmark_id": "short",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "short",
+          "acceptable": [
+            "short",
+            "rembrandt",
+            "loop",
+            "split",
+            "broad"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 2.07
+    },
+    {
+      "benchmark_id": "short_fashion_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "low_key",
+          "expected": "short",
+          "acceptable": [
+            "short",
+            "split",
+            "rembrandt",
+            "rim_only",
+            "low_key",
+            "gobo",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "low_key",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 2.03
+    },
+    {
+      "benchmark_id": "soft_editorial_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "window_portrait",
+            "golden_hour",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.91,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 3.07
+    },
+    {
+      "benchmark_id": "split_strong",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "split",
+          "expected": "split"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "split",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "right"
+      },
+      "timing_s": 1.7
+    },
+    {
+      "benchmark_id": "tabletop_soft_product",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "low_key",
+          "expected": "tabletop_soft_product",
+          "acceptable": [
+            "tabletop_soft_product",
+            "flat_fashion",
+            "high_key",
+            "low_key",
+            "unknown",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "low_key",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 2.24
+    },
+    {
+      "benchmark_id": "weak_catchlight",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "rembrandt",
+          "expected": "rembrandt"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.36
+    },
+    {
+      "benchmark_id": "white_seamless_catalog",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "high_key",
+          "expected": "flat_fashion",
+          "acceptable": [
+            "flat_fashion",
+            "high_key",
+            "split",
+            "butterfly",
+            "rembrandt",
+            "loop",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 3,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "high_key",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.9,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 3.44
+    },
+    {
+      "benchmark_id": "window_light_side",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "window_portrait",
+          "acceptable": [
+            "window_portrait",
+            "loop",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 4,
+          "expected": 1,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 4,
+        "key_direction": "left"
+      },
+      "timing_s": 3.2
+    },
+    {
+      "benchmark_id": "window_negative_fill",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "gobo",
+          "acceptable": [
+            "gobo",
+            "window_portrait",
+            "window_negative_fill",
+            "split",
+            "rembrandt",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.47
+    },
+    {
+      "benchmark_id": "window_soft_side",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "window_portrait",
+          "expected": "window_portrait"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "window_portrait",
+        "pattern_source": "specialty:reference_read",
+        "pattern_confidence": 0.8,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 2.57
+    }
+  ]
+}

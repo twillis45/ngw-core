@@ -8,8 +8,8 @@ import {
 
 /* ── Theme + constants (matching DiagramCard) ────────── */
 
-const LIGHT_COLORS_DARK = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#a855f7' };
-const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#7c3aed' };
+const LIGHT_COLORS_DARK  = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#ec4899' };
+const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#be185d' };
 
 /** Theme-aware palette for canvas drawing (matches DiagramCard). */
 function getTheme() {
@@ -44,7 +44,8 @@ function lightColor(role, colors) {
   if (lc[role]) return lc[role];
   if (role?.startsWith('key')) return lc.key;
   if (role?.startsWith('fill')) return lc.fill;
-  if (role?.startsWith('rim') || role?.startsWith('hair')) return lc.rim;
+  if (role?.startsWith('rim')) return lc.rim;
+  if (role?.startsWith('hair')) return lc.hair;
   if (role === 'background') return lc.background;
   return colors ? '#64748b' : '#94a3b8';
 }

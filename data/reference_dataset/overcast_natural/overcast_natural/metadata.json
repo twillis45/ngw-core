@@ -1,0 +1,50 @@
+{
+  "reference_id": "overcast_natural",
+  "pattern_id": "overcast_natural",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "community",
+  "entry_trust_score": 0.7,
+  "approval_status": "approved",
+  "environment": "natural",
+  "source_type": "found_online",
+  "light_count": 1,
+  "key_direction_deg": null,
+  "shadow_pattern": "overcast_natural",
+  "notes": "Overcast natural \u2014 outdoor portrait under overcast sky, soft diffused light, no harsh shadows, urban setting",
+  "ground_truth": {
+    "expected_pattern": "overcast_natural",
+    "acceptable_patterns": [
+      "overcast_natural",
+      "flat_fashion",
+      "high_key",
+      "rembrandt",
+      "loop",
+      "unknown"
+    ],
+    "expected_light_count": 1,
+    "acceptable_light_count_range": [
+      1,
+      2
+    ],
+    "expected_key_direction": "unknown"
+  },
+  "benchmark_metadata": {
+    "category": "natural",
+    "difficulty": "hard",
+    "known_challenges": [
+      "overcast is an environment not a geometric pattern",
+      "very soft diffused light produces near-zero shadow signal",
+      "outdoor scene with complex background may confuse analysis"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.207636+00:00"
+  },
+  "image_dimensions": {
+    "width": 446,
+    "height": 595
+  },
+  "ingested_at": "2026-03-17T22:27:21.207754+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

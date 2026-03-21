@@ -8,6 +8,7 @@ import ModeCard from '../components/ModeCard';
 import Toast from '../components/Toast';
 import DiagramCard from '../cards/DiagramCard';
 import { EXAMPLE_ANALYSES, GALLERY_ITEMS } from '../data/exampleData';
+import { trackEvent } from '../data/analytics';
 
 const DEV_TAP_COUNT = 5;
 const DEV_TAP_WINDOW = 3000;
@@ -41,6 +42,9 @@ export default function WelcomeScreenV2() {
 
   /* ── Scroll to top on mount ── */
   useEffect(() => { window.scrollTo(0, 0); }, []);
+
+  /* ── Track landing view once per session ── */
+  useEffect(() => { trackEvent('LANDING_VIEW', { screen: 'welcome' }); }, []);
 
   /* ── Scroll-reveal + stagger with IntersectionObserver ── */
   useEffect(() => {
@@ -183,14 +187,14 @@ export default function WelcomeScreenV2() {
         </div>
 
         <h1 className="v2-hero__headline v2-hero__fade v2-hero__fade--1">
-          Reverse-engineer<br />any photograph.
+          Get this shot right —<br />first try.
         </h1>
         <p className="v2-hero__sub v2-hero__fade v2-hero__fade--2">
-          Upload a photo. Get the complete lighting setup.
+          Upload any reference photo. Get the exact lighting setup in seconds.
         </p>
 
         <button type="button" className="btn btn--primary v2-hero__cta v2-hero__fade v2-hero__fade--3" onClick={triggerUpload}>
-          Upload a Photo
+          Try it now
         </button>
         <p className="v2-hero__hint v2-hero__fade v2-hero__fade--3">Free &mdash; no account needed</p>
       </div>
@@ -199,9 +203,9 @@ export default function WelcomeScreenV2() {
           EXAMPLE ANALYSIS — full-bleed dark section
           ════════════════════════════════════════════ */}
       <div className="v2-section v2-section--alt v2-reveal v2-reveal--from-left">
-        <h2 className="v2-section__title">See What NGW Finds</h2>
+        <h2 className="v2-section__title">See how it works</h2>
         <p className="v2-section__sub">
-          Upload any reference photo and get the complete lighting breakdown.
+          Upload a reference photo. Get the pattern, positions, and power ratios — ready to run.
         </p>
 
         <div className="v2-example__tabs">
@@ -253,9 +257,9 @@ export default function WelcomeScreenV2() {
           GALLERY — full-bleed default bg, real photos
           ════════════════════════════════════════════ */}
       <div className="v2-section v2-reveal v2-reveal--from-right">
-        <h2 className="v2-section__title">Try It On Any Photo</h2>
+        <h2 className="v2-section__title">Any photo. Any setup.</h2>
         <p className="v2-section__sub">
-          Tap an image to see the full analysis&nbsp;&mdash; or upload your own.
+          Tap a scenario to see the full setup — or upload your own reference photo.
         </p>
 
         <div className="v2-gallery__scroll v2-stagger">
@@ -278,9 +282,9 @@ export default function WelcomeScreenV2() {
           HOW PHOTOGRAPHERS USE NGW — alt bg
           ════════════════════════════════════════════ */}
       <div className="v2-section v2-section--alt v2-reveal v2-reveal--from-left">
-        <h2 className="v2-section__title">How Photographers Use NGW</h2>
+        <h2 className="v2-section__title">Three ways to use it on set</h2>
         <p className="v2-section__sub">
-          Three workflows for every stage of your shoot.
+          Before, during, and after — the full workflow for repeatable results.
         </p>
 
         <div className="v2-workflow v2-stagger">
@@ -293,10 +297,14 @@ export default function WelcomeScreenV2() {
               </svg>
             </span>
             <span className="v2-workflow__body">
-              <span className="v2-workflow__title">Reverse-Engineer Any Photo</span>
-              <span className="v2-workflow__desc">Upload a reference, get the exact lighting setup</span>
+              <span className="v2-workflow__title">Match any reference photo</span>
+              <span className="v2-workflow__desc">Upload it — get positions, modifiers, and power ratios</span>
             </span>
-            <span className="v2-workflow__arrow">{'\u203A'}</span>
+            <span className="v2-workflow__arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
           </button>
 
           <button type="button" className="v2-workflow__card" style={{ '--stagger-i': 1 }} onClick={() => handleWorkflowClick('wizard')}>
@@ -306,10 +314,14 @@ export default function WelcomeScreenV2() {
               </svg>
             </span>
             <span className="v2-workflow__body">
-              <span className="v2-workflow__title">Plan Your Next Shoot</span>
-              <span className="v2-workflow__desc">Build a lighting setup from mood + environment</span>
+              <span className="v2-workflow__title">Plan the shot before you arrive</span>
+              <span className="v2-workflow__desc">Describe the mood and your space — get the full setup</span>
             </span>
-            <span className="v2-workflow__arrow">{'\u203A'}</span>
+            <span className="v2-workflow__arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
           </button>
 
           <button type="button" className="v2-workflow__card" style={{ '--stagger-i': 2 }} onClick={() => handleWorkflowClick('shoot')}>
@@ -321,79 +333,50 @@ export default function WelcomeScreenV2() {
               </svg>
             </span>
             <span className="v2-workflow__body">
-              <span className="v2-workflow__title">Shoot Mode: On-Set Assistant</span>
-              <span className="v2-workflow__desc">Step-by-step light placement, exposure checks, and troubleshooting</span>
+              <span className="v2-workflow__title">Run it on set — step by step</span>
+              <span className="v2-workflow__desc">Place each light, dial in power, verify — and lock the setup</span>
             </span>
-            <span className="v2-workflow__arrow">{'\u203A'}</span>
+            <span className="v2-workflow__arrow">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
           </button>
         </div>
       </div>
 
       {/* ════════════════════════════════════════════
-          PRICING — 3-tier packages
+          PRICING — Founders Access
           ════════════════════════════════════════════ */}
       <div className="v2-section v2-reveal v2-reveal--zoom">
-        <h2 className="v2-section__title">Choose Your Plan</h2>
+        <h2 className="v2-section__title">Founders Access</h2>
         <p className="v2-section__sub">
-          Start free. Upgrade when you&rsquo;re ready.
+          Launch price. Locked in forever — increases when seats fill.
         </p>
 
-        <div className="v2-pricing">
-          {/* Free */}
-          <div className="v2-pricing__card">
-            <div className="v2-pricing__header">
-              <h3 className="v2-pricing__name">Free</h3>
-              <div className="v2-pricing__price">$0</div>
-              <div className="v2-pricing__period">forever</div>
+        <div className="v2-founders">
+          <div className="v2-founders__card">
+            <div className="v2-founders__badge">Limited seats</div>
+            <div className="v2-founders__price">
+              <span className="v2-founders__amount">$39</span>
+              <span className="v2-founders__period">one-time</span>
             </div>
-            <ul className="v2-pricing__features">
-              <li>1 analysis</li>
-              <li>Pattern identification</li>
-              <li>Light count</li>
-              <li>Key direction</li>
+            <p className="v2-founders__note">Full access. No subscription. Price increases as seats fill.</p>
+            <ul className="v2-founders__features">
+              <li>Unlimited analyses — any photo, any setup</li>
+              <li>Full lighting diagrams with exact positions</li>
+              <li>Shoot Mode — on-set step-by-step assistant</li>
+              <li>Gear matching — setups built around what you own</li>
+              <li>Recipe library — proven setups, ready to run</li>
+              <li>Save and reuse setups across shoots</li>
             </ul>
-            <button type="button" className="v2-pricing__cta v2-pricing__cta--outline" onClick={triggerUpload}>
-              Get Started
+            <button type="button" className="v2-founders__cta" onClick={triggerUpload}>
+              Get Founders Access — $39
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
             </button>
-          </div>
-
-          {/* Starter */}
-          <div className="v2-pricing__card v2-pricing__card--featured">
-            <div className="v2-pricing__badge">Most Popular</div>
-            <div className="v2-pricing__header">
-              <h3 className="v2-pricing__name">Starter</h3>
-              <div className="v2-pricing__price">$9<span className="v2-pricing__unit">/mo</span></div>
-              <div className="v2-pricing__period">billed monthly</div>
-            </div>
-            <ul className="v2-pricing__features">
-              <li>10 analyses / month</li>
-              <li>Full lighting diagrams</li>
-              <li>Lighting presets library</li>
-              <li>Save setups</li>
-            </ul>
-            <button type="button" className="btn btn--primary v2-pricing__cta" onClick={triggerUpload}>
-              Start Free Trial
-            </button>
-          </div>
-
-          {/* Pro */}
-          <div className="v2-pricing__card">
-            <div className="v2-pricing__header">
-              <h3 className="v2-pricing__name">Pro</h3>
-              <div className="v2-pricing__price">$19<span className="v2-pricing__unit">/mo</span></div>
-              <div className="v2-pricing__period">billed monthly</div>
-            </div>
-            <ul className="v2-pricing__features">
-              <li>Unlimited analyses</li>
-              <li>Shoot mode assistant</li>
-              <li>Gear matching</li>
-              <li>Export &amp; share setups</li>
-              <li>Recipe packages</li>
-              <li>Priority support</li>
-            </ul>
-            <button type="button" className="v2-pricing__cta v2-pricing__cta--outline" onClick={triggerUpload}>
-              Start Free Trial
-            </button>
+            <p className="v2-founders__free">Try free first — no account needed.</p>
           </div>
         </div>
       </div>
@@ -402,76 +385,101 @@ export default function WelcomeScreenV2() {
           SECONDARY LINKS + ADMIN
           ════════════════════════════════════════════ */}
       <div className="v2-footer v2-section--alt">
-        <button
-          className="welcome__btn welcome__btn--secondary"
-          onClick={() => dispatch({ type: 'NAVIGATE', screen: 'recipes' })}
-        >
-          <span className="welcome__btn-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
-            </svg>
-          </span>
-          <span className="welcome__btn-text">
-            <strong>Lighting Recipes</strong>
-            <small>Browse proven setups for any look</small>
-          </span>
-          <span className="welcome__btn-arrow">{'\u203A'}</span>
-        </button>
-
-        {kitSaved && (
+        <p className="v2-footer__label">Quick access</p>
+        <div className="v2-footer__grid">
           <button
-            className="welcome__btn welcome__btn--secondary"
-            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'my_kit' })}
+            className="v2-tile"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'recipes' })}
+            type="button"
           >
-            <span className="welcome__btn-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+            <span className="v2-tile__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
               </svg>
             </span>
-            <span className="welcome__btn-text">
-              <strong>My Kit</strong>
-              <small>View and manage your saved gear</small>
-            </span>
-            <span className="welcome__btn-arrow">{'\u203A'}</span>
+            <span className="v2-tile__label">Recipes</span>
           </button>
-        )}
 
-        {savedCount > 0 && (
           <button
-            className="welcome__btn welcome__btn--secondary"
-            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+            className="v2-tile"
+            onClick={triggerUpload}
+            type="button"
           >
-            <span className="welcome__btn-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+            <span className="v2-tile__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <path d="m21 15-5-5L5 21"/>
               </svg>
             </span>
-            <span className="welcome__btn-text">
-              <strong>Saved Setups</strong>
-              <small>{savedCount} saved setup{savedCount !== 1 ? 's' : ''}</small>
-            </span>
-            <span className="welcome__btn-arrow">{'\u203A'}</span>
+            <span className="v2-tile__label">Analyze</span>
           </button>
-        )}
+
+          {kitSaved && (
+            <button
+              className="v2-tile"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'my_kit' })}
+              type="button"
+            >
+              <span className="v2-tile__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+                </svg>
+              </span>
+              <span className="v2-tile__label">My Kit</span>
+            </button>
+          )}
+
+          {savedCount > 0 && (
+            <button
+              className="v2-tile"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+              type="button"
+            >
+              <span className="v2-tile__icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+                </svg>
+              </span>
+              <span className="v2-tile__label">Saved{savedCount > 0 ? ` (${savedCount})` : ''}</span>
+            </button>
+          )}
+
+          <button
+            className="v2-tile"
+            onClick={() => handleWorkflowClick('shoot')}
+            type="button"
+          >
+            <span className="v2-tile__icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <circle cx="12" cy="12" r="6"/>
+                <circle cx="12" cy="12" r="2"/>
+              </svg>
+            </span>
+            <span className="v2-tile__label">Shoot Mode</span>
+          </button>
+
+          <button
+            className="v2-tile v2-tile--muted"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
+            type="button"
+          >
+            <span className="v2-tile__icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 12H5M12 5l-7 7 7 7"/>
+              </svg>
+            </span>
+            <span className="v2-tile__label">Classic</span>
+          </button>
+        </div>
 
         {adminModes.map(mode => (
           <ModeCard key={mode.id} mode={mode} onSelect={handleModeSelect} />
         ))}
 
-        {/* Back to V1 link */}
-        <button
-          className="welcome__btn welcome__btn--secondary"
-          onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
-          style={{ opacity: 0.5 }}
-        >
-          <span className="welcome__btn-text">
-            <strong>&larr; Back to Current Homepage</strong>
-            <small>Return to the live version</small>
-          </span>
-        </button>
-
-        <div className="welcome__build">v2 mockup</div>
+        <div className="welcome__build">No Guesswork Lighting</div>
       </div>
 
       <Toast

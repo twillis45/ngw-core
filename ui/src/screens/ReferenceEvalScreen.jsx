@@ -1,37 +1,650 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { uploadReferenceImage } from '../api';
 import { RECIPES } from '../data/recipes';
 import DiagramCard from '../cards/DiagramCard';
 import CollapsibleCard from '../cards/CollapsibleCard';
 import ZoomOverlay from '../cards/ZoomOverlay';
+import usePaywall from '../hooks/usePaywall';
+import { trackEvent } from '../data/analytics';
+import { getToken } from '../data/authApi';
+
+// ── Pattern / mood option lists ────────────────────────────────────────────
 
 const MOOD_OPTIONS = [
-  { value: 'beauty', label: 'Beauty' },
+  { value: 'beauty',    label: 'Beauty' },
   { value: 'cinematic', label: 'Cinematic' },
   { value: 'corporate', label: 'Corporate' },
   { value: 'editorial', label: 'Editorial' },
-  { value: 'natural', label: 'Natural' },
-  { value: 'high_key', label: 'High Key' },
-  { value: 'low_key', label: 'Low Key' },
+  { value: 'natural',   label: 'Natural' },
+  { value: 'high_key',  label: 'High Key' },
+  { value: 'low_key',   label: 'Low Key' },
 ];
 
 const MOOD_LABELS = Object.fromEntries(MOOD_OPTIONS.map(m => [m.value, m.label]));
 
+const PATTERN_OPTIONS = [
+  'rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad',
+  'short', 'rim_only', 'beauty_dish', 'high_key', 'low_key',
+  'natural_window', 'dramatic_key', 'three_point',
+];
+
+const ISSUE_TYPES = [
+  { value: 'wrong_pattern',  label: 'Pattern identified incorrectly' },
+  { value: 'wrong_mood',     label: 'Mood / style misidentified' },
+  { value: 'no_face',        label: 'No face found / wrong subject' },
+  { value: 'confidence_low', label: 'Confidence feels too high' },
+  { value: 'other',          label: 'Something else is off' },
+];
+
+// ── Admin: submit ground truth ─────────────────────────────────────────────
+
+async function submitGroundTruth({
+  imagePath, expectedPattern, expectedMood,
+  lightingFamily, sourceQuality, sourceDirection,
+  contrastLevel, colorTemp, lightCount, subjectType, notes,
+}) {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const corrections = {};
+  if (lightingFamily)  corrections.lighting_family    = lightingFamily;
+  if (sourceQuality)   corrections.source_quality     = sourceQuality;
+  if (sourceDirection) corrections.source_direction   = sourceDirection;
+  if (contrastLevel)   corrections.contrast_level     = contrastLevel;
+  if (colorTemp)       corrections.color_temperature  = colorTemp;
+  if (lightCount)      corrections.light_count        = parseInt(lightCount, 10);
+  if (subjectType)     corrections.subject_type       = subjectType;
+  if (notes)           corrections.notes              = notes;
+  const res = await fetch('/api/admin/image-labels', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      image_path: imagePath,
+      expected_pattern: expectedPattern || null,
+      expected_mood: expectedMood || null,
+      corrections: Object.keys(corrections).length ? corrections : null,
+    }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Server error (${res.status})`);
+  }
+  return res.json();
+}
+
+// ── Admin correction panel ─────────────────────────────────────────────────
+
+const SOURCE_QUALITY_OPTIONS  = ['soft', 'hard', 'mixed', 'diffused', 'ring'];
+const SOURCE_DIR_OPTIONS      = [
+  'camera-left high', 'camera-left eye level', 'camera-left low',
+  'camera-right high', 'camera-right eye level', 'camera-right low',
+  'frontal', 'overhead', 'behind / rim', 'split',
+];
+const CONTRAST_OPTIONS        = ['low', 'medium', 'high', 'extreme'];
+const SUBJECT_TYPE_OPTIONS    = ['solo', 'group', 'product', 'pet', 'architecture', 'landscape', 'abstract', 'food'];
+
+function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
+  const [open, setOpen]                     = useState(false);
+  const [pattern, setPattern]               = useState('');
+  const [mood, setMood]                     = useState('');
+  const [lightingFamily, setLightingFamily] = useState('');
+  const [sourceQuality, setSourceQuality]   = useState('');
+  const [sourceDir, setSourceDir]           = useState('');
+  const [contrast, setContrast]             = useState('');
+  const [colorTemp, setColorTemp]           = useState('');
+  const [lightCount, setLightCount]         = useState('');
+  const [subjectType, setSubjectType]       = useState('');
+  const [notes, setNotes]                   = useState('');
+  const [saving, setSaving]                 = useState(false);
+  const [saved, setSaved]                   = useState(false);
+  const [err, setErr]                       = useState(null);
+
+  const lr = analysis?.description?.referenceAnalysis?.lighting_read;
+  const rs = analysis?.description?.referenceAnalysis?.recreation_setup;
+
+  // Pre-fill all fields with detected values when panel opens
+  useEffect(() => {
+    if (open) {
+      setPattern(analysis?.classification?.lightingPattern || '');
+      setMood(analysis?.classification?.mood || '');
+      setLightingFamily(lr?.lighting_family || '');
+      setSourceQuality(lr?.source_quality || '');
+      setSourceDir(lr?.source_direction || '');
+      setContrast(lr?.contrast_level || '');
+      setColorTemp(lr?.color_temperature || '');
+      setLightCount(rs?.light_count != null ? String(rs.light_count) : '');
+      setSubjectType('');
+      setNotes('');
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSave() {
+    setSaving(true);
+    setErr(null);
+    try {
+      await submitGroundTruth({
+        imagePath,
+        expectedPattern: pattern,
+        expectedMood: mood,
+        lightingFamily,
+        sourceQuality,
+        sourceDirection: sourceDir,
+        contrastLevel: contrast,
+        colorTemp,
+        lightCount,
+        subjectType,
+        notes,
+      });
+      setSaved(true);
+      setOpen(false);
+      trackEvent('admin_ground_truth_saved', { imagePath, pattern, mood });
+      setTimeout(() => setSaved(false), 4000);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="ref-correction ref-correction--admin">
+      <div className="ref-correction__row">
+        <span className="ref-correction__admin-badge">Admin</span>
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={() => setOpen(v => !v)}
+          type="button"
+        >
+          {open ? 'Cancel' : 'Correct This Analysis'}
+        </button>
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={onNavigateLab}
+          type="button"
+        >
+          Open in Lab
+        </button>
+        {saved && (
+          <span className="ref-correction__saved">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Ground truth saved
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="ref-correction__form">
+          <p className="ref-correction__form-intro">
+            Override detected values. Pre-filled from current analysis — change only what's wrong.
+          </p>
+
+          {/* Row 1: Pattern + Mood */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Pattern</label>
+              <select className="ref-correction__select" value={pattern} onChange={e => setPattern(e.target.value)}>
+                <option value="">— as detected —</option>
+                {PATTERN_OPTIONS.map(p => (
+                  <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Mood</label>
+              <select className="ref-correction__select" value={mood} onChange={e => setMood(e.target.value)}>
+                <option value="">— as detected —</option>
+                {MOOD_OPTIONS.map(m => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 2: Lighting Family + Source Quality */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Lighting Family</label>
+              <select className="ref-correction__select" value={lightingFamily} onChange={e => setLightingFamily(e.target.value)}>
+                <option value="">— as detected —</option>
+                {PATTERN_OPTIONS.map(p => (
+                  <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Source Quality</label>
+              <select className="ref-correction__select" value={sourceQuality} onChange={e => setSourceQuality(e.target.value)}>
+                <option value="">— as detected —</option>
+                {SOURCE_QUALITY_OPTIONS.map(q => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 3: Source Direction + Contrast */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Source Direction</label>
+              <select className="ref-correction__select" value={sourceDir} onChange={e => setSourceDir(e.target.value)}>
+                <option value="">— as detected —</option>
+                {SOURCE_DIR_OPTIONS.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Contrast</label>
+              <select className="ref-correction__select" value={contrast} onChange={e => setContrast(e.target.value)}>
+                <option value="">— as detected —</option>
+                {CONTRAST_OPTIONS.map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Row 4: Color Temp + Light Count */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Color Temp</label>
+              <input
+                type="text"
+                className="ref-correction__select"
+                placeholder="e.g. 5500K daylight"
+                value={colorTemp}
+                onChange={e => setColorTemp(e.target.value)}
+              />
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Light Count</label>
+              <input
+                type="number"
+                className="ref-correction__select"
+                min="1" max="8"
+                placeholder="# of lights"
+                value={lightCount}
+                onChange={e => setLightCount(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Row 5: Subject Type (full width) */}
+          <div className="ref-correction__field">
+            <label className="ref-correction__label">Subject Type</label>
+            <select className="ref-correction__select" value={subjectType} onChange={e => setSubjectType(e.target.value)}>
+              <option value="">— as detected —</option>
+              {SUBJECT_TYPE_OPTIONS.map(s => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="ref-correction__field">
+            <label className="ref-correction__label">Notes (optional)</label>
+            <textarea
+              className="ref-correction__textarea"
+              rows={2}
+              placeholder="What's wrong? What should the correct answer be?"
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
+          {err && <p className="ref-correction__error">{err}</p>}
+          <button
+            className="btn btn--primary btn--sm"
+            onClick={handleSave}
+            disabled={saving}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            {saving ? 'Saving…' : 'Save Ground Truth'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── User: report analysis issue ────────────────────────────────────────────
+
+function UserCorrectionForm({ analysis, referenceImagePreview }) {
+  const [open, setOpen]     = useState(false);
+  const [issue, setIssue]   = useState('');
+  const [note, setNote]     = useState('');
+  const [sent, setSent]     = useState(false);
+
+  function handleSubmit() {
+    trackEvent('ANALYSIS_CORRECTION_SUBMITTED', {
+      issue_type: issue,
+      note: note.trim() || null,
+      detected_pattern: analysis?.classification?.lightingPattern,
+      detected_mood: analysis?.classification?.mood,
+      confidence: analysis?.classification?.confidence,
+    });
+    setSent(true);
+    setOpen(false);
+  }
+
+  if (sent) {
+    return (
+      <div className="ref-correction ref-correction--thanks">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)"
+          strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Thanks — we'll use this to improve the engine.
+      </div>
+    );
+  }
+
+  return (
+    <div className="ref-correction ref-correction--user">
+      {!open ? (
+        <button
+          className="ref-correction__trigger"
+          onClick={() => setOpen(true)}
+          type="button"
+        >
+          Analysis doesn't look right?
+        </button>
+      ) : (
+        <div className="ref-correction__form">
+          <p className="ref-correction__form-intro">What seems off?</p>
+          <div className="ref-correction__radio-group">
+            {ISSUE_TYPES.map(it => (
+              <label key={it.value} className="ref-correction__radio-row">
+                <input
+                  type="radio"
+                  name="issue_type"
+                  value={it.value}
+                  checked={issue === it.value}
+                  onChange={() => setIssue(it.value)}
+                />
+                <span>{it.label}</span>
+              </label>
+            ))}
+          </div>
+          <textarea
+            className="ref-correction__textarea"
+            rows={2}
+            placeholder="Anything to add? (optional)"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+          />
+          <div className="ref-correction__form-actions">
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={handleSubmit}
+              disabled={!issue}
+            >
+              Submit
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => setOpen(false)}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Scan status ────────────────────────────────────────────────────────────
+
+const SCAN_PHASES = [
+  'Reading the light\u2026',
+  'Analyzing shadows\u2026',
+  'Identifying setup\u2026',
+  'Evaluating mood\u2026',
+  'Checking modifiers\u2026',
+];
+
+function ScanStatus() {
+  const [phase, setPhase] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPhase(p => (p + 1) % SCAN_PHASES.length), 3200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="ref-scan-status">
+      {/* key forces remount → fade-in re-runs on each phase */}
+      <span className="ref-scan-status__dot" />
+      <span className="ref-scan-status__text" key={phase}>{SCAN_PHASES[phase]}</span>
+    </div>
+  );
+}
+
+// ── Color palette panel with harmony picker ─────────────────────────────────
+
+const HARMONY_LABELS = {
+  analogous:          'Analogous',
+  complementary:      'Complementary',
+  split_complementary:'Split-Complementary',
+  triadic:            'Triadic',
+  monochromatic:      'Monochromatic',
+  neutral:            'Neutral',
+  warm_cool_split:    'Warm/Cool Split',
+};
+
+function ColorPalettePanel({ colorPalette: cp }) {
+  // Build the full list of available harmony views
+  const primary = cp.color_harmony && cp.color_harmony !== 'unknown' ? cp.color_harmony : null;
+  const alts = (cp.alternate_harmonies || []).filter(h => h && h !== 'unknown' && h !== primary);
+  // warm_cool_split is also surfaced separately — include it if not already
+  if (cp.warm_cool_split && !alts.includes('warm_cool_split') && primary !== 'warm_cool_split') {
+    alts.push('warm_cool_split');
+  }
+  const allHarmonies = [primary, ...alts].filter(Boolean);
+  const [activeHarmony, setActiveHarmony] = useState(primary || null);
+
+  return (
+    <div style={{ marginTop: 'var(--space-md)', borderTop: '1px solid var(--border-faint)', paddingTop: 'var(--space-md)' }}>
+
+      {/* palette_character — headline */}
+      {cp.palette_character && (
+        <div style={{ marginBottom: 'var(--space-sm)' }}>
+          <div className="ref-analysis__label">Color Character</div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)', lineHeight: 1.5 }}>
+            {cp.palette_character}
+          </div>
+        </div>
+      )}
+
+      {/* Harmony picker — pill tabs, shown when more than one harmony exists */}
+      {allHarmonies.length > 0 && (
+        <div style={{ marginBottom: 'var(--space-sm)' }}>
+          <div className="ref-analysis__label" style={{ marginBottom: 5 }}>Color Harmony</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+            {allHarmonies.map(h => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => setActiveHarmony(h)}
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: activeHarmony === h ? 'var(--weight-semibold)' : 'var(--weight-normal)',
+                  color: activeHarmony === h ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                  background: activeHarmony === h ? 'var(--color-accent-subtle)' : 'var(--color-surface-elevated)',
+                  border: activeHarmony === h ? '1px solid var(--color-accent-subtle-border)' : '1px solid transparent',
+                  borderRadius: 'var(--radius-full)',
+                  padding: '3px 10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  textTransform: 'capitalize',
+                  letterSpacing: 'var(--tracking-wide)',
+                }}
+              >
+                {HARMONY_LABELS[h] || h.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Light temperature */}
+      {(cp.color_temperature_key || cp.color_temperature_shadows) && (
+        <div style={{ marginBottom: 'var(--space-sm)' }}>
+          <div className="ref-analysis__label">Light Temperature</div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text)', lineHeight: 1.5 }}>
+            {cp.color_temperature_key && <span>Key: {cp.color_temperature_key}</span>}
+            {cp.color_temperature_key && cp.color_temperature_shadows && (
+              <span style={{ color: 'var(--color-text-dim)', margin: '0 6px' }}>·</span>
+            )}
+            {cp.color_temperature_shadows && <span>Shadows: {cp.color_temperature_shadows}</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Color swatches — harmony-aware colored chips */}
+      {(() => {
+        // harmony_swatches holds hex codes for the selected harmony;
+        // fall back to all dominant_colors (paired with their hexes) when no harmony data.
+        const harmonyHexes = activeHarmony && cp.harmony_swatches?.[activeHarmony]?.length > 0
+          ? cp.harmony_swatches[activeHarmony]
+          : null;
+
+        // Build display list: [{hex, name}] — hex may be absent for old analyses
+        let chips;
+        if (harmonyHexes) {
+          // Harmony mode: hexes only (from harmony_swatches). Find matching name if possible.
+          const hexToName = {};
+          (cp.dominant_color_hexes || []).forEach((h, i) => {
+            if (h) hexToName[h.toLowerCase()] = cp.dominant_colors?.[i] || '';
+          });
+          chips = harmonyHexes.map(h => ({ hex: h, name: hexToName[h?.toLowerCase()] || '' }));
+        } else {
+          // All-colors mode: pair dominant_colors with their hexes
+          chips = (cp.dominant_colors || []).map((name, i) => ({
+            hex: cp.dominant_color_hexes?.[i] || null,
+            name,
+          }));
+        }
+
+        if (!chips.length) return null;
+
+        const label = harmonyHexes
+          ? `${HARMONY_LABELS[activeHarmony] || activeHarmony.replace(/_/g, ' ')} Palette`
+          : 'Detected Colors';
+
+        return (
+          <div style={{ marginBottom: 'var(--space-sm)' }}>
+            <div className="ref-analysis__label">{label}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              {chips.map(({ hex, name }, i) => (
+                <div key={i} title={name || hex || ''} style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+                }}>
+                  {hex ? (
+                    <div style={{
+                      width: 36, height: 36,
+                      borderRadius: 'var(--radius-sm)',
+                      background: hex,
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+                    }} />
+                  ) : (
+                    /* fallback: text chip when no hex available */
+                    <span style={{
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--color-text-secondary)',
+                      background: 'var(--color-surface-elevated)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '2px 7px',
+                    }}>{name}</span>
+                  )}
+                  {hex && name && (
+                    <span style={{
+                      fontSize: 10, color: 'var(--color-text-dim)',
+                      maxWidth: 40, textAlign: 'center',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      lineHeight: 1.2,
+                    }}>{name}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Contrasting pairs — filter to active harmony when possible */}
+      {cp.contrasting_pairs?.length > 0 && (() => {
+        // Each pair string typically includes a parenthetical harmony label.
+        // e.g. "red vs teal (complementary)" — try to match active harmony.
+        const harmonyKey = activeHarmony || '';
+        const harmonyWords = harmonyKey.replace(/_/g, ' ').toLowerCase().split(' ');
+        const filtered = cp.contrasting_pairs.filter(p =>
+          harmonyWords.some(w => w.length > 3 && p.toLowerCase().includes(w))
+        );
+        // If filter yields results, show only those; otherwise fall back to all
+        const pairs = filtered.length > 0 ? filtered : cp.contrasting_pairs;
+        return (
+          <div style={{ marginBottom: 'var(--space-sm)' }}>
+            <div className="ref-analysis__label">Color Contrasts</div>
+            {pairs.map((pair, i) => (
+              <div key={i} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
+                {pair}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Color grading notes */}
+      {cp.color_grading_notes && (
+        <div>
+          <div className="ref-analysis__label">Grading Notes</div>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
+            {cp.color_grading_notes}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main screen
+// ═══════════════════════════════════════════════════════════════════════════
+
 export default function ReferenceEvalScreen() {
-  const { referenceImage, referenceImages } = useAppState();
-  const imageCount = referenceImages?.length || (referenceImage ? 1 : 0);
+  const { referenceImage, referenceImages, user, refAnalysis: storedAnalysis } = useAppState();
   const dispatch = useDispatch();
-  const [loading, setLoading] = useState(true);
-  const [analysis, setAnalysis] = useState(null);
+  const userEmail = user?.email || user?.username || null;
+  const { isAdmin } = usePaywall(userEmail);
+
+  const imageCount = referenceImages?.length || (referenceImage ? 1 : 0);
+
+  const fileRef = useRef(null);
+  const [loading, setLoading]           = useState(true);
+  const [analysis, setAnalysis]         = useState(null);
   const [selectedMood, setSelectedMood] = useState(null);
-  const [error, setError] = useState(null);
-  const [zoomSrc, setZoomSrc] = useState(null);
+  const [error, setError]               = useState(null);
+  const [zoomSrc, setZoomSrc]           = useState(null);
 
   useEffect(() => {
     if (!referenceImage?.file) {
-      setLoading(false);
-      setError('No image selected');
+      // Dev demo: if analysis was pre-populated in app state (e.g. via ?_demo=ref_eval),
+      // hydrate local state from it instead of showing the error banner.
+      if (storedAnalysis) {
+        setAnalysis(storedAnalysis);
+        setSelectedMood(storedAnalysis?.classification?.mood || null);
+        setLoading(false);
+      } else {
+        setLoading(false);
+        setError('No image selected');
+      }
       return;
     }
 
@@ -60,6 +673,12 @@ export default function ReferenceEvalScreen() {
 
   function handleConfirm() {
     const mood = selectedMood || 'natural';
+    // Store the full analysis so SetupWizard can pass it to shoot-match as priorAnalysis.
+    // This prevents shoot-match from re-deriving a different pattern and ensures
+    // the setup recommendation is anchored to what ref eval detected.
+    if (analysis) {
+      dispatch({ type: 'SET_REF_ANALYSIS', analysis });
+    }
     dispatch({ type: 'SET_MOOD', mood });
     dispatch({ type: 'SET_INTENT', intent: 'ref_match' });
   }
@@ -69,46 +688,125 @@ export default function ReferenceEvalScreen() {
     dispatch({ type: 'GO_BACK' });
   }
 
-  const classification = analysis?.classification;
-  const palette = analysis?.palette?.overall || [];
-  const recipeName = classification?.suggestedRecipe
+  function handleAnalyzeAnother() {
+    fileRef.current?.click();
+  }
+
+  async function handleFileSelected(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (fileRef.current) fileRef.current.value = '';
+    const preview = URL.createObjectURL(f);
+    const imageObj = { file: f, preview, serverPath: null };
+    dispatch({ type: 'SET_REFERENCE_IMAGE', payload: imageObj });
+    dispatch({ type: 'SET_REFERENCE_IMAGES', payload: [imageObj] });
+    setAnalysis(null);
+    setError(null);
+    setSelectedMood(null);
+    setLoading(true);
+    try {
+      const result = await uploadReferenceImage(f);
+      dispatch({ type: 'SET_REFERENCE_IMAGE', payload: { ...imageObj, serverPath: result.path } });
+      setAnalysis(result.analysis);
+      setSelectedMood(result.analysis?.classification?.mood || null);
+    } catch (err) {
+      setError(err.message || 'Analysis failed');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleOpenLab() {
+    if (referenceImage) {
+      dispatch({ type: 'SET_LAB_PENDING_IMAGE', payload: referenceImage });
+    }
+    dispatch({ type: 'NAVIGATE', screen: 'lab' });
+  }
+
+  const classification    = analysis?.classification;
+  const palette           = analysis?.palette?.overall || [];
+  const recipeName        = classification?.suggestedRecipe
     ? RECIPES.find(r => r.id === classification.suggestedRecipe)?.name
     : null;
-  const subject = analysis?.description?.subject;
-  const refAnalysis = analysis?.description?.referenceAnalysis;
-  const imageRead = refAnalysis?.image_read;
-  const lightingRead = refAnalysis?.lighting_read;
-  const recreationSetup = refAnalysis?.recreation_setup;
+  const subject           = analysis?.description?.subject;
+  const refAnalysis       = analysis?.description?.referenceAnalysis;
+  const imageRead         = refAnalysis?.image_read;
+  const lightingRead      = refAnalysis?.lighting_read;
+  const recreationSetup   = refAnalysis?.recreation_setup;
+  const colorPalette      = refAnalysis?.color_palette;
 
   return (
-    <div className="screen">
-      <h2 className="screen-heading">Reference Evaluation</h2>
+    <div className="screen ref-eval-screen">
+
+      {/* Hidden file input for "Analyze another" */}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileSelected}
+      />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 var(--space-md)', marginBottom: 'var(--space-xs)' }}>
+        <h2 className="screen-heading" style={{ margin: 0 }}>Reference Evaluation</h2>
+        {(analysis || error) && !loading && (
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={handleAnalyzeAnother}
+            style={{ flexShrink: 0 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Analyze another
+          </button>
+        )}
+      </div>
 
       {/* Zoom overlay */}
       {zoomSrc && <ZoomOverlay src={zoomSrc} alt="Reference photo" onClose={() => setZoomSrc(null)} />}
 
-      {/* Reference image(s) with scan overlay during analysis */}
+      {/* ── Floating image preview ───────────────────────────────────────── */}
       {referenceImage?.preview && (
-        <div className="ref-hero">
-          <div className={`ref-hero__image${loading ? ' ref-hero__image--scanning' : ''}`}>
-            {imageCount > 1 ? (
-              <div className="ref-hero__gallery">
-                {referenceImages.map((img, i) => (
-                  <img key={i} src={img.preview} alt={`Reference photo ${i + 1}`} onClick={() => !loading && setZoomSrc(img.preview)} />
-                ))}
-              </div>
-            ) : (
-              <img src={referenceImage.preview} alt="Reference photo" onClick={() => !loading && setZoomSrc(referenceImage.preview)} />
-            )}
-            {loading && <div className="ref-scan-overlay"><div className="ref-scan-overlay__line" /></div>}
-          </div>
+        <div className={`ref-eval__preview-wrap${loading ? ' ref-eval__preview-wrap--analyzing' : ''}`}>
+          {imageCount > 1 ? (
+            /* Gallery: grid layout, no individual float */
+            <div className={`ref-eval__gallery${loading ? ' ref-eval__gallery--scanning' : ''}`}>
+              {referenceImages.map((img, i) => (
+                <img
+                  key={i}
+                  src={img.preview}
+                  alt={`Reference photo ${i + 1}`}
+                  onClick={() => !loading && setZoomSrc(img.preview)}
+                />
+              ))}
+              {loading && <div className="ref-scan-overlay"><div className="ref-scan-overlay__line" /></div>}
+            </div>
+          ) : (
+            /* Single image: dramatic float */
+            <div
+              className={`lab-workbench__img-shell${
+                loading
+                  ? ' lab-workbench__img-shell--analyzing'
+                  : ' lab-workbench__img-shell--settled'
+              }`}
+              onClick={() => !loading && setZoomSrc(referenceImage.preview)}
+            >
+              <img
+                src={referenceImage.preview}
+                alt="Reference photo"
+                className="ref-eval__img"
+              />
+              {loading && <div className="ref-scan-overlay"><div className="ref-scan-overlay__line" /></div>}
+            </div>
+          )}
+          {/* Scan status lives inside the preview wrap so it's always
+              visible directly below the image without scrolling */}
+          {loading && <ScanStatus />}
         </div>
       )}
 
-      {/* Scanning status — rotates through analysis phases */}
-      {loading && <ScanStatus />}
-
-      {/* Narrative — directly under image for immediate context */}
+      {/* Narrative — directly under image */}
       {!loading && imageRead?.narrative && (
         <div className="ref-hero__narrative">
           <span className="ref-hero__narrative-label">At a Glance</span>
@@ -122,7 +820,7 @@ export default function ReferenceEvalScreen() {
       )}
 
       {/* Image count badge */}
-      {!loading && analysis && (
+      {!loading && analysis && imageCount > 0 && (
         <div className="ref-image-count">
           <span className="ref-image-count__badge">
             {imageCount} reference image{imageCount !== 1 ? 's' : ''}
@@ -134,9 +832,14 @@ export default function ReferenceEvalScreen() {
       {error && !loading && (
         <div className="ref-eval__error">
           <p>{error}</p>
-          <button className="btn btn--primary btn--sm" onClick={handleBack}>
-            Go Back
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn--ghost btn--sm" onClick={handleAnalyzeAnother}>
+              Try another image
+            </button>
+            <button className="btn btn--primary btn--sm" onClick={handleBack}>
+              Go Back
+            </button>
+          </div>
         </div>
       )}
 
@@ -145,7 +848,10 @@ export default function ReferenceEvalScreen() {
         <>
           {/* ── The Light ── */}
           {lightingRead && (
-            <CollapsibleCard icon={'\uD83D\uDCA1'} title="The Light">
+            <CollapsibleCard
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>}
+              title="The Light"
+            >
               <div className="ref-analysis">
                 {lightingRead.lighting_family && lightingRead.lighting_family !== 'unknown' && (
                   <div className="ref-analysis__row">
@@ -213,7 +919,9 @@ export default function ReferenceEvalScreen() {
               )}
               {lightingRead.ambiguity_notes?.length > 0 && (
                 <div className="ref-card__warning">
-                  <span className="ref-card__warning-icon">{'\u26A0\uFE0F'}</span>
+                  <span className="ref-card__warning-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  </span>
                   <div>
                     {lightingRead.ambiguity_notes.map((n, i) => <p key={i}>{n}</p>)}
                   </div>
@@ -224,16 +932,21 @@ export default function ReferenceEvalScreen() {
 
           {/* ── Lighting Diagram ── */}
           {analysis?.detectedDiagram?.raw && (
-            <CollapsibleCard icon={'\uD83D\uDDA5'} title="Lighting">
+            <CollapsibleCard
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="3"/><path d="M7 9L4 22h16L17 9"/></svg>}
+              title="Lighting"
+            >
               <DiagramCard spec={analysis.detectedDiagram.raw} title="" inline />
             </CollapsibleCard>
           )}
 
-          {/* ── The Shot ─────────────────────────── */}
+          {/* ── The Shot ── */}
           {(subject || imageRead || classification) && (
-            <CollapsibleCard icon={'\uD83D\uDCF8'} title="The Shot">
+            <CollapsibleCard
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+              title="The Shot"
+            >
               <div className="ref-analysis">
-                {/* What kind of shot */}
                 {imageRead?.genre && imageRead.genre !== 'unknown' && (
                   <div className="ref-analysis__row ref-analysis__row--inline">
                     <span className="ref-analysis__label">Genre</span>
@@ -248,7 +961,6 @@ export default function ReferenceEvalScreen() {
                     </span>
                   </div>
                 )}
-                {/* Who's in it */}
                 {imageRead?.subject_type && (
                   <div className="ref-analysis__row ref-analysis__row--inline">
                     <span className="ref-analysis__label">Subject</span>
@@ -267,7 +979,6 @@ export default function ReferenceEvalScreen() {
                     </span>
                   </div>
                 )}
-                {/* Composition */}
                 {(imageRead?.camera_subject_relationship || subject?.framing) && (
                   <div className="ref-analysis__row">
                     <span className="ref-analysis__label">Framing</span>
@@ -287,7 +998,6 @@ export default function ReferenceEvalScreen() {
                     <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{subject.pose}</span>
                   </div>
                 ) : null}
-                {/* Scene context */}
                 {imageRead?.visual_intent && (
                   <div className="ref-analysis__row">
                     <span className="ref-analysis__label">Visual Intent</span>
@@ -306,7 +1016,6 @@ export default function ReferenceEvalScreen() {
                     <span className="ref-analysis__value">{imageRead.background_relationship}</span>
                   </div>
                 )}
-                {/* Style & reference */}
                 {imageRead?.lighting_style && (
                   <div className="ref-analysis__row ref-analysis__row--inline">
                     <span className="ref-analysis__label">Lighting Style</span>
@@ -325,7 +1034,6 @@ export default function ReferenceEvalScreen() {
                     <span className="ref-analysis__value">{recipeName}</span>
                   </div>
                 )}
-                {/* Technical */}
                 {imageRead?.notable_visual_devices?.length > 0 && (
                   <div className="ref-analysis__row">
                     <span className="ref-analysis__label">Visual Devices</span>
@@ -333,7 +1041,6 @@ export default function ReferenceEvalScreen() {
                   </div>
                 )}
               </div>
-              {/* Inline palette */}
               {palette.length > 0 && (
                 <>
                   <div className="ref-analysis__label" style={{ marginTop: 'var(--space-sm)' }}>Palette</div>
@@ -348,12 +1055,20 @@ export default function ReferenceEvalScreen() {
                   </div>
                 </>
               )}
+
+              {/* VLM color palette — richer character analysis */}
+              {colorPalette && (colorPalette.palette_character || colorPalette.dominant_colors?.length > 0) && (
+                <ColorPalettePanel colorPalette={colorPalette} />
+              )}
             </CollapsibleCard>
           )}
 
-          {/* ── How To Recreate It ───────────────────── */}
+          {/* ── How To Recreate It ── */}
           {recreationSetup && (
-            <CollapsibleCard icon={'\uD83D\uDD27'} title="How To Recreate It">
+            <CollapsibleCard
+              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
+              title="How To Recreate It"
+            >
               <div className="ref-analysis">
                 {recreationSetup.setup_family && recreationSetup.setup_family !== 'unknown' && (
                   <div className="ref-analysis__row ref-analysis__row--inline">
@@ -408,22 +1123,24 @@ export default function ReferenceEvalScreen() {
             </CollapsibleCard>
           )}
 
-          {/* Mood selector */}
+          {/* ── Confirm vibe ── */}
           <div className="result-card">
             <div className="result-card__header">
-              <span className="result-card__icon">{'\u2728'}</span>
+              <span className="result-card__icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+              </span>
               <span>Confirm Vibe</span>
             </div>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-dim)', marginBottom: 'var(--space-sm)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-dim)', marginBottom: 'var(--space-sm)' }}>
               {classification?.mood
-                ? `We detected a ${MOOD_LABELS[classification.mood] || classification.mood} vibe. Tap a different option to override.`
+                ? `We detected a ${MOOD_LABELS[classification.mood] || classification.mood} vibe. Tap to override.`
                 : 'Select the vibe you want to achieve.'}
             </p>
             <div className="chip-grid">
               {MOOD_OPTIONS.map(m => (
                 <button
                   key={m.value}
-                  className={`chip ${selectedMood === m.value ? 'chip--selected' : ''}`}
+                  className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}
                   onClick={() => setSelectedMood(m.value)}
                 >
                   {m.label}
@@ -432,7 +1149,21 @@ export default function ReferenceEvalScreen() {
             </div>
           </div>
 
-          {/* Confirm button */}
+          {/* ── Correction panel (admin) / report issue (user) ── */}
+          {isAdmin ? (
+            <AdminCorrectionPanel
+              analysis={analysis}
+              imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
+              onNavigateLab={handleOpenLab}
+            />
+          ) : (
+            <UserCorrectionForm
+              analysis={analysis}
+              referenceImagePreview={referenceImage?.preview}
+            />
+          )}
+
+          {/* ── Confirm button ── */}
           <div style={{ padding: 'var(--space-md) 0', paddingBottom: 'calc(var(--space-xl) + env(safe-area-inset-bottom, 0px))' }}>
             <button
               className="btn btn--primary"
@@ -440,21 +1171,21 @@ export default function ReferenceEvalScreen() {
               disabled={!selectedMood}
               onClick={handleConfirm}
             >
-              Confirm & Get Setup {'\u2192'}
+              Confirm &amp; Get Setup →
             </button>
           </div>
         </>
       )}
 
-      {/* Fallback: no analysis but not loading */}
+      {/* Fallback: no analysis, not loading */}
       {!loading && !analysis && !error && (
-        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--text-dim)' }}>
+        <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-dim)' }}>
           <p>Could not analyze this image. You can still continue.</p>
           <div className="chip-grid" style={{ marginTop: 'var(--space-md)' }}>
             {MOOD_OPTIONS.map(m => (
               <button
                 key={m.value}
-                className={`chip ${selectedMood === m.value ? 'chip--selected' : ''}`}
+                className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}
                 onClick={() => setSelectedMood(m.value)}
               >
                 {m.label}
@@ -467,32 +1198,10 @@ export default function ReferenceEvalScreen() {
             disabled={!selectedMood}
             onClick={handleConfirm}
           >
-            Continue {'\u2192'}
+            Continue →
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-const SCAN_PHASES = [
-  'Reading the light\u2026',
-  'Analyzing shadows\u2026',
-  'Identifying setup\u2026',
-  'Evaluating mood\u2026',
-  'Checking modifiers\u2026',
-];
-
-function ScanStatus() {
-  const [phase, setPhase] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setPhase(p => (p + 1) % SCAN_PHASES.length), 2400);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <div className="ref-scan-status">
-      <div className="ref-scan-status__bar"><div className="ref-scan-status__fill" /></div>
-      <p className="ref-scan-status__text">{SCAN_PHASES[phase]}</p>
     </div>
   );
 }

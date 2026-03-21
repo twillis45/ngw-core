@@ -150,7 +150,7 @@ export const REMBRANDT_PORTRAIT = {
   ],
 
   referenceImageSignature: {
-    pattern: 'rembrandt-ish',
+    pattern: 'rembrandt',
     diagnosticFeatures: [
       'Triangle of light on shadow cheek',
       'Single dominant catchlight at 10-11 or 1-2 o\'clock',
@@ -573,7 +573,7 @@ export const CARAVAGGIO_CHIAROSCURO = {
   ],
 
   referenceImageSignature: {
-    pattern: 'split/short',
+    pattern: 'split',
     diagnosticFeatures: [
       'Half or more of face in deep shadow',
       'Sharp shadow edges (hard light)',

@@ -2,6 +2,7 @@ import { useAppState, useDispatch } from '../context/AppContext';
 import MoodTile from '../components/MoodTile';
 import StickyBottomBar from '../components/StickyBottomBar';
 import { MOOD_LIST } from '../coaching';
+import { MOOD_ICONS } from '../components/MoodIcons';
 
 export default function MoodPickerScreen() {
   const { mood } = useAppState();
@@ -24,7 +25,7 @@ export default function MoodPickerScreen() {
         {MOOD_LIST.map(m => (
           <MoodTile
             key={m.value}
-            emoji={m.emoji}
+            icon={MOOD_ICONS[m.value]}
             label={m.label}
             desc={m.desc}
             selected={mood === m.value}

@@ -1,0 +1,56 @@
+{
+  "run_timestamp": "2026-03-17T17:37:52.403086+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "mixed_light_failure",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "gobo",
+          "expected": "unknown",
+          "acceptable": [
+            "unknown",
+            "flat_fashion",
+            "hybrid",
+            "rembrandt",
+            "loop",
+            "split",
+            "gobo",
+            "grid/window gobo"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.83
+    }
+  ]
+}

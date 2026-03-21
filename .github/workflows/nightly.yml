@@ -1,0 +1,73 @@
+name: Nightly Benchmark Drift Check
+
+on:
+  schedule:
+    # 02:00 UTC every day
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "Optional notes for this nightly run"
+        required: false
+        default: ""
+
+jobs:
+  nightly-drift:
+    name: Nightly Drift Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CI_BENCHMARK_SECRET: ${{ secrets.CI_BENCHMARK_SECRET }}
+      NGW_BASE_URL: ${{ secrets.NGW_BASE_URL || 'http://localhost:8000' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run nightly drift check
+        id: nightly
+        run: |
+          NOTES="${{ github.event.inputs.notes || 'Scheduled nightly drift check' }}"
+          python3 scripts/nightly_benchmark.py --notes "${NOTES}"
+
+      - name: Upload nightly results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-drift-${{ github.run_id }}
+          path: /tmp/nightly_result.json
+          retention-days: 90
+
+      - name: Notify on drift detected
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## ⚠️ Nightly Drift Detected\n\nThe nightly benchmark check found significant score drift vs the current baseline.\nCheck the workflow artifacts for details.\n\n> Run: ${{ github.run_id }}';
+            try {
+              const result = JSON.parse(fs.readFileSync('/tmp/nightly_result.json', 'utf8'));
+              if (result.drift_items && result.drift_items.length) {
+                body += '\n\n**Drift items:**\n';
+                for (const item of result.drift_items.slice(0, 5)) {
+                  body += `- ${item.type}: ${item.pattern_id || 'overall'} Δ${item.delta > 0 ? '+' : ''}${(item.delta * 100).toFixed(1)}%\n`;
+                }
+              }
+            } catch (_) {}
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Nightly benchmark drift — ${new Date().toISOString().slice(0,10)}`,
+              body,
+              labels: ['benchmark-drift', 'automated'],
+            });

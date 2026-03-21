@@ -1,7 +1,9 @@
+import { apiFetch } from './lib/apiClient';
+
 /** POST /recommend and return the raw API response. */
 
 export async function fetchRecommendation(payload) {
-  const resp = await fetch('/recommend', {
+  const resp = await apiFetch('/recommend', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -24,13 +26,17 @@ export async function uploadReferenceImage(file) {
   const form = new FormData();
   form.append('file', file);
 
-  const resp = await fetch('/api/upload-reference', {
+  const resp = await apiFetch('/api/upload-reference', {
     method: 'POST',
     body: form,
   });
 
   if (!resp.ok) {
-    throw new Error('Failed to upload reference image');
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    const msg = typeof err.detail === 'string'
+      ? err.detail
+      : JSON.stringify(err.detail || err, null, 2);
+    throw new Error(msg || 'Failed to upload reference image');
   }
 
   return resp.json();
@@ -39,7 +45,7 @@ export async function uploadReferenceImage(file) {
 /** POST /api/shoot-match and return UI-ready card data. */
 
 export async function fetchShootMatch(wizardState) {
-  const resp = await fetch('/api/shoot-match', {
+  const resp = await apiFetch('/api/shoot-match', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(wizardState),

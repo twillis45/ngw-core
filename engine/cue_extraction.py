@@ -41,18 +41,24 @@ from engine.image_analysis_models import (
     ContinuousSourceSignals,
     ContrastRatio,
     EnvironmentalShadowContinuity,
+    EyeSocketShadow,
+    FaceOrientation,
+    FillRatio,
     HighlightAxisMap,
     HighlightSymmetry,
     HighlightToShadowTransition,
     LightStructureDetection,
     MultiShadowDetection,
+    NoseShadowLength,
     OffAxisKeyDetection,
     PoseInducedShadowInterference,
     PrimaryShadowDirection,
     ReflectionArchitecture,
     SeparationLightAnalysis,
+    ShadowContinuity,
     ShadowEdgeHardness,
     ShadowInterruptionPattern,
+    ShadowPenumbra,
     SpecularHighlightBehavior,
     SubjectBackgroundSeparation,
     TonalProcessingEstimation,
@@ -120,6 +126,25 @@ def extract_shadow_edge_hardness(
 
     notes = [f"Shadow edge density: {shadow_edge_density:.4f}, midtone: {midtone_edge_density:.4f}"]
 
+    # P2e: Texture / occlusion correction.  Hard light creates sharp edges
+    # specifically at shadow boundaries while midtone regions stay relatively
+    # smooth.  When objects on the face (flowers, accessories, detailed
+    # clothing) or heavy skin texture inflate edges everywhere, the midtone
+    # edge density will be comparably high.  In that case the shadow edge
+    # density is inflated by texture, not by hard light — correct it by
+    # subtracting the texture baseline (midtone density).
+    if midtone_edge_density > 0.005 and shadow_edge_density > 0:
+        density_ratio = midtone_edge_density / shadow_edge_density
+        if density_ratio > 0.4:
+            # Subtract texture baseline; keep at least 30% of original density
+            # so genuinely hard light with some texture isn't zeroed out.
+            corrected = shadow_edge_density - midtone_edge_density * 0.7
+            shadow_edge_density = max(corrected, shadow_edge_density * 0.3)
+            notes.append(
+                f"Texture correction applied: midtone/shadow ratio={density_ratio:.2f}, "
+                f"corrected density={shadow_edge_density:.4f}"
+            )
+
     # P2d: Contrast-grade-aware thresholds.  Heavy contrast grading amplifies
     # edge density at shadow boundaries, making soft light appear hard.
     # Raise the hard threshold from 0.03 to 0.05 under heavy grading.
@@ -147,9 +172,32 @@ def extract_shadow_edge_hardness(
         classification = "mixed"
         confidence = 0.45
 
+    # Measure shadow-to-midtone transition width (gradient extent in pixels).
+    # Dilate the shadow mask boundary and measure average gradient magnitude
+    # along the transition zone.
+    transition_px = None
+    try:
+        boundary = cv2.dilate(shadow_mask.astype(np.uint8), None, iterations=2) - \
+                   cv2.erode(shadow_mask.astype(np.uint8), None, iterations=2)
+        if np.sum(boundary) > 0:
+            sobel_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
+            sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
+            mag = np.sqrt(sobel_x ** 2 + sobel_y ** 2)
+            boundary_mag = mag[boundary > 0]
+            if boundary_mag.size > 0:
+                # Inverse of gradient magnitude → transition width.
+                # High gradient = sharp edge = small width; low = soft = large.
+                mean_mag = float(np.mean(boundary_mag))
+                if mean_mag > 1.0:
+                    transition_px = round(255.0 / mean_mag, 1)
+                else:
+                    transition_px = 255.0  # very soft edge
+    except Exception:
+        pass
+
     return ShadowEdgeHardness(
         classification=classification,
-        transition_width_px=None,  # future: measure gradient width
+        transition_width_px=transition_px,
         confidence=round(confidence, 2),
         notes=notes,
     )
@@ -369,9 +417,19 @@ def extract_primary_shadow_direction(
         direction = "unknown"
         confidence = 0.2
 
+    # Map direction label to clock position (shadow fall direction)
+    _DIR_TO_CLOCK = {
+        "upper_left": 10,
+        "upper_right": 2,
+        "left": 9,
+        "right": 3,
+        "below": 6,
+    }
+    clock_angle = _DIR_TO_CLOCK.get(direction)
+
     return PrimaryShadowDirection(
         direction=direction,
-        clock_angle=None,
+        clock_angle=clock_angle,
         consistency="unknown",
         confidence=round(confidence, 2),
         notes=notes,
@@ -470,7 +528,19 @@ def extract_catchlight_position(
 def extract_catchlight_shape(
     catchlight_data: Dict[str, Any],
 ) -> Optional[CatchlightShape]:
-    """Cue 5: Repackage existing catchlight shapes into cue model."""
+    """Cue 5: Repackage existing catchlight shapes and sizes into cue model.
+
+    size_ratio_mean is the mean of per-catchlight (area / iris_area) ratios
+    (capped at 0.5 by the vision pass).  We map it to a size_class that
+    informs modifier size estimation in infer_source_quality.
+
+    Size thresholds (iris-relative):
+      point     < 0.08   bare bulb, small fresnel, direct flash
+      small     0.08-0.18  gridded modifier, small beauty dish (~16")
+      medium    0.18-0.32  medium octa/softbox (~24-36")
+      large     0.32-0.42  large softbox, umbrella (~48-60")
+      very_large > 0.42   huge diffusion panel, scrim, full-sky
+    """
     if not catchlight_data.get("ok") or catchlight_data.get("count", 0) == 0:
         return None
 
@@ -490,12 +560,37 @@ def extract_catchlight_shape(
     else:
         dominant = "unknown"
 
+    # ── Catchlight size → modifier size class ────────────────────────────
+    size_ratios = [c.get("size_ratio") for c in catchlights if c.get("size_ratio") is not None]
+    size_ratio_mean = float(sum(size_ratios) / len(size_ratios)) if size_ratios else None
+    size_class = "unknown"
+    if size_ratio_mean is not None:
+        if size_ratio_mean < 0.08:
+            size_class = "point"
+        elif size_ratio_mean < 0.18:
+            size_class = "small"
+        elif size_ratio_mean < 0.32:
+            size_class = "medium"
+        elif size_ratio_mean < 0.42:
+            size_class = "large"
+        else:
+            size_class = "very_large"
+
+    notes = []
+    if size_ratio_mean is not None:
+        notes.append(
+            f"Catchlight size_ratio_mean={size_ratio_mean:.3f} → size_class={size_class}."
+        )
+
     confidence = 0.6 if len(shapes) >= 2 else 0.35
 
     return CatchlightShape(
         dominant_shape=dominant,
         shapes_seen=shapes_seen,
+        size_ratio_mean=size_ratio_mean,
+        size_class=size_class,
         confidence=confidence,
+        notes=notes,
     )
 
 
@@ -662,6 +757,14 @@ def extract_light_structure(
         pattern_name=structure_data.get("pattern_name", "unknown"),
         confidence=structure_data.get("confidence", 0.0),
         notes=structure_data.get("notes", []),
+        # ── Enhanced signals (v2) ──
+        nose_shadow_centroid_angle_deg=structure_data.get("nose_shadow_centroid_angle_deg", 0.0),
+        nose_shadow_centroid_distance=structure_data.get("nose_shadow_centroid_distance", 0.0),
+        left_right_asymmetry=structure_data.get("left_right_asymmetry", 0.0),
+        top_bottom_ratio=structure_data.get("top_bottom_ratio", 0.0),
+        shadow_density=structure_data.get("shadow_density", 0.0),
+        triangle_isolation=structure_data.get("triangle_isolation", 0.0),
+        highlight_width_ratio=structure_data.get("highlight_width_ratio", 0.0),
     )
 
 
@@ -716,8 +819,16 @@ def extract_highlight_to_shadow_transition(
 def extract_contrast_ratio(
     img_bgr: np.ndarray,
     person_mask: np.ndarray,
+    face_box: Optional[tuple] = None,
 ) -> Optional[ContrastRatio]:
-    """Cue 7: Measure overall contrast ratio of the person region."""
+    """Cue 7: Measure overall contrast ratio of the person region.
+
+    When face_box is provided, also computes a face-region-only contrast label
+    stored in ``face_label``.  Dark clothing inflates the person-region spread
+    to "high"/"extreme" even when the face is evenly lit; face_label is used by
+    downstream gates (e.g. triangle detection) that care about lighting contrast
+    on the face, not clothing contrast.
+    """
     if cv2 is None:
         return None
 
@@ -745,9 +856,36 @@ def extract_contrast_ratio(
 
     confidence = 0.7  # histogram-based, fairly reliable
 
+    # Face-region contrast — only when face_box available and big enough
+    face_label: Optional[str] = None
+    if face_box is not None:
+        try:
+            x0, y0, x1, y1 = face_box
+            h, w = gray.shape[:2]
+            x0, y0 = max(0, x0), max(0, y0)
+            x1, y1 = min(w, x1), min(h, y1)
+            face_region = gray[y0:y1, x0:x1]
+            if face_region.size >= 200:
+                fp5 = float(np.percentile(face_region, CONTRAST.PERCENTILE_LOW))
+                fp95 = float(np.percentile(face_region, CONTRAST.PERCENTILE_HIGH))
+                if fp5 < 1:
+                    fp5 = 1.0
+                face_spread = (fp95 - fp5) / 255.0
+                if face_spread < CONTRAST.SPREAD_LOW:
+                    face_label = "low"
+                elif face_spread < CONTRAST.SPREAD_MEDIUM:
+                    face_label = "medium"
+                elif face_spread < CONTRAST.SPREAD_HIGH:
+                    face_label = "high"
+                else:
+                    face_label = "extreme"
+        except Exception:
+            face_label = None
+
     return ContrastRatio(
         ratio=round(ratio, 2),
         label=label,
+        face_label=face_label,
         confidence=confidence,
         notes=[f"P5={p5:.0f}, P95={p95:.0f}, spread={spread:.2f}"],
     )
@@ -1375,10 +1513,30 @@ def extract_tonal_processing_estimation(
     # Also check histogram spread
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     p1 = float(np.percentile(gray, 1))
+    p5 = float(np.percentile(gray, 5))
+    p95 = float(np.percentile(gray, 95))
     p99 = float(np.percentile(gray, 99))
     if p99 - p1 > TONAL.HCG_TONAL_RANGE_MIN and mean_sat < TONAL.HCG_SATURATION_MAX:
         is_high_contrast = True
         notes.append(f"Near-full tonal range ({p1:.0f}–{p99:.0f}) with low saturation — high-contrast grade.")
+
+    # Crushed shadows / clipped highlights detection: even with saturated
+    # colours, aggressive tone curves compress shadows or highlights,
+    # amplifying shadow edge density and causing false "hard" classifications.
+    shadow_crush = (p5 - p1 < TONAL.CRUSH_P5_DELTA) and (p1 < TONAL.CRUSH_P1_MAX)
+    highlight_clip = (p99 - p95 < TONAL.CLIP_P99_DELTA) and (p99 > TONAL.CLIP_P99_MIN)
+    if not is_high_contrast and (shadow_crush and highlight_clip):
+        is_high_contrast = True
+        notes.append(
+            f"Crushed shadows (p1={p1:.0f}, p5={p5:.0f}) + clipped highlights "
+            f"(p95={p95:.0f}, p99={p99:.0f}) — heavy contrast grading detected."
+        )
+    elif not is_high_contrast and shadow_crush and (p99 - p1 > TONAL.CRUSH_RANGE_MIN):
+        is_high_contrast = True
+        notes.append(
+            f"Crushed shadows (p1={p1:.0f}, p5={p5:.0f}) with wide tonal range "
+            f"({p1:.0f}–{p99:.0f}) — contrast grading detected."
+        )
 
     # Determine processing label
     if is_bw:
@@ -1711,6 +1869,392 @@ def detect_projected_pattern_shape(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# P3 / P4 / P5 — Nose Shadow Length, Shadow Continuity, Fill Ratio
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def extract_nose_shadow_length(
+    img_bgr: np.ndarray,
+    face_box: Tuple[int, int, int, int],
+) -> Optional[NoseShadowLength]:
+    """Measure how far the nose shadow drops below the nose tip.
+
+    Scans a narrow vertical column at the horizontal center of the face
+    starting from the estimated nose tip (≈72% of face height) downward.
+    Returns the normalised drop length so pattern inference can distinguish
+    butterfly (tiny drop) from loop (mid drop) from rembrandt (long drop).
+    """
+    if cv2 is None:
+        return None
+
+    x0, y0, x1, y1 = face_box
+    face_h = y1 - y0
+    face_w = x1 - x0
+    if face_h < 40 or face_w < 30:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    notes: List[str] = []
+
+    # Nose tip: MediaPipe landmark 1 is approximately 72% down the face box.
+    # Using 0.70 gives robust results across a range of head tilts.
+    nose_tip_y = int(y0 + face_h * 0.70)
+    nose_tip_y_ratio = round((nose_tip_y - y0) / face_h, 3)
+
+    # Scan the central 20% of face width downward from the nose tip
+    cx0 = int(x0 + face_w * 0.40)
+    cx1 = int(x0 + face_w * 0.60)
+    cx0, cx1 = max(0, cx0), min(img_bgr.shape[1], cx1)
+
+    # Baseline luminance: row just above the nose tip (lit upper nose bridge)
+    baseline_row = max(y0, nose_tip_y - int(face_h * 0.06))
+    baseline_lum = float(np.mean(gray[baseline_row, cx0:cx1])) if cx1 > cx0 else 128.0
+
+    # Shadow threshold: 60% of baseline brightness defines the shadow region
+    shadow_thresh = baseline_lum * 0.60
+
+    # Scan downward from nose tip; stop at lip (≈90% of face height) to avoid chin shadow
+    lip_y = int(y0 + face_h * 0.88)
+    scan_end = min(lip_y, y1)
+
+    shadow_end_y = nose_tip_y  # default: no drop
+    in_shadow = False
+    for scan_y in range(nose_tip_y, scan_end):
+        row_lum = float(np.mean(gray[scan_y, cx0:cx1])) if cx1 > cx0 else baseline_lum
+        if row_lum < shadow_thresh:
+            in_shadow = True
+            shadow_end_y = scan_y
+        elif in_shadow:
+            # Shadow ended — stop (don't skip through lit gaps)
+            break
+
+    extension_px = max(0, shadow_end_y - nose_tip_y)
+    scannable_h = max(1, scan_end - nose_tip_y)
+    # Normalise to face height, not scannable height, for scale invariance
+    length_ratio = round(extension_px / max(face_h, 1), 3)
+
+    # Map to pattern label
+    if length_ratio < 0.10:
+        shadow_label = "butterfly"
+    elif length_ratio < 0.30:
+        shadow_label = "loop"
+    elif length_ratio < 0.50:
+        shadow_label = "loop_rembrandt"
+    else:
+        shadow_label = "rembrandt"
+
+    # Confidence: higher when shadow is clear and scannable region is adequate
+    conf = round(min(0.80, 0.40 + (scannable_h / face_h) * 0.50), 2)
+    notes.append(
+        f"Nose shadow drop: {extension_px}px / face_h={face_h}px → "
+        f"ratio={length_ratio:.3f} ({shadow_label}); baseline_lum={baseline_lum:.0f}."
+    )
+
+    return NoseShadowLength(
+        length_ratio=length_ratio,
+        shadow_label=shadow_label,
+        nose_tip_y_ratio=nose_tip_y_ratio,
+        confidence=conf,
+        notes=notes,
+    )
+
+
+def extract_shadow_continuity(
+    img_bgr: np.ndarray,
+    face_box: Tuple[int, int, int, int],
+    shadow_side: str = "unknown",
+) -> Optional[ShadowContinuity]:
+    """Check whether the nose shadow connects continuously to the cheek shadow.
+
+    A true Rembrandt triangle requires the nose shadow to merge into the
+    far-cheek shadow with no luminance gap.  Loop lighting leaves a clear
+    lit gap between them.
+
+    Uses connected-component analysis on the dark mask in the
+    nose-tip-to-upper-lip region.
+    """
+    if cv2 is None:
+        return None
+
+    x0, y0, x1, y1 = face_box
+    face_h = y1 - y0
+    face_w = x1 - x0
+    if face_h < 40 or face_w < 30:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    notes: List[str] = []
+
+    # Region of interest: nose-tip area to below nose (shadow triangle zone)
+    roi_y0 = int(y0 + face_h * 0.65)   # just above nose tip
+    roi_y1 = int(y0 + face_h * 0.88)   # upper lip
+    roi_x0, roi_x1 = max(0, x0), min(img_bgr.shape[1], x1)
+    roi_y0, roi_y1 = max(0, roi_y0), min(img_bgr.shape[0], roi_y1)
+
+    if roi_y1 - roi_y0 < 10 or roi_x1 - roi_x0 < 20:
+        return None
+
+    roi_gray = gray[roi_y0:roi_y1, roi_x0:roi_x1]
+    roi_h, roi_w = roi_gray.shape
+
+    # Adaptive dark threshold: 55th percentile of ROI
+    p55 = float(np.percentile(roi_gray, 55))
+    dark_mask = (roi_gray < p55).astype(np.uint8)
+
+    # Connected components on the dark mask
+    n_labels, labels = cv2.connectedComponents(dark_mask)
+
+    if n_labels <= 1:
+        # Entire region is lit — no shadow at all in this zone
+        notes.append("No shadow components found in nose-cheek zone.")
+        return ShadowContinuity(
+            triangle_connected=False,
+            connectivity_score=0.0,
+            gap_width_ratio=1.0,
+            confidence=0.45,
+            notes=notes,
+        )
+
+    # Component sizes (excluding background 0)
+    comp_sizes = [(labels == i).sum() for i in range(1, n_labels)]
+
+    # Nose shadow component: dark region in the central column (x 30–70% of ROI)
+    nose_col_lo = int(roi_w * 0.30)
+    nose_col_hi = int(roi_w * 0.70)
+    nose_region = dark_mask[:, nose_col_lo:nose_col_hi]
+    nose_lbl_region = labels[:, nose_col_lo:nose_col_hi]
+    nose_labels_present = set(nose_lbl_region[nose_region > 0]) - {0}
+
+    # Cheek shadow component: dark region on the shadow side (outer 30% of ROI)
+    if shadow_side == "left":
+        cheek_col_lo, cheek_col_hi = 0, int(roi_w * 0.30)
+    else:  # right or unknown — check right side
+        cheek_col_lo, cheek_col_hi = int(roi_w * 0.70), roi_w
+
+    cheek_region = dark_mask[:, cheek_col_lo:cheek_col_hi]
+    cheek_lbl_region = labels[:, cheek_col_lo:cheek_col_hi]
+    cheek_labels_present = set(cheek_lbl_region[cheek_region > 0]) - {0}
+
+    # Triangle connected: nose and cheek shadows share a component label
+    shared = nose_labels_present & cheek_labels_present
+    triangle_connected = len(shared) > 0
+
+    # Gap width: find the lit corridor between nose and cheek shadows
+    # Measure the maximum consecutive lit columns between nose_col_hi and cheek_col_lo
+    if not triangle_connected and shadow_side != "left":
+        bridge_zone = dark_mask[:, nose_col_hi:cheek_col_lo]
+    elif not triangle_connected:
+        bridge_zone = dark_mask[:, cheek_col_hi:nose_col_lo]
+    else:
+        bridge_zone = None
+
+    gap_w = 0
+    if bridge_zone is not None and bridge_zone.shape[1] > 0:
+        # Fraction of columns that are entirely lit (no dark pixels)
+        col_has_dark = (bridge_zone.sum(axis=0) > 0)
+        gap_w = int((~col_has_dark).sum())
+
+    gap_width_ratio = round(gap_w / max(face_w, 1), 3)
+    connectivity_score = 1.0 if triangle_connected else round(
+        max(0.0, 1.0 - gap_width_ratio * 3.0), 2
+    )
+
+    conf = round(min(0.75, 0.35 + (roi_h * roi_w) / (face_h * face_w) * 0.80), 2)
+    notes.append(
+        f"{'Triangle CONNECTED' if triangle_connected else 'Triangle DISCONNECTED'}: "
+        f"connectivity={connectivity_score:.2f}, gap_ratio={gap_width_ratio:.3f}."
+    )
+
+    return ShadowContinuity(
+        triangle_connected=triangle_connected,
+        connectivity_score=connectivity_score,
+        gap_width_ratio=gap_width_ratio,
+        confidence=conf,
+        notes=notes,
+    )
+
+
+def extract_fill_ratio(
+    img_bgr: np.ndarray,
+    face_box: Tuple[int, int, int, int],
+    skin_mask: Optional[np.ndarray],
+    shadow_direction: str = "unknown",
+) -> Optional[FillRatio]:
+    """Measure shadow-side vs key-side luminance ratio to quantify fill.
+
+    Splits the face box into two halves based on the primary shadow direction
+    (shadow side = far from key) and measures mean luminance in the skin region
+    of each half.  The ratio (shadow/lit) indicates how much fill is present.
+    """
+    if cv2 is None:
+        return None
+
+    x0, y0, x1, y1 = face_box
+    face_w = x1 - x0
+    face_h = y1 - y0
+    if face_h < 40 or face_w < 30:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    h_img, w_img = gray.shape
+    notes: List[str] = []
+
+    # Determine which horizontal half is lit and which is shadow
+    # shadow_direction is where the shadow FALLS (inverted from key position)
+    # e.g. shadow_direction = "upper_right" → shadow on right → key on left → lit_side = left
+    shadow_on_right = shadow_direction in ("upper_right", "right", "lower_right")
+    shadow_on_left = shadow_direction in ("upper_left", "left", "lower_left")
+    if not shadow_on_right and not shadow_on_left:
+        # Unknown direction — fall back to comparing both halves
+        shadow_on_right = True  # assume right shadow (most common portrait key)
+
+    face_cx = (x0 + x1) // 2
+    if shadow_on_right:
+        lit_x0, lit_x1 = x0, face_cx
+        shadow_x0, shadow_x1 = face_cx, x1
+    else:
+        lit_x0, lit_x1 = face_cx, x1
+        shadow_x0, shadow_x1 = x0, face_cx
+
+    # Restrict to central 80% vertically (avoid hairline and chin)
+    vert_pad = int(face_h * 0.10)
+    vy0 = max(0, y0 + vert_pad)
+    vy1 = min(h_img, y1 - vert_pad)
+
+    def _half_mean(hx0: int, hx1: int) -> float:
+        hx0 = max(0, min(hx0, w_img))
+        hx1 = max(0, min(hx1, w_img))
+        region = gray[vy0:vy1, hx0:hx1]
+        if skin_mask is not None:
+            mask_region = skin_mask[vy0:vy1, hx0:hx1]
+            skin_px = region[mask_region > 0]
+            if len(skin_px) >= 30:
+                return float(np.mean(skin_px))
+        return float(np.mean(region)) if region.size > 0 else 128.0
+
+    lit_mean = _half_mean(lit_x0, lit_x1)
+    shadow_mean = _half_mean(shadow_x0, shadow_x1)
+
+    ratio = round(shadow_mean / max(lit_mean, 1.0), 3)
+    ratio = min(1.0, ratio)  # clamp: shadow can't be brighter than lit for a real fill ratio
+
+    if ratio > 0.75:
+        fill_label = "flat"
+    elif ratio > 0.55:
+        fill_label = "soft_fill"
+    elif ratio > 0.35:
+        fill_label = "moderate_fill"
+    elif ratio > 0.20:
+        fill_label = "low_fill"
+    else:
+        fill_label = "no_fill"
+
+    # Confidence: higher when sides are well-separated in luminance
+    separation = abs(lit_mean - shadow_mean) / max(lit_mean, 1.0)
+    conf = round(min(0.80, 0.35 + separation * 1.5), 2)
+
+    notes.append(
+        f"Fill ratio: lit_mean={lit_mean:.0f}, shadow_mean={shadow_mean:.0f}, "
+        f"ratio={ratio:.3f} → {fill_label} (shadow_dir={shadow_direction})."
+    )
+
+    return FillRatio(
+        ratio=ratio,
+        fill_label=fill_label,
+        lit_side_mean=round(lit_mean, 1),
+        shadow_side_mean=round(shadow_mean, 1),
+        confidence=conf,
+        notes=notes,
+    )
+
+
+def extract_eye_socket_shadow(
+    img_bgr: np.ndarray,
+    face_box: Tuple[int, int, int, int],
+) -> Optional[EyeSocketShadow]:
+    """Measure the eye socket shadow depth to estimate key light height.
+
+    A high key light projects the brow ridge downward into the eye socket,
+    creating a dark band above the iris.  This function measures that band's
+    mean luminance relative to the broader face and returns a height_label.
+
+    Implementation:
+    - Eye socket band: rows 22%–38% from top of face box
+      (roughly brow-to-upper-iris region for a frontal head crop)
+    - Reference region: rows 38%–80% (mid-face — cheeks, nose, mouth)
+      avoids hairline (top 22%) and chin (bottom 20%)
+    - depth_ratio = (ref_mean - socket_mean) / max(ref_mean, 1)
+      High depth_ratio → dark socket → high key
+    """
+    if cv2 is None:
+        return None
+
+    x0, y0, x1, y1 = face_box
+    face_h = y1 - y0
+    face_w = x1 - x0
+    if face_h < 60 or face_w < 40:
+        return None
+
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    h_img, w_img = gray.shape
+
+    # Horizontal inset: use central 70% to avoid ear/hair edges
+    hx_pad = int(face_w * 0.15)
+    hx0 = max(0, x0 + hx_pad)
+    hx1 = min(w_img, x1 - hx_pad)
+
+    # Eye socket band: 22%–38% from top of face
+    socket_y0 = max(0, y0 + int(face_h * 0.22))
+    socket_y1 = min(h_img, y0 + int(face_h * 0.38))
+
+    # Mid-face reference: 38%–80% from top
+    ref_y0 = min(h_img, y0 + int(face_h * 0.38))
+    ref_y1 = min(h_img, y0 + int(face_h * 0.80))
+
+    socket_region = gray[socket_y0:socket_y1, hx0:hx1]
+    ref_region = gray[ref_y0:ref_y1, hx0:hx1]
+
+    if socket_region.size < 20 or ref_region.size < 20:
+        return None
+
+    socket_mean = float(np.mean(socket_region))
+    ref_mean = float(np.mean(ref_region))
+
+    if ref_mean < 5.0:
+        return None  # pathologically dark image — no signal
+
+    depth_ratio = round((ref_mean - socket_mean) / max(ref_mean, 1.0), 3)
+    depth_ratio = max(-0.5, min(1.0, depth_ratio))  # clamp
+
+    # Height labels
+    if depth_ratio > 0.25:
+        height_label = "high"
+    elif depth_ratio > 0.10:
+        height_label = "eye_level"
+    else:
+        height_label = "low"
+
+    # Confidence based on face size and depth signal magnitude
+    size_factor = min(1.0, face_h / 120.0)          # larger face → more reliable
+    signal_factor = min(1.0, abs(depth_ratio) / 0.20)  # stronger shadow → more reliable
+    conf = round(max(0.25, min(0.70, 0.3 + 0.4 * size_factor * signal_factor)), 2)
+
+    notes = [
+        f"Eye socket: socket_mean={socket_mean:.0f}, ref_mean={ref_mean:.0f}, "
+        f"depth_ratio={depth_ratio:.3f} → {height_label} (conf {conf:.2f})."
+    ]
+
+    return EyeSocketShadow(
+        depth_ratio=depth_ratio,
+        socket_mean_lum=round(socket_mean, 1),
+        face_mean_lum=round(ref_mean, 1),
+        height_label=height_label,
+        confidence=conf,
+        notes=notes,
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Master Orchestrator
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -1798,7 +2342,7 @@ def extract_visual_cues(
         )
         report.contrast_ratio = _safe_extract(
             "contrast_ratio", extract_contrast_ratio,
-            img_bgr, person_mask,
+            img_bgr, person_mask, face_box,
         )
         report.subject_background_separation = _safe_extract(
             "subject_background_separation", extract_subject_background_separation,
@@ -1835,6 +2379,43 @@ def extract_visual_cues(
             "projected_pattern_shape", detect_projected_pattern_shape,
             person_mask,
         )
+
+        # ── P3: Nose shadow length ───────────────────────────────────────
+        if face_box is not None:
+            report.nose_shadow_length = _safe_extract(
+                "nose_shadow_length", extract_nose_shadow_length,
+                img_bgr, face_box,
+            )
+
+        # ── P4: Shadow continuity (Rembrandt triangle check) ────────────
+        if face_box is not None:
+            # Get primary shadow direction for sided-split
+            _sd = "unknown"
+            if report.primary_shadow_direction:
+                _sd = report.primary_shadow_direction.direction or "unknown"
+            report.shadow_continuity = _safe_extract(
+                "shadow_continuity", extract_shadow_continuity,
+                img_bgr, face_box, _sd,
+            )
+
+        # ── P5: Fill ratio ───────────────────────────────────────────────
+        if face_box is not None:
+            _fill_sd = "unknown"
+            if report.primary_shadow_direction:
+                _fill_sd = report.primary_shadow_direction.direction or "unknown"
+            report.fill_ratio = _safe_extract(
+                "fill_ratio", extract_fill_ratio,
+                img_bgr, face_box, skin_mask, _fill_sd,
+            )
+
+        # ── P8: Eye socket shadow depth ─────────────────────────────────
+        # Measure the dark band above the iris — directly encodes key height
+        # without requiring catchlights (works even when eyes are occluded).
+        if face_box is not None:
+            report.eye_socket_shadow = _safe_extract(
+                "eye_socket_shadow", extract_eye_socket_shadow,
+                img_bgr, face_box,
+            )
     else:
         all_notes.append("No masks available — only catchlight-based cues extracted.")
 
@@ -1894,6 +2475,61 @@ def enrich_cue_report_from_pipeline(
         except Exception:
             pass  # best-effort enrichment
 
+        # Backfill size_ratio_mean / size_class into catchlight_shape.
+        # The topology pass stores per-catchlight size_ratio in primary /
+        # secondary / tertiary dicts.  Collect across all three so we can
+        # compute a mean and map to a modifier size class.
+        try:
+            topo_entries = [
+                topology_data[k] for k in ("primary", "secondary", "tertiary")
+                if isinstance(topology_data.get(k), dict)
+            ]
+            if topo_entries:
+                ratios = [
+                    c["size_ratio"] for c in topo_entries
+                    if isinstance(c.get("size_ratio"), (int, float))
+                ]
+                if ratios:
+                    mean_ratio = float(sum(ratios) / len(ratios))
+                    if mean_ratio < 0.08:
+                        size_class = "point"
+                    elif mean_ratio < 0.18:
+                        size_class = "small"
+                    elif mean_ratio < 0.32:
+                        size_class = "medium"
+                    elif mean_ratio < 0.42:
+                        size_class = "large"
+                    else:
+                        size_class = "very_large"
+
+                    if report.catchlight_shape is not None:
+                        # Mutate the existing model (Pydantic v2 supports direct assignment)
+                        report.catchlight_shape.size_ratio_mean = round(mean_ratio, 3)
+                        report.catchlight_shape.size_class = size_class
+                        report.catchlight_shape.notes.append(
+                            f"Topology size_ratio_mean={mean_ratio:.3f} → {size_class}."
+                        )
+                    else:
+                        # Eyes were visible in topology but not basic pass — create shape cue
+                        shapes = [c.get("shape", "unknown") for c in topo_entries]
+                        rect_count = shapes.count("rectangular")
+                        round_count = shapes.count("round")
+                        dominant = (
+                            "rectangular" if rect_count > round_count
+                            else "round" if round_count > rect_count
+                            else "mixed" if shapes else "unknown"
+                        )
+                        report.catchlight_shape = CatchlightShape(
+                            dominant_shape=dominant,
+                            shapes_seen=list(set(shapes)),
+                            size_ratio_mean=round(mean_ratio, 3),
+                            size_class=size_class,
+                            confidence=0.55,
+                            notes=[f"Topology size_ratio_mean={mean_ratio:.3f} → {size_class}."],
+                        )
+        except Exception:
+            pass  # best-effort size enrichment
+
     # ── Highlight axis map ──
     axis_map_data = pipeline_results.get("highlight_axis_map")
     if isinstance(axis_map_data, dict) and axis_map_data.get("ok"):
@@ -1949,5 +2585,85 @@ def enrich_cue_report_from_pipeline(
             report.light_structure = extract_light_structure(structure_data)
         except Exception:
             pass
+
+    # ── Face orientation (P6: broad / short disambiguation) ──
+    # face_yaw is computed in the catchlight pass from landmark geometry.
+    # Positive yaw → face turned image-right; negative → image-left.
+    # The broad side is whichever image-direction shows MORE of the face.
+    cl_data = pipeline_results.get("catchlights", {})
+    if isinstance(cl_data, dict):
+        try:
+            face_yaw = cl_data.get("face_yaw")
+            if face_yaw is not None:
+                yaw = float(face_yaw)
+                _FRONTAL_THRESHOLD = 0.12
+                if abs(yaw) < _FRONTAL_THRESHOLD:
+                    yaw_label = "frontal"
+                    broad_side = "unknown"
+                    short_side = "unknown"
+                    fo_conf = 0.0
+                elif yaw > 0:
+                    # Face turned image-right → image-left side is more visible
+                    broad_side = "left"
+                    short_side = "right"
+                    if yaw < 0.25:
+                        yaw_label = "slight_right"
+                        fo_conf = 0.45
+                    elif yaw < 0.40:
+                        yaw_label = "moderate_right"
+                        fo_conf = 0.65
+                    else:
+                        yaw_label = "significant_right"
+                        fo_conf = 0.80
+                else:  # yaw < 0
+                    # Face turned image-left → image-right side is more visible
+                    broad_side = "right"
+                    short_side = "left"
+                    if yaw > -0.25:
+                        yaw_label = "slight_left"
+                        fo_conf = 0.45
+                    elif yaw > -0.40:
+                        yaw_label = "moderate_left"
+                        fo_conf = 0.65
+                    else:
+                        yaw_label = "significant_left"
+                        fo_conf = 0.80
+
+                report.face_orientation = FaceOrientation(
+                    yaw=round(yaw, 3),
+                    yaw_label=yaw_label,
+                    broad_side=broad_side,
+                    short_side=short_side,
+                    confidence=fo_conf,
+                    notes=[
+                        f"face_yaw={yaw:.3f} → {yaw_label}; "
+                        f"broad_side={broad_side}, short_side={short_side}."
+                    ],
+                )
+        except Exception:
+            pass  # best-effort enrichment
+
+    # ── Shadow penumbra ──
+    # shadow_penumbra_pass() runs in the extended pipeline and outputs
+    # penumbra_width_ratio + apparent_source_size.  Wire the result into
+    # the cue report so infer_source_quality can use it as an independent
+    # modifier-size signal (separate from catchlight shape).
+    penumbra_data = pipeline_results.get("penumbra")
+    if isinstance(penumbra_data, dict) and penumbra_data.get("ok"):
+        try:
+            # Derive confidence from penumbra_uniformity — uniform edges
+            # across the subject give higher confidence in the width estimate.
+            uniformity = penumbra_data.get("penumbra_uniformity", 0.0)
+            pen_conf = round(max(0.3, min(0.75, 0.3 + uniformity * 0.45)), 2)
+            report.shadow_penumbra = ShadowPenumbra(
+                penumbra_width_px=penumbra_data.get("penumbra_width_px", 0.0),
+                penumbra_width_ratio=penumbra_data.get("penumbra_width_ratio", 0.0),
+                apparent_source_size=penumbra_data.get("apparent_source_size", "unknown"),
+                penumbra_uniformity=uniformity,
+                confidence=pen_conf,
+                notes=penumbra_data.get("notes", []),
+            )
+        except Exception:
+            pass  # best-effort enrichment
 
     return report

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import DistanceRefCard from './DistanceRefCard';
+import { formatFeedback, formatTips, formatFixes, formatDiagFixes } from '../lib/formatFeedback';
 
 /**
  * ShootStepCard — renders a single step in the Shoot Mode workflow.
@@ -10,14 +11,19 @@ import DistanceRefCard from './DistanceRefCard';
  *   isCompleted  - boolean, has the user marked this step done?
  *   onComplete   - () => void, toggle completion
  *   totalSteps   - number, total steps for progress display
+ *   mode         - 'photographer' | 'assistant' | 'learning'  (default: 'photographer')
  */
-export default function ShootStepCard({ step, isActive, isCompleted, onComplete, totalSteps }) {
+export default function ShootStepCard({ step, isActive, isCompleted, onComplete, totalSteps, mode = 'photographer' }) {
   const [expanded, setExpanded] = useState(isActive);
 
-  // Auto-expand active step (in useEffect, not during render)
+  // Follow active step — expand when active, collapse when done/pending
   useEffect(() => {
-    if (isActive) setExpanded(true);
+    setExpanded(isActive);
   }, [isActive]);
+
+  // Apply mode-based formatting to display text (source data unchanged)
+  const displaySubtitle = formatFeedback(step.subtitle, mode, 'subtitle');
+  const displayTips     = formatTips(step.tips, mode);
 
   const stateClass = isCompleted
     ? 'shoot-step--done'
@@ -38,8 +44,8 @@ export default function ShootStepCard({ step, isActive, isCompleted, onComplete,
         </span>
         <div className="shoot-step__header-text">
           <span className="shoot-step__title">{step.title}</span>
-          {step.subtitle && (
-            <span className="shoot-step__subtitle">{step.subtitle}</span>
+          {displaySubtitle && (
+            <span className="shoot-step__subtitle">{displaySubtitle}</span>
           )}
         </div>
         <span className={`shoot-step__chevron ${expanded ? 'shoot-step__chevron--open' : ''}`}>
@@ -62,18 +68,21 @@ export default function ShootStepCard({ step, isActive, isCompleted, onComplete,
       {/* Expandable content */}
       {expanded && (
         <div className="shoot-step__body">
-          {/* Type-specific rendering */}
+          {/* Type-specific rendering — pass mode so they can format their own text */}
           {step.type === 'camera_setup' && <CameraSetupContent data={step.data} />}
-          {step.type === 'light_placement' && <LightPlacementContent data={step.data} />}
-          {step.type === 'test_exposure' && <TestExposureContent data={step.data} />}
-          {step.type === 'adjustments' && <AdjustmentsContent data={step.data} />}
+          {step.type === 'light_placement' && <LightPlacementContent data={step.data} mode={mode} />}
+          {step.type === 'test_exposure' && <TestExposureContent data={step.data} mode={mode} />}
+          {step.type === 'adjustments' && <AdjustmentsContent data={step.data} mode={mode} />}
 
-          {/* Tips */}
-          {step.tips?.length > 0 && (
+          {/* Tips — hidden in assistant mode, prefixed in learning mode */}
+          {displayTips?.length > 0 && (
             <div className="shoot-step__tips">
-              {step.tips.map((tip, i) => (
+              <div className="shoot-step__tips-label">
+                {mode === 'learning' ? 'Why This Matters' : 'Pro Tips'}
+              </div>
+              {displayTips.map((tip, i) => (
                 <div key={i} className="shoot-step__tip">
-                  <span className="shoot-step__tip-icon">{'\uD83D\uDCA1'}</span>
+                  <span className="shoot-step__tip-icon">{'\u2022'}</span>
                   <span>{tip}</span>
                 </div>
               ))}
@@ -126,7 +135,15 @@ function CameraSetupContent({ data }) {
   );
 }
 
-function LightPlacementContent({ data }) {
+const BARE_TOKENS = new Set(['bare', 'bare_bulb', 'bare bulb', 'direct', 'none', 'unknown', 'modifier not detected', '']);
+function cleanModifier(mod) {
+  if (!mod) return null;
+  return BARE_TOKENS.has(mod.toLowerCase().trim()) ? null : mod;
+}
+
+function LightPlacementContent({ data, mode = 'photographer' }) {
+  const modifier = cleanModifier(data.modifier);
+  const isAssistant = mode === 'assistant';
   return (
     <div className="shoot-step__light-content">
       <div
@@ -138,17 +155,19 @@ function LightPlacementContent({ data }) {
         </span>
       </div>
 
-      {data.modifier && (
-        <div className="shoot-step__light-modifier">{data.modifier}</div>
+      {modifier && (
+        <div className="shoot-step__light-modifier">{modifier}</div>
+      )}
+
+      {/* Initial placement hint — simple starting position */}
+      {data.initialPlacement && (
+        <div className="shoot-step__placement-hint">
+          <span className="shoot-step__placement-hint-label">Start here</span>
+          <span className="shoot-step__placement-hint-text">{data.initialPlacement}</span>
+        </div>
       )}
 
       <div className="shoot-step__light-specs">
-        {data.position && (
-          <div className="shoot-step__spec">
-            <span className="shoot-step__spec-label">Position</span>
-            <span className="shoot-step__spec-value">{data.position}</span>
-          </div>
-        )}
         {data.height && (
           <div className="shoot-step__spec">
             <span className="shoot-step__spec-label">Height</span>
@@ -161,32 +180,75 @@ function LightPlacementContent({ data }) {
             <span className="shoot-step__spec-value">{data.distance}</span>
           </div>
         )}
+        {/* Angle — shown for assistant so they know the geometry */}
+        {data.angle && (
+          <div className="shoot-step__spec">
+            <span className="shoot-step__spec-label">Angle</span>
+            <span className="shoot-step__spec-value">{data.angle}</span>
+          </div>
+        )}
+        {data.direction && (
+          <div className="shoot-step__spec">
+            <span className="shoot-step__spec-label">Direction</span>
+            <span className="shoot-step__spec-value">{data.direction}</span>
+          </div>
+        )}
         {data.powerHint && (
           <div className="shoot-step__spec">
             <span className="shoot-step__spec-label">Power</span>
             <span className="shoot-step__spec-value">{data.powerHint}</span>
           </div>
         )}
+        {/* Feather hint — assistant needs to know if and where to feather */}
+        {isAssistant && data.featherHint && (
+          <div className="shoot-step__spec" style={{ gridColumn: '1 / -1' }}>
+            <span className="shoot-step__spec-label">Feather</span>
+            <span className="shoot-step__spec-value">{data.featherHint}</span>
+          </div>
+        )}
       </div>
 
       {data.distanceRef && <DistanceRefCard ref_data={data.distanceRef} />}
+
+      {/* Aim target — where the modifier should be aimed, for assistant */}
+      {isAssistant && data.aimTarget && (
+        <div className="shoot-step__placement-hint" style={{ marginTop: 8 }}>
+          <span className="shoot-step__placement-hint-label">Aim at</span>
+          <span className="shoot-step__placement-hint-text">{data.aimTarget}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-function TestExposureContent({ data }) {
+function TestExposureContent({ data, mode = 'photographer' }) {
   const [checks, setChecks] = useState({});
+  const isAssistant = mode === 'assistant';
 
   function toggleCheck(idx) {
     setChecks(prev => ({ ...prev, [idx]: !prev[idx] }));
   }
+
+  /* In assistant mode, show only level-1 (priority) signs/warnings */
+  function filterItems(items) {
+    if (!items) return [];
+    const normalized = items.map(i => typeof i === 'string' ? { text: i, level: 1 } : i);
+    if (!isAssistant) return normalized;
+    const priority = normalized.filter(i => i.level === 1);
+    return priority.length > 0 ? priority : normalized;
+  }
+
+  const goodItems = filterItems(data.goodSigns);
+  const warnItems = filterItems(data.warnings);
 
   return (
     <div className="shoot-step__test-content">
       {/* Checklist */}
       {data.checklist?.length > 0 && (
         <div className="shoot-step__checklist">
-          <span className="shoot-step__checklist-label">Test Checklist</span>
+          <span className="shoot-step__checklist-label">
+            {isAssistant ? 'Check these' : 'Test Checklist'}
+          </span>
           {data.checklist.map((item, i) => (
             <label key={i} className="shoot-step__check-item">
               <input
@@ -203,21 +265,29 @@ function TestExposureContent({ data }) {
       )}
 
       {/* Good signs */}
-      {data.goodSigns?.length > 0 && (
+      {goodItems.length > 0 && (
         <div className="shoot-step__signs">
-          <span className="shoot-step__signs-label">{'\u2705'} Good Signs</span>
+          <span className="shoot-step__signs-label">
+            {'\u2705'} {isAssistant ? 'Confirms correct' : 'Good Signs'}
+          </span>
           <ul>
-            {data.goodSigns.map((s, i) => <li key={i}>{s}</li>)}
+            {goodItems.map((s, i) => (
+              <li key={i}>{s.text}</li>
+            ))}
           </ul>
         </div>
       )}
 
       {/* Warnings */}
-      {data.warnings?.length > 0 && (
+      {warnItems.length > 0 && (
         <div className="shoot-step__signs">
-          <span className="shoot-step__signs-label">{'\u26A0\uFE0F'} Watch Out</span>
+          <span className="shoot-step__signs-label">
+            {'\u26A0\uFE0F'} {isAssistant ? 'Flag to photographer if' : 'Watch Out'}
+          </span>
           <ul>
-            {data.warnings.map((w, i) => <li key={i}>{w}</li>)}
+            {warnItems.map((w, i) => (
+              <li key={i}>{w.text}</li>
+            ))}
           </ul>
         </div>
       )}
@@ -225,28 +295,50 @@ function TestExposureContent({ data }) {
   );
 }
 
-function AdjustmentsContent({ data }) {
+function FixCommand({ fix, mode }) {
+  // Assistant mode: structured { doThis, result } — clean, command-forward layout
+  if (mode === 'assistant') {
+    const doThis = fix.doThis || fix.text || '';
+    const result = fix.result || null;
+    return (
+      <div className="shoot-step__cmd-item">
+        <span className="shoot-step__cmd-action">{doThis}</span>
+        {result && (
+          <span className="shoot-step__cmd-effect">{result}</span>
+        )}
+      </div>
+    );
+  }
+
+  // Photographer / learning mode: problem → fix format
+  if (typeof fix === 'string') return <div className="shoot-step__fix-item">{fix}</div>;
+  if (fix.problem && fix.fix) {
+    return (
+      <div className="shoot-step__fix-item">
+        <span className="shoot-step__fix-problem">{fix.problem}</span>
+        <span className="shoot-step__fix-solution">{fix.fix}</span>
+      </div>
+    );
+  }
+  return <div className="shoot-step__fix-item">{fix.text || fix.label || fix.fix || ''}</div>;
+}
+
+function AdjustmentsContent({ data, mode = 'photographer' }) {
+  const displayFixes = formatFixes(data.quickFixes, mode);
+  const isAssistant = mode === 'assistant';
+
   return (
     <div className="shoot-step__adjustments-content">
       {/* Quick fixes */}
-      {data.quickFixes?.length > 0 && (
+      {displayFixes?.length > 0 && (
         <div className="shoot-step__fixes-section">
-          <span className="shoot-step__fixes-label">{'\uD83D\uDD27'} Quick Fixes</span>
+          <span className="shoot-step__fixes-label">
+            {'\uD83D\uDD27'} {isAssistant ? 'Adjustments' : 'Quick Fixes'}
+          </span>
           <div className="shoot-step__fixes-list">
-            {data.quickFixes.map((fix, i) => {
-              if (typeof fix === 'string') {
-                return <div key={i} className="shoot-step__fix-item">{fix}</div>;
-              }
-              if (fix.problem && fix.fix) {
-                return (
-                  <div key={i} className="shoot-step__fix-item">
-                    <span className="shoot-step__fix-problem">If {fix.problem.toLowerCase()}:</span>
-                    <span className="shoot-step__fix-solution">{fix.fix}</span>
-                  </div>
-                );
-              }
-              return <div key={i} className="shoot-step__fix-item">{fix.text || fix.label || fix.fix || ''}</div>;
-            })}
+            {displayFixes.map((fix, i) => (
+              <FixCommand key={i} fix={fix} mode={mode} />
+            ))}
           </div>
         </div>
       )}
@@ -254,11 +346,13 @@ function AdjustmentsContent({ data }) {
       {/* Substitutions */}
       {data.substitutions?.length > 0 && (
         <div className="shoot-step__subs-section">
-          <span className="shoot-step__fixes-label">{'\uD83D\uDD04'} Substitutions</span>
+          <span className="shoot-step__fixes-label">
+            {'\uD83D\uDD04'} {isAssistant ? 'If you don\u2019t have it' : 'Substitutions'}
+          </span>
           {data.substitutions.map((sub, i) => (
             <div key={i} className="shoot-step__sub-item">
               {sub.ifMissing && sub.ifMissing !== '\u2014' && (
-                <span className="shoot-step__sub-if">If missing: {sub.ifMissing}</span>
+                <span className="shoot-step__sub-if">Missing: {sub.ifMissing}</span>
               )}
               <span className="shoot-step__sub-use">Use: {sub.use}</span>
               {sub.tradeoff && (
@@ -272,16 +366,20 @@ function AdjustmentsContent({ data }) {
       {/* Diagnostics */}
       {data.diagnostics?.length > 0 && (
         <div className="shoot-step__diag-section">
-          <span className="shoot-step__fixes-label">{'\uD83E\uDE7A'} If Something Looks Off</span>
+          <span className="shoot-step__fixes-label">
+            {'\uD83E\uDE7A'} {isAssistant ? 'Looks wrong? Flag it' : 'If Something Looks Off'}
+          </span>
           {data.diagnostics.map((d, i) => (
             <div key={i} className="shoot-step__diag-item">
               <div className="shoot-step__diag-symptoms">
                 {d.symptoms?.map((s, j) => <span key={j} className="shoot-step__diag-tag">{s}</span>)}
               </div>
               {d.fixes?.length > 0 && (
-                <ul className="shoot-step__diag-fixes">
-                  {d.fixes.map((f, j) => <li key={j}>{f}</li>)}
-                </ul>
+                <div className="shoot-step__diag-fixes">
+                  {formatDiagFixes(d.fixes, mode).map((f, j) => (
+                    <FixCommand key={j} fix={f} mode={mode} />
+                  ))}
+                </div>
               )}
             </div>
           ))}

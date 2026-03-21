@@ -3,11 +3,13 @@
  * Consumes lighting_read from ReferencePhotoAnalysis.
  */
 import CollapsibleCard from './CollapsibleCard';
+import CardIcon from '../components/CardIcon';
 
-export default function RefLightingCard({ lightingRead }) {
+export default function RefLightingCard({ lightingRead, lightingIntelligence }) {
   if (!lightingRead) return null;
 
   const lr = lightingRead;
+  const li = lightingIntelligence || {};
   const hasObs = lr.key_observations?.length > 0;
   const hasAmbiguity = lr.ambiguity_notes?.length > 0;
 
@@ -17,7 +19,7 @@ export default function RefLightingCard({ lightingRead }) {
     : null;
 
   return (
-    <CollapsibleCard icon={'\uD83D\uDCA1'} title="The Light">
+    <CollapsibleCard icon={<CardIcon name="light" />} title="The Light">
       <div className="ref-card__grid">
         {familyLabel && (
           <Row label="Lighting Family" value={capitalize(familyLabel)} />
@@ -39,6 +41,12 @@ export default function RefLightingCard({ lightingRead }) {
         )}
         {typeof lr.light_count === 'number' && lr.light_count > 0 && (
           <Row label="Light Count" value={lightCountLabel(lr.light_count)} />
+        )}
+        {li.detectedCCT && (
+          <Row label="Color Temperature" value={`~${li.detectedCCT}K`} />
+        )}
+        {li.detectedEnvironment && (
+          <Row label="Environment" value={capitalize(li.detectedEnvironment.replace(/[-_]/g, ' '))} />
         )}
         {lr.tonal_processing_notes && (
           <Row label="Processing" value={lr.tonal_processing_notes} />

@@ -140,7 +140,7 @@ export default function RoomPlannerScreen() {
       {/* Header */}
       <div className="room-planner__header">
         <button className="room-planner__back" onClick={handleBack}>{'\u25C0'} Back</button>
-        <h2 className="room-planner__title">{'\uD83D\uDCD0'} Room Planner</h2>
+        <h2 className="room-planner__title">Room Planner</h2>
       </div>
 
       {/* Tabs */}
@@ -155,7 +155,7 @@ export default function RoomPlannerScreen() {
           className={`room-planner__tab ${tab === 'camera' ? 'room-planner__tab--active' : ''}`}
           onClick={() => setTab('camera')}
         >
-          {'\uD83D\uDCF7'} Camera
+          Camera
         </button>
         <button
           className={`room-planner__tab ${tab === 'plan' ? 'room-planner__tab--active' : ''}`}
@@ -198,7 +198,7 @@ export default function RoomPlannerScreen() {
             className="btn btn--secondary room-planner__camera-btn"
             onClick={() => setShowCamera(true)}
           >
-            {'\uD83D\uDCF7'} Use Camera to Estimate
+            Use Camera to Estimate
           </button>
 
           {/* Room fit comparison */}
@@ -206,24 +206,24 @@ export default function RoomPlannerScreen() {
             <div className="room-fit">
               <div className="room-fit__header">Your Room vs. Setup Needs</div>
               <div className={`room-fit__row ${roomFit.ceilingFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
-                <span>{roomFit.ceilingFits ? '\u2705' : '\u274C'}</span>
+                <span>{roomFit.ceilingFits ? '\u2713' : '\u2715'}</span>
                 <span>Ceiling: {dims.ceilingFt} ft</span>
                 <span className="room-fit__need">needs {spaceNeeds.minCeilingFt} ft</span>
               </div>
               <div className={`room-fit__row ${roomFit.widthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
-                <span>{roomFit.widthFits ? '\u2705' : '\u274C'}</span>
+                <span>{roomFit.widthFits ? '\u2713' : '\u2715'}</span>
                 <span>Width: {dims.widthFt} ft</span>
                 <span className="room-fit__need">needs {spaceNeeds.minWidthFt} ft</span>
               </div>
               <div className={`room-fit__row ${roomFit.depthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
-                <span>{roomFit.depthFits ? '\u2705' : '\u274C'}</span>
+                <span>{roomFit.depthFits ? '\u2713' : '\u2715'}</span>
                 <span>Depth: {dims.lengthFt} ft</span>
                 <span className="room-fit__need">needs {spaceNeeds.minDepthFt} ft</span>
               </div>
               {roomFit.issues.length > 0 && (
                 <div className="room-fit__issues">
                   {roomFit.issues.map((issue, i) => (
-                    <div key={i} className="room-fit__issue">{'\u26A0\uFE0F'} {issue}</div>
+                    <div key={i} className="room-fit__issue">! {issue}</div>
                   ))}
                 </div>
               )}
@@ -285,7 +285,7 @@ export default function RoomPlannerScreen() {
             <div className="floor-plan__warnings">
               {warnings.map((w, i) => (
                 <div key={i} className="floor-plan__warning">
-                  {'\u26A0\uFE0F'} {w}
+                  ! {w}
                 </div>
               ))}
             </div>

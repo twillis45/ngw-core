@@ -1,0 +1,49 @@
+{
+  "reference_id": "short",
+  "pattern_id": "short",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "community",
+  "entry_trust_score": 0.7,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 1,
+  "key_direction_deg": 315.0,
+  "shadow_pattern": "short",
+  "notes": "Short lighting \u2014 key on narrow side of face (side turned away from camera), dark moody portrait with rim",
+  "ground_truth": {
+    "expected_pattern": "short",
+    "acceptable_patterns": [
+      "short",
+      "rembrandt",
+      "loop",
+      "split",
+      "broad"
+    ],
+    "expected_light_count": 1,
+    "acceptable_light_count_range": [
+      1,
+      2
+    ],
+    "expected_key_direction": "upper_left"
+  },
+  "benchmark_metadata": {
+    "category": "dramatic",
+    "difficulty": "hard",
+    "known_challenges": [
+      "short vs broad depends on face turn direction relative to key \u2014 requires pose solver",
+      "very dark image may limit shadow analysis",
+      "rim light on far shoulder could register as second source"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.260701+00:00"
+  },
+  "image_dimensions": {
+    "width": 474,
+    "height": 474
+  },
+  "ingested_at": "2026-03-17T22:27:21.260798+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}
