@@ -822,10 +822,14 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # shadow patterns.  base="unknown" + mood=high_key is more likely
     # flat/commercial lighting where no dominant key shadow is visible.
     bg_pat = getattr(bg, "pattern", "") if bg else ""
+    # "clamshell" is excluded by default: it describes a specific 2-source
+    # geometric setup (key above + fill below) that is orthogonal to the
+    # high_key tonal descriptor.  Exception: a clamshell that is also
+    # classified as high_key mood AND has very_high overall brightness is
     # "clamshell" is excluded: it describes a specific 2-source geometric
     # setup (key above + fill below) that is orthogonal to the high_key
-    # tonal descriptor.  Upgrading clamshell → high_key loses the setup
-    # geometry and produces wrong light-count corrections downstream.
+    # tonal descriptor.  The fallback (bg_bright + count≥4) below handles
+    # beauty-dish high-key cases where mood="editorial".
     if mood == "high_key" and base not in ("unknown", "clamshell"):
         return "high_key"
 
@@ -835,10 +839,21 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # high overall brightness), promote to high_key.  Only fire for
     # soft/flat base patterns that are compatible with multi-light
     # high-key setups — exclude dramatic/directional patterns like
-    # rembrandt, triangle, split, short.  Also exclude clamshell: see above.
+    # rembrandt, triangle, split, short.
+    # For non-clamshell bases the bright-bg guard is sufficient.
     if bg_bright and brightness in ("high", "very_high") and \
        base in ("loop", "butterfly", "broad", "flat_fashion"):
         return "high_key"
+    # Clamshell in a bright high-key environment (beauty dish editorial) can
+    # also be high_key, but requires an additional guard: the catchlight
+    # light_count must be ≥ 4.  Count=3 indicates a genuine triangle setup
+    # (three distinct sources), not high-key specular inflation.  Count ≥ 4
+    # in a bright+bg_bright clamshell scene reliably indicates over-counted
+    # reflections from fill panels — a high-key signature.
+    if bg_bright and brightness in ("high", "very_high") and base == "clamshell":
+        _ck_lc = getattr(li, "light_count", 0) if li else 0
+        if _ck_lc >= 4:
+            return "high_key"
 
     # ── Flat fashion: unknown pattern + bright + even background ──────
     # Flat fashion / catalog lighting produces minimal directional shadows.
@@ -955,11 +970,16 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # shadow with only a narrow sliver of light.  mood=low_key alone is
     # too common (fires on 12/32 benchmarks), so we require:
     #   - mood explicitly classified as "low_key"
-    #   - base pattern is a dramatic geometric type (split or rembrandt)
+    #   - base pattern is a dramatic or ambiguous geometric type; loop and
+    #     butterfly are included because low-confidence classifiers often
+    #     return these when the true setup is low-key but shadow geometry
+    #     is ambiguous (e.g. very dark face with single side key).
     #   - dark background (intentional)
-    #   - very narrow highlight width (< 15% of face) — the distinctive
-    #     signal that separates low_key from standard dramatic setups
-    if mood == "low_key" and base in ("split", "rembrandt") and bg_dark:
+    #   - very narrow highlight width (< 15%) OR high shadow density (> 30%)
+    #     — either confirms a high-ratio setup; hl_w alone can be unreliable
+    #     when the classifier returns 1.0 (fallback) for images without a
+    #     detected face mesh.
+    if mood == "low_key" and base in ("split", "rembrandt", "loop", "butterfly") and bg_dark:
         ls_data = getattr(cr, "light_structure", None) if cr else None
         hl_w = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
         if hl_w < 0.15:

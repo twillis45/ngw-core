@@ -439,6 +439,22 @@ export default function SettingsScreen() {
             onChange={v => update('imageHandling', v)}
           />
         </SettingsCard>
+        <SettingsCard label="Analytics">
+          <ActionSetting
+            label="Usage Analytics"
+            description="View your session history, pattern detection stats, and usage trends."
+            buttonText="View Analytics"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+          />
+          {isAdmin && (
+            <ActionSetting
+              label="Exec Dashboard"
+              description="Executive metrics and aggregate system statistics (admin only)."
+              buttonText="View Dashboard"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'exec' })}
+            />
+          )}
+        </SettingsCard>
       </SettingsSection>
 
       {/* ── 4. ADVANCED (collapsed by default) ───────────────────────── */}
@@ -516,20 +532,6 @@ export default function SettingsScreen() {
         {/* Dev Tools — existing, gated by feature flag */}
         {isEnabled('enable_lab') && (
           <SettingsCard label="Dev Tools">
-            <ActionSetting
-              label="Analytics"
-              description="View usage analytics dashboard."
-              buttonText="View Analytics"
-              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
-            />
-            {isAdmin && (
-              <ActionSetting
-                label="Exec Dashboard"
-                description="Executive metrics (admin only)."
-                buttonText="View Dashboard"
-                onClick={() => dispatch({ type: 'NAVIGATE', screen: 'exec' })}
-              />
-            )}
             <div className="stg-row stg-row--action">
               <div className="stg-row__meta">
                 <span className="stg-row__label">Plan Tier</span>
