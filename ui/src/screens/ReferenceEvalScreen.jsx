@@ -206,6 +206,248 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
   );
 }
 
+// ── Admin: all VLM data + narrative ────────────────────────────────────────
+
+function AdminVLMPanel({ analysis }) {
+  const [open, setOpen] = useState(false);
+  const [rawOpen, setRawOpen] = useState(false);
+  if (!analysis) return null;
+
+  const cls = analysis.classification || {};
+  const li  = analysis.lightingIntelligence || null;
+  const pex = li?.perceptionExplanation || null;
+  const candidates = analysis.patternCandidates || null;
+  const refA = analysis.description?.referenceAnalysis || null;
+
+  // Format 0–1 score as percentage string
+  function pct(v) {
+    if (v == null) return '—';
+    const n = v > 1 ? v : v * 100;
+    return `${Math.round(n)}%`;
+  }
+
+  const rowStyle = {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    padding: '5px 0', borderBottom: '1px solid var(--color-border-subtle)',
+    gap: 8, fontSize: 'var(--text-xs)',
+  };
+  const labelStyle = { color: 'var(--color-text-dim)', flexShrink: 0, minWidth: 130 };
+  const valueStyle = { color: 'var(--color-text)', textAlign: 'right', wordBreak: 'break-word' };
+
+  function Section({ title, children }) {
+    return (
+      <div style={{ marginBottom: 'var(--space-sm)' }}>
+        <div style={{
+          fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)',
+          color: 'var(--color-accent)', textTransform: 'uppercase',
+          letterSpacing: 'var(--tracking-widest)', marginBottom: 6, marginTop: 10,
+        }}>{title}</div>
+        {children}
+      </div>
+    );
+  }
+
+  function DataRow({ label, value }) {
+    if (value == null || value === '' || value === 'unknown') return null;
+    const display = Array.isArray(value) ? value.join(', ') : String(value);
+    return (
+      <div style={rowStyle}>
+        <span style={labelStyle}>{label}</span>
+        <span style={valueStyle}>{display}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ref-correction ref-correction--admin" style={{ marginTop: 8 }}>
+      <div className="ref-correction__row">
+        <span className="ref-correction__admin-badge">Admin</span>
+        <button
+          className="btn btn--ghost btn--sm"
+          onClick={() => setOpen(v => !v)}
+          type="button"
+        >
+          {open ? 'Hide VLM Data' : 'VLM Data ↓'}
+        </button>
+      </div>
+
+      {open && (
+        <div style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)' }}>
+
+          {/* ── Classification scores ── */}
+          <Section title="Classification">
+            <DataRow label="Pattern"         value={cls.lightingPattern} />
+            <DataRow label="Reliability"     value={pct(cls.reliabilityScore ?? cls.confidence)} />
+            <DataRow label="Confidence raw"  value={cls.confidence != null ? String(cls.confidence) : null} />
+            <DataRow label="Pattern source"  value={cls.patternSource} />
+            <DataRow label="Mood detected"   value={cls.mood} />
+            <DataRow label="Light count"     value={cls.lightCount != null ? String(cls.lightCount) : null} />
+            <DataRow label="Color temp"      value={cls.colorTemperature} />
+            <DataRow label="CCT (K)"         value={cls.colorTemperatureKelvin != null ? `${cls.colorTemperatureKelvin} K` : null} />
+            <DataRow label="Suggested recipe" value={cls.suggestedRecipe} />
+          </Section>
+
+          {/* ── Pattern candidates ── */}
+          {candidates && Object.keys(candidates).length > 0 && (
+            <Section title="Pattern Candidates">
+              {Object.entries(candidates).map(([classifier, result]) => {
+                if (!result) return null;
+                const pat   = result.pattern || result.lightingPattern || '—';
+                const score = result.score ?? result.confidence ?? result.reliabilityScore;
+                const src   = result.source || result.patternSource || null;
+                return (
+                  <div key={classifier} style={rowStyle}>
+                    <span style={labelStyle}>{classifier}</span>
+                    <span style={valueStyle}>
+                      {pat}
+                      {score != null && <span style={{ color: 'var(--color-text-dim)', marginLeft: 4 }}>· {pct(score)}</span>}
+                      {src && <span style={{ color: 'var(--color-text-dim)', marginLeft: 4 }}>· {src}</span>}
+                    </span>
+                  </div>
+                );
+              })}
+            </Section>
+          )}
+
+          {/* ── Lighting Intelligence ── */}
+          {li && (
+            <Section title="Lighting Intelligence">
+              <DataRow label="Light count"      value={li.lightCount != null ? String(li.lightCount) : null} />
+              <DataRow label="Key position"     value={li.keyPosition} />
+              <DataRow label="Detected modifier" value={li.detectedModifier} />
+              <DataRow label="Ambient"          value={li.ambientConditions || li.detectedEnvironment} />
+              <DataRow label="Detected CCT"     value={li.detectedCCT != null ? `${li.detectedCCT} K` : null} />
+            </Section>
+          )}
+
+          {/* ── Perception Explanation ── */}
+          {pex && (
+            <Section title="Perception Explanation">
+              {pex.patternReasoning && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, marginBottom: 4 }}>Pattern reasoning</div>
+                  <div style={{ color: 'var(--color-text)', lineHeight: 1.55 }}>{pex.patternReasoning}</div>
+                </div>
+              )}
+              {pex.supportingSignals?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, color: 'var(--color-success)', marginBottom: 4 }}>
+                    Supporting signals ({pex.supportingSignals.length})
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6 }}>
+                    {pex.supportingSignals.map((s, i) => (
+                      <li key={i} style={{ color: 'var(--color-text-secondary)', marginBottom: 2 }}>
+                        {typeof s === 'string' ? s : (s.signal || s.description || JSON.stringify(s))}
+                        {s.weight != null && <span style={{ color: 'var(--color-text-dim)', marginLeft: 4 }}>({s.weight})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {pex.contradictingSignals?.length > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ ...labelStyle, color: 'var(--color-error)', marginBottom: 4 }}>
+                    Contradicting signals ({pex.contradictingSignals.length})
+                  </div>
+                  <ul style={{ margin: 0, paddingLeft: 16, lineHeight: 1.6 }}>
+                    {pex.contradictingSignals.map((s, i) => (
+                      <li key={i} style={{ color: 'var(--color-text-secondary)', marginBottom: 2 }}>
+                        {typeof s === 'string' ? s : (s.signal || s.description || JSON.stringify(s))}
+                        {s.weight != null && <span style={{ color: 'var(--color-text-dim)', marginLeft: 4 }}>({s.weight})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </Section>
+          )}
+
+          {/* ── VLM Narrative fields not shown in user cards ── */}
+          {refA?.image_read && (() => {
+            const ir = refA.image_read;
+            const extraFields = [
+              ['Full narrative',        ir.narrative],
+              ['Aspect ratio',          ir.aspect_ratio],
+              ['Tonal contrast',        ir.tonal_contrast],
+              ['Skin tone confidence',  ir.skin_tone_confidence != null ? pct(ir.skin_tone_confidence) : null],
+              ['Subject count',         ir.subject_count != null ? String(ir.subject_count) : null],
+              ['Mixed skin tones',      ir.skin_tone_mixed != null ? String(ir.skin_tone_mixed) : null],
+              ['All skin tones',        ir.subject_skin_tones],
+              ['Shot type',             ir.shot_type],
+              ['Camera angle',          ir.camera_angle],
+              ['Depth of field',        ir.depth_of_field],
+              ['BG texture',            ir.background_texture],
+              ['Catchlight shape',      ir.catchlight_shape],
+              ['Catchlight position',   ir.catchlight_position],
+              ['Shadow hardness',       ir.shadow_hardness],
+              ['Shadow direction',      ir.shadow_direction],
+              ['Specular highlights',   ir.specular_highlights],
+            ].filter(([, v]) => v != null && v !== '' && v !== 'unknown' && !(Array.isArray(v) && v.length === 0));
+            if (!extraFields.length) return null;
+            return (
+              <Section title="Image Read — Extended">
+                {extraFields.map(([label, value]) => (
+                  <DataRow key={label} label={label} value={value} />
+                ))}
+              </Section>
+            );
+          })()}
+
+          {refA?.lighting_read && (() => {
+            const lr = refA.lighting_read;
+            const extraFields = [
+              ['Contrast ratio',         lr.contrast_ratio],
+              ['Exposure latitude',      lr.exposure_latitude],
+              ['Catchlight quality',     lr.catchlight_quality],
+              ['Background separation', lr.background_separation],
+              ['Gradient falloff',       lr.gradient_falloff],
+              ['Modifier confidence',    lr.modifier_confidence != null ? pct(lr.modifier_confidence) : null],
+              ['Modifier hint',          lr.modifier_hint],
+              ['Setup confidence',       lr.setup_confidence != null ? pct(lr.setup_confidence) : null],
+              ['Environment type',       lr.environment_type],
+              ['Ambient contribution',   lr.ambient_contribution],
+            ].filter(([, v]) => v != null && v !== '' && v !== 'unknown');
+            if (!extraFields.length) return null;
+            return (
+              <Section title="Lighting Read — Extended">
+                {extraFields.map(([label, value]) => (
+                  <DataRow key={label} label={label} value={value} />
+                ))}
+              </Section>
+            );
+          })()}
+
+          {/* ── Raw JSON dump ── */}
+          <Section title="Raw Analysis JSON">
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm"
+              onClick={() => setRawOpen(v => !v)}
+              style={{ fontSize: 'var(--text-xs)', marginBottom: rawOpen ? 8 : 0 }}
+            >
+              {rawOpen ? 'Hide raw JSON' : 'Show raw JSON'}
+            </button>
+            {rawOpen && (
+              <pre style={{
+                fontSize: 10, lineHeight: 1.4, overflowX: 'auto',
+                background: 'var(--color-surface-elevated)',
+                border: '1px solid var(--color-border-subtle)',
+                borderRadius: 'var(--radius-sm)',
+                padding: 10, margin: 0,
+                color: 'var(--color-text-secondary)',
+                maxHeight: 400, overflowY: 'auto',
+              }}>
+                {JSON.stringify(analysis, null, 2)}
+              </pre>
+            )}
+          </Section>
+
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── User: report analysis issue ────────────────────────────────────────────
 
 function UserCorrectionForm({ analysis, referenceImagePreview, issueTypes = DEFAULT_ISSUE_TYPES, moodOptions = DEFAULT_MOOD_OPTIONS }) {
@@ -1100,13 +1342,16 @@ export default function ReferenceEvalScreen() {
 
           {/* ── Correction panel (admin) / report issue (user) ── */}
           {isAdmin ? (
-            <AdminCorrectionPanel
-              analysis={analysis}
-              imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
-              onNavigateLab={handleOpenLab}
-              patternOptions={patternOptions}
-              moodOptions={moodOptions}
-            />
+            <>
+              <AdminCorrectionPanel
+                analysis={analysis}
+                imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
+                onNavigateLab={handleOpenLab}
+                patternOptions={patternOptions}
+                moodOptions={moodOptions}
+              />
+              <AdminVLMPanel analysis={analysis} />
+            </>
           ) : (
             <UserCorrectionForm
               analysis={analysis}
