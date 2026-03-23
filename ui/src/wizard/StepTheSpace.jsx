@@ -135,6 +135,10 @@ export default function StepTheSpace({ onNext }) {
       {/* ── Environment — grouped into Controlled / Natural ── */}
       <div className="consolidated-step__section">
         <div className="consolidated-step__label">Space</div>
+        <p className="wizard-context-hint" style={{ marginBottom: 8 }}>
+          <strong>Shapes the output:</strong> Studio environments get full modifier recommendations.
+          On-location picks portable gear and accounts for ambient light bleed.
+        </p>
         <div className="env-groups">
           <div className="env-group">
             <div className="env-group__label">Controlled</div>
@@ -174,6 +178,10 @@ export default function StepTheSpace({ onNext }) {
             selected={ceilingHeight}
             onSelect={v => dispatch({ type: 'SET_CEILING_HEIGHT', ceilingHeight: v })}
           />
+          <p className="wizard-context-hint">
+            <strong>Why this matters:</strong> Low ceilings (under 8 ft) prevent overhead boom arms and limit vertical key position.
+            Heights under 8 ft restrict high-key setups and hair lights above the frame.
+          </p>
 
           {/* Expandable room dimensions */}
           {!showRoomDims ? (
@@ -188,7 +196,7 @@ export default function StepTheSpace({ onNext }) {
               <div className="room-dims__presets room-dims__presets--compact">
                 {(typeof ROOM_PRESETS !== 'undefined' ? ROOM_PRESETS : []).slice(0, 4).map((p, i) => (
                   <button key={i} className="chip chip--small" onClick={() => handlePreset(p)}>
-                    {p.icon} {p.label}
+                    {p.label}
                   </button>
                 ))}
               </div>
@@ -228,6 +236,9 @@ export default function StepTheSpace({ onNext }) {
       {showGearQuestion && (
         <div className={`consolidated-step__section consolidated-step__gear${envReady ? '' : ' consolidated-step__gear--disabled'}`}>
           <div className="consolidated-step__label">Your gear — shapes the result</div>
+          <p className="wizard-context-hint" style={{ marginBottom: 8 }}>
+            NGW adapts the blueprint to what you own. "Best Setup" shows the ideal rig regardless of what you have.
+          </p>
 
           {savedKit && (
             <IntentCard

@@ -437,7 +437,7 @@ def _generate_insights(
 ) -> List[str]:
     """Auto-generate actionable, human-readable failure insights."""
     if not valid:
-        return ["No valid results to analyse."]
+        return ["No valid results to analyze."]
 
     insights: List[str] = []
 

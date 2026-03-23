@@ -23,7 +23,14 @@ def _origin_filter(origin: Optional[str], kind: str = 'metrics') -> str:
     kind: 'metrics' | 'conversion' | 'cohorts' | 'learning' — selects which EXCL_*
           constant to fall back to when origin is None/all.
     """
-    if not origin or origin == 'all':
+    if origin == 'all':
+        # Explicitly requested all data — no exclusion filter applied.
+        # Sessions from every origin (production, internal, expert_review, test) are included.
+        return " AND 1=1 "
+
+    if not origin:
+        # Default (no explicit selection) — apply the standard exclusion-flag filter
+        # so only clean production sessions enter metrics by default.
         excl_map = {
             'metrics':    EXCL_METRICS,
             'conversion': EXCL_CONVERSION,
@@ -38,11 +45,11 @@ def _origin_filter(origin: Optional[str], kind: str = 'metrics') -> str:
             " (SELECT session_id FROM session_provenance WHERE session_origin='production')) "
         )
 
-    # 'internal' — covers both internal and expert_review
+    # 'internal' — covers internal, expert_review, and user-marked test sessions
     return (
         " AND (session_id IS NULL OR session_id IN"
         " (SELECT session_id FROM session_provenance"
-        "  WHERE session_origin IN ('internal','expert_review'))) "
+        "  WHERE session_origin IN ('internal','expert_review','test'))) "
     )
 
 
@@ -125,12 +132,12 @@ def get_funnel_stats(days: int = 30, origin: Optional[str] = None) -> List[Dict[
 
 
 def get_pattern_breakdown(days: int = 30, origin: Optional[str] = None) -> Dict[str, Any]:
-    """Break down analyses and upgrades by lighting pattern."""
+    """Break down analysis counts and upgrades by lighting pattern."""
     since = time.time() - days * 86400
     em = _origin_filter(origin, 'metrics')
     ec = _origin_filter(origin, 'conversion')
     with get_db() as conn:
-        # analyses by pattern
+        # analysis counts by pattern
         analysis_rows = conn.execute(
             f"""SELECT json_extract(data_json, '$.pattern') as pattern, COUNT(*) as cnt
                FROM analytics_events
@@ -334,10 +341,10 @@ def get_kpi_summary(days: int = 30, origin: Optional[str] = None) -> Dict[str, A
     return {
         "total_sessions": total_sessions,
         "total_users": total_users,
-        "total_analyses": analyses,
+        "total_analysis": analyses,
         "match_rate_pct": round(matches / shoots * 100, 1) if shoots else 0,
         "conversion_rate_pct": round(upgrades / paywall_views * 100, 1) if paywall_views else 0,
-        "analyses_per_session": round(analyses / total_sessions, 1) if total_sessions else 0,
+        "analysis_per_session": round(analyses / total_sessions, 1) if total_sessions else 0,
         "upgrades": upgrades,
     }
 
@@ -418,13 +425,13 @@ def get_pattern_performance(days: int = 30, origin: Optional[str] = None) -> Lis
 
 
 def get_daily_trend(days: int = 30, origin: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Daily counts of analyses, upgrades, and matches."""
+    """Daily counts of analysis runs, upgrades, and matches."""
     since = time.time() - days * 86400
     em = _origin_filter(origin, 'metrics')
     with get_db() as conn:
         rows = conn.execute(
             f"""SELECT date(created_at, 'unixepoch') as day,
-                      SUM(CASE WHEN name='ANALYSIS_COMPLETE' THEN 1 ELSE 0 END) as analyses,
+                      SUM(CASE WHEN name='ANALYSIS_COMPLETE' THEN 1 ELSE 0 END) as analysis,
                       SUM(CASE WHEN name='UPGRADE_COMPLETED' THEN 1 ELSE 0 END) as upgrades,
                       SUM(CASE WHEN name='MATCH_ACHIEVED' THEN 1 ELSE 0 END) as matches
                FROM analytics_events
@@ -433,7 +440,7 @@ def get_daily_trend(days: int = 30, origin: Optional[str] = None) -> List[Dict[s
             (since,),
         ).fetchall()
     return [
-        {"day": r["day"], "analyses": r["analyses"], "upgrades": r["upgrades"], "matches": r["matches"]}
+        {"day": r["day"], "analysis": r["analysis"], "upgrades": r["upgrades"], "matches": r["matches"]}
         for r in rows
     ]
 

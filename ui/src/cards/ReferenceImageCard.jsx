@@ -266,8 +266,8 @@ export default function ReferenceImageCard({ imageUrl, analysis, mood, lightingI
         )}
         {colorTemp && (
           <div className="ref-analysis__row ref-analysis__row--inline">
-            <span className="ref-analysis__label">Color Temp</span>
-            <span className="ref-analysis__value">
+            <span className={`ref-analysis__label ref-analysis__temp-${colorTemp}`}>Color Temp</span>
+            <span className={`ref-analysis__value ref-analysis__temp-${colorTemp}`}>
               <span className={`ref-analysis__temp-dot ref-analysis__temp-dot--${colorTemp}`} />
               {colorTemp.charAt(0).toUpperCase() + colorTemp.slice(1)}
               {classification?.colorTemperatureKelvin ? ` (${classification.colorTemperatureKelvin.toLocaleString()} K)` : ''}

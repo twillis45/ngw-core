@@ -8,6 +8,7 @@ const SKIN_TONES = [
   { value: 'light',  label: 'Light',  swatch: '#FDDBB4' },
   { value: 'medium', label: 'Medium', swatch: '#C68642' },
   { value: 'dark',   label: 'Dark',   swatch: '#8D5524' },
+  { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
 ];
 
 export default function StepSubject() {
@@ -56,7 +57,7 @@ export default function StepSubject() {
               })}
               type="button"
             >
-              <span className="tone-chip__swatch" style={{ backgroundColor: t.swatch }} />
+              <span className="tone-chip__swatch" style={{ background: t.swatch }} />
               <span>{t.label}</span>
             </button>
           ))}

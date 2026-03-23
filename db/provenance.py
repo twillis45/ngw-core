@@ -218,6 +218,46 @@ def update_session_provenance(session_id: str, **kwargs) -> Optional[Dict[str, A
     return get_session_provenance(session_id)
 
 
+def mark_session_as_test(session_id: str, marked_by: str = "") -> Optional[Dict[str, Any]]:
+    """
+    Mark a production session as a test/dev session.
+    Sets all exclusion flags so the session is removed from every analytics dimension.
+    Uses origin='test' to distinguish user-marked sessions from hardcoded internal ones
+    (so they can be reverted via unmark_session_as_test).
+    """
+    reason = f"user-marked test session ({marked_by})" if marked_by else "user-marked test session"
+    return update_session_provenance(
+        session_id,
+        session_origin="test",
+        exclude_from_learning=1,
+        exclude_from_metrics=1,
+        exclude_from_conversion=1,
+        exclude_from_cohorts=1,
+        classification_reason=reason,
+    )
+
+
+def unmark_session_as_test(session_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Revert a user-marked test session back to production.
+    Only operates on sessions with session_origin='test' — never downgrades
+    internal or expert_review sessions.
+    Returns the existing record unchanged if it can't be reverted.
+    """
+    prov = get_session_provenance(session_id)
+    if not prov or prov.get("session_origin") != "test":
+        return prov  # Refuse to touch internal/expert/production sessions
+    return update_session_provenance(
+        session_id,
+        session_origin="production",
+        exclude_from_learning=0,
+        exclude_from_metrics=0,
+        exclude_from_conversion=0,
+        exclude_from_cohorts=0,
+        classification_reason="user-unmarked test session (restored to production)",
+    )
+
+
 def promote_session_for_learning(session_id: str) -> Optional[Dict[str, Any]]:
     """
     Explicitly mark an expert/internal session for learning review.
@@ -259,11 +299,12 @@ def get_provenance_summary(days: int = 30, origin: Optional[str] = None) -> Dict
     # Build optional origin clause
     if origin and origin != 'all':
         if origin == 'internal':
-            origin_clause = " AND session_origin IN ('internal','expert_review')"
+            # 'internal' tab covers internal, expert_review, and user-marked test sessions
+            origin_clause = " AND session_origin IN ('internal','expert_review','test')"
         else:
             origin_clause = f" AND session_origin='{origin}'"
     else:
-        origin_clause = ""
+        origin_clause = ""  # 'all' or no filter → full breakdown
 
     with get_db() as conn:
         # Counts by origin (always full breakdown — not scoped to origin filter)
@@ -310,6 +351,7 @@ def get_provenance_summary(days: int = 30, origin: Optional[str] = None) -> Dict
             "production": by_origin.get("production", 0),
             "internal": by_origin.get("internal", 0),
             "expert_review": by_origin.get("expert_review", 0),
+            "test": by_origin.get("test", 0),
         },
         "excluded": {
             "from_metrics": excl_metrics,

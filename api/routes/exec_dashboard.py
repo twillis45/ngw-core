@@ -32,25 +32,28 @@ _AVG_UPGRADE_VALUE_USD = 12.0
 @router.get("/dashboard")
 async def exec_dashboard(
     days: int = Query(7, ge=1, le=365),
+    origin: str = Query("all"),
     user: Dict = Depends(get_dev_user),
 ):
     """
     Full executive dashboard payload.
     Aggregates: KPIs, trends, pattern table, failure insights,
     benchmark status, revenue breakdown, experiment impact.
+    origin = 'all' | 'production' | 'internal'
     """
     result: Dict[str, Any] = {
         "generated_at": time.time(),
         "days": days,
+        "origin": origin,
     }
 
     # Run all sections in sequence — each is isolated, failures return empty dicts
-    result["kpis"]              = _get_kpis(days)
-    result["kpi_prev"]          = _get_kpis(days * 2, offset_days=days)
+    result["kpis"]              = _get_kpis(days, origin=origin)
+    result["kpi_prev"]          = _get_kpis(days * 2, offset_days=days, origin=origin)
     result["benchmark_status"]  = _get_benchmark_status()
-    result["patterns"]          = _get_pattern_table(days)
+    result["patterns"]          = _get_pattern_table(days, origin=origin)
     result["failure_insights"]  = _get_failure_insights()
-    result["revenue"]           = _get_revenue(days)
+    result["revenue"]           = _get_revenue(days, origin=origin)
     result["experiments"]       = _get_experiments()
 
     return result
@@ -70,7 +73,7 @@ async def exec_trends(
 
 # ── Section builders ───────────────────────────────────────────────────────────
 
-def _get_kpis(days: int, offset_days: int = 0) -> Dict[str, Any]:
+def _get_kpis(days: int, offset_days: int = 0, origin: str = "all") -> Dict[str, Any]:
     """
     Headline KPIs for the period [now - days - offset_days, now - offset_days].
     When offset_days=0 returns current period; when offset_days=days returns previous period
@@ -85,8 +88,8 @@ def _get_kpis(days: int, offset_days: int = 0) -> Dict[str, Any]:
         since  = now - (days + offset_days) * 86400
         until  = now - offset_days * 86400
 
-        kpi    = get_kpi_summary(days) if offset_days == 0 else _kpi_in_window(since, until)
-        shoot  = get_shoot_mode_stats(days) if offset_days == 0 else _shoot_in_window(since, until)
+        kpi    = get_kpi_summary(days, origin=origin) if offset_days == 0 else _kpi_in_window(since, until, origin=origin)
+        shoot  = get_shoot_mode_stats(days, origin=origin) if offset_days == 0 else _shoot_in_window(since, until, origin=origin)
 
         # Revenue per session: estimated from upgrades × avg value / sessions
         sessions  = kpi.get("total_sessions", 0) or 1
@@ -100,7 +103,7 @@ def _get_kpis(days: int, offset_days: int = 0) -> Dict[str, Any]:
             "revenue_per_session": rev_per_s,
             "total_upgrades":      upgrades,
             "total_sessions":      kpi.get("total_sessions", 0),
-            "total_analyses":      kpi.get("total_analyses", 0),
+            "total_analysis":      kpi.get("total_analysis", 0),
             "match_rate_pct":      kpi.get("match_rate_pct", 0),
             "conversion_rate_pct": kpi.get("conversion_rate_pct", 0),
             "avg_steps_to_match":  shoot.get("avg_steps_to_match"),
@@ -111,44 +114,46 @@ def _get_kpis(days: int, offset_days: int = 0) -> Dict[str, Any]:
         return {}
 
 
-def _kpi_in_window(since: float, until: float) -> Dict[str, Any]:
+def _kpi_in_window(since: float, until: float, origin: str = "all") -> Dict[str, Any]:
     """KPI counts for an arbitrary [since, until] window."""
     try:
+        from db.analytics import _origin_filter
         from db.database import get_db
+        excl = _origin_filter(origin, 'metrics')
         with get_db() as conn:
             sessions = conn.execute(
-                "SELECT COUNT(DISTINCT session_id) as cnt FROM analytics_events "
-                "WHERE created_at>=? AND created_at<? AND session_id IS NOT NULL",
+                f"SELECT COUNT(DISTINCT session_id) as cnt FROM analytics_events "
+                f"WHERE created_at>=? AND created_at<? AND session_id IS NOT NULL{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             analyses = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='ANALYSIS_COMPLETE' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='ANALYSIS_COMPLETE' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             upgrades = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='UPGRADE_COMPLETED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='UPGRADE_COMPLETED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             paywall = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='PAYWALL_TRIGGERED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='PAYWALL_TRIGGERED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             matches = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='MATCH_ACHIEVED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='MATCH_ACHIEVED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             shoots = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='SHOOT_MODE_STARTED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='SHOOT_MODE_STARTED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
         return {
             "total_sessions":      sessions,
-            "total_analyses":      analyses,
+            "total_analysis":      analyses,
             "upgrades":            upgrades,
             "match_rate_pct":      round(matches / shoots * 100, 1) if shoots else 0,
             "conversion_rate_pct": round(upgrades / paywall * 100, 1) if paywall else 0,
@@ -157,18 +162,20 @@ def _kpi_in_window(since: float, until: float) -> Dict[str, Any]:
         return {}
 
 
-def _shoot_in_window(since: float, until: float) -> Dict[str, Any]:
+def _shoot_in_window(since: float, until: float, origin: str = "all") -> Dict[str, Any]:
     try:
+        from db.analytics import _origin_filter
         from db.database import get_db
+        excl = _origin_filter(origin, 'metrics')
         with get_db() as conn:
             starts = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='SHOOT_MODE_STARTED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='SHOOT_MODE_STARTED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
             matches = conn.execute(
-                "SELECT COUNT(*) as cnt FROM analytics_events "
-                "WHERE name='MATCH_ACHIEVED' AND created_at>=? AND created_at<?",
+                f"SELECT COUNT(*) as cnt FROM analytics_events "
+                f"WHERE name='MATCH_ACHIEVED' AND created_at>=? AND created_at<?{excl}",
                 (since, until),
             ).fetchone()["cnt"]
         return {
@@ -229,7 +236,7 @@ def _get_benchmark_status() -> Dict[str, Any]:
         return {"has_runs": False}
 
 
-def _get_pattern_table(days: int) -> List[Dict[str, Any]]:
+def _get_pattern_table(days: int, origin: str = "all") -> List[Dict[str, Any]]:
     """
     Per-pattern cross-section: success rate, conversion rate, revenue/session,
     benchmark score, and delta from previous run.
@@ -239,7 +246,7 @@ def _get_pattern_table(days: int) -> List[Dict[str, Any]]:
         from db.benchmark import get_pattern_metrics, get_benchmark_runs, get_run_results
         from collections import defaultdict
 
-        perf     = get_pattern_performance(days)
+        perf     = get_pattern_performance(days, origin=origin)
         bm_all   = get_pattern_metrics()
         bm_map   = {m["pattern_id"]: m for m in bm_all}
 
@@ -356,7 +363,7 @@ def _get_failure_insights() -> List[Dict[str, Any]]:
         return []
 
 
-def _get_revenue(days: int) -> Dict[str, Any]:
+def _get_revenue(days: int, origin: str = "all") -> Dict[str, Any]:
     """
     Revenue breakdown by product type and session outcome.
     Inferred from UPGRADE_COMPLETED analytics events (data_json fields).
@@ -365,11 +372,13 @@ def _get_revenue(days: int) -> Dict[str, Any]:
         from db.database import get_db
         import json as _json
 
+        from db.analytics import _origin_filter
+        excl  = _origin_filter(origin, 'conversion')
         since = time.time() - days * 86400
         with get_db() as conn:
             rows = conn.execute(
-                "SELECT data_json FROM analytics_events "
-                "WHERE name='UPGRADE_COMPLETED' AND created_at>=?",
+                f"SELECT data_json FROM analytics_events "
+                f"WHERE name='UPGRADE_COMPLETED' AND created_at>=?{excl}",
                 (since,),
             ).fetchall()
 

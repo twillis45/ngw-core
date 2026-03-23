@@ -363,7 +363,7 @@ export default function WelcomeScreenV2() {
             </div>
             <p className="v2-founders__note">Full access. No subscription. Price increases as seats fill.</p>
             <ul className="v2-founders__features">
-              <li>Unlimited analyses — any photo, any setup</li>
+              <li>Unlimited analysis — any photo, any setup</li>
               <li>Full lighting diagrams with exact positions</li>
               <li>Shoot Mode — on-set step-by-step assistant</li>
               <li>Gear matching — setups built around what you own</li>

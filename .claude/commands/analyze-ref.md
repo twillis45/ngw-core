@@ -25,11 +25,15 @@ Look at the attached image yourself (you are a multimodal model). Describe what 
 
 - **Scene & subject**: What is the subject doing? Framing? Crop? Pose?
 - **Mood & intent**: What feeling does the image convey? What genre?
-- **Lighting**: Where is the key light? What quality (hard/soft)? Any fill? Rim? How many sources?
-- **Shadows**: What pattern? Any projected shadows (gobo, flags, blinds)?
-- **Background**: What's happening behind the subject?
+- **Lighting**: Where is the key light? What quality (hard/soft)? Any fill? Rim? Kicker? How many sources? Is the key above, at eye level, or below the subject? Is there a **clamshell** (second source below/camera)?
+- **Shadows**: What pattern specifically? Options: butterfly, loop, rembrandt, split, clamshell, broad, short, rim-only, available light. Any projected shadows (gobo, flags, blinds)? Is the nose shadow on the lit or shadow side of the face?
+- **Broad vs. short**: Is the lit side of the face toward or away from the camera? (Broad = lit side toward camera; Short = lit side away.)
+- **Skin tone consideration**: Note subject's approximate skin tone (light/medium/dark) and whether shadow thresholds and contrast ratios appear affected by it.
+- **Source type**: Is this strobe/flash, continuous, or ambient? Any mixing of source types?
+- **Background**: What's happening behind the subject? Same exposure zone as subject, or separated? Lit separately?
+- **Subject–background separation**: Is the subject clearly separated or blending into the background? What creates the separation (rim light, tone contrast, background light)?
 - **Tonal treatment**: Color or B&W? Contrast level? Post-processing?
-- **How you'd recreate it**: What gear, placement, modifiers would you use?
+- **How you'd recreate it**: What gear, placement, modifiers would you use? Be explicit about clamshell, flags, reflectors, or background lights if they appear present.
 
 Write this as natural photographer language — the kind of description you'd give a lighting assistant to recreate the shot.
 
@@ -40,9 +44,11 @@ Write this as natural photographer language — the kind of description you'd gi
 
 ### RefLightingCard fields:
 - lighting_family, source_quality, source_direction, shadow_pattern, fill_presence, rim_presence, light_count, tonal_processing_notes, key_observations, ambiguity_notes
+- **skin_tone_note**: flag if skin tone may be affecting shadow threshold or contrast perception
 
 ### RefRecreationCard fields:
 - setup_family, modifier_suggestion, light_count, key_placement, fill_strategy, background_strategy, camera_subject_guidance, setup_notes, alternate_hypotheses
+- **alternate_hypotheses must explicitly consider**: clamshell, split, broad/short orientation, rim-only, available-light + reflector, and whether a background light accounts for any background separation
 
 ---
 

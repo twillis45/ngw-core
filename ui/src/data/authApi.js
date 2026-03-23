@@ -2,6 +2,19 @@ import { apiFetch as baseApiFetch } from '../lib/apiClient';
 
 const TOKEN_KEY = 'ngw_auth_token';
 const USER_KEY = 'ngw_auth_user';
+// Legacy key used before the auth refactor — migrate on first read.
+const LEGACY_TOKEN_KEY = 'ngw_token';
+
+// One-time migration: move ngw_token → ngw_auth_token so existing sessions
+// survive the key rename without forcing a re-login.
+(function migrateToken() {
+  try {
+    if (!localStorage.getItem(TOKEN_KEY)) {
+      const old = localStorage.getItem(LEGACY_TOKEN_KEY);
+      if (old) localStorage.setItem(TOKEN_KEY, old);
+    }
+  } catch { /* ignore storage errors */ }
+})();
 
 export function getToken() {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
@@ -14,7 +27,7 @@ export function getUser() {
   } catch { return null; }
 }
 
-function saveAuth(token, user) {
+export function saveAuth(token, user) {
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
@@ -57,6 +70,19 @@ export async function login(email, password) {
   });
   saveAuth(data.token, data.user);
   return data.user;
+}
+
+export async function verifyEmail(token) {
+  const data = await apiFetch('/auth/verify-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+  saveAuth(data.token, data.user);
+  return data.user;
+}
+
+export async function resendVerification() {
+  return apiFetch('/auth/resend-verification', { method: 'POST' });
 }
 
 export async function fetchMe() {

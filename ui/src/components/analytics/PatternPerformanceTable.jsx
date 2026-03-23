@@ -1,5 +1,5 @@
 /**
- * PatternPerformanceTable — Per lighting pattern: analyses, upgrades, CVR.
+ * PatternPerformanceTable — Per lighting pattern: analysis, upgrades, CVR.
  * Sorted by conversion rate (highest first).
  */
 export default function PatternPerformanceTable({ patterns }) {
@@ -16,19 +16,19 @@ export default function PatternPerformanceTable({ patterns }) {
         <thead>
           <tr>
             <th>Pattern</th>
-            <th title="Times this pattern was detected in an analysis">Analyses</th>
+            <th title="Times this pattern was detected in an analysis">Analysis</th>
             <th title="Upgrades by users who saw this pattern">Upgrades</th>
-            <th title="Upgrades ÷ Analyses">CVR</th>
+            <th title="Upgrades ÷ Analysis">CVR</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {patterns.map(p => {
+          {patterns.map((p, i) => {
             const cvrW = Math.max(2, Math.round(p.conversion_rate_pct / maxCVR * 100));
             const acW = Math.max(2, Math.round(p.analysis_count / maxAC * 100));
             const isTopCVR = p.conversion_rate_pct === maxCVR;
             return (
-              <tr key={p.pattern} className={isTopCVR ? 'ppt__row--top' : ''}>
+              <tr key={`${p.pattern}-${i}`} className={isTopCVR ? 'ppt__row--top' : ''}>
                 <td className="ppt__pattern">{p.pattern}</td>
                 <td>
                   <div className="ppt__inline-bar">

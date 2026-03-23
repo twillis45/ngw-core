@@ -74,11 +74,11 @@ export default function ShootStepCard({ step, isActive, isCompleted, onComplete,
           {step.type === 'test_exposure' && <TestExposureContent data={step.data} mode={mode} />}
           {step.type === 'adjustments' && <AdjustmentsContent data={step.data} mode={mode} />}
 
-          {/* Tips — hidden in assistant mode, prefixed in learning mode */}
+          {/* Tips — hidden in assistant mode, distinct callout in learning mode */}
           {displayTips?.length > 0 && (
-            <div className="shoot-step__tips">
+            <div className={`shoot-step__tips${mode === 'learning' ? ' shoot-step__tips--learn' : ''}`}>
               <div className="shoot-step__tips-label">
-                {mode === 'learning' ? 'Why This Matters' : 'Pro Tips'}
+                {mode === 'learning' ? '📖 Why This Matters' : 'Pro Tips'}
               </div>
               {displayTips.map((tip, i) => (
                 <div key={i} className="shoot-step__tip">
@@ -310,7 +310,28 @@ function FixCommand({ fix, mode }) {
     );
   }
 
-  // Photographer / learning mode: problem → fix format
+  // Learning mode: problem → fix + structured result/effect
+  if (mode === 'learning') {
+    if (fix.doThis) {
+      return (
+        <div className="shoot-step__fix-item">
+          <span className="shoot-step__fix-solution">{fix.doThis}</span>
+          {fix.result && <span className="shoot-step__fix-effect">→ {fix.result}</span>}
+        </div>
+      );
+    }
+    if (fix.problem && fix.fix) {
+      return (
+        <div className="shoot-step__fix-item">
+          <span className="shoot-step__fix-problem">{fix.problem}</span>
+          <span className="shoot-step__fix-solution">{fix.fix}</span>
+          {fix.result && <span className="shoot-step__fix-effect">→ {fix.result}</span>}
+        </div>
+      );
+    }
+  }
+
+  // Photographer mode: problem → fix format
   if (typeof fix === 'string') return <div className="shoot-step__fix-item">{fix}</div>;
   if (fix.problem && fix.fix) {
     return (

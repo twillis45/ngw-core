@@ -5,7 +5,9 @@ import { trackEvent } from '../data/analytics';
 import { buildRefTestSteps, buildRefQuickFixes } from '../transform';
 import useSettings from '../hooks/useSettings';
 import usePaywall from '../hooks/usePaywall';
-import { loadMode } from '../data/modeStore';
+import usePreviewMode from '../hooks/usePreviewMode';
+import useMode from '../hooks/useMode';
+import { getPattern } from '../knowledge';
 
 // Gate / upgrade components
 import PaywallGate from '../components/PaywallGate';
@@ -23,7 +25,7 @@ import RefImageReadCard from '../cards/RefImageReadCard';
 import RefLightingCard from '../cards/RefLightingCard';
 import RefRecreationCard from '../cards/RefRecreationCard';
 import RefInterpretationsCard from '../cards/RefInterpretationsCard';
-import ShootSetupCard from '../cards/ShootSetupCard';
+import CameraSettingsCard from '../cards/CameraSettingsCard';
 import DiagramCard from '../cards/DiagramCard';
 import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
@@ -32,7 +34,7 @@ import WhatToLookForCard from '../cards/WhatToLookForCard';
 import QuickFixesCard from '../cards/QuickFixesCard';
 import OtherSetupsCard from '../cards/OtherSetupsCard';
 import SkinToneCard from '../cards/SkinToneCard';
-import FeedbackCard from '../cards/FeedbackCard';
+import OutcomeCapture from '../components/OutcomeCapture';
 import TestShotCard from '../cards/TestShotCard';
 import MySetupsCard from '../cards/MySetupsCard';
 
@@ -151,7 +153,8 @@ function ShootModeCTA({ isPaid, onUnlock, mode }) {
 // ── Save bar ────────────────────────────────────────────────────────────────
 
 function SaveBar({ result }) {
-  const { autoSaveSetups } = useSettings();
+  const { autoSaveSetups, viewMode } = useSettings();
+  const isQuickMode = viewMode === 'quick';
   const [saveOpen, setSaveOpen] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saveTag, setSaveTag] = useState('personal');
@@ -257,10 +260,18 @@ export default function ResultsScreen() {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
   const userEmail = user?.email || user?.username || null;
-  const { isPaid, unlock } = usePaywall(userEmail);
+  const { isPaid, unlock, isAdmin: isAdminEmail } = usePaywall(userEmail);
+  const { access: previewAccess } = usePreviewMode();
+  const { viewMode } = useSettings();
+  const isQuickMode = viewMode === 'quick';
+  const isAdmin = previewAccess === 'admin' || isAdminEmail;
+  // Preview As overrides the actual plan — 'paid'/'admin' = unlocked, 'guest'/'free' = locked
+  const effectiveIsPaid = previewAccess !== null
+    ? (previewAccess === 'paid' || previewAccess === 'admin')
+    : isPaid;
   const [zoomSrc, setZoomSrc] = useState(null);
   const [tab, setTab] = useState('blueprint');
-  const [appMode] = useState(() => loadMode());
+  const appMode = useMode();
 
   useEffect(() => {
     if (result) {
@@ -296,6 +307,12 @@ export default function ResultsScreen() {
     [hasRefAnalysis, lightingRead, recreationSetup],
   );
 
+  const patternRiskLevel = useMemo(() => {
+    const patternId = result?.bestMatch?.lightingPattern;
+    if (!patternId) return null;
+    return getPattern(patternId)?.metadata?.riskLevel ?? null;
+  }, [result?.bestMatch?.lightingPattern]);
+
   if (error) {
     return (
       <div className="screen">
@@ -327,10 +344,40 @@ export default function ResultsScreen() {
   const detectedDiagramSpec = result.referenceImageAnalysis?.detectedDiagram?.raw;
   const modifierFamily = result.lightingIntelligence?.detectedModifier || null;
 
+  // Synthesize a lightweight lightingRead from lightingIntelligence for wizard-flow results
+  // (no reference image uploaded — RefLightingCard still shows engine-derived data)
+  const li = result.lightingIntelligence || {};
+  const syntheticLightingRead = !hasRefAnalysis && (li.lightCount || li.keyPosition || result.bestMatch?.lightingPattern)
+    ? {
+        lighting_family:       li.lightingFamily   || null,
+        source_quality:        li.sourceQuality    || null,
+        source_direction:      li.keyPosition      || null,
+        shadow_pattern:        result.bestMatch?.lightingPattern || null,
+        fill_presence:         li.fillPresence     || null,
+        rim_presence:          null,
+        light_count:           li.lightCount       || null,
+        tonal_processing_notes: null,
+        key_observations:      [],
+        ambiguity_notes:       [],
+      }
+    : null;
+
+  // Title: pattern name if known, otherwise fallback
+  const rawPattern = result.bestMatch?.lightingPattern;
+  const patternKnown = rawPattern && rawPattern.toLowerCase() !== 'unknown';
+  const screenTitle = patternKnown
+    ? `${rawPattern.charAt(0).toUpperCase() + rawPattern.slice(1)} Setup`
+    : result.referenceImage
+      ? 'Reference Analysis'
+      : 'Your Setup';
+
   return (
     <div className="screen">
       {zoomSrc && <ZoomOverlay src={zoomSrc} alt="Reference photo" onClose={() => setZoomSrc(null)} />}
-      {!isPaid && <ExitIntercept onUnlock={unlock} />}
+      {!effectiveIsPaid && <ExitIntercept onUnlock={unlock} />}
+
+      {/* Screen title */}
+      <h2 className="screen-heading results-screen-heading">{screenTitle}</h2>
 
       {/* Reference hero image */}
       {result.referenceImage && (
@@ -373,12 +420,13 @@ export default function ResultsScreen() {
       <LookSummaryCard
         bestMatch={result.bestMatch}
         lightingIntelligence={result.lightingIntelligence}
+        patternRiskLevel={patternRiskLevel}
       />
 
       {/* ─────────────────────────────────────────────────────────────────
           PHASE 6 — Upgrade nudge (post-analysis, before blueprint)
           ──────────────────────────────────────────────────────────────── */}
-      {!isPaid && !nudgeDismissed && (
+      {!effectiveIsPaid && !nudgeDismissed && (
         <div className="upgrade-nudge">
           <button className="upgrade-nudge__dismiss" onClick={dismissNudge} aria-label="Dismiss">×</button>
           {result.bestMatch?.recipeId ? (
@@ -399,31 +447,42 @@ export default function ResultsScreen() {
       )}
 
       {/* ─────────────────────────────────────────────────────────────────
-          TAB BAR
+          TAB BAR — hidden in quick mode (Blueprint only)
           ──────────────────────────────────────────────────────────────── */}
-      <div className="results-tabs">
-        <button
-          className={`results-tab${tab === 'blueprint' ? ' results-tab--active' : ''}`}
-          onClick={() => setTab('blueprint')}
-          type="button"
-        >
-          Blueprint
-        </button>
-        <button
-          className={`results-tab${tab === 'fix' ? ' results-tab--active' : ''}`}
-          onClick={() => setTab('fix')}
-          type="button"
-        >
-          Fix It
-        </button>
-        <button
-          className={`results-tab${tab === 'gear' ? ' results-tab--active' : ''}`}
-          onClick={() => setTab('gear')}
-          type="button"
-        >
-          Gear
-        </button>
-      </div>
+      {(!isQuickMode || isAdmin) && (
+        <div className="results-tabs">
+          <button
+            className={`results-tab${tab === 'blueprint' ? ' results-tab--active' : ''}`}
+            onClick={() => setTab('blueprint')}
+            type="button"
+          >
+            Blueprint
+          </button>
+          <button
+            className={`results-tab${tab === 'fix' ? ' results-tab--active' : ''}`}
+            onClick={() => setTab('fix')}
+            type="button"
+          >
+            Fix It
+          </button>
+          <button
+            className={`results-tab${tab === 'gear' ? ' results-tab--active' : ''}`}
+            onClick={() => setTab('gear')}
+            type="button"
+          >
+            Gear
+          </button>
+          {isAdmin && (
+            <button
+              className={`results-tab results-tab--debug${tab === 'debug' ? ' results-tab--active' : ''}`}
+              onClick={() => setTab('debug')}
+              type="button"
+            >
+              Debug
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ─────────────────────────────────────────────────────────────────
           TAB 1 — Blueprint
@@ -432,7 +491,7 @@ export default function ResultsScreen() {
       <div className={`results-tab-panel results-tab-panel--blueprint${tab !== 'blueprint' ? ' results-tab-panel--hidden' : ''}`}>
         {/* Blueprint — shown directly (no double "Blueprint" wrapper) */}
         <PaywallGate
-          isPaid={isPaid}
+          isPaid={effectiveIsPaid}
           onUnlock={unlock}
           headline="Build this exactly — positions, modifiers, power ratios."
           bullets={[
@@ -447,19 +506,17 @@ export default function ResultsScreen() {
             lights={result.setup.lights}
             lightingIntelligence={result.lightingIntelligence}
             cameraSettings={result.cameraSettings}
+            lightType={result.bestMatch?.lightType}
+            lightTypeNote={result.bestMatch?.lightTypeNote}
             mode={appMode}
           />
+          {result.cameraSettings && (
+            <CameraSettingsCard settings={result.cameraSettings} />
+          )}
         </PaywallGate>
 
         {/* Shoot Mode CTA */}
-        <ShootModeCTA isPaid={isPaid} onUnlock={unlock} mode={appMode} />
-
-        {/* Free users see the basic setup card */}
-        {!isPaid && (
-          <CollapsibleSection title="Setup Overview" icon={ICON.wrench}>
-            <ShootSetupCard lights={result.setup.lights} />
-          </CollapsibleSection>
-        )}
+        <ShootModeCTA isPaid={effectiveIsPaid} onUnlock={unlock} mode={appMode} />
 
         {/* Diagram */}
         {(detectedDiagramSpec || result.diagram) && (
@@ -479,26 +536,26 @@ export default function ResultsScreen() {
           defaultOpen={result.spaceCheck?.warnings?.length > 0}
         />
 
-        {/* Reference Analysis */}
-        {hasRefAnalysis && (
+        {/* Reference Analysis (full ref image) or Lighting Analysis (wizard-flow synthetic) */}
+        {(hasRefAnalysis || syntheticLightingRead) && (
           <div className="results-section">
-            <PhaseLabel label="Reference Analysis" first />
+            <PhaseLabel label={hasRefAnalysis ? 'Reference Analysis' : 'Lighting Analysis'} first />
             <div className="results-section__cards">
-              <CollapsibleSection title="Lighting Read" icon={ICON.lighting}>
+              <CollapsibleSection title="Lighting Analysis" icon={ICON.lighting} defaultOpen={!hasRefAnalysis}>
                 <RefLightingCard
-                  lightingRead={lightingRead}
+                  lightingRead={lightingRead || syntheticLightingRead}
                   lightingIntelligence={result.lightingIntelligence}
                 />
+                {hasRefAnalysis && (
+                  <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
+                )}
               </CollapsibleSection>
-              <CollapsibleSection title="Image Read" icon={ICON.image}>
-                <RefImageReadCard imageRead={imageRead} />
-              </CollapsibleSection>
-              <CollapsibleSection title="Recreation Setup" icon={ICON.target}>
-                <RefRecreationCard recreationSetup={recreationSetup} />
-              </CollapsibleSection>
-              <CollapsibleSection title="Interpretations" icon={ICON.search}>
-                <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
-              </CollapsibleSection>
+              {hasRefAnalysis && (
+                <CollapsibleSection title="Scene & Setup" icon={ICON.image}>
+                  <RefImageReadCard imageRead={imageRead} />
+                  <RefRecreationCard recreationSetup={recreationSetup} />
+                </CollapsibleSection>
+              )}
             </div>
           </div>
         )}
@@ -509,12 +566,12 @@ export default function ResultsScreen() {
           ──────────────────────────────────────────────────────────────── */}
       <div className={`results-tab-panel results-tab-panel--fix${tab !== 'fix' ? ' results-tab-panel--hidden' : ''}`}>
         {/* Quick fixes — primary content, shown directly */}
-        <QuickFixesCard fixes={quickFixes} isPaid={isPaid} onUnlock={unlock} />
+        <QuickFixesCard fixes={quickFixes} isPaid={effectiveIsPaid} onUnlock={unlock} />
 
         {/* Camera + subject — gated */}
         <CollapsibleSection title="Camera & Subject" icon={ICON.camera}>
           <PaywallGate
-            isPaid={isPaid}
+            isPaid={effectiveIsPaid}
             onUnlock={unlock}
             headline="Dial in the camera — re-test and it holds."
             bullets={[
@@ -544,12 +601,12 @@ export default function ResultsScreen() {
           />
         </CollapsibleSection>
 
-        {isPaid && (
+        {(effectiveIsPaid || isAdmin) && (
           <CollapsibleSection title="How to Test" icon={ICON.list}>
             <HowToTestCard steps={testSteps} />
           </CollapsibleSection>
         )}
-        {isPaid && (
+        {(effectiveIsPaid || isAdmin) && (
           <CollapsibleSection title="What to Look For" icon={ICON.eye}>
             <WhatToLookForCard goodSigns={result.goodSigns} warnings={result.warnings} />
           </CollapsibleSection>
@@ -572,7 +629,7 @@ export default function ResultsScreen() {
 
         {/* Recommended gear — primary content, shown directly */}
         <PaywallGate
-          isPaid={isPaid}
+          isPaid={effectiveIsPaid}
           onUnlock={unlock}
           headline="Get gear that locks this result in every time."
           preview={false}
@@ -594,19 +651,103 @@ export default function ResultsScreen() {
             signalReliability={result.signalReliability}
             faceValidation={result.faceValidation}
             edgeCaseFlags={result.edgeCaseFlags}
+            perceptionExplanation={result.lightingIntelligence?.perceptionExplanation}
           />
         </CollapsibleSection>
 
         <MySetupsCard />
 
-        <CollapsibleSection title="Feedback" icon={ICON.message}>
-          <FeedbackCard
-            setupId={result.bestMatch.systemId || result.bestMatch.name}
-            mood={result.mood}
-            pattern={result.bestMatch.lightingPattern}
-          />
-        </CollapsibleSection>
+        <OutcomeCapture
+          setupId={result.bestMatch.systemId || result.bestMatch.name}
+          mood={result.mood}
+          pattern={result.bestMatch.lightingPattern}
+        />
       </div>
+
+      {/* ─────────────────────────────────────────────────────────────────
+          TAB 4 — Debug (admin only)
+          Full VLM pipeline output, lighting intelligence, raw signals.
+          ──────────────────────────────────────────────────────────────── */}
+      {isAdmin && (
+        <div className={`results-tab-panel results-tab-panel--debug${tab !== 'debug' ? ' results-tab-panel--hidden' : ''}`}>
+
+          {/* Lighting Read — full VLM lighting analysis */}
+          {lightingRead && (
+            <CollapsibleSection title="Lighting Read (VLM)" icon={ICON.lighting} defaultOpen>
+              <RefLightingCard
+                lightingRead={lightingRead}
+                lightingIntelligence={result.lightingIntelligence}
+              />
+            </CollapsibleSection>
+          )}
+
+          {/* Interpretations — VLM recreation interpretations */}
+          {lightingRead && recreationSetup && (
+            <CollapsibleSection title="Interpretations" icon={ICON.search} defaultOpen>
+              <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
+            </CollapsibleSection>
+          )}
+
+          {/* Image Read — VLM scene description */}
+          {imageRead && (
+            <CollapsibleSection title="Image Read (VLM)" icon={ICON.image} defaultOpen>
+              <RefImageReadCard imageRead={imageRead} />
+            </CollapsibleSection>
+          )}
+
+          {/* Recreation Setup — VLM-derived recreation plan */}
+          {recreationSetup && (
+            <CollapsibleSection title="Recreation Setup (VLM)" icon={ICON.target} defaultOpen>
+              <RefRecreationCard recreationSetup={recreationSetup} />
+            </CollapsibleSection>
+          )}
+
+          {/* Lighting Intelligence — full engine output */}
+          {result.lightingIntelligence && (
+            <CollapsibleSection title="Lighting Intelligence" icon={ICON.activity} defaultOpen>
+              <RefLightingCard
+                lightingRead={syntheticLightingRead}
+                lightingIntelligence={result.lightingIntelligence}
+              />
+            </CollapsibleSection>
+          )}
+
+          {/* Signal Quality — full debug view */}
+          <CollapsibleSection title="Signal Quality (full)" icon={ICON.activity} defaultOpen>
+            <SignalQualityCard
+              signalReliability={result.signalReliability}
+              faceValidation={result.faceValidation}
+              edgeCaseFlags={result.edgeCaseFlags}
+              perceptionExplanation={result.lightingIntelligence?.perceptionExplanation}
+            />
+          </CollapsibleSection>
+
+          {/* VLM Narratives */}
+          {result.vlmDescription && (
+            <CollapsibleSection title="VLM Description" icon={ICON.eye} defaultOpen>
+              <pre className="debug-json">{typeof result.vlmDescription === 'string' ? result.vlmDescription : JSON.stringify(result.vlmDescription, null, 2)}</pre>
+            </CollapsibleSection>
+          )}
+          {result.vlmReconstruction && (
+            <CollapsibleSection title="VLM Reconstruction" icon={ICON.eye} defaultOpen>
+              <pre className="debug-json">{JSON.stringify(result.vlmReconstruction, null, 2)}</pre>
+            </CollapsibleSection>
+          )}
+
+          {/* Raw JSON dump — lightingIntelligence */}
+          {result.lightingIntelligence && (
+            <CollapsibleSection title="Raw: lightingIntelligence" icon={ICON.wrench}>
+              <pre className="debug-json">{JSON.stringify(result.lightingIntelligence, null, 2)}</pre>
+            </CollapsibleSection>
+          )}
+
+          {/* Raw JSON dump — bestMatch */}
+          <CollapsibleSection title="Raw: bestMatch + setup" icon={ICON.wrench}>
+            <pre className="debug-json">{JSON.stringify({ bestMatch: result.bestMatch, setup: result.setup, signalReliability: result.signalReliability }, null, 2)}</pre>
+          </CollapsibleSection>
+
+        </div>
+      )}
 
       {/* Save setup — sticky bottom bar, always visible */}
       <SaveBar result={result} />

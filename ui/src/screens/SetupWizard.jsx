@@ -9,7 +9,7 @@ import StickyBottomBar from '../components/StickyBottomBar';
 import { criteriaForGear } from '../gearPresets';
 import { LIGHT_CATALOG, getGearProfile, getQualityTier } from '../data/lightCatalog';
 import { saveKit } from '../data/kitStore';
-import { loadSettings } from '../data/settingsStore';
+import useSettings from '../hooks/useSettings';
 
 const STEP_COMPONENTS = {
   the_shot: StepTheShot,
@@ -127,6 +127,7 @@ function buildPayload(state) {
 export default function SetupWizard() {
   const state = useAppState();
   const dispatch = useDispatch();
+  const { powerDisplay, units } = useSettings();
   const { wizardSteps, wizardStep } = state;
 
   const currentStepName = wizardSteps[wizardStep] || 'mood';
@@ -180,8 +181,7 @@ export default function SetupWizard() {
         }
 
         const apiResponse = await fetchShootMatch(shootMatchPayload);
-        const { powerDisplay } = loadSettings();
-        const result = transformShootMatch(apiResponse, { mood: effectiveMood, skinTone: state.skinTone, powerDisplay });
+        const result = transformShootMatch(apiResponse, { mood: effectiveMood, skinTone: state.skinTone, powerDisplay, units });
 
         // Attach reference image preview and full analysis from shoot-match response
         if (state.referenceImage?.preview) {
@@ -210,8 +210,11 @@ export default function SetupWizard() {
 
   if (!StepComponent) return null;
 
+  const wizardTitle = state.intent === 'edit_kit' ? 'Edit Your Kit' : 'Build from Scratch';
+
   return (
     <div className="screen">
+      <h2 className="screen-heading">{wizardTitle}</h2>
       <WizardProgress steps={wizardSteps} currentStep={wizardStep} />
       <StepComponent onNext={handleNext} />
 

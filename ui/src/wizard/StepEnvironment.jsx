@@ -100,7 +100,7 @@ export default function StepEnvironment() {
               className="room-dims__toggle"
               onClick={() => setShowRoomDims(true)}
             >
-              {'\uD83D\uDCCF'} Set exact room dimensions
+              Set exact room dimensions
             </button>
           ) : (
             <div className="room-dims room-dims--wizard">
@@ -110,7 +110,7 @@ export default function StepEnvironment() {
               <div className="room-dims__presets room-dims__presets--compact">
                 {ROOM_PRESETS.slice(0, 4).map((p, i) => (
                   <button key={i} className="chip chip--small" onClick={() => handlePreset(p)}>
-                    {p.icon} {p.label}
+                    {p.label}
                   </button>
                 ))}
               </div>
@@ -168,7 +168,7 @@ export default function StepEnvironment() {
                 className="room-dims__camera-btn"
                 onClick={() => setShowCamera(true)}
               >
-                {'\uD83D\uDCF7'} Use Camera to Measure
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: 'text-bottom' }}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Use Camera to Measure
               </button>
 
               {showCamera && (

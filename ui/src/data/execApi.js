@@ -23,9 +23,9 @@ async function execFetch(path, options = {}) {
   return data;
 }
 
-/** Full dashboard payload. days = 7 | 30 | 90 */
-export async function getExecDashboard(days = 7) {
-  return execFetch(`/dashboard?days=${days}`);
+/** Full dashboard payload. days = 7 | 30 | 90, origin = 'all' | 'production' | 'internal' */
+export async function getExecDashboard(days = 7, origin = 'all') {
+  return execFetch(`/dashboard?days=${days}&origin=${origin}`);
 }
 
 /** Extended trend data — 7d and 30d daily series. */

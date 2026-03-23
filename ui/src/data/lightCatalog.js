@@ -2,7 +2,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'speedlights',
     label: 'Speedlights',
-    icon: '\u26A1',
     items: [
       // Godox
       { value: 'godox_v1',         vendor: 'Godox',      model: 'V1',         gearProfile: 'speedlight', qualityTier: 2 },
@@ -42,7 +41,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'portable_strobes',
     label: 'Portable Strobes',
-    icon: '\u{1F50B}',
     items: [
       // Godox
       { value: 'godox_ad200',      vendor: 'Godox',      model: 'AD200',      gearProfile: 'strobe_mono', qualityTier: 2 },
@@ -73,7 +71,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'studio_strobes',
     label: 'Studio Strobes',
-    icon: '\u{1F50C}',
     items: [
       // Profoto (current)
       { value: 'profoto_d2',       vendor: 'Profoto',      model: 'D2',         gearProfile: 'strobe_pack', qualityTier: 5 },
@@ -115,7 +112,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'led_continuous',
     label: 'LED Continuous',
-    icon: '\u2600\uFE0F',
     items: [
       // Aputure
       { value: 'aputure_600d',      vendor: 'Aputure',   model: '600d Pro',    gearProfile: 'led_cob', qualityTier: 4 },
@@ -148,7 +144,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'led_panels',
     label: 'LED Panels',
-    icon: '\u{1F7E6}',
     items: [
       // Aputure
       { value: 'aputure_nova_p300c', vendor: 'Aputure',  model: 'Nova P300c',   gearProfile: 'led_panel', qualityTier: 4 },
@@ -173,7 +168,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'specialty',
     label: 'Specialty',
-    icon: '\u{1F52E}',
     items: [
       // Ring lights
       { value: 'ring_light',         vendor: 'Generic',   model: 'Ring Light',     gearProfile: 'ring_light', qualityTier: 1 },
@@ -184,11 +178,11 @@ export const LIGHT_CATALOG = [
       { value: 'etc_source_four_jr', vendor: 'ETC',       model: 'Source Four Jr',   gearProfile: 'ellipsoidal', qualityTier: 3 },
       { value: 'etc_colorsource',    vendor: 'ETC',       model: 'ColorSource Spot', gearProfile: 'ellipsoidal', qualityTier: 3 },
       // Tube lights
-      { value: 'nanlite_pavotube',   vendor: 'Nanlite',   model: 'PavoTube II 30X', gearProfile: 'tube_light', qualityTier: 3 },
-      { value: 'nanlite_pavotube6c', vendor: 'Nanlite',   model: 'PavoTube II 6C',  gearProfile: 'tube_light', qualityTier: 2 },
-      { value: 'aputure_amaran_t4c', vendor: 'Aputure',   model: 'Amaran T4c',      gearProfile: 'tube_light', qualityTier: 3 },
-      { value: 'aputure_amaran_t2c', vendor: 'Aputure',   model: 'Amaran T2c',      gearProfile: 'tube_light', qualityTier: 2 },
-      { value: 'quasar_q50',         vendor: 'Quasar Science', model: 'Q50',         gearProfile: 'tube_light', qualityTier: 4 },
+      { value: 'nanlite_pavotube',   vendor: 'Nanlite',   model: 'PavoTube II 30X', gearProfile: 'led_tube', qualityTier: 3 },
+      { value: 'nanlite_pavotube6c', vendor: 'Nanlite',   model: 'PavoTube II 6C',  gearProfile: 'led_tube', qualityTier: 2 },
+      { value: 'aputure_amaran_t4c', vendor: 'Aputure',   model: 'Amaran T4c',      gearProfile: 'led_tube', qualityTier: 3 },
+      { value: 'aputure_amaran_t2c', vendor: 'Aputure',   model: 'Amaran T2c',      gearProfile: 'led_tube', qualityTier: 2 },
+      { value: 'quasar_q50',         vendor: 'Quasar Science', model: 'Q50',         gearProfile: 'led_tube', qualityTier: 4 },
       // Flex / mat lights
       { value: 'westcott_flex_mat',  vendor: 'Westcott',  model: 'Flex Mat',        gearProfile: 'led_panel', qualityTier: 3 },
       { value: 'nanlite_compac200',  vendor: 'Nanlite',   model: 'Compac 200',      gearProfile: 'led_panel', qualityTier: 2 },
@@ -197,7 +191,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'triggers',
     label: 'Remote Triggers / Sync',
-    icon: '\u{1F4E1}',
     section: 'accessories',
     items: [
       // Godox X system
@@ -228,7 +221,6 @@ export const LIGHT_CATALOG = [
   {
     category: 'light_meters',
     label: 'Light Meters',
-    icon: '\u{1F4CF}',
     section: 'accessories',
     items: [
       // Sekonic

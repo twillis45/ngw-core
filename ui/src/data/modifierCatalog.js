@@ -50,9 +50,9 @@ export const MODIFIER_CATALOG = [
   { value: 'buff_beauty_22',        label: 'Beauty Dish 22"',     category: 'beauty_dishes', vendor: 'Paul C. Buff', size: '22"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.5, editorial: 0.6, natural: 0.3, high_key: 0.4, low_key: 0.5 } },
   // ── Beauty Dishes — Godox ──
-  { value: 'godox_beauty_16',       label: 'BDR 16.5"',           category: 'beauty_dishes', vendor: 'Godox',        size: '16.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'small',
+  { value: 'godox_beauty_16',       label: 'Beauty Dish 16.5" (BDR)', category: 'beauty_dishes', vendor: 'Godox',        size: '16.5"', shape: 'round', qualityTag: 'medium', sizeClass: 'small',
     moodAffinity: { beauty: 0.8, cinematic: 0.6, corporate: 0.5, editorial: 0.7, natural: 0.3, high_key: 0.4, low_key: 0.5 } },
-  { value: 'godox_beauty_21',       label: 'BDR Pro 21"',         category: 'beauty_dishes', vendor: 'Godox',        size: '21"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
+  { value: 'godox_beauty_21',       label: 'Beauty Dish 21" (BDR Pro)', category: 'beauty_dishes', vendor: 'Godox',        size: '21"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
     moodAffinity: { beauty: 0.9, cinematic: 0.7, corporate: 0.5, editorial: 0.6, natural: 0.4, high_key: 0.5, low_key: 0.5 } },
   // ── Beauty Dishes — Westcott ──
   { value: 'westcott_beauty_24',    label: 'Switch 24"',          category: 'beauty_dishes', vendor: 'Westcott',     size: '24"',   shape: 'round', qualityTag: 'medium', sizeClass: 'medium',
@@ -98,13 +98,17 @@ export const MODIFIER_CATALOG = [
 ];
 
 /** Category groups for display */
+const _GRID_SNOOT_VALUES = new Set(['grid_spot', 'grid', 'snoot', 'optical_snoot']);
+const _FLAG_GOBO_VALUES  = new Set(['barn_doors', 'gobo']);
+
 export const MODIFIER_CATEGORIES = [
-  { key: 'softboxes',     label: 'Softboxes',      items: MODIFIER_CATALOG.filter(m => m.category === 'softboxes') },
-  { key: 'stripboxes',    label: 'Stripboxes',      items: MODIFIER_CATALOG.filter(m => m.category === 'stripboxes') },
-  { key: 'umbrellas',     label: 'Umbrellas',       items: MODIFIER_CATALOG.filter(m => m.category === 'umbrellas') },
-  { key: 'beauty_dishes', label: 'Beauty Dishes & Reflectors', items: MODIFIER_CATALOG.filter(m => m.category === 'beauty_dishes') },
-  { key: 'control',       label: 'Light Control',   items: MODIFIER_CATALOG.filter(m => m.category === 'control') },
-  { key: 'bounce',        label: 'Bounce / Diffusion', items: MODIFIER_CATALOG.filter(m => m.category === 'bounce') },
+  { key: 'softboxes',     label: 'Softboxes',          items: MODIFIER_CATALOG.filter(m => m.category === 'softboxes') },
+  { key: 'stripboxes',    label: 'Stripboxes',          items: MODIFIER_CATALOG.filter(m => m.category === 'stripboxes') },
+  { key: 'umbrellas',     label: 'Umbrellas',           items: MODIFIER_CATALOG.filter(m => m.category === 'umbrellas') },
+  { key: 'beauty_dishes', label: 'Beauty Dishes',       items: MODIFIER_CATALOG.filter(m => m.category === 'beauty_dishes') },
+  { key: 'grids_snoots',  label: 'Grids & Snoots',      items: MODIFIER_CATALOG.filter(m => _GRID_SNOOT_VALUES.has(m.value)) },
+  { key: 'flags_gobos',   label: 'Flags & Gobos',        items: MODIFIER_CATALOG.filter(m => _FLAG_GOBO_VALUES.has(m.value)) },
+  { key: 'reflectors',    label: 'Reflectors & V-Flats', items: MODIFIER_CATALOG.filter(m => m.category === 'bounce') },
 ];
 
 /** Reverse-lookup map */

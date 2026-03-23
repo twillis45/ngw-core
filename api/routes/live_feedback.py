@@ -11,6 +11,7 @@ This route only:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
@@ -42,9 +43,15 @@ async def live_feedback(req: LiveFeedbackRequest) -> Dict[str, Any]:
         priorityAction   most important corrective action
         summary          human-readable one-liner
     """
+    # Normalize web-relative paths with leading slash
+    def _norm(p: str) -> str:
+        if p.startswith('/') and not Path(p).exists():
+            return p.lstrip('/')
+        return p
+
     # Analyse reference
     try:
-        ref_ar = analyze_image(req.referencePath, run_extended=True, run_solver=False)
+        ref_ar = analyze_image(_norm(req.referencePath), run_extended=True, run_solver=False)
     except Exception as e:
         logger.exception("Live feedback — reference image analysis failed")
         raise HTTPException(status_code=500, detail=f"Reference analysis failed: {e}") from e
@@ -54,7 +61,7 @@ async def live_feedback(req: LiveFeedbackRequest) -> Dict[str, Any]:
 
     # Analyse test shot
     try:
-        test_ar = analyze_image(req.testPath, run_extended=True, run_solver=False)
+        test_ar = analyze_image(_norm(req.testPath), run_extended=True, run_solver=False)
     except Exception as e:
         logger.exception("Live feedback — test image analysis failed")
         raise HTTPException(status_code=500, detail=f"Test image analysis failed: {e}") from e

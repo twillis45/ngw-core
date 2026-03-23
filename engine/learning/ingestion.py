@@ -80,26 +80,40 @@ def _fleet_cvr_stats(patterns: List[Dict[str, Any]]) -> Tuple[float, float]:
     return (statistics.mean(rates), statistics.stdev(rates))
 
 
-def ingest_from_analytics(days: int = 30) -> Dict[str, Any]:
+def ingest_from_analytics(days: int = 30, origin: str = "production") -> Dict[str, Any]:
     """
     Run a full ingestion pass over the last `days` days of analytics.
     Returns a summary of clusters created/updated.
 
     This is the only entry point for ingestion. It is safe to call repeatedly —
     existing open clusters are updated in-place rather than duplicated.
+
+    Args:
+        days:   Analytics lookback window (7–90).
+        origin: Data scope for this run.
+                'production' (default) — only clean production sessions.
+                'all'                  — all sessions including internal/dev.
+                                         Use from the LAB UI to test the pipeline
+                                         before real production traffic exists.
+                                         The scheduler always uses 'production'.
     """
-    logger.info("Learning ingestion started (days=%d)", days)
+    logger.info("Learning ingestion started (days=%d origin=%s)", days, origin)
     started_at = time.time()
+
+    # 'all' passed to analytics functions bypasses production exclusion filters.
+    analytics_origin: Optional[str] = "all" if origin == "all" else None
+
     summary: Dict[str, Any] = {
         "days": days,
+        "origin": origin,
         "clusters_created_or_updated": 0,
         "by_failure_mode": {},
         "errors": [],
     }
 
     try:
-        patterns = get_pattern_performance(days=days)
-        kpi = get_kpi_summary(days=days)
+        patterns = get_pattern_performance(days=days, origin=analytics_origin)
+        kpi = get_kpi_summary(days=days, origin=analytics_origin)
         shoot_mode = get_shoot_mode_stats(days=days)
         trend = get_daily_trend(days=days)
         success_conv = get_success_conversion_breakdown(days=days)
@@ -129,13 +143,16 @@ def ingest_from_analytics(days: int = 30) -> Dict[str, Any]:
     summary["by_failure_mode"]["trust_gap"] = n
 
     # 6 — Environment-segmented conversion gaps
-    n = _ingest_conversion_gaps_by_environment(days, summary)
+    n = _ingest_conversion_gaps_by_environment(days, summary, dev_mode=(origin == "all"))
     summary["by_failure_mode"]["env_conversion_gap"] = n
 
     elapsed = round(time.time() - started_at, 2)
     summary["elapsed_secs"] = elapsed
     summary["total_clusters"] = sum(summary["by_failure_mode"].values())
     summary["clusters_created_or_updated"] = summary["total_clusters"]
+    # Convenience aliases used by the scheduler status display and UI
+    summary["clusters_created"] = summary["total_clusters"]
+    summary["clusters_updated"] = 0   # detectors upsert; split tracking is future work
     logger.info("Learning ingestion complete: %s clusters in %.2fs", summary["total_clusters"], elapsed)
     return summary
 
@@ -291,8 +308,8 @@ def _ingest_pattern_drift(trend: List[Dict[str, Any]], summary: Dict) -> int:
     first_half = trend[:mid]
     second_half = trend[mid:]
 
-    first_avg = sum(d.get("analyses", 0) for d in first_half) / len(first_half)
-    second_avg = sum(d.get("analyses", 0) for d in second_half) / len(second_half)
+    first_avg = sum(d.get("analysis", 0) for d in first_half) / len(first_half)
+    second_avg = sum(d.get("analysis", 0) for d in second_half) / len(second_half)
 
     if first_avg == 0:
         return 0
@@ -332,25 +349,30 @@ def _ingest_pattern_drift(trend: List[Dict[str, Any]], summary: Dict) -> int:
         return 0
 
 
-def _ingest_conversion_gaps_by_environment(days: int, summary: Dict) -> int:
+def _ingest_conversion_gaps_by_environment(days: int, summary: Dict, dev_mode: bool = False) -> int:
     """
     Detect conversion gaps segmented by (pattern, environment).
     Uses session_signals directly for environment breakdown.
     Only runs if there are signals with environment data.
+
+    dev_mode=True drops the include_in_learning filter so internal sessions
+    are included — used when the LAB UI triggers ingestion in 'all' origin mode.
     """
     import time
+
+    learning_filter = "" if dev_mode else "AND include_in_learning=1"
 
     count = 0
     try:
         with __import__('db.database', fromlist=['get_db']).get_db() as conn:
             rows = conn.execute(
-                """SELECT pattern_id, environment,
+                f"""SELECT pattern_id, environment,
                           COUNT(*) as sessions,
                           SUM(CASE WHEN upgraded=1 THEN 1 ELSE 0 END) as upgrades
                    FROM session_signals
                    WHERE environment IS NOT NULL
                      AND environment != ''
-                     AND include_in_learning=1
+                     {learning_filter}
                      AND created_at >= ?
                    GROUP BY pattern_id, environment
                    HAVING sessions >= ?""",

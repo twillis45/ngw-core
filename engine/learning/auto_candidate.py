@@ -208,9 +208,9 @@ def _build_candidate_content(
         uc = evidence.get("upgrade_count", 0)
         env_label = cluster.get("environment")
         env_context = f" specifically in {env_label} environments" if env_label else ""
-        title = f"[Auto] Conversion gap — {pat_label} pattern ({ac} analyses, {cvr}% CVR)"
+        title = f"[Auto] Conversion gap — {pat_label} pattern ({ac} analysis, {cvr}% CVR)"
         description = (
-            f"Pattern {pat_label} has been detected in {ac} analyses{env_context} but yielded only "
+            f"Pattern {pat_label} has been detected in {ac} analysis runs{env_context} but yielded only "
             f"{uc} upgrade(s) ({cvr}% CVR). This suggests the engine may be over-diagnosing "
             f"this pattern in contexts where users cannot act on the recommendation, or "
             f"the blueprint output for this pattern needs clearer actionability."

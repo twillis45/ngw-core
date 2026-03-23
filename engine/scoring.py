@@ -297,14 +297,16 @@ def _compute_context_bonuses(
     # 2. Modifier match — exact, family-level, and mismatch penalty
     # Soft-modifier family: all softbox/octabox/umbrella variants produce similar
     # gradual shadow falloff and are interchangeable for setup recommendations.
-    # Semi-hard (beauty_dish) and hard (grid_spot, snoot) are distinct families.
+    # Semi-hard (beauty_dish) and hard (grid_spot, snoot, bare_bulb) are distinct families.
+    # bare_bulb is hard light — no diffusion, point-source quality — grouped with hard
+    # modifiers so it gets correctly penalised when a soft source is detected.
     _SOFT_MODS = {
         "softbox", "softbox_rect", "softbox_large", "softbox_strip",
         "octabox", "octabox_large", "softbox_octa", "softbox_octa_large",
         "umbrella_shoot_through",
     }
-    _SEMI_HARD_MODS = {"beauty_dish"}
-    _HARD_MODS = {"grid_spot", "snoot", "barn_doors", "gobo", "optical_snoot"}
+    _SEMI_HARD_MODS = {"beauty_dish", "umbrella_reflective"}
+    _HARD_MODS = {"grid_spot", "snoot", "barn_doors", "gobo", "optical_snoot", "bare_bulb"}
 
     detected_mod = input_ctx.get("detected_modifier")
     if detected_mod:
@@ -363,6 +365,66 @@ def _compute_context_bonuses(
                     reason=f"Hard modifier detected ('{detected_mod}') but system uses soft '{system_mod}'.",
                 ))
                 notes.append(f"Modifier mismatch penalty: {penalty:.1f}")
+
+    # 2b. Bare-bulb prior — bare strobe is uncommon in everyday portrait/headshot work.
+    # Apply a standing penalty unless something in the context explicitly supports it:
+    # user has no modifiers in their gear, or the detected modifier is bare_bulb itself.
+    if taxonomy.get("modifier_family") == "bare_bulb":
+        _user_mods = set(input_ctx.get("modifiers_available") or []) if input_ctx else set()
+        _det_mod = input_ctx.get("detected_modifier") if input_ctx else None
+        _bare_supported = (
+            _det_mod == "bare_bulb"                         # reference confirmed bare strobe
+            or (not _user_mods and not _det_mod)            # no modifier context at all — don't punish
+        )
+        if not _bare_supported:
+            penalty = -5.0
+            total += penalty
+            bonuses.append(FeatureBonus(
+                feature="bare_bulb_prior",
+                value="bare_bulb",
+                points=penalty,
+                reason="Bare-bulb systems are uncommon for typical portrait setups; "
+                       "no evidence of bare strobe use detected.",
+            ))
+            notes.append(f"Bare bulb prior penalty: {penalty:.1f}")
+
+    # 2c. Continuous/LED gear prior — strobes and speedlights dominate portrait
+    # photography.  Continuous LED is over-represented in system data (equal counts)
+    # but significantly less common in practice for controlled stills work.
+    # Penalise continuous systems relative to the environment unless the user's
+    # own gear is continuous or the context genuinely suits it (live events,
+    # outdoor run-and-gun, video-hybrid work).
+    _CONTINUOUS_PROFILES = {
+        "continuous_2_light", "led_panel", "led_panel_mono", "led_panel_2",
+        "led_cob", "led_cob_mono", "led_tube", "continuous_led",
+    }
+    _system_gear = taxonomy.get("gear_profile", "")
+    if _system_gear in _CONTINUOUS_PROFILES:
+        _env = input_ctx.get("environment", "") if input_ctx else ""
+        _user_gear = input_ctx.get("gear_profile", "") if input_ctx else ""
+        _user_mods_raw = set(input_ctx.get("modifiers_available") or []) if input_ctx else set()
+        # Continuous is contextually appropriate when:
+        #   • the user explicitly selected continuous gear
+        #   • the environment is live events or outdoor (run-and-gun/video hybrid)
+        _CONTINUOUS_OK_ENVS = {"event", "on_location_outdoor", "live_event"}
+        _continuous_ok = (
+            _user_gear in _CONTINUOUS_PROFILES
+            or _env in _CONTINUOUS_OK_ENVS
+        )
+        if not _continuous_ok:
+            # Studio environments get a larger penalty — flash/strobe is strongly
+            # preferred there; other environments get a smaller discouragement.
+            _STUDIO_ENVS = {"studio_large", "studio_small", "studio_medium", "home_studio"}
+            _cont_penalty = -8.0 if _env in _STUDIO_ENVS else -4.0
+            total += _cont_penalty
+            bonuses.append(FeatureBonus(
+                feature="continuous_gear_prior",
+                value=_system_gear,
+                points=_cont_penalty,
+                reason=f"Continuous/LED gear is less common than strobe/flash for "
+                       f"'{_env or 'unspecified'}' environments; no continuous gear context detected.",
+            ))
+            notes.append(f"Continuous gear prior penalty: {_cont_penalty:.1f}")
 
     # 3. Pattern match — classify what the system *would* produce, compare
     detected_pattern = input_ctx.get("detected_pattern")

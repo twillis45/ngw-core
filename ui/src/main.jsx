@@ -13,10 +13,9 @@ import './styles/app.css';
 applyTheme(loadTheme());
 applySettings();
 
-/* URL param shortcuts for dev testing:
-   ?lab=1      — enables Lab feature flag only
-   ?devmode=1  — enables Lab + injects mock dev user (full bypass) */
+/* URL param shortcuts — dev builds only */
 let _devModeUser = null;
+let _pendingVerifyToken = null;
 try {
   const params = new URLSearchParams(window.location.search);
   let dirty = false;
@@ -25,12 +24,17 @@ try {
     params.delete('lab');
     dirty = true;
   }
-  if (params.get('devmode') === '1') {
+  if (import.meta.env.DEV && params.get('devmode') === '1') {
     setFlag('enable_lab', true);
     _devModeUser = { id: 'dev-mode', email: 'dev@localhost', username: 'Dev Mode' };
-    // Persist so AppHeader hydration picks it up on re-renders
     localStorage.setItem('ngw_auth_user', JSON.stringify(_devModeUser));
     params.delete('devmode');
+    dirty = true;
+  }
+  const vt = params.get('verify_token');
+  if (vt) {
+    _pendingVerifyToken = vt;
+    params.delete('verify_token');
     dirty = true;
   }
   if (dirty) {
@@ -40,7 +44,7 @@ try {
   }
 } catch { /* ignore */ }
 
-export { _devModeUser };
+export { _devModeUser, _pendingVerifyToken };
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -1,6 +1,6 @@
 import CardIcon from '../components/CardIcon';
 import useSettings from '../hooks/useSettings';
-import { formatDistance } from '../utils/units';
+import { formatDistance, wbTempClass } from '../utils/units';
 
 /** Convert a pre-formatted distance string (e.g. "7 ft") to metric if needed. */
 function convertDist(val, units) {
@@ -42,7 +42,7 @@ export default function CameraSubjectCard({ camera, subject, background }) {
             <div className="cam-stat__key">Shutter</div>
           </div>
           <div className="cam-stat">
-            <div className="cam-stat__val">{camera.wb}</div>
+            <div className={`cam-stat__val ${wbTempClass(camera.wb)}`}>{camera.wb}</div>
             <div className="cam-stat__key">White Bal.</div>
           </div>
         </div>

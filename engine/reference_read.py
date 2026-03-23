@@ -872,13 +872,23 @@ def _build_background_relationship(
     return ", ".join(parts) if parts else ""
 
 
-def _derive_fill_presence(geometry: Any, cue_report: VisualCueReport) -> str:
+def _derive_fill_presence(
+    geometry: Any,
+    cue_report: VisualCueReport,
+    face_mesh_available: bool = True,
+) -> str:
     has_fill = getattr(geometry, "has_fill", False)
     cr = cue_report.contrast_ratio
     cr_label = cr.label if cr else "unknown"
 
     if not has_fill:
         if cr_label in ("high", "extreme"):
+            if not face_mesh_available:
+                # High contrast here reflects post-grading, NOT measured shadow depth.
+                # Without face mesh we cannot distinguish "deliberately unfilled" from
+                # "softer image that was heavily graded to look contrasty."
+                # Return unknown so fill_strategy doesn't recommend negative fill.
+                return "unknown"
             return "none"
         return "none" if cr_label == "unknown" else "subtle"
 
@@ -897,12 +907,11 @@ def _derive_rim_presence(
     spec = cue_report.specular_highlight_behavior
     if not spec:
         return "unknown"
-    # Strong + tight is definitive rim evidence regardless of light count
-    if spec.intensity == "strong" and spec.spread == "tight":
-        return "strong"
-    # With only 1 light (or passive bounce), moderate specular highlights are
-    # key-light reflections on skin (nose bridge, cheekbone), NOT rim lighting.
-    # True rim requires a dedicated backlight or edge-positioned source.
+    # A dedicated rim requires at least 2 detected sources.  With 0 or 1 lights,
+    # any specular highlights — including "strong + tight" — are key reflections
+    # off skin, fabric, or costume, NOT a backlight.  Full-body images with no
+    # face mesh are especially prone to false positives here (clothing/jewelry
+    # specular reads as tight on B&W high-contrast images).
     if light_count <= 1:
         return "none"
     # Clamshell: both lights are frontal (upper key + lower fill) — there's
@@ -910,6 +919,9 @@ def _derive_rim_presence(
     # reflecting off angled surfaces (costume, jewelry, etc.).
     if "clamshell" in shadow_pattern.lower():
         return "none"
+    # Multi-source confirmed: strong + tight specular is definitive rim evidence.
+    if spec.intensity == "strong" and spec.spread == "tight":
+        return "strong"
     if spec.intensity in ("moderate", "strong"):
         return "subtle"
     return "none"
@@ -1157,6 +1169,98 @@ def _derive_fill_strategy(
     if fill_presence == "strong":
         return "fill light opposite key at ~1.5:1 ratio or clamshell position"
     return ""
+
+
+def _infer_focal_aperture_from_geometry(
+    face_ratio: float,
+    person_ratio: float,
+    luminance_delta: Optional[float] = None,
+) -> tuple:
+    """Infer focal-length range and aperture range from image geometry.
+
+    Uses measured pixel ratios rather than framing-text keywords so the
+    recommendation is anchored to what the camera actually captured.
+
+    face_ratio      : face_area / image_area (0–1).  Primary zoom signal.
+    person_ratio    : person_pixels / image_pixels (0–1).  Framing depth.
+    luminance_delta : subject-background luminance separation (0–1).
+                      Secondary aperture signal — high separation on a tight
+                      framing suggests intentional shallow DOF.
+
+    Returns (focal_length: str, aperture: str).
+    """
+    # ── Focal length ────────────────────────────────────────────────────────
+    # face_ratio reflects how zoomed-in the camera is independently of
+    # whether the subject is close or the lens is long.  The combination
+    # of face_ratio + person_ratio narrows the plausible focal range.
+
+    if face_ratio > 0.12:
+        # Face covers >12 % of the frame — tight/close-up, telephoto territory.
+        focal_length = "85–135mm"
+
+    elif face_ratio > 0.05:
+        # Face covers 5–12 % — classic headshot distance.
+        focal_length = "85–105mm"
+
+    elif face_ratio > 0.015 and person_ratio > 0.18:
+        # Face present but small; substantial person area — three-quarter
+        # or full-body portrait.  Mid-telephoto gives natural proportions.
+        focal_length = "50–85mm"
+
+    elif person_ratio > 0.30:
+        # Person fills the frame but face is too small to anchor to a tight
+        # focal length — full body.  35 mm is the studio-constrained floor;
+        # 85 mm is the realistic ceiling before distance becomes impractical.
+        focal_length = "35–85mm"
+
+    elif person_ratio > 0.15:
+        # Partial body / three-quarter with no strong face signal.
+        focal_length = "50–85mm"
+
+    else:
+        # Subject small in frame — environmental or distant.
+        focal_length = "24–50mm"
+
+    # ── Aperture ────────────────────────────────────────────────────────────
+    # DOF requirement is the primary driver.  A full-body shot mandates f/8+
+    # regardless of intent; a tight close-up can afford shallow DOF.
+    # luminance_delta refines the estimate for ambiguous mid-range framings.
+
+    if face_ratio > 0.12:
+        # Very tight close-up — intentional shallow DOF is the norm.
+        aperture = "f/2.8–5.6"
+
+    elif person_ratio > 0.30:
+        # Full body: head-to-toe must be simultaneously sharp.
+        # f/4 risks the extremities going soft, especially with any subject
+        # depth relative to the camera axis.
+        aperture = "f/8–11"
+
+    elif person_ratio > 0.15 or (face_ratio > 0.015 and person_ratio > 0.10):
+        # Three-quarter: torso + partial limbs visible — moderate DOF needed.
+        aperture = "f/5.6–8"
+
+    elif face_ratio > 0.05:
+        # Headshot: full face (including ears and nose depth) must be sharp.
+        aperture = "f/5.6–8"
+
+    else:
+        # Distant/environmental — subject sharpness vs background DOF varies;
+        # f/5.6–8 is a safe mid-range recommendation.
+        aperture = "f/5.6–8"
+
+    # Secondary refinement: on tight framings, high background separation
+    # is evidence that a wide aperture was used deliberately for subject
+    # isolation.  Don't apply to full-body shots (DOF constraint wins).
+    if (
+        luminance_delta is not None
+        and luminance_delta > 0.55
+        and face_ratio > 0.05
+        and person_ratio < 0.20
+    ):
+        aperture = "f/2.8–5.6"
+
+    return focal_length, aperture
 
 
 def _derive_background_strategy(
@@ -2792,7 +2896,8 @@ def build_lighting_read(
     if has_shadow_interruption or inferred_dramatic_hard:
         fill_presence = "none"
     else:
-        fill_presence = _derive_fill_presence(geometry, cue_report) if geometry else "unknown"
+        _face_mesh_avail = getattr(scene_ctx, "has_face_mesh", True) if scene_ctx else True
+        fill_presence = _derive_fill_presence(geometry, cue_report, face_mesh_available=_face_mesh_avail) if geometry else "unknown"
 
     # Lighting family — for gobo/slit or inferred dramatic hard light,
     # override light count from catchlights (catchlights may show multiple
@@ -3401,25 +3506,56 @@ def build_recreation_setup(
     # focal length + aperture are broken out into their own fields.
     cam_guidance = image_read.camera_subject_relationship or ""
 
-    # Suggest focal length & aperture based on framing
+    # Suggest focal length & aperture from image geometry (truth-layer first).
+    # Extract face_ratio and person_ratio from the vision pipeline data so the
+    # recommendation is anchored to measured pixel coverage rather than text
+    # keyword matching on the framing description string.
     focal_length = ""
     aperture = ""
-    framing_lc = cam_guidance.lower()
-    if "close" in framing_lc or "tight" in framing_lc:
-        focal_length = "85–135mm"
-        aperture = "f/2.8–5.6"
-    elif "head" in framing_lc:
-        focal_length = "85–105mm"
-        aperture = "f/4–5.6"
-    elif "full" in framing_lc or "environmental" in framing_lc:
-        focal_length = "35–50mm"
-        aperture = "f/4–8"
-    elif "three-quarter" in framing_lc or "3/4" in framing_lc:
-        focal_length = "50–85mm"
-        aperture = "f/2.8–5.6"
-    elif "medium" in framing_lc:
-        focal_length = "50–85mm"
-        aperture = "f/2.8–5.6"
+
+    _geo_face_ratio = 0.0
+    _geo_person_ratio = scene_ctx.person_ratio if scene_ctx else 0.0
+    _geo_lum_delta: Optional[float] = None
+
+    # Face ratio from face_box + image dimensions
+    if vision_data:
+        _fb = vision_data.get("region_attribution", {}).get("face_box")
+        _masks = vision_data.get("region_attribution", {}).get("masks", {})
+        _img_h = _masks.get("_image_h", 0) or 0
+        _img_w = _masks.get("_image_w", 0) or 0
+        if _fb and len(_fb) == 4 and _img_h > 1 and _img_w > 1:
+            _face_area = max(0, _fb[2] - _fb[0]) * max(0, _fb[3] - _fb[1])
+            _geo_face_ratio = _face_area / (_img_h * _img_w)
+
+    # Background separation as secondary aperture signal
+    _sep = cue_report.subject_background_separation
+    if _sep and _sep.luminance_delta is not None:
+        _geo_lum_delta = _sep.luminance_delta
+
+    # Use geometry when we have at least one reliable signal
+    _has_geo = _geo_person_ratio > 0.01 or _geo_face_ratio > 0.005
+    if _has_geo:
+        focal_length, aperture = _infer_focal_aperture_from_geometry(
+            face_ratio=_geo_face_ratio,
+            person_ratio=_geo_person_ratio,
+            luminance_delta=_geo_lum_delta,
+        )
+    else:
+        # Fallback: keyword match on framing text when geometry is unavailable
+        # (e.g. no segmentation mask, reference was a crop without a person).
+        framing_lc = cam_guidance.lower()
+        if "close" in framing_lc or "tight" in framing_lc:
+            focal_length = "85–135mm"
+            aperture = "f/2.8–5.6"
+        elif "head" in framing_lc:
+            focal_length = "85–105mm"
+            aperture = "f/5.6–8"
+        elif "full" in framing_lc or "environmental" in framing_lc:
+            focal_length = "35–85mm"
+            aperture = "f/8–11"
+        elif "three-quarter" in framing_lc or "3/4" in framing_lc or "medium" in framing_lc:
+            focal_length = "50–85mm"
+            aperture = "f/5.6–8"
 
     # Setup notes
     setup_notes: List[str] = []
@@ -3450,7 +3586,7 @@ def build_recreation_setup(
     _is_prone = any(tok in _pose_lc_rec for tok in (
         "prone", "lying", "floor", "reclined", "reclining", "on side",
     ))
-    _is_full_body = "full" in framing_lc or "wide" in framing_lc
+    _is_full_body = "full" in cam_guidance.lower() or "wide" in cam_guidance.lower()
     if _is_prone and _is_full_body:
         setup_notes.append(
             "Subject is prone/lying on the floor — shoot from floor level "

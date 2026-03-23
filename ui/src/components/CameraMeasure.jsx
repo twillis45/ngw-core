@@ -236,7 +236,7 @@ export default function CameraMeasure({ onEstimate, onClose }) {
     <div className="camera-measure">
       {/* Header */}
       <div className="camera-measure__header">
-        <span className="camera-measure__title">{'\uD83D\uDCF7'} Camera Measure</span>
+        <span className="camera-measure__title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6, verticalAlign: 'text-bottom' }}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>Camera Measure</span>
         <button className="camera-measure__close" onClick={onClose}>{'\u2715'}</button>
       </div>
 
@@ -319,7 +319,7 @@ export default function CameraMeasure({ onEstimate, onClose }) {
             onClick={captureFrame}
             disabled={needsInput && !refHeightFt}
           >
-            {'\uD83D\uDCF8'} Capture
+            Capture
           </button>
         </div>
       )}

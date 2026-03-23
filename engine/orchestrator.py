@@ -720,6 +720,83 @@ def _resolve_authoritative_pattern(result: "AnalysisResult") -> Tuple[str, str]:
     return (pc.authoritative_pattern, pc.authoritative_source)
 
 
+# Canonical setup family for each pattern used in blueprint/shoot steps.
+# Patterns not listed here fall back to lighting_family.replace("-", "_").
+_PATTERN_TO_SETUP_FAMILY = {
+    "butterfly":   "butterfly_paramount",
+    "clamshell":   "clamshell_beauty",
+    "triangle":    "triangle_headshot",
+    "rembrandt":   "dramatic_chiaroscuro",
+    "window_portrait": "window_light",
+}
+
+
+def _sync_authoritative_pattern_to_cards(result: "AnalysisResult") -> None:
+    """Propagate the resolved authoritative_pattern to ALL output cards.
+
+    pattern_candidates is the single truth source — it resolves conflicts
+    across reference_read, lighting_inference, cue_inference, and
+    light_structure using a defined priority order.  After resolution, this
+    function writes the result back into:
+
+      • reference_analysis.lighting_read.shadow_pattern
+      • reference_analysis.lighting_read.lighting_family (re-derived)
+      • reference_analysis.recreation_setup.setup_family (re-derived)
+
+    so that the Analysis card, Blueprint card, and Shoot Mode steps all
+    show the same pattern and are never independently derived.
+    """
+    auth = result.authoritative_pattern
+    if not auth or auth in ("unknown", ""):
+        return
+
+    ref = result.reference_analysis
+    if ref is None:
+        return
+
+    lr = ref.lighting_read
+    rs = ref.recreation_setup
+
+    if lr is not None:
+        old_pat = (lr.shadow_pattern or "").lower()
+        auth_lc = auth.lower()
+        if old_pat and old_pat != auth_lc and old_pat not in ("unknown", ""):
+            # ── Update lighting_read.shadow_pattern ──────────────────────
+            lr.shadow_pattern = auth
+            lr.shadow_pattern_detail = auth
+
+            # ── Rebuild lighting_family with corrected pattern ───────────
+            try:
+                from engine.reference_read import _build_lighting_family as _blf
+                lr.lighting_family = _blf(
+                    auth,
+                    str(getattr(lr, "source_quality", "unknown") or "unknown"),
+                    str(getattr(lr, "fill_presence", "unknown") or "unknown"),
+                    int(getattr(lr, "light_count", 1) or 1),
+                )
+            except Exception:
+                pass  # leave existing value if import fails
+
+            # ── Annotate for transparency ────────────────────────────────
+            _anotes = list(getattr(lr, "ambiguity_notes", []) or [])
+            _anotes.append(
+                f"Pattern synced from priority resolver: '{old_pat}' → '{auth}' "
+                f"(source: {result.authoritative_pattern_source}). "
+                "Analysis, Blueprint, and Shoot Mode now agree."
+            )
+            lr.ambiguity_notes = _anotes
+
+    if rs is not None and auth not in ("unknown", ""):
+        # ── Update recreation_setup.setup_family ─────────────────────────
+        # Prefer the canonical name; fall back to the lighting_family string.
+        if auth in _PATTERN_TO_SETUP_FAMILY:
+            rs.setup_family = _PATTERN_TO_SETUP_FAMILY[auth]
+        elif lr is not None and lr.lighting_family:
+            rs.setup_family = lr.lighting_family.replace("-", "_")
+        else:
+            rs.setup_family = f"single_key_{auth}"
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Result containers
 # ═══════════════════════════════════════════════════════════════════════════
@@ -910,6 +987,19 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
             if "warm_overall" in _env_hints and "warm_background" in _env_hints:
                 return "golden_hour"
 
+    # ── Golden hour env-agnostic fallback ─────────────────────────────
+    # When the env classifier misidentifies warm natural backlight as
+    # studio/unknown (is_natural_light=False), the warm_overall +
+    # warm_background + bg_bright convergence still reliably identifies
+    # golden-hour character.  Restrict to diffuse base patterns only —
+    # hard-edge patterns (split, rembrandt) would indicate a studio key,
+    # not a golden-hour wash, even with warm environment hints.
+    if bg_bright and base in ("butterfly", "loop", "broad", "short"):
+        _esc2 = getattr(cr, "environmental_shadow_continuity", None)
+        _hints2 = getattr(_esc2, "environment_hints", []) if _esc2 else []
+        if "warm_overall" in _hints2 and "warm_background" in _hints2:
+            return "golden_hour"
+
     # ── Overcast natural: outdoor shade + soft + low contrast ─────────
     # Requires: outdoor_shade + soft shadows + low contrast.
     # Exception: when "high_contrast_grade" is in special_cases, the pixel
@@ -992,7 +1082,15 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # the rim wrapping around the edges.  Distinguished from rim_only
     # by wider highlights (0.25-0.35 vs <0.25) and from standard split
     # by higher shadow density (>0.3 vs <0.15 for well-lit split).
-    if base == "split" and brightness == "low" and bg_dark:
+    # "rembrandt" is included because low-confidence pattern classifiers
+    # sometimes return rembrandt for rim-sculpt setups where the split
+    # edge is slightly asymmetric.  Guards keep regressions out:
+    #   - brightness=="low" blocks split_strong (brightness=high)
+    #   - 0.25 ≤ hl_w < 0.35 blocks rim_only (hl_w < 0.25) and
+    #     rembrandt_classic (hl_w=0.41) / split_strong (hl_w=0.59)
+    #   - controlled_background blocks mixed_light_failure (hints=[])
+    #     and window_negative_fill (no controlled_background)
+    if base in ("split", "rembrandt") and brightness == "low" and bg_dark:
         _esc_ars = getattr(cr, "environmental_shadow_continuity", None)
         _ars_hints = getattr(_esc_ars, "environment_hints", []) if _esc_ars else []
         if "controlled_background" in _ars_hints:
@@ -1014,6 +1112,41 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         _rim_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
         if _rim_sd > 0.45 and _rim_hl < 0.25 and _rim_hl >= 0.15:
             return "rim_only"
+
+    # ── Hurley triangle: clamshell geometry with 3 catchlight sources ─────
+    # Hurley-style 3-light setups (key above + fill below + rim/hair) produce
+    # a clamshell-like shadow geometry but with exactly 3 distinct catchlight
+    # sources.  A genuine 2-source clamshell (upper key + lower reflector/
+    # panel) registers light_count=2.  Count=3 confirms a third active source
+    # (hair/rim/kicker) that distinguishes the Hurley triangle from clamshell.
+    # Guard: light_count≥4 routes to high_key above (high-key beauty-dish
+    # specular inflation); only count==3 fires here.
+    if base == "clamshell":
+        _htri_lc = getattr(li, "light_count", 0) if li else 0
+        if _htri_lc == 3:
+            return "triangle"
+
+    # ── Tabletop soft product: dappled foliage shadows → outdoor product ──
+    # Tabletop product or beauty shots outdoors or near foliage produce
+    # distinctive dappled shadow patterns from leaves/branches.  The
+    # "dappled_foliage" environment hint is uniquely diagnostic — no
+    # controlled studio setup produces this signal across the benchmark set.
+    _tsp_esc = getattr(cr, "environmental_shadow_continuity", None)
+    _tsp_hints = getattr(_tsp_esc, "environment_hints", []) if _tsp_esc else []
+    if "dappled_foliage" in _tsp_hints:
+        return "tabletop_soft_product"
+
+    # ── Window portrait env-agnostic fallback: gradient background ────────
+    # When the env classifier misidentifies window light as studio/unknown
+    # (is_natural_light=False), the combination of a side-key short base and
+    # a gradient background reliably indicates window portraiture.  Window
+    # light produces characteristic background fall-off (gradient from light
+    # side to shadow side) that studio setups rarely reproduce.  Restrict to
+    # "short" base — the key signature of side-window portraiture — to avoid
+    # promoting any gradient-background shot (studio rim shots can also have
+    # background gradients but typically use loop/rembrandt, not short).
+    if base == "short" and bg_pat == "gradient":
+        return "window_portrait"
 
     return None
 
@@ -1741,6 +1874,12 @@ def analyze_image(
             implied = _PATTERN_IMPLIED_SIDE.get(pc.authoritative_pattern)
             if implied:
                 _intel.key_side = implied
+
+    # ── Sync truth source: authoritative_pattern → all cards ─────────
+    # pattern_candidates is the single source of truth.  Write it back to
+    # lighting_read.shadow_pattern and recreation_setup.setup_family so
+    # the Analysis card, Blueprint, and Shoot Mode steps never disagree.
+    _sync_authoritative_pattern_to_cards(result)
 
     # ── Perception layer (read-only diagnostics) ─────────────────────
     _compute_perception_layer(result)

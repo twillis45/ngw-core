@@ -64,6 +64,48 @@ def list_diagnostics(
     }
 
 
+@router.get("/config")
+def get_config() -> Dict[str, Any]:
+    """Return UI option lists driven by the backend truth layer.
+
+    Consumed by ReferenceEvalScreen so hardcoded option arrays stay in sync
+    with what the engine actually accepts.
+    """
+    from engine.services.shoot_match_service import MOOD_MAP
+
+    # Canonical internal mood IDs (de-dup MOOD_MAP values, sort for stability)
+    mood_ids = sorted(set(MOOD_MAP.values()))
+    mood_labels = {
+        "beauty":    "Beauty",
+        "cinematic": "Cinematic",
+        "corporate": "Corporate",
+        "editorial": "Editorial",
+        "natural":   "Natural",
+        "high_key":  "High Key",
+        "low_key":   "Low Key",
+    }
+    moods = [
+        {"value": m, "label": mood_labels.get(m, m.replace("_", " ").title())}
+        for m in mood_ids
+    ]
+
+    patterns = [
+        "rembrandt", "loop", "butterfly", "split", "flat", "broad",
+        "short", "rim_only", "beauty_dish", "high_key", "low_key",
+        "natural_window", "dramatic_key", "three_point",
+    ]
+
+    issue_types = [
+        {"value": "wrong_pattern",  "label": "Pattern identified incorrectly"},
+        {"value": "wrong_mood",     "label": "Mood / style misidentified"},
+        {"value": "no_face",        "label": "No face found / wrong subject"},
+        {"value": "confidence_low", "label": "Confidence feels too high"},
+        {"value": "other",          "label": "Something else is off"},
+    ]
+
+    return {"moods": moods, "patterns": patterns, "issue_types": issue_types}
+
+
 @router.get("/diagnostics/{failure_id}")
 def get_single_diagnostic(failure_id: str) -> Dict[str, Any]:
     """Return a single diagnostic failure by ID."""

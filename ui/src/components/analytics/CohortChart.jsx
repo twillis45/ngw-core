@@ -1,5 +1,5 @@
 /**
- * CohortChart — Daily trend sparkline for analyses, matches, and upgrades.
+ * CohortChart — Daily trend sparkline for analysis, matches, and upgrades.
  * Uses inline SVG polyline — no chart library needed.
  */
 export default function CohortChart({ trend }) {
@@ -11,7 +11,7 @@ export default function CohortChart({ trend }) {
   const innerW = W - PAD * 2;
   const innerH = H - PAD * 2;
 
-  const maxVal = Math.max(...trend.flatMap(d => [d.analyses, d.matches, d.upgrades]), 1);
+  const maxVal = Math.max(...trend.flatMap(d => [d.analysis, d.matches, d.upgrades]), 1);
 
   function points(key) {
     return trend.map((d, i) => {
@@ -26,7 +26,7 @@ export default function CohortChart({ trend }) {
   return (
     <div className="cohort">
       <div className="cohort__legend">
-        <span className="cohort__dot cohort__dot--analyses" />Analyses
+        <span className="cohort__dot cohort__dot--analysis" />Analysis
         <span className="cohort__dot cohort__dot--matches" />Matches
         <span className="cohort__dot cohort__dot--upgrades" />Upgrades
       </div>
@@ -36,7 +36,7 @@ export default function CohortChart({ trend }) {
         preserveAspectRatio="none"
         aria-hidden="true"
       >
-        <polyline points={points('analyses')} className="cohort__line cohort__line--analyses" />
+        <polyline points={points('analysis')} className="cohort__line cohort__line--analysis" />
         <polyline points={points('matches')} className="cohort__line cohort__line--matches" />
         <polyline points={points('upgrades')} className="cohort__line cohort__line--upgrades" />
       </svg>
@@ -46,7 +46,7 @@ export default function CohortChart({ trend }) {
       </div>
       {lastDay && (
         <div className="cohort__today">
-          Today — Analyses: {lastDay.analyses} · Matches: {lastDay.matches} · Upgrades: {lastDay.upgrades}
+          Today — Analysis: {lastDay.analysis} · Matches: {lastDay.matches} · Upgrades: {lastDay.upgrades}
         </div>
       )}
     </div>

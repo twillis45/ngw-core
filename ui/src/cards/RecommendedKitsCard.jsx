@@ -13,6 +13,7 @@ import useKit from '../hooks/useKit';
 import { getModifierDetails } from '../data/modifierCatalog';
 import VendorLogo from '../components/VendorLogo';
 import { getRoleColor } from '../lib/lightRoleColors';
+import { useDispatch } from '../context/AppContext';
 
 // ── B&H shop search link ─────────────────────────────────────────────────────
 const EXTERNAL_LINK_ICON = (
@@ -111,31 +112,56 @@ const ROLE_LABELS_GEAR = {
  * Build a full labeled gear list from blueprint lights at a given tier.
  * Each section: { roleLabel, items: [{name, qty}], alt?: string }
  */
-function buildBlueprintGear(setupLights, tier, primaryFamily) {
+function buildBlueprintGear(setupLights, tier, primaryFamily, lightType) {
   if (!setupLights || setupLights.length === 0) return null;
+  const isContinuous = lightType === 'continuous';
+  const primaryKits = isContinuous ? CONTINUOUS_MODIFIER_KITS : MODIFIER_KITS;
+  const fallbackKit = isContinuous ? CONTINUOUS_FALLBACK_KIT : FALLBACK_KIT;
   const sections = [];
+
   for (const light of setupLights) {
     const role = (light.role || 'key').toLowerCase();
-    const modName = light.modifier || '';
     const roleLabel = ROLE_LABELS_GEAR[role] || 'Light';
 
+    // Resolve the modifier family for this specific light from its raw type.
+    // _modifierType is the snake_case API key (e.g. 'octabox', 'softbox_rect').
+    // Falls back to primaryFamily for key, or null for secondaries.
+    const lightFamily = light._modifierType
+      ? resolveModifierFamily(light._modifierType)
+      : (role === 'key' ? primaryFamily : null);
+
     if (role === 'key') {
-      const tierKit = (MODIFIER_KITS[primaryFamily] || FALLBACK_KIT)[tier] || [];
+      const family = lightFamily || primaryFamily;
+      const tierKit = (primaryKits[family] || fallbackKit)[tier] || [];
       if (tierKit.length) sections.push({ roleLabel, roleKey: 'key', items: tierKit });
     } else if (role === 'fill') {
-      // Always show fill strobe as primary; reflector is always the budget alternative
-      const items = SECONDARY_LIGHT_GEAR.fill_strobe[tier] || [];
-      if (items.length) sections.push({
-        roleLabel,
-        roleKey: 'fill',
-        items,
-        alt: 'Alternative: 5-in-1 Reflector 43–48" (silver/white panel) — no strobe needed, works well for clamshell',
-      });
+      // If the blueprint specifies a modifier for the fill, use that kit family.
+      // Otherwise fall back to generic fill strobe / LED tables.
+      const resolvedKit = lightFamily ? (primaryKits[lightFamily] || fallbackKit)[tier] : null;
+      const items = resolvedKit?.length
+        ? resolvedKit
+        : isContinuous
+          ? (CONTINUOUS_SECONDARY_LIGHT_GEAR.fill_led[tier] || [])
+          : (SECONDARY_LIGHT_GEAR.fill_strobe[tier] || []);
+      const alt = isContinuous
+        ? 'Alternative: 5-in-1 Reflector 43–48" (silver/white panel) — no power needed, works well for interview fill'
+        : 'Alternative: 5-in-1 Reflector 43–48" (silver/white panel) — no strobe needed, works well for clamshell';
+      if (items.length) sections.push({ roleLabel, roleKey: 'fill', items, alt });
     } else if (role === 'hair' || role === 'rim') {
-      const items = SECONDARY_LIGHT_GEAR.hair_rim[tier] || [];
+      const resolvedKit = lightFamily ? (primaryKits[lightFamily] || fallbackKit)[tier] : null;
+      const items = resolvedKit?.length
+        ? resolvedKit
+        : isContinuous
+          ? (CONTINUOUS_SECONDARY_LIGHT_GEAR.hair_rim_led[tier] || [])
+          : (SECONDARY_LIGHT_GEAR.hair_rim[tier] || []);
       if (items.length) sections.push({ roleLabel, roleKey: role, items });
     } else if (role === 'background') {
-      const items = SECONDARY_LIGHT_GEAR.background[tier] || [];
+      const resolvedKit = lightFamily ? (primaryKits[lightFamily] || fallbackKit)[tier] : null;
+      const items = resolvedKit?.length
+        ? resolvedKit
+        : isContinuous
+          ? (CONTINUOUS_SECONDARY_LIGHT_GEAR.background_led[tier] || [])
+          : (SECONDARY_LIGHT_GEAR.background[tier] || []);
       if (items.length) sections.push({ roleLabel, roleKey: 'background', items });
     }
   }
@@ -175,6 +201,59 @@ const FALLBACK_KIT = {
   good:   [{ name: 'Godox AD200Pro strobe (~$280)', qty: 1 }, { name: 'Medium Softbox (~$60)', qty: 1 }],
   better: [{ name: 'Profoto B10 Plus (~$1,800)', qty: 1 }, { name: 'Profoto modifier of choice (~$200+)', qty: 1 }],
   best:   [{ name: 'Broncolor Siros L 800 (~$2,400)', qty: 1 }, { name: 'Broncolor modifier system (~$700+)', qty: 1 }],
+};
+
+// ── Continuous (LED / video) kits — used when lightType === 'continuous' ─────
+const CONTINUOUS_MODIFIER_KITS = {
+  softbox_rect: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Godox 60×90 cm Softbox (~$60)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 300B II Bi-Color (~$650)', qty: 1 }, { name: 'Nanlite 60×90 cm Softbox (~$120)', qty: 1 }],
+    best:   [{ name: 'Aputure 600d Pro (~$1,800)', qty: 1 }, { name: 'Aputure Light Dome II 90 cm (~$150)', qty: 1 }],
+  },
+  softbox_octa: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Godox 80 cm Octa Softbox (~$55)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 300B II Bi-Color (~$650)', qty: 1 }, { name: 'Nanlite 120 cm Octa Softbox (~$180)', qty: 1 }],
+    best:   [{ name: 'Aputure 600d Pro (~$1,800)', qty: 1 }, { name: 'Aputure Light Dome 150 cm (~$350)', qty: 1 }],
+  },
+  beauty_dish: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Godox 16" Beauty Dish (~$55)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 300B II Bi-Color (~$650)', qty: 1 }, { name: 'Nanlite Beauty Dish 55 cm (~$120)', qty: 1 }],
+    best:   [{ name: 'Aputure 600d Pro (~$1,800)', qty: 1 }, { name: 'Aputure Spotlight Mount (~$600)', qty: 1 }],
+  },
+  umbrella_shoot: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: '43" Silver Shoot-Through Umbrella (~$25)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 150B Bi-Color (~$380)', qty: 1 }, { name: 'Westcott 43" Optical White Satin (~$55)', qty: 1 }],
+    best:   [{ name: 'Aputure 300d II (~$900)', qty: 1 }, { name: 'Aputure Light Dome Mini II (~$130)', qty: 1 }],
+  },
+  ring_flash: {
+    good:   [{ name: 'Neewer 18" LED Ring Light Kit (~$60)', qty: 1 }],
+    better: [{ name: 'Westcott Flex Cine Ring 24" LED (~$350)', qty: 1 }],
+    best:   [{ name: 'Rotolight AEOS 2 Pro LED (~$1,200)', qty: 1 }],
+  },
+};
+
+const CONTINUOUS_FALLBACK_KIT = {
+  good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Medium Softbox (~$55)', qty: 1 }],
+  better: [{ name: 'Nanlite Forza 300B II Bi-Color (~$650)', qty: 1 }, { name: 'Nanlite Softbox (~$120)', qty: 1 }],
+  best:   [{ name: 'Aputure 600d Pro (~$1,800)', qty: 1 }, { name: 'Aputure modifier of choice (~$150+)', qty: 1 }],
+};
+
+const CONTINUOUS_SECONDARY_LIGHT_GEAR = {
+  fill_led: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Godox 60×90 cm Softbox (~$60)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 150B Bi-Color (~$380)', qty: 1 }, { name: 'Nanlite 60×90 cm Softbox (~$100)', qty: 1 }],
+    best:   [{ name: 'Aputure 300d II (~$900)', qty: 1 }, { name: 'Aputure Light Dome Mini II (~$130)', qty: 1 }],
+  },
+  hair_rim_led: {
+    good:   [{ name: 'Godox SL60W Bi-Color LED (~$180)', qty: 1 }, { name: 'Godox Strip Softbox 30×120 cm (~$45)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 60B Bi-Color (~$350)', qty: 1 }, { name: 'Nanlite Strip Softbox (~$80)', qty: 1 }],
+    best:   [{ name: 'Aputure 120d II (~$400)', qty: 1 }, { name: 'Aputure Fresnel Mount (~$120)', qty: 1 }],
+  },
+  background_led: {
+    good:   [{ name: 'Godox SL60W LED (~$150)', qty: 1 }],
+    better: [{ name: 'Nanlite Forza 60B Bi-Color (~$350)', qty: 1 }],
+    best:   [{ name: 'Aputure 120d II (~$400)', qty: 1 }],
+  },
 };
 
 // Recommended support per modifier family — stands, grips, sandbags specific to the setup.
@@ -270,7 +349,8 @@ const MODIFIER_DISPLAY_NAMES = {
   beauty_dish: 'Beauty Dish', softbox: 'Softbox', softbox_rect: 'Rect Softbox',
   softbox_octa: 'Octa Softbox', umbrella: 'Umbrella', umbrella_shoot: 'Shoot-Through Umbrella',
   reflector: 'Reflector', grid: 'Grid', grid_spot: 'Grid Spot',
-  stripbox: 'Strip Box', ring_flash: 'Ring Flash', diffusion_panel: 'Diffusion Panel',
+  stripbox: 'Strip Box', ring_flash: 'Ring Flash', ring_light: 'Ring Light', ring: 'Ring Light', macro_ring_flash: 'Macro Ring Flash',
+  diffusion_panel: 'Diffusion Panel',
   bare: 'Bare Flash',
   // Mola
   mola_setti: 'Mola Setti', mola_demi: 'Mola Demi', mola_euro: 'Mola Euro',
@@ -386,7 +466,7 @@ const MODIFIER_FAMILY_TYPES = {
   softbox_octa:  ['softbox', 'softbox_octa'],
   beauty_dish:   ['beauty_dish'],
   umbrella_shoot:['umbrella', 'umbrella_shoot'],
-  ring_flash:    ['ring_flash'],
+  ring_flash:    ['ring_flash', 'ring_light', 'ring', 'macro_ring_flash'],
 };
 
 // Close alternatives: modifier types that can approximate the family but aren't ideal.
@@ -396,6 +476,40 @@ const MODIFIER_FAMILY_ALTERNATIVES = {
   ring_flash:     { types: ['beauty_dish'], note: 'Not a ring flash — won\'t produce the ring-shaped catchlight or flat wrap-around shadow. Usable for beauty but a distinctly different look.' },
   umbrella_shoot: { types: ['softbox', 'softbox_rect'], note: 'Softbox will work — slightly more directional than an umbrella shoot-through. A solid substitute at portrait pace.' },
 };
+
+/**
+ * Cross-pattern backup suggestions — reverse lookup.
+ * If the user owns a modifier from the `ownedFamily` key, and the current setup
+ * calls for a modifier in `works_for`, that owned modifier is surfaced as a
+ * "could work as backup" suggestion with a cautionary note.
+ */
+const CROSS_PATTERN_BACKUPS = {
+  ring_flash: {
+    works_for: ['beauty_dish', 'softbox_octa'],
+    note: 'Ring flash produces flat, wrap-around light — a workable single-light clamshell substitute at close range. Expect a ring-shaped catchlight instead of a dish or round window.',
+  },
+  beauty_dish: {
+    works_for: ['softbox_octa', 'softbox_rect'],
+    note: 'Beauty dish can fill the key light role when no softbox is available. Expect harder shadow edges and more mid-tone contrast than the recommended modifier.',
+  },
+  softbox_octa: {
+    works_for: ['beauty_dish'],
+    note: 'Large octabox produces softer, more wrapping light than a beauty dish — shadow edges will be less defined. The overall look reads as a softer version of this setup.',
+  },
+  umbrella_shoot: {
+    works_for: ['softbox_rect', 'softbox_octa'],
+    note: 'Shoot-through umbrella approximates the soft key quality — slightly more light spill and a less directional spread than a softbox.',
+  },
+};
+
+/** Returns true if the kit contains any strobe-type light (for modeling-light note). */
+const STROBE_BRAND_PREFIXES = ['godox', 'profoto', 'broncolor', 'elinchrom', 'flashpoint', 'neewer', 'yongnuo'];
+function hasStrobeLights(kit) {
+  return (kit?.lights || []).some(l => {
+    const type = (l.type || '').toLowerCase();
+    return STROBE_BRAND_PREFIXES.some(b => type.startsWith(b));
+  });
+}
 
 // Why the exact modifier family is ideal for this pattern/setup.
 // Shown as a positive rationale under exact kit matches.
@@ -533,8 +647,25 @@ function getKitMatches(kit, tier, modifierFamily, setupLights) {
   const matches = [];
   let hasModifierMatch = false;
 
-  // Lights — must match the active tier
-  for (const light of (kit.lights || [])) {
+  // Lights — must match the active tier.
+  // Also check if a kit light IS the modifier family (e.g. ring flash stored as a light).
+  const lightModifierUsed = new Set(); // track light indices used for modifier matching
+  let exactModifierFoundFromLight = false;
+  if (modifierFamily) {
+    for (let i = 0; i < (kit.lights || []).length; i++) {
+      const light = kit.lights[i];
+      const type = (light.type || '').toLowerCase();
+      if (resolveModifierFamily(type) === modifierFamily) {
+        lightModifierUsed.add(i);
+        hasModifierMatch = true;
+        exactModifierFoundFromLight = true;
+        matches.push({ name: formatItemType(type, LIGHT_DISPLAY_NAMES), qty: light.qty || 1, kind: 'modifier', fitScore: 1 });
+      }
+    }
+  }
+  for (let i = 0; i < (kit.lights || []).length; i++) {
+    if (lightModifierUsed.has(i)) continue;
+    const light = kit.lights[i];
     const type = (light.type || '').toLowerCase();
     let lightTier = LIGHT_TIER[type];
     if (!lightTier) {
@@ -553,7 +684,7 @@ function getKitMatches(kit, tier, modifierFamily, setupLights) {
   // Modifiers — resolve each kit modifier to its family, score fit, match exactly or as alternative.
   // Use index tracking to prevent the same kit item from matching multiple roles.
   const altEntry = MODIFIER_FAMILY_ALTERNATIVES[modifierFamily];
-  let exactModifierFound = false;
+  let exactModifierFound = exactModifierFoundFromLight;
   let alternativeNote = null;
   const usedModIdx = new Set();
 
@@ -626,6 +757,31 @@ function getKitMatches(kit, tier, modifierFamily, setupLights) {
     }
   }
 
+  // Cross-pattern backup suggestions: owned modifiers that aren't the recommended
+  // family but whose family is listed as a backup for the current setup.
+  // Only shown when no exact match was found — avoids redundancy.
+  if (!exactModifierFound) {
+    const alreadyUsedBackupFamilies = new Set();
+    for (let i = 0; i < (kit.modifiers || []).length; i++) {
+      if (usedModIdx.has(i)) continue;
+      const mod = kit.modifiers[i];
+      const type = (mod.type || '').toLowerCase();
+      const ownedFamily = resolveModifierFamily(type);
+      if (!ownedFamily || alreadyUsedBackupFamilies.has(ownedFamily)) continue;
+      const backup = CROSS_PATTERN_BACKUPS[ownedFamily];
+      if (backup && backup.works_for.includes(modifierFamily)) {
+        alreadyUsedBackupFamilies.add(ownedFamily);
+        matches.push({
+          name: modifierDisplayName(type),
+          qty: mod.qty || 1,
+          kind: 'modifier',
+          isBackup: true,
+          fitNote: backup.note,
+        });
+      }
+    }
+  }
+
   // Speed ring adapter note: shown when the user has a modifier that matches
   // but may not be native to the recommended strobe's mount system.
   const mountInfo = modifierFamily && STROBE_MOUNT[modifierFamily]?.[tier];
@@ -636,20 +792,52 @@ function getKitMatches(kit, tier, modifierFamily, setupLights) {
   return { matches, adapterNote, alternativeNote };
 }
 
-// Map kit light types to gear tier
+// Map kit light types to gear tier.
+// Matching order in inferKitTier/getKitMatches:
+//   1. Exact key match
+//   2. type.startsWith(key) — longer key matches prefix of type
+//   3. key.startsWith(brand) — brand prefix fallback (first segment of type)
+// Add specific models when the brand fallback would give the wrong tier.
 const LIGHT_TIER = {
-  // Entry-level / Godox
-  godox_ad200: 'good', godox_ad200pro: 'good', godox_v1: 'good',
-  godox_sk400: 'good', godox_sl60: 'good', godox_ad300: 'good',
+  // ── Entry-level / 'good' ────────────────────────────────────────────────
+  // Godox — full ecosystem (AD200/300 series, V-series, speedlights, LEDs)
+  godox: 'good',
+  // Other entry / consumer brands (prefix catch-all)
   neewer: 'good', yongnuo: 'good', flashpoint: 'good',
-  // Prosumer / Profoto / Elinchrom
-  profoto_b10: 'better', profoto_b10x: 'better', profoto_b1: 'better',
-  profoto_b2: 'better', profoto_a1: 'better', profoto_d2: 'better',
-  elinchrom_elc: 'better', elinchrom_d_lite: 'better', elinchrom: 'better',
-  broncolor_siros: 'better',
-  // Professional / Broncolor
-  broncolor_move: 'best', broncolor_scoro: 'best', broncolor_siros_l: 'best',
-  profoto_pro10: 'best', profoto_d1: 'best',
+  // Canon / Nikon / Sony speedlights
+  canon: 'good', nikon: 'good', sony: 'good',
+  // Ring lights & tube LEDs are entry-level accessories
+  ring_light: 'good',
+  // SmallRig LED panels — prosumer-priced but entry-tier for flash work
+  smallrig: 'good',
+
+  // ── Prosumer / 'better' ─────────────────────────────────────────────────
+  // Profoto B-series portable (B1, B1X, B2, B10, B10X, B10 Plus, A10, A2, AcuteB)
+  profoto_b: 'better', profoto_a: 'better', profoto_acuteb: 'better',
+  profoto_compact: 'better',
+  // Profoto D-series monoheads (D1, D2, D3, D4)
+  profoto_d: 'better',
+  // Elinchrom (all models — ELC, D-Lite, FIVE, THREE)
+  elinchrom: 'better', elinchrom_dlite: 'better',
+  // Westcott FJ-series portables
+  westcott_fj: 'better',
+  // Paul C. Buff — Einstein, DigiBee, AlienBees, White Lightning
+  pcb: 'better',
+  // Bowens & Hensel studio monolights
+  bowens: 'better', hensel: 'better',
+  // Aputure mid-tier (Amaran 60d/120d/200d, 300d/300x map to this brand prefix)
+  aputure: 'better',
+  // Nanlite mid-tier (Forza 60–500 range)
+  nanlite: 'better',
+  // Godox higher-power packs (QT600, DP600) stay 'good' via godox prefix above
+
+  // ── Professional / 'best' ───────────────────────────────────────────────
+  // Broncolor — ALL Broncolor lights are the 'best' tier
+  broncolor: 'best',
+  // Profoto Pro & SCF pack systems (Pro-7a, Pro-8a, Pro-10, Pro-11, SCF)
+  profoto_pro: 'best', profoto_scf: 'best',
+  // Litepanels Gemini / Astra — cinema-grade broadcast panels
+  litepanels: 'best',
 };
 
 function inferKitTier(kit) {
@@ -677,8 +865,9 @@ function inferKitTier(kit) {
   return null;
 }
 
-export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
+export default function RecommendedKitsCard({ modifierFamily, setupLights, lightType }) {
   const userKit = useKit();
+  const dispatch = useDispatch();
   const userTier = inferKitTier(userKit);
   const [activeTier, setActiveTier] = useState(userTier || 'good');
   const [showAdvantages, setShowAdvantages] = useState(false);
@@ -701,15 +890,21 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
     setActiveTier(tier);
   }
 
-  const kit = MODIFIER_KITS[modifierFamily] || FALLBACK_KIT;
+  const isContinuous = lightType === 'continuous';
+  const kitTable = isContinuous ? CONTINUOUS_MODIFIER_KITS : MODIFIER_KITS;
+  const fallback  = isContinuous ? CONTINUOUS_FALLBACK_KIT : FALLBACK_KIT;
+  const kit = kitTable[modifierFamily] || fallback;
   const items = kit[activeTier] || kit.good || [];
   // Blueprint-derived full rig gear (used when Blueprint lights are passed in)
-  const blueprintGear = buildBlueprintGear(setupLights, activeTier, modifierFamily);
+  const blueprintGear = buildBlueprintGear(setupLights, activeTier, modifierFamily, lightType);
   const secondaryLightCount = (setupLights || []).filter(l => {
     const r = (l.role || '').toLowerCase();
     return r === 'fill' || r === 'hair' || r === 'rim';
   }).length;
   const { matches: kitMatches, adapterNote, alternativeNote } = getKitMatches(userKit, activeTier, modifierFamily, setupLights);
+  const modelingLightNote = isContinuous && hasStrobeLights(userKit)
+    ? 'Your strobe\'s modeling light can approximate a continuous key — set to full power, turn off burst, and expose for continuous light.'
+    : null;
 
   // Contextual note based on whether user's kit tier matches
   let kitNote;
@@ -868,19 +1063,22 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
         );
       })()}
 
-      {kitMatches.length > 0 && (() => {
-        // Sort: lights first, then modifiers by fitScore desc (best match first), then support
+      {(kitMatches.length > 0 || modelingLightNote) && (() => {
+        // Sort: lights first, then modifiers by fitScore desc (best match first), then support.
+        // Backups sort last within modifiers.
         const KIND_ORDER = { light: 0, modifier: 1, support: 2 };
         const sorted = [...kitMatches].sort((a, b) => {
           const ko = KIND_ORDER[a.kind] - KIND_ORDER[b.kind];
           if (ko !== 0) return ko;
           if (a.kind === 'modifier' && b.kind === 'modifier') {
+            // backups go last, then sort by fitScore desc
+            if (a.isBackup !== b.isBackup) return a.isBackup ? 1 : -1;
             return (b.fitScore ?? 0.5) - (a.fitScore ?? 0.5);
           }
           return 0;
         });
-        const hasExactModifier = kitMatches.some(m => m.kind === 'modifier' && !m.isAlternative);
-        const hasAltOnly = !hasExactModifier && kitMatches.some(m => m.isAlternative);
+        const hasExactModifier = kitMatches.some(m => m.kind === 'modifier' && !m.isAlternative && !m.isBackup);
+        const hasAltOnly = !hasExactModifier && kitMatches.some(m => m.isAlternative || m.isBackup);
         return (
           <div className={`kits-card__your-gear${yourGearOpen ? ' kits-card__your-gear--open' : ''}`}>
             <button
@@ -905,7 +1103,9 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
                 <p className="kits-card__your-gear-sub">
                   {hasAltOnly
                     ? 'No exact match — these from your kit can substitute'
-                    : 'These items from your saved kit work for this setup'}
+                    : kitMatches.some(m => m.isBackup)
+                      ? 'Kit items that work for this setup + backup options'
+                      : 'These items from your saved kit work for this setup'}
                 </p>
               </div>
               <svg
@@ -919,14 +1119,16 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
             </button>
             {yourGearOpen && <ul className="kits-card__your-gear-list">
               {sorted.map((match, i) => (
-                <li key={i} className={`kits-card__your-gear-item${match.isAlternative ? ' kits-card__your-gear-alternative' : ''}`}>
+                <li key={i} className={`kits-card__your-gear-item${match.isAlternative ? ' kits-card__your-gear-alternative' : ''}${match.isBackup ? ' kits-card__your-gear-backup' : ''}`}>
                   <div className="kits-card__your-gear-item-row">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                      style={{ flexShrink: 0, color: match.isAlternative ? '#f59e0b' : '#6ee7b7' }}>
-                      {match.isAlternative
-                        ? <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                        : <polyline points="20 6 9 17 4 12"/>}
+                      style={{ flexShrink: 0, color: match.isBackup ? '#94a3b8' : match.isAlternative ? '#f59e0b' : '#6ee7b7' }}>
+                      {match.isBackup
+                        ? <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>
+                        : match.isAlternative
+                          ? <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                          : <polyline points="20 6 9 17 4 12"/>}
                     </svg>
                     <VendorLogo name={match.name} />
                     <span className="kits-card__your-gear-name">
@@ -940,6 +1142,7 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
                       </span>
                     )}
                     {match.isAlternative && <span className="kits-card__alt-tag">alt</span>}
+                    {match.isBackup && <span className="kits-card__backup-tag">backup</span>}
                   </div>
                   {match.fitNote && match.kind === 'modifier' && (
                     <p className="kits-card__fit-note">{match.fitNote}</p>
@@ -947,6 +1150,26 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
                 </li>
               ))}
             </ul>}
+            {yourGearOpen && modelingLightNote && (
+              <div className="kits-card__modeling-note">
+                <svg className="kits-card__modeling-note__icon" width="16" height="16" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="5"/>
+                  <line x1="12" y1="1" x2="12" y2="3"/>
+                  <line x1="12" y1="21" x2="12" y2="23"/>
+                  <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                  <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                  <line x1="1" y1="12" x2="3" y2="12"/>
+                  <line x1="21" y1="12" x2="23" y2="12"/>
+                  <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                  <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                </svg>
+                <div className="kits-card__modeling-note__body">
+                  <span className="kits-card__modeling-note__label">Modeling Light Option</span>
+                  <span className="kits-card__modeling-note__text">{modelingLightNote}</span>
+                </div>
+              </div>
+            )}
             {yourGearOpen && hasExactModifier && MODIFIER_FAMILY_RATIONALE[modifierFamily] && (
               <p className="kits-card__match-rationale">{MODIFIER_FAMILY_RATIONALE[modifierFamily]}</p>
             )}
@@ -955,6 +1178,24 @@ export default function RecommendedKitsCard({ modifierFamily, setupLights }) {
             )}
             {yourGearOpen && adapterNote && (
               <p className="kits-card__adapter-note">{adapterNote}</p>
+            )}
+            {yourGearOpen && (
+              <div className="kits-card__your-gear-footer">
+                <span className="kits-card__your-gear-footer-note">
+                  {hasExactModifier
+                    ? 'Exact match — ready to shoot.'
+                    : hasAltOnly
+                      ? 'Alternative gear — will work, not ideal.'
+                      : 'Matched from your saved kit.'}
+                </span>
+                <button
+                  type="button"
+                  className="kits-card__your-gear-footer-link"
+                  onClick={() => dispatch({ type: 'NAVIGATE', screen: 'my_kit' })}
+                >
+                  Edit My Kit →
+                </button>
+              </div>
             )}
           </div>
         );

@@ -2,7 +2,7 @@
  * AnalyticsDashboard — admin-only analytics screen.
  * Fetches from GET /api/analytics/dashboard and renders 8 dashboard sections.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getToken } from '../data/authApi';
 import DashboardLayout from '../components/analytics/DashboardLayout';
 import KPIStrip from '../components/analytics/KPIStrip';
@@ -22,6 +22,8 @@ function SectionHead({ title, subtitle }) {
   );
 }
 
+const REFRESH_MS = 60_000;
+
 export default function AnalyticsDashboard() {
   const [days, setDays] = useState(30);
   const [origin, setOrigin] = useState('all');
@@ -29,30 +31,36 @@ export default function AnalyticsDashboard() {
   const [provenance, setProvenance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const timerRef = useRef(null);
 
-  async function loadStats() {
+  const loadStats = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = getToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const originParam = origin !== 'all' ? `&origin=${origin}` : '';
       const [dashRes, provRes] = await Promise.all([
-        fetch(`/api/analytics/dashboard?days=${days}${originParam}`, { headers }),
-        fetch(`/api/analytics/provenance?days=${days}${originParam}`, { headers }),
+        fetch(`/api/analytics/dashboard?days=${days}&origin=${origin}`, { headers }),
+        fetch(`/api/analytics/provenance?days=${days}&origin=${origin}`, { headers }),
       ]);
       if (dashRes.status === 403) { setError('Admin access required.'); return; }
       if (!dashRes.ok) { setError('Failed to load dashboard data.'); return; }
       setData(await dashRes.json());
       if (provRes.ok) setProvenance(await provRes.json());
+      setLastRefresh(Date.now());
     } catch {
       setError('Network error.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [days, origin]);
 
-  useEffect(() => { loadStats(); }, [days, origin]);
+  useEffect(() => {
+    loadStats();
+    timerRef.current = setInterval(loadStats, REFRESH_MS);
+    return () => clearInterval(timerRef.current);
+  }, [loadStats]);
 
   return (
     <DashboardLayout
@@ -63,6 +71,7 @@ export default function AnalyticsDashboard() {
       onRefresh={loadStats}
       loading={loading}
       error={error}
+      lastRefresh={lastRefresh}
     >
       {data && (
         <div className="adb__body">
@@ -200,6 +209,13 @@ export default function AnalyticsDashboard() {
                   </div>
                   <div className="adb__stat-label">Expert Review</div>
                   <div className="adb__stat-sub">excluded unless promoted</div>
+                </div>
+                <div className="adb__stat-card" style={{ borderColor: 'rgba(255,160,77,0.3)' }}>
+                  <div className="adb__stat-value" style={{ color: 'var(--color-warning)' }}>
+                    {provenance.by_origin?.test ?? 0}
+                  </div>
+                  <div className="adb__stat-label">Test</div>
+                  <div className="adb__stat-sub">user-marked, excluded</div>
                 </div>
               </div>
               <div className="adb__stat-row">

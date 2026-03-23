@@ -68,7 +68,8 @@ function ConfidenceBar({ score }) {
 export default function ResultConfidenceExplainer({ bestMatch, signalReliability, edgeCaseFlags }) {
   const [open, setOpen] = useState(false);
 
-  const score   = bestMatch?.reliabilityScore ?? 0;
+  const rawScore = bestMatch?.reliabilityScore ?? 0;
+  const score    = rawScore > 1 ? rawScore / 100 : rawScore;
   const pattern = bestMatch?.lightingPattern  ?? '';
   const level   = getLevel(score);
 

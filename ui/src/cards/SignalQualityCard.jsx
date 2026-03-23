@@ -10,6 +10,8 @@
 
 import { useState } from 'react';
 import CardIcon from '../components/CardIcon';
+import useSettings from '../hooks/useSettings';
+import { signalStrength } from '../lib/signals';
 
 function SignalMeter({ strength }) {
   const bars = 3;
@@ -24,12 +26,6 @@ function SignalMeter({ strength }) {
       ))}
     </div>
   );
-}
-
-function strengthFromScore(score) {
-  if (score >= 0.65) return 'strong';
-  if (score >= 0.40) return 'moderate';
-  return 'weak';
 }
 
 function ambiguityLabel(flag) {
@@ -56,8 +52,10 @@ function edgeCaseLabel(flag) {
   return labels[flag] || flag.replace(/_/g, ' ');
 }
 
-export default function SignalQualityCard({ signalReliability, faceValidation, edgeCaseFlags }) {
-  const [expanded, setExpanded] = useState(false);
+export default function SignalQualityCard({ signalReliability, faceValidation, edgeCaseFlags, perceptionExplanation }) {
+  const { confidenceDisplay } = useSettings();
+  // Auto-expand signal details when the user has chosen the 'detailed' view
+  const [expanded, setExpanded] = useState(confidenceDisplay === 'detailed');
 
   // Determine overall strength
   const overallScore = signalReliability?.overallSignalStrength ?? null;
@@ -65,10 +63,11 @@ export default function SignalQualityCard({ signalReliability, faceValidation, e
   const total = signalReliability?.signalsTotal ?? 24;
   const faceDetected = faceValidation?.faceDetected ?? true;
   const faceQuality = faceValidation?.faceQuality ?? 'none';
+  const faceYaw = faceValidation?.faceYaw ?? null;
 
   if (overallScore === null && !faceValidation && !edgeCaseFlags) return null;
 
-  const strength = overallScore !== null ? strengthFromScore(overallScore) : 'moderate';
+  const strength = overallScore !== null ? signalStrength(overallScore) : 'moderate';
 
   const strengthLabel = {
     strong: 'Consistent — pattern confirmed across signals.',
@@ -88,7 +87,12 @@ export default function SignalQualityCard({ signalReliability, faceValidation, e
         .map(([k]) => k)
     : [];
 
-  const hasDetails = ambiguityFlags.length > 0 || activeEdgeCases.length > 0 || !faceDetected;
+  // Perception explanation signals
+  const supportingSignals = perceptionExplanation?.supportingSignals || [];
+  const contradictingSignals = perceptionExplanation?.contradictingSignals || [];
+  const hasPerceptionSignals = supportingSignals.length > 0 || contradictingSignals.length > 0;
+
+  const hasDetails = ambiguityFlags.length > 0 || activeEdgeCases.length > 0 || !faceDetected || hasPerceptionSignals;
 
   const faceLabel = faceQuality === 'good'
     ? 'Face clearly detected'
@@ -134,6 +138,11 @@ export default function SignalQualityCard({ signalReliability, faceValidation, e
           )}
         </span>
         {faceLabel}
+        {faceYaw != null && (
+          <span className="signal-quality__face-yaw" title="Face turn angle — 0° is straight-on, higher values indicate a turned face">
+            {Math.round(Math.abs(faceYaw))}° turn
+          </span>
+        )}
       </div>
 
       {/* Expandable detail */}
@@ -161,6 +170,32 @@ export default function SignalQualityCard({ signalReliability, faceValidation, e
                   {edgeCaseLabel(flag)}
                 </div>
               ))}
+              {hasPerceptionSignals && (
+                <div className="signal-quality__perception-signals">
+                  {supportingSignals.length > 0 && (
+                    <div className="signal-quality__perception-group">
+                      <span className="signal-quality__perception-label signal-quality__perception-label--for">Supporting</span>
+                      {supportingSignals.map((s, i) => (
+                        <div key={`s${i}`} className="signal-quality__flag signal-quality__flag--supporting">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginRight: 4 }}><polyline points="20 6 9 17 4 12"/></svg>
+                          {s}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {contradictingSignals.length > 0 && (
+                    <div className="signal-quality__perception-group">
+                      <span className="signal-quality__perception-label signal-quality__perception-label--against">Contradicting</span>
+                      {contradictingSignals.map((s, i) => (
+                        <div key={`c${i}`} className="signal-quality__flag signal-quality__flag--contradicting">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginRight: 4 }}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          {s}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </>

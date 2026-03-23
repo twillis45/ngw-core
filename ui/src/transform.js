@@ -4,11 +4,28 @@
 
 import { getCoaching, buildTestSteps } from './coaching';
 import { getModifierDetails, recommendedSizeClass } from './data/modifierCatalog';
+import { formatRoomDim } from './utils/units';
 
 /* ── helpers ────────────────────────────────────────────── */
 
 function metersToFeet(m) {
   return (m * 3.281).toFixed(1);
+}
+
+/**
+ * Convert the metric area suffix that lighting system names carry in the
+ * database (e.g. "Large Studio (>40 m²)") to imperial sq ft when the user
+ * has chosen imperial units.  The m² token can appear as-is or inside a
+ * nested parenthetical like "(Small Studio (<40 m²))".
+ *
+ * Leaves the string unchanged for metric users.
+ */
+function adaptSystemName(name, units) {
+  if (!name || units !== 'imperial') return name;
+  return name.replace(/([<>≤≥]?)(\d+(?:\.\d+)?)\s*m²/g, (_, op, num) => {
+    const sqFt = Math.round(parseFloat(num) * 10.764);
+    return `${op}${sqFt} sq ft`;
+  });
 }
 
 function modifierLabel(token) {
@@ -23,9 +40,12 @@ function modifierLabel(token) {
     stripbox:     'Strip Box',
     barn_doors:   'Barn Doors',
     snoot:        'Snoot',
-    bare:         'Bare Bulb',
-    hard_source:  'Hard Source (Fresnel / Standard Reflector)',
-    unknown:      'Modifier Not Detected',
+    bare:             'Bare Bulb',
+    hard_source:      'Hard Source (Fresnel / Standard Reflector)',
+    ring_flash:       'Ring Flash',
+    ring_light:       'Ring Light',
+    macro_ring_flash: 'Macro Ring Flash',
+    unknown:          'Modifier Not Detected',
   };
   return map[token] || token.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -199,7 +219,7 @@ export function ceilingFtToCategory(ceilingFt) {
  * @param {{ lengthFt: number, widthFt: number, ceilingFt: number }} [roomDimensions]
  * @returns {object}
  */
-function buildSpaceCheck(lights, roomDimensions) {
+function buildSpaceCheck(lights, roomDimensions, units = 'imperial') {
   let maxDist = 0;
   let maxHeight = 0;
   for (const l of lights) {
@@ -215,11 +235,14 @@ function buildSpaceCheck(lights, roomDimensions) {
   const minDepthFt = parseFloat(metersToFeet(depthM));
   const minCeilingFt = parseFloat(metersToFeet(ceilingM));
 
+  // Format a feet value for display in the user's preferred units
+  const fmtFt = (ft) => formatRoomDim(ft, units);
+
   const warnings = [];
   if (ceilingM > 2.6) {
     warnings.push(
-      `If your ceiling is under ${metersToFeet(ceilingM)} ft: ` +
-      'lower the rim/hair light to shoulder height and angle it down 30\u00b0'
+      `If your ceiling is under ${fmtFt(parseFloat(metersToFeet(ceilingM)))}: ` +
+      'lower tall lights or angle them down 30\u00b0'
     );
   }
 
@@ -240,19 +263,19 @@ function buildSpaceCheck(lights, roomDimensions) {
     const issues = [];
     if (!ceilingFits) {
       issues.push(
-        `Ceiling is ${roomDimensions.ceilingFt} ft but setup needs ${minCeilingFt} ft — ` +
+        `Ceiling is ${fmtFt(roomDimensions.ceilingFt)} but setup needs ${fmtFt(minCeilingFt)} — ` +
         'lower tall lights or angle them down'
       );
     }
     if (!widthFits) {
       issues.push(
-        `Room width is ${roomDimensions.widthFt} ft but setup needs ${minWidthFt} ft — ` +
+        `Room width is ${fmtFt(roomDimensions.widthFt)} but setup needs ${fmtFt(minWidthFt)} — ` +
         'move lights closer to subject'
       );
     }
     if (!depthFits) {
       issues.push(
-        `Room depth is ${roomDimensions.lengthFt} ft but setup needs ${minDepthFt} ft — ` +
+        `Room depth is ${fmtFt(roomDimensions.lengthFt)} but setup needs ${fmtFt(minDepthFt)} — ` +
         'move camera closer or use a longer lens'
       );
     }
@@ -366,11 +389,11 @@ function buildSkinToneAdjustments(skinTone, mood, lights) {
 
   const adjustments = {
     light: {
-      exposure: '+0 to +1/3 stop — lighter skin reflects more light; meter carefully to avoid blowout',
-      modifier: 'Use a large, soft modifier to minimize specular highlights',
-      whiteBalance: 'Standard daylight (5500K) or slightly warm (5600-5800K)',
-      fillRatio: numLights >= 2 ? 'Fill can be subtle (2:1 ratio) — skin naturally bounces light' : null,
-      rimNote: hasRim ? 'Reduce rim power by 1/2 stop — rim can clip quickly on lighter skin' : null,
+      exposure: '+0 to +1/3 stop — lighter skin reflects more; meter carefully to avoid blowout',
+      modifier: 'Large, soft modifier to minimize specular highlights',
+      whiteBalance: 'Standard daylight (5500K) or slightly warm (5600–5800K)',
+      fillRatio: numLights >= 2 ? 'Subtle fill (2:1 ratio) — skin naturally bounces light' : null,
+      rimNote: hasRim ? 'Reduce rim by 1/2 stop — rim can clip quickly on lighter skin' : null,
       keyTip: 'Watch histogram highlights — pull back power if right edge clips',
     },
     medium: {
@@ -379,15 +402,23 @@ function buildSkinToneAdjustments(skinTone, mood, lights) {
       whiteBalance: 'Daylight (5500K) or match ambient — most versatile range',
       fillRatio: numLights >= 2 ? 'Standard 2:1 to 3:1 fill ratio for natural dimension' : null,
       rimNote: hasRim ? 'Rim at standard power for clean separation' : null,
-      keyTip: 'Use a grey card — auto white balance can skew with warm undertones',
+      keyTip: 'Grey card recommended — AWB can skew warm with golden undertones',
     },
     dark: {
-      exposure: '+2/3 to +1 stop over meter reading — camera meters underexpose dark skin',
-      modifier: 'Large softbox with grid to control spill while keeping light soft and wrap-around',
-      whiteBalance: 'Daylight (5500K) or slightly cool (5200-5400K) to retain richness',
-      fillRatio: numLights >= 2 ? 'Lower ratio (1.5:1 to 2:1) — deep shadows lose detail quickly' : null,
-      rimNote: hasRim ? 'Rim light is essential for separation — keep at standard or +1/3 power' : null,
-      keyTip: 'Expose for the face, not the background — ETTR (expose to the right) is your friend',
+      exposure: '+2/3 to +1 stop over meter reading — cameras routinely underexpose dark skin',
+      modifier: 'Large softbox with grid — soft and wrap-around, controlled spill',
+      whiteBalance: 'Daylight (5500K) or slightly cool (5200–5400K) to retain skin richness',
+      fillRatio: numLights >= 2 ? 'Lower ratio (1.5:1 to 2:1) — deep shadows lose detail fast' : null,
+      rimNote: hasRim ? 'Rim light critical for separation — keep at standard or +1/3 stop' : null,
+      keyTip: 'Expose for the face — ETTR (expose to the right) is your friend',
+    },
+    mixed: {
+      exposure: 'Set exposure for the darkest subject (+2/3 stop); the lightest will be fine — never the reverse',
+      modifier: 'Large, soft modifier (>100cm) maximizes even coverage across the group',
+      whiteBalance: 'Lock to daylight (5500K) — do not use AWB during a multi-subject session',
+      fillRatio: numLights >= 2 ? 'Keep fill generous (2:1 or softer) — reduces tonal contrast across subjects' : null,
+      rimNote: hasRim ? 'Rim at medium power; lighter subjects may need 1/2 stop pull-back' : null,
+      keyTip: null,
     },
   };
 
@@ -400,10 +431,15 @@ function buildSkinToneAdjustments(skinTone, mood, lights) {
     { label: 'White Balance', value: data.whiteBalance },
   ];
   if (data.fillRatio) tips.push({ label: 'Fill Ratio', value: data.fillRatio });
-  if (data.rimNote) tips.push({ label: 'Rim Light', value: data.rimNote });
-  tips.push({ label: 'Key Tip', value: data.keyTip });
+  if (data.rimNote)  tips.push({ label: 'Rim Light', value: data.rimNote });
+  if (data.keyTip)   tips.push({ label: 'Key Tip', value: data.keyTip });
 
-  return { skinTone, tips };
+  // Mixed-tone: add per-subject shoot order note
+  const mixedNote = skinTone === 'mixed'
+    ? 'For sequential sessions (e.g. corporate headshots): set exposure for darkest subject first, then chimp after each lighter subject and adjust if needed. Lock WB for the entire session.'
+    : null;
+
+  return { skinTone, tips, mixedNote };
 }
 
 /* ── quick-fix priority ranking ─────────────────────────── */
@@ -553,7 +589,7 @@ export function buildRefQuickFixes(lightingRead, recreationSetup) {
 
 /* ── main transform ─────────────────────────────────────── */
 
-export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {}) {
+export function transformForUI(apiResponse, mood, skinTone, { powerDisplay, units = 'imperial' } = {}) {
   const sel = apiResponse.result.structured.selection;
   const winner = sel.winner;
   const picks = sel.top_picks || [];
@@ -572,15 +608,17 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {
     modifier: modifierLabel(l.modifier),
   }));
 
-  // Engine confidence is the source of truth (solver-informed)
-  let adjustedConf = confScore;
-  const reliability = reliabilityFromConfidence(adjustedConf);
+  // Engine confidence is the source of truth (solver-informed).
+  // reliabilityFromConfidence uses 0–100 internally; reliabilityScore is
+  // normalized to 0–1 so all display components (LookSummaryCard, confidence
+  // explainer, symptom engine, etc.) use a consistent fractional scale.
+  const reliability = reliabilityFromConfidence(confScore);
 
   // Best Match card
   const bestMatch = {
-    name: winner.system_name || winner.system_id,
+    name: adaptSystemName(winner.system_name || winner.system_id, units),
     systemId: winner.system_id,
-    reliabilityScore: adjustedConf,
+    reliabilityScore: confScore / 100,
     reliabilityDots: reliability.dots,
     reliabilityLabel: reliability.label,
     rationale: buildRationale(winner, mood, spec, lightingPattern),
@@ -611,6 +649,7 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {
       modifierSizeNote,
       powerHint: powerHint(l.role, lightingPattern, powerDisplay),
       _role: l.role,                 // kept for reactive re-render in cards
+      _modifierType: l.modifier,     // raw API modifier key — used by RecommendedKitsCard
       _lightingPattern: lightingPattern, // kept for reactive re-render in cards
       meterReading: meterReading(l.role, lightingPattern, keyFStopIdx),
       notes: l.notes || [],
@@ -622,7 +661,7 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {
     const bd = p.breakdown;
     const gap = winner.final_score - bd.final_score;
     return {
-      name: bd.system_name || bd.system_id,
+      name: adaptSystemName(bd.system_name || bd.system_id, units),
       gap: gap.toFixed(1),
       gapLabel: gap < 3 ? 'Close alternative' : gap < 8 ? 'Viable option' : 'Budget option',
       tradeoff: p.reason || '',
@@ -632,7 +671,7 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay } = {
   return {
     bestMatch,
     setup: { lights: setupLights },
-    spaceCheck: buildSpaceCheck(spec.lights || []),
+    spaceCheck: buildSpaceCheck(spec.lights || [], undefined, units),
     diagram: spec,
     cameraSettings: coaching.camera,
     subject: coaching.subject || null,
@@ -661,6 +700,7 @@ export function transformShootMatch(apiResponse, ctx = {}) {
   const mood = ctx.mood || 'corporate';
   const skinTone = ctx.skinTone || null;
   const powerDisplay = ctx.powerDisplay || 'fraction';
+  const units = ctx.units || 'imperial';
 
   // Re-use coaching data for subject/background/camera guidance
   const coaching = getCoaching(mood);
@@ -676,17 +716,96 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     modifier: modifierLabel(l.modifier),
   }));
 
-  // Engine confidence is the source of truth (solver-informed)
+  // Engine confidence is the source of truth (solver-informed).
+  // reliabilityFromConfidence uses 0–100 internally; reliabilityScore is
+  // normalized to 0–1 so all display components use a consistent fractional scale.
   const confScore = c.bestMatch.reliability || 0;
-  let adjustedConf = confScore;
-  const reliability = reliabilityFromConfidence(adjustedConf);
+  const reliability = reliabilityFromConfidence(confScore);
 
-  const keyFStopIdx = parseKeyFStop(c.cameraSettings?.aperture);
+  // Derive reference analysis data early — used both for aperture override
+  // (which drives keyFStopIdx + power hints) and background distance.
+  // referenceImageAnalysis in the shoot-match response is the _build_reference_analysis()
+  // summary dict (keys: palette, classification, referenceRead, ...).  It does NOT have
+  // the "description.referenceAnalysis" wrapper that the /upload-reference endpoint uses.
+  // Geometry-inferred camera settings live at referenceRead.recreation.{aperture,setupFamily}.
+  const _refImg = apiResponse.referenceImageAnalysis;
+  // Legacy path kept for ReferenceEvalScreen / any cached responses that still carry the
+  // upload-reference model_dump structure.
+  const refAnalysis = _refImg?.description?.referenceAnalysis ?? null;
+
+  // Geometry-inferred aperture from reference analysis overrides the mood-based
+  // default when a reference image was analysed.  A full-body frame returns
+  // "f/8–11" while the cinematic/natural mood tables would otherwise give "f/2–f/4",
+  // producing nonsensical power-hint math.  WB is overridden with the detected
+  // colour temperature so the blueprint stays grounded in the actual reference.
+  // Geometry-inferred aperture and setup family come from referenceRead.recreation
+  // in the shoot-match response (serialized by _build_reference_read_summary()).
+  // Fall back to the legacy model_dump path for upload-reference cached responses.
+  const _recRec     = _refImg?.referenceRead?.recreation;
+  const refAperture    = _recRec?.aperture    || refAnalysis?.recreation_setup?.aperture    || null;
+  const refSetupFamily = _recRec?.setupFamily || refAnalysis?.recreation_setup?.setup_family || null;
+  // CCT source priority:
+  //   1. lightingIntelligence.detectedCCT — engine path via lighting_inference.py
+  //   2. vlmReconstruction dominant_cct_kelvin — numeric, always computed by vision pipeline
+  // Both are numeric Kelvin values from the same analysis run.
+  const _vlmCCT = apiResponse.vlmReconstruction?.primary_reconstruction?.dominant_cct_kelvin
+               || apiResponse.vlmReconstruction?.primary?.dominant_cct_kelvin
+               || apiResponse.vlmReconstruction?.dominant_cct_kelvin
+               || null;
+  const detectedCCT = apiResponse.lightingIntelligence?.detectedCCT || _vlmCCT || null;
+  const effectiveAperture = refAperture || c.cameraSettings?.aperture;
+
+  const keyFStopIdx = parseKeyFStop(effectiveAperture);
+
+  // WB derivation — three-tier priority:
+  //   1. detectedCCT from engine (numeric Kelvin, most accurate)
+  //   2. setup_family fallback (when CCT classifier returned a string and was
+  //      silently dropped — derive a sensible default from light source type)
+  //   3. Leave as mood-based default (no reference image, or unknown family)
+  const _SETUP_FAMILY_WB = {
+    // Strobe / flash families → 5500 K
+    beauty_clamshell:       '5500 K',
+    beauty_dish_strobe:     '5500 K',
+    strobe_softbox:         '5500 K',
+    strobe_umbrella:        '5500 K',
+    strobe_beauty:          '5500 K',
+    ring_light:             '5500 K',
+    gobo_projection:        '5500 K',
+    slit_flag_projection:   '5500 K',
+    projected_shadow_pattern: '5500 K',
+    dramatic_chiaroscuro:   '5500 K',
+    // Natural / window light → daylight-ish but cooler
+    natural_window_key:     '5500–6500 K (match window)',
+    natural_window_light:   '5500–6500 K (match window)',
+    natural_ambient:        '5500–6500 K (available light)',
+    window_portrait:        '5500–6500 K (match window)',
+    // Outdoor
+    outdoor_natural:        '5600–6200 K (daylight)',
+    golden_hour:            '3500–4500 K (warm)',
+    overcast_natural:       '6000–7000 K (overcast)',
+    // Continuous / tungsten-leaning sources
+    continuous_soft:        '3200–5600 K (match source)',
+    tungsten_hard:          '3200 K',
+  };
+  const familyWB = refSetupFamily ? (_SETUP_FAMILY_WB[refSetupFamily] || null) : null;
+
+  // Effective WB for blueprint — engine CCT wins, family fallback when engine has none.
+  const effectiveWB = detectedCCT ? `${detectedCCT} K` : familyWB;
+
+  // Build final cameraSettings — start from the pattern/mood base, then overlay
+  // any reference-analysis overrides so the blueprint is always reference-aware.
+  const _baseCam = c.cameraSettings || coaching.camera || null;
+  const effectiveCameraSettings = _baseCam ? {
+    ..._baseCam,
+    // Normalize backend's white_balance key → wb for DiagramCard / WBSpectrum
+    ...(_baseCam.white_balance && !_baseCam.wb ? { wb: _baseCam.white_balance } : {}),
+    ...(refAperture  ? { aperture: refAperture }         : {}),
+    ...(effectiveWB  ? { wb: effectiveWB }               : {}),
+  } : null;
 
   // Derive background distance from reference analysis when available.
   // The recreation_setup.background_strategy describes the actual background
   // relationship from the reference image — use it to override coaching defaults.
-  const refAnalysis = apiResponse.referenceImageAnalysis?.description?.referenceAnalysis;
   const bgStrategy = refAnalysis?.recreation_setup?.background_strategy || '';
   const bgRelationship = refAnalysis?.image_read?.background_relationship || '';
   const bgHint = (bgStrategy + ' ' + bgRelationship).toLowerCase();
@@ -706,12 +825,54 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     subjectToBackground = '10+ ft (far background)';
   }
 
+  // Compute setup lights up-front so we can reconcile diagram.lights modifiers below.
+  const BARE_MOD_TOKENS = ['unknown', 'bare', 'bare_bulb', 'direct', 'none', ''];
+  const setupLights = (c.shootThisSetup.lights || []).map(l => {
+    const role = (l.role || 'key').toLowerCase().replace(/ light$/, '');
+    const rawMod = (l.modifier || '').toLowerCase().trim();
+    const modifier = BARE_MOD_TOKENS.includes(rawMod) && role === 'key'
+      ? (refAnalysis?.recreation_setup?.modifier_suggestion || l.modifier || '')
+      : l.modifier;
+    return {
+      role,
+      label: l.role,
+      positionText: `${l.position}, ${l.height}`,
+      distanceFt: l.distance,
+      distanceM: l.distance,
+      modifier,
+      powerHint: l.notes?.[0] || powerHint(role, lightingPattern, powerDisplay),
+      _role: role,
+      _lightingPattern: lightingPattern,
+      meterReading: meterReading(role, lightingPattern, keyFStopIdx),
+      notes: l.notes || [],
+    };
+  });
+
+  // Keep diagram.lights in sync with setup.lights so both cards always reflect the
+  // same physical setup. When the engine returns a bare/unknown modifier for the key
+  // light we substitute the reference-analysis suggestion in setup.lights; patch the
+  // same index in diagram so the diagram icon matches.
+  const reconciledDiagram = (() => {
+    const d = c.diagram;
+    if (!d?.lights?.length) return d;
+    const lights = d.lights.map((dl, i) => {
+      const sl = setupLights[i];
+      if (!sl) return dl;
+      const rawMod = (dl.modifier || '').toLowerCase().trim();
+      if (BARE_MOD_TOKENS.includes(rawMod) && sl.role === 'key') {
+        return { ...dl, modifier: sl.modifier };
+      }
+      return dl;
+    });
+    return { ...d, lights };
+  })();
+
   return {
     gearMatch: apiResponse.gearMatch || null,
     bestMatch: {
-      name: c.bestMatch.name,
+      name: adaptSystemName(c.bestMatch.name, units),
       systemId: c.diagram?.systemId,
-      reliabilityScore: adjustedConf,
+      reliabilityScore: confScore / 100,
       reliabilityDots: reliability.dots,
       reliabilityLabel: reliability.label,
       rationale: c.whyThisWorks.body,
@@ -730,34 +891,10 @@ export function transformShootMatch(apiResponse, ctx = {}) {
       },
     },
 
-    setup: {
-      lights: (c.shootThisSetup.lights || []).map(l => {
-        const role = (l.role || 'key').toLowerCase().replace(/ light$/, '');
-        // When the engine returns 'unknown' for modifier, fall back to the
-        // reference analysis modifier_suggestion if available (it knows more).
-        const BARE_MOD_TOKENS = ['unknown', 'bare', 'bare_bulb', 'direct', 'none', ''];
-        const rawMod = (l.modifier || '').toLowerCase().trim();
-        const modifier = BARE_MOD_TOKENS.includes(rawMod) && role === 'key'
-          ? (refAnalysis?.recreation_setup?.modifier_suggestion || l.modifier || '')
-          : l.modifier;
-        return {
-          role,
-          label: l.role,
-          positionText: `${l.position}, ${l.height}`,
-          distanceFt: l.distance,
-          distanceM: l.distance,
-          modifier,
-          powerHint: l.notes?.[0] || powerHint(role, lightingPattern, powerDisplay),
-          _role: role,
-          _lightingPattern: lightingPattern,
-          meterReading: meterReading(role, lightingPattern, keyFStopIdx),
-          notes: l.notes || [],
-        };
-      }),
-    },
+    setup: { lights: setupLights },
 
     spaceCheck: c.diagram?.lights
-      ? buildSpaceCheck(c.diagram.lights)
+      ? buildSpaceCheck(c.diagram.lights, undefined, units)
       : {
           minWidthFt: null,
           minDepthFt: null,
@@ -767,9 +904,9 @@ export function transformShootMatch(apiResponse, ctx = {}) {
           warnings: [],
         },
 
-    diagram: c.diagram,
+    diagram: reconciledDiagram,
 
-    cameraSettings: c.cameraSettings || coaching.camera || null,
+    cameraSettings: effectiveCameraSettings,
 
     subject: coaching.subject || null,
     background: coaching.background || null,
@@ -808,7 +945,17 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     vlmDescription: apiResponse.vlmDescription || null,
     vlmReconstruction: apiResponse.vlmReconstruction || null,
     referenceImageAnalysis: apiResponse.referenceImageAnalysis || null,
-    lightingIntelligence: apiResponse.lightingIntelligence || null,
+    // Merge vlmReconstruction dominant_cct_kelvin into lightingIntelligence when the
+    // engine path (detected_cct_kelvin) is absent — ensures the blueprint CCT badge
+    // and DiagramCard WB bar both reflect the reference image colour temperature.
+    lightingIntelligence: apiResponse.lightingIntelligence
+      ? {
+          ...apiResponse.lightingIntelligence,
+          ...(!apiResponse.lightingIntelligence.detectedCCT && _vlmCCT
+            ? { detectedCCT: _vlmCCT }
+            : {}),
+        }
+      : null,
 
     // Perception / robustness layer (Phase 6–9)
     faceValidation: apiResponse.faceValidation || null,

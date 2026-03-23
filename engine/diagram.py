@@ -172,6 +172,15 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
         key_prefs, key_fallback = _key_preferences(mood)
         key_modifier = _choose_modifier(available, key_prefs, key_fallback)
 
+    # Ring light is a single on-axis source — the ring itself provides fill by
+    # wrapping evenly around the lens axis.  Forcing its gear_profile here
+    # overrides whatever modifier_family the taxonomy carries (bare_bulb for
+    # beauty-mood systems) and prevents the mood-driven fill + rim additions
+    # that would produce a physically wrong 3-light diagram.
+    is_ring_light = taxonomy.get("gear_profile") == "ring_light"
+    if is_ring_light:
+        key_modifier = "ring_light"
+
     # Triangle (Hurley-style): two symmetric keys + low fill — early return
     force_pattern = mm_overrides.get("force_pattern") if mm_overrides else None
     if force_pattern == "triangle" or _needs_triangle(mood):
@@ -269,6 +278,8 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
     mm_bg = mm_overrides.get("background_light") if mm_overrides else None
 
     wants_fill = mm_fill if mm_fill is not None else _needs_fill(mood)
+    if is_ring_light:
+        wants_fill = False
     if wants_fill:
         fill_prefs, fill_fallback = _fill_preferences(mood)
         fill_mod = _choose_modifier(available, fill_prefs, fill_fallback)
@@ -314,6 +325,8 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
         )
 
     wants_rim = mm_rim if mm_rim is not None else _needs_rim(mood)
+    if is_ring_light:
+        wants_rim = False
     if wants_rim:
         rim_prefs, rim_fallback = _rim_preferences(mood)
         rim_mod = _choose_modifier(available, rim_prefs, rim_fallback)
@@ -457,16 +470,20 @@ def build_reference_diagram(
                 modifier=mod,
                 notes=["Detected: right flanking key (2 o'clock catchlight)."],
             ),
-            LightPlacement(
-                role="fill_low",
-                label="Detected Low Fill",
-                angle_deg=0.0,
-                height_m=1.2,
-                distance_m=0.8,
-                modifier="softbox",
-                notes=["Detected: low fill completing the triangle (5–6 o'clock catchlight)."],
-            ),
         ]
+        # Only add low fill if the truth layer confirms ≥3 sources or describes a fill
+        if light_count >= 3 or fill_method_text:
+            lights.append(
+                LightPlacement(
+                    role="fill_low",
+                    label="Detected Low Fill",
+                    angle_deg=0.0,
+                    height_m=1.2,
+                    distance_m=0.8,
+                    modifier="softbox",
+                    notes=["Detected: low fill completing the triangle (5–6 o'clock catchlight)."],
+                )
+            )
 
     # ── Clamshell ─────────────────────────────────────────────────────────
     elif pattern == "clamshell":
@@ -480,16 +497,20 @@ def build_reference_diagram(
                 modifier=mod,
                 notes=["Detected: centered key above (top catchlight)."],
             ),
-            LightPlacement(
-                role="fill",
-                label="Detected Fill / Reflector",
-                angle_deg=0.0,
-                height_m=1.2,
-                distance_m=0.8,
-                modifier="reflector",
-                notes=["Detected: low fill below chin (bottom catchlight). Reflector or low light."],
-            ),
         ]
+        # Only add fill if the truth layer confirms ≥2 sources or describes a fill method
+        if light_count >= 2 or fill_method_text:
+            lights.append(
+                LightPlacement(
+                    role="fill",
+                    label="Detected Fill / Reflector",
+                    angle_deg=0.0,
+                    height_m=1.2,
+                    distance_m=0.8,
+                    modifier="reflector",
+                    notes=["Detected: low fill below chin (bottom catchlight). Reflector or low light."],
+                )
+            )
 
     # ── Rembrandt-ish ─────────────────────────────────────────────────────
     elif pattern == "rembrandt":

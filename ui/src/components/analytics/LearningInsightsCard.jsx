@@ -29,8 +29,8 @@ export default function LearningInsightsCard({ patterns, retention, shootMode })
       <div className="lic__two-col">
         <div>
           <div className="lic__sub-head">Top Patterns Seen</div>
-          {byPattern.map(p => (
-            <div key={p.pattern} className="lic__bar-row">
+          {byPattern.map((p, i) => (
+            <div key={`${p.pattern}-${i}`} className="lic__bar-row">
               <span className="lic__bar-label">{p.pattern}</span>
               <div className="lic__bar-track">
                 <div

@@ -4,7 +4,7 @@ import StickyBottomBar from '../components/StickyBottomBar';
 import { trackEvent } from '../data/analytics';
 
 const ENVIRONMENTS = [
-  { value: 'studio_small',        label: 'Small Room',            desc: 'Bedroom, tight space, or office' },
+  { value: 'studio_small',        label: 'Small Studio',          desc: 'Dedicated studio, tight cyclorama, or compact backdrop' },
   { value: 'home_studio',         label: 'Home Studio',           desc: 'Garage, spare room, or home backdrop' },
   { value: 'studio_medium',       label: 'Studio — Medium',       desc: 'Shared studio or rental space' },
   { value: 'studio_large',        label: 'Studio — Large',        desc: 'Full commercial studio' },

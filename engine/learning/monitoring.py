@@ -116,7 +116,7 @@ def _measure_and_snapshot(
     current = {
         "match_rate_pct": shoot_mode.get("match_rate_pct", 0),
         "conversion_rate_pct": kpi.get("conversion_rate_pct", 0),
-        "analyses_per_session": kpi.get("analyses_per_session", 0),
+        "analysis_per_session": kpi.get("analysis_per_session", 0),
         "matched_conversion_rate_pct": success_conv.get("matched_conversion_rate_pct", 0),
         "lift_pct": success_conv.get("lift_pct", 0),
     }
@@ -190,7 +190,7 @@ def capture_pre_release_baseline(days: int = 30) -> Dict[str, Any]:
     return {
         "match_rate_pct": shoot_mode.get("match_rate_pct", 0),
         "conversion_rate_pct": kpi.get("conversion_rate_pct", 0),
-        "analyses_per_session": kpi.get("analyses_per_session", 0),
+        "analysis_per_session": kpi.get("analysis_per_session", 0),
         "matched_conversion_rate_pct": success_conv.get("matched_conversion_rate_pct", 0),
         "lift_pct": success_conv.get("lift_pct", 0),
         "total_sessions": kpi.get("total_sessions", 0),

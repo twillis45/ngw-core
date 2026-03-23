@@ -195,6 +195,9 @@ MODIFIER_LABELS = {
     "diffusion_panel": "Diffusion Panel / Scrim",
     "bare_bulb": "Bare Bulb",
     "gel_cto": "CTO Gel",
+    "ring_flash": "Ring Flash",
+    "ring_light": "Ring Light",
+    "macro_ring_flash": "Macro Ring Flash",
 }
 
 ROLE_LABELS = {"key": "Key Light", "fill": "Fill Light", "rim": "Rim Light", "background": "Background Light"}
@@ -339,6 +342,8 @@ def filter_systems(
         "olive":  {"medium", "olive"},
         "deep":   {"deep", "dark"},
         "dark":   {"dark", "deep"},
+        # mixed = no skin tone filtering; accept any system
+        "mixed":  set(),
     }
 
     def _apply_skin_tone(pool):
@@ -638,16 +643,56 @@ def _height_desc(h: float) -> str:
     return f"{base} ({_m_to_ft(abs(diff))} {label} eye level)"
 
 
+_POWER_HINTS: Dict[str, str] = {
+    "key":        "Set first — all other lights dial relative to this",
+    "fill":       "1–2 stops below key for natural contrast; more for dramatic",
+    "rim":        "Start 0.5 stop below key — visible but not overpowering",
+    "hair":       "0.5–1 stop below key — adds dimension without spilling on face",
+    "background": "Match key for bright BG; pull 1–2 stops down for depth",
+}
+
+_FEATHER_HINTS: Dict[str, str] = {
+    "key":        "Feather slightly past subject — edge of modifier gives softer spread",
+    "rim":        "Feather slightly away from camera to prevent lens flare",
+    "hair":       "Aim at hair, not face — flag or barn door if spill hits forehead",
+    "background": "Sweep modifier across backdrop for even coverage",
+}
+
+_AIM_TARGETS: Dict[str, str] = {
+    "key":        "Bridge of nose or chin area",
+    "fill":       "Shadow side of face — mirror the key aim point",
+    "rim":        "Back of near shoulder and hair",
+    "hair":       "Top of head — should not reach eyebrows",
+    "background": "Center of backdrop, or angled low for a gradient",
+}
+
+
 def _map_light(light: Dict[str, Any]) -> Dict[str, Any]:
     mod = light.get("modifier", "")
+    role_key = light["role"]
+    angle_deg = light["angle_deg"]
+    height_m = light["height_m"]
+    distance_m = light["distance_m"]
+    angle_abs = round(abs(angle_deg))
+    angle_side = "camera right" if angle_deg >= 0 else "camera left"
+    angle_str = "on axis" if abs(angle_deg) < 5 else f"{angle_abs}° {angle_side}"
     return {
-        "roleKey": light["role"],
-        "role": ROLE_LABELS.get(light["role"], light.get("label", light["role"])),
+        "roleKey": role_key,
+        "role": ROLE_LABELS.get(role_key, light.get("label", role_key)),
         "modifier": MODIFIER_LABELS.get(mod, mod),
-        "position": _angle_desc(light["angle_deg"]),
-        "height": _height_desc(light["height_m"]),
-        "distance": _m_to_ft(light["distance_m"]),
+        "position": _angle_desc(angle_deg),
+        "height": _height_desc(height_m),
+        "distance": _m_to_ft(distance_m),
+        "angle": angle_str,
+        "direction": light.get("direction", ""),
+        "powerHint": light.get("powerHint") or _POWER_HINTS.get(role_key, ""),
+        "featherHint": light.get("featherHint") or _FEATHER_HINTS.get(role_key, ""),
+        "aimTarget": light.get("aimTarget") or _AIM_TARGETS.get(role_key, ""),
         "notes": light.get("notes", []),
+        # Raw numeric values passed through for ceiling/room geometry in shoot_mode.py
+        "height_m": height_m,
+        "angle_deg": angle_deg,
+        "distance_m": distance_m,
     }
 
 
@@ -1061,6 +1106,19 @@ def _build_reference_read_summary(
         if tips:
             rec_dict["tips"] = list(tips) if not isinstance(tips, str) else [tips]
 
+        # Geometry-inferred camera settings — these drive aperture and WB
+        # overrides in the transform layer so the blueprint reflects the actual
+        # reference image rather than the mood-based defaults.
+        apt = getattr(recreation, "aperture", None)
+        fl  = getattr(recreation, "focal_length", None)
+        sf  = getattr(recreation, "setup_family", None)
+        if apt:
+            rec_dict["aperture"] = apt
+        if fl:
+            rec_dict["focalLength"] = fl
+        if sf:
+            rec_dict["setupFamily"] = sf
+
         if rec_dict:
             summary["recreation"] = rec_dict
 
@@ -1290,6 +1348,10 @@ def build_shoot_match_result(
     ar = None
     if reference_image:
         image_path = Path(reference_image)
+        # Paths starting with '/static/' are web-relative — strip the leading
+        # slash so they resolve relative to the working directory (project root).
+        if not image_path.exists() and str(image_path).startswith('/'):
+            image_path = Path(str(image_path).lstrip('/'))
         if image_path.exists():
             try:
                 ar = analyze_image(str(image_path), run_extended=True, run_solver=True, debug=True)
@@ -1380,10 +1442,33 @@ def build_shoot_match_result(
     confidence_score = round(float(outcome.confidence))
 
     # ── Backfill alternatives ────────────────────────────────────
+    # Alternatives are scored with the same priors as the primary (bare_bulb and
+    # continuous penalties apply), then selected with gear-group diversity so the
+    # list shows meaningful options — not three slightly different LED setups.
+    # Priority order:
+    #   1. Same environment, same mood — different gear group or modifier
+    #   2. Same mood, broader environment pool
+    #   3. Unconstrained (all systems)
     if len(top_picks) < 4:
         existing_ids = {p.breakdown.system_id for p in top_picks}
+        winner_gear = winner.breakdown.system_id  # used for context only
+
+        # Gear groups already seen in top_picks — used to enforce diversity
+        def _gear_group(s_or_c):
+            tr = s_or_c.get("taxonomy_refs", {}) if isinstance(s_or_c, dict) else {}
+            gp = tr.get("gear_profile", "")
+            return _GEAR_TO_GROUP.get(gp, "other")
+
+        seen_gear_groups = {_gear_group(
+            {"taxonomy_refs": next(
+                (s["taxonomy_refs"] for s in all_systems if s["id"] == p.breakdown.system_id),
+                {}
+            )}
+        ) for p in top_picks}
+
         mood_pool = [s for s in all_systems if s["taxonomy_refs"].get("mood") == mood]
         env_pool = [s for s in mood_pool if s["taxonomy_refs"].get("environment") == environment]
+
         for pool in [env_pool, mood_pool, all_systems]:
             if len(top_picks) >= 4:
                 break
@@ -1399,18 +1484,26 @@ def build_shoot_match_result(
                 continue
             scored = [(c, _score(c, input_ctx=input_ctx, solver_quality=sq)) for c in candidates]
             scored.sort(key=lambda x: -float(x[1].final_score))
-            for c, bd in scored:
-                if len(top_picks) >= 4:
-                    break
-                if bd.system_id in existing_ids:
-                    continue
-                existing_ids.add(bd.system_id)
-                top_picks.append(SelectionPick(
-                    rank=len(top_picks) + 1,
-                    breakdown=bd,
-                    reason=f"Alternative: from broader search (behind by {float(winner.breakdown.final_score) - float(bd.final_score):.1f} points).",
-                    diagram_spec=None,
-                ))
+
+            # Two passes: first take from gear groups not yet represented,
+            # then fill remaining slots with best overall.
+            for diversity_pass in (True, False):
+                for c, bd in scored:
+                    if len(top_picks) >= 4:
+                        break
+                    if bd.system_id in existing_ids:
+                        continue
+                    cg = _gear_group(c)
+                    if diversity_pass and cg in seen_gear_groups:
+                        continue  # skip — this gear group already represented
+                    existing_ids.add(bd.system_id)
+                    seen_gear_groups.add(cg)
+                    top_picks.append(SelectionPick(
+                        rank=len(top_picks) + 1,
+                        breakdown=bd,
+                        reason=f"Alternative: from broader search (behind by {float(winner.breakdown.final_score) - float(bd.final_score):.1f} points).",
+                        diagram_spec=None,
+                    ))
 
     # ── Diagram ──────────────────────────────────────────────────
     source = next((s for s in filtered if s["id"] == winner_id), filtered[0])
@@ -1422,7 +1515,19 @@ def build_shoot_match_result(
     # Authoritative pattern candidates come from orchestrator.resolve_pattern_candidates().
     # The fallback rule-based classifier (patterns.classify_lighting_pattern) is used
     # only when no vision pipeline ran (no reference image).
-    modifier_family = source["taxonomy_refs"].get("modifier_family", "")
+
+    # modifier_family — single truth source:
+    # When a reference image was analyzed, use what the vision pipeline actually
+    # detected (lighting_intel.modifier_family).  Fall back to the matched system's
+    # taxonomy_refs only when no reference analysis ran, so the system's modifier
+    # is the best available signal.  This prevents bare_bulb from leaking into
+    # card text when the reference clearly showed a softbox.
+    _detected_modifier = (
+        lighting_intel.modifier_family
+        if lighting_intel is not None and lighting_intel.modifier_family not in (None, "", "unknown")
+        else None
+    )
+    modifier_family = _detected_modifier or source["taxonomy_refs"].get("modifier_family", "")
     gear_profile = source["taxonomy_refs"].get("gear_profile", "")
 
     pattern_candidates = None
@@ -1452,8 +1557,12 @@ def build_shoot_match_result(
 
     diagram_dict["pattern"] = pattern
 
-    # When pattern comes from reference analysis, override diagram geometry
-    if ar and ar.authoritative_pattern_source in ("reference_read", "lighting_inference") and lighting_intel:
+    # When a reference image was analyzed, override diagram geometry from the
+    # truth layer (lighting_intel) regardless of which classifier "won".
+    # The source check was too narrow — "none" (all classifiers failed) still
+    # means a reference image ran; the system diagram lights must not leak
+    # through (they'd add rim/fill based on matched-system mood, not detection).
+    if ar and lighting_intel:
         try:
             ref_diagram = build_reference_diagram(
                 pattern=pattern,

@@ -6,6 +6,7 @@ All business logic lives in engine.services.style_dna_service.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
@@ -23,13 +24,13 @@ class StyleDNARequest(BaseModel):
     imagePaths: List[str] = Field(
         ...,
         min_length=1,
-        description="List of server-side image paths to analyse (use /upload-reference first).",
+        description="List of server-side image paths to analyze (use /upload-reference first).",
     )
 
 
 @router.post("/style-dna")
 async def style_dna(req: StyleDNARequest) -> Dict[str, Any]:
-    """Analyse a portfolio of images and return Style DNA.
+    """Analyze a portfolio of images and return Style DNA.
 
     Upload images first via /upload-reference, then pass their server paths here.
 
@@ -52,6 +53,9 @@ async def style_dna(req: StyleDNARequest) -> Dict[str, Any]:
     analysis_results = []
     failed = 0
     for path in req.imagePaths:
+        # Normalize web-relative paths with leading slash
+        if path.startswith('/') and not Path(path).exists():
+            path = path.lstrip('/')
         try:
             ar = analyze_image(path, run_extended=True, run_solver=False)
             if ar.ok:
@@ -65,13 +69,13 @@ async def style_dna(req: StyleDNARequest) -> Dict[str, Any]:
     if not analysis_results:
         raise HTTPException(
             status_code=422,
-            detail="All image analyses failed — check image paths and formats.",
+            detail="All image analysis failed — check image paths and formats.",
         )
 
     dna = analyze_user_portfolio(analysis_results)
     return {
         "status": "success",
-        "analysedImages": len(analysis_results),
+        "analyzedImages": len(analysis_results),
         "failedImages": failed,
         "styleDNA": dna,
     }

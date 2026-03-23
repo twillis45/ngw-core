@@ -29,6 +29,10 @@ class TrackBody(BaseModel):
     data: Dict[str, Any] = {}
 
 
+class ExcludeBody(BaseModel):
+    exclude: bool = True  # True = mark as test, False = restore to production
+
+
 @router.post("/track", status_code=204)
 async def track(
     body: TrackBody,
@@ -133,6 +137,46 @@ async def analytics_provenance(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
     from db.provenance import get_provenance_summary
     return get_provenance_summary(days=days, origin=origin)
+
+
+@router.post("/analytics/sessions/{session_id}/exclude")
+async def set_session_exclude(
+    body: ExcludeBody,
+    session_id: str = Path(..., description="Session ID to mark/unmark as test"),
+    user=Depends(get_current_user),
+):
+    """
+    Mark or unmark the current session as a test/dev session.
+    Any authenticated user can flag their own session to remove it from metrics.
+    Uses session_origin='test' so it can be toggled back; never touches 'internal' sessions.
+    """
+    from db.provenance import (
+        ensure_session_provenance,
+        mark_session_as_test,
+        unmark_session_as_test,
+    )
+
+    user_email = user.get("email", "")
+
+    # Ensure a provenance record exists before we try to update it
+    ensure_session_provenance(
+        session_id=session_id,
+        user_id=user.get("id"),
+        user_email=user_email,
+    )
+
+    if body.exclude:
+        updated = mark_session_as_test(session_id, marked_by=user_email)
+        logger.info("Session %s marked as test by %s", session_id, user_email)
+    else:
+        updated = unmark_session_as_test(session_id)
+        logger.info("Session %s unmarked (restored) by %s", session_id, user_email)
+
+    return {
+        "excluded": body.exclude,
+        "session_id": session_id,
+        "provenance": updated,
+    }
 
 
 @router.post("/analytics/sessions/{session_id}/promote")

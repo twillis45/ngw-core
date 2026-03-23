@@ -1,6 +1,8 @@
 /**
  * DashboardLayout — Outer wrapper with header, date range controls, origin filter, and grid.
  */
+import { useDispatch } from '../../context/AppContext';
+
 const ORIGIN_OPTS = [
   { id: 'all',        label: 'All' },
   { id: 'production', label: 'Prod' },
@@ -10,12 +12,29 @@ const ORIGIN_OPTS = [
 export default function DashboardLayout({
   days, onDaysChange,
   origin, onOriginChange,
-  onRefresh, loading, error, children,
+  onRefresh, loading, error, children, lastRefresh,
 }) {
+  const dispatch = useDispatch();
   return (
     <div className="adb screen">
       <div className="adb__header">
-        <h2 className="adb__title">Analytics</h2>
+        <div className="adb__title-group">
+          <button
+            className="adb__back-btn"
+            type="button"
+            onClick={() => dispatch({ type: 'GO_BACK' })}
+            title="Back to Settings"
+          >← Settings</button>
+          <h2 className="adb__title">Analytics</h2>
+          <div className="adb__view-tabs">
+            <button className="adb__view-tab adb__view-tab--on" type="button">Analytics</button>
+            <button
+              className="adb__view-tab"
+              type="button"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'exec' })}
+            >Executive</button>
+          </div>
+        </div>
         <div className="adb__controls">
           {/* Origin filter */}
           <div className="adb__origin-group" title="Filter sessions by origin">
@@ -42,6 +61,11 @@ export default function DashboardLayout({
               {d}d
             </button>
           ))}
+          {lastRefresh && (
+            <span className="adb__last-refresh" title={new Date(lastRefresh).toLocaleTimeString()}>
+              {new Date(lastRefresh).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
           <button
             className={`adb__refresh${loading ? ' adb__refresh--spin' : ''}`}
             onClick={onRefresh}

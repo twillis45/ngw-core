@@ -44,7 +44,7 @@ def log_vlm_corrections(
     Parameters
     ----------
     image_path : str
-        Path to the analysed image.
+        Path to the analyzed image.
     notes : list[str]
         Notes from ImageRead.notes — may include VLM learning annotations.
     extra : dict, optional

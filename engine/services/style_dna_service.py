@@ -1,6 +1,6 @@
 """Style DNA System — Phase 8 (scaffold).
 
-Analyses a portfolio of images and extracts the photographer's "style DNA":
+Analyzes a portfolio of images and extracts the photographer's "style DNA":
 the lighting patterns, contrast profiles, modifier preferences, and mood
 tendencies that define their visual signature.
 
@@ -286,11 +286,11 @@ def analyze_user_portfolio(
     ----------
     analysis_results:
         List of AnalysisResult from engine.orchestrator.analyze_image().
-        Pass only successfully-analysed results (ar.ok is True).
+        Pass only successfully-analyzed results (ar.ok is True).
 
     Returns
     -------
-    dict — Style DNA report, JSON-serialisable.
+    dict — Style DNA report, JSON-serializable.
     """
     try:
         return _analyze_portfolio_inner(analysis_results)
@@ -314,7 +314,7 @@ def _analyze_portfolio_inner(
     if total == 0:
         return {
             "imageCount": 0,
-            "error": "No analysable images in portfolio.",
+            "error": "No analyzable images in portfolio.",
             "suggestions": ["Upload at least one image to generate a Style DNA profile."],
         }
 

@@ -103,13 +103,13 @@ _ps('div_title',  fontName=FBOLD, fontSize=30, textColor=WHITE, leading=38, spac
 _ps('div_sub',    fontName=FREG,  fontSize=14, textColor=MUTED, leading=22, spaceAfter=0,  alignment=TA_LEFT)
 _ps('h1',         fontName=FBOLD, fontSize=24, textColor=WHITE, leading=32, spaceAfter=12, spaceBefore=20)
 _ps('h2',         fontName=FBOLD, fontSize=18, textColor=WHITE, leading=26, spaceAfter=8,  spaceBefore=18)
-_ps('h3',         fontName=FBOLD, fontSize=15, textColor=WHITE, leading=22, spaceAfter=6,  spaceBefore=18)
+_ps('h3',         fontName=FBOLD, fontSize=15, textColor=WHITE, leading=22, spaceAfter=6,  spaceBefore=20)
 _ps('h4',         fontName=FBOLD, fontSize=12, textColor=BLUE,  leading=18, spaceAfter=4,  spaceBefore=10)
-_ps('body',       fontName=FREG,  fontSize=13, textColor=WHITE, leading=22, spaceAfter=12)
-_ps('body_muted', fontName=FREG,  fontSize=12, textColor=MUTED, leading=20, spaceAfter=10)
-_ps('bullet',     fontName=FREG,  fontSize=13, textColor=WHITE, leading=21, spaceAfter=7,  leftIndent=16, firstLineIndent=-10)
-_ps('bullet_sm',  fontName=FREG,  fontSize=12, textColor=MUTED, leading=19, spaceAfter=6,  leftIndent=16, firstLineIndent=-10)
-_ps('caption',    fontName=FITAL, fontSize=11, textColor=MUTED, leading=16, spaceAfter=16, alignment=TA_CENTER)
+_ps('body',       fontName=FREG,  fontSize=13, textColor=WHITE, leading=22, spaceAfter=14)
+_ps('body_muted', fontName=FREG,  fontSize=12, textColor=MUTED, leading=20, spaceAfter=12)
+_ps('bullet',     fontName=FREG,  fontSize=13, textColor=WHITE, leading=21, spaceAfter=9,  leftIndent=16, firstLineIndent=-10)
+_ps('bullet_sm',  fontName=FREG,  fontSize=12, textColor=MUTED, leading=19, spaceAfter=8,  leftIndent=16, firstLineIndent=-10)
+_ps('caption',    fontName=FITAL, fontSize=11, textColor=MUTED, leading=16, spaceAfter=18, alignment=TA_CENTER)
 _ps('label',      fontName=FBOLD, fontSize=10, textColor=MUTED, leading=14, spaceAfter=4,  spaceBefore=8)
 _ps('code',       fontName=FMONO, fontSize=11, textColor=GREEN, leading=16, backColor=CARD, leftIndent=8, rightIndent=8, spaceAfter=8)
 _ps('note',       fontName=FITAL, fontSize=12, textColor=AMBER, leading=18, spaceAfter=8)
@@ -2124,156 +2124,370 @@ def doc_signal_system():
 # DOCUMENT 12 — LEARNING SYSTEM GUIDE
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def doc_learning_system():
-    s = cover(12, 'Learning System Guide', 'Failure detection, candidate generation, approval workflow, and safety gates.')
+    s = cover(12, 'Learning System Guide',
+              'Pattern knowledge base, signal quality weighting, 3-gate CI evaluation, '
+              'revenue projection, and the full closed-loop improvement pipeline.')
     s += [
         H2('Overview'), sp(6),
-        P('The NGW learning system monitors live user outcomes, detects patterns of failure, '
-          'and automatically generates typed improvement proposals called Candidates. Every '
-          'proposal begins in "proposed" status. Nothing is auto-implemented — all changes '
-          'require explicit curator approval. Seeded and internal signals are excluded.'),
+        P('The NGW learning system is a closed-loop pipeline that turns production user outcomes '
+          'into validated engine improvements. It combines a curated pattern knowledge base, '
+          'quality-weighted signal aggregation, a 3-gate CI evaluator, and revenue projection '
+          'to ensure every proposed change is safe, signal-sufficient, and worth shipping.'),
+        sp(10),
+        P('Nothing is auto-implemented without passing all three gates. Low-risk changes '
+          'can auto-deploy once gates clear; medium risk requires human review; high risk '
+          'always requires a human gate regardless of gate scores.'),
         sp(12),
         MetricRow([
-            ('Live only',  'Signal source for learning', BLUE),
-            ('5 types',    'Failure cluster categories',  GREEN),
-            ('Human req.', 'All changes need approval',   AMBER),
-            ('0',          'Auto-implemented changes',    RED),
+            ('27',         'Patterns in knowledge base', BLUE),
+            ('3-Gate CI',  'Signal · Benchmark · Pattern', GREEN),
+            ('3 Risk tiers','low / medium / high',        AMBER),
+            ('+$2,063',    'Annual uplift, S3 vs S1',     GREEN),
         ]),
-        sp(18),
+        sp(20),
 
-        H2('Data Requirements'), sp(6),
+        H2('Architecture — Six Modules'), sp(6),
         table([
-            ['Parameter',             'Value',       'Notes'],
-            ['Minimum signal count',  '≥ 30',        'Per pattern per time window'],
-            ['Time window',           '30 days',     'Rolling; configurable via env'],
-            ['Signal source filter',  'live only',   'include_in_learning = TRUE AND source = live'],
-            ['Minimum cluster size',  '≥ 10',        'Failures in same category to form a cluster'],
-            ['Severity threshold',    '≥ 0.25',      'Normalized score; below this = not surfaced'],
-        ], col_widths=[TW*0.30, TW*0.18, TW*0.52]),
-        sp(16),
+            ['Module',                            'Location',                          'Role'],
+            ['ingestion',                         'engine/learning/ingestion.py',      'Analytics → failure clusters (6 failure modes)'],
+            ['auto_candidate',                    'engine/learning/auto_candidate.py', 'Failure cluster → typed candidate proposals'],
+            ['sandbox_eval',                      'engine/learning/sandbox_eval.py',   'Gold Set evaluation — safe / risky / blocked'],
+            ['monitoring',                        'engine/learning/monitoring.py',     'Post-release metric tracking at 7/14/30d windows'],
+            ['knowledge',                         'engine/learning/knowledge.py',      'Pattern KB · signal weighting · MIN_SIGNALS gate'],
+            ['ci_gate',                           'engine/learning/ci_gate.py',        '3-gate CI evaluator with risk-tier disposition'],
+            ['revenue',                           'engine/learning/revenue.py',        'CVR delta → revenue projection · 30-day simulation'],
+        ], col_widths=[TW*0.20, TW*0.36, TW*0.44]),
+        sp(20),
 
-        H2('Failure Detection Algorithm'), sp(6),
-        *cb('engine/learning/auto_candidate.py — detection loop', [
-            '# Runs on schedule (weekly) or triggered manually.',
-            'def detect_failures(db, window_days=30, min_n=30):',
-            '    signals = db.query(',
-            '        "SELECT pattern, outcome, reliability_score, gear_tier"',
-            '        " FROM session_signals"',
-            '        " WHERE include_in_learning = TRUE"',
-            '        "   AND signal_source = \'live\'"',
-            '        "   AND created_at >= DATE(\'now\',\'-%d days\')" % window_days',
-            '    )',
-            '    by_pattern = group_by(signals, "pattern")',
-            '    clusters = []',
-            '    for pattern, rows in by_pattern.items():',
-            '        if len(rows) < min_n:',
-            '            continue',
-            '        failure_rate = count(rows, outcome=\'failed\') / len(rows)',
-            '        cvr = count(rows, outcome__in=[\'nailed_it\',\'close\']) / len(rows)',
-            '        cluster = FailureCluster(',
-            '            pattern=pattern, n=len(rows),',
-            '            failure_rate=failure_rate, cvr=cvr',
-            '        )',
-            '        clusters.append(cluster)',
-            '    return clusters',
-        ], lang='python'),
-        sp(4),
-
-        H2('Severity Scoring'), sp(6),
-        P('Each failure cluster is scored on a 0–1 scale. Clusters above the threshold '
-          '(0.25) are promoted to Candidates automatically. The formula rewards large '
-          'clusters and penalizes high-volume patterns with low failure rates.'),
-        sp(8),
-        *cb('engine/learning/auto_candidate.py — severity formula', [
-            'def severity(cluster: FailureCluster) -> float:',
-            '    # Volume component: log-scaled, capped at 500 signals',
-            '    volume = min(cluster.n, 500) / 500',
-            '    # Failure rate component: straight failure rate',
-            '    fail_r = cluster.failure_rate',
-            '    # CVR gap: how far below 0.60 baseline CVR',
-            '    cvr_gap = max(0, 0.60 - cluster.cvr) / 0.60',
-            '    # Weighted sum',
-            '    return 0.35 * volume + 0.35 * fail_r + 0.30 * cvr_gap',
-        ], lang='python'),
-        sp(16),
-
-        H2('Failure-to-Candidate Type Mapping'), sp(6),
-        table([
-            ['Failure Pattern',      'Candidate Type',            'Trigger Condition'],
-            ['conversion_gap',       'blueprint_correction',      'CVR < 25% with n ≥ 50'],
-            ['confidence_mismatch',  'confidence_recalibration',  'High confidence but failure_rate > 40%'],
-            ['step_deviation',       'shoot_mode_step_fix',       'Users consistently skip or fail one step'],
-            ['pattern_drift',        'dataset_promotion',         'Pattern accuracy declining over 4 weeks'],
-            ['trust_gap',            'trust_safety',              'High-confidence wrong results ≥ 3 weeks'],
-        ], col_widths=[TW*0.24, TW*0.28, TW*0.48]),
-        sp(14),
-
-        H2('Auto-Generated Candidate Example'), sp(6),
-        *cb('Example: auto-generated blueprint_correction candidate (JSON)', [
-            '{',
-            '  "id": "cand_uuid_here",',
-            '  "title": "[Auto] Conversion gap — \'loop\' pattern (n=150, CVR=18%)",',
-            '  "description": "Loop pattern detected in 150 analyses but yielded',
-            '    only 27 upgrades (18% CVR). Engine may be over-diagnosing this',
-            '    pattern in low-ceiling environments.",',
-            '  "candidate_type": "blueprint_correction",',
-            '  "status": "proposed",',
-            '  "proposed_change": {',
-            '    "type":           "blueprint_correction",',
-            '    "action":         "review_detection_threshold",',
-            '    "review_areas":   ["threshold","blueprint_copy","confidence_gate"],',
-            '    "affected_pattern": "loop"',
-            '  },',
-            '  "estimated_success_lift":    0.22,',
-            '  "estimated_regression_risk": 0.08,',
-            '  "source": "auto"',
-            '}',
-        ], lang='json'),
-        sp(4),
-
-        H2('Approval Workflow'), sp(4),
-        *[item for i, (t, b) in enumerate([
-            ('Auto-Generate',   'Learning sweep detects cluster → creates candidate with status="proposed".'),
-            ('Curator Review',  'Lab curator reads description, proposed_change, lift, and regression risk.'),
-            ('Risk Assessment', 'High risk (regression_risk > 0.20) requires a second curator approval.'),
-            ('Approve/Reject',  'Curator sets status="approved" or status="rejected" with notes.'),
-            ('Engine Update',   'Approved candidate is applied to blueprint or detection config.'),
-            ('Validation',      'Gold set evaluation re-runs automatically. Any regression reverts the change.'),
-        ], start=1) for item in step(i, t, b)],
-        sp(14),
-
-        H2('Engine Update & Rollback'), sp(6),
-        *cb('bash — apply and rollback a candidate', [
-            '# Apply an approved candidate',
-            '$ python3 scripts/apply_candidate.py --id cand_uuid_here',
-            '',
-            '# Re-run gold set evaluation to confirm no regression',
-            '$ python3 scripts/run_benchmarks.py --gold-sets-only',
-            '',
-            '# Rollback: revert candidate to proposed status',
-            '$ sqlite3 data/ngw_users.db \\',
-            '  "UPDATE candidates SET status=\'proposed\' WHERE id=\'cand_uuid_here\';"',
-            '',
-            '# Then manually revert the blueprint change and re-run gold sets',
-        ]),
+        H2('Pattern Knowledge Base'), sp(6),
+        P('engine/learning/knowledge.py holds a PATTERN_KNOWLEDGE_BASE dict with 27 entries. '
+          'Each entry records the pattern\'s risk level, minimum signals for change, and '
+          'known failure symptoms with fix steps. The risk level drives gate thresholds.'),
         sp(10),
-        *callout('Regression Safety Gate', [
-            'Gold set evaluation is mandatory after every approved candidate. If any gold set '
-            'score drops below 75%, the deployment pipeline fails and the candidate is '
-            'automatically reverted to "proposed" status.',
-            'There is no way to bypass this gate in production. Local dev only.',
-        ], kind='red'),
-        sp(14),
-
-        H2('Learning Performance Benchmarks'), sp(6),
         table([
-            ['Pattern',      'Baseline CVR', 'Target Post-Update', 'Min Signals Needed', 'Notes'],
-            ['Clamshell',    '85–92%',       '90–95%',            '30',                 'Incremental gains only'],
-            ['Loop',         '60–80%',       '72–85%',            '30',                 'Most improvement headroom'],
-            ['Rembrandt',    '40–70%',       '55–75%',            '50',                 'Complex; high variance'],
-            ['Butterfly',    '70–82%',       '75–87%',            '30',                 'Ceiling height key factor'],
-            ['Split',        '65–78%',       '68–82%',            '30',                 'Gear tier dominant factor'],
-            ['Hard Direct',  '55–70%',       '65–78%',            '40',                 'Needs modifier data'],
-        ], col_widths=[TW*0.18, TW*0.18, TW*0.22, TW*0.22, TW*0.20]),
+            ['Risk Level', 'Min Weighted Signals', 'Patterns (examples)',               'Auto-Deploy?'],
+            ['low',        '25',                   'broad, short, high_key, low_key',   'Yes, if gates pass'],
+            ['medium',     '75',                   'split, butterfly, three_point, rim','Human review required'],
+            ['high',       '200',                  'loop, rembrandt, clamshell, unknown','Human gate always'],
+        ], col_widths=[TW*0.14, TW*0.22, TW*0.42, TW*0.22]),
+        sp(12),
+        *cb('engine/learning/knowledge.py — PatternEntry', [
+            '@dataclass',
+            'class PatternEntry:',
+            '    pattern_id:             str',
+            '    display_name:           str',
+            '    family:                 str   # portrait|editorial|commercial|tabletop',
+            '    risk_level:             str   # low | medium | high',
+            '    min_signals_for_change: int   # MIN_SIGNALS[risk_level]',
+            '    symptoms:               List[SymptomEntry]',
+            '    tags:                   List[str]',
+            '',
+            '# Access helpers',
+            'entry  = get_pattern_entry("clamshell")   # → PatternEntry',
+            'high   = list_high_risk_patterns()         # → ["loop","rembrandt","clamshell",...]',
+            'thresh = get_min_signals("rembrandt")      # → 200',
+        ], lang='python'),
+        sp(20),
+
+        H2('Pattern Comparison System'), sp(6),
+        P('When analysis confidence falls below 0.72 and alternative patterns are present, '
+          'the UI switches into comparison mode. The comparison system surfaces the two most '
+          'likely patterns side-by-side so the photographer can confirm or reject the '
+          'engine\'s top pick — adding a high-quality ambiguity signal back to the learning loop.'),
+        sp(10),
+        P('Source: ui/src/knowledge/graph.js builds a bidirectional confusionWith graph. '
+          'ui/src/knowledge/index.js getPatternComparisons() returns structured '
+          'comparison pairs including key distinguishing cues (e.g., nose shadow side, '
+          'catch-light position, shadow falloff) for the detected and candidate patterns.'),
+        sp(10),
+        table([
+            ['Component',               'Location',                              'Role'],
+            ['buildGraph()',            'knowledge/graph.js',                    'Computes patternToPatterns + patternToSymptoms maps once'],
+            ['getPatternComparisons()', 'knowledge/index.js',                    'Returns ComparisonPair[] for a pattern and its confusionWith list'],
+            ['ResultPatternComparePrompt','screens/ResultsScreen.jsx',           'Rendered when showComparison === true (confidence < 0.72)'],
+            ['confusionWith',           'knowledge/patterns.js → each entry',    'Array of pattern IDs most often confused with this one'],
+        ], col_widths=[TW*0.26, TW*0.36, TW*0.38]),
+        sp(12),
+        *cb('ui/src/knowledge/index.js — comparison trigger logic', [
+            '// In buildResultsData():',
+            'const showComparison = confidence < 0.72 && alternatives.length > 0;',
+            'const comparisons    = showComparison',
+            '  ? getPatternComparisons(patternId)',
+            '  : [];',
+            '',
+            '// Each ComparisonPair includes:',
+            '// { patternA, patternB, distinguishers: [',
+            '//   { cue, aValue, bValue, weight },   // e.g. nose shadow position',
+            '//   ...] }',
+        ], lang='javascript'),
+        sp(12),
+        *callout('Why comparison signals are high-value', [
+            'A photographer who manually selects "Loop — not Rembrandt" after seeing ambiguous results',
+            'provides a human-verified ambiguity correction. These signals carry source="live" + outcome',
+            '"failed" weight in the knowledge system. Accumulating 15–20 such corrections reliably shifts',
+            'the classifier thresholds for the confused pattern pair.',
+        ], kind='blue'),
+        sp(20),
+
+        H2('Signal Quality Weighting'), sp(6),
+        P('Raw session signals are weighted before counting toward a gate threshold. '
+          'A pro photographer\'s expert-reviewed correction carries 5× the weight of a '
+          'beginner\'s live session. This prevents a flood of low-quality signals from '
+          'triggering unsafe changes.'),
+        sp(10),
+        P('weight = tier × source × outcome × confidence_boost (if confidence ≥ 0.75)'),
+        sp(8),
+        table([
+            ['Factor',     'Value',         'Multiplier'],
+            ['Tier',       'pro',            '2.0×'],
+            ['',           'advanced',       '1.5×'],
+            ['',           'intermediate',   '1.0×'],
+            ['',           'beginner',       '0.5×'],
+            ['',           'unknown',        '0.7×'],
+            ['Source',     'expert_review',  '2.5×'],
+            ['',           'internal',       '1.2×'],
+            ['',           'live',           '1.0×'],
+            ['',           'seeded',         '0.4×'],
+            ['Outcome',    'nailed_it / failed', '1.0×'],
+            ['',           'close',          '0.7×'],
+            ['',           'unknown',        '0.3×'],
+            ['Conf boost', '≥ 0.75',         '+1.8× (capped at 5.0 total)'],
+        ], col_widths=[TW*0.22, TW*0.36, TW*0.42]),
+        sp(14),
+        *cb('engine/learning/knowledge.py — compute_signal_weight()', [
+            'w = compute_signal_weight(',
+            '    skill_tier="pro",',
+            '    confidence_score=0.9,',
+            '    source="expert_review",',
+            '    outcome="nailed_it",',
+            ')  # → 5.0  (capped)',
+            '',
+            'w = compute_signal_weight("intermediate", 0.8, "live", "failed")',
+            '# → 1.8  (confidence boost applied)',
+            '',
+            'w = compute_signal_weight("beginner", 0.3, "live", "unknown")',
+            '# → 0.15',
+        ], lang='python'),
+        sp(20),
+
+        H2('3-Gate CI Evaluator'), sp(6),
+        P('Before any candidate can be promoted, it must pass three gates in sequence. '
+          'Failing any gate blocks promotion entirely — the gates cannot be overridden '
+          'except by the override_blocked flag with an explicit written reason.'),
+        sp(10),
+        table([
+            ['Gate',               'What it checks',                               'Failure condition'],
+            ['1 Signal Sufficiency','Weighted signals ≥ MIN_SIGNALS[risk_level]',  'Returns disposition=insufficient'],
+            ['2 Benchmark Delta',  'Overall score drop ≤ 2%',                     'Returns disposition=blocked'],
+            ['3 Pattern Regression','No single pattern drops > 5%',                'Returns disposition=blocked'],
+        ], col_widths=[TW*0.26, TW*0.42, TW*0.32]),
+        sp(12),
+        P('If all gates pass, the risk level determines the final disposition:'),
+        sp(8),
+        table([
+            ['Risk Level', 'Disposition',  'What happens next'],
+            ['low',        'auto_deploy',  'Change deployed automatically; monitoring window opens'],
+            ['medium',     'human_review', 'Curator notified; must approve before deploy'],
+            ['high',       'human_gate',   'Committee review required regardless of gate scores'],
+            ['any',        'blocked',      'Gate 2 or 3 failed; fix regressions before re-evaluating'],
+            ['any',        'insufficient', 'Gate 1 failed; accumulate more signals and retry'],
+        ], col_widths=[TW*0.16, TW*0.22, TW*0.62]),
+        sp(14),
+        *cb('engine/learning/ci_gate.py — evaluate_candidate_dict()', [
+            '# Pure-function test (no DB)',
+            'result = evaluate_candidate_dict(',
+            '    candidate       = {"id": "c1", "pattern_id": "loop", "risk_level": "low"},',
+            '    insight         = aggregate_signals_for_pattern("loop", signals),',
+            '    benchmark_delta = 0.01,   # +1% overall score',
+            ')',
+            '# result.disposition → "auto_deploy"',
+            '# result.overall_verdict → "pass"',
+            '',
+            '# DB-backed evaluation (loads signals + runs benchmark)',
+            'result = evaluate_candidate_gate("cand-uuid-here")',
+            'print(summarise_gate_result(result))',
+            '# → "✅ Auto-deploy: 3/3 gates passed (low risk)"',
+        ], lang='python'),
+        sp(20),
+
+        H2('Failure Detection & Candidate Pipeline'), sp(6),
+        table([
+            ['Failure Mode',       'Candidate Type',           'Trigger Condition'],
+            ['conversion_gap',     'blueprint_correction',     'CVR < 1.0% with n ≥ 5 sessions'],
+            ['confidence_mismatch','confidence_recalibration', 'CVR > 2σ below fleet mean'],
+            ['step_deviation',     'shoot_mode_step_fix',      'Global match rate < 30%'],
+            ['pattern_drift',      'dataset_promotion',        'Daily volume decline > 40%'],
+            ['trust_gap',          'trust_safety',             'Matched sessions convert worse than unmatched'],
+            ['env_conversion_gap', 'blueprint_correction',     'Environment-segmented CVR gap'],
+        ], col_widths=[TW*0.26, TW*0.30, TW*0.44]),
+        sp(12),
+        *callout('Candidate Safety Rules', [
+            'Candidates always begin in status="proposed". No candidate is ever auto-accepted.',
+            'sandbox_eval verdict "blocked" prevents promotion. Override requires override_blocked=true + written reason.',
+            'Confidence_recalibration is the only candidate type with an auto-apply endpoint.',
+            'All other types require manual engine edits and a benchmark re-run.',
+        ], kind='amber'),
+        sp(20),
+
+        H2('Benchmark Enforcement System'), sp(6),
+        P('The benchmark enforcement system ensures no candidate can degrade core accuracy. '
+          'Gate 2 of the CI evaluator runs sandbox_eval.py against the Gold Set before any '
+          'candidate can advance. Gate 3 adds a per-pattern regression check. Together they '
+          'create a two-layer safety net: fleet-level accuracy (Gate 2) and individual '
+          'pattern regression (Gate 3).'),
+        sp(10),
+        table([
+            ['Gate',     'Enforcement layer',    'Pass threshold',           'Source module'],
+            ['Gate 2',   'Benchmark delta',       'Overall acc Δ ≥ −2%',     'sandbox_eval.py vs Gold Set'],
+            ['Gate 3',   'Pattern regression',    'Per-pattern acc Δ ≥ −5%', 'per-pattern subset of Gold Set'],
+            ['Blocked',  'Both gates failed',     'N/A — manual override req','ci_gate.py → disposition=blocked'],
+        ], col_widths=[TW*0.12, TW*0.26, TW*0.30, TW*0.32]),
+        sp(12),
+        P('Gold Set promotion: when a session reaches confidence ≥ 0.85 with outcome '
+          '"nailed_it" it becomes a gold set candidate (GET /lab/signals/gold-set-suggestions). '
+          'Human-reviewed gold set images set the accuracy baseline that Gates 2 and 3 measure against. '
+          'The larger and more diverse the gold set, the tighter the enforcement.'),
+        sp(10),
+        *cb('engine/learning/ci_gate.py — gate dispositions', [
+            '# Disposition map after all gates:',
+            '# "auto_deploy"    → all 3 passed + risk_level="low"',
+            '# "human_review"   → all 3 passed + risk_level="medium"',
+            '# "human_gate"     → all 3 passed + risk_level="high"',
+            '# "blocked"        → Gate 2 or Gate 3 failed',
+            '# "insufficient"   → Gate 1 (signal count) failed',
+            '',
+            '# Run it programmatically:',
+            'result = evaluate_candidate_dict({',
+            '    "pattern_id":          "rembrandt",',
+            '    "weighted_signals":    212,',
+            '    "benchmark_delta":     -0.01,',
+            '    "pattern_acc_delta":   0.02,',
+            '    "risk_level":          "high",',
+            '})',
+            '# → CIGateResult(disposition="human_gate", gates_passed=[1,2,3])',
+        ], lang='python'),
+        sp(12),
+        *callout('Adding benchmark cases', [
+            'POST /lab/benchmarks/cases — add individual cases manually.',
+            'POST /lab/benchmarks/from-gold-set — promote gold set suggestions in bulk.',
+            'Run python3 scripts/run_benchmarks.py after each engine edit.',
+            'Zero FAIL results required before any Gate 2 benchmark delta is computed.',
+        ], kind='blue'),
+        sp(20),
+
+        H2('Revenue Projection & 30-Day Simulation'), sp(6),
+        P('engine/learning/revenue.py quantifies the revenue impact of a CVR improvement. '
+          'It answers three questions: (1) How much revenue does fixing this pattern unlock? '
+          '(2) Which day does the signal gate clear? (3) What\'s the difference between '
+          'treating all patterns identically vs. risk-tiering the deployment schedule?'),
+        sp(10),
+        *cb('engine/learning/revenue.py — compute_revenue_impact()', [
+            'scenario = compute_revenue_impact(',
+            '    pattern_id       = "rembrandt",',
+            '    sessions_per_day = 40,',
+            '    before_cvr       = 0.042,   # 4.2% current',
+            '    after_cvr        = 0.065,   # 6.5% target',
+            '    arpu             = 9.00,    # $9 per conversion',
+            ')',
+            '# scenario.cvr_lift                   → +2.3pp',
+            '# scenario.additional_conversions_30d → 27.6',
+            '# scenario.delta_revenue_30d          → $248.40',
+            '# scenario.annualised_delta           → $2,980.80',
+        ], lang='python'),
+        sp(12),
+        P('project_30_day_metrics() simulates day-by-day signal accumulation for a list '
+          'of patterns under a given scenario. For each pattern it computes:'),
+        sp(6),
+        table([
+            ['Field',                     'Meaning'],
+            ['gate_unlock_day',            'Day signals cross MIN_SIGNALS[risk_level] threshold'],
+            ['deploy_day',                 'gate_unlock_day + risk deploy lag (low=0d, med=+3d, high=+7d)'],
+            ['cumulative_revenue_delta',   'Running Σ of daily revenue delta from deploy_day onward'],
+            ['day_snapshots',              'List of 30 DaySnapshot objects — one per day, suitable for charts'],
+        ], col_widths=[TW*0.30, TW*0.70]),
+        sp(14),
+        P('scripts/simulate_30day.py runs the full simulation across three strategic scenarios '
+          'with ASCII day-by-day signal bars, gate unlock events, and a final comparison table. '
+          'The CRITICAL insight: risk-tiered deployment (Scenario 3) outperforms treating all '
+          'patterns as high-risk by $172/month (+$2,063/year) — while maintaining the same '
+          'safety gates for high-risk patterns.'),
+        sp(8),
+        *cb('bash — run the 30-day simulation', [
+            '# Full 3-scenario comparison (recommended)',
+            'python3 scripts/simulate_30day.py',
+            '',
+            '# Single scenario (Controlled Autonomy)',
+            'python3 scripts/simulate_30day.py --scenario 3',
+            '',
+            '# JSON output for API / dashboard integration',
+            'python3 scripts/simulate_30day.py --json --scenario 3',
+            '',
+            '# Example Scenario 3 output (key events):',
+            '# Day  1: Loop gate cleared  (low risk, 25 signals) → deploy same day → +$224',
+            '# Day  5: Clamshell gate cleared (med risk, 75 sig) → deploy day 8   → +$296',
+            '# Day 15: Rembrandt gate cleared (high risk, 200 sig)→ deploy day 22 → +$99',
+            '# ──────────────────────────────────────────────────────────────────────',
+            '# 30d total: +$620.01   |   Annualised: +$7,440.12',
+        ]),
+        sp(14),
+        table([
+            ['Scenario',              'Loop',          'Clamshell',     'Rembrandt',     '30d Delta', 'Annualised', 'vs S1'],
+            ['1 — Conservative',      'High → day 10', 'High → day 10', 'High → day 10', '+$448',     '+$5,377',    'baseline'],
+            ['2 — Moderate',          'Low → day 1',   'High → day 10', 'Med → day 5',   '+$600',     '+$7,204',    '+$1,827/yr'],
+            ['3 — Controlled Auto ✅', 'Low → day 1',   'Med → day 5',   'High → day 15', '+$620',     '+$7,440',    '+$2,063/yr'],
+        ], col_widths=[TW*0.24, TW*0.14, TW*0.14, TW*0.14, TW*0.10, TW*0.12, TW*0.12]),
+        sp(12),
+        *callout('The risk-tier advantage', [
+            'Scenario 3 dominates because Loop and Clamshell are the highest-volume patterns.',
+            'Deploying Loop on Day 1 (not Day 10) captures 9 extra days of revenue lift.',
+            'Rembrandt is correctly delayed — it is a high-risk ambiguous pattern requiring 200 signals.',
+            'The $172/month difference vs Scenario 1 compounds to $2,063/year at current volume.',
+            'This justifies maintaining the knowledge base risk tiers with discipline.',
+        ], kind='green'),
+        sp(12),
+        P('API integration: POST /lab/learning/revenue/simulate accepts a JSON array of '
+          'SimulateScenario objects and returns a RevenueProjection array with full '
+          'day_snapshots suitable for rendering as a 30-day bar chart in the Lab UI.'),
+        sp(20),
+
+        H2('API Endpoints — Knowledge & Revenue'), sp(6),
+        table([
+            ['Method', 'Path',                                         'Purpose'],
+            ['GET',    '/lab/learning/knowledge',                      'Full pattern knowledge base (27 patterns)'],
+            ['GET',    '/lab/learning/knowledge/{id}',                 'Single pattern entry with symptoms + fix steps'],
+            ['POST',   '/lab/learning/knowledge/{id}/signals',         'Aggregate weighted signals for a pattern'],
+            ['POST',   '/lab/learning/knowledge/{id}/ci-gate',         'Run full 3-gate CI evaluation for a candidate'],
+            ['POST',   '/lab/learning/revenue/impact',                 'Compute CVR delta → revenue impact'],
+            ['POST',   '/lab/learning/revenue/simulate',               '30-day simulation for N scenario configs'],
+        ], col_widths=[TW*0.10, TW*0.42, TW*0.48]),
+        sp(14),
+        *callout('Auth Requirements', [
+            'All /lab/learning/* endpoints require JWT with email in NGW_DEV_EMAILS.',
+            'Set NGW_DEV_MODE=1 to bypass auth locally. Never in production.',
+            'Signal aggregate endpoint reads db/signals.py — ensure ngw.db is seeded for local testing.',
+        ], kind='amber'),
+        sp(20),
+
+        H2('Monitoring — Post-Release Windows'), sp(6),
+        P('After a candidate is released, monitoring.py captures metric snapshots at '
+          '7, 14, and 30 days. Two alert types trigger automatic notifications:'),
+        sp(8),
+        table([
+            ['Alert Type',          'Trigger Condition',                        'Recommended Action'],
+            ['candidate_regression','success_rate_delta < −5pp OR conf < −0.1', 'Review candidate; consider rollback'],
+            ['rollback_review',     'CVR delta < −3pp OR trust delta < −0.15',  'Immediate rollback review required'],
+        ], col_widths=[TW*0.28, TW*0.40, TW*0.32]),
+        sp(12),
+        *cb('bash — monitoring sweep', [
+            '# Sweep all 3 windows (7d, 14d, 30d)',
+            'POST /lab/learning/monitoring/sweep-all',
+            '',
+            '# Check alerts',
+            'GET  /lab/learning/monitoring',
+            '',
+            '# Detailed report for one release',
+            'GET  /lab/learning/monitoring/{attribution_id}',
+        ]),
     ]
     return s
 
@@ -3196,6 +3410,9 @@ def doc_developer_guide():
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # DOCUMENT 17 — NGW LAB MANUAL (FULL)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# DOCUMENT 17 — NGW LAB MANUAL (FULL)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def doc_lab_manual():
     s = cover(17, 'NGW Lab Manual',
               'Signal pipeline, benchmark system v2, reference dataset, VLM architecture, '
@@ -3876,7 +4093,7 @@ def doc_lab_manual():
         sp(8),
 
         H3('Complete Blueprint YAML Schema'), sp(6),
-        *cb('data/systems/canonical/{pattern}.yml  (part 1 — header + environment + camera)', [
+        *cb('data/systems/canonical/{pattern}.yml — header + environment + camera', [
             'pattern:      loop',
             'pattern_name: Loop',
             'category:     portrait',
@@ -3899,32 +4116,30 @@ def doc_lab_manual():
             '  height: 5.5',
             '  lens: 85mm',
             '  angle_to_subject_deg: 0.0',
-            '',
+        ]),
+        *cb('data/systems/canonical/{pattern}.yml — capture + lights', [
             'capture_settings:',
             '  iso:           100-400',
             '  aperture:      f/2.8-f/8',
             '  shutter:       1/125-1/250',
             '  white_balance: 5500K',
             '  notes: ["Meter off subject face"]',
-        ], lang='yaml'),
-        sp(6),
-        *cb('data/systems/canonical/{pattern}.yml  (part 2 — lights + shadow + failure + substitutions)', [
+            '',
             'lights:              # Array — at least one role:key required',
             '  - role: key',
             '    modifier: octa_90cm',
             '    angle_deg: 45     # horizontal off-axis (0=front, 90=hard side)',
             '    height: 7.5       # feet above floor',
-            '    height_offset_in: 0',
             '    distance_ft: 6.0',
             '    power_ratio: 1.0  # relative to key (key always 1.0)',
-            '    notes: ["Catch-light should appear at 2 oclock"]',
             '  - role: fill',
             '    modifier: v_flat_white',
             '    angle_deg: 315',
             '    height: 5.5',
             '    distance_ft: 4.0',
             '    power_ratio: 0.33',
-            '',
+        ]),
+        *cb('data/systems/canonical/{pattern}.yml — shadow + failure fields', [
             'shadow_signature:',
             '  expected_pattern: loop',
             '  nose_shadow:  "Loop below and to the side of nose"',
@@ -3944,7 +4159,7 @@ def doc_lab_manual():
             '',
             'use_cases: ["Portrait", "Editorial", "Headshots"]',
             'example_photographers: ["Platon", "Annie Leibovitz"]',
-        ], lang='yaml'),
+        ]),
         sp(10),
         *callout('Clock-Position Convention', [
             'angle_deg = horizontal off-axis from camera forward. 0 = directly in front.',
@@ -4268,11 +4483,6 @@ def doc_lab_manual():
     return s
 
 
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# DOCUMENT 18 — ANALYSIS GUIDE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def doc_analysis_guide():
     s = cover(18, 'Analysis Guide',
               'VLM analysis pipeline, shoot-match API, AnalysisResult structure, '

@@ -1,5 +1,5 @@
 /**
- * Pre-baked example analyses for the homepage.
+ * Pre-baked example analysis results for the homepage.
  *
  * Each entry contains a DiagramCard-compatible spec, result chips,
  * and metadata so the homepage can showcase NGW output without
@@ -77,7 +77,7 @@ export const EXAMPLE_ANALYSES = [
   },
 ];
 
-/** Gallery entries — uses same photos as example analyses + extras. */
+/** Gallery entries — uses same photos as example analysis results + extras. */
 export const GALLERY_ITEMS = [
   { id: 'gallery_portrait', label: 'Portrait', gradient: 'linear-gradient(135deg, #1a1a2e, #0f3460)', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80' },
   { id: 'gallery_beauty', label: 'Beauty', gradient: 'linear-gradient(135deg, #2d1b69, #6b1d5e)', image: 'https://images.unsplash.com/photo-1616683693504-3ea7e9ad6fec?w=400&q=80' },

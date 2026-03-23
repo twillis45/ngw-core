@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
-import ChipStepper from '../components/ChipStepper';
 import { LIGHT_CATALOG } from '../data/lightCatalog';
 import { MODIFIER_CATEGORIES } from '../data/modifierCatalog';
 import { getSupportByCategory } from '../data/supportCatalog';
@@ -9,10 +8,9 @@ import VendorLogo from '../components/VendorLogo';
 
 /* ── Quick Kit Presets (Good / Better / Best) ──────── */
 const QUICK_KITS = [
-  // ── Good (budget-friendly, gets the job done) ──
+  // ── Photo: Good ──
   {
-    id: 'good_one_light',
-    tier: 'good',
+    id: 'good_one_light', tier: 'good', workflow: 'photo',
     label: '1-Light Starter',
     desc: 'Speedlight + umbrella — clean single source',
     lights: [{ type: 'godox_v860iii', qty: 1 }],
@@ -20,37 +18,33 @@ const QUICK_KITS = [
     support: [{ type: 'light_stand_8', qty: 1 }],
   },
   {
-    id: 'good_two_light',
-    tier: 'good',
-    label: '2-Light Budget Kit',
+    id: 'good_two_light', tier: 'good', workflow: 'photo',
+    label: '2-Light Budget',
     desc: 'Two speedlights — key + fill on a budget',
     lights: [{ type: 'godox_v860iii', qty: 2 }],
     modifiers: [{ type: 'umbrella', qty: 1 }, { type: 'umbrella_reflective', qty: 1 }],
     support: [{ type: 'light_stand_8', qty: 2 }, { type: 'sandbag_15', qty: 2 }],
   },
-  // ── Better (solid pro-am / working photographer) ──
+  // ── Photo: Better ──
   {
-    id: 'better_portrait',
-    tier: 'better',
+    id: 'better_portrait', tier: 'better', workflow: 'photo',
     label: '2-Light Portrait',
-    desc: 'Portable strobe + octabox — pro-quality one or two light',
+    desc: 'Portable strobe + octabox — pro-quality control',
     lights: [{ type: 'godox_ad300', qty: 2 }],
     modifiers: [{ type: 'octabox', qty: 1 }, { type: 'stripbox', qty: 1 }],
     support: [{ type: 'c_stand_40', qty: 2 }, { type: 'sandbag_15', qty: 2 }],
   },
   {
-    id: 'better_beauty',
-    tier: 'better',
+    id: 'better_beauty', tier: 'better', workflow: 'photo',
     label: 'Clamshell Beauty',
     desc: 'Key above + fill below — fashion/beauty standard',
     lights: [{ type: 'godox_ad300', qty: 2 }],
     modifiers: [{ type: 'octabox', qty: 1 }, { type: 'reflector', qty: 1 }],
     support: [{ type: 'c_stand_40', qty: 1 }, { type: 'boom_arm_78', qty: 1 }, { type: 'sandbag_25', qty: 1 }],
   },
-  // ── Best (studio pro / commercial) ──
+  // ── Photo: Best ──
   {
-    id: 'best_three_light',
-    tier: 'best',
+    id: 'best_three_light', tier: 'best', workflow: 'photo',
     label: '3-Light Studio',
     desc: 'Key + fill + rim — full studio control',
     lights: [{ type: 'profoto_b10x', qty: 3 }],
@@ -58,29 +52,78 @@ const QUICK_KITS = [
     support: [{ type: 'c_stand_avenger', qty: 3 }, { type: 'sandbag_25', qty: 3 }, { type: 'boom_arm_78', qty: 1 }],
   },
   {
-    id: 'best_cinematic',
-    tier: 'best',
+    id: 'best_cinematic', tier: 'best', workflow: 'photo',
     label: 'Cinematic / Editorial',
     desc: 'Hard key + shaped rim — dramatic editorial look',
     lights: [{ type: 'profoto_b10x', qty: 2 }],
     modifiers: [{ type: 'grid_spot', qty: 1 }, { type: 'snoot', qty: 1 }, { type: 'barn_doors', qty: 1 }],
     support: [{ type: 'c_stand_avenger', qty: 2 }, { type: 'sandbag_25', qty: 2 }, { type: 'flag_24x36', qty: 2 }],
   },
-  // ── Natural (ambient / no artificial light) ──
+  // ── Natural ──
   {
-    id: 'natural_window',
-    tier: 'natural',
+    id: 'natural_window', tier: 'natural', workflow: 'photo',
     label: 'Natural Light + Fill',
     desc: 'Window key + reflector/scrim — no flash needed',
     lights: [],
     modifiers: [{ type: 'reflector', qty: 1 }, { type: 'scrim', qty: 1 }, { type: 'v_flat', qty: 1 }],
     support: [{ type: 'c_stand_40', qty: 1 }],
   },
+  // ── Video: Good (budget continuous) ──
+  {
+    id: 'video_good_single', tier: 'good', workflow: 'video',
+    label: 'LED Single Key',
+    desc: 'Godox SL150II — reliable continuous key for interviews',
+    lights: [{ type: 'godox_sl150ii', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }],
+    support: [{ type: 'light_stand_10', qty: 1 }, { type: 'sandbag_15', qty: 1 }],
+  },
+  {
+    id: 'video_good_two', tier: 'good', workflow: 'video',
+    label: 'LED 2-Light Interview',
+    desc: 'Key + fill — clean talking-head setup on a budget',
+    lights: [{ type: 'godox_sl150ii', qty: 1 }, { type: 'godox_lc500r', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }, { type: 'umbrella', qty: 1 }],
+    support: [{ type: 'light_stand_10', qty: 2 }, { type: 'sandbag_15', qty: 2 }],
+  },
+  // ── Video: Better (mid-range COB) ──
+  {
+    id: 'video_better_aputure', tier: 'better', workflow: 'video',
+    label: 'Aputure 300D Key + Fill',
+    desc: 'COB LED key + bi-color panel fill — pro video standard',
+    lights: [{ type: 'aputure_300d', qty: 1 }, { type: 'aputure_p60c', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }],
+    support: [{ type: 'c_stand_40', qty: 2 }, { type: 'sandbag_15', qty: 2 }],
+  },
+  {
+    id: 'video_better_3pt', tier: 'better', workflow: 'video',
+    label: '3-Point Video',
+    desc: 'Key + fill + backlight — broadcast-quality portrait',
+    lights: [{ type: 'aputure_300d', qty: 1 }, { type: 'aputure_p60c', qty: 1 }, { type: 'godox_sl150ii', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }, { type: 'octabox', qty: 1 }],
+    support: [{ type: 'c_stand_40', qty: 2 }, { type: 'light_stand_10', qty: 1 }, { type: 'sandbag_15', qty: 3 }],
+  },
+  // ── Video: Best (high-output COB) ──
+  {
+    id: 'video_best_600', tier: 'best', workflow: 'video',
+    label: 'Aputure 600D Pro Kit',
+    desc: '600D key + 300D fill — cinematic output, hard or soft',
+    lights: [{ type: 'aputure_600d', qty: 1 }, { type: 'aputure_300d', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }, { type: 'octabox', qty: 1 }, { type: 'grid_spot', qty: 1 }],
+    support: [{ type: 'c_stand_avenger', qty: 2 }, { type: 'sandbag_25', qty: 2 }, { type: 'boom_arm_78', qty: 1 }],
+  },
+  {
+    id: 'video_best_nanlite', tier: 'best', workflow: 'video',
+    label: 'Nanlite Forza 500 Kit',
+    desc: 'High-CRI 500W + panel — commercial film & beauty video',
+    lights: [{ type: 'nanlite_forza500ii', qty: 1 }, { type: 'nanlite_pavot16c', qty: 1 }],
+    modifiers: [{ type: 'softbox_large', qty: 1 }, { type: 'octabox', qty: 1 }],
+    support: [{ type: 'c_stand_avenger', qty: 2 }, { type: 'sandbag_25', qty: 2 }],
+  },
 ];
 
 const TIER_LABELS = {
   good: { label: 'Good', color: 'var(--color-text-secondary)' },
-  better: { label: 'Better', color: 'var(--color-accent)' },
+  better: { label: 'Better ★', color: 'var(--color-accent)' },
   best: { label: 'Best', color: '#22c55e' },
   natural: { label: 'Natural', color: '#eab308' },
 };
@@ -163,6 +206,8 @@ export default function StepGearEntry() {
   const [openModCats, setOpenModCats] = useState({});
   const [kitSaved, setKitSaved] = useState(false);
   const [kitsExpanded, setKitsExpanded] = useState(true);
+  const [selectedKitId, setSelectedKitId] = useState(null);
+  const [videoKitsExpanded, setVideoKitsExpanded] = useState(true);
 
   /* ── Context-aware highlighting ────────────────────── */
 
@@ -227,9 +272,9 @@ export default function StepGearEntry() {
   const kitMoodMatch = useMemo(() => {
     if (!mood) return {};
     const map = {
-      beauty:    ['better_beauty', 'best_three_light', 'good_two_light'],
-      cinematic: ['best_cinematic', 'better_portrait'],
-      corporate: ['better_portrait', 'best_three_light', 'good_two_light'],
+      beauty:    ['better_beauty', 'best_three_light', 'video_better_aputure', 'video_good_single'],
+      cinematic: ['best_cinematic', 'better_portrait', 'video_best_600', 'video_better_3pt'],
+      corporate: ['better_portrait', 'best_three_light', 'video_better_aputure', 'video_better_3pt'],
       editorial: ['best_cinematic', 'best_three_light'],
       natural:   ['natural_window'],
       high_key:  ['best_three_light', 'better_portrait'],
@@ -289,6 +334,7 @@ export default function StepGearEntry() {
   }
 
   function loadQuickKit(kit) {
+    setSelectedKitId(kit.id);
     dispatch({
       type: 'LOAD_GEAR_KIT',
       gear: { lights: kit.lights, modifiers: kit.modifiers, support: kit.support },
@@ -302,9 +348,9 @@ export default function StepGearEntry() {
   const lightCats = LIGHT_CATALOG.filter(c => c.section !== 'accessories');
   const accessoryCats = LIGHT_CATALOG.filter(c => c.section === 'accessories');
 
-  // Group kits by tier
-  // Best shown first — users scan top to bottom
-  const kitTiers = ['best', 'better', 'good', 'natural'];
+  // Photo kits: better first (preferred tier), then best, good, natural
+  // Video kits rendered separately below
+  const photoKitTiers = ['better', 'best', 'good', 'natural'];
 
   return (
     <>
@@ -320,53 +366,105 @@ export default function StepGearEntry() {
         </div>
       )}
 
-      {/* ── Quick Kits — Good / Better / Best ────── */}
+      {/* ── Quick Kits — Photo ────────────────────── */}
       <div className="gear-section">
         <button
           type="button"
           className="gear-section__label gear-section__label--toggle"
           onClick={() => setKitsExpanded(!kitsExpanded)}
         >
-          Quick Kits
-          <span className="gear-section__hint">Ready to shoot with what you have</span>
+          Photo Kits
+          <span className="gear-section__hint">Strobe &amp; speedlight setups</span>
           <span className={`gear-category__arrow${kitsExpanded ? ' gear-category__arrow--open' : ''}`}>
             {'\u25BC'}
           </span>
         </button>
         {kitsExpanded && (
           <div className="quick-kits-tiers">
-            {kitTiers.map(tier => {
-              const tierKits = QUICK_KITS.filter(k => k.tier === tier);
+            {photoKitTiers.map(tier => {
+              const tierKits = QUICK_KITS.filter(k => k.tier === tier && k.workflow === 'photo');
               if (!tierKits.length) return null;
               const t = TIER_LABELS[tier];
               return (
                 <div className="quick-kits-tier" key={tier}>
-                  <div className="quick-kits-tier__label" style={{ color: t.color }}>
-                    {t.label}
-                  </div>
+                  <div className="quick-kits-tier__label" style={{ color: t.color }}>{t.label}</div>
                   <div className="quick-kits">
                     {tierKits.map(kit => {
                       const matched = kitMoodMatch[kit.id];
-                      const kitParts = [];
+                      const active = selectedKitId === kit.id;
                       const lCount = kit.lights.reduce((s, l) => s + l.qty, 0);
                       const mCount = kit.modifiers.reduce((s, m) => s + m.qty, 0);
-                      const sCount = kit.support.reduce((s, s2) => s + s2.qty, 0);
+                      const kitParts = [];
                       if (lCount) kitParts.push(`${lCount} light${lCount > 1 ? 's' : ''}`);
                       if (mCount) kitParts.push(`${mCount} mod${mCount > 1 ? 's' : ''}`);
-                      if (sCount) kitParts.push(`${sCount} support`);
                       return (
                         <button
                           key={kit.id}
                           type="button"
-                          className={`quick-kit quick-kit--${kit.tier}${matched ? ' quick-kit--recommended' : ''}`}
+                          className={`quick-kit quick-kit--${kit.tier}${matched ? ' quick-kit--recommended' : ''}${active ? ' quick-kit--active' : ''}`}
                           onClick={() => loadQuickKit(kit)}
                         >
                           <span className="quick-kit__name">
                             {kit.label}
-                            {matched && <span className="quick-kit__match-dot" title="Matches your vibe">{'\u2605'}</span>}
+                            {matched && <span className="quick-kit__match-dot" title="Matches your setup">{'\u2605'}</span>}
                           </span>
                           <span className="quick-kit__desc">{kit.desc}</span>
-                          <span className="quick-kit__counts">{kitParts.join(' · ')}</span>
+                          {kitParts.length > 0 && <span className="quick-kit__counts">{kitParts.join(' · ')}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ── Quick Kits — Video / Continuous ──────── */}
+      <div className="gear-section">
+        <button
+          type="button"
+          className="gear-section__label gear-section__label--toggle"
+          onClick={() => setVideoKitsExpanded(!videoKitsExpanded)}
+        >
+          Video Kits
+          <span className="gear-section__hint">Continuous LED setups</span>
+          <span className={`gear-category__arrow${videoKitsExpanded ? ' gear-category__arrow--open' : ''}`}>
+            {'\u25BC'}
+          </span>
+        </button>
+        {videoKitsExpanded && (
+          <div className="quick-kits-tiers">
+            {['better', 'best', 'good'].map(tier => {
+              const tierKits = QUICK_KITS.filter(k => k.tier === tier && k.workflow === 'video');
+              if (!tierKits.length) return null;
+              const t = TIER_LABELS[tier];
+              return (
+                <div className="quick-kits-tier" key={tier}>
+                  <div className="quick-kits-tier__label" style={{ color: t.color }}>{t.label}</div>
+                  <div className="quick-kits">
+                    {tierKits.map(kit => {
+                      const matched = kitMoodMatch[kit.id];
+                      const active = selectedKitId === kit.id;
+                      const lCount = kit.lights.reduce((s, l) => s + l.qty, 0);
+                      const mCount = kit.modifiers.reduce((s, m) => s + m.qty, 0);
+                      const kitParts = [];
+                      if (lCount) kitParts.push(`${lCount} light${lCount > 1 ? 's' : ''}`);
+                      if (mCount) kitParts.push(`${mCount} mod${mCount > 1 ? 's' : ''}`);
+                      return (
+                        <button
+                          key={kit.id}
+                          type="button"
+                          className={`quick-kit quick-kit--${kit.tier}${matched ? ' quick-kit--recommended' : ''}${active ? ' quick-kit--active' : ''}`}
+                          onClick={() => loadQuickKit(kit)}
+                        >
+                          <span className="quick-kit__name">
+                            {kit.label}
+                            {matched && <span className="quick-kit__match-dot" title="Matches your setup">{'\u2605'}</span>}
+                          </span>
+                          <span className="quick-kit__desc">{kit.desc}</span>
+                          {kitParts.length > 0 && <span className="quick-kit__counts">{kitParts.join(' · ')}</span>}
                         </button>
                       );
                     })}
@@ -432,19 +530,26 @@ export default function StepGearEntry() {
                           </span>
                         </button>
                         {vOpen && (
-                          <div className="vendor-group__models">
-                            {group.items.map(item => (
-                              <ChipStepper
-                                key={item.value}
-                                label={item.model}
-                                qty={lightQty(item.value)}
-                                highlighted={isLightRecommended(item)}
-                                reason={getLightReason(item, mood)}
-                                onAdd={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })}
-                                onIncrement={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })}
-                                onDecrement={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })}
-                              />
-                            ))}
+                          <div className="mod-list">
+                            {group.items.map(item => {
+                              const qty = lightQty(item.value);
+                              const rec = isLightRecommended(item);
+                              return (
+                                <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
+                                  {rec && <span className="mod-list__dot" />}
+                                  <span className="mod-list__name">{item.model}</span>
+                                  {qty === 0 ? (
+                                    <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })} aria-label={`Add ${item.model}`}>+</button>
+                                  ) : (
+                                    <div className="mod-list__stepper">
+                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
+                                      <span>{qty}</span>
+                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })} aria-label="Add one">+</button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -480,52 +585,50 @@ export default function StepGearEntry() {
                 </span>
               </button>
               {isOpen && (() => {
-                // Check if this category has vendor sub-groups
+                // Group by vendor if applicable
                 const hasVendors = cat.items.some(item => item.vendor);
-                if (!hasVendors) {
-                  return (
-                    <div className="gear-category__items" style={{ padding: '4px 0 8px' }}>
-                      <div className="chip-grid">
-                        {cat.items.map(item => (
-                          <ChipStepper
-                            key={item.value}
-                            label={item.label}
-                            qty={modQty(item.value)}
-                            highlighted={isModRecommended(item)}
-                            onAdd={() => dispatch({ type: 'ADD_MODIFIER', modifier: item.value })}
-                            onIncrement={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: 1 })}
-                            onDecrement={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: -1 })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  );
-                }
-                // Group items by vendor
-                const vendorGroups = [];
-                const vendorSeen = {};
-                for (const item of cat.items) {
-                  const v = item.vendor || 'Generic';
-                  if (!vendorSeen[v]) { vendorSeen[v] = []; vendorGroups.push(v); }
-                  vendorSeen[v].push(item);
-                }
+                const groups = hasVendors
+                  ? (() => {
+                      const seen = {};
+                      for (const item of cat.items) {
+                        const v = item.vendor || 'Generic';
+                        if (!seen[v]) seen[v] = [];
+                        seen[v].push(item);
+                      }
+                      return Object.entries(seen);
+                    })()
+                  : [['', cat.items]];
+
                 return (
-                  <div className="gear-category__items" style={{ padding: '4px 0 8px' }}>
-                    {vendorGroups.map(v => (
-                      <div key={v} style={{ marginBottom: 6 }}>
-                        <div className="gear-vendor-label">{v}</div>
-                        <div className="chip-grid">
-                          {vendorSeen[v].map(item => (
-                            <ChipStepper
-                              key={item.value}
-                              label={item.label}
-                              qty={modQty(item.value)}
-                              highlighted={isModRecommended(item)}
-                              onAdd={() => dispatch({ type: 'ADD_MODIFIER', modifier: item.value })}
-                              onIncrement={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: 1 })}
-                              onDecrement={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: -1 })}
-                            />
-                          ))}
+                  <div className="gear-category__items">
+                    {groups.map(([vendor, items]) => (
+                      <div key={vendor}>
+                        {vendor && <div className="gear-vendor-label">{vendor}</div>}
+                        <div className="mod-list">
+                          {items.map(item => {
+                            const qty = modQty(item.value);
+                            const rec = isModRecommended(item);
+                            return (
+                              <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
+                                {rec && <span className="mod-list__dot" />}
+                                <span className="mod-list__name">{item.label}</span>
+                                {qty === 0 ? (
+                                  <button
+                                    className="mod-list__add"
+                                    onClick={() => dispatch({ type: 'ADD_MODIFIER', modifier: item.value })}
+                                    type="button"
+                                    aria-label={`Add ${item.label}`}
+                                  >+</button>
+                                ) : (
+                                  <div className="mod-list__stepper">
+                                    <button type="button" onClick={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
+                                    <span>{qty}</span>
+                                    <button type="button" onClick={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: 1 })} aria-label="Add one">+</button>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -566,18 +669,26 @@ export default function StepGearEntry() {
               </button>
               {isOpen && !useVendorGroups && (
                 <div className="gear-category__items" style={{ padding: '4px 0 8px' }}>
-                  <div className="chip-grid">
-                    {cat.items.map(item => (
-                      <ChipStepper
-                        key={item.value}
-                        label={item.label}
-                        qty={supportQty(item.value)}
-                        highlighted={isSupportRecommended(item)}
-                        onAdd={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })}
-                        onIncrement={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })}
-                        onDecrement={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })}
-                      />
-                    ))}
+                  <div className="mod-list">
+                    {cat.items.map(item => {
+                      const qty = supportQty(item.value);
+                      const rec = isSupportRecommended(item);
+                      return (
+                        <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
+                          {rec && <span className="mod-list__dot" />}
+                          <span className="mod-list__name">{item.label}</span>
+                          {qty === 0 ? (
+                            <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })} aria-label={`Add ${item.label}`}>+</button>
+                          ) : (
+                            <div className="mod-list__stepper">
+                              <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
+                              <span>{qty}</span>
+                              <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })} aria-label="Add one">+</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -614,18 +725,26 @@ export default function StepGearEntry() {
                           </button>
                         )}
                         {vOpen && (
-                          <div className="vendor-group__models">
-                            {group.items.map(item => (
-                              <ChipStepper
-                                key={item.value}
-                                label={item.label}
-                                qty={supportQty(item.value)}
-                                highlighted={isSupportRecommended(item)}
-                                onAdd={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })}
-                                onIncrement={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })}
-                                onDecrement={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })}
-                              />
-                            ))}
+                          <div className="mod-list">
+                            {group.items.map(item => {
+                              const qty = supportQty(item.value);
+                              const rec = isSupportRecommended(item);
+                              return (
+                                <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
+                                  {rec && <span className="mod-list__dot" />}
+                                  <span className="mod-list__name">{item.label}</span>
+                                  {qty === 0 ? (
+                                    <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })} aria-label={`Add ${item.label}`}>+</button>
+                                  ) : (
+                                    <div className="mod-list__stepper">
+                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
+                                      <span>{qty}</span>
+                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })} aria-label="Add one">+</button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -682,17 +801,24 @@ export default function StepGearEntry() {
                             </span>
                           </button>
                           {vOpen && (
-                            <div className="vendor-group__models">
-                              {group.items.map(item => (
-                                <ChipStepper
-                                  key={item.value}
-                                  label={item.model}
-                                  qty={lightQty(item.value)}
-                                  onAdd={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })}
-                                  onIncrement={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })}
-                                  onDecrement={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })}
-                                />
-                              ))}
+                            <div className="mod-list">
+                              {group.items.map(item => {
+                                const qty = lightQty(item.value);
+                                return (
+                                  <div key={item.value} className="mod-list__row">
+                                    <span className="mod-list__name">{item.model}</span>
+                                    {qty === 0 ? (
+                                      <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })} aria-label={`Add ${item.model}`}>+</button>
+                                    ) : (
+                                      <div className="mod-list__stepper">
+                                        <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
+                                        <span>{qty}</span>
+                                        <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })} aria-label="Add one">+</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>

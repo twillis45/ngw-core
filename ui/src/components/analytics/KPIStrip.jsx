@@ -9,9 +9,9 @@ export default function KPIStrip({ kpi, shootMode, paywall }) {
       sub: kpi?.total_users ? `${fmt(kpi.total_users)} users` : null,
     },
     {
-      label: 'Analyses',
-      value: fmt(kpi?.total_analyses),
-      sub: kpi?.analyses_per_session ? `${kpi.analyses_per_session}/session` : null,
+      label: 'Analysis',
+      value: fmt(kpi?.total_analysis),
+      sub: kpi?.analysis_per_session ? `${kpi.analysis_per_session}/session` : null,
     },
     {
       label: 'Match Rate',

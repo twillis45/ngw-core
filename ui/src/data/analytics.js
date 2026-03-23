@@ -8,7 +8,7 @@ const SESSION_KEY = 'ngw_session_id';
 const MAX_EVENTS = 200;
 
 /** Persistent session ID for this browser session. */
-function getSessionId() {
+export function getSessionId() {
   try {
     let id = sessionStorage.getItem(SESSION_KEY);
     if (!id) {
@@ -62,4 +62,33 @@ export function getStoredEvents() {
 /** Clear stored events. */
 export function clearEvents() {
   try { localStorage.removeItem(EVENTS_KEY); } catch {}
+}
+
+/**
+ * Mark or unmark the current session as a test/dev session.
+ * Excluded sessions are removed from all analytics metrics and dashboards.
+ * Requires the user to be authenticated (token from authApi).
+ *
+ * @param {boolean} [exclude=true]  true = mark as test, false = restore to production
+ * @returns {Promise<boolean>}      true on success
+ */
+export async function excludeCurrentSession(exclude = true) {
+  const sessionId = getSessionId();
+  if (!sessionId) return false;
+  try {
+    const { getToken } = await import('./authApi');
+    const token = getToken();
+    if (!token) return false;
+    const res = await fetch(`/api/analytics/sessions/${sessionId}/exclude`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ exclude }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
 }

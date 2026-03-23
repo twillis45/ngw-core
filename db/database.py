@@ -35,13 +35,27 @@ def init_db():
     with get_db() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
-                id          TEXT PRIMARY KEY,
-                email       TEXT UNIQUE NOT NULL,
-                username    TEXT UNIQUE NOT NULL,
-                hashed_pw   TEXT NOT NULL,
-                created_at  REAL NOT NULL,
-                updated_at  REAL NOT NULL
+                id             TEXT PRIMARY KEY,
+                email          TEXT UNIQUE NOT NULL,
+                username       TEXT UNIQUE NOT NULL,
+                hashed_pw      TEXT NOT NULL,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                created_at     REAL NOT NULL,
+                updated_at     REAL NOT NULL
             );
+
+            -- Backfill existing rows missing the email_verified column
+            -- (ignored if column already exists — executescript is lenient)
+
+            CREATE TABLE IF NOT EXISTS email_verifications (
+                id         TEXT PRIMARY KEY,
+                user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token      TEXT UNIQUE NOT NULL,
+                expires_at REAL NOT NULL,
+                used_at    REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_email_verif_token ON email_verifications(token);
+            CREATE INDEX IF NOT EXISTS idx_email_verif_user  ON email_verifications(user_id);
 
             CREATE TABLE IF NOT EXISTS user_kits (
                 id          TEXT PRIMARY KEY,
@@ -131,6 +145,13 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_rule_candidates_status ON rule_candidates(status);
         """)
+    # Migrate existing users table — add email_verified if missing
+    with get_db() as conn:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "email_verified" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
+            # Default existing accounts to verified so they're not locked out
+
     from db.analytics import init_analytics_table
     init_analytics_table()
     from db.learning import init_learning_tables
@@ -146,10 +167,65 @@ def create_user(email: str, username: str, hashed_pw: str) -> Dict[str, Any]:
     now = time.time()
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO users (id, email, username, hashed_pw, created_at, updated_at) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO users (id, email, username, hashed_pw, email_verified, created_at, updated_at) VALUES (?,?,?,?,0,?,?)",
             (uid, email.lower(), username, hashed_pw, now, now),
         )
-    return {"id": uid, "email": email.lower(), "username": username}
+    return {"id": uid, "email": email.lower(), "username": username, "email_verified": False}
+
+
+# ── Email Verification ─────────────────────────────────────
+
+def create_verification_token(user_id: str, expires_in: int = 86400) -> str:
+    """Create a new verification token (valid for expires_in seconds, default 24h).
+    Returns the token string."""
+    import secrets
+    token = secrets.token_urlsafe(32)
+    vid = uuid.uuid4().hex
+    expires_at = time.time() + expires_in
+    with get_db() as conn:
+        # Invalidate any existing unused tokens for this user
+        conn.execute(
+            "DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL",
+            (user_id,),
+        )
+        conn.execute(
+            "INSERT INTO email_verifications (id, user_id, token, expires_at) VALUES (?,?,?,?)",
+            (vid, user_id, token, expires_at),
+        )
+    return token
+
+
+def consume_verification_token(token: str) -> Optional[Dict[str, Any]]:
+    """Mark token as used and set user.email_verified=1.
+    Returns updated user dict or None if token is invalid/expired."""
+    now = time.time()
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM email_verifications WHERE token = ? AND used_at IS NULL AND expires_at > ?",
+            (token, now),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE email_verifications SET used_at = ? WHERE id = ?",
+            (now, row["id"]),
+        )
+        conn.execute(
+            "UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?",
+            (now, row["user_id"]),
+        )
+        user = conn.execute("SELECT * FROM users WHERE id = ?", (row["user_id"],)).fetchone()
+    return dict(user) if user else None
+
+
+def mark_email_verified(user_id: str) -> None:
+    """Directly mark a user's email as verified (admin use / testing)."""
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?",
+            (now, user_id),
+        )
 
 
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:

@@ -103,17 +103,32 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
     analysis = None
     lighting_intel = None
     try:
-        ar = analyze_image(str(dest), run_extended=False, run_solver=False)
+        # Use extended pipeline so the reference eval analysis screen and the
+        # shoot-match blueprint both resolve from the same truth source.
+        # run_extended=True enables VLW reconciliation, extended vision passes,
+        # and cross-classifier resolution — the same depth as shoot_match itself.
+        # This is one-time per image upload (not real-time), so the extra latency
+        # (~3-5s) is acceptable for accuracy.
+        ar = analyze_image(str(dest), run_extended=True, run_solver=False)
         if ar.ok:
             raw = ar.description
             vision = ar.vision_data
             lighting_intel = ar.lighting_intel
 
+            # Build classification dict and enrich with the resolved
+            # authoritative_pattern so the priorAnalysis mechanism in
+            # shoot-match can anchor pattern detection to what was shown
+            # on the reference eval screen, rather than re-deriving it.
+            _cls = dict(ar.classification or {})
+            if ar.authoritative_pattern and ar.authoritative_pattern != "unknown":
+                _cls["lightingPattern"] = ar.authoritative_pattern
+                _cls["patternSource"] = ar.authoritative_pattern_source
+
             analysis = {
                 "palette": raw.get("palette", {}),
                 "orientation": raw.get("orientation"),
                 "isGrayscale": raw.get("is_grayscale_like", False),
-                "classification": ar.classification,
+                "classification": _cls,
             }
 
             if vision and vision.get("ok"):
@@ -189,7 +204,8 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
                         "raw": ref_diagram_dict,
                     }
 
-                    # Build descriptions
+                    # Build the reference description (sub-keys: catchlights,
+                    # lightQuality, background, pattern, subject).
                     ref_description = build_reference_description(
                         vision_data=vision,
                         classification=ar.classification,
@@ -198,6 +214,20 @@ async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
                         cue_report=ar.cue_report,
                         vlm_description=ar.vlm_description,
                     )
+
+                    # Override referenceAnalysis with the orchestrator-resolved
+                    # version — it has been through pattern_candidates resolution
+                    # and _sync_authoritative_pattern_to_cards(), so all three
+                    # cards (image_read, lighting_read, recreation_setup) agree
+                    # on the authoritative pattern.  This is the single truth
+                    # source: the analysis screen and the blueprint both read
+                    # from the same resolved data.
+                    if ar.reference_analysis is not None:
+                        try:
+                            ref_description["referenceAnalysis"] = ar.reference_analysis.model_dump()
+                        except Exception:
+                            pass  # keep build_reference_description() result on failure
+
                     analysis["description"] = ref_description
 
                     # Lighting intelligence summary

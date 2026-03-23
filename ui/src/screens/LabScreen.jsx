@@ -149,7 +149,7 @@ export default function LabScreen() {
   ];
 
   return (
-    <div className="screen">
+    <div className="screen lab-screen">
       <h2 className="screen-heading">NGW Lab</h2>
       <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', textAlign: 'center', marginBottom: 'var(--space-md)' }}>
         Internal development tools

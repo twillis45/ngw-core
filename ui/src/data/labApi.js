@@ -225,10 +225,42 @@ export async function getLearningOps() {
   return labFetch('/learning/ops');
 }
 
-export async function triggerIngestion(days = 30) {
+export async function getSchedulerStatus() {
+  return labFetch('/learning/scheduler');
+}
+
+export async function startScheduler({ intervalHours, windowDays } = {}) {
+  return labFetch('/learning/scheduler/start', {
+    method: 'POST',
+    body: JSON.stringify({
+      interval_hours: intervalHours ?? null,
+      window_days:    windowDays    ?? null,
+    }),
+  });
+}
+
+export async function stopScheduler() {
+  return labFetch('/learning/scheduler/stop', { method: 'POST' });
+}
+
+export async function configureScheduler({ intervalHours, windowDays }) {
+  return labFetch('/learning/scheduler', {
+    method: 'PATCH',
+    body: JSON.stringify({
+      interval_hours: intervalHours ?? null,
+      window_days:    windowDays    ?? null,
+    }),
+  });
+}
+
+export async function runSchedulerNow() {
+  return labFetch('/learning/scheduler/run-now', { method: 'POST' });
+}
+
+export async function triggerIngestion(days = 30, mode = 'production') {
   return labFetch('/learning/ingest', {
     method: 'POST',
-    body: JSON.stringify({ days }),
+    body: JSON.stringify({ days, mode }),
   });
 }
 
@@ -258,9 +290,10 @@ export async function generateCandidateFromCluster(clusterId) {
   });
 }
 
-export async function evaluateCandidate(candidateId) {
+export async function evaluateCandidate(candidateId, { autoReleaseOnSafe = false } = {}) {
   return labFetch(`/learning/candidates/${candidateId}/evaluate`, {
     method: 'POST',
+    body: JSON.stringify({ auto_release_on_safe: autoReleaseOnSafe }),
   });
 }
 
@@ -427,5 +460,58 @@ export async function applyCandidate(candidateId, notes = '') {
   return labFetch(`/learning/candidates/${candidateId}/apply`, {
     method: 'POST',
     body: JSON.stringify({ notes }),
+  });
+}
+
+// ── Knowledge Base ────────────────────────────────────────
+
+/** Full pattern knowledge base — all 27 entries with risk levels and signal thresholds. */
+export async function getKnowledgeBase() {
+  return labFetch('/learning/knowledge');
+}
+
+/** Single pattern knowledge entry with symptoms and fix steps. */
+export async function getKnowledgeEntry(patternId) {
+  return labFetch(`/learning/knowledge/${patternId}`);
+}
+
+/** Aggregate weighted signals for a pattern — returns AggregatedInsight. */
+export async function aggregatePatternSignals(patternId, days = 30) {
+  return labFetch(`/learning/knowledge/${patternId}/signals`, {
+    method: 'POST',
+    body: JSON.stringify({ days }),
+  });
+}
+
+/** Run 3-gate CI evaluation for a pattern candidate. */
+export async function runCIGate(patternId, candidateDict) {
+  return labFetch(`/learning/knowledge/${patternId}/ci-gate`, {
+    method: 'POST',
+    body: JSON.stringify({ candidate_dict: candidateDict }),
+  });
+}
+
+// ── Revenue Simulation ────────────────────────────────────
+
+/** Compute revenue impact from a CVR delta for a pattern. */
+export async function computeRevenueImpact(patternId, { sessionsPerDay = 500, beforeCvr = 0.035, cvrDelta = 0.003, arpu = 49, days = 30 } = {}) {
+  return labFetch('/learning/revenue/impact', {
+    method: 'POST',
+    body: JSON.stringify({
+      pattern_id: patternId,
+      sessions_per_day: sessionsPerDay,
+      before_cvr: beforeCvr,
+      cvr_delta: cvrDelta,
+      arpu,
+      days,
+    }),
+  });
+}
+
+/** Run 30-day simulation for a list of scenarios. */
+export async function simulateRevenue(scenarios) {
+  return labFetch('/learning/revenue/simulate', {
+    method: 'POST',
+    body: JSON.stringify({ scenarios }),
   });
 }

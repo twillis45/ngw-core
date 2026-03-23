@@ -222,7 +222,7 @@ export const SYMPTOMS = [
  * @param {object} opts
  * @param {object}  opts.ambiguityFlags   - from result.signalReliability.ambiguityFlags
  * @param {object}  opts.edgeCaseFlags    - from result.edgeCaseFlags
- * @param {number}  opts.reliabilityScore - 0–1 from result.bestMatch.reliabilityScore
+ * @param {number}  opts.reliabilityScore - 0–1 (normalized from result.bestMatch.reliabilityScore)
  * @param {number}  opts.signalStrength   - 0–1 from result.signalReliability.overallSignalStrength
  * @returns {string[]} ordered array of symptom slugs (most actionable first), max 3
  */

@@ -255,25 +255,35 @@ def _infer_pattern_from_catchlights(
         dominant_hour = all_hours[0]
 
         if dominant_quad == "upper_left" or dominant_hour in (10, 11):
+            # Catchlight side indicates KEY POSITION (camera-left, elevated), not pattern.
+            # Both Loop and Rembrandt produce upper-left catchlights — the nose shadow
+            # is the only reliable discriminator.  Default to loop (more common) with
+            # low confidence; orchestrator should override with nose-shadow result.
             return {
-                "pattern": "rembrandt",
-                "pattern_confidence": 0.5 + conf_boost,
-                "key_position_text": "45 off-axis",
+                "pattern": "loop",
+                "pattern_confidence": 0.35 + conf_boost,
+                "key_position_text": "30-45 off-axis left",
                 "fill_method_text": "",
                 "light_count": 1,
                 "unrecognized_details": [],
-                "notes": [f"Single catchlight at {dominant_hour} o'clock → Rembrandt-ish."],
+                "notes": [
+                    f"Single catchlight at {dominant_hour} o'clock → key camera-left; "
+                    "loop/rembrandt indeterminate without nose shadow data."
+                ],
             }
 
         if dominant_quad == "upper_right" or dominant_hour in (1, 2):
             return {
                 "pattern": "loop",
-                "pattern_confidence": 0.5 + conf_boost,
-                "key_position_text": "30 off-axis",
+                "pattern_confidence": 0.35 + conf_boost,
+                "key_position_text": "30-45 off-axis right",
                 "fill_method_text": "",
                 "light_count": 1,
                 "unrecognized_details": [],
-                "notes": [f"Single catchlight at {dominant_hour} o'clock → loop."],
+                "notes": [
+                    f"Single catchlight at {dominant_hour} o'clock → key camera-right; "
+                    "loop/rembrandt indeterminate without nose shadow data."
+                ],
             }
 
         if dominant_quad == "top_center" or dominant_hour == 12:
@@ -790,11 +800,24 @@ def infer_lighting_from_vision(
     _detected_env = None
 
     if cue_report is not None and cue_report.ok:
-        # Color temperature from classification or cue report
+        # Color temperature from classification or cue report.
+        # VLM classifiers return string descriptors ("warm", "cool", "daylight")
+        # rather than numeric Kelvin values.  Map them so detected_cct_kelvin
+        # is populated and the blueprint WB reflects the actual reference image.
+        _CCT_STRING_TO_KELVIN = {
+            "tungsten": 3200, "incandescent": 3200, "warm": 3200,
+            "warm_white": 3800, "candle": 2700, "halogen": 3400,
+            "neutral": 5500, "daylight": 5500, "strobe": 5500,
+            "flash": 5500, "natural": 5600, "studio": 5600,
+            "overcast": 6500, "cool": 6500, "cloudy": 6500,
+            "shade": 7500, "open_shade": 7500, "blue_sky": 8000,
+        }
         if classification and classification.get("colorTemperature"):
             ct = classification["colorTemperature"]
             if isinstance(ct, (int, float)) and ct > 0:
                 _detected_cct = int(ct)
+            elif isinstance(ct, str):
+                _detected_cct = _CCT_STRING_TO_KELVIN.get(ct.lower().strip())
 
         # Environment from cue-based inference (already ran above)
         if cue_report.cues_computed > 0:
@@ -886,10 +909,13 @@ _ROLE_QUADRANT_MAP: Dict[str, Dict[str, set]] = {
         "key": {"upper_left", "upper_right", "top_center"},
     },
     "rembrandt": {
-        "key": {"upper_left"},
+        # Key can be on either side — left or right — depending on which side
+        # the subject's lit cheek faces the camera.
+        "key": {"upper_left", "upper_right"},
     },
     "loop": {
-        "key": {"upper_right", "top_center"},
+        # Loop key can also be on either side; top_center → slight front elevation.
+        "key": {"upper_left", "upper_right", "top_center"},
     },
     "split": {
         "key": {"hard_left", "hard_right"},
@@ -1189,7 +1215,7 @@ def describe_background(
     """
     if not vision_data:
         return {
-            "summary": "Background could not be analysed.",
+            "summary": "Background could not be analyzed.",
             "dominantColors": [],
             "backgroundRatio": None,
             "backgroundLight": None,
@@ -1340,7 +1366,7 @@ def describe_subject(
             "angle": "unknown",
             "framing": "unknown",
             "skinTone": None,
-            "summary": "Subject could not be analysed.",
+            "summary": "Subject could not be analyzed.",
         }
 
     pose_data = vision_data.get("pose", {})

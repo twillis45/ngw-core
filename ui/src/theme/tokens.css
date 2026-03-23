@@ -109,9 +109,9 @@
 
   --color-icon:            #A89060;  /* warm brass — instrument panel, not SaaS blue */
 
-  /* CTA buttons — authoritative dark blue, not neon */
-  --color-cta:             #2870CC;
-  --color-cta-hover:       #1D60B8;
+  /* CTA buttons — bright enough to read on near-black background */
+  --color-cta:             #3D82E6;
+  --color-cta-hover:       #4D92F4;
   /* Paid / commerce badge — always a recognisable gold-amber */
   --color-paid:            #f59e0b;
   --color-paid-subtle:     rgba(245, 158, 11, 0.12);
@@ -213,52 +213,6 @@
   --shadow-card: 0 1px 4px rgba(0,0,0,0.42);
 }
 
-/* ── Lightroom Theme ────────────────────────────────────── */
-/* Inspired by Adobe Lightroom's panel-heavy editing UI:     */
-/* medium grays with higher surface contrast, Adobe blue     */
-/* accent, slightly warmer neutrals than Photoshop.          */
-[data-theme="lightroom"] {
-  --color-bg:               #1A1A1A;
-  --color-surface:          #303030;
-  --color-surface-elevated: #3D3D3D;
-  --color-text:             #D1D1D1;
-  --color-text-secondary:   #8E8E8E;
-  --color-border:           #484848;
-  --border-subtle:          rgba(72, 72, 72, 0.6);
-  --border-faint:           rgba(72, 72, 72, 0.38);
-
-  --color-accent:           #1473E6;
-  --color-accent-hover:     #0D66D0;
-  --color-accent-subtle:    rgba(20, 115, 230, 0.15);
-  --color-accent-subtle-border: rgba(20, 115, 230, 0.28);
-
-  --color-success:          #2DA562;
-  --color-success-subtle:   rgba(45, 165, 98, 0.12);
-  --color-warning:          #E8A100;
-  --color-warning-subtle:   rgba(232, 161, 0, 0.10);
-  --color-error:            #D7373F;
-  --color-error-subtle:     rgba(215, 55, 63, 0.10);
-  --color-creative:         #9256D9;
-  --color-creative-subtle:  rgba(146, 86, 217, 0.10);
-
-  --color-key:              #E8A100;
-  --color-fill:             #1473E6;
-  --color-rim:              #9256D9;
-  --color-bg-light:         #2DA562;
-  --color-hair:             #db2777;
-
-  --color-icon:            var(--color-accent);
-
-  --color-cta:             #1473E6;
-  --color-cta-hover:       #0D66D0;
-  --color-paid:            #E8A100;
-  --color-paid-subtle:     rgba(232, 161, 0, 0.12);
-
-  --shadow-sm:   0 1px 3px rgba(0,0,0,0.35);
-  --shadow-md:   0 3px 10px rgba(0,0,0,0.45);
-  --shadow-lg:   0 6px 20px rgba(0,0,0,0.55);
-  --shadow-card: 0 1px 4px rgba(0,0,0,0.36);
-}
 
 /* ── DailyNote Theme ────────────────────────────────────── */
 /* Inspired by DailyNote's Clean Light theme: pure whites,  */

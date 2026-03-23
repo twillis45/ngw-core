@@ -233,10 +233,15 @@ class TestReconcileSourceQuality:
         result = _reconcile_source_quality(vlm, "hard")
         assert result.agreement == "conflicting"
 
-    def test_bw_note_on_hard_conflict(self):
+    def test_bw_auto_resolves_to_vlm_override(self):
+        # B&W processing inflates apparent shadow hardness in CV.  When VLM
+        # expects soft (clamshell) but CV reads hard and image is B&W,
+        # the reconciler now auto-resolves to vlm_override rather than flagging
+        # conflicting — VLM catchlight analysis is more reliable here.
         vlm = _map_vlm_style("clamshell")  # expects soft
         result = _reconcile_source_quality(vlm, "hard", is_bw=True)
-        assert result.agreement == "conflicting"
+        assert result.agreement == "vlm_override"
+        assert result.recommended_value == "soft"
         assert len(result.notes) > 0
 
 

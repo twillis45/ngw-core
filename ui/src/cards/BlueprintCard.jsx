@@ -12,6 +12,23 @@ import CardIcon from '../components/CardIcon';
 import { getRoleColor } from '../lib/lightRoleColors';
 import useSettings from '../hooks/useSettings';
 import { powerHint } from '../transform';
+import { wbTempClass } from '../utils/units';
+import HelpTip from '../components/HelpTip';
+import WBSpectrum from '../components/WBSpectrum';
+
+const LIGHT_FIELD_TIPS = {
+  Modifier: 'The shaping device on the light. Larger modifiers (octabox, large softbox) produce softer shadows. Smaller/harder modifiers (grid, snoot) produce crisp shadows and tight control.',
+  Position: 'Camera-relative placement — left, right, above, behind. Determines shadow direction on the subject\'s face.',
+  Distance: 'Light-to-subject distance. Closer = softer shadows + faster falloff (subject brighter than background). Farther = harder shadows + more even exposure across the frame.',
+  Power:    'Output level relative to the key light. Key is always set first. Fill is 1–2 stops below key for natural contrast. Rim starts 0.5 stops below key.',
+};
+
+const CAMERA_FIELD_TIPS = {
+  Aperture: 'Controls depth of field and flash exposure. f/8–f/11 keeps the whole face sharp. Wider apertures (f/2.8) blur the background but reduce flash sync headroom.',
+  ISO:      'Sensor sensitivity. Lower ISO = cleaner image. Flash setups typically use ISO 100–200. Higher ISO may be needed outdoors or when mixing with ambient light.',
+  Shutter:  'Controls ambient light bleed. Flash sync limit is typically 1/200s. Slower shutter = more ambient; faster = darker background (HSS required above sync speed).',
+  WB:       'White balance. Flash is typically 5500–5600K (Daylight). Match your WB to the dominant light source to avoid colour casts between shadows and highlights.',
+};
 
 const SHOP_ICON = (
   <svg className="shop-link__icon" width="10" height="10" viewBox="0 0 24 24" fill="none"
@@ -110,7 +127,10 @@ function LightRow({ light, index, isAssistant }) {
       <div className="blueprint-light__details">
         {displayModifier && (
           <div className="blueprint-light__row">
-            <span className="blueprint-light__key">Modifier</span>
+            <span className="blueprint-light__key">
+              Modifier
+              <HelpTip text={LIGHT_FIELD_TIPS.Modifier} />
+            </span>
             <span className="blueprint-light__val">
               <a
                 href={getBHUrl(`${displayModifier}${modSize ? ' ' + modSize : ''}`)}
@@ -127,19 +147,28 @@ function LightRow({ light, index, isAssistant }) {
         )}
         {position && (
           <div className="blueprint-light__row">
-            <span className="blueprint-light__key">Position</span>
+            <span className="blueprint-light__key">
+              Position
+              <HelpTip text={LIGHT_FIELD_TIPS.Position} />
+            </span>
             <span className="blueprint-light__val">{position}</span>
           </div>
         )}
         {distance && (
           <div className="blueprint-light__row">
-            <span className="blueprint-light__key">Distance</span>
+            <span className="blueprint-light__key">
+              Distance
+              <HelpTip text={LIGHT_FIELD_TIPS.Distance} />
+            </span>
             <span className="blueprint-light__val">{distance}</span>
           </div>
         )}
         {power && (
           <div className="blueprint-light__row">
-            <span className="blueprint-light__key">Power</span>
+            <span className="blueprint-light__key">
+              Power
+              <HelpTip text={LIGHT_FIELD_TIPS.Power} />
+            </span>
             <span className="blueprint-light__val">{power}</span>
           </div>
         )}
@@ -155,7 +184,7 @@ function LightRow({ light, index, isAssistant }) {
   );
 }
 
-export default function BlueprintCard({ lights, lightingIntelligence, cameraSettings, mode }) {
+export default function BlueprintCard({ lights, lightingIntelligence, cameraSettings, lightType, lightTypeNote, mode, twoHostSetup }) {
   if (!lights || lights.length === 0) return null;
 
   const cam = cameraSettings;
@@ -170,7 +199,12 @@ export default function BlueprintCard({ lights, lightingIntelligence, cameraSett
         <span className="blueprint-card__badge">Paid</span>
       </div>
 
-      {!isAssistant && (
+      {!isAssistant && twoHostSetup && (
+        <div className="blueprint-two-host-note">
+          <strong>2-Host Crossed Key</strong> — each light is the other host's fill. Match outputs exactly or one host reads overlit.
+        </div>
+      )}
+      {!isAssistant && !twoHostSetup && (
         <p className="blueprint-card__intro">
           Positions, modifiers, and power ratios — designed for repeatable results.
         </p>
@@ -190,31 +224,44 @@ export default function BlueprintCard({ lights, lightingIntelligence, cameraSett
           <div className="blueprint-camera__grid">
             {cam.aperture && (
               <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">Aperture</span>
+                <span className="blueprint-camera__key">
+                  Aperture
+                  <HelpTip text={CAMERA_FIELD_TIPS.Aperture} side="below" />
+                </span>
                 <span className="blueprint-camera__val">{cam.aperture}</span>
               </div>
             )}
             {cam.iso && (
               <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">ISO</span>
+                <span className="blueprint-camera__key">
+                  ISO
+                  <HelpTip text={CAMERA_FIELD_TIPS.ISO} side="below" />
+                </span>
                 <span className="blueprint-camera__val">{cam.iso}</span>
               </div>
             )}
             {cam.shutter && (
               <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">Shutter</span>
+                <span className="blueprint-camera__key">
+                  Shutter
+                  <HelpTip text={CAMERA_FIELD_TIPS.Shutter} side="below" />
+                </span>
                 <span className="blueprint-camera__val">{cam.shutter}</span>
               </div>
             )}
             {cam.wb && (
               <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">WB</span>
-                <span className="blueprint-camera__val">{cam.wb}</span>
+                <span className="blueprint-camera__key">
+                  WB
+                  <HelpTip text={CAMERA_FIELD_TIPS.WB} side="below" />
+                </span>
+                <span className={`blueprint-camera__val ${wbTempClass(cam.wb)}`}>{cam.wb}</span>
+                <WBSpectrum wb={cam.wb} />
               </div>
             )}
           </div>
           {li?.detectedCCT && (
-            <div className="blueprint-camera__cct">
+            <div className={`blueprint-camera__cct ${wbTempClass(String(li.detectedCCT))}`}>
               Detected colour temp: <strong>{li.detectedCCT} K</strong>
             </div>
           )}
@@ -225,6 +272,19 @@ export default function BlueprintCard({ lights, lightingIntelligence, cameraSett
       {!isAssistant && li?.fillMethod && (
         <div className="blueprint-note">
           <span className="blueprint-note__label">Fill method:</span> {li.fillMethod}
+        </div>
+      )}
+
+      {/* Light type note — shown when recipe has a strong strobe or continuous preference */}
+      {!isAssistant && lightTypeNote && (
+        <div className={`blueprint-light-type-note blueprint-light-type-note--${lightType || 'both'}`}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            {lightType === 'continuous'
+              ? <><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></>
+              : <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>
+            }
+          </svg>
+          <span>{lightTypeNote}</span>
         </div>
       )}
     </div>

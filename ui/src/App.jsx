@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useAppState } from './context/AppContext';
 
 import AppHeader from './components/AppHeader';
+import PreviewBanner from './components/PreviewBanner';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
 import WelcomeScreen from './screens/WelcomeScreen';
@@ -126,6 +127,7 @@ export default function App() {
   return (
     <>
       {!isV2 && <AppHeader />}
+      {!isV2 && <PreviewBanner />}
       <div className="app-layout">
         {!isV2 && <BottomNav onShare={handleShare} />}
         <Screen />

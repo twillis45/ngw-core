@@ -4,6 +4,20 @@
  */
 import CollapsibleCard from './CollapsibleCard';
 import CardIcon from '../components/CardIcon';
+import HelpTip from '../components/HelpTip';
+
+const FIELD_TIPS = {
+  'Lighting Family': 'Broad category of the lighting approach — e.g. portrait, beauty, editorial, available light. Drives modifier and position recommendations.',
+  'Source Quality':  'Hard sources (bare bulb, grid spot) produce crisp shadow edges. Soft sources (large softbox, umbrella) wrap light around the subject and produce gradual shadow transitions.',
+  'Direction':       'Where the key light is coming from relative to the camera. Off-axis (45°) creates shadows; on-axis (direct) flattens them.',
+  'Shadow Pattern':  'The shape cast by the subject\'s nose and face. Rembrandt = triangle under eye. Loop = small shadow below nose. Butterfly = symmetrical shadow under nose. Clamshell = shadow-free beauty look.',
+  'Fill':            'A fill light or reflector reduces shadow depth. None = deep natural shadows. Subtle = slight lift. Moderate = even skin. Strong = very low contrast.',
+  'Rim Light':       'A light behind and to the side of the subject creates a bright edge that separates them from the background. Important for depth when background is dark.',
+  'Light Count':     'Estimated number of artificial light sources. Single-source setups rely on modifiers for quality; multi-light setups control each zone independently.',
+  'Color Temperature': 'Measured in Kelvin. Daylight ≈ 5500K (neutral). Tungsten ≈ 3200K (warm/amber). Flash ≈ 5600K. Mismatched sources produce mixed-colour casts.',
+  'Environment':     'Detected shooting context — affects expected ambient light behaviour and recommended settings.',
+  'Processing':      'Post-processing or tonal treatment detected — e.g. high contrast, matte, desaturated. May indicate a deliberate stylistic choice vs. in-camera exposure.',
+};
 
 export default function RefLightingCard({ lightingRead, lightingIntelligence }) {
   if (!lightingRead) return null;
@@ -13,7 +27,6 @@ export default function RefLightingCard({ lightingRead, lightingIntelligence }) 
   const hasObs = lr.key_observations?.length > 0;
   const hasAmbiguity = lr.ambiguity_notes?.length > 0;
 
-  // Build a readable lighting family label
   const familyLabel = lr.lighting_family && lr.lighting_family !== 'unknown'
     ? lr.lighting_family.replace(/[-_]/g, ' ')
     : null;
@@ -72,9 +85,13 @@ export default function RefLightingCard({ lightingRead, lightingIntelligence }) 
 }
 
 function Row({ label, value }) {
+  const tip = FIELD_TIPS[label];
   return (
     <div className="ref-card__row">
-      <span className="ref-card__label">{label}</span>
+      <span className="ref-card__label">
+        {label}
+        {tip && <HelpTip text={tip} side="above" />}
+      </span>
       <span className="ref-card__value">{value}</span>
     </div>
   );

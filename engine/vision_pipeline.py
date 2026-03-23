@@ -352,7 +352,7 @@ def _detect_background_environment(
 ) -> Dict[str, Any]:
     """Detect background environment characteristics (outdoor, foliage, sunlight).
 
-    Analyses texture variance, edge density, and (for colour images) green
+    Analyzes texture variance, edge density, and (for colour images) green
     channel dominance in the background region.
     """
     h, w = img_bgr.shape[:2]
@@ -374,7 +374,7 @@ def _detect_background_environment(
     edges = cv2.Canny(bg_gray, BG_ENV.CANNY_LOW, BG_ENV.CANNY_HIGH)
     edge_ratio = float(np.sum(edges[background_mask] > 0) / max(bg_pixels, 1))
 
-    # Also analyse the BRIGHT portion of the background separately.
+    # Also analyze the BRIGHT portion of the background separately.
     # In images with strong directional light the background can be mostly
     # black with pockets of illuminated detail (foliage, architecture, etc).
     bright_bg_mask = background_mask & (gray > BG_ENV.BRIGHT_BG_THRESHOLD)
@@ -642,6 +642,43 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     left_catchlights = analyze_eye(left_center, left_r, "left") if _left_open else []
     right_catchlights = analyze_eye(right_center, right_r, "right") if _right_open else []
     all_catchlights = left_catchlights + right_catchlights
+
+    # ── Filter lower-hemisphere catchlights ───────────────────────────
+    # Positions 4–8 o'clock are below the iris horizontal axis.  In a standard
+    # portrait the key is always above (9–3 via 12), so bright spots in the
+    # lower hemisphere almost always come from reflective costume elements —
+    # medals, name-tags, jewellery, eyeglass rims — not from the actual source.
+    # Strategy:
+    #   • When upper-hemisphere (9–3 via 12) catchlights also exist, discard
+    #     all lower-hemisphere ones — they are false positives.
+    #   • When ONLY lower-hemisphere catchlights exist, keep them but annotate
+    #     with suspect_lower=True so downstream inference can discount them.
+    _LOWER_HEMISPHERE_CLOCKS = {4, 5, 6, 7, 8}
+
+    def _is_lower(c: dict) -> bool:
+        try:
+            return int(c["position"].split()[0]) in _LOWER_HEMISPHERE_CLOCKS
+        except (ValueError, IndexError):
+            return False
+
+    _upper_cls = [c for c in all_catchlights if not _is_lower(c)]
+    _lower_cls  = [c for c in all_catchlights if     _is_lower(c)]
+
+    if _upper_cls and _lower_cls:
+        # Mix of valid + suspect — drop the suspect lower-hemisphere ones
+        all_catchlights   = _upper_cls
+        left_catchlights  = [c for c in left_catchlights  if not _is_lower(c)]
+        right_catchlights = [c for c in right_catchlights if not _is_lower(c)]
+    elif _lower_cls and not _upper_cls:
+        # Only lower-hemisphere catchlights — discard entirely for key-position
+        # inference.  In a standard portrait the key always comes from above; a
+        # lone catchlight below the iris is almost certainly a costume reflection
+        # (medal, name-tag, jewellery, eyeglass rim) rather than the actual source.
+        # Clearing here lets the count=0 early-return fire, which prevents a wrong
+        # key position ("below left") from polluting all downstream inferences.
+        all_catchlights   = []
+        left_catchlights  = []
+        right_catchlights = []
 
     # ── Face yaw estimation from landmark geometry ────────────────────
     # Compare the distance from nose tip to left vs right face edges.

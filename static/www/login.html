@@ -60,14 +60,46 @@
       <button type="submit" class="btn btn--primary" id="loginBtn">Log In</button>
     </form>
 
-    <div class="auth__footer">
+    <div class="auth__footer" style="margin-bottom:8px">
       Don't have an account? <a href="/signup">Sign up</a>
+    </div>
+    <div class="auth__footer">
+      <button type="button" class="auth__reset-link" id="forgotBtn">Forgot your password?</button>
+    </div>
+
+    <div id="resetInfo" class="auth__reset-info" style="display:none">
+      <strong>To reset your password:</strong>
+      <p>Email <a href="mailto:hello@noguesswork.com">hello@noguesswork.com</a> from the address on your account. We&rsquo;ll send a reset link within a few hours.</p>
     </div>
   </div>
 </main>
 
+<style>
+.auth__reset-link {
+  background: none; border: none; padding: 0;
+  color: var(--accent, #4DA3FF); font-size: .875rem;
+  cursor: pointer; text-decoration: underline;
+}
+.auth__reset-link:hover { opacity: .8; }
+.auth__reset-info {
+  margin-top: 16px; padding: 14px 16px;
+  background: rgba(77,163,255,.08);
+  border: 1px solid rgba(77,163,255,.25);
+  border-radius: 8px; font-size: .875rem;
+  line-height: 1.55; color: var(--text-dim, #9ca3af);
+}
+.auth__reset-info strong { color: var(--text, #f9fafb); display: block; margin-bottom: 6px; }
+.auth__reset-info a { color: var(--accent, #4DA3FF); }
+</style>
 <script src="/www/js/marketing.js"></script>
 <script>
+document.getElementById('forgotBtn').addEventListener('click', function() {
+  var el = document.getElementById('resetInfo');
+  var shown = el.style.display !== 'none';
+  el.style.display = shown ? 'none' : 'block';
+  this.textContent = shown ? 'Forgot your password?' : 'Hide reset instructions';
+});
+
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var btn = document.getElementById('loginBtn');

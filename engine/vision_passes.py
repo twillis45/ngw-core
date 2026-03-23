@@ -1145,8 +1145,11 @@ def catchlight_pass(
             if eye_roi.size < 100:
                 continue
 
-            # Find bright spots in eye region
-            thresh_val = max(200, int(np.percentile(eye_roi, 95)))
+            # Find bright spots in eye region.
+            # Floor lowered 200 → 180: catchlights in dark irises (dark-skinned
+            # subjects, brown/dark eyes) can peak at 180-199 luma and were
+            # missed with the original hard floor.
+            thresh_val = max(180, int(np.percentile(eye_roi, 95)))
             _, bright = cv2.threshold(eye_roi, thresh_val, 255, cv2.THRESH_BINARY)
 
             bright_pixels = np.sum(bright > 0)
@@ -2566,7 +2569,18 @@ def light_structure_pass(
         }
 
     # ── Shadow detection in nose region ──────────────────────────
-    shadow_threshold = face_mean * 0.7
+    # Skin-tone adaptive threshold: darker skin has a compressed tonal range,
+    # so shadow pixels are only slightly darker than the face mean.  A fixed
+    # 0.70 ratio classifies too much as "lit" on dark skin (face_mean ~90-110).
+    # Boost the ratio for darker faces so shadow pixels near 75-80 luma are
+    # captured correctly.  Capped at 0.82 to avoid false positives on very
+    # dark backlit faces where noise approaches face_mean.
+    # face_mean ~180 (light skin)  → ratio ≈ 0.70  → threshold ≈ 126
+    # face_mean ~130 (medium skin) → ratio ≈ 0.70  → threshold ≈  91
+    # face_mean ~100 (dark skin)   → ratio ≈ 0.775 → threshold ≈  78
+    _shadow_ratio_base = 0.70 + max(0.0, (130.0 - face_mean) / 400.0)
+    _shadow_ratio_base = min(_shadow_ratio_base, 0.82)
+    shadow_threshold = face_mean * _shadow_ratio_base
     shadow_mask = (nose_region < shadow_threshold).astype(np.uint8)
     shadow_ratio = float(np.mean(shadow_mask))
 
@@ -2634,7 +2648,13 @@ def light_structure_pass(
     elif nose_shadow_angle_deg > 0:
         _angle_near_vertical = (160 < nose_shadow_angle_deg < 200)
     else:
-        _angle_near_vertical = True  # no angle data → don't constrain
+        # No reliable angle data — do NOT presume vertical.
+        # Defaulting True allowed butterfly to fire on dark skin where compressed
+        # shadow range produces a small, nearly-symmetric nose shadow with no
+        # measurable centroid direction.  Loop and Rembrandt would then be skipped
+        # even when the shadow asymmetry clearly points off-axis.
+        # Require actual measured evidence of a near-vertical angle for butterfly.
+        _angle_near_vertical = False
 
     # ── Very low shadow: on-axis source (butterfly / beauty dish) ──
     # When shadow_density is extremely low (< 5%), the nose region has
@@ -2642,9 +2662,11 @@ def light_structure_pass(
     # top/bottom) are running on noise.  Minimal shadow = centered, on-axis
     # source — classify as butterfly.  This catches beauty dish and ring
     # light setups that produce almost no nose shadow.
-    # Guard: a dark face (face_mean < 80) likely means backlighting/rim light,
-    # not an on-axis source.  Low shadow_ratio on a dark face is noise.
-    _face_bright_enough = face_mean > 80
+    # Guard: a nearly-silhouetted face (face_mean < 60) likely means backlighting
+    # or rim light, not an on-axis source.  Low shadow_ratio there is noise.
+    # Threshold lowered from 80 → 60 so dark-skinned subjects in normal studio
+    # lighting (face_mean 70-100) are not incorrectly excluded from butterfly detection.
+    _face_bright_enough = face_mean > 60
     if shadow_ratio < 0.05 and abs(left_shadow - right_shadow) < 0.15 and _face_bright_enough:
         pattern_name = "butterfly"
         nose_shadow_shape = "minimal_centered"
@@ -2699,12 +2721,16 @@ def light_structure_pass(
             if face_mean > 0:
                 _triangle_isolation = (cheek_brightness - surround_brightness) / max(face_mean, 1.0)
 
-            # Triangle = bright patch on shadow cheek.  Brightness above the
-            # shadow threshold is sufficient for classification here;
-            # isolation strength (_triangle_isolation) is stored as a signal
-            # for downstream confidence scoring in the orchestrator.
+            # Triangle = bright patch on shadow cheek that is ALSO meaningfully
+            # brighter than the surrounding shadow area.  On dark skin the cheek
+            # can exceed shadow_threshold purely because of normal skin luminance,
+            # not because a lit triangle is present.  _triangle_isolation
+            # (cheek - surround) / face_mean guards against this false positive:
+            # a genuine Rembrandt triangle typically scores ≥ 0.12 (12% of face
+            # mean brighter than surround); skin-tone noise stays well below 0.08.
             _above_threshold = cheek_brightness > shadow_threshold
-            if _above_threshold:
+            _isolation_ok = _triangle_isolation >= 0.12
+            if _above_threshold and _isolation_ok:
                 triangle_detected = True
                 triangle_cheek = shadow_side
                 triangle_completeness = round(

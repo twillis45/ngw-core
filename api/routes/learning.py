@@ -62,6 +62,7 @@ class ClusterStatusUpdate(BaseModel):
 
 class IngestRequest(BaseModel):
     days: int = Field(30, ge=7, le=90)
+    mode: str = Field("production", pattern="^(production|dev)$")
 
 
 class GenerateCandidateRequest(BaseModel):
@@ -78,10 +79,32 @@ class MonitoringSweepRequest(BaseModel):
     window_days: int = Field(30, ge=7, le=30)
 
 
+class SchedulerStartRequest(BaseModel):
+    interval_hours: Optional[int] = Field(None, ge=1, le=168)
+    window_days:    Optional[int] = Field(None, ge=7, le=90)
+
+
+class SchedulerConfigRequest(BaseModel):
+    interval_hours: Optional[int] = Field(None, ge=1, le=168)
+    window_days:    Optional[int] = Field(None, ge=7, le=90)
+
+
 class PromoteRequest(BaseModel):
     """Explicitly promote a candidate to review_ready (requires clean eval)."""
     override_blocked: bool = False
     reason: Optional[str] = None
+
+
+class EvaluateRequest(BaseModel):
+    """Options for sandbox evaluation."""
+    auto_release_on_safe: bool = Field(
+        False,
+        description=(
+            "If True and verdict is 'safe', automatically advance the candidate "
+            "to 'accepted' without requiring a separate human-review step. "
+            "Only applies when verdict is exactly 'safe' — 'risky' still requires review."
+        ),
+    )
 
 
 # ── Dashboard summary ──────────────────────────────────────────────────────────
@@ -151,6 +174,62 @@ def learning_ops_dashboard(user=Depends(get_dev_user)):
     }
 
 
+# ── Scheduler control ──────────────────────────────────────────────────────────
+
+@router.get("/scheduler")
+async def scheduler_status(user=Depends(get_dev_user)):
+    """Return current scheduler state."""
+    from engine.scheduler import get_scheduler_status
+    return get_scheduler_status()
+
+
+@router.post("/scheduler/start")
+async def scheduler_start(body: SchedulerStartRequest, user=Depends(get_dev_user)):
+    """
+    Start the scheduler. No-op if already running.
+    Optionally override interval_hours and window_days.
+    Runs first pass immediately (no warmup delay).
+    """
+    from engine.scheduler import start_scheduler
+    return start_scheduler(
+        interval_hours=body.interval_hours,
+        window_days=body.window_days,
+        warmup_secs=0,
+        started_by="api",
+    )
+
+
+@router.post("/scheduler/stop")
+async def scheduler_stop(user=Depends(get_dev_user)):
+    """Stop the running scheduler. No-op if not running."""
+    from engine.scheduler import stop_scheduler
+    return stop_scheduler()
+
+
+@router.patch("/scheduler")
+async def scheduler_configure(body: SchedulerConfigRequest, user=Depends(get_dev_user)):
+    """
+    Update scheduler config (interval_hours and/or window_days).
+    If currently running, restarts immediately with the new config.
+    If not running, saves config for next start.
+    """
+    from engine.scheduler import configure_scheduler
+    return configure_scheduler(
+        interval_hours=body.interval_hours,
+        window_days=body.window_days,
+    )
+
+
+@router.post("/scheduler/run-now")
+async def scheduler_run_now(user=Depends(get_dev_user)):
+    """
+    Trigger an immediate ingestion run, resetting the timer.
+    If the scheduler is not running, starts it first.
+    """
+    from engine.scheduler import trigger_run_now
+    return trigger_run_now()
+
+
 # ── Ingestion ──────────────────────────────────────────────────────────────────
 
 @router.post("/ingest")
@@ -158,9 +237,16 @@ def trigger_ingestion(
     body: IngestRequest,
     user=Depends(get_dev_user),
 ):
-    """Trigger an analytics ingestion run to detect/update failure clusters."""
+    """
+    Trigger an analytics ingestion run to detect/update failure clusters.
+
+    mode='production' (default) — only clean production sessions (same as scheduler).
+    mode='dev'                  — includes all sessions (internal/dev) for pipeline
+                                  testing before real production traffic exists.
+    """
     from engine.learning.ingestion import ingest_from_analytics
-    summary = ingest_from_analytics(days=body.days)
+    origin = "all" if body.mode == "dev" else "production"
+    summary = ingest_from_analytics(days=body.days, origin=origin)
     return summary
 
 
@@ -244,36 +330,61 @@ def generate_candidate_from_cluster(
 @router.post("/candidates/{candidate_id}/evaluate")
 def evaluate_candidate(
     candidate_id: str,
+    body: EvaluateRequest = None,
     user=Depends(get_dev_user),
 ):
     """
     Run sandbox evaluation for a candidate against the Gold Set.
     Stores result in candidate_evaluations.
     Returns the evaluation with verdict (safe | risky | blocked).
+
+    auto_release_on_safe (default: false):
+      When true and verdict == 'safe', the candidate is automatically advanced
+      to 'accepted' — skipping the manual review step.
+      'risky' still requires a human to accept.
+      'blocked' always stays in 'proposed'.
     """
+    if body is None:
+        body = EvaluateRequest()
+
     candidate = get_rule_candidate(candidate_id)
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
     from engine.learning.sandbox_eval import evaluate_candidate as run_eval
     evaluation = run_eval(candidate)
+    verdict = evaluation.get("verdict")
 
-    # If verdict is safe/risky, auto-set candidate to review_ready
-    # If blocked, keep as proposed and add warning
-    if evaluation.get("verdict") == "blocked":
+    if verdict == "blocked":
+        # Regressions detected — must not proceed without override
         update_rule_candidate(candidate_id, status="proposed")
         evaluation["promotion_blocked"] = True
+        evaluation["new_status"] = "proposed"
         evaluation["promotion_message"] = (
             "Candidate has been evaluated as BLOCKED due to detected regressions. "
             "It cannot be promoted to review_ready until regressions are resolved. "
             "Admin override available via /candidates/{id}/promote."
         )
+    elif verdict == "safe" and body.auto_release_on_safe:
+        # Safe + auto-promote flag → skip review, go straight to accepted
+        update_rule_candidate(candidate_id, status="accepted")
+        evaluation["promotion_blocked"] = False
+        evaluation["new_status"] = "accepted"
+        evaluation["promotion_message"] = (
+            "Candidate auto-accepted (verdict: safe, auto_release_on_safe=true). "
+            "Ready to apply or record a release."
+        )
+        logger.info(
+            "Candidate %s auto-accepted after safe eval (requested by %s)",
+            candidate_id, user.get("email"),
+        )
     else:
-        # Safe or risky — promote to review_ready
+        # Safe or risky — promote to review_ready, await human decision
         update_rule_candidate(candidate_id, status="review_ready")
         evaluation["promotion_blocked"] = False
+        evaluation["new_status"] = "review_ready"
         evaluation["promotion_message"] = (
-            f"Candidate promoted to review_ready (verdict: {evaluation.get('verdict')}). "
+            f"Candidate promoted to review_ready (verdict: {verdict}). "
             "Human review required before acceptance."
         )
 
@@ -619,4 +730,292 @@ def apply_candidate_to_engine(
             f"Confidence floor for '{pattern_id}' set to {suggested_floor:.3f}. "
             "Engine restart required for changes to take effect."
         ),
+    }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Knowledge Base Endpoints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# GET  /lab/learning/knowledge               — full pattern knowledge base
+# GET  /lab/learning/knowledge/{pattern_id}  — single pattern entry
+# POST /lab/learning/knowledge/{pattern_id}/signals — aggregate signals for pattern
+# POST /lab/learning/knowledge/{pattern_id}/ci-gate — run CI gate for a candidate
+
+
+@router.get("/knowledge")
+def list_knowledge_base(user=Depends(get_dev_user)):
+    """
+    Return the full NGW pattern knowledge base.
+
+    Each entry describes a pattern's risk level, expected symptoms,
+    known fix steps, and minimum signal thresholds.
+    """
+    from engine.learning.knowledge import PATTERN_KNOWLEDGE_BASE, MIN_SIGNALS
+    from dataclasses import asdict
+
+    entries = []
+    for pid, entry in PATTERN_KNOWLEDGE_BASE.items():
+        entries.append({
+            "pattern_id":            entry.pattern_id,
+            "display_name":          entry.display_name,
+            "family":                entry.family,
+            "risk_level":            entry.risk_level,
+            "min_signals_for_change": entry.min_signals_for_change,
+            "symptom_count":         len(entry.symptoms),
+            "tags":                  entry.tags,
+            "description":           entry.description,
+        })
+
+    by_risk = {
+        "low":    [e["pattern_id"] for e in entries if e["risk_level"] == "low"],
+        "medium": [e["pattern_id"] for e in entries if e["risk_level"] == "medium"],
+        "high":   [e["pattern_id"] for e in entries if e["risk_level"] == "high"],
+    }
+
+    return {
+        "total_patterns": len(entries),
+        "min_signals":    MIN_SIGNALS,
+        "by_risk":        by_risk,
+        "entries":        entries,
+    }
+
+
+@router.get("/knowledge/{pattern_id}")
+def get_knowledge_entry(pattern_id: str, user=Depends(get_dev_user)):
+    """Return the full knowledge entry for a single pattern, including all symptoms and fix steps."""
+    from engine.learning.knowledge import get_pattern_entry
+    from dataclasses import asdict
+
+    entry = get_pattern_entry(pattern_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Pattern '{pattern_id}' not found in knowledge base")
+
+    result = asdict(entry)
+    return result
+
+
+class SignalAggregateRequest(BaseModel):
+    window_days: int = Field(default=30, ge=1, le=365)
+
+
+@router.post("/knowledge/{pattern_id}/signals")
+def aggregate_pattern_signals(
+    pattern_id:  str,
+    body:        SignalAggregateRequest,
+    user=Depends(get_dev_user),
+):
+    """
+    Aggregate quality-weighted production signals for a pattern.
+
+    Returns an AggregatedInsight with signal counts, success/fail rates,
+    signal quality label, and threshold pass/fail for each risk tier.
+    """
+    from db.signals import get_pattern_breakdown
+    from engine.learning.knowledge import (
+        LearningSignal, enrich_signal_weights,
+        aggregate_signals_for_pattern, get_pattern_entry, MIN_SIGNALS,
+    )
+    from dataclasses import asdict
+
+    entry = get_pattern_entry(pattern_id)
+    if not entry:
+        raise HTTPException(status_code=404, detail=f"Pattern '{pattern_id}' not found in knowledge base")
+
+    try:
+        rows = get_pattern_breakdown(pattern_id=pattern_id, days=body.window_days)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Signal load failed: {exc}")
+
+    signals = []
+    for row in (rows or []):
+        sig = LearningSignal(
+            signal_id        = str(row.get("id", "")),
+            pattern_id       = pattern_id,
+            outcome          = str(row.get("outcome", "unknown")),
+            skill_tier       = str(row.get("skill_tier", "unknown")),
+            confidence_score = float(row.get("confidence_score", 0.5)),
+            source           = str(row.get("signal_source", "live")),
+            session_id       = str(row.get("session_id", "")),
+        )
+        signals.append(sig)
+
+    enrich_signal_weights(signals)
+    insight = aggregate_signals_for_pattern(pattern_id, signals, window_days=body.window_days)
+
+    return {
+        "pattern_id":             insight.pattern_id,
+        "window_days":            insight.window_days,
+        "raw_signal_count":       insight.raw_signal_count,
+        "weighted_signal_count":  insight.weighted_signal_count,
+        "weighted_success_rate":  insight.weighted_success_rate,
+        "weighted_fail_rate":     insight.weighted_fail_rate,
+        "dominant_failure_mode":  insight.dominant_failure_mode,
+        "signal_quality_label":   insight.signal_quality_label,
+        "meets_low_threshold":    insight.meets_low_threshold,
+        "meets_medium_threshold": insight.meets_medium_threshold,
+        "meets_high_threshold":   insight.meets_high_threshold,
+        "thresholds":             MIN_SIGNALS,
+        "pattern_risk_level":     entry.risk_level,
+        "pattern_min_signals":    entry.min_signals_for_change,
+    }
+
+
+class CIGateRequest(BaseModel):
+    candidate_id:    str
+    benchmark_delta: Optional[float] = None   # override for testing
+
+
+@router.post("/knowledge/{pattern_id}/ci-gate")
+def run_ci_gate(
+    pattern_id: str,
+    body:       CIGateRequest,
+    user=Depends(get_dev_user),
+):
+    """
+    Run the full CI gate evaluation for a candidate.
+
+    Checks:
+      1. Signal sufficiency (weighted signals ≥ MIN_SIGNALS[risk_level])
+      2. Benchmark delta (no overall regression)
+      3. Pattern regression (no single pattern drops > 5%)
+
+    Returns disposition: auto_deploy | human_review | human_gate | blocked | insufficient
+    """
+    from engine.learning.ci_gate import evaluate_candidate_gate, summarise_gate_result
+    from dataclasses import asdict
+
+    result = evaluate_candidate_gate(body.candidate_id)
+
+    return {
+        "candidate_id":    result.candidate_id,
+        "pattern_id":      result.pattern_id,
+        "risk_level":      result.risk_level,
+        "disposition":     result.disposition,
+        "overall_verdict": result.overall_verdict,
+        "blocking_reason": result.blocking_reason,
+        "summary":         summarise_gate_result(result),
+        "gates": [
+            {
+                "gate":    g.gate,
+                "verdict": g.verdict,
+                "message": g.message,
+                "detail":  g.detail,
+            }
+            for g in result.gates
+        ],
+        "notes":        result.notes,
+        "evaluated_at": result.evaluated_at,
+    }
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Revenue & Projection Endpoints
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# POST /lab/learning/revenue/impact     — compute revenue delta for a pattern fix
+# POST /lab/learning/revenue/simulate   — run 30-day simulation for N scenarios
+
+
+class RevenueImpactRequest(BaseModel):
+    pattern_id:       str
+    sessions_per_day: float = Field(..., gt=0)
+    before_cvr:       float = Field(..., ge=0.0, le=1.0)
+    after_cvr:        float = Field(..., ge=0.0, le=1.0)
+    arpu:             float = Field(default=9.0, gt=0)
+    days:             int   = Field(default=30, ge=1, le=365)
+    description:      str   = ""
+
+
+@router.post("/revenue/impact")
+def compute_revenue_impact_endpoint(
+    body: RevenueImpactRequest,
+    user=Depends(get_dev_user),
+):
+    """
+    Compute the incremental revenue impact of a CVR improvement for one pattern.
+
+    Returns: cvr_lift, additional_conversions_30d, delta_revenue_30d, annualised_delta
+    """
+    from engine.learning.revenue import compute_revenue_impact
+    from dataclasses import asdict
+
+    try:
+        scenario = compute_revenue_impact(
+            pattern_id       = body.pattern_id,
+            sessions_per_day = body.sessions_per_day,
+            before_cvr       = body.before_cvr,
+            after_cvr        = body.after_cvr,
+            arpu             = body.arpu,
+            days             = body.days,
+            description      = body.description,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    return asdict(scenario)
+
+
+class SimulateScenario(BaseModel):
+    name:              str
+    description:       str = ""
+    pattern_id:        str
+    risk_level:        str = "medium"
+    sessions_per_day:  float
+    baseline_cvr:      float
+    target_cvr:        float
+    arpu:              float = 9.0
+    daily_new_signals: Optional[float] = None
+
+
+class SimulateRequest(BaseModel):
+    scenarios: list[SimulateScenario] = Field(..., min_length=1, max_length=20)
+
+
+@router.post("/revenue/simulate")
+def simulate_revenue(
+    body: SimulateRequest,
+    user=Depends(get_dev_user),
+):
+    """
+    Run a 30-day revenue projection simulation for a list of scenarios.
+
+    Each scenario represents a pattern fix with its own risk level and
+    daily session volume. Returns day-by-day signal accumulation, gate
+    unlock/deploy events, and revenue delta vs. baseline.
+    """
+    from engine.learning.revenue import project_30_day_metrics, summarise_revenue_impact
+
+    sc_dicts = [s.model_dump() for s in body.scenarios]
+    projections = project_30_day_metrics(sc_dicts)
+    summary     = summarise_revenue_impact(projections)
+
+    return {
+        "summary": summary,
+        "projections": [
+            {
+                "scenario_name":          p.scenario_name,
+                "pattern_id":             p.pattern_id,
+                "risk_level":             p.risk_level,
+                "gate_unlock_day":        p.gate_unlock_day,
+                "deploy_day":             p.deploy_day,
+                "revenue_delta_30d":      p.revenue_delta_30d,
+                "annualised_delta":       p.annualised_delta,
+                "total_conversions_30d":  p.total_conversions_30d,
+                "baseline_conversions_30d": p.baseline_conversions_30d,
+                "day_snapshots": [
+                    {
+                        "day":                snap.day,
+                        "cumulative_signals": snap.cumulative_signals,
+                        "gate_status":        snap.gate_status,
+                        "cvr":                snap.cvr,
+                        "sessions":           snap.sessions,
+                        "conversions":        snap.conversions,
+                        "revenue":            snap.revenue,
+                    }
+                    for snap in p.day_snapshots
+                ],
+            }
+            for p in projections
+        ],
     }

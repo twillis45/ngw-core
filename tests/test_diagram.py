@@ -256,8 +256,9 @@ class TestDiagramDeterminism:
 # ── Reference diagram (detected lighting) ──────────────────────────────────
 
 class TestReferenceDiagram:
-    def test_triangle_has_three_lights(self):
-        d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect")
+    def test_triangle_has_three_lights_when_confirmed(self):
+        # light_count=3 → all three lights including fill_low
+        d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect", light_count=3)
         assert d.system_id == "reference_detected"
         assert len(d.lights) == 3
         roles = [l.role for l in d.lights]
@@ -265,8 +266,23 @@ class TestReferenceDiagram:
         assert "key_right" in roles
         assert "fill_low" in roles
 
-    def test_triangle_symmetric_keys(self):
+    def test_triangle_two_keys_only_when_no_fill_confirmed(self):
+        # light_count=0, no fill_method_text → only the two keys
         d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect")
+        assert len(d.lights) == 2
+        roles = [l.role for l in d.lights]
+        assert "key_left" in roles
+        assert "key_right" in roles
+        assert "fill_low" not in roles
+
+    def test_triangle_fill_added_via_fill_method_text(self):
+        # fill_method_text truthy → fill_low added even with light_count=0
+        d = build_reference_diagram(pattern="triangle", fill_method_text="reflector below")
+        roles = [l.role for l in d.lights]
+        assert "fill_low" in roles
+
+    def test_triangle_symmetric_keys(self):
+        d = build_reference_diagram(pattern="triangle", modifier_family="softbox_rect", light_count=3)
         left = next(l for l in d.lights if l.role == "key_left")
         right = next(l for l in d.lights if l.role == "key_right")
         assert left.angle_deg == -right.angle_deg
@@ -274,15 +290,29 @@ class TestReferenceDiagram:
         assert left.distance_m == right.distance_m
         assert left.modifier == right.modifier == "softbox_rect"
 
-    def test_clamshell_has_two_lights(self):
-        d = build_reference_diagram(pattern="clamshell", modifier_family="beauty_dish")
+    def test_clamshell_has_two_lights_when_confirmed(self):
+        # light_count=2 → key + fill
+        d = build_reference_diagram(pattern="clamshell", modifier_family="beauty_dish", light_count=2)
         assert len(d.lights) == 2
         roles = [l.role for l in d.lights]
         assert "key" in roles
         assert "fill" in roles
 
-    def test_clamshell_key_above_fill(self):
+    def test_clamshell_single_key_when_no_fill_confirmed(self):
+        # light_count=0, no fill_method_text → key only (no fill)
         d = build_reference_diagram(pattern="clamshell")
+        assert len(d.lights) == 1
+        assert d.lights[0].role == "key"
+
+    def test_clamshell_fill_added_via_fill_method_text(self):
+        # fill_method_text truthy → fill added even with light_count=0
+        d = build_reference_diagram(pattern="clamshell", fill_method_text="reflector below chin")
+        roles = [l.role for l in d.lights]
+        assert "key" in roles
+        assert "fill" in roles
+
+    def test_clamshell_key_above_fill(self):
+        d = build_reference_diagram(pattern="clamshell", light_count=2)
         key = next(l for l in d.lights if l.role == "key")
         fill = next(l for l in d.lights if l.role == "fill")
         assert key.height_m > fill.height_m
@@ -352,9 +382,9 @@ class TestReferenceDiagramBackgroundLight:
         roles = [l.role for l in d.lights]
         assert "background" not in roles
 
-    def test_background_light_with_triangle(self):
-        """Triangle + background light → 4 lights total."""
-        d = build_reference_diagram(pattern="triangle", background_light=True)
+    def test_background_light_with_triangle_confirmed_fill(self):
+        """Triangle + background light + confirmed fill → 4 lights total."""
+        d = build_reference_diagram(pattern="triangle", background_light=True, light_count=3)
         assert len(d.lights) == 4
         roles = [l.role for l in d.lights]
         assert "key_left" in roles
@@ -362,13 +392,32 @@ class TestReferenceDiagramBackgroundLight:
         assert "fill_low" in roles
         assert "background" in roles
 
-    def test_background_light_with_clamshell(self):
-        """Clamshell + background light → 3 lights total."""
-        d = build_reference_diagram(pattern="clamshell", background_light=True)
+    def test_background_light_with_triangle_no_fill_confirmed(self):
+        """Triangle + background light, no confirmed fill → 3 lights (2 keys + bg)."""
+        d = build_reference_diagram(pattern="triangle", background_light=True)
+        assert len(d.lights) == 3
+        roles = [l.role for l in d.lights]
+        assert "key_left" in roles
+        assert "key_right" in roles
+        assert "fill_low" not in roles
+        assert "background" in roles
+
+    def test_background_light_with_clamshell_confirmed_fill(self):
+        """Clamshell + background light + confirmed fill → 3 lights total."""
+        d = build_reference_diagram(pattern="clamshell", background_light=True, light_count=2)
         assert len(d.lights) == 3
         roles = [l.role for l in d.lights]
         assert "key" in roles
         assert "fill" in roles
+        assert "background" in roles
+
+    def test_background_light_with_clamshell_no_fill_confirmed(self):
+        """Clamshell + background light, no confirmed fill → 2 lights (key + bg)."""
+        d = build_reference_diagram(pattern="clamshell", background_light=True)
+        assert len(d.lights) == 2
+        roles = [l.role for l in d.lights]
+        assert "key" in roles
+        assert "fill" not in roles
         assert "background" in roles
 
     def test_background_light_with_unknown(self):

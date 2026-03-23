@@ -255,7 +255,9 @@ def test_lighting_intelligence_in_response(monkeypatch):
         # lightingIntelligence carries scoring-influence fields
         assert "lightingIntelligence" in data
         intel = data["lightingIntelligence"]
-        assert intel["detectedPattern"] == "rembrandt"
+        # 10 o'clock catchlight → loop (low confidence; loop/rembrandt
+        # indeterminate from catchlight position alone — nose shadow needed).
+        assert intel["detectedPattern"] == "loop"
         assert intel["detectedModifier"] == "beauty_dish"
         assert intel["lightCount"] == 1
         assert "backgroundLight" in intel
@@ -278,7 +280,7 @@ def test_lighting_intelligence_in_response(monkeypatch):
         assert dd["lights"][0]["position"]  # has position description
         assert dd["lights"][0]["roleKey"] == "key"  # raw role preserved
         assert dd["raw"]["system_id"] == "reference_detected"
-        assert dd["raw"]["lights"][0]["angle_deg"] == -45.0  # rembrandt 45° camera-left (10 o'clock catchlight)
+        assert dd["raw"]["lights"][0]["angle_deg"] == -30.0  # loop template: 30° camera-left (10 o'clock catchlight)
 
         # Each diagram light links back to the catchlights that support it
         assert "detectedFrom" in dd["lights"][0]

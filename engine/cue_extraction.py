@@ -1752,6 +1752,62 @@ def extract_shadow_interruption_pattern(
             notes=notes,
         )
 
+    # ── 4f. High-density clothing / garment texture suppression ──
+    # Formal uniforms (ribbon racks, medal bars, epaulettes) and structured
+    # garments (herringbone, pinstripe, lace) produce dense, highly periodic
+    # horizontal lines within the expanded face region.  These mimic slit /
+    # venetian-blind gobo patterns.
+    #
+    # Key discriminator: real gobo patterns project shadow lines ONTO SKIN.
+    # Garment-texture lines lie in the clothing region (person_mask but NOT
+    # skin_mask).  Measure the skin-coverage fraction of all detected line pixels.
+    #
+    # Secondary discriminator: real flag / gobo setups produce < 12 bold lines
+    # (3–8 for venetian-blind, 2–4 for flags).  > 20 lines is nearly always
+    # clothing or garment texture.
+    if line_count > 12 and skin_mask is not None and skin_mask.size > 0:
+        # Build a binary mask of all detected line pixels
+        _line_draw = np.zeros((h, w), dtype=np.uint8)
+        for ln in lines:
+            cv2.line(_line_draw, (int(ln[0][0]), int(ln[0][1])),
+                     (int(ln[0][2]), int(ln[0][3])), 255, 1)
+        _skin_bin = (skin_mask > 0).astype(np.uint8)
+        _line_pixels = int(np.count_nonzero(_line_draw))
+        _skin_overlap = int(np.count_nonzero(_line_draw & _skin_bin))
+        _skin_coverage = _skin_overlap / max(_line_pixels, 1)
+
+        # Also check the simpler y-position heuristic as corroboration
+        face_bottom_y = float(y1)
+        _lines_below = sum(
+            1 for ln in lines
+            if (float(ln[0][1]) + float(ln[0][3])) / 2.0 > face_bottom_y
+        )
+        _below_fraction = _lines_below / line_count
+
+        # Suppress when:
+        #   • > 20 lines (too many for any real gobo) regardless of skin coverage, OR
+        #   • 12-20 lines AND skin coverage < 10 % (lines are on clothing, not face)
+        _garment_texture = (
+            line_count > 20
+            or (line_count > 12 and _skin_coverage < 0.10)
+        )
+        if _garment_texture:
+            notes.append(
+                f"Line count={line_count}, skin_coverage={_skin_coverage:.1%}, "
+                f"below_face={_below_fraction:.0%} — garment texture (ribbon rack, "
+                f"uniform, structured fabric), not projected lighting. Suppressing."
+            )
+            return ShadowInterruptionPattern(
+                detected=False,
+                classification="none",
+                line_count=line_count,
+                line_parallelism=round(parallelism, 3),
+                periodicity_score=round(periodicity, 3),
+                shadow_face_incongruence=round(incongruence, 3),
+                confidence=0.15,
+                notes=notes,
+            )
+
     # ── 5. Classification ──
     if parallelism > 0.6 and line_count >= 3 and incongruence > 0.4:
         classification = "geometric_bar"

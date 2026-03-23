@@ -70,7 +70,10 @@ export default function MySetupsCard() {
       <ul className="my-setups-card__list">
         {recent.map(setup => {
           const pattern = setup.result?.bestMatch?.lightingPattern;
-          const score = setup.result?.bestMatch?.reliabilityScore;
+          // Backward-compat: old stored setups have reliabilityScore in 0–100 scale;
+          // new setups are 0–1.  Normalise to 0–1 so the display is always 0–100%.
+          const rawScore = setup.result?.bestMatch?.reliabilityScore;
+          const score = rawScore != null ? (rawScore > 1 ? rawScore / 100 : rawScore) : null;
           return (
             <li key={setup.id} className="my-setups-card__item">
               <div className="my-setups-card__item-info">
@@ -80,7 +83,7 @@ export default function MySetupsCard() {
                     <span className="my-setups-card__pattern-pill">{pattern}</span>
                   )}
                   {score != null && (
-                    <span className="my-setups-card__score">{Math.round(score)}%</span>
+                    <span className="my-setups-card__score">{Math.round(score * 100)}%</span>
                   )}
                   <span className="my-setups-card__date">{formatDate(setup.timestamp)}</span>
                 </div>

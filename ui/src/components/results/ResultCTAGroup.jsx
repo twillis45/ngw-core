@@ -12,7 +12,7 @@
  */
 import { trackEvent } from '../../data/analytics';
 
-export default function ResultCTAGroup({ patternId, onAnalyze, onBuild }) {
+export default function ResultCTAGroup({ patternId, onAnalyze, onBuild, analyzeLabel = 'Analyze Another Photo', buildLabel = 'Build This Setup' }) {
   function handleAnalyze() {
     trackEvent('analyze_similar_clicked', { pattern: patternId });
     if (onAnalyze) onAnalyze();
@@ -32,7 +32,7 @@ export default function ResultCTAGroup({ patternId, onAnalyze, onBuild }) {
           <circle cx="8.5" cy="8.5" r="1.5"/>
           <polyline points="21 15 16 10 5 21"/>
         </svg>
-        <span className="rcg__btn-label">Analyze Another Photo</span>
+        <span className="rcg__btn-label">{analyzeLabel}</span>
       </button>
 
       <button className="rcg__btn" onClick={handleBuild} type="button">
@@ -40,7 +40,7 @@ export default function ResultCTAGroup({ patternId, onAnalyze, onBuild }) {
           strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
         </svg>
-        <span className="rcg__btn-label">Build This Setup</span>
+        <span className="rcg__btn-label">{buildLabel}</span>
       </button>
     </div>
   );

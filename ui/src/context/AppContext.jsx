@@ -471,32 +471,157 @@ const DispatchCtx = createContext(null);
 
 const DEMO_RESULT = {
   bestMatch: {
-    name: 'Loop',
+    name: 'Loop Portrait',
     lightingPattern: 'Loop',
-    reliabilityScore: 0.58,
+    reliabilityScore: 0.82,
+    systemId: 'loop_portrait',
     description: 'Loop lighting — a small downward shadow drops from the nose at roughly 45°, cheek fully lit, minimal fill.',
+    lightType: 'strobe',
   },
   setup: {
     lights: [
-      { label: 'Key Light',  modifier: '90cm Octabox',  positionText: '45° camera left, high', distanceFt: '4 ft', powerHint: '1/4 power' },
-      { label: 'Hair Light', modifier: 'Grid Spot',     positionText: 'Behind, upper right',   distanceFt: '5 ft', powerHint: '1/8 power' },
+      {
+        role: 'key', label: 'Key Light',
+        modifier: '90cm Octabox', _modifierType: 'softbox_octa',
+        positionText: '45° camera-left, high (15–20° above eye level)',
+        distanceFt: '4 ft', distanceM: '1.2 m',
+        powerHint: 'Set first — 1/4 power, adjust for f/8',
+        _role: 'key', _lightingPattern: 'Loop',
+        notes: ['Flag the key to prevent background spill'],
+      },
+      {
+        role: 'fill', label: 'Fill Light',
+        modifier: 'Reflector (silver/white)',
+        positionText: 'Camera-right, eye level',
+        distanceFt: '6 ft', distanceM: '1.8 m',
+        powerHint: '2 stops below key (passive reflector)',
+        _role: 'fill', _lightingPattern: 'Loop',
+        notes: ['5-in-1 reflector held at camera-right — no power needed'],
+      },
+      {
+        role: 'hair', label: 'Hair Light',
+        modifier: 'Grid Spot',
+        positionText: 'Behind subject, upper-right',
+        distanceFt: '5 ft', distanceM: '1.5 m',
+        powerHint: '1 stop below key (1/8 power)',
+        _role: 'hair', _lightingPattern: 'Loop',
+        notes: ['Grid tightens the beam — prevents lens flare'],
+      },
     ],
   },
-  cameraSettings: { aperture: 'f/2.8', iso: '400', shutter: '1/200s', wb: 'Daylight' },
-  signalReliability: {
-    overallSignalStrength: 0.55,
-    signalsAvailable: ['catchlight_position', 'shadow_direction', 'nose_shadow'],
-    ambiguityFlags: { multiple_patterns_close_confidence: true },
+  lightingIntelligence: {
+    detectedModifier: 'softbox_octa',
+    catchlightShape: 'round',
+    shadowPattern: 'loop',
+    fillPresence: 'subtle',
+    sourceQuality: 'soft',
+    sourceDirection: 'camera-left high',
+    lightCount: 3,
+    skinTone: 'medium',
   },
-  edgeCaseFlags: { blown_highlights: false, mixed_color_temperature: true, extreme_low_key: false },
-  alternatives: [{ name: 'Split Lighting', score: 0.51 }],
+  diagram: {
+    lights: [
+      { role: 'key',  label: 'Key',  angle_deg: -45, distance_m: 1.2, height_m: 2.0, modifier: 'softbox_octa' },
+      { role: 'fill', label: 'Fill', angle_deg: 30,  distance_m: 1.8, height_m: 1.5, modifier: 'reflector' },
+      { role: 'hair', label: 'Hair', angle_deg: 135, distance_m: 1.5, height_m: 2.1, modifier: 'grid' },
+    ],
+    camera: { distance_m: 2.2 },
+  },
+  cameraSettings: { aperture: 'f/8', iso: '100', shutter: '1/200s', wb: 'Daylight' },
+  signalReliability: {
+    overallSignalStrength: 0.82,
+    signalsAvailable: ['catchlight_position', 'catchlight_shape', 'shadow_direction', 'nose_shadow', 'source_quality'],
+    ambiguityFlags: {},
+  },
+  edgeCaseFlags: { blown_highlights: false, mixed_color_temperature: false, extreme_low_key: false },
+  alternatives: [
+    { name: 'Rembrandt', gapLabel: 'Close alternative', tradeoff: 'Rotate key 10° further for triangle on cheek' },
+    { name: 'Paramount', gapLabel: 'Viable option',     tradeoff: 'Move key directly in front for butterfly shadow' },
+  ],
   patternCandidates: [],
+  spaceCheck: { warnings: [], minWidthFt: 12, minDepthFt: 14, minCeilingFt: 9 },
+  testSteps: [
+    'Key only — all other lights off',
+    'Loop shadow should drop from nose at 45°',
+    'Add hair light — check for lens flare with grid on',
+    'Add fill reflector — shadow side should remain defined',
+    'Test shot — compare shadow shape and contrast',
+  ],
+  goodSigns: ['Clean loop shadow drop', 'Catchlight at 10–11 o\'clock', 'Cheek fully lit'],
+  warnings: ['If nose shadow touches the lip line, rotate key slightly forward'],
+  quickFixes: [],
+  skinToneAdjustments: null,
+};
+
+const DEMO_RING_RESULT = {
+  bestMatch: {
+    name: 'Ring Flash',
+    lightingPattern: 'Ring Flash',
+    reliabilityScore: 0.91,
+    systemId: 'ring_flash',
+    description: 'Ring flash — perfectly flat, shadowless lighting with characteristic donut catchlights encircling the pupil.',
+    lightType: 'macro_ring_flash',
+  },
+  setup: {
+    lights: [
+      {
+        role: 'key', label: 'Ring Flash',
+        modifier: 'Canon MR-14EX II',
+        _modifierType: 'ring_flash',
+        positionText: 'On-axis, lens-mounted',
+        distanceFt: '2–3 ft', distanceM: '0.6–0.9 m',
+        powerHint: '1/4 power typical — adjust for f/11',
+        _role: 'key', _lightingPattern: 'Ring Flash',
+        notes: ['Mount directly on lens — keeps catchlights perfectly centered', 'Closer = more wraparound fill'],
+      },
+    ],
+  },
+  lightingIntelligence: {
+    detectedModifier: 'ring_flash',
+    catchlightShape: 'ring',
+    shadowPattern: 'none',
+    fillPresence: 'full',
+    sourceQuality: 'flat',
+    sourceDirection: 'on-axis',
+    lightCount: 1,
+    skinTone: 'medium',
+  },
+  diagram: {
+    lights: [
+      { role: 'key', label: 'Ring', angle_deg: 0, distance_m: 0.75, height_m: 1.6, modifier: 'ring_flash' },
+    ],
+    camera: { distance_m: 0.75 },
+  },
+  cameraSettings: { aperture: 'f/11', iso: '100', shutter: '1/200s', wb: 'Flash' },
+  signalReliability: {
+    overallSignalStrength: 0.91,
+    signalsAvailable: ['catchlight_shape', 'shadow_direction', 'source_quality', 'fill_presence'],
+    ambiguityFlags: {},
+  },
+  edgeCaseFlags: { blown_highlights: false, mixed_color_temperature: false, extreme_low_key: false },
+  alternatives: [
+    { name: 'Butterfly', gapLabel: 'Close alternative', tradeoff: 'Beauty dish on-axis gives similar flat look with more dimension' },
+    { name: 'Clamshell', gapLabel: 'Viable option', tradeoff: 'Dish + bounce card — broader catchlight, more control' },
+  ],
+  patternCandidates: [],
+  spaceCheck: { warnings: [], minWidthFt: 6, minDepthFt: 6, minCeilingFt: 7 },
+  testSteps: [
+    'Mount ring flash to lens — check all contacts seated',
+    "Test fire — look for the donut catchlight in subject's eyes",
+    'Shadow check — no directional shadows should appear on background wall',
+    'Exposure test at f/11 — ring flash is powerful at close range',
+    'Check for red-eye — ring flash can cause this; use modeling light to pre-constrict pupil',
+  ],
+  goodSigns: ['Donut catchlight centered in both eyes', 'Flat, shadowless background', 'Even skin tone front-to-back'],
+  warnings: ['Avoid merging catchlights if subject is too close — stay 2+ ft', 'Red-eye risk — ask subject to look slightly off-axis'],
+  quickFixes: [],
+  skinToneAdjustments: null,
 };
 
 const DEMO_REF_IMAGE = {
   preview: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600&q=80',
   file: null,
-  serverPath: '/static/demo/ref_sample.jpg',
+  serverPath: 'static/demo/ref_sample.jpg',
 };
 
 const DEMO_ANALYSIS = {
@@ -577,6 +702,9 @@ function _buildDemoInit(devModeUser) {
     }
     if (demo === 'symptom') {
       return { ...base, screen: 'symptom', symptomSlug: params.get('slug') || 'mixed-temperature' };
+    }
+    if (demo === 'ring_flash') {
+      return { ...base, screen: 'results', result: DEMO_RING_RESULT, apiResponse: {} };
     }
     if (demo === 'analytics') {
       return { ...base, screen: 'analytics' };

@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { loadTheme, saveTheme, applyTheme, getSystemTheme, THEMES } from '../data/themeStore';
-import { getUser, logout as apiLogout } from '../data/authApi';
+import { getUser, getToken, fetchMe, saveAuth, logout as apiLogout, verifyEmail } from '../data/authApi';
 import { probeAndEnableLab } from '../data/labApi';
 import { isEnabled } from '../modes/featureFlags';
 import { pullKitFromServer } from '../data/kitStore';
 import { pullSetupsFromServer } from '../data/setupStore';
 import MasterModeSelector, { MASTER_MODE_MAP } from './MasterModeSelector';
+import { _pendingVerifyToken } from '../main';
 
 function resolvedTheme() {
   return loadTheme() || getSystemTheme();
@@ -21,16 +22,41 @@ export default function AppHeader() {
   const masterEnabled = isEnabled('enable_master_mode');
   const activeMaster = masterMode && MASTER_MODE_MAP[masterMode];
 
-  // Hydrate user from localStorage on mount, auto-probe Lab access
+  // Hydrate user from localStorage on mount, auto-probe Lab access.
+  // Falls back to fetchMe() when a valid token exists but no cached user
+  // object — covers users whose session survived a storage key rename.
   const [, forceUpdate] = useState(0);
   useEffect(() => {
+    // Handle email verification token from URL (?verify_token=...)
+    if (_pendingVerifyToken) {
+      verifyEmail(_pendingVerifyToken)
+        .then(me => {
+          dispatch({ type: 'SET_USER', user: me });
+          probeAndEnableLab().then(() => forceUpdate(n => n + 1));
+          pullKitFromServer();
+          pullSetupsFromServer();
+          dispatch({ type: 'NAVIGATE', screen: 'welcome' });
+        })
+        .catch(() => { /* invalid/expired — user can request resend */ });
+      return;
+    }
+
     const saved = getUser();
     if (saved && !user) {
       dispatch({ type: 'SET_USER', user: saved });
       probeAndEnableLab().then(() => forceUpdate(n => n + 1));
-      // Sync server data down to localStorage
       pullKitFromServer();
       pullSetupsFromServer();
+    } else if (!saved && !user && getToken()) {
+      fetchMe()
+        .then(me => {
+          saveAuth(getToken(), me);
+          dispatch({ type: 'SET_USER', user: me });
+          probeAndEnableLab().then(() => forceUpdate(n => n + 1));
+          pullKitFromServer();
+          pullSetupsFromServer();
+        })
+        .catch(() => { /* token is invalid/expired — leave logged out */ });
     }
   }, []);
 
@@ -54,6 +80,7 @@ export default function AppHeader() {
     <header className="app-header">
       {canGoBack && (
         <button
+          type="button"
           className="app-header__back"
           onClick={handleBack}
           aria-label="Go back"
@@ -80,7 +107,7 @@ export default function AppHeader() {
         className="app-header__theme-toggle"
         onClick={toggleTheme}
         aria-label={`Switch to ${THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]} mode`}
-        title={theme === 'photoshop' ? 'Ps' : theme === 'lightroom' ? 'Lr' : theme === 'daynote' ? 'DN' : undefined}
+        title={theme === 'photoshop' ? 'Ps' : theme === 'daynote' ? 'DN' : undefined}
         type="button"
       >
         {theme === 'dark' ? (
@@ -98,7 +125,7 @@ export default function AppHeader() {
             <rect x="3" y="16" width="7" height="5" rx="1"/>
           </svg>
         ) : theme === 'photoshop' ? (
-          /* Sliders icon — shown in photoshop mode, click → lightroom */
+          /* Sliders icon — shown in photoshop mode, click → daynote */
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" y1="21" x2="4" y2="14"/>
             <line x1="4" y1="10" x2="4" y2="3"/>
@@ -109,12 +136,6 @@ export default function AppHeader() {
             <line x1="1" y1="14" x2="7" y2="14"/>
             <line x1="9" y1="8" x2="15" y2="8"/>
             <line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
-        ) : theme === 'lightroom' ? (
-          /* Notepad icon — shown in lightroom mode, click → daynote */
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 20h9"/>
-            <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
           </svg>
         ) : (
           /* Moon icon — shown in daynote mode, click → dark */

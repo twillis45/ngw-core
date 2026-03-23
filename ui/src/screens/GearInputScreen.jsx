@@ -7,7 +7,7 @@ import GearModeToggle from '../components/GearModeToggle';
 import LightEntry from '../components/LightEntry';
 import ModifierChips from '../components/ModifierChips';
 import StickyBottomBar from '../components/StickyBottomBar';
-import { loadSettings } from '../data/settingsStore';
+import useSettings from '../hooks/useSettings';
 
 /** Build a photographer-friendly name for each light system.
  *  Priority: user-entered brand → gear-type short name.
@@ -63,6 +63,7 @@ export default function GearInputScreen() {
   const state = useAppState();
   const dispatch = useDispatch();
   const { lights, gearMode } = state;
+  const { powerDisplay, units } = useSettings();
   const isBest = gearMode === 'best_setup';
 
   async function submit() {
@@ -86,15 +87,13 @@ export default function GearInputScreen() {
           } catch (_) { /* proceed without image */ }
         }
         const apiResponse = await fetchShootMatch(wizardState);
-        const { powerDisplay } = loadSettings();
-        const result = transformShootMatch(apiResponse, { powerDisplay });
+        const result = transformShootMatch(apiResponse, { powerDisplay, units });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       } else {
         // Fallback: legacy /recommend flow
         const payload = buildPayload(state);
         const apiResponse = await fetchRecommendation(payload);
-        const { powerDisplay } = loadSettings();
-        const result = transformForUI(apiResponse, state.mood || 'corporate', null, { powerDisplay });
+        const result = transformForUI(apiResponse, state.mood || 'corporate', null, { powerDisplay, units });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       }
     } catch (err) {

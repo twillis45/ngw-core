@@ -298,7 +298,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--runs", type=int, default=5, metavar="N",
-        help="Number of most-recent runs to analyse (default: 5)",
+        help="Number of most-recent runs to analyze (default: 5)",
     )
     parser.add_argument(
         "--all", action="store_true",

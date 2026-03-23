@@ -176,10 +176,15 @@ def _build_light_step(
     room_tips = _room_guidance_for_light(light, room)
     tips.extend(room_tips)
 
-    # Simple initial placement hint for key light — direction is inferred live
-    initial_placement = None
-    if role_key == "key":
-        initial_placement = "Place key slightly left and above eye level"
+    # Initial placement hint — role-specific starting position
+    _INITIAL_PLACEMENT: Dict[str, str] = {
+        "key":        "Place key slightly left and above eye level",
+        "fill":       "Place fill on the opposite side of key, at or near camera level",
+        "rim":        "Place rim behind and to the side of subject, aimed at the back of the head",
+        "hair":       "Place hair light directly above and slightly behind subject",
+        "background": "Place background light aimed at backdrop, centered or low-angled for gradient",
+    }
+    initial_placement = light.get("initialPlacement") or _INITIAL_PLACEMENT.get(role_key)
 
     return {
         "id": f"light_{role_key}_{step_num}",
@@ -196,7 +201,11 @@ def _build_light_step(
             "height": light.get("height", ""),
             "distance": distance_str,
             "distanceRef": distance_ref,
+            "angle": light.get("angle", ""),
+            "direction": light.get("direction", ""),
             "powerHint": light.get("powerHint", ""),
+            "featherHint": light.get("featherHint", ""),
+            "aimTarget": light.get("aimTarget", ""),
         },
         "warnings": warnings,
         "tips": tips,
@@ -398,6 +407,10 @@ def shoot_mode_start(req: ShootModeStartRequest) -> Dict[str, Any]:
 async def evaluate_test_shot(req: EvaluateTestShotRequest) -> Dict[str, Any]:
     """Analyze a test shot and provide basic feedback."""
     image_path = Path(req.testShotPath)
+    # Web-relative paths starting with '/' are treated as absolute by Path()
+    # but are relative to the project root — strip the leading slash and retry.
+    if not image_path.exists() and str(image_path).startswith('/'):
+        image_path = Path(str(image_path).lstrip('/'))
     if not image_path.exists():
         raise HTTPException(status_code=404, detail="Test shot image not found")
 

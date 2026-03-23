@@ -1,6 +1,8 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import ZoomOverlay from './ZoomOverlay';
 import CardIcon from '../components/CardIcon';
+import WBSpectrum from '../components/WBSpectrum';
+import { wbTempClass } from '../utils/units';
 
 const LIGHT_COLORS_DARK  = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#ec4899' };
 const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#be185d' };
@@ -46,6 +48,17 @@ const SHORT_MOD = {
   beauty_dish: 'Beauty Dish', grid_spot: 'Grid', grid: 'Grid',
   stripbox: 'Strip', barn_doors: 'Barndoors', snoot: 'Snoot',
   bare: 'Bare', bare_bulb: 'Bare', strobe_bare: 'Bare',
+  ring_flash: 'Ring Flash', ring_light: 'Ring Light', macro_ring_flash: 'Macro Ring Flash',
+};
+
+/** One-line role descriptions shown in the legend. */
+const ROLE_DESC = {
+  key:        'primary source — shapes the face',
+  fill:       'lifts shadow contrast',
+  rim:        'separates subject from background',
+  hair:       'adds crown separation',
+  background: 'exposes the backdrop',
+  accent:     'adds edge or depth detail',
 };
 const FONT_STACK = `"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif`;
 
@@ -63,6 +76,7 @@ function formatWB(wb) {
   return k ? `${wb.charAt(0).toUpperCase() + wb.slice(1)} (${k})` : wb;
 }
 
+
 function mToFt(m) { return (m * 3.281).toFixed(0); }
 /** Format a distance label respecting units setting. */
 function fmtDist(m, units) {
@@ -79,7 +93,7 @@ function distLabelWidth(ctx, m, units) {
 
 /* ── Top-down view (existing) ────────────────────── */
 
-function drawTopView(canvas, spec, units, highlightRole) {
+function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
   if (!canvas || !spec) return;
 
   const tc = getThemeColors();
@@ -95,6 +109,10 @@ function drawTopView(canvas, spec, units, highlightRole) {
   const idealH = Math.round(W * (isMobile ? 1.15 : isLargeDesktop ? 0.85 : isDesktop ? 0.75 : 0.65));
   const H = Math.max(Math.min(idealH, maxCanvasH), isMobile ? 340 : 260);
   const fs = W >= 900 ? 1.7 : W >= 700 ? 1.5 : W >= 600 ? 1.35 : W >= 450 ? 1.2 : 1.0;
+  const badgeFont = `bold ${Math.round(13 * fs)}px ${FONT_STACK}`;
+  const badgeBg = tc.isDark ? 'rgba(30,41,59,0.85)' : 'rgba(241,245,249,0.9)';
+  const badgeBorder = tc.isDark ? 'rgba(100,116,139,0.5)' : 'rgba(100,116,139,0.4)';
+  const badgeText = tc.isDark ? '#e2e8f0' : '#1e293b';
   canvas.width = W * dpr;
   canvas.height = H * dpr;
   canvas.style.width = W + 'px';
@@ -106,6 +124,9 @@ function drawTopView(canvas, spec, units, highlightRole) {
 
   const subjectY = H * 0.48;
   const subjectX = W / 2;
+  const hostSep = W * 0.13;
+  const subjectAX = twoHostSetup ? subjectX - hostSep : subjectX;
+  const subjectBX = twoHostSetup ? subjectX + hostSep : subjectX;
   const scale = Math.min(W, H) * 0.175;
   const cam = spec.camera || {};
   const camDist = cam.distance_m || 2;
@@ -126,15 +147,55 @@ function drawTopView(canvas, spec, units, highlightRole) {
   ctx.textAlign = 'center';
   ctx.fillText('BG', subjectX, bgY + 4);
 
-  // ── subject ───────────────────────────────────────
-  ctx.fillStyle = tc.subjectHead;
-  ctx.beginPath();
-  ctx.arc(subjectX, subjectY, 10, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = tc.textFaint;
-  ctx.font = `${Math.round(11 * fs)}px ${FONT_STACK}`;
-  ctx.textAlign = 'center';
-  ctx.fillText('Subject', subjectX, subjectY + 24);
+  // ── subject(s) ────────────────────────────────────
+  if (twoHostSetup) {
+    [{ x: subjectAX, label: 'Host A' }, { x: subjectBX, label: 'Host B' }].forEach(({ x, label }) => {
+      ctx.fillStyle = tc.subjectHead;
+      ctx.beginPath();
+      ctx.arc(x, subjectY, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = tc.textFaint;
+      ctx.font = `${Math.round(11 * fs)}px ${FONT_STACK}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, x, subjectY + 24);
+    });
+
+    // ── inter-subject distance indicator ─────────────────
+    const spacing = spec.subject_spacing_m || 1.2;
+    const spacingLabel = fmtDist(spacing, units);
+    const lineY = subjectY - 22;
+    const aEdge = subjectAX + 12;
+    const bEdge = subjectBX - 12;
+    ctx.strokeStyle = tc.isDark ? 'rgba(148,163,184,0.45)' : 'rgba(100,116,139,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(aEdge, lineY);
+    ctx.lineTo(bEdge, lineY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // arrowheads
+    const asz = Math.round(5 * fs);
+    [[aEdge, 1], [bEdge, -1]].forEach(([ax, dir]) => {
+      ctx.fillStyle = tc.isDark ? 'rgba(148,163,184,0.6)' : 'rgba(100,116,139,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(ax, lineY);
+      ctx.lineTo(ax + dir * asz, lineY - asz / 2);
+      ctx.lineTo(ax + dir * asz, lineY + asz / 2);
+      ctx.closePath();
+      ctx.fill();
+    });
+    drawDistBadge((subjectAX + subjectBX) / 2, lineY, spacingLabel);
+  } else {
+    ctx.fillStyle = tc.subjectHead;
+    ctx.beginPath();
+    ctx.arc(subjectX, subjectY, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = tc.textFaint;
+    ctx.font = `${Math.round(11 * fs)}px ${FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Subject', subjectX, subjectY + 24);
+  }
 
   // ── camera ────────────────────────────────────────
   const camX = subjectX;
@@ -156,10 +217,6 @@ function drawTopView(canvas, spec, units, highlightRole) {
   // ── distance badges (camera↔subject, subject↔background) ──
   // Pill-shaped badges centered on the line between elements
   const bgDistM = (subjectY - bgY) / scale;  // actual distance based on rendered positions
-  const badgeFont = `bold ${Math.round(13 * fs)}px ${FONT_STACK}`;
-  const badgeBg = tc.isDark ? 'rgba(30,41,59,0.85)' : 'rgba(241,245,249,0.9)';
-  const badgeBorder = tc.isDark ? 'rgba(100,116,139,0.5)' : 'rgba(100,116,139,0.4)';
-  const badgeText = tc.isDark ? '#e2e8f0' : '#1e293b';
 
   function drawDistBadge(x, y, label) {
     ctx.font = badgeFont;
@@ -297,11 +354,19 @@ function drawTopView(canvas, spec, units, highlightRole) {
   });
 
   // ── beams (light → target) ───────────────────────
-  lights.forEach(({ role, lx, ly }) => {
+  lights.forEach(({ role, lx, ly, side }) => {
     const color = lightColor(role, tc.lightColors);
     const isBackground = role === 'background';
-    const targetX = isBackground ? subjectX : subjectX;
-    const targetY = isBackground ? bgY : subjectY;
+    let targetX, targetY;
+    if (isBackground) {
+      targetX = subjectX; targetY = bgY;
+    } else if (twoHostSetup && side === 'left') {
+      targetX = subjectBX; targetY = subjectY; // left light crosses to Host B
+    } else if (twoHostSetup && side === 'right') {
+      targetX = subjectAX; targetY = subjectY; // right light crosses to Host A
+    } else {
+      targetX = subjectX; targetY = subjectY;
+    }
 
     ctx.save();
     ctx.globalAlpha = tc.isDark ? 0.12 : 0.10;
@@ -375,9 +440,17 @@ function drawTopView(canvas, spec, units, highlightRole) {
   }
 
   // Reserve ICON areas (not just labels) so light labels don't overlap them
-  // Subject circle + label
-  addBox(subjectX, subjectY, 28, 28);               // subject circle
-  addBox(subjectX, subjectY + 24, 60, 20);           // "Subject" label
+  // Subject circle(s) + label(s)
+  if (twoHostSetup) {
+    addBox(subjectAX, subjectY, 28, 28);
+    addBox(subjectAX, subjectY + 24, 60, 20);
+    addBox(subjectBX, subjectY, 28, 28);
+    addBox(subjectBX, subjectY + 24, 60, 20);
+    addBox((subjectAX + subjectBX) / 2, subjectY - 22, subjectBX - subjectAX, 26); // spacing badge
+  } else {
+    addBox(subjectX, subjectY, 28, 28);              // subject circle
+    addBox(subjectX, subjectY + 24, 60, 20);         // "Subject" label
+  }
   // Camera icon + label
   addBox(camX, camY, 28, 18);                        // camera rectangle
   addBox(camX, camY + 20, 60, 20);                   // "Camera" label
@@ -1173,7 +1246,7 @@ function handlePrint(canvasEl, spec, title, view) {
   win.document.close();
 }
 
-export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole }) {
+export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole, twoHostSetup }) {
   const canvasRef = useRef(null);
   const [view, setView] = useState('top');
   const [zoomSrc, setZoomSrc] = useState(null);
@@ -1182,7 +1255,7 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
   useEffect(() => {
     const draw = view === 'space'
       ? (c) => drawFloorPlan(c, spec, units, spaceCheck, roomDimensions, highlightRole)
-      : view === 'side' ? (c) => drawSideView(c, spec, units, highlightRole) : (c) => drawTopView(c, spec, units, highlightRole);
+      : view === 'side' ? (c) => drawSideView(c, spec, units, highlightRole) : (c) => drawTopView(c, spec, units, highlightRole, twoHostSetup);
     draw(canvasRef.current);
 
     function onResize() { draw(canvasRef.current); }
@@ -1241,12 +1314,19 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
         <div className="diagram-layout__canvas">
           <canvas ref={canvasRef} className="diagram-canvas" onClick={handleCanvasZoom} />
           {cameraSettings && (
-            <div className="diagram-camera-bar">
-              {cameraSettings.aperture && <span className="diagram-camera-bar__item"><strong>{cameraSettings.aperture}</strong></span>}
-              {cameraSettings.iso && <span className="diagram-camera-bar__item">ISO {cameraSettings.iso}</span>}
-              {cameraSettings.shutter && <span className="diagram-camera-bar__item">{cameraSettings.shutter}</span>}
-              {cameraSettings.wb && <span className="diagram-camera-bar__item">WB {formatWB(cameraSettings.wb)}</span>}
-            </div>
+            <>
+              <div className="diagram-camera-bar">
+                {cameraSettings.aperture && <span className="diagram-camera-bar__item"><strong>{cameraSettings.aperture}</strong></span>}
+                {cameraSettings.iso && <span className="diagram-camera-bar__item">ISO {cameraSettings.iso}</span>}
+                {cameraSettings.shutter && <span className="diagram-camera-bar__item">{cameraSettings.shutter}</span>}
+              </div>
+              {cameraSettings.wb && (
+                <div className="diagram-wb-row">
+                  <span className={`diagram-camera-bar__item diagram-wb-row__label ${wbTempClass(cameraSettings.wb)}`}>WB {formatWB(cameraSettings.wb)}</span>
+                  <WBSpectrum wb={cameraSettings.wb} className="diagram-wb-spectrum" />
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="diagram-layout__sidebar">
@@ -1254,12 +1334,7 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
             {lights.map((l, i) => {
               const modText = SHORT_MOD[l.modifier] || (l.modifier || '').replace(/_/g, ' ');
               const roleName = l.label || l.role.replace(/_/g, ' ');
-              const detail = [
-                modText,
-                fmtDist(l.distance_m, units),
-                `${Math.round(Math.abs(l.angle_deg))}\u00b0`,
-                `${fmtDist(l.height_m || 1.7, units)} high`,
-              ].filter(Boolean).join(' \u00b7 ');
+              const role = l.role.toLowerCase();
               const extra = formatEnginePowerHint(l.power_hint, powerDisplay) || l.ratio_hint || '';
               const isHighlightedLegend = highlightRole && (
                 l.role === highlightRole || l.role.startsWith(highlightRole) || highlightRole.startsWith(l.role)
@@ -1271,8 +1346,30 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
                     style={{ background: lightColor(l.role, tc.lightColors) }}
                   />
                   <span className="diagram-legend__info">
-                    <span className="diagram-legend__name">{roleName}</span>
-                    <span className="diagram-legend__detail">{detail}{extra ? ` \u00b7 ${extra}` : ''}</span>
+                    <div className="diagram-legend__header">
+                      <span className="diagram-legend__name">{roleName}</span>
+                    </div>
+                    {ROLE_DESC[role] && (
+                      <span className="diagram-legend__role-desc">{ROLE_DESC[role]}</span>
+                    )}
+                    <div className="diagram-legend__fields">
+                      {modText && (
+                        <span className="diagram-legend__field">
+                          <span className="diagram-legend__field-key">Mod</span>{modText}
+                        </span>
+                      )}
+                      <span className="diagram-legend__field">
+                        <span className="diagram-legend__field-key">Pos</span>
+                        {Math.round(Math.abs(l.angle_deg))}&deg;&nbsp;&middot;&nbsp;
+                        {fmtDist(l.distance_m, units)}&nbsp;&middot;&nbsp;
+                        {fmtDist(l.height_m || 1.7, units)} high
+                      </span>
+                      {extra && (
+                        <span className="diagram-legend__field">
+                          <span className="diagram-legend__field-key">Pwr</span>{extra}
+                        </span>
+                      )}
+                    </div>
                   </span>
                 </div>
               );
@@ -1280,8 +1377,12 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
             <div className="diagram-legend__row">
               <span className="diagram-legend__dot" style={{ background: tc.camera }} />
               <span className="diagram-legend__info">
-                <span className="diagram-legend__name">Camera</span>
-                {spec.camera?.distance_m && <span className="diagram-legend__detail">{fmtDist(spec.camera.distance_m, units)} from subject</span>}
+                <div className="diagram-legend__header">
+                  <span className="diagram-legend__name">Camera</span>
+                </div>
+                {spec.camera?.distance_m && (
+                  <span className="diagram-legend__role-desc">{fmtDist(spec.camera.distance_m, units)} from subject</span>
+                )}
               </span>
             </div>
           </div>
@@ -1292,26 +1393,46 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
             const hasRoom = !!roomDimensions;
             const anyFail = ceilFail || wFail || dFail;
             const allPass = hasRoom && !anyFail;
+
+            // Compute floor area from min dimensions
+            const wFt = parseFloat(spaceCheck.minWidthFt) || 0;
+            const dFt = parseFloat(spaceCheck.minDepthFt) || 0;
+            const hasArea = wFt > 0 && dFt > 0;
+            const areaLabel = hasArea
+              ? units === 'metric'
+                ? `${((wFt * 0.3048) * (dFt * 0.3048)).toFixed(1)} m²`
+                : `${Math.round(wFt * dFt)} sq ft`
+              : null;
+
             return (
               <div className={`diagram-space-footer${anyFail ? ' diagram-space-footer--fail' : allPass ? ' diagram-space-footer--pass' : ''}`}>
-                <span className="diagram-space-footer__dot" />
-                <span className="diagram-space-footer__label">Min</span>
-                {spaceCheck.minCeilingFt && (
-                  <span className={`diagram-space-footer__dim${hasRoom ? (ceilFail ? ' diagram-space-footer__dim--fail' : ' diagram-space-footer__dim--pass') : ''}`}>
-                    {formatRoomDim(spaceCheck.minCeilingFt, units)}<span className="diagram-space-footer__unit"> ceil</span>
-                  </span>
-                )}
-                {(spaceCheck.minWidthFt || spaceCheck.minDepthFt) && (
-                  <span className="diagram-space-footer__sep">·</span>
-                )}
-                <span className={`diagram-space-footer__floor${hasRoom ? ((wFail || dFail) ? ' diagram-space-footer__dim--fail' : ' diagram-space-footer__dim--pass') : ''}`}>
-                  {spaceCheck.minWidthFt && formatRoomDim(spaceCheck.minWidthFt, units)}
-                  {spaceCheck.minWidthFt && spaceCheck.minDepthFt && <span className="diagram-space-footer__x">×</span>}
-                  {spaceCheck.minDepthFt && formatRoomDim(spaceCheck.minDepthFt, units)}
-                  <span className="diagram-space-footer__unit"> floor</span>
-                </span>
+                <div className="diagram-space-footer__heading">
+                  <span className="diagram-space-footer__dot" />
+                  <span className="diagram-space-footer__label">Space needed for this setup</span>
+                  {anyFail && <span className="diagram-space-footer__warn-badge">⚠ too small</span>}
+                  {allPass && <span className="diagram-space-footer__pass-badge">✓ fits</span>}
+                </div>
+                <div className="diagram-space-footer__rows">
+                  {spaceCheck.minCeilingFt && (
+                    <div className={`diagram-space-footer__row${hasRoom ? (ceilFail ? ' diagram-space-footer__dim--fail' : ' diagram-space-footer__dim--pass') : ''}`}>
+                      <span className="diagram-space-footer__row-label">Ceiling height</span>
+                      <span className="diagram-space-footer__row-val">≥ {formatRoomDim(spaceCheck.minCeilingFt, units)}</span>
+                    </div>
+                  )}
+                  {(spaceCheck.minWidthFt || spaceCheck.minDepthFt) && (
+                    <div className={`diagram-space-footer__row${hasRoom ? ((wFail || dFail) ? ' diagram-space-footer__dim--fail' : ' diagram-space-footer__dim--pass') : ''}`}>
+                      <span className="diagram-space-footer__row-label">Floor space</span>
+                      <span className="diagram-space-footer__row-val">
+                        {spaceCheck.minWidthFt && formatRoomDim(spaceCheck.minWidthFt, units)}
+                        {spaceCheck.minWidthFt && spaceCheck.minDepthFt && ' × '}
+                        {spaceCheck.minDepthFt && formatRoomDim(spaceCheck.minDepthFt, units)}
+                        {areaLabel && <span className="diagram-space-footer__area"> — {areaLabel}</span>}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 {spaceCheck?.warnings?.length > 0 && (
-                  <span className="diagram-space-footer__warn-hint">⚠ lower rim</span>
+                  <div className="diagram-space-footer__warn-hint">⚠ {spaceCheck.warnings[0]}</div>
                 )}
               </div>
             );

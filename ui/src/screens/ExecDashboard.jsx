@@ -14,6 +14,7 @@
  * Auto-refreshes every 60 s. Mobile-first, dark-theme consistent.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useDispatch } from '../context/AppContext';
 import { getExecDashboard, getExecTrends } from '../data/execApi';
 import { pct, usd, relTime } from '../lib/formatters';
 
@@ -89,7 +90,7 @@ function TrendChart({ data, metrics, title }) {
   }
 
   const colors = {
-    analyses: 'var(--color-accent)',
+    analysis: 'var(--color-accent)',
     upgrades: 'var(--color-success)',
     matches:  'var(--color-warning)',
   };
@@ -101,7 +102,7 @@ function TrendChart({ data, metrics, title }) {
   const W = width  - pad.left - pad.right;
   const H = height - pad.top  - pad.bottom;
 
-  const series = (metrics || ['analyses', 'upgrades', 'matches']).map(key => {
+  const series = (metrics || ['analysis', 'upgrades', 'matches']).map(key => {
     const vals = data.map(d => d[key] ?? 0);
     return { key, vals };
   });
@@ -118,7 +119,7 @@ function TrendChart({ data, metrics, title }) {
   }
 
   // X-axis labels (first, middle, last)
-  const labelIdxs = [0, Math.floor(labels.length / 2), labels.length - 1];
+  const labelIdxs = [...new Set([0, Math.floor(labels.length / 2), labels.length - 1])];
 
   return (
     <div className="ed-trend-chart">
@@ -128,7 +129,7 @@ function TrendChart({ data, metrics, title }) {
         {[0.25, 0.5, 0.75, 1].map(f => {
           const y = pad.top + H - f * H;
           return (
-            <g key={f}>
+            <g key={`grid-${f}`}>
               <line x1={pad.left} y1={y} x2={pad.left + W} y2={y}
                 stroke="var(--color-border)" strokeWidth="0.5" />
               <text x={pad.left - 4} y={y + 3} textAnchor="end"
@@ -151,7 +152,7 @@ function TrendChart({ data, metrics, title }) {
           if (i >= labels.length) return null;
           const x = pad.left + (i / Math.max(labels.length - 1, 1)) * W;
           return (
-            <text key={i} x={x} y={height - 4} textAnchor="middle"
+            <text key={`label-${i}`} x={x} y={height - 4} textAnchor="middle"
               fontSize="7" fill="var(--color-text-dim)">
               {(labels[i] || '').slice(5)}
             </text>
@@ -178,11 +179,11 @@ function KPICard({ label, value, delta, deltaFmt, suffix, trend }) {
   const dc = deltaClass(delta);
   return (
     <div className="ed-kpi">
-      <div className="ed-kpi__label">{label}</div>
       <div className="ed-kpi__value">
         {value}
         {suffix && <span className="ed-kpi__suffix">{suffix}</span>}
       </div>
+      <div className="ed-kpi__label">{label}</div>
       {delta != null && (
         <div className={`ed-kpi__delta ${dc}`}>
           {deltaStr(delta, deltaFmt)}
@@ -258,7 +259,7 @@ const PAT_COLS = [
   { key: 'revenue_per_session', label: 'Rev/Session',    fmt: v => v != null ? `$${v}` : '—' },
   { key: 'live_success_rate',   label: 'Live Success',   fmt: v => v != null ? pct(v) : '—' },
   { key: 'delta_change',        label: 'Δ BM',           fmt: null }, // handled specially
-  { key: 'analysis_count',      label: 'Analyses',       fmt: v => v ?? '—' },
+  { key: 'analysis_count',      label: 'Analysis',       fmt: v => v ?? '—' },
 ];
 
 function PatternTable({ patterns }) {
@@ -266,7 +267,14 @@ function PatternTable({ patterns }) {
   const [sortDir,  setSortDir]  = useState('desc');
 
   if (!patterns || patterns.length === 0) {
-    return <div className="ed-empty">No pattern data yet</div>;
+    return (
+      <div className="ed-card ed-card--wide">
+        <div className="ed-card__hdr">
+          <span className="ed-card__title">Pattern Performance</span>
+        </div>
+        <div className="ed-empty">No pattern data yet</div>
+      </div>
+    );
   }
 
   const sorted = [...patterns].sort((a, b) => {
@@ -302,8 +310,8 @@ function PatternTable({ patterns }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map(p => (
-              <tr key={p.pattern_id} className="ed-table__row">
+            {sorted.map((p, i) => (
+              <tr key={`${p.pattern_id}-${i}`} className="ed-table__row">
                 {PAT_COLS.map(c => {
                   if (c.key === 'delta_change') {
                     const d = p.delta_change;
@@ -653,7 +661,9 @@ function SkeletonDashboard() {
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function ExecDashboard() {
+  const dispatch = useDispatch();
   const [days,        setDays]       = useState(7);
+  const [origin,      setOrigin]     = useState('all');
   const [data,        setData]       = useState(null);
   const [trends,      setTrends]     = useState(null);
   const [loading,     setLoading]    = useState(true);
@@ -665,7 +675,7 @@ export default function ExecDashboard() {
   const load = useCallback(async () => {
     try {
       const [dash, tr] = await Promise.all([
-        getExecDashboard(days),
+        getExecDashboard(days, origin),
         getExecTrends(),
       ]);
       setData(dash);
@@ -677,7 +687,7 @@ export default function ExecDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [days]);
+  }, [days, origin]);
 
   useEffect(() => {
     setLoading(true);
@@ -693,23 +703,49 @@ export default function ExecDashboard() {
       {/* Header */}
       <div className="ed-header">
         <div className="ed-header__left">
+          <button
+            className="adb__back-btn"
+            type="button"
+            onClick={() => dispatch({ type: 'GO_BACK' })}
+            title="Back to Settings"
+          >← Settings</button>
           <h2 className="ed-title">Executive Dashboard</h2>
-          {lastRefresh && (
-            <span className="ed-refresh-badge">
-              Updated {relTime(lastRefresh / 1000)}
-            </span>
-          )}
+          <div className="adb__view-tabs">
+            <button
+              className="adb__view-tab"
+              type="button"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+            >Analytics</button>
+            <button className="adb__view-tab adb__view-tab--on" type="button">Executive</button>
+          </div>
         </div>
         <div className="ed-header__right">
-          <div className="ed-day-selector">
+          <div className="adb__origin-group" title="Filter sessions by origin">
+            {[{ id: 'all', label: 'All' }, { id: 'production', label: 'Prod' }, { id: 'internal', label: 'Dev' }].map(o => (
+              <button
+                key={o.id}
+                className={`adb__origin-btn${origin === o.id ? ' adb__origin-btn--on' : ''}`}
+                type="button"
+                onClick={() => setOrigin(o.id)}
+              >{o.label}</button>
+            ))}
+          </div>
+          <div className="adb__controls-sep" />
+          <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
             {DAY_OPTIONS.map(o => (
               <button key={o.value}
-                className={`ed-day-btn ${days === o.value ? 'ed-day-btn--active' : ''}`}
+                className={`adb__range-btn${days === o.value ? ' adb__range-btn--on' : ''}`}
+                type="button"
                 onClick={() => setDays(o.value)}>
                 {o.label}
               </button>
             ))}
           </div>
+          {lastRefresh && (
+            <span className="ed-refresh-badge">
+              Updated {relTime(lastRefresh / 1000)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -751,7 +787,7 @@ export default function ExecDashboard() {
             </div>
             <TrendChart
               data={trendData}
-              metrics={['analyses', 'upgrades', 'matches']}
+              metrics={['analysis', 'upgrades', 'matches']}
             />
           </div>
 
@@ -777,8 +813,8 @@ export default function ExecDashboard() {
                   <div className="ed-sq-label">Sessions</div>
                 </div>
                 <div className="ed-sq-item">
-                  <div className="ed-sq-val">{data.kpis?.total_analyses ?? '—'}</div>
-                  <div className="ed-sq-label">Analyses</div>
+                  <div className="ed-sq-val">{data.kpis?.total_analysis ?? '—'}</div>
+                  <div className="ed-sq-label">Analysis</div>
                 </div>
                 <div className="ed-sq-item">
                   <div className="ed-sq-val">{pct(data.kpis?.success_rate)}</div>

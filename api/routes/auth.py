@@ -1,13 +1,18 @@
-"""Authentication routes: register, login, me."""
+"""Authentication routes: register, login, me, email verification."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from auth.security import (
     hash_password, verify_password, create_access_token, get_current_user,
 )
-from db.database import create_user, get_user_by_email
+from auth.email import send_verification_email
+from db.database import (
+    create_user, get_user_by_email,
+    create_verification_token, consume_verification_token,
+    mark_email_verified,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -23,6 +28,10 @@ class LoginBody(BaseModel):
     password: str
 
 
+class VerifyBody(BaseModel):
+    token: str
+
+
 class TokenResponse(BaseModel):
     token: str
     user: dict
@@ -32,6 +41,19 @@ class UserResponse(BaseModel):
     id: str
     email: str
     username: str
+    email_verified: bool = False
+
+
+def _user_public(user: dict) -> dict:
+    from db.provenance import get_internal_emails
+    email = user.get("email", "")
+    return {
+        "id": user["id"],
+        "email": email,
+        "username": user["username"],
+        "email_verified": bool(user.get("email_verified", 0)),
+        "is_admin": email.lower() in get_internal_emails(),
+    }
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
@@ -42,7 +64,15 @@ def register(body: RegisterBody):
     hashed = hash_password(body.password)
     user = create_user(body.email, body.username, hashed)
     token = create_access_token(user["id"])
-    return {"token": token, "user": user}
+
+    # Send verification email (non-blocking — failure doesn't break registration)
+    try:
+        verif_token = create_verification_token(user["id"])
+        send_verification_email(body.email, verif_token)
+    except Exception:
+        pass  # logged inside send_verification_email
+
+    return {"token": token, "user": _user_public(user)}
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -51,12 +81,30 @@ def login(body: LoginBody):
     if not user or not verify_password(body.password, user["hashed_pw"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["id"])
-    return {
-        "token": token,
-        "user": {"id": user["id"], "email": user["email"], "username": user["username"]},
-    }
+    return {"token": token, "user": _user_public(user)}
 
 
 @router.get("/me", response_model=UserResponse)
 def me(user=Depends(get_current_user)):
-    return {"id": user["id"], "email": user["email"], "username": user["username"]}
+    return _user_public(user)
+
+
+@router.post("/verify-email")
+def verify_email(body: VerifyBody):
+    user = consume_verification_token(body.token)
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    token = create_access_token(user["id"])
+    return {"token": token, "user": _user_public(user)}
+
+
+@router.post("/resend-verification")
+def resend_verification(user=Depends(get_current_user)):
+    if user.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Email already verified")
+    try:
+        verif_token = create_verification_token(user["id"])
+        send_verification_email(user["email"], verif_token)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to send email") from exc
+    return {"detail": "Verification email sent"}

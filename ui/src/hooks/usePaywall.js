@@ -16,6 +16,7 @@ const STORAGE_KEY = 'ngw_paid';
 /** These accounts always have full access — no paywall, no prompts. */
 const ADMIN_EMAILS = [
   'todd@toddwillisphoto.com',
+  'dev@localhost',
 ];
 
 function isAdminEmail(email) {
@@ -28,16 +29,15 @@ function readPaid() {
 }
 
 export default function usePaywall(userEmail) {
-  const admin = isAdminEmail(userEmail);
-  const [isPaid, setIsPaid] = useState(() => admin || readPaid());
+  // Admin check is computed once in the initializer — avoids an extra render cycle.
+  const [isPaid, setIsPaid] = useState(() => isAdminEmail(userEmail) || readPaid());
 
-  // Whenever an admin email is detected, stamp localStorage so other checks stay consistent
+  // When userEmail changes to an admin address, sync isPaid.
+  // Do NOT write to localStorage — admin access is identity-derived, not persisted,
+  // so subsequent non-admin sessions in the same browser get the correct free tier.
   useEffect(() => {
-    if (admin) {
-      try { localStorage.setItem(STORAGE_KEY, 'true'); } catch {}
-      setIsPaid(true);
-    }
-  }, [admin]);
+    if (isAdminEmail(userEmail)) setIsPaid(true);
+  }, [userEmail]);
 
   const unlock = useCallback(() => {
     try { localStorage.setItem(STORAGE_KEY, 'true'); } catch {}
@@ -46,10 +46,10 @@ export default function usePaywall(userEmail) {
   }, [userEmail]);
 
   const lock = useCallback(() => {
-    if (admin) return; // admin accounts cannot be locked
+    if (isAdminEmail(userEmail)) return; // admin accounts cannot be locked
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
     setIsPaid(false);
-  }, [admin]);
+  }, [userEmail]);
 
-  return { isPaid, unlock, lock, isAdmin: admin };
+  return { isPaid, unlock, lock, isAdmin: isAdminEmail(userEmail) };
 }

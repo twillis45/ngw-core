@@ -1,6 +1,6 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useDispatch, useAppState } from '../context/AppContext';
-import { loadSetups } from '../data/setupStore';
+import { loadSetups, onSetupsChanged } from '../data/setupStore';
 import usePlan from '../hooks/usePlan';
 
 /* Static floor-plan SVG shown in the proof preview — no data dependency */
@@ -51,7 +51,12 @@ export default function HomeScreenV2() {
   const { isPaid } = usePlan(user?.email);
   const fileRef = useRef(null);
 
-  const savedSetups = loadSetups();
+  const [setups, setSetups] = useState(() => loadSetups());
+
+  // Cross-tab sync — refresh when another tab saves or deletes a setup
+  useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
+
+  const savedSetups = setups;
   const lastSetup = savedSetups.length > 0 ? savedSetups[savedSetups.length - 1] : null;
 
   function handleFileChange(e) {
@@ -118,7 +123,7 @@ export default function HomeScreenV2() {
             <circle cx="8.5" cy="8.5" r="1.5" />
             <path d="m21 15-5-5L5 21" />
           </svg>
-          {isPaid ? 'Analyse a photo' : 'Try it now'}
+          {isPaid ? 'Analyze a photo' : 'Try it now'}
         </button>
         {!isPaid && <span className="home-v2__cta-hint">Free — no account needed</span>}
       </div>

@@ -10,6 +10,7 @@ This route only:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -56,9 +57,15 @@ async def get_blueprint(req: BlueprintRequest) -> Dict[str, Any]:
     analysis_result: Any
 
     if req.imagePath:
+        # Normalize web-relative paths: '/static/uploads/...' → 'static/uploads/...'
+        # Path() treats leading-slash strings as absolute filesystem paths, but
+        # the upload-reference endpoint returns project-root-relative paths.
+        image_path_str = req.imagePath
+        if image_path_str.startswith('/') and not Path(image_path_str).exists():
+            image_path_str = image_path_str.lstrip('/')
         # Full analysis from reference image
         try:
-            ar = analyze_image(req.imagePath, run_extended=True, run_solver=True)
+            ar = analyze_image(image_path_str, run_extended=True, run_solver=True)
         except Exception as e:
             logger.exception("Blueprint image analysis failed")
             raise HTTPException(status_code=500, detail=f"Image analysis failed: {e}") from e

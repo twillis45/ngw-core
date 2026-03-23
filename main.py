@@ -56,7 +56,14 @@ async def lifespan(app):
     from db.signals import init_signals_tables, seed_signals
     init_signals_tables()
     seed_signals()   # no-op if rows already exist
+
+    # Start background scheduler (no-op if ENABLE_SCHEDULER is not set)
+    from engine.scheduler import boot_scheduler, stop_scheduler
+    boot_scheduler()
+
     yield
+
+    stop_scheduler()
 
 
 app = FastAPI(title="NGW Core v1", version=ENGINE_VERSION, lifespan=lifespan)
@@ -115,6 +122,15 @@ app.include_router(lab_signals_router, prefix="/api")
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+@app.middleware("http")
+async def cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    # Vite build outputs content-hashed filenames under /static/ui/assets/.
+    # These are safe to cache forever — new deploy = new hash = new URL.
+    if request.url.path.startswith("/static/ui/assets/"):
+        response.headers["Cache-Control"] = "max-age=31536000, immutable"
+    return response
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok", "engine_version": ENGINE_VERSION}
@@ -140,6 +156,8 @@ def root(request: Request):
 
 _MARKETING_PAGES = {"features", "pricing", "library", "blog", "login", "signup"}
 
+_DOCS_PAGES = {"index", "patterns", "glossary", "how-it-works"}
+
 
 @app.get("/features")
 @app.get("/pricing")
@@ -160,11 +178,73 @@ def marketing_page(request: Request):
     raise HTTPException(status_code=404)
 
 
+@app.get("/docs")
+def docs_index_redirect():
+    return RedirectResponse(url="/docs/", status_code=301)
+
+
+@app.get("/docs/")
+@app.get("/docs/{page}")
+def docs_page(page: str = "index"):
+    slug = page.rstrip("/") or "index"
+    slug = slug.removesuffix(".html")
+    if slug not in _DOCS_PAGES:
+        raise HTTPException(status_code=404)
+    file_path = Path(f"static/www/docs/{slug}.html")
+    if file_path.exists():
+        return HTMLResponse(file_path.read_text(encoding="utf-8"))
+    raise HTTPException(status_code=404)
+
+
+@app.get("/sitemap.xml")
+def sitemap():
+    base = "https://noguesswork.com"
+    urls = [
+        f"{base}/",
+        f"{base}/features",
+        f"{base}/pricing",
+        f"{base}/blog",
+        f"{base}/library",
+        f"{base}/docs/",
+        f"{base}/docs/patterns",
+        f"{base}/docs/glossary",
+        f"{base}/docs/how-it-works",
+    ]
+    items = "\n".join(
+        f"  <url><loc>{u}</loc><changefreq>weekly</changefreq></url>"
+        for u in urls
+    )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f"{items}\n"
+        "</urlset>"
+    )
+    return HTMLResponse(content=xml, media_type="application/xml")
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Allow: /docs/\n"
+        "Allow: /features\n"
+        "Allow: /pricing\n"
+        "Allow: /blog\n"
+        "Allow: /library\n"
+        "Disallow: /api/\n"
+        "Disallow: /ui\n"
+        "Disallow: /static/uploads/\n"
+        "Sitemap: https://noguesswork.com/sitemap.xml\n"
+    )
+    return HTMLResponse(content=content, media_type="text/plain")
+
+
 @app.get("/ui")
 def ui() -> HTMLResponse:
     ui_path = Path("static/ui/index.html")
-    if ui_path.exists():
-        return HTMLResponse(ui_path.read_text(encoding="utf-8"))
-    return HTMLResponse("<html><body><h1>NGW UI</h1></body></html>")
+    html = ui_path.read_text(encoding="utf-8") if ui_path.exists() else "<html><body><h1>NGW UI</h1></body></html>"
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 

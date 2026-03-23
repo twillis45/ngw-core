@@ -2,6 +2,28 @@ import { getToken, syncSetup as syncSetupRemote, fetchSetups as fetchSetupsRemot
 
 const STORAGE_KEY = 'ngw_saved_setups';
 
+// ── Cross-tab sync via BroadcastChannel ──────────────────────────────────────
+// When a setup is saved or deleted in one tab, all other tabs update automatically.
+
+const _channel = typeof BroadcastChannel !== 'undefined'
+  ? new BroadcastChannel('ngw_setups')
+  : null;
+
+/**
+ * Register a callback that fires when another tab modifies setups.
+ * Returns an unsubscribe function.
+ */
+export function onSetupsChanged(callback) {
+  if (!_channel) return () => {};
+  const handler = (e) => { if (e.data?.type === 'setups_changed') callback(); };
+  _channel.addEventListener('message', handler);
+  return () => _channel.removeEventListener('message', handler);
+}
+
+function _broadcast() {
+  _channel?.postMessage({ type: 'setups_changed' });
+}
+
 export function loadSetups() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -23,6 +45,7 @@ export function saveSetup(entry) {
   // Cap at 50 saved setups
   const trimmed = all.slice(-50);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
+  _broadcast();
 
   // Sync to server if logged in (fire-and-forget)
   if (getToken()) {
@@ -35,6 +58,7 @@ export function saveSetup(entry) {
 export function deleteSetup(id) {
   const all = loadSetups().filter(s => s.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  _broadcast();
 
   // Sync deletion to server if logged in (fire-and-forget)
   if (getToken()) {
@@ -73,7 +97,7 @@ export function getStylePattern(setups) {
  * Returns { improved, delta, lastScore, currentScore } or null when no comparison is possible.
  * delta is always positive; check `improved` for direction.
  * @param {string} pattern       - lighting pattern name
- * @param {number} currentScore  - reliabilityScore from current result (0-100)
+ * @param {number} currentScore  - reliabilityScore from current result (0–1)
  * @param {Array}  [setups]      - pre-loaded setups; defaults to loadSetups()
  */
 export function getImprovementSignal(pattern, currentScore, setups) {
@@ -87,14 +111,16 @@ export function getImprovementSignal(pattern, currentScore, setups) {
   if (!previous.length) return null;
   // Most recent previous entry (array is oldest-first, take last)
   const last = previous[previous.length - 1];
-  const lastScore = last.result.bestMatch.reliabilityScore;
+  // Normalize stored score — old saves used 0-100, new saves use 0-1
+  const rawLast = last.result.bestMatch.reliabilityScore;
+  const lastScore = rawLast > 1 ? rawLast / 100 : rawLast;
   const raw = currentScore - lastScore;
-  if (Math.abs(raw) < 3) return null; // within noise threshold
+  if (Math.abs(raw) < 0.03) return null; // within noise threshold (3 pp)
   return {
     improved: raw > 0,
-    delta: Math.round(Math.abs(raw)),
-    lastScore: Math.round(lastScore),
-    currentScore: Math.round(currentScore),
+    delta: Math.round(Math.abs(raw) * 100),
+    lastScore: Math.round(lastScore * 100),
+    currentScore: Math.round(currentScore * 100),
   };
 }
 

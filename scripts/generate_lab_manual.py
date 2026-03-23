@@ -551,7 +551,7 @@ def part_operations(st):
                'contextual action buttons within each screen.', st))
     s += dtable(
         ['Tab', 'Icon', 'Purpose'],
-        [['Home',    'House',    'Start a new setup, analyse a photo, or open a recent setup'],
+        [['Home',    'House',    'Start a new setup, analyze a photo, or open a recent setup'],
          ['My Kit',  'Camera',   'Manage your gear inventory'],
          ['Kit Bag', 'Briefcase','Browse and run saved setups'],
          ['Saved',   'Bookmark', 'Access reference images and saved sessions'],

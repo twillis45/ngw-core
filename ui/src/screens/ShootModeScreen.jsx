@@ -3,20 +3,24 @@ import { useAppState, useDispatch } from '../context/AppContext';
 import { saveSetup } from '../data/setupStore';
 import { startShootMode } from '../data/shootModeApi';
 import { saveShootRole, loadShootRole, saveShootProgress, loadShootProgress } from '../data/shootModeStore';
-import { saveMode, loadMode } from '../data/modeStore';
+import { saveMode } from '../data/modeStore';
+import useMode from '../hooks/useMode';
 import { createSession, loadSession, clearSession, getShareUrl } from '../data/teamStore';
 import { trackEvent } from '../data/analytics';
 import usePaywall from '../hooks/usePaywall';
+import usePreviewMode from '../hooks/usePreviewMode';
+import useSettings from '../hooks/useSettings';
 import DiagramCard from '../cards/DiagramCard';
 import ShootStepCard from '../components/ShootStepCard';
 import ShootLightCard from '../components/ShootLightCard';
 import ShootOverlay from '../components/ShootOverlay';
 import ShootModePaywall from '../components/ShootModePaywall';
+import OutcomeCapture from '../components/OutcomeCapture';
 
 /**
  * ChecklistBlock — collapsible pre/post shoot checklist with local checkbox state.
  */
-function ChecklistBlock({ title, icon, items, defaultOpen = true }) {
+function ChecklistBlock({ title, icon, items, defaultOpen = true, mode = 'photographer' }) {
   const [open, setOpen] = useState(defaultOpen);
   const [checked, setChecked] = useState(() => new Set());
 
@@ -70,7 +74,7 @@ function ChecklistBlock({ title, icon, items, defaultOpen = true }) {
                 </span>
                 <span className="sm-checklist__label">{item.label}</span>
               </button>
-              {item.note && <p className="sm-checklist__note">{item.note}</p>}
+              {item.note && <p className={`sm-checklist__note${mode === 'learning' ? ' sm-checklist__note--learn' : ''}`}>{item.note}</p>}
             </li>
           ))}
         </ul>
@@ -79,35 +83,108 @@ function ChecklistBlock({ title, icon, items, defaultOpen = true }) {
   );
 }
 
+/* ── Mode-aware checklist item sets ── */
+const PRE_SHOOT_ITEMS = {
+  photographer: [
+    { id: 'power',      label: 'Strobes powered on and test-fired' },
+    { id: 'trigger',    label: 'Trigger synced — test pop confirmed' },
+    { id: 'modeling',   label: 'Modeling lights on for rough placement' },
+    { id: 'modifiers',  label: 'Modifiers attached and secure' },
+    { id: 'background', label: 'Background in place, no wrinkles' },
+    { id: 'card',       label: 'Memory card inserted / tethering active' },
+    { id: 'subject',    label: 'Subject briefed on mark and posing direction' },
+  ],
+  assistant: [
+    { id: 'power',      label: 'Strobes on, test fired' },
+    { id: 'trigger',    label: 'Trigger synced' },
+    { id: 'modifiers',  label: 'Modifiers on' },
+    { id: 'background', label: 'Background set' },
+    { id: 'card',       label: 'Card in / tethered' },
+    { id: 'subject',    label: 'Subject on mark' },
+  ],
+  learning: [
+    { id: 'power',      label: 'Strobes powered on and test-fired', note: 'Test firing recycles the capacitors and confirms TTL/manual settings are active before you burn a frame.' },
+    { id: 'trigger',    label: 'Trigger synced — test pop confirmed', note: 'A missed sync means a black frame at fast shutter speeds — verify before the subject arrives.' },
+    { id: 'modeling',   label: 'Modeling lights on for rough placement', note: 'Modeling lights preview the shadow direction and modifier spread so you can rough-position without test frames.' },
+    { id: 'modifiers',  label: 'Modifiers attached and secure', note: 'Loose speedrings or grids shift quality and direction mid-shoot without a visible cue.' },
+    { id: 'background', label: 'Background in place, no wrinkles', note: 'Wrinkles catch specular from the key light and read as distracting highlights in the final image.' },
+    { id: 'card',       label: 'Memory card inserted / tethering active', note: 'Shooting without a card is a silent failure — confirm before the subject is under lights.' },
+    { id: 'subject',    label: 'Subject briefed on mark and posing direction', note: 'A defined mark keeps the subject within the zone of correct exposure and focus distance.' },
+  ],
+};
+
+function getPostShootItems(mode, goodSigns, warnings) {
+  const evalItems = [
+    ...(goodSigns?.length > 0
+      ? goodSigns.map((s, i) => ({ id: `good-${i}`, label: typeof s === 'string' ? s : s.text }))
+      : [
+          { id: 'catchlight', label: mode === 'assistant' ? 'Catchlight correct' : 'Catchlight shape and position look correct' },
+          { id: 'shadow',     label: mode === 'assistant' ? 'Shadow edge matches ref' : 'Shadow edge softness matches the reference' },
+          { id: 'highlight',  label: mode === 'assistant' ? 'Highlights where intended' : 'Highlight placement is where you intended' },
+          { id: 'exposure',   label: mode === 'assistant' ? 'Histogram clean' : 'Histogram clean — no blown highlights or crushed blacks' },
+        ]),
+    ...(warnings?.length > 0
+      ? warnings.map((w, i) => ({ id: `warn-${i}`, label: typeof w === 'string' ? w : w.text, note: 'Watch for this' }))
+      : []),
+    { id: 'spill',      label: mode === 'assistant' ? 'No background spill' : 'No unwanted spill onto background',
+      ...(mode === 'learning' ? { note: 'Spill from the key or fill washing the background reduces separation and can blow out a white background unevenly.' } : {}) },
+    { id: 'separation', label: mode === 'assistant' ? 'Subject separates cleanly' : 'Subject separates cleanly from background',
+      ...(mode === 'learning' ? { note: 'Separation is driven by the ratio between background light and rim/hair light — adjust independently if this fails.' } : {}) },
+  ];
+  return evalItems;
+}
+
+const MODE_META = {
+  photographer: {
+    label: 'Narrated',
+    tagline: 'Full context — placement, rationale, pro tips',
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+      </svg>
+    ),
+  },
+  assistant: {
+    label: 'Brief',
+    tagline: 'Commands only — no context, faster scanning',
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+      </svg>
+    ),
+  },
+  learning: {
+    label: 'Learn',
+    tagline: 'Cause & effect — explains why each step works',
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
+      </svg>
+    ),
+  },
+};
+
 /**
  * ModeToggle — inline pill toggle for feedback presentation mode.
- * "Photographer" = conversational | "Assistant" = direct commands.
- * "Learn" is a secondary option shown as a smaller pill.
  */
 function ModeToggle({ mode, onChange }) {
+  const active = MODE_META[mode] || MODE_META.photographer;
   return (
     <div className="shoot-mode__mode-toggle" aria-label="Feedback style">
-      <button
-        className={`shoot-mode__mode-btn${mode === 'photographer' ? ' shoot-mode__mode-btn--active' : ''}`}
-        onClick={() => onChange('photographer')}
-        title="Conversational instructions with context"
-      >
-        Photographer
-      </button>
-      <button
-        className={`shoot-mode__mode-btn${mode === 'assistant' ? ' shoot-mode__mode-btn--active' : ''}`}
-        onClick={() => onChange('assistant')}
-        title="Direct commands only"
-      >
-        Assistant
-      </button>
-      <button
-        className={`shoot-mode__mode-btn shoot-mode__mode-btn--learn${mode === 'learning' ? ' shoot-mode__mode-btn--active' : ''}`}
-        onClick={() => onChange('learning')}
-        title="Full explanations with cause and effect"
-      >
-        Learn
-      </button>
+      <div className="shoot-mode__mode-pills">
+        {Object.entries(MODE_META).map(([key, meta]) => (
+          <button
+            key={key}
+            className={`shoot-mode__mode-btn shoot-mode__mode-btn--${key}${mode === key ? ` shoot-mode__mode-btn--active shoot-mode__mode-btn--active-${key}` : ''}`}
+            onClick={() => onChange(key)}
+            title={meta.tagline}
+          >
+            <span className="shoot-mode__mode-icon">{meta.icon}</span>
+            {meta.label}
+          </button>
+        ))}
+      </div>
+      <div className="shoot-mode__mode-tagline">{active.tagline}</div>
     </div>
   );
 }
@@ -125,6 +202,12 @@ export default function ShootModeScreen() {
   const dispatch = useDispatch();
   const userEmail = user?.email || user?.username || null;
   const { isPaid, unlock } = usePaywall(userEmail);
+  const { access: previewAccess } = usePreviewMode();
+  const effectiveIsPaid = previewAccess !== null
+    ? (previewAccess === 'paid' || previewAccess === 'admin')
+    : isPaid;
+  const { shootModeStyle } = useSettings();
+  const isChecklistMode = shootModeStyle === 'checklist';
 
   // Local state
   const [role, setRole] = useState(shootRole || loadShootRole() || null);
@@ -145,8 +228,10 @@ export default function ShootModeScreen() {
   const [showTeamShare, setShowTeamShare] = useState(false);
   const [teamCopied, setTeamCopied] = useState(false);
 
-  // Feedback presentation mode — how instructions are phrased
-  const [mode, setMode] = useState(() => loadMode());
+  // Feedback presentation mode — reactive to Settings changes
+  const _persistedMode = useMode();
+  const [modeOverride, setModeOverride] = useState(null);
+  const mode = modeOverride ?? _persistedMode;
 
   // Live View overlay
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -164,7 +249,7 @@ export default function ShootModeScreen() {
   const [struggleShown, setStruggleShown] = useState(false);
 
   function handleModeChange(m) {
-    setMode(m);
+    setModeOverride(m);
     saveMode(m);
   }
 
@@ -244,7 +329,7 @@ export default function ShootModeScreen() {
       if (wasCompleted) {
         next.delete(key);
         // Struggle detection: user is un-doing steps → they're stuck
-        if (!isPaid && !struggleShown) {
+        if (!effectiveIsPaid && !struggleShown) {
           retryCountRef.current += 1;
           if (retryCountRef.current >= 2) {
             setStruggleShown(true);
@@ -313,7 +398,7 @@ export default function ShootModeScreen() {
 
   // ── Save setup ──
   function handleSave() {
-    if (!isPaid) {
+    if (!effectiveIsPaid) {
       setPaywallVariant('default');
       setPaywallOpen(true);
       return;
@@ -327,7 +412,7 @@ export default function ShootModeScreen() {
 
   // ── Live view — gated with tease for free users ──
   function handleLiveView() {
-    if (!isPaid) {
+    if (!effectiveIsPaid) {
       setTeaseRevealed(false);
       setOverlayOpen(true);
       // After 2.5s reveal paywall over the live view
@@ -535,7 +620,7 @@ export default function ShootModeScreen() {
         {/* During tease: show real overlay, then reveal paywall over it */}
         {overlayOpen && !teaseRevealed && (
           <ShootOverlay
-            currentCommand={isPaid ? overlayCommand : null}
+            currentCommand={effectiveIsPaid ? overlayCommand : null}
             onClose={handleCloseOverlay}
           />
         )}
@@ -583,21 +668,29 @@ export default function ShootModeScreen() {
 
         {/* Phase 6: Match Lock Banner */}
         {matchLocked && (
-          <div className="shoot-mode__lock-banner">
-            <div className="shoot-mode__lock-icon">✓</div>
-            <div className="shoot-mode__lock-text">
-              <strong>Lighting locked — this will hold across shots.</strong>
-              <span>{saved ? 'Saved. Reproducible on your next shoot.' : 'Save it. Same result, every time you run it.'}</span>
+          <>
+            <div className="shoot-mode__lock-banner">
+              <div className="shoot-mode__lock-icon">✓</div>
+              <div className="shoot-mode__lock-text">
+                <strong>Lighting locked — this will hold across shots.</strong>
+                <span>{saved ? 'Saved. Reproducible on your next shoot.' : 'Save it. Same result, every time you run it.'}</span>
+              </div>
+              <button
+                className="shoot-mode__lock-save"
+                onClick={handleSave}
+                disabled={saved}
+                type="button"
+              >
+                {saved ? '✓ Locked' : 'Lock This Setup'}
+              </button>
             </div>
-            <button
-              className="shoot-mode__lock-save"
-              onClick={handleSave}
-              disabled={saved}
-              type="button"
-            >
-              {saved ? '✓ Locked' : 'Lock This Setup'}
-            </button>
-          </div>
+            <OutcomeCapture
+              compact
+              setupId={bestMatch.systemId || bestMatch.name}
+              mood={result?.mood}
+              pattern={bestMatch.lightingPattern}
+            />
+          </>
         )}
 
         {/* Setup Header */}
@@ -611,10 +704,10 @@ export default function ShootModeScreen() {
           </div>
           <div className="shoot-mode__header-actions">
             <button
-              className={`shoot-mode__liveview-btn${!isPaid ? ' shoot-mode__liveview-btn--tease' : ''}`}
+              className={`shoot-mode__liveview-btn${!effectiveIsPaid ? ' shoot-mode__liveview-btn--tease' : ''}`}
               onClick={handleLiveView}
               type="button"
-              title={isPaid ? 'Live View — camera overlay with light placement guidance' : 'Unlock live guidance'}
+              title={effectiveIsPaid ? 'Live View — camera overlay with light placement guidance' : 'Unlock live guidance'}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0118 0"/><path d="M3 15a9 9 0 0018 0"/></svg>
               Live
@@ -666,6 +759,9 @@ export default function ShootModeScreen() {
               spec={detectedDiagramSpec || diagram}
               title="Lighting"
               highlightRole={activeHighlightRole}
+              cameraSettings={result.cameraSettings}
+              spaceCheck={result.spaceCheck}
+              roomDimensions={roomDimensions}
             />
           </div>
         )}
@@ -675,24 +771,17 @@ export default function ShootModeScreen() {
           title="Before You Start"
           icon="✓"
           defaultOpen={true}
-          items={[
-            { id: 'power', label: 'Strobes powered on and test-fired' },
-            { id: 'trigger', label: 'Trigger synced — test pop confirmed' },
-            { id: 'modeling', label: 'Modeling lights on for rough placement' },
-            { id: 'modifiers', label: 'Modifiers attached and secure' },
-            { id: 'background', label: 'Background in place, no wrinkles' },
-            { id: 'card', label: 'Memory card inserted / tethering active' },
-            { id: 'subject', label: 'Subject briefed on mark and posing direction' },
-          ]}
+          mode={mode}
+          items={PRE_SHOOT_ITEMS[mode] || PRE_SHOOT_ITEMS.photographer}
         />
 
-        {/* Step Cards */}
-        <div className="shoot-mode__steps">
+        {/* Step Cards — checklist mode: all expanded; step mode: one active */}
+        <div className={`shoot-mode__steps${isChecklistMode ? ' shoot-mode__steps--checklist' : ''}`}>
           {steps.map((step, idx) => (
             <ShootStepCard
               key={stepKey(step, idx)}
               step={step}
-              isActive={idx === currentStep}
+              isActive={isChecklistMode ? true : idx === currentStep}
               isCompleted={completedSteps.has(stepKey(step, idx))}
               onComplete={() => toggleStepComplete(stepKey(step, idx))}
               totalSteps={totalCount}
@@ -706,39 +795,21 @@ export default function ShootModeScreen() {
           title="After Testing"
           icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
           defaultOpen={false}
-          items={[
-            ...(result.goodSigns?.length > 0
-              ? result.goodSigns.map((s, i) => ({
-                  id: `good-${i}`,
-                  label: typeof s === 'string' ? s : s.text,
-                }))
-              : [
-                  { id: 'catchlight', label: 'Catchlight shape and position look correct' },
-                  { id: 'shadow', label: 'Shadow edge softness matches the reference' },
-                  { id: 'highlight', label: 'Highlight placement is where you intended' },
-                  { id: 'exposure', label: 'Histogram clean — no blown highlights or crushed blacks' },
-                ]),
-            ...(result.warnings?.length > 0
-              ? result.warnings.map((w, i) => ({
-                  id: `warn-${i}`,
-                  label: typeof w === 'string' ? w : w.text,
-                  note: 'Watch for this',
-                }))
-              : []),
-            { id: 'spill', label: 'No unwanted spill onto background' },
-            { id: 'separation', label: 'Subject separates cleanly from background' },
-          ]}
+          mode={mode}
+          items={getPostShootItems(mode, result.goodSigns, result.warnings)}
         />
 
         {/* Sticky Action Bar */}
         <div className="shoot-mode__actions">
-          <button
-            className="shoot-mode__action-btn"
-            onClick={() => goToStep(currentStep - 1)}
-            disabled={currentStep <= 0}
-          >
-            {'\u25C0'} Prev
-          </button>
+          {!isChecklistMode && (
+            <button
+              className="shoot-mode__action-btn"
+              onClick={() => goToStep(currentStep - 1)}
+              disabled={currentStep <= 0}
+            >
+              {'\u25C0'} Prev
+            </button>
+          )}
           <button
             className="shoot-mode__action-btn"
             onClick={handleSave}
@@ -751,14 +822,14 @@ export default function ShootModeScreen() {
             disabled={loading || steps.length === 0}
             onClick={() => {
               if (steps.length === 0) return;
-              if (currentStep < steps.length - 1) {
-                goToStep(currentStep + 1);
-              } else {
+              if (isChecklistMode || currentStep >= steps.length - 1) {
                 handleShotMatch();
+              } else {
+                goToStep(currentStep + 1);
               }
             }}
           >
-            {currentStep < steps.length - 1 ? 'Next \u25B6' : 'Verify'}
+            {(!isChecklistMode && currentStep < steps.length - 1) ? 'Next \u25B6' : 'Verify'}
           </button>
         </div>
 
@@ -809,6 +880,7 @@ export default function ShootModeScreen() {
           stepNumber={lightIdx + 1}
           totalLights={totalLights}
           warnings={currentLight.warnings}
+          mode={mode}
           onPrev={() => setLightIdx(i => Math.max(0, i - 1))}
           onNext={() => setLightIdx(i => Math.min(totalLights - 1, i + 1))}
         />
@@ -854,63 +926,40 @@ export default function ShootModeScreen() {
         {/* Feedback mode toggle */}
         <ModeToggle mode={mode} onChange={handleModeChange} />
 
-        {/* Camera Settings — large */}
-        {cameraStep && (
-          <div className="shoot-mode__section">
-            <h3 className="shoot-mode__section-title">Camera Settings</h3>
-            <div className="shoot-mode__camera-grid shoot-mode__camera-grid--large">
-              {cameraStep.data.aperture && (
-                <div className="shoot-mode__camera-item">
-                  <span className="shoot-mode__camera-label">Aperture</span>
-                  <span className="shoot-mode__camera-value shoot-mode__camera-value--large">
-                    {cameraStep.data.aperture}
-                  </span>
-                </div>
-              )}
-              {cameraStep.data.iso && (
-                <div className="shoot-mode__camera-item">
-                  <span className="shoot-mode__camera-label">ISO</span>
-                  <span className="shoot-mode__camera-value shoot-mode__camera-value--large">
-                    {cameraStep.data.iso}
-                  </span>
-                </div>
-              )}
-              {cameraStep.data.shutter && (
-                <div className="shoot-mode__camera-item">
-                  <span className="shoot-mode__camera-label">Shutter</span>
-                  <span className="shoot-mode__camera-value shoot-mode__camera-value--large">
-                    {cameraStep.data.shutter}
-                  </span>
-                </div>
-              )}
-              {cameraStep.data.wb && (
-                <div className="shoot-mode__camera-item">
-                  <span className="shoot-mode__camera-label">White Balance</span>
-                  <span className="shoot-mode__camera-value shoot-mode__camera-value--large">
-                    {cameraStep.data.wb}
-                  </span>
-                </div>
-              )}
-            </div>
-            {cameraStep.tips?.length > 0 && (
-              <div className="shoot-mode__tip-line">
-                {cameraStep.tips[0]}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Camera Settings */}
+        {cameraStep && (() => {
+          const cameraIdx = steps.indexOf(cameraStep);
+          const cameraKey = stepKey(cameraStep, cameraIdx);
+          const cameraDone = completedSteps.has(cameraKey);
+          return (
+            <ShootStepCard
+              step={cameraStep}
+              isActive={!cameraDone}
+              isCompleted={cameraDone}
+              onComplete={() => toggleStepComplete(cameraKey)}
+              totalSteps={steps.length}
+              mode={mode}
+            />
+          );
+        })()}
 
         {/* Test Checklist */}
-        {testStep && (
-          <ShootStepCard
-            step={testStep}
-            isActive={true}
-            isCompleted={completedSteps.has(stepKey(testStep, steps.indexOf(testStep)))}
-            onComplete={() => toggleStepComplete(stepKey(testStep, steps.indexOf(testStep)))}
-            totalSteps={steps.length}
-            mode={mode}
-          />
-        )}
+        {testStep && (() => {
+          const testIdx = steps.indexOf(testStep);
+          const testKey = stepKey(testStep, testIdx);
+          const cameraKey = cameraStep ? stepKey(cameraStep, steps.indexOf(cameraStep)) : null;
+          const cameraDone = cameraKey ? completedSteps.has(cameraKey) : true;
+          return (
+            <ShootStepCard
+              step={testStep}
+              isActive={cameraDone && !completedSteps.has(testKey)}
+              isCompleted={completedSteps.has(testKey)}
+              onComplete={() => toggleStepComplete(testKey)}
+              totalSteps={steps.length}
+              mode={mode}
+            />
+          );
+        })()}
 
         {/* Action Bar */}
         <div className="shoot-mode__actions">

@@ -1,4 +1,6 @@
 import CardIcon from '../components/CardIcon';
+import WBSpectrum from '../components/WBSpectrum';
+import { wbTempClass } from '../utils/units';
 
 export default function CameraSettingsCard({ settings }) {
   if (!settings) return null;
@@ -24,8 +26,9 @@ export default function CameraSettingsCard({ settings }) {
           <div className="cam-stat__key">Shutter</div>
         </div>
         <div className="cam-stat">
-          <div className="cam-stat__val">{settings.wb}</div>
+          <div className={`cam-stat__val ${wbTempClass(settings.wb)}`}>{settings.wb}</div>
           <div className="cam-stat__key">White Bal.</div>
+          <WBSpectrum wb={settings.wb} />
         </div>
       </div>
 

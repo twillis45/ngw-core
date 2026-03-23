@@ -6,7 +6,7 @@ import { buildRefTestSteps, buildRefQuickFixes } from '../transform';
 import useSettings from '../hooks/useSettings';
 import usePaywall from '../hooks/usePaywall';
 import useSignal from '../hooks/useSignal';
-import { loadMode } from '../data/modeStore';
+import useMode from '../hooks/useMode';
 import OutcomeCapture from '../components/OutcomeCapture';
 import ResultConfidenceExplainer from '../components/results/ResultConfidenceExplainer';
 import ResultPatternComparePrompt from '../components/results/ResultPatternComparePrompt';
@@ -35,8 +35,20 @@ import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
 import QuickFixesCard from '../cards/QuickFixesCard';
 import OtherSetupsCard from '../cards/OtherSetupsCard';
-import FeedbackCard from '../cards/FeedbackCard';
 import MySetupsCard from '../cards/MySetupsCard';
+
+// ── PaywallGate bullet lists ─────────────────────────────────────────────────
+const BLUEPRINT_BULLETS = [
+  'Precise light positions and angles for this pattern',
+  'Power ratios dialled in — stop adjusting between takes',
+  'Modifier specs and distance callouts',
+  'Founders access — $39 one-time. Price increases as seats fill.',
+];
+
+const CAMERA_BULLETS = [
+  'Aperture and ISO tuned to this pattern',
+  'Subject positioning and background distance',
+];
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 const ICON = {
@@ -56,6 +68,36 @@ const ICON = {
   palette:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22C6.49 22 2 17.52 2 12C2 6.48 6.49 2 12 2c5.52 0 10 4.48 10 10 0 2.21-1.79 4-4 4h-2a2 2 0 00-2 2c0 1.11.89 2 2 2z"/><circle cx="7" cy="13" r="1"/><circle cx="9" cy="8" r="1"/><circle cx="14" cy="7" r="1"/><circle cx="17" cy="11" r="1"/></svg>,
   aperture: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="14.31" y1="8" x2="20.05" y2="17.94"/><line x1="9.69" y1="8" x2="21.17" y2="8"/><line x1="7.38" y1="12" x2="13.12" y2="2.06"/><line x1="9.69" y1="16" x2="3.95" y2="6.06"/><line x1="14.31" y1="16" x2="2.83" y2="16"/><line x1="16.62" y1="12" x2="10.88" y2="21.94"/></svg>,
 };
+
+// ── Debug block with copy button ─────────────────────────────────────────────
+function DebugBlock({ content }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={copy}
+        style={{
+          position: 'absolute', top: 8, right: 8,
+          fontSize: '11px', padding: '3px 8px',
+          background: copied ? 'var(--color-success, #22c55e)' : 'var(--color-surface-raised, #2a2a2a)',
+          color: copied ? '#fff' : 'var(--color-text-secondary)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 4, cursor: 'pointer', zIndex: 1,
+        }}
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+      <pre className="debug-json">{content}</pre>
+    </div>
+  );
+}
 
 // ── Collapsible section (identical to V1) ────────────────────────────────────
 function CollapsibleSection({ title, icon, children, defaultOpen = false }) {
@@ -249,25 +291,23 @@ function RefineSection({ children }) {
 }
 
 // ── Save bar (identical to V1) ───────────────────────────────────────────────
+const SAVE_INIT = { open: false, name: '', tag: 'personal', saved: false, improvement: null };
+
 function SaveBar({ result }) {
   const { autoSaveSetups } = useSettings();
-  const [saveOpen, setSaveOpen]   = useState(false);
-  const [saveName, setSaveName]   = useState('');
-  const [saveTag,  setSaveTag]    = useState('personal');
-  const [saved,    setSaved]      = useState(false);
-  const [improvement, setImprovement] = useState(null);
+  const [form, setForm] = useState(SAVE_INIT);
   const autoSavedRef = useRef(null);
 
   const pattern = result?.bestMatch?.lightingPattern;
   const score   = result?.bestMatch?.reliabilityScore;
 
   function handleSave() {
-    if (!saveName.trim()) return;
+    if (!form.name.trim()) return;
     const signal = getImprovementSignal(pattern, score);
-    saveSetup({ name: saveName.trim(), tag: saveTag, result });
-    setSaveOpen(false); setSaveName(''); setSaved(true); setImprovement(signal);
-    trackEvent('SETUP_SAVED', { pattern, score, tag: saveTag, manual: true });
-    setTimeout(() => { setSaved(false); setImprovement(null); }, 3500);
+    saveSetup({ name: form.name.trim(), tag: form.tag, result });
+    setForm(f => ({ ...f, open: false, name: '', saved: true, improvement: signal }));
+    trackEvent('SETUP_SAVED', { pattern, score, tag: form.tag, manual: true });
+    setTimeout(() => setForm(f => ({ ...f, saved: false, improvement: null })), 3500);
   }
 
   useEffect(() => {
@@ -277,27 +317,27 @@ function SaveBar({ result }) {
     autoSavedRef.current = key;
     const signal = getImprovementSignal(pattern, score);
     saveSetup({ name: result.bestMatch.name, tag: 'auto', result });
-    setSaved(true); setImprovement(signal);
+    setForm(f => ({ ...f, saved: true, improvement: signal }));
     trackEvent('SETUP_SAVED', { pattern, score, tag: 'auto', manual: false });
-    setTimeout(() => { setSaved(false); setImprovement(null); }, 3500);
+    setTimeout(() => setForm(f => ({ ...f, saved: false, improvement: null })), 3500);
   }, [autoSaveSetups, result]);
 
   return (
     <>
       <div className="save-setup-bar">
-        {saved ? (
+        {form.saved ? (
           <span className="save-setup-bar__saved">
             ✓ Locked — use this setup anytime.
-            {improvement && (
-              <span className={`save-setup-bar__improvement save-setup-bar__improvement--${improvement.improved ? 'up' : 'down'}`}>
-                {improvement.improved ? '↑' : '↓'} {improvement.improved ? 'Improved' : 'Score dropped'} by {improvement.delta} pts
+            {form.improvement && (
+              <span className={`save-setup-bar__improvement save-setup-bar__improvement--${form.improvement.improved ? 'up' : 'down'}`}>
+                {form.improvement.improved ? '↑' : '↓'} {form.improvement.improved ? 'Improved' : 'Score dropped'} by {form.improvement.delta} pts
               </span>
             )}
           </span>
         ) : (
           <>
             <span className="save-setup-bar__warning">You&rsquo;ll lose this setup when you leave.</span>
-            <button className="btn btn--ghost btn--sm" onClick={() => setSaveOpen(!saveOpen)} type="button">
+            <button className="btn btn--ghost btn--sm" onClick={() => setForm(f => ({ ...f, open: !f.open }))} type="button">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
                 <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
@@ -307,22 +347,22 @@ function SaveBar({ result }) {
           </>
         )}
       </div>
-      {saveOpen && (
+      {form.open && (
         <div className="save-setup-form">
           <input
             className="save-setup-form__input"
             type="text"
             placeholder="Setup name..."
-            value={saveName}
-            onChange={e => setSaveName(e.target.value)}
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
             autoFocus
           />
           <div className="save-setup-form__tags">
             {['personal', 'studio'].map(tag => (
               <button
                 key={tag}
-                className={`chip${saveTag === tag ? ' chip--selected' : ''}`}
-                onClick={() => setSaveTag(tag)}
+                className={`chip${form.tag === tag ? ' chip--selected' : ''}`}
+                onClick={() => setForm(f => ({ ...f, tag }))}
                 type="button"
               >
                 {tag.charAt(0).toUpperCase() + tag.slice(1)}
@@ -332,7 +372,7 @@ function SaveBar({ result }) {
           <button
             className="btn btn--primary btn--sm"
             onClick={handleSave}
-            disabled={!saveName.trim()}
+            disabled={!form.name.trim()}
             style={{ width: '100%' }}
           >
             Save
@@ -351,9 +391,9 @@ export default function ResultsScreenV2() {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
   const userEmail = user?.email || user?.username || null;
-  const { isPaid, unlock } = usePaywall(userEmail);
+  const { isPaid, unlock, isAdmin } = usePaywall(userEmail);
   const [zoomSrc, setZoomSrc] = useState(null);
-  const [appMode] = useState(() => loadMode());
+  const appMode = useMode();
 
   // Session signal — outcome capture (did they get the shot?)
   const { sendSignal, sent: signalSent, outcome: signalOutcome, loading: signalLoading } = useSignal(
@@ -440,17 +480,21 @@ export default function ResultsScreenV2() {
     ? [...refQuickFixes, ...(result.quickFixes || [])]
     : result.quickFixes;
 
-  const detectedDiagramSpec = result.referenceImageAnalysis?.detectedDiagram?.raw;
   const modifierFamily      = result.lightingIntelligence?.detectedModifier || null;
-  const hasDiagram          = !!(detectedDiagramSpec || result.diagram);
+  const hasDiagram          = !!result.diagram;
 
-  // Symptom detection from signal flags
-  const detectedSymptoms = getSymptomsFromSignals({
-    ambiguityFlags:  result.signalReliability?.ambiguityFlags  || {},
-    edgeCaseFlags:   result.edgeCaseFlags                      || {},
-    reliabilityScore: result.bestMatch?.reliabilityScore       ?? 1,
-    signalStrength:  result.signalReliability?.overallSignalStrength ?? 1,
-  });
+  // Symptom detection from signal flags — memoised so getSymptomsFromSignals
+  // doesn't re-run on every render that doesn't change signal data.
+  const detectedSymptoms = useMemo(() => getSymptomsFromSignals({
+    ambiguityFlags:   result.signalReliability?.ambiguityFlags           || {},
+    edgeCaseFlags:    result.edgeCaseFlags                               || {},
+    reliabilityScore: result.bestMatch?.reliabilityScore                 ?? 1,
+    signalStrength:   result.signalReliability?.overallSignalStrength    ?? 1,
+  }), [
+    result.signalReliability,
+    result.edgeCaseFlags,
+    result.bestMatch?.reliabilityScore,
+  ]);
 
   function handleSymptomNavigate(slug) {
     dispatch({ type: 'NAVIGATE_SYMPTOM', slug });
@@ -461,12 +505,20 @@ export default function ResultsScreenV2() {
   }
 
   function handleBuildSetup() {
-    dispatch({ type: 'SET_APP_MODE', mode: 'build' });
-    dispatch({ type: 'NAVIGATE', screen: 'wizard' });
+    // SET_INTENT initializes wizardSteps — avoids blank wizard screen
+    dispatch({ type: 'SET_INTENT', intent: 'mood' });
   }
+
+  // "Analyze Another Photo" only makes sense when the source was a photo upload
+  const isPhotoSource = !!result.referenceImage;
+  const analyzeLabel = isPhotoSource ? 'Analyze Another Photo' : 'New Setup';
+  const buildLabel   = isPhotoSource ? 'Build This Setup'      : 'Start Over';
 
   return (
     <div className="screen">
+      <h2 className="screen-heading">
+        {result.referenceImage ? 'Reference Analysis' : (result.bestMatch?.name || 'Your Results')}
+      </h2>
       {zoomSrc && <ZoomOverlay src={zoomSrc} alt="Reference photo" onClose={() => setZoomSrc(null)} />}
       {!isPaid && <ExitIntercept onUnlock={unlock} />}
 
@@ -525,6 +577,7 @@ export default function ResultsScreenV2() {
       <LookSummaryCard
         bestMatch={result.bestMatch}
         lightingIntelligence={result.lightingIntelligence}
+        setupLightCount={result.setup?.lights?.length ?? null}
       />
 
       {/* ────────────────────────────────────────────────────────────────────
@@ -561,11 +614,12 @@ export default function ResultsScreenV2() {
           ──────────────────────────────────────────────────────────────── */}
       {hasDiagram && (
         <DiagramCard
-          spec={detectedDiagramSpec || result.diagram}
+          spec={result.diagram}
           title="Lighting Diagram"
           cameraSettings={result.cameraSettings}
           spaceCheck={result.spaceCheck}
           roomDimensions={roomDimensions}
+          twoHostSetup={result.twoHostSetup}
         />
       )}
 
@@ -588,19 +642,17 @@ export default function ResultsScreenV2() {
         isPaid={isPaid}
         onUnlock={unlock}
         headline="Build this exactly — positions, modifiers, power ratios."
-        bullets={[
-          'Precise light positions and angles for this pattern',
-          'Power ratios dialled in — stop adjusting between takes',
-          'Modifier specs and distance callouts',
-          'Founders access — $39 one-time. Price increases as seats fill.',
-        ]}
+        bullets={BLUEPRINT_BULLETS}
         ctaText="Founders Access — $39"
       >
         <BlueprintCard
           lights={result.setup.lights}
           lightingIntelligence={result.lightingIntelligence}
           cameraSettings={result.cameraSettings}
+          lightType={result.bestMatch?.lightType}
+          lightTypeNote={result.bestMatch?.lightTypeNote}
           mode={appMode}
+          twoHostSetup={result.twoHostSetup}
         />
       </PaywallGate>
 
@@ -621,6 +673,8 @@ export default function ResultsScreenV2() {
         patternId={result.bestMatch?.lightingPattern}
         onAnalyze={handleAnalyzeAnother}
         onBuild={handleBuildSetup}
+        analyzeLabel={analyzeLabel}
+        buildLabel={buildLabel}
       />
 
       {/* ────────────────────────────────────────────────────────────────────
@@ -642,6 +696,9 @@ export default function ResultsScreenV2() {
         onOutcome={sendSignal}
         loading={signalLoading}
         sent={signalOutcome}
+        setupId={result.bestMatch?.systemId || result.bestMatch?.name}
+        mood={result.mood}
+        pattern={result.bestMatch?.lightingPattern}
       />
 
       {/* ────────────────────────────────────────────────────────────────────
@@ -659,10 +716,7 @@ export default function ResultsScreenV2() {
           isPaid={isPaid}
           onUnlock={unlock}
           headline="Camera settings for this exact setup."
-          bullets={[
-            'Aperture and ISO tuned to this pattern',
-            'Subject positioning and background distance',
-          ]}
+          bullets={CAMERA_BULLETS}
           preview={false}
         >
           <CameraSubjectCard
@@ -688,7 +742,7 @@ export default function ResultsScreenV2() {
           headline="Gear that gets this result every time."
           preview={false}
         >
-          <RecommendedKitsCard modifierFamily={modifierFamily} setupLights={result.setup?.lights} />
+          <RecommendedKitsCard modifierFamily={modifierFamily} setupLights={result.setup?.lights} lightType={result.bestMatch?.lightType} />
         </PaywallGate>
         {(result.alternatives?.length > 0 || result.substitutions?.length > 0) && (
           <OtherSetupsCard
@@ -729,13 +783,27 @@ export default function ResultsScreenV2() {
 
       <MySetupsCard />
 
-      <CollapsibleSection title="Feedback" icon={ICON.message}>
-        <FeedbackCard
-          setupId={result.bestMatch.systemId || result.bestMatch.name}
-          mood={result.mood}
-          pattern={result.bestMatch.lightingPattern}
-        />
-      </CollapsibleSection>
+      {/* ── Admin debug section ───────────────────────────────────────────── */}
+      {isAdmin && (
+        <>
+          {result.vlmDescription && (
+            <CollapsibleSection title="VLM Description" icon={ICON.eye}>
+              <DebugBlock content={typeof result.vlmDescription === 'string' ? result.vlmDescription : JSON.stringify(result.vlmDescription, null, 2)} />
+            </CollapsibleSection>
+          )}
+          {result.vlmReconstruction && (
+            <CollapsibleSection title="VLM Reconstruction" icon={ICON.eye}>
+              <DebugBlock content={JSON.stringify(result.vlmReconstruction, null, 2)} />
+            </CollapsibleSection>
+          )}
+          <CollapsibleSection title="Lighting Intelligence" icon={ICON.eye}>
+            <DebugBlock content={JSON.stringify(result.lightingIntelligence, null, 2)} />
+          </CollapsibleSection>
+          <CollapsibleSection title="Match Data" icon={ICON.eye}>
+            <DebugBlock content={JSON.stringify({ bestMatch: result.bestMatch, setup: result.setup, signalReliability: result.signalReliability }, null, 2)} />
+          </CollapsibleSection>
+        </>
+      )}
 
       {/* ── Save setup — sticky bottom bar ───────────────────────────────── */}
       <SaveBar result={result} />

@@ -44,20 +44,26 @@ class TestPatternFromCatchlights:
         assert result["pattern_confidence"] == 0.0
         assert result["light_count"] == 0
 
-    def test_single_at_10_rembrandt(self):
+    def test_single_at_10_loop_indeterminate(self):
+        # 10 o'clock is camera-left elevated — loop and rembrandt are indistinguishable
+        # from catchlight position alone (nose shadow is the only real discriminator).
+        # Returns "loop" with low confidence so the orchestrator can override via shadow.
         result = _infer_pattern_from_catchlights([_c("left", "10"), _c("right", "10")])
-        assert result["pattern"] == "rembrandt"
-        assert result["key_position_text"] == "45 off-axis"
+        assert result["pattern"] == "loop"
+        assert result["pattern_confidence"] <= 0.65
+        assert "30-45 off-axis" in result["key_position_text"]
         assert result["light_count"] == 1
 
-    def test_single_at_11_rembrandt(self):
+    def test_single_at_11_loop_indeterminate(self):
+        # Same reasoning as 10 o'clock — returns loop with low confidence.
         result = _infer_pattern_from_catchlights([_c("left", "11")])
-        assert result["pattern"] == "rembrandt"
+        assert result["pattern"] == "loop"
+        assert result["pattern_confidence"] <= 0.65
 
     def test_single_at_1_loop(self):
         result = _infer_pattern_from_catchlights([_c("left", "1"), _c("right", "1")])
         assert result["pattern"] == "loop"
-        assert result["key_position_text"] == "30 off-axis"
+        assert "30-45 off-axis" in result["key_position_text"]
 
     def test_single_at_2_loop(self):
         result = _infer_pattern_from_catchlights([_c("left", "2")])
@@ -268,7 +274,9 @@ class TestInferLightingFromVision:
         assert result.detected_skin_tone == "light"
         assert result.skin_tone_confidence == 0.8
 
-    def test_single_catchlight_rembrandt(self):
+    def test_single_catchlight_loop_cinematic(self):
+        # 10 o'clock catchlight returns "loop" with low confidence (loop/rembrandt
+        # indeterminate without nose shadow).  Mood classification can override later.
         vision_data = {
             "ok": True,
             "catchlights": {
@@ -282,7 +290,8 @@ class TestInferLightingFromVision:
             "skin_tone": {"ok": False},
         }
         result = infer_lighting_from_vision(vision_data, classification={"mood": "cinematic", "confidence": 0.7})
-        assert result.pattern == "rembrandt"
+        assert result.pattern == "loop"
+        assert result.pattern_confidence <= 0.65
         assert result.modifier_family == "beauty_dish"
         assert result.detected_mood == "cinematic"
         assert result.detected_skin_tone is None
@@ -513,7 +522,7 @@ class TestDescribeLightQuality:
 class TestDescribeBackground:
     def test_no_vision_data(self):
         result = describe_background(None, None)
-        assert "could not be analysed" in result["summary"]
+        assert "could not be analyzed" in result["summary"]
 
     def test_dark_background(self):
         vision = {
@@ -618,7 +627,7 @@ class TestDescribeSubject:
     def test_no_vision_data(self):
         result = describe_subject(None)
         assert result["pose"] == "unknown"
-        assert "could not be analysed" in result["summary"]
+        assert "could not be analyzed" in result["summary"]
 
     def test_standing_front(self):
         vision = {

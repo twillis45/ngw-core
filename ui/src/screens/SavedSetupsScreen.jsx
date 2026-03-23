@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDispatch } from '../context/AppContext';
-import { loadSetups, deleteSetup } from '../data/setupStore';
+import { loadSetups, deleteSetup, onSetupsChanged } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
 
 const FILTERS = [
@@ -15,6 +15,9 @@ export default function SavedSetupsScreen() {
   const [filter, setFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
   const [recreateId, setRecreateId] = useState(null);
+
+  // Cross-tab sync — refresh when another tab saves or deletes a setup
+  useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
   const filtered = filter === 'all' ? setups : setups.filter(s => s.tag === filter);
 
@@ -43,7 +46,12 @@ export default function SavedSetupsScreen() {
   }
 
   function formatDate(ts) {
-    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    if (ts == null) return '';
+    // Local timestamps are ms (Date.now()); server timestamps are seconds (time.time())
+    const ms = ts < 1e12 ? ts * 1000 : ts;
+    const d = new Date(ms);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
   if (setups.length === 0) {
@@ -95,7 +103,7 @@ export default function SavedSetupsScreen() {
                 </span>
               )}
               <span className="saved-setup-card__tag">{setup.tag}</span>
-              <span className="saved-setup-card__date">{formatDate(setup.timestamp)}</span>
+              <span className="saved-setup-card__date">{formatDate(setup.timestamp ?? setup.created_at)}</span>
             </div>
           </div>
 

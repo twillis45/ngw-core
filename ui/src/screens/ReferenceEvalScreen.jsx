@@ -9,9 +9,9 @@ import usePaywall from '../hooks/usePaywall';
 import { trackEvent } from '../data/analytics';
 import { getToken } from '../data/authApi';
 
-// ── Pattern / mood option lists ────────────────────────────────────────────
+// ── Pattern / mood option lists — fallback defaults (overridden by /api/config) ─
 
-const MOOD_OPTIONS = [
+const DEFAULT_MOOD_OPTIONS = [
   { value: 'beauty',    label: 'Beauty' },
   { value: 'cinematic', label: 'Cinematic' },
   { value: 'corporate', label: 'Corporate' },
@@ -21,15 +21,13 @@ const MOOD_OPTIONS = [
   { value: 'low_key',   label: 'Low Key' },
 ];
 
-const MOOD_LABELS = Object.fromEntries(MOOD_OPTIONS.map(m => [m.value, m.label]));
-
-const PATTERN_OPTIONS = [
+const DEFAULT_PATTERN_OPTIONS = [
   'rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad',
   'short', 'rim_only', 'beauty_dish', 'high_key', 'low_key',
   'natural_window', 'dramatic_key', 'three_point',
 ];
 
-const ISSUE_TYPES = [
+const DEFAULT_ISSUE_TYPES = [
   { value: 'wrong_pattern',  label: 'Pattern identified incorrectly' },
   { value: 'wrong_mood',     label: 'Mood / style misidentified' },
   { value: 'no_face',        label: 'No face found / wrong subject' },
@@ -40,9 +38,7 @@ const ISSUE_TYPES = [
 // ── Admin: submit ground truth ─────────────────────────────────────────────
 
 async function submitGroundTruth({
-  imagePath, expectedPattern, expectedMood,
-  lightingFamily, sourceQuality, sourceDirection,
-  contrastLevel, colorTemp, lightCount, subjectType, notes,
+  imagePath, expectedPattern, expectedMood, lightCount, notes,
 }) {
   const token = getToken();
   const headers = {
@@ -50,14 +46,8 @@ async function submitGroundTruth({
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const corrections = {};
-  if (lightingFamily)  corrections.lighting_family    = lightingFamily;
-  if (sourceQuality)   corrections.source_quality     = sourceQuality;
-  if (sourceDirection) corrections.source_direction   = sourceDirection;
-  if (contrastLevel)   corrections.contrast_level     = contrastLevel;
-  if (colorTemp)       corrections.color_temperature  = colorTemp;
-  if (lightCount)      corrections.light_count        = parseInt(lightCount, 10);
-  if (subjectType)     corrections.subject_type       = subjectType;
-  if (notes)           corrections.notes              = notes;
+  if (lightCount) corrections.light_count = parseInt(lightCount, 10);
+  if (notes)      corrections.notes       = notes;
   const res = await fetch('/api/admin/image-labels', {
     method: 'POST',
     headers,
@@ -77,46 +67,24 @@ async function submitGroundTruth({
 
 // ── Admin correction panel ─────────────────────────────────────────────────
 
-const SOURCE_QUALITY_OPTIONS  = ['soft', 'hard', 'mixed', 'diffused', 'ring'];
-const SOURCE_DIR_OPTIONS      = [
-  'camera-left high', 'camera-left eye level', 'camera-left low',
-  'camera-right high', 'camera-right eye level', 'camera-right low',
-  'frontal', 'overhead', 'behind / rim', 'split',
-];
-const CONTRAST_OPTIONS        = ['low', 'medium', 'high', 'extreme'];
-const SUBJECT_TYPE_OPTIONS    = ['solo', 'group', 'product', 'pet', 'architecture', 'landscape', 'abstract', 'food'];
+function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptions = DEFAULT_PATTERN_OPTIONS, moodOptions = DEFAULT_MOOD_OPTIONS }) {
+  const [open, setOpen]         = useState(false);
+  const [pattern, setPattern]   = useState('');
+  const [mood, setMood]         = useState('');
+  const [lightCount, setLightCount] = useState('');
+  const [notes, setNotes]       = useState('');
+  const [saving, setSaving]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [err, setErr]           = useState(null);
 
-function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
-  const [open, setOpen]                     = useState(false);
-  const [pattern, setPattern]               = useState('');
-  const [mood, setMood]                     = useState('');
-  const [lightingFamily, setLightingFamily] = useState('');
-  const [sourceQuality, setSourceQuality]   = useState('');
-  const [sourceDir, setSourceDir]           = useState('');
-  const [contrast, setContrast]             = useState('');
-  const [colorTemp, setColorTemp]           = useState('');
-  const [lightCount, setLightCount]         = useState('');
-  const [subjectType, setSubjectType]       = useState('');
-  const [notes, setNotes]                   = useState('');
-  const [saving, setSaving]                 = useState(false);
-  const [saved, setSaved]                   = useState(false);
-  const [err, setErr]                       = useState(null);
-
-  const lr = analysis?.description?.referenceAnalysis?.lighting_read;
   const rs = analysis?.description?.referenceAnalysis?.recreation_setup;
 
-  // Pre-fill all fields with detected values when panel opens
+  // Pre-fill fields with detected values when panel opens
   useEffect(() => {
     if (open) {
       setPattern(analysis?.classification?.lightingPattern || '');
       setMood(analysis?.classification?.mood || '');
-      setLightingFamily(lr?.lighting_family || '');
-      setSourceQuality(lr?.source_quality || '');
-      setSourceDir(lr?.source_direction || '');
-      setContrast(lr?.contrast_level || '');
-      setColorTemp(lr?.color_temperature || '');
       setLightCount(rs?.light_count != null ? String(rs.light_count) : '');
-      setSubjectType('');
       setNotes('');
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,13 +97,7 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
         imagePath,
         expectedPattern: pattern,
         expectedMood: mood,
-        lightingFamily,
-        sourceQuality,
-        sourceDirection: sourceDir,
-        contrastLevel: contrast,
-        colorTemp,
         lightCount,
-        subjectType,
         notes,
       });
       setSaved(true);
@@ -184,13 +146,13 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
             Override detected values. Pre-filled from current analysis — change only what's wrong.
           </p>
 
-          {/* Row 1: Pattern + Mood */}
+          {/* Pattern + Mood */}
           <div className="ref-correction__fields">
             <div className="ref-correction__field">
               <label className="ref-correction__label">Pattern</label>
               <select className="ref-correction__select" value={pattern} onChange={e => setPattern(e.target.value)}>
                 <option value="">— as detected —</option>
-                {PATTERN_OPTIONS.map(p => (
+                {patternOptions.map(p => (
                   <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
                 ))}
               </select>
@@ -199,91 +161,24 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
               <label className="ref-correction__label">Mood</label>
               <select className="ref-correction__select" value={mood} onChange={e => setMood(e.target.value)}>
                 <option value="">— as detected —</option>
-                {MOOD_OPTIONS.map(m => (
+                {moodOptions.map(m => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Row 2: Lighting Family + Source Quality */}
-          <div className="ref-correction__fields">
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Lighting Family</label>
-              <select className="ref-correction__select" value={lightingFamily} onChange={e => setLightingFamily(e.target.value)}>
-                <option value="">— as detected —</option>
-                {PATTERN_OPTIONS.map(p => (
-                  <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
-                ))}
-              </select>
-            </div>
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Source Quality</label>
-              <select className="ref-correction__select" value={sourceQuality} onChange={e => setSourceQuality(e.target.value)}>
-                <option value="">— as detected —</option>
-                {SOURCE_QUALITY_OPTIONS.map(q => (
-                  <option key={q} value={q}>{q}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 3: Source Direction + Contrast */}
-          <div className="ref-correction__fields">
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Source Direction</label>
-              <select className="ref-correction__select" value={sourceDir} onChange={e => setSourceDir(e.target.value)}>
-                <option value="">— as detected —</option>
-                {SOURCE_DIR_OPTIONS.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Contrast</label>
-              <select className="ref-correction__select" value={contrast} onChange={e => setContrast(e.target.value)}>
-                <option value="">— as detected —</option>
-                {CONTRAST_OPTIONS.map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Row 4: Color Temp + Light Count */}
-          <div className="ref-correction__fields">
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Color Temp</label>
-              <input
-                type="text"
-                className="ref-correction__select"
-                placeholder="e.g. 5500K daylight"
-                value={colorTemp}
-                onChange={e => setColorTemp(e.target.value)}
-              />
-            </div>
-            <div className="ref-correction__field">
-              <label className="ref-correction__label">Light Count</label>
-              <input
-                type="number"
-                className="ref-correction__select"
-                min="1" max="8"
-                placeholder="# of lights"
-                value={lightCount}
-                onChange={e => setLightCount(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Row 5: Subject Type (full width) */}
-          <div className="ref-correction__field">
-            <label className="ref-correction__label">Subject Type</label>
-            <select className="ref-correction__select" value={subjectType} onChange={e => setSubjectType(e.target.value)}>
-              <option value="">— as detected —</option>
-              {SUBJECT_TYPE_OPTIONS.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+          {/* Light Count */}
+          <div className="ref-correction__field" style={{ maxWidth: 140 }}>
+            <label className="ref-correction__label">Light Count</label>
+            <input
+              type="number"
+              className="ref-correction__select"
+              min="1" max="8"
+              placeholder="# of lights"
+              value={lightCount}
+              onChange={e => setLightCount(e.target.value)}
+            />
           </div>
 
           <div className="ref-correction__field">
@@ -313,7 +208,7 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab }) {
 
 // ── User: report analysis issue ────────────────────────────────────────────
 
-function UserCorrectionForm({ analysis, referenceImagePreview }) {
+function UserCorrectionForm({ analysis, referenceImagePreview, issueTypes = DEFAULT_ISSUE_TYPES, moodOptions = DEFAULT_MOOD_OPTIONS }) {
   const [open, setOpen]     = useState(false);
   const [issue, setIssue]   = useState('');
   const [note, setNote]     = useState('');
@@ -357,7 +252,7 @@ function UserCorrectionForm({ analysis, referenceImagePreview }) {
         <div className="ref-correction__form">
           <p className="ref-correction__form-intro">What seems off?</p>
           <div className="ref-correction__radio-group">
-            {ISSUE_TYPES.map(it => (
+            {issueTypes.map(it => (
               <label key={it.value} className="ref-correction__radio-row">
                 <input
                   type="radio"
@@ -513,7 +408,7 @@ function ColorPalettePanel({ colorPalette: cp }) {
           ? cp.harmony_swatches[activeHarmony]
           : null;
 
-        // Build display list: [{hex, name}] — hex may be absent for old analyses
+        // Build display list: [{hex, name}] — hex may be absent for old analysis results
         let chips;
         if (harmonyHexes) {
           // Harmony mode: hexes only (from harmony_swatches). Find matching name if possible.
@@ -614,6 +509,40 @@ function ColorPalettePanel({ colorPalette: cp }) {
 }
 
 
+function ColorPalettePanelToggle({ colorPalette }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 'var(--space-sm)' }}>
+      <button
+        type="button"
+        className="ref-analysis__expand-btn"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          fontSize: 'var(--text-xs)',
+          color: 'var(--color-text-dim)',
+          background: 'none',
+          border: 'none',
+          padding: '4px 0',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        <svg
+          width="11" height="11" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        {open ? 'Hide color analysis' : 'See detailed color analysis'}
+      </button>
+      {open && <ColorPalettePanel colorPalette={colorPalette} />}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Main screen
 // ═══════════════════════════════════════════════════════════════════════════
@@ -632,6 +561,26 @@ export default function ReferenceEvalScreen() {
   const [selectedMood, setSelectedMood] = useState(null);
   const [error, setError]               = useState(null);
   const [zoomSrc, setZoomSrc]           = useState(null);
+
+  // Option lists from the truth layer — fall back to defaults while loading
+  const [moodOptions, setMoodOptions]       = useState(DEFAULT_MOOD_OPTIONS);
+  const [patternOptions, setPatternOptions] = useState(DEFAULT_PATTERN_OPTIONS);
+  const [issueTypes, setIssueTypes]         = useState(DEFAULT_ISSUE_TYPES);
+
+  // Derived label map — stays in sync with API-fetched moodOptions
+  const moodLabels = Object.fromEntries(moodOptions.map(m => [m.value, m.label]));
+
+  useEffect(() => {
+    fetch('/api/config', { headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {} })
+      .then(r => r.ok ? r.json() : null)
+      .then(cfg => {
+        if (!cfg) return;
+        if (cfg.moods?.length)       setMoodOptions(cfg.moods);
+        if (cfg.patterns?.length)    setPatternOptions(cfg.patterns);
+        if (cfg.issue_types?.length) setIssueTypes(cfg.issue_types);
+      })
+      .catch(() => { /* keep defaults on network error */ });
+  }, []);
 
   useEffect(() => {
     if (!referenceImage?.file) {
@@ -897,8 +846,8 @@ export default function ReferenceEvalScreen() {
                 )}
                 {classification?.colorTemperature && (
                   <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Color Temp</span>
-                    <span className="ref-analysis__value">
+                    <span className={`ref-analysis__label ref-analysis__temp-${classification.colorTemperature}`}>Color Temp</span>
+                    <span className={`ref-analysis__value ref-analysis__temp-${classification.colorTemperature}`}>
                       <span className={`ref-analysis__temp-dot ref-analysis__temp-dot--${classification.colorTemperature}`} />
                       {classification.colorTemperature.charAt(0).toUpperCase() + classification.colorTemperature.slice(1)}
                       {classification.colorTemperatureKelvin ? ` (${classification.colorTemperatureKelvin.toLocaleString()} K)` : ''}
@@ -957,7 +906,7 @@ export default function ReferenceEvalScreen() {
                   <div className="ref-analysis__row ref-analysis__row--inline">
                     <span className="ref-analysis__label">Mood</span>
                     <span className="ref-analysis__value">
-                      {MOOD_LABELS[classification.mood] || classification.mood}
+                      {moodLabels[classification.mood] || classification.mood}
                     </span>
                   </div>
                 )}
@@ -1056,9 +1005,9 @@ export default function ReferenceEvalScreen() {
                 </>
               )}
 
-              {/* VLM color palette — richer character analysis */}
+              {/* VLM color palette — richer character analysis, collapsed by default */}
               {colorPalette && (colorPalette.palette_character || colorPalette.dominant_colors?.length > 0) && (
-                <ColorPalettePanel colorPalette={colorPalette} />
+                <ColorPalettePanelToggle colorPalette={colorPalette} />
               )}
             </CollapsibleCard>
           )}
@@ -1133,11 +1082,11 @@ export default function ReferenceEvalScreen() {
             </div>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-dim)', marginBottom: 'var(--space-sm)' }}>
               {classification?.mood
-                ? `We detected a ${MOOD_LABELS[classification.mood] || classification.mood} vibe. Tap to override.`
+                ? `We detected a ${moodLabels[classification.mood] || classification.mood} vibe. Tap to override.`
                 : 'Select the vibe you want to achieve.'}
             </p>
             <div className="chip-grid">
-              {MOOD_OPTIONS.map(m => (
+              {moodOptions.map(m => (
                 <button
                   key={m.value}
                   className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}
@@ -1155,11 +1104,15 @@ export default function ReferenceEvalScreen() {
               analysis={analysis}
               imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
               onNavigateLab={handleOpenLab}
+              patternOptions={patternOptions}
+              moodOptions={moodOptions}
             />
           ) : (
             <UserCorrectionForm
               analysis={analysis}
               referenceImagePreview={referenceImage?.preview}
+              issueTypes={issueTypes}
+              moodOptions={moodOptions}
             />
           )}
 
@@ -1182,7 +1135,7 @@ export default function ReferenceEvalScreen() {
         <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-dim)' }}>
           <p>Could not analyze this image. You can still continue.</p>
           <div className="chip-grid" style={{ marginTop: 'var(--space-md)' }}>
-            {MOOD_OPTIONS.map(m => (
+            {moodOptions.map(m => (
               <button
                 key={m.value}
                 className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}

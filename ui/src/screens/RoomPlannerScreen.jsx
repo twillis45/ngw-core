@@ -4,6 +4,8 @@ import FloorPlanCanvas from '../components/FloorPlanCanvas';
 import CameraMeasure from '../components/CameraMeasure';
 import { ROOM_PRESETS } from '../data/roomPresets';
 import { checkRoomFit } from '../spatial/spatialEngine';
+import useSettings from '../hooks/useSettings';
+import { formatRoomDim } from '../utils/units';
 
 /**
  * RoomPlannerScreen — three-tab spatial calibration screen.
@@ -15,6 +17,18 @@ import { checkRoomFit } from '../spatial/spatialEngine';
 export default function RoomPlannerScreen() {
   const { roomDimensions, result } = useAppState();
   const dispatch = useDispatch();
+  const { units } = useSettings();
+  const isMetric = units === 'metric';
+
+  // Conversion helpers — internal state is always in feet
+  const toDisplay = (ft) => isMetric ? String((parseFloat(ft) * 0.3048).toFixed(1)) : String(ft || '');
+  const fromDisplay = (v) => isMetric ? String(parseFloat(v) / 0.3048) : v;
+  const stepUnit = isMetric ? 'm' : 'ft';
+  const dimStep = isMetric ? 0.5 : 1;
+  const dimMin  = isMetric ? 2   : 6;
+  const dimMax  = isMetric ? 24  : 80;
+  const ceilMax = isMetric ? 9   : 30;
+  const fmt = (ft) => formatRoomDim(ft, units);
 
   const [tab, setTab] = useState('dims');  // 'dims' | 'camera' | 'plan'
   const [lengthFt, setLengthFt] = useState(roomDimensions?.lengthFt || '');
@@ -181,16 +195,31 @@ export default function RoomPlannerScreen() {
                   setCeilingFt(String(p.ceilingFt));
                 }}
               >
-                {p.icon} {p.label}
+                {p.label}
               </button>
             ))}
           </div>
 
           {/* Inputs */}
           <div className="room-dims">
-            <StepperInput label="Room Length (depth)" value={lengthFt} onChange={setLengthFt} />
-            <StepperInput label="Room Width" value={widthFt} onChange={setWidthFt} />
-            <StepperInput label="Ceiling Height" value={ceilingFt} onChange={setCeilingFt} min={6} max={30} />
+            <StepperInput
+              label="Room Length (depth)"
+              value={toDisplay(lengthFt)}
+              onChange={v => setLengthFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={dimMax}
+            />
+            <StepperInput
+              label="Room Width"
+              value={toDisplay(widthFt)}
+              onChange={v => setWidthFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={dimMax}
+            />
+            <StepperInput
+              label="Ceiling Height"
+              value={toDisplay(ceilingFt)}
+              onChange={v => setCeilingFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={ceilMax}
+            />
           </div>
 
           {/* Camera measure button */}
@@ -207,18 +236,18 @@ export default function RoomPlannerScreen() {
               <div className="room-fit__header">Your Room vs. Setup Needs</div>
               <div className={`room-fit__row ${roomFit.ceilingFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
                 <span>{roomFit.ceilingFits ? '\u2713' : '\u2715'}</span>
-                <span>Ceiling: {dims.ceilingFt} ft</span>
-                <span className="room-fit__need">needs {spaceNeeds.minCeilingFt} ft</span>
+                <span>Ceiling: {fmt(dims.ceilingFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minCeilingFt)}</span>
               </div>
               <div className={`room-fit__row ${roomFit.widthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
                 <span>{roomFit.widthFits ? '\u2713' : '\u2715'}</span>
-                <span>Width: {dims.widthFt} ft</span>
-                <span className="room-fit__need">needs {spaceNeeds.minWidthFt} ft</span>
+                <span>Width: {fmt(dims.widthFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minWidthFt)}</span>
               </div>
               <div className={`room-fit__row ${roomFit.depthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
                 <span>{roomFit.depthFits ? '\u2713' : '\u2715'}</span>
-                <span>Depth: {dims.lengthFt} ft</span>
-                <span className="room-fit__need">needs {spaceNeeds.minDepthFt} ft</span>
+                <span>Depth: {fmt(dims.lengthFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minDepthFt)}</span>
               </div>
               {roomFit.issues.length > 0 && (
                 <div className="room-fit__issues">
