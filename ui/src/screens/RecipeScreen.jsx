@@ -222,16 +222,17 @@ export default function RecipeScreen() {
   async function selectRecipe(recipe) {
     dispatch({ type: 'SET_LOADING' });
     try {
+      const gearProfile = recipe.gearProfile || 'strobe_mono';
       const payload = {
         systems: [{
           id: 'system-recipe',
           name: recipe.name,
-          criteria: criteriaForGear('strobe_mono'),
+          criteria: criteriaForGear(gearProfile),
           features: { dimmable: true, smart_ready: true, battery: true, waterproof: false },
           taxonomy_refs: {
             mood: recipe.mood,
-            gear_profile: 'strobe_mono',
-            modifier_family: recipe.modifiers[0] || 'softbox',
+            gear_profile: gearProfile,
+            modifier_family: recipe.modifierFamily || recipe.modifiers[0] || 'softbox',
           },
         }],
         input: {
