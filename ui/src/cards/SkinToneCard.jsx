@@ -4,7 +4,7 @@ const TONE_META = {
   light:  { label: 'Light',  swatch: '#FDDBB4' },
   medium: { label: 'Medium', swatch: '#C68642' },
   dark:   { label: 'Dark',   swatch: '#8D5524' },
-  mixed:  { label: 'Mixed Tones', swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
+  mixed:  { label: 'Multiple Subjects', swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
 };
 
 export default function SkinToneCard({ data }) {
@@ -24,9 +24,9 @@ export default function SkinToneCard({ data }) {
 
       {data.skinTone === 'mixed' && (
         <div className="skin-tip skin-tip--callout">
-          <div className="skin-tip__label">Mixed Skin Tone Session</div>
+          <div className="skin-tip__label">Multiple Subjects — Mixed Skin Tones</div>
           <div className="skin-tip__value">
-            Optimize your baseline for the darkest subject. Lighter subjects will remain well-exposed while darker subjects will never be underexposed.
+            This session has subjects with different skin tones. Lock your baseline to the darkest subject — lighter subjects will hold; darker subjects will not survive underexposure. Manage exposure differences through subject positioning and flagging, not power changes.
           </div>
         </div>
       )}
@@ -40,7 +40,7 @@ export default function SkinToneCard({ data }) {
 
       {data.mixedNote && (
         <div className="skin-tip skin-tip--note">
-          <div className="skin-tip__label">Sequential Sessions</div>
+          <div className="skin-tip__label">Workflow — Flagging & Sequential Order</div>
           <div className="skin-tip__value">{data.mixedNote}</div>
         </div>
       )}

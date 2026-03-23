@@ -413,12 +413,12 @@ function buildSkinToneAdjustments(skinTone, mood, lights) {
       keyTip: 'Expose for the face — ETTR (expose to the right) is your friend',
     },
     mixed: {
-      exposure: 'Set exposure for the darkest subject (+2/3 stop); the lightest will be fine — never the reverse',
-      modifier: 'Large, soft modifier (>100cm) maximizes even coverage across the group',
-      whiteBalance: 'Lock to daylight (5500K) — do not use AWB during a multi-subject session',
-      fillRatio: numLights >= 2 ? 'Keep fill generous (2:1 or softer) — reduces tonal contrast across subjects' : null,
-      rimNote: hasRim ? 'Rim at medium power; lighter subjects may need 1/2 stop pull-back' : null,
-      keyTip: null,
+      exposure: 'Expose for the darkest subject (+2/3 to +1 stop) — lighter subjects will be fine; underexposing dark skin cannot be fixed in post',
+      modifier: 'Largest soft modifier available (>100cm) — maximizes wrap and even coverage across all subjects',
+      whiteBalance: 'Lock WB to daylight (5500K) before the first frame — never use AWB across a multi-subject session',
+      fillRatio: numLights >= 2 ? 'Generous fill (1.5:1 to 2:1) — compresses the tonal range between subjects without flattening shape' : null,
+      rimNote: hasRim ? 'Set rim for darkest subject; pull lighter subjects back 1/2–1 stop if rim clips their skin' : null,
+      keyTip: 'Position darkest subject closest to the key (or largest modifier) — use distance to manage relative brightness across subjects without power changes',
     },
   };
 
@@ -432,11 +432,11 @@ function buildSkinToneAdjustments(skinTone, mood, lights) {
   ];
   if (data.fillRatio) tips.push({ label: 'Fill Ratio', value: data.fillRatio });
   if (data.rimNote)  tips.push({ label: 'Rim Light', value: data.rimNote });
-  if (data.keyTip)   tips.push({ label: 'Key Tip', value: data.keyTip });
+  if (data.keyTip)   tips.push({ label: 'Subject Position', value: data.keyTip });
 
-  // Mixed-tone: add per-subject shoot order note
+  // Mixed-tone: add multi-subject workflow notes
   const mixedNote = skinTone === 'mixed'
-    ? 'For sequential sessions (e.g. corporate headshots): set exposure for darkest subject first, then chimp after each lighter subject and adjust if needed. Lock WB for the entire session.'
+    ? 'Flag or gobo lighter subjects if they\'re reading hot after you lock exposure for the darkest — a small negative flag is faster than a power change. For sequential headshots: dial in on the darkest subject first, chimp after each subsequent subject, and adjust via distance or flag before touching power. Keep WB locked for the entire run.'
     : null;
 
   return { skinTone, tips, mixedNote };

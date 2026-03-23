@@ -77,11 +77,13 @@ function RiskBadge({ riskLevel }) {
 
 export default function LookSummaryCard({ bestMatch, lightingIntelligence, setupLightCount, patternRiskLevel }) {
   const { guidanceLevel, confidenceDisplay } = useSettings();
-  const [reasoningOpen, setReasoningOpen] = useState(false);
+  const isMinimal  = guidanceLevel === 'minimal';
+  const isCoaching = guidanceLevel === 'coaching';
+  // Coaching auto-expands the "Why this pattern" section
+  const [reasoningOpen, setReasoningOpen] = useState(isCoaching);
   if (!bestMatch) return null;
 
   const isRecipe = !!bestMatch.recipeId;
-  const isMinimal = guidanceLevel === 'minimal';
   const showNumeric = confidenceDisplay === 'numeric' || confidenceDisplay === 'detailed';
 
   // Treat missing or canonical "unknown" as null — never render "Unknown Pattern"
@@ -146,7 +148,33 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
         diagnosisLine = 'Position critical. Lock placement before you shoot.';
       }
     }
+  } else if (isCoaching) {
+    if (isRecipe) {
+      headline = 'Blueprint ready — set it up and shoot. Check the breakdown for positioning detail.';
+      diagnosisLine = null;
+    } else {
+      if (score >= CONFIDENCE_THRESHOLDS.HIGH) {
+        headline = patternReasoning
+          ? 'Pattern confirmed. Supporting signals are strong — see the breakdown below.'
+          : 'Pattern confirmed.';
+      } else if (score >= CONFIDENCE_THRESHOLDS.MODERATE) {
+        headline = pattern
+          ? 'Pattern detected — but signals are mixed. Review the supporting and contradicting signals before committing.'
+          : 'Pattern unclear — not enough consistent signals. Consider re-framing or adding fill.';
+      } else {
+        headline = 'Not enough signal to confirm the setup. Resolve the key position first before reading anything else.';
+      }
+
+      if (score >= CONFIDENCE_THRESHOLDS.HIGH) {
+        diagnosisLine = null;
+      } else if (score >= CONFIDENCE_THRESHOLDS.MODERATE) {
+        diagnosisLine = 'Position sensitivity is moderate. Small shifts in key distance or angle will change the result — bracket the position ±6 inches and compare before locking in.';
+      } else {
+        diagnosisLine = 'Low confidence read. Focus entirely on getting the shadow pattern right first — distance, angle, and height. Everything else is premature until the key is dialled in.';
+      }
+    }
   } else {
+    // Guided (default)
     if (isRecipe) {
       headline = 'Blueprint ready \u2014 set it up and shoot.';
       diagnosisLine = null;
@@ -195,9 +223,11 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
 
       {bestMatch.rationale && (
         <p className="look-summary__rationale">
-          {bestMatch.rationale.length > 140
-            ? bestMatch.rationale.slice(0, 137) + '…'
-            : bestMatch.rationale}
+          {isCoaching
+            ? bestMatch.rationale
+            : bestMatch.rationale.length > 140
+              ? bestMatch.rationale.slice(0, 137) + '…'
+              : bestMatch.rationale}
         </p>
       )}
 
@@ -237,7 +267,9 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
           </svg>
           {isMinimal
             ? 'High var — lock position.'
-            : 'High variability risk — nail the position before you shoot.'}
+            : isCoaching
+              ? 'High variability — position is sensitive. Bracket key distance ±6 inches and compare results before committing.'
+              : 'High variability risk — nail the position before you shoot.'}
         </div>
       )}
     </div>
