@@ -87,13 +87,13 @@ export default function GearInputScreen() {
           } catch (_) { /* proceed without image */ }
         }
         const apiResponse = await fetchShootMatch(wizardState);
-        const result = transformShootMatch(apiResponse, { powerDisplay, units });
+        const result = transformShootMatch(apiResponse, { powerDisplay, units, mood: state.mood, skinTone: state.skinTone || null });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       } else {
         // Fallback: legacy /recommend flow
         const payload = buildPayload(state);
         const apiResponse = await fetchRecommendation(payload);
-        const result = transformForUI(apiResponse, state.mood || 'corporate', null, { powerDisplay, units });
+        const result = transformForUI(apiResponse, state.mood || 'corporate', state.skinTone || null, { powerDisplay, units });
         dispatch({ type: 'SET_RESULT', result, apiResponse });
       }
     } catch (err) {

@@ -34,6 +34,7 @@ import DiagramCard from '../cards/DiagramCard';
 import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
 import QuickFixesCard from '../cards/QuickFixesCard';
+import SkinToneCard from '../cards/SkinToneCard';
 import OtherSetupsCard from '../cards/OtherSetupsCard';
 import MySetupsCard from '../cards/MySetupsCard';
 
@@ -710,6 +711,12 @@ export default function ResultsScreenV2() {
         data={result.spaceCheck}
         defaultOpen={result.spaceCheck?.warnings?.length > 0}
       />
+
+      {result.skinToneAdjustments && (
+        <CollapsibleSection title="Skin Tone" icon={ICON.palette}>
+          <SkinToneCard data={result.skinToneAdjustments} />
+        </CollapsibleSection>
+      )}
 
       <CollapsibleSection title="Camera & Subject" icon={ICON.camera}>
         <PaywallGate
