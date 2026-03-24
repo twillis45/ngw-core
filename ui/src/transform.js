@@ -20,9 +20,16 @@ function metersToFeet(m) {
  *
  * Leaves the string unchanged for metric users.
  */
-function adaptSystemName(name, units) {
-  if (!name || units !== 'imperial') return name;
-  return name.replace(/([<>≤≥]?)(\d+(?:\.\d+)?)\s*m²/g, (_, op, num) => {
+function adaptSystemName(name, units, skinTone) {
+  if (!name) return name;
+  let out = name;
+  // When skin tone is mixed (multiple subjects), replace the single-person
+  // skin tone parenthetical with "Multiple Subjects" so the title is accurate.
+  if (skinTone === 'mixed') {
+    out = out.replace(/\s*\((Light|Medium|Dark)\s+Skin\)/gi, ' (Multiple Subjects)');
+  }
+  if (units !== 'imperial') return out;
+  return out.replace(/([<>≤≥]?)(\d+(?:\.\d+)?)\s*m²/g, (_, op, num) => {
     const sqFt = Math.round(parseFloat(num) * 10.764);
     return `${op}${sqFt} sq ft`;
   });
@@ -616,7 +623,7 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay, unit
 
   // Best Match card
   const bestMatch = {
-    name: adaptSystemName(winner.system_name || winner.system_id, units),
+    name: adaptSystemName(winner.system_name || winner.system_id, units, skinTone),
     systemId: winner.system_id,
     reliabilityScore: confScore / 100,
     reliabilityDots: reliability.dots,
@@ -661,7 +668,7 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay, unit
     const bd = p.breakdown;
     const gap = winner.final_score - bd.final_score;
     return {
-      name: adaptSystemName(bd.system_name || bd.system_id, units),
+      name: adaptSystemName(bd.system_name || bd.system_id, units, skinTone),
       gap: gap.toFixed(1),
       gapLabel: gap < 3 ? 'Close alternative' : gap < 8 ? 'Viable option' : 'Budget option',
       tradeoff: p.reason || '',
@@ -870,7 +877,7 @@ export function transformShootMatch(apiResponse, ctx = {}) {
   return {
     gearMatch: apiResponse.gearMatch || null,
     bestMatch: {
-      name: adaptSystemName(c.bestMatch.name, units),
+      name: adaptSystemName(c.bestMatch.name, units, skinTone),
       systemId: c.diagram?.systemId,
       reliabilityScore: confScore / 100,
       reliabilityDots: reliability.dots,

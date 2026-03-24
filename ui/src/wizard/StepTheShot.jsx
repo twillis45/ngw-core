@@ -16,6 +16,10 @@ const SKIN_TONES = [
   { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
 ];
 
+// Subject types that represent multiple people
+const MULTI_PERSON_SUBJECTS = ['couple', 'small_group'];
+const SINGLE_PERSON_SUBJECTS = ['headshot', 'half_body', 'full_body'];
+
 /* ── SVG icons for master modes — consistent with app icon style ── */
 const ModeIcons = {
   default:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>,
@@ -96,7 +100,13 @@ export default function StepTheShot() {
               key={s.value}
               type="button"
               className={`subject-chip${subjectType === s.value ? ' subject-chip--selected' : ''}`}
-              onClick={() => dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: s.value })}
+              onClick={() => {
+                dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: s.value });
+                // Mixed skin tone only applies to multi-person — clear it for single-person subjects
+                if (SINGLE_PERSON_SUBJECTS.includes(s.value) && skinTone === 'mixed') {
+                  dispatch({ type: 'SET_SKIN_TONE', skinTone: null });
+                }
+              }}
             >
               <span className="subject-chip__label">{s.label}</span>
               {s.hint && <span className="subject-chip__hint">{s.hint}</span>}
@@ -113,10 +123,16 @@ export default function StepTheShot() {
               <button
                 key={t.value}
                 className={`tone-chip tone-chip--small${skinTone === t.value ? ' tone-chip--selected' : ''}`}
-                onClick={() => dispatch({
-                  type: 'SET_SKIN_TONE',
-                  skinTone: skinTone === t.value ? null : t.value,
-                })}
+                onClick={() => {
+                  const next = skinTone === t.value ? null : t.value;
+                  dispatch({ type: 'SET_SKIN_TONE', skinTone: next });
+                  // Mixed always means multiple people — auto-promote to a multi-person subject if needed
+                  if (next === 'mixed' && (!subjectType || SINGLE_PERSON_SUBJECTS.includes(subjectType))) {
+                    const best = filteredSubjects.find(s => s.value === 'couple')
+                      || filteredSubjects.find(s => s.value === 'small_group');
+                    if (best) dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: best.value });
+                  }
+                }}
                 type="button"
               >
                 <span className="tone-chip__swatch" style={{ background: t.swatch }} />
