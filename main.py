@@ -68,9 +68,14 @@ async def lifespan(app):
     from engine.scheduler import boot_scheduler, stop_scheduler
     boot_scheduler()
 
+    # Start waitlist email sequence loop (no-op if WAITLIST_SEQUENCE_ENABLED not set)
+    from engine.email_sequence import boot_sequence, stop_sequence
+    boot_sequence()
+
     yield
 
     stop_scheduler()
+    stop_sequence()
 
 
 app = FastAPI(title="NGW Core v1", version=ENGINE_VERSION, lifespan=lifespan)

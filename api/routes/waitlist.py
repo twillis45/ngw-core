@@ -249,3 +249,27 @@ async def list_waitlist(request: Request):
 
     entries = _load()
     return {"count": len(entries), "entries": entries}
+
+
+@router.post("/run-sequence")
+async def run_sequence(request: Request):
+    """
+    Admin endpoint — manually trigger the follow-up email sequence check.
+    Requires ?secret=<NGW_JWT_SECRET> or the X-Admin-Token header.
+    Useful for testing and forcing a check without waiting for the 4-hour loop.
+    """
+    jwt_secret = os.getenv("NGW_JWT_SECRET", "")
+    provided   = (
+        request.query_params.get("secret", "")
+        or request.headers.get("X-Admin-Token", "")
+    )
+    if not jwt_secret or provided != jwt_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        from engine.email_sequence import check_and_send_follow_ups
+        result = check_and_send_follow_ups()
+        return {"status": "ok", **result}
+    except Exception as exc:
+        logger.error("waitlist run-sequence error: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
