@@ -11,13 +11,17 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from auth.security import get_optional_user
+from db.database import get_analysis_count, get_active_subscription
 from engine.services.recommend_service import (
     build_recommend_result,
     ENGINE_VERSION,
 )
+
+_DEFAULT_PAYWALL_THRESHOLD = 3
 
 router = APIRouter()
 
@@ -74,13 +78,54 @@ def _json_safe_errors(errs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # ── Endpoint ──
 
 @router.post("/recommend")
-def recommend(body: Dict[str, Any]) -> Dict[str, Any]:
+def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str, Any]:
     """Recommend a lighting system from caller-provided candidates.
 
     This route is a thin HTTP layer. All business logic — selection,
     scoring, response formatting — lives in
     engine.services.recommend_service.build_recommend_result().
+
+    Server-side paywall gate: free/anonymous sessions are capped at
+    the paywall_timing flag threshold (default 3). Paid subscribers bypass.
     """
+    # ── Paywall gate ─────────────────────────────────────────────────────────
+    is_paid = False
+    if user:
+        try:
+            sub = get_active_subscription(user.get("email", ""))
+            is_paid = sub is not None
+        except Exception:
+            pass
+
+    if not is_paid:
+        session_id: str = (body.get("metadata") or {}).get("session_id", "")
+        if session_id:
+            count = get_analysis_count(session_id)
+            threshold = _DEFAULT_PAYWALL_THRESHOLD
+            try:
+                from db.flags import get_flags_for_session
+                flags = get_flags_for_session(session_id)
+                paywall_flag = next(
+                    (f for f in flags.values()
+                     if f.get("group") == "paywall_timing" and f.get("enabled")),
+                    None,
+                )
+                if paywall_flag:
+                    threshold = paywall_flag.get("config", {}).get("threshold", _DEFAULT_PAYWALL_THRESHOLD)
+            except Exception:
+                pass
+            if count >= threshold:
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "code": "PAYWALL_LIMIT_REACHED",
+                        "message": "Free analysis limit reached. Upgrade to Pro for unlimited analyses.",
+                        "count": count,
+                        "threshold": threshold,
+                    },
+                )
+    # ─────────────────────────────────────────────────────────────────────────
+
     try:
         req = RecommendRequest.model_validate(body)
     except ValidationError as e:

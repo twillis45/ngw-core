@@ -16,7 +16,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from auth.security import get_current_user
 from pydantic import BaseModel, Field
 
 # Service layer — all business logic
@@ -90,7 +91,10 @@ async def _validate_upload(file: UploadFile) -> bytes:
 
 
 @router.post("/upload-reference")
-async def upload_reference(file: UploadFile = File(...)) -> Dict[str, Any]:
+async def upload_reference(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+) -> Dict[str, Any]:
     """Save an uploaded reference image, run basic analysis, and return both."""
     content = await _validate_upload(file)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
