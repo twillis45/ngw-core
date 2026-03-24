@@ -38,6 +38,8 @@ from api.routes.live_feedback import router as live_feedback_router
 from api.routes.style_dna import router as style_dna_router
 from api.routes.track import router as track_router
 from api.routes.learning import router as learning_router
+from api.routes.flags import router as flags_router
+from api.routes.experiments import router as experiments_router
 from db.database import init_db
 
 from engine.services.recommend_service import ENGINE_VERSION
@@ -56,6 +58,8 @@ async def lifespan(app):
     from db.signals import init_signals_tables, seed_signals
     init_signals_tables()
     seed_signals()   # no-op if rows already exist
+    from db.experiments import init_experiments_tables
+    init_experiments_tables()
 
     # Start background scheduler (no-op if ENABLE_SCHEDULER is not set)
     from engine.scheduler import boot_scheduler, stop_scheduler
@@ -119,6 +123,8 @@ app.include_router(style_dna_router, prefix="/api")
 app.include_router(track_router, prefix="/api")
 app.include_router(learning_router, prefix="/api")
 app.include_router(lab_signals_router, prefix="/api")
+app.include_router(flags_router, prefix="/api")
+app.include_router(experiments_router, prefix="/api")
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

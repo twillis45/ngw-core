@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { getExecDashboard, getExecTrends } from '../data/execApi';
 import { pct, usd, relTime } from '../lib/formatters';
+import ExperimentsPanel from '../components/analytics/ExperimentsPanel';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -836,8 +837,14 @@ export default function ExecDashboard() {
             </div>
           </div>
 
-          {/* 7. Experiment Impact */}
+          {/* 7. Experiment Impact (legacy) */}
           <ExperimentImpact experiments={data.experiments} />
+
+          {/* 8. Live A/B Experiments */}
+          <div className="ed-section">
+            <h2 className="ed-section-title">A/B Experiments</h2>
+            <ExperimentsPanel days={days} />
+          </div>
         </>
       )}
     </div>
