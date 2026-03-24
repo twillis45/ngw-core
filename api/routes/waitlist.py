@@ -1,0 +1,251 @@
+"""
+/api/waitlist  — Early access waitlist capture.
+
+POST  /api/waitlist   { email, first_name?, shoot_type? }
+GET   /api/waitlist   (admin only) — list all entries
+
+Stores submissions in data/waitlist.json (append-only, never deletes).
+Sends a confirmation email via SMTP/Resend on successful sign-up.
+Duplicate emails are silently accepted (200 + already_registered flag)
+so the UX is unchanged from the user's perspective.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import os
+import re
+import smtplib
+import ssl
+from datetime import datetime, timezone
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from pathlib import Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, EmailStr, field_validator
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/waitlist", tags=["waitlist"])
+
+# ── Storage ──────────────────────────────────────────────────────────────────
+WAITLIST_PATH = Path("data/waitlist.json")
+
+VALID_SHOOT_TYPES = {
+    "portraits_headshots",
+    "studio",
+    "events",
+    "content_social",
+    "product",
+    "mixed",
+    "",          # empty = not answered
+}
+
+
+def _load() -> list[dict]:
+    """Load all waitlist entries from disk."""
+    if not WAITLIST_PATH.exists():
+        return []
+    try:
+        return json.loads(WAITLIST_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def _save(entries: list[dict]) -> None:
+    """Persist waitlist entries to disk (atomic write)."""
+    WAITLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = WAITLIST_PATH.with_suffix(".tmp")
+    tmp.write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    tmp.replace(WAITLIST_PATH)
+
+
+def _email_exists(entries: list[dict], email: str) -> bool:
+    email_lower = email.lower()
+    return any(e.get("email", "").lower() == email_lower for e in entries)
+
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+def _send_confirmation(email: str, first_name: str) -> None:
+    """Send a confirmation email via SMTP (Resend)."""
+    smtp_host = os.getenv("SMTP_HOST", "smtp.resend.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "resend")
+    smtp_pass = os.getenv("SMTP_PASS", "")
+    from_email = os.getenv("FROM_EMAIL", "noreply@noguessworksystems.com")
+    app_url    = os.getenv("APP_URL", "https://noguessworksystems.com")
+
+    if not smtp_pass:
+        logger.warning("waitlist: SMTP_PASS not set — skipping confirmation email")
+        return
+
+    greeting = f"Hi {first_name}," if first_name else "Hey,"
+
+    subject = "You're on the No Guesswork waitlist 📸"
+
+    html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"/></head>
+<body style="margin:0;padding:0;background:#0E0F12;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0E0F12;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#17191F;border:1px solid #2A2E38;border-radius:12px;padding:40px;">
+        <tr><td>
+          <!-- Logo -->
+          <div style="margin-bottom:28px;">
+            <span style="font-size:1.25rem;font-weight:700;color:#F4F6F8;">No Guesswork</span>
+          </div>
+
+          <!-- Greeting -->
+          <p style="color:#F4F6F8;font-size:1rem;line-height:1.6;margin:0 0 16px;">
+            {greeting}
+          </p>
+          <p style="color:#F4F6F8;font-size:1rem;line-height:1.6;margin:0 0 24px;">
+            You're on the list. We'll reach out as soon as your early access spot is ready.
+          </p>
+
+          <!-- What to expect -->
+          <div style="background:#1E2129;border-radius:8px;padding:20px;margin-bottom:24px;">
+            <p style="color:#A9AFBB;font-size:0.875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin:0 0 12px;">
+              What happens next
+            </p>
+            <ul style="color:#F4F6F8;font-size:0.9375rem;line-height:1.7;margin:0;padding-left:20px;">
+              <li>We're onboarding photographers in small batches</li>
+              <li>First 500 get <strong>3 months free</strong> + locked-in pricing</li>
+              <li>You'll get a personal invite link when your spot opens</li>
+            </ul>
+          </div>
+
+          <!-- CTA -->
+          <p style="margin:0 0 28px;">
+            <a href="{app_url}/early-access"
+               style="display:inline-block;background:#4DA3FF;color:#fff;font-weight:700;font-size:0.9375rem;padding:12px 24px;border-radius:8px;text-decoration:none;">
+              View your spot →
+            </a>
+          </p>
+
+          <p style="color:#A9AFBB;font-size:0.8125rem;line-height:1.6;margin:0;">
+            Questions? Reply to this email — it goes straight to the builder.<br/>
+            <a href="{app_url}/early-access" style="color:#4DA3FF;">noguessworksystems.com</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    text_body = f"""{greeting}
+
+You're on the No Guesswork waitlist.
+
+We're onboarding photographers in small batches. First 500 get 3 months free + locked-in pricing.
+You'll get a personal invite link when your spot opens.
+
+Questions? Reply to this email — it goes straight to the builder.
+
+{app_url}/early-access
+"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = f"No Guesswork <{from_email}>"
+    msg["To"]      = email
+
+    msg.attach(MIMEText(text_body, "plain"))
+    msg.attach(MIMEText(html_body, "html"))
+
+    ctx = ssl.create_default_context()
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.ehlo()
+            server.starttls(context=ctx)
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(from_email, [email], msg.as_string())
+        logger.info("waitlist: confirmation sent to %s", email)
+    except Exception as exc:
+        logger.error("waitlist: email send failed for %s — %s", email, exc)
+
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
+class WaitlistRequest(BaseModel):
+    email:       str
+    first_name:  Optional[str] = ""
+    shoot_type:  Optional[str] = ""
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", v):
+            raise ValueError("Invalid email address")
+        return v
+
+    @field_validator("first_name")
+    @classmethod
+    def clean_name(cls, v: str) -> str:
+        return (v or "").strip()[:80]
+
+    @field_validator("shoot_type")
+    @classmethod
+    def validate_shoot_type(cls, v: str) -> str:
+        v = (v or "").strip()
+        if v not in VALID_SHOOT_TYPES:
+            return ""
+        return v
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+@router.post("")
+async def join_waitlist(payload: WaitlistRequest):
+    """
+    Join the early access waitlist.
+    Idempotent — duplicate emails return 200 without re-sending the email.
+    """
+    entries = _load()
+
+    if _email_exists(entries, payload.email):
+        return {"status": "ok", "already_registered": True}
+
+    entry = {
+        "email":      payload.email,
+        "first_name": payload.first_name,
+        "shoot_type": payload.shoot_type,
+        "joined_at":  datetime.now(timezone.utc).isoformat(),
+    }
+    entries.append(entry)
+    _save(entries)
+
+    # Fire-and-forget confirmation email (best effort — never blocks the response)
+    try:
+        _send_confirmation(payload.email, payload.first_name)
+    except Exception as exc:
+        logger.error("waitlist: unexpected email error — %s", exc)
+
+    logger.info(
+        "waitlist: new signup — %s (%s) shoot=%s total=%d",
+        payload.email, payload.first_name or "anon", payload.shoot_type or "-", len(entries)
+    )
+
+    return {"status": "ok", "already_registered": False}
+
+
+@router.get("")
+async def list_waitlist(request: Request):
+    """
+    Admin endpoint — returns all waitlist entries as JSON.
+    Requires ?secret=<NGW_JWT_SECRET> or the X-Admin-Token header.
+    Not production auth — just a lightweight guard against casual crawling.
+    """
+    jwt_secret = os.getenv("NGW_JWT_SECRET", "")
+    provided   = (
+        request.query_params.get("secret", "")
+        or request.headers.get("X-Admin-Token", "")
+    )
+    if not jwt_secret or provided != jwt_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    entries = _load()
+    return {"count": len(entries), "entries": entries}

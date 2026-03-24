@@ -42,6 +42,7 @@ from api.routes.flags import router as flags_router
 from api.routes.experiments import router as experiments_router
 from api.routes.paywall import router as paywall_router
 from api.routes.stripe_checkout import router as stripe_router
+from api.routes.waitlist import router as waitlist_router
 from db.database import init_db
 
 from engine.services.recommend_service import ENGINE_VERSION
@@ -129,6 +130,7 @@ app.include_router(flags_router, prefix="/api")
 app.include_router(experiments_router, prefix="/api")
 app.include_router(paywall_router, prefix="/api")
 app.include_router(stripe_router, prefix="/api")
+app.include_router(waitlist_router)
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -164,7 +166,7 @@ def root(request: Request):
     return RedirectResponse(url="/ui", status_code=307)
 
 
-_MARKETING_PAGES = {"features", "pricing", "library", "blog", "login", "signup"}
+_MARKETING_PAGES = {"features", "pricing", "library", "blog", "login", "signup", "early-access"}
 
 _DOCS_PAGES = {"index", "patterns", "glossary", "how-it-works"}
 
@@ -175,6 +177,7 @@ _DOCS_PAGES = {"index", "patterns", "glossary", "how-it-works"}
 @app.get("/blog")
 @app.get("/login")
 @app.get("/signup")
+@app.get("/early-access")
 def marketing_page(request: Request):
     page = request.url.path.lstrip("/")
     if page not in _MARKETING_PAGES:
