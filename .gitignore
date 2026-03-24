@@ -20,6 +20,9 @@ htmlcov/
 .vscode/
 .idea/
 
+# Benchmark run artifacts
+benchmarks/results/
+
 # Runtime / local artifacts
 .env
 .env.*
