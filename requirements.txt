@@ -43,3 +43,4 @@ bcrypt==3.2.2
 openai>=1.30.0
 python-dotenv>=0.20.0
 stripe>=7.0.0
+PyYAML>=6.0
