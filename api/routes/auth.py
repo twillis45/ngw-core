@@ -6,12 +6,14 @@ from pydantic import BaseModel, Field
 
 from auth.security import (
     hash_password, verify_password, create_access_token, get_current_user,
+    get_optional_user,
 )
 from auth.email import send_verification_email
 from db.database import (
     create_user, get_user_by_email,
     create_verification_token, consume_verification_token,
     mark_email_verified,
+    get_active_subscription, get_subscription_by_stripe_session,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -96,6 +98,49 @@ def verify_email(body: VerifyBody):
         raise HTTPException(status_code=400, detail="Invalid or expired verification link")
     token = create_access_token(user["id"])
     return {"token": token, "user": _user_public(user)}
+
+
+@router.get("/subscription-status")
+def subscription_status(
+    stripe_session: str | None = None,
+    email: str | None = None,
+    user=Depends(get_optional_user),
+):
+    """
+    Validate whether a user has an active paid subscription.
+
+    Checks in priority order:
+      1. stripe_session param — direct checkout session lookup (post-payment redirect)
+      2. email param or authenticated user's email — most recent active subscription
+
+    Returns:
+      { "is_paid": bool, "plan": str | None, "billing_period": str | None,
+        "stripe_session_id": str | None }
+    """
+    # 1. Direct session lookup (most trusted — used immediately after checkout)
+    if stripe_session:
+        sub = get_subscription_by_stripe_session(stripe_session)
+        if sub and sub.get("status") == "active":
+            return {
+                "is_paid": True,
+                "plan": sub["plan"],
+                "billing_period": sub["billing_period"],
+                "stripe_session_id": sub["stripe_session_id"],
+            }
+
+    # 2. Email lookup — prefer explicit param, fall back to JWT user
+    lookup_email = email or (user.get("email") if user else None)
+    if lookup_email:
+        sub = get_active_subscription(lookup_email)
+        if sub:
+            return {
+                "is_paid": True,
+                "plan": sub["plan"],
+                "billing_period": sub["billing_period"],
+                "stripe_session_id": sub["stripe_session_id"],
+            }
+
+    return {"is_paid": False, "plan": None, "billing_period": None, "stripe_session_id": None}
 
 
 @router.post("/resend-verification")

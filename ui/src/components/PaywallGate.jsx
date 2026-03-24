@@ -26,6 +26,7 @@ import { trackEvent } from '../data/analytics';
 import { broadcastConversion, trackExposure } from '../data/experimentTracker';
 import { getActiveInGroup, getAllFlags, getSessionId } from '../data/flagsStore';
 import { VALUE_FRAMES, getPaywallConfig } from '../data/pricingStore';
+import PricingScreen from './PricingScreen';
 import UpgradePrompt from './UpgradePrompt';
 
 export default function PaywallGate({
@@ -39,6 +40,7 @@ export default function PaywallGate({
   children,
 }) {
   const [bypassed, setBypassed] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
 
   const paywallCfg = getPaywallConfig();
   const effectiveType = paywallType || paywallCfg.type || 'hard';
@@ -92,6 +94,11 @@ export default function PaywallGate({
   function handleUnlock() {
     trackEvent('UPGRADE_CLICKED', { headline: effectiveHeadline, frame, type: effectiveType });
     broadcastConversion('UPGRADE_CLICKED', { frame, type: effectiveType });
+    setShowPricing(true);
+  }
+
+  function handlePricingUnlock(plan) {
+    setShowPricing(false);
     onUnlock?.();
   }
 
@@ -114,6 +121,14 @@ export default function PaywallGate({
             compact
           />
         </div>
+        {showPricing && (
+          <PricingScreen
+            trigger={effectiveType}
+            source="PaywallGate"
+            onClose={() => setShowPricing(false)}
+            onUnlock={handlePricingUnlock}
+          />
+        )}
       </div>
     );
   }
@@ -140,6 +155,14 @@ export default function PaywallGate({
         >
           Continue without upgrading →
         </button>
+      )}
+      {showPricing && (
+        <PricingScreen
+          trigger={effectiveType}
+          source="PaywallGate"
+          onClose={() => setShowPricing(false)}
+          onUnlock={handlePricingUnlock}
+        />
       )}
     </div>
   );

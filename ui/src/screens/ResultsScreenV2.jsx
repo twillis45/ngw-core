@@ -7,12 +7,16 @@ import useSettings from '../hooks/useSettings';
 import usePaywall from '../hooks/usePaywall';
 import useSignal from '../hooks/useSignal';
 import useMode from '../hooks/useMode';
+import usePaywallTrigger from '../hooks/usePaywallTrigger';
 import OutcomeCapture from '../components/OutcomeCapture';
+import SuccessMomentPaywall from '../components/SuccessMomentPaywall';
 import ResultConfidenceExplainer from '../components/results/ResultConfidenceExplainer';
 import ResultPatternComparePrompt from '../components/results/ResultPatternComparePrompt';
 import ResultSymptomSuggestions from '../components/results/ResultSymptomSuggestions';
 import ResultCTAGroup from '../components/results/ResultCTAGroup';
 import { getSymptomsFromSignals } from '../data/symptoms';
+import { BLUEPRINT_BULLETS, CAMERA_BULLETS } from '../data/paywallBullets';
+import { getSessionId } from '../data/flagsStore';
 
 // Gate / upgrade components
 import PaywallGate from '../components/PaywallGate';
@@ -38,18 +42,7 @@ import SkinToneCard from '../cards/SkinToneCard';
 import OtherSetupsCard from '../cards/OtherSetupsCard';
 import MySetupsCard from '../cards/MySetupsCard';
 
-// ── PaywallGate bullet lists ─────────────────────────────────────────────────
-const BLUEPRINT_BULLETS = [
-  'Precise light positions and angles for this pattern',
-  'Power ratios dialled in — stop adjusting between takes',
-  'Modifier specs and distance callouts',
-  'Founders access — $39 one-time. Price increases as seats fill.',
-];
-
-const CAMERA_BULLETS = [
-  'Aperture and ISO tuned to this pattern',
-  'Subject positioning and background distance',
-];
+// ── PaywallGate bullet lists (shared — edit in data/paywallBullets.js) ───────
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 const ICON = {
@@ -392,7 +385,8 @@ export default function ResultsScreenV2() {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
   const userEmail = user?.email || user?.username || null;
-  const { isPaid, unlock, isAdmin } = usePaywall(userEmail);
+  const { isPaid, unlock, isAdmin, analysisCount, incrementCount } = usePaywall(userEmail);
+  const { activeGate, fireGate, dismissGate } = usePaywallTrigger({ isPaid, analysisCount });
   const [zoomSrc, setZoomSrc] = useState(null);
   const appMode = useMode();
 
@@ -434,6 +428,7 @@ export default function ResultsScreenV2() {
         pattern: result.bestMatch?.lightingPattern,
         score,
       });
+      incrementCount();
       if (score != null && score < 0.65) {
         trackEvent('low_confidence_detected', {
           pattern: result.bestMatch?.lightingPattern,
@@ -532,6 +527,15 @@ export default function ResultsScreenV2() {
         />
       )}
 
+      {/* Success-moment paywall — fires after "Nailed it" outcome */}
+      {activeGate?.trigger === 'success_moment' && (
+        <SuccessMomentPaywall
+          onUnlock={() => { unlock(); dismissGate(); }}
+          onDismiss={dismissGate}
+          pattern={result.bestMatch?.lightingPattern}
+        />
+      )}
+
       {/* ── Reference hero image ─────────────────────────────────────────── */}
       {result.referenceImage && (
         <div className="ref-hero">
@@ -609,6 +613,15 @@ export default function ResultsScreenV2() {
         />
       )}
 
+      {/* ════════════════════════════════════════════════════════════════════
+          TWO-COLUMN LAYOUT  (1080px+ desktop)
+          Primary  = setup / blueprint / CTA flow  (left)
+          Secondary = details / gear / analysis     (right)
+          Mobile: primary stacks first, secondary follows — correct order.
+          ════════════════════════════════════════════════════════════════ */}
+      <div className="results-two-col">
+      <div className="results-two-col__primary">
+
       {/* ────────────────────────────────────────────────────────────────────
           2. DIAGRAM PREVIEW
           Surfaced immediately — not buried in a collapsible.
@@ -644,7 +657,6 @@ export default function ResultsScreenV2() {
         onUnlock={unlock}
         headline="Build this exactly — positions, modifiers, power ratios."
         bullets={BLUEPRINT_BULLETS}
-        ctaText="Founders Access — $39"
       >
         <BlueprintCard
           lights={result.setup.lights}
@@ -694,13 +706,35 @@ export default function ResultsScreenV2() {
           Signal rule: every session must produce a signal.
           ──────────────────────────────────────────────────────────────── */}
       <OutcomeCapture
-        onOutcome={sendSignal}
+        onOutcome={(outcome) => {
+          sendSignal(outcome);
+          if (outcome === 'nailed_it') {
+            fireGate('NAILED_IT');
+            // Attribute outcome to experiment variants — needed for CVR metrics
+            fetch('/api/paywall/event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                session_id: getSessionId(),
+                event_name: 'OUTCOME_NAILED_IT',
+                trigger: 'success_moment',
+                type: 'value_triggered',
+                analysis_count: analysisCount,
+                active_flags: [],
+              }),
+            }).catch(() => {}); // fire-and-forget — never block UX
+          }
+        }}
         loading={signalLoading}
         sent={signalOutcome}
         setupId={result.bestMatch?.systemId || result.bestMatch?.name}
         mood={result.mood}
         pattern={result.bestMatch?.lightingPattern}
       />
+
+      </div>{/* end results-two-col__primary */}
+      <div className="results-two-col__secondary">
 
       {/* ────────────────────────────────────────────────────────────────────
           7. SECONDARY CONTENT
@@ -787,6 +821,9 @@ export default function ResultsScreenV2() {
           edgeCaseFlags={result.edgeCaseFlags}
         />
       </CollapsibleSection>
+
+      </div>{/* end results-two-col__secondary */}
+      </div>{/* end results-two-col */}
 
       <MySetupsCard />
 

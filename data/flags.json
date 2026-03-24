@@ -81,6 +81,16 @@
       "type": "nudge"
     }
   },
+  "paywall_value_trigger": {
+    "enabled": false,
+    "rollout_pct": 0,
+    "group": "paywall_timing",
+    "config": {
+      "threshold": 3,
+      "type": "value_triggered",
+      "trigger": "success_moment"
+    }
+  },
   "yearly_discount_20": {
     "enabled": true,
     "rollout_pct": 100,

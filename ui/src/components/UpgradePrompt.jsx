@@ -8,9 +8,22 @@
  *   variant    — 'default' | 'compact' | 'modal'
  */
 
+import { useEffect } from 'react';
 import { trackEvent } from '../data/analytics';
+import { trackExposure } from '../data/experimentTracker';
+import { getActiveInGroup } from '../data/flagsStore';
+import { getActivePricing } from '../data/pricingStore';
 
-export default function UpgradePrompt({ headline, bullets, onUnlock, ctaText = 'Founders Access — $39', variant = 'default' }) {
+export default function UpgradePrompt({ headline, bullets, onUnlock, ctaText, variant = 'default' }) {
+  const pricing = getActivePricing();
+
+  useEffect(() => {
+    const ctaFlag = getActiveInGroup('cta_messaging');
+    if (ctaFlag) trackExposure(ctaFlag.name, 'treatment');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const defaultCta = `${pricing.cta || 'Get Full Access'} — $${pricing.price_monthly}/mo`;
+
   return (
     <div className={`upgrade-prompt upgrade-prompt--${variant}`}>
       <div className="upgrade-prompt__icon">
@@ -40,7 +53,7 @@ export default function UpgradePrompt({ headline, bullets, onUnlock, ctaText = '
       </div>
 
       <button className="upgrade-prompt__cta" onClick={() => { trackEvent('UPGRADE_CLICKED', { headline }); onUnlock?.(); }} type="button">
-        {ctaText}
+        {ctaText || defaultCta}
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
           stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="9 18 15 12 9 6"/>

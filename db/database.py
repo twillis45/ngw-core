@@ -144,6 +144,37 @@ def init_db():
                 updated_at          REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_rule_candidates_status ON rule_candidates(status);
+
+            -- ── Stripe subscriptions ──────────────────────────────────────
+            -- One row per completed Stripe Checkout session.
+            -- customer_email is the billing identity; may differ from users.email.
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id                     TEXT PRIMARY KEY,
+                stripe_session_id      TEXT UNIQUE NOT NULL,
+                stripe_customer_id     TEXT,
+                stripe_subscription_id TEXT,
+                customer_email         TEXT NOT NULL,
+                plan                   TEXT NOT NULL DEFAULT 'pro',
+                billing_period         TEXT NOT NULL DEFAULT 'monthly',
+                status                 TEXT NOT NULL DEFAULT 'active',
+                created_at             REAL NOT NULL,
+                updated_at             REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sub_email
+                ON subscriptions(customer_email);
+            CREATE INDEX IF NOT EXISTS idx_sub_stripe_session
+                ON subscriptions(stripe_session_id);
+            CREATE INDEX IF NOT EXISTS idx_sub_stripe_sub_id
+                ON subscriptions(stripe_subscription_id);
+
+            -- ── Per-session analysis counts ───────────────────────────────
+            -- Server-side source of truth for free-tier limit enforcement.
+            -- Keyed by the browser session_id from flagsStore.getSessionId().
+            CREATE TABLE IF NOT EXISTS session_analysis_counts (
+                session_id  TEXT PRIMARY KEY,
+                count       INTEGER NOT NULL DEFAULT 0,
+                updated_at  REAL NOT NULL
+            );
         """)
     # Migrate existing users table — add email_verified if missing
     with get_db() as conn:
@@ -238,6 +269,91 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     return dict(row) if row else None
+
+
+# ── Subscription CRUD ──────────────────────────────────────
+
+def create_subscription(
+    stripe_session_id: str,
+    customer_email: str,
+    plan: str = "pro",
+    billing_period: str = "monthly",
+    stripe_customer_id: Optional[str] = None,
+    stripe_subscription_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Persist a completed Stripe Checkout session as a subscription record."""
+    sub_id = uuid.uuid4().hex
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO subscriptions
+               (id, stripe_session_id, stripe_customer_id, stripe_subscription_id,
+                customer_email, plan, billing_period, status, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(stripe_session_id) DO NOTHING""",
+            (
+                sub_id, stripe_session_id, stripe_customer_id, stripe_subscription_id,
+                customer_email.lower(), plan, billing_period, "active", now, now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM subscriptions WHERE stripe_session_id = ?",
+            (stripe_session_id,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def get_active_subscription(customer_email: str) -> Optional[Dict[str, Any]]:
+    """Return the most recent active subscription for an email, or None."""
+    with get_db() as conn:
+        row = conn.execute(
+            """SELECT * FROM subscriptions
+               WHERE customer_email = ? AND status = 'active'
+               ORDER BY created_at DESC LIMIT 1""",
+            (customer_email.lower(),),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_subscription_by_stripe_session(stripe_session_id: str) -> Optional[Dict[str, Any]]:
+    """Return the subscription row for a given Stripe checkout session ID, or None."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM subscriptions WHERE stripe_session_id = ?",
+            (stripe_session_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── Analysis Count CRUD ────────────────────────────────────
+
+def increment_analysis_count(session_id: str) -> Dict[str, Any]:
+    """Increment the server-side analysis count for a session.
+    Returns {'count': int, 'updated_at': float}."""
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO session_analysis_counts (session_id, count, updated_at)
+               VALUES (?, 1, ?)
+               ON CONFLICT(session_id) DO UPDATE
+               SET count = count + 1, updated_at = excluded.updated_at""",
+            (session_id, now),
+        )
+        row = conn.execute(
+            "SELECT count, updated_at FROM session_analysis_counts WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+    return {"count": row["count"], "updated_at": row["updated_at"]}
+
+
+def get_analysis_count(session_id: str) -> int:
+    """Return the current analysis count for a session (0 if not found)."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT count FROM session_analysis_counts WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+    return row["count"] if row else 0
 
 
 # ── Kit CRUD ───────────────────────────────────────────────

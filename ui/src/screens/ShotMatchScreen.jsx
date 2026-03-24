@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import ZoomOverlay from '../cards/ZoomOverlay';
+import usePaywall from '../hooks/usePaywall';
 
 /**
  * Shot Match — compare a reference image vs user's attempt.
- * Scaffold: dual upload + comparison placeholder.
+ * Studio-tier feature: requires planTier === 'studio'.
  *
  * Entry points:
  *  - WelcomeScreen mode card (if enable_shot_match flag)
@@ -12,8 +13,9 @@ import ZoomOverlay from '../cards/ZoomOverlay';
  *  - ShootModeScreen "Verify" action
  */
 export default function ShotMatchScreen() {
-  const { referenceImage, referenceImages, result } = useAppState();
+  const { referenceImage, referenceImages, result, user } = useAppState();
   const dispatch = useDispatch();
+  const { isStudio, isAdmin } = usePaywall(user?.email || user?.username || null);
   const attemptRef = useRef(null);
   const refUploadRef = useRef(null);
 
@@ -30,6 +32,7 @@ export default function ShotMatchScreen() {
   const [zoomSrc, setZoomSrc] = useState(null);
   const [refDragging, setRefDragging] = useState(false);
   const [attemptDragging, setAttemptDragging] = useState(false);
+  const [compareError, setCompareError] = useState(null);
 
   function loadPreview(file, setter) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -68,29 +71,124 @@ export default function ShotMatchScreen() {
     return () => document.removeEventListener('paste', onPaste);
   }, [refPreview, attemptPreview]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleCompare() {
+  /** Convert a base64 data-URL back to a Blob for FormData upload. */
+  function dataUrlToBlob(dataUrl) {
+    const [header, b64] = dataUrl.split(',');
+    const mime = (header.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+    const bytes = atob(b64);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    return new Blob([buf], { type: mime });
+  }
+
+  /** Upload one image to /api/upload-reference and return the analysis JSON. */
+  async function uploadAndAnalyze(blob, filename) {
+    const fd = new FormData();
+    fd.append('file', blob, filename);
+    const res = await fetch('/api/upload-reference', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(`Analysis failed (HTTP ${res.status})`);
+    return res.json();
+  }
+
+  /** Compare two upload-reference responses and produce structured match data. */
+  function compareAnalyses(ref, att) {
+    const ri = ref.analysis?.lightingIntelligence || {};
+    const ai = att.analysis?.lightingIntelligence || {};
+    const rc = ref.analysis?.classification       || {};
+    const ac = att.analysis?.classification       || {};
+
+    const rPat = ri.detectedPattern || rc.lightingPattern || null;
+    const aPat = ai.detectedPattern || ac.lightingPattern || null;
+    const rKey = ri.keyPosition     || null;
+    const aKey = ai.keyPosition     || null;
+    const rSide = ri.keySide        || null;
+    const aSide = ai.keySide        || null;
+    const rMod = ri.detectedModifier || null;
+    const aMod = ai.detectedModifier || null;
+    const rCnt = ri.lightCount != null ? String(ri.lightCount) : null;
+    const aCnt = ai.lightCount != null ? String(ai.lightCount) : null;
+
+    function dim(label, r, a) {
+      const present = r && a;
+      const match = present ? r === a : null;
+      return { label, refValue: r || '—', attValue: a || '—', match };
+    }
+
+    const dims = [
+      dim('Light Pattern',    rPat,  aPat),
+      dim('Key Position',     rKey,  aKey),
+      dim('Key Side',         rSide, aSide),
+      dim('Modifier Type',    rMod,  aMod),
+      dim('Light Count',      rCnt,  aCnt),
+    ];
+
+    const scored = dims.filter(d => d.match !== null);
+    const matchCount = scored.filter(d => d.match).length;
+    const matchPct = scored.length > 0 ? Math.round(matchCount / scored.length * 100) : null;
+
+    return { matchPct, dimensions: dims };
+  }
+
+  async function handleCompare() {
     if (!refPreview || !attemptPreview) return;
     setComparing(true);
+    setComparisonResult(null);
+    setCompareError(null);
 
-    // Scaffold: simulate comparison delay, then show placeholder
-    setTimeout(() => {
+    try {
+      const [refData, attData] = await Promise.all([
+        uploadAndAnalyze(dataUrlToBlob(refPreview),   'reference.jpg'),
+        uploadAndAnalyze(dataUrlToBlob(attemptPreview), 'attempt.jpg'),
+      ]);
+      setComparisonResult(compareAnalyses(refData, attData));
+    } catch (err) {
+      setCompareError(err.message || 'Comparison failed — please try again.');
+    } finally {
       setComparing(false);
-      setComparisonResult({
-        overall: 'Comparison coming soon',
-        dimensions: [
-          { label: 'Light Direction', status: 'pending' },
-          { label: 'Source Hardness', status: 'pending' },
-          { label: 'Contrast', status: 'pending' },
-          { label: 'Background Separation', status: 'pending' },
-          { label: 'Shadow Pattern', status: 'pending' },
-          { label: 'Specular Behavior', status: 'pending' },
-        ],
-      });
-    }, 1200);
+    }
   }
 
   function handleBack() {
     dispatch({ type: 'GO_BACK' });
+  }
+
+  // Studio-tier gate — admins always pass
+  if (!isStudio && !isAdmin) {
+    return (
+      <div className="screen">
+        <h2 className="screen-heading">Shot Match</h2>
+        <div className="shot-match__gate">
+          <div className="shot-match__gate-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+          </div>
+          <h3 className="shot-match__gate-title">Studio Plan Required</h3>
+          <p className="shot-match__gate-body">
+            Shot Match is a Studio-tier feature. Upload your attempt alongside a reference and get a
+            precise breakdown of how closely your lighting matches — pattern, key position, modifier, and more.
+          </p>
+          <p className="shot-match__gate-sub">
+            Upgrade to Studio to unlock Shot Match and the full Creative recipe library.
+          </p>
+          <button
+            className="btn btn--primary"
+            style={{ width: '100%', marginBottom: 'var(--space-sm)' }}
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'upgrade' })}
+          >
+            Upgrade to Studio
+          </button>
+          <button
+            className="btn btn--ghost"
+            style={{ width: '100%' }}
+            onClick={handleBack}
+          >
+            {'← '} Back
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -212,21 +310,48 @@ export default function ShotMatchScreen() {
         </button>
       </div>
 
-      {/* ── Comparison Results (scaffold) ── */}
+      {/* ── Error ── */}
+      {compareError && (
+        <div className="shot-match__error">{compareError}</div>
+      )}
+
+      {/* ── Comparison Results ── */}
       {comparisonResult && (
         <div className="shot-match__results">
           <h3 className="shoot-mode__section-title">Match Analysis</h3>
-          <div className="shot-match__placeholder">
-            <p style={{ color: 'var(--color-text-secondary)', textAlign: 'center', marginBottom: 'var(--space-md)' }}>
-              Full comparison engine coming soon. Dimensions that will be analyzed:
-            </p>
-            {comparisonResult.dimensions.map((dim, i) => (
-              <div key={i} className="shot-match__dimension">
-                <span className="shot-match__dim-label">{dim.label}</span>
-                <span className="shot-match__dim-status">{'\u2013'}</span>
+
+          {/* Overall score */}
+          {comparisonResult.matchPct !== null && (
+            <div className="shot-match__score">
+              <div className="shot-match__score-pct">{comparisonResult.matchPct}%</div>
+              <div className="shot-match__score-label">
+                {comparisonResult.matchPct >= 80 ? 'Strong match — lighting looks consistent' :
+                 comparisonResult.matchPct >= 50 ? 'Partial match — some differences detected' :
+                 'Low match — significant lighting differences'}
               </div>
-            ))}
-          </div>
+            </div>
+          )}
+
+          {/* Per-dimension breakdown */}
+          {comparisonResult.dimensions.map((dim, i) => (
+            <div key={i} className="shot-match__dimension">
+              <span className="shot-match__dim-label">{dim.label}</span>
+              <span className="shot-match__dim-values">
+                <span style={{ fontWeight: 'var(--weight-medium)', color: 'var(--color-text)' }}>
+                  {dim.refValue}
+                  {dim.attValue !== dim.refValue && dim.refValue !== '—' && dim.attValue !== '—'
+                    ? ` → ${dim.attValue}` : ''}
+                </span>
+                <span className={
+                  dim.match === true  ? 'shot-match__dim-match' :
+                  dim.match === false ? 'shot-match__dim-miss'  :
+                  'shot-match__dim-na'
+                }>
+                  {dim.match === true ? '✓ Match' : dim.match === false ? '✗ Differs' : '—'}
+                </span>
+              </span>
+            </div>
+          ))}
         </div>
       )}
 

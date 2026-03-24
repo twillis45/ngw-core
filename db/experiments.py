@@ -184,12 +184,28 @@ def get_experiment_metrics(flag_name: str, days: int = 30) -> Dict:
         elif name in ("OUTCOME_NAILED_IT", "OUTCOME_CLOSE"):
             by_variant[v]["nailed_its"] += cnt
 
+    # Resolve the active monthly price from the pricing flag config (if any),
+    # falling back to the DEFAULT_PRICE_MONTHLY baseline.
+    DEFAULT_PRICE_MONTHLY = 39.0
+    price_per_conversion = DEFAULT_PRICE_MONTHLY
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+        _flags = _json.loads((_Path(__file__).resolve().parent.parent / "data" / "flags.json").read_text())
+        for _flag in _flags.values():
+            if _flag.get("group") == "pricing" and _flag.get("enabled"):
+                _cfg_price = _flag.get("config", {}).get("price_monthly")
+                if _cfg_price:
+                    price_per_conversion = float(_cfg_price)
+                    break
+    except Exception:
+        pass  # always fall back to default
+
     for _v, m in by_variant.items():
         s = m["sessions"] or 1
         c = m["conversions"]
         m["conversion_rate"] = round(c / s * 100, 1)
-        # Revenue estimate at $39 base — overridden per pricing flag
-        m["revenue_est"] = round(c * 39.0, 2)
+        m["revenue_est"] = round(c * price_per_conversion, 2)
         m["arpu_est"] = round(m["revenue_est"] / s, 2)
 
     return {

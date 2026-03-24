@@ -68,6 +68,7 @@ class ExpEvent(BaseModel):
     flag_name: str
     variant: str
     event_name: str
+    group: Optional[str] = None   # narrows attribution to a specific flag group
     data: dict = {}
 
 

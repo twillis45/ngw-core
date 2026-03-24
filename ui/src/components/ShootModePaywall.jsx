@@ -12,8 +12,11 @@
  *   struggle      — "You're adjusting blindly right now."
  */
 
-import { useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { trackEvent } from '../data/analytics';
+import { trackExposure } from '../data/experimentTracker';
+import { getActiveInGroup } from '../data/flagsStore';
+import PricingScreen from './PricingScreen';
 
 const TRIGGER_COPY = {
   first_attempt: "You're 2–3 adjustments away from nailing this.",
@@ -30,27 +33,37 @@ const TRIGGER_CTA = {
 export default function ShootModePaywall({ onUnlock, onClose, variant = 'default' }) {
   const triggerLine = TRIGGER_COPY[variant] || null;
   const ctaLabel    = TRIGGER_CTA[variant]  || 'Unlock Shoot Mode';
+  const [showPricing, setShowPricing] = useState(false);
 
   useEffect(() => {
     trackEvent('PAYWALL_TRIGGERED', { trigger: 'shoot_mode', variant });
+    const paywallFlag = getActiveInGroup('paywall_timing');
+    if (paywallFlag) trackExposure(paywallFlag.name, 'treatment');
   }, []);
 
   function handleUnlock() {
-    trackEvent('UPGRADE_CLICKED', {
-      headline: 'Match this shot — not guess it',
-      variant,
-    });
-    onUnlock();
+    trackEvent('UPGRADE_CLICKED', { headline: 'Match this shot — not guess it', variant });
+    setShowPricing(true);
+  }
+
+  function handlePricingUnlock(plan) {
+    setShowPricing(false);
+    onUnlock(plan);
+  }
+
+  function handleClose() {
+    trackEvent('PAYWALL_DISMISSED', { trigger: 'shoot_mode', variant, type: 'shoot_mode' });
+    onClose?.();
   }
 
   return (
-    <div className="sm-paywall-overlay" onClick={onClose}>
+    <div className="sm-paywall-overlay" onClick={handleClose}>
       <div className="sm-paywall" onClick={e => e.stopPropagation()}>
 
         {onClose && (
           <button
             className="sm-paywall__close"
-            onClick={onClose}
+            onClick={handleClose}
             type="button"
             aria-label="Close"
           >
@@ -115,6 +128,15 @@ export default function ShootModePaywall({ onUnlock, onClose, variant = 'default
         </button>
 
       </div>
+
+      {showPricing && (
+        <PricingScreen
+          trigger="shoot_mode"
+          source="ShootModePaywall"
+          onClose={() => setShowPricing(false)}
+          onUnlock={handlePricingUnlock}
+        />
+      )}
     </div>
   );
 }

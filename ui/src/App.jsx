@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useAppState } from './context/AppContext';
+import { useState, useCallback, useEffect } from 'react';
+import { useAppState, useDispatch } from './context/AppContext';
 
 import AppHeader from './components/AppHeader';
 import PreviewBanner from './components/PreviewBanner';
@@ -9,8 +9,8 @@ import WelcomeScreen from './screens/WelcomeScreen';
 import HomeScreenV2 from './screens/HomeScreenV2';
 import SetupWizard from './screens/SetupWizard';
 import LoadingScreen from './screens/LoadingScreen';
-import ResultsScreen from './screens/ResultsScreen';
 import ResultsScreenV2 from './screens/ResultsScreenV2';
+// ResultsScreen (v1) — deprecated. File kept for reference; route removed. Use ResultsScreenV2.
 import RecipeScreen from './screens/RecipeScreen';
 import MyKitScreen from './screens/MyKitScreen';
 import SavedSetupsScreen from './screens/SavedSetupsScreen';
@@ -33,7 +33,6 @@ const SCREENS = {
   wizard:  SetupWizard,
   loading: LoadingScreen,
   results: ResultsScreenV2,
-  results_v1: ResultsScreen,
   recipes: RecipeScreen,
   my_kit:  MyKitScreen,
   saved_setups: SavedSetupsScreen,
@@ -84,11 +83,25 @@ function buildShareText(result) {
 
 export default function App() {
   const { screen, result } = useAppState();
+  const dispatch = useDispatch();
   const Screen = SCREENS[screen] || WelcomeScreen;
   const [toast, setToast] = useState(null);
   const dismissToast = useCallback(() => setToast(null), []);
 
   const [shareOpen, setShareOpen] = useState(false);
+
+  // Post-payment redirect — fires once on mount when returning from Stripe checkout.
+  // main.jsx sets ngw_post_payment=1 in sessionStorage before React mounts.
+  // sessionStorage resets on tab close so this only fires once per checkout.
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('ngw_post_payment') === '1') {
+        sessionStorage.removeItem('ngw_post_payment');
+        dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+      }
+    } catch { /* ignore — sessionStorage unavailable */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally runs once on mount only
 
   function handleShare() {
     if (!result) return;

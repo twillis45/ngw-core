@@ -20,14 +20,23 @@ import OutcomeCapture from '../components/OutcomeCapture';
 /**
  * ChecklistBlock — collapsible pre/post shoot checklist with local checkbox state.
  */
-function ChecklistBlock({ title, icon, items, defaultOpen = true, mode = 'photographer' }) {
+function ChecklistBlock({ title, icon, items, defaultOpen = true, mode = 'photographer', storageKey = null }) {
   const [open, setOpen] = useState(defaultOpen);
-  const [checked, setChecked] = useState(() => new Set());
+  const [checked, setChecked] = useState(() => {
+    if (!storageKey) return new Set();
+    try {
+      const raw = sessionStorage.getItem(`ngw_checklist_${storageKey}`);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+  });
 
   function toggle(id) {
     setChecked(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      if (storageKey) {
+        try { sessionStorage.setItem(`ngw_checklist_${storageKey}`, JSON.stringify([...next])); } catch {}
+      }
       return next;
     });
   }
@@ -773,6 +782,7 @@ export default function ShootModeScreen() {
           defaultOpen={true}
           mode={mode}
           items={PRE_SHOOT_ITEMS[mode] || PRE_SHOOT_ITEMS.photographer}
+          storageKey="pre_shoot"
         />
 
         {/* Step Cards — checklist mode: all expanded; step mode: one active */}
@@ -797,6 +807,7 @@ export default function ShootModeScreen() {
           defaultOpen={false}
           mode={mode}
           items={getPostShootItems(mode, result.goodSigns, result.warnings)}
+          storageKey="post_shoot"
         />
 
         {/* Sticky Action Bar */}

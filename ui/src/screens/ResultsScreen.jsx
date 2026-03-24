@@ -8,6 +8,7 @@ import usePaywall from '../hooks/usePaywall';
 import usePreviewMode from '../hooks/usePreviewMode';
 import useMode from '../hooks/useMode';
 import { getPattern } from '../knowledge';
+import { getActivePricing } from '../data/pricingStore';
 
 // Gate / upgrade components
 import PaywallGate from '../components/PaywallGate';
@@ -260,7 +261,7 @@ export default function ResultsScreen() {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
   const userEmail = user?.email || user?.username || null;
-  const { isPaid, unlock, isAdmin: isAdminEmail } = usePaywall(userEmail);
+  const { isPaid, unlock, isAdmin: isAdminEmail, incrementCount } = usePaywall(userEmail);
   const { access: previewAccess } = usePreviewMode();
   const { viewMode } = useSettings();
   const isQuickMode = viewMode === 'quick';
@@ -272,6 +273,7 @@ export default function ResultsScreen() {
   const [zoomSrc, setZoomSrc] = useState(null);
   const [tab, setTab] = useState('blueprint');
   const appMode = useMode();
+  const activePricing = getActivePricing();
 
   useEffect(() => {
     if (result) {
@@ -279,8 +281,9 @@ export default function ResultsScreen() {
         pattern: result.bestMatch?.lightingPattern,
         score: result.bestMatch?.reliabilityScore,
       });
+      incrementCount();
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // One-time post-analysis upgrade nudge
   const [nudgeDismissed, setNudgeDismissed] = useState(() => {
@@ -441,7 +444,7 @@ export default function ResultsScreen() {
             </p>
           )}
           <button className="upgrade-nudge__cta" onClick={unlock} type="button">
-            Fix This Shot — $39
+            Fix This Shot — ${activePricing.price_monthly}/mo
           </button>
         </div>
       )}
@@ -498,9 +501,8 @@ export default function ResultsScreen() {
             'Precise light positions and angles for this pattern',
             'Power ratios dialled in — stop adjusting between takes',
             'Modifier specs and distance callouts',
-            'Founders access — $39 one-time. Price increases as seats fill.',
+            'Full access to every pattern, setup, and blueprint.',
           ]}
-          ctaText="Founders Access — $39"
         >
           <BlueprintCard
             lights={result.setup.lights}

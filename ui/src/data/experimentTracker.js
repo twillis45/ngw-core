@@ -13,7 +13,16 @@
 import { getSessionId, getAllFlags } from './flagsStore';
 import { trackEvent } from './analytics';
 
-const _exposed = new Set();
+const EXPOSED_KEY = 'ngw_exp_exposed';
+
+function loadExposed() {
+  try { return new Set(JSON.parse(sessionStorage.getItem(EXPOSED_KEY) || '[]')); } catch { return new Set(); }
+}
+function saveExposed(set) {
+  try { sessionStorage.setItem(EXPOSED_KEY, JSON.stringify([...set])); } catch {}
+}
+
+const _exposed = loadExposed();
 
 function post(body) {
   // Fire-and-forget — never block the UI
@@ -32,6 +41,7 @@ export function trackExposure(flagName, variant) {
   const key = `${flagName}:${variant}`;
   if (_exposed.has(key)) return;
   _exposed.add(key);
+  saveExposed(_exposed);
 
   post({
     session_id: getSessionId(),
@@ -60,12 +70,13 @@ export function trackConversion(flagName, variant, eventName, data = {}) {
  * Broadcast a conversion event to ALL active experiments that touch the same group.
  * Use for shared events like UPGRADE_CLICKED that should attribute to pricing + paywall flags.
  */
-export function broadcastConversion(eventName, data = {}) {
+export function broadcastConversion(eventName, data = {}, groups = ['pricing', 'paywall_timing', 'cta_messaging']) {
   const flags = getAllFlags();
   const sid = getSessionId();
 
   for (const [flagName, def] of Object.entries(flags)) {
     if (!def.enabled) continue;
+    if (groups.length > 0 && !groups.includes(def.group)) continue;
     post({
       session_id: sid,
       flag_name: flagName,

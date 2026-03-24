@@ -40,6 +40,8 @@ from api.routes.track import router as track_router
 from api.routes.learning import router as learning_router
 from api.routes.flags import router as flags_router
 from api.routes.experiments import router as experiments_router
+from api.routes.paywall import router as paywall_router
+from api.routes.stripe_checkout import router as stripe_router
 from db.database import init_db
 
 from engine.services.recommend_service import ENGINE_VERSION
@@ -125,6 +127,8 @@ app.include_router(learning_router, prefix="/api")
 app.include_router(lab_signals_router, prefix="/api")
 app.include_router(flags_router, prefix="/api")
 app.include_router(experiments_router, prefix="/api")
+app.include_router(paywall_router, prefix="/api")
+app.include_router(stripe_router, prefix="/api")
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 

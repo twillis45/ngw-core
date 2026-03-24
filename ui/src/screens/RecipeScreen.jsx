@@ -162,19 +162,21 @@ export default function RecipeScreen() {
   const { user } = useAppState();
   const dispatch = useDispatch();
   const { powerDisplay, units } = useSettings();
-  const { isPaid } = usePaywall(user?.email || user?.username || null);
+  const { isPaid, isStudio } = usePaywall(user?.email || user?.username || null);
   const { access: previewAccess } = usePreviewMode();
 
   // Effective plan: preview overrides actual
   const effectiveIsPaid = previewAccess !== null
     ? (previewAccess === 'paid' || previewAccess === 'admin')
     : isPaid;
+  const effectiveIsStudio = previewAccess === 'admin' || isStudio;
   const effectiveIsGuest = previewAccess !== null ? previewAccess === 'guest' : !user;
 
   function canRunRecipe(meta) {
     if (effectiveIsGuest) return false;          // must sign in
     const required = meta?.minPlan || 'free';
     if (required === 'free') return true;
+    if (required === 'studio') return effectiveIsStudio;
     return effectiveIsPaid;                       // 'paid' requires paid plan
   }
   const [filter, setFilter] = useState(null);
@@ -288,11 +290,12 @@ export default function RecipeScreen() {
       <div className="recipe-list">
         {filtered.map(recipe => {
           const isExpanded = expandedId === recipe.id;
-          const kitMatch   = checkKitMatch(recipe);
-          const meta       = RECIPE_META[recipe.id] || {};
-          const lightType  = meta.lightType;
-          const unlocked   = canRunRecipe(meta);
-          const isPaidOnly = (meta.minPlan === 'paid') && !unlocked;
+          const kitMatch     = checkKitMatch(recipe);
+          const meta         = RECIPE_META[recipe.id] || {};
+          const lightType    = meta.lightType;
+          const unlocked     = canRunRecipe(meta);
+          const isPaidOnly   = (meta.minPlan === 'paid') && !unlocked;
+          const isStudioOnly = (meta.minPlan === 'studio') && !unlocked;
           return (
             <div
               key={recipe.id}
@@ -326,7 +329,10 @@ export default function RecipeScreen() {
                     {lightType === 'strobe' && (
                       <span className="recipe-light-type recipe-light-type--strobe">Flash only</span>
                     )}
-                    {!unlocked && isPaidOnly && (
+                    {!unlocked && isStudioOnly && (
+                      <span className="recipe-lock-badge recipe-lock-badge--studio">Studio</span>
+                    )}
+                    {!unlocked && isPaidOnly && !isStudioOnly && (
                       <span className="recipe-lock-badge">Paid</span>
                     )}
                     {!unlocked && effectiveIsGuest && (

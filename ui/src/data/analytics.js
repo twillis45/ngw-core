@@ -3,23 +3,13 @@
  * Fire-and-forget: never blocks, never throws.
  */
 
-const EVENTS_KEY = 'ngw_analytics_events';
-const SESSION_KEY = 'ngw_session_id';
-const MAX_EVENTS = 200;
+import { getSessionId as _getSessionId } from './flagsStore';
 
-/** Persistent session ID for this browser session. */
-export function getSessionId() {
-  try {
-    let id = sessionStorage.getItem(SESSION_KEY);
-    if (!id) {
-      id = Math.random().toString(36).slice(2, 10).toUpperCase();
-      sessionStorage.setItem(SESSION_KEY, id);
-    }
-    return id;
-  } catch {
-    return null;
-  }
-}
+/** Re-exported from flagsStore — single source of truth for session ID. */
+export { _getSessionId as getSessionId };
+
+const EVENTS_KEY = 'ngw_analytics_events';
+const MAX_EVENTS = 200;
 
 /**
  * Track a named event with optional payload.
@@ -42,7 +32,7 @@ export function trackEvent(name, data = {}) {
 
   // Fire-and-forget to server
   try {
-    const session_id = getSessionId();
+    const session_id = _getSessionId();
     fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -73,7 +63,7 @@ export function clearEvents() {
  * @returns {Promise<boolean>}      true on success
  */
 export async function excludeCurrentSession(exclude = true) {
-  const sessionId = getSessionId();
+  const sessionId = _getSessionId();
   if (!sessionId) return false;
   try {
     const { getToken } = await import('./authApi');

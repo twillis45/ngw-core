@@ -272,6 +272,10 @@ body {
   color: var(--color-accent);
   background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
+.recipe-lock-badge--studio {
+  color: #c084fc;
+  background: color-mix(in srgb, #c084fc 12%, transparent);
+}
 .recipe-card--locked .recipe-card__main { cursor: default; }
 .recipe-card--locked .intent-card__text strong { opacity: 0.6; }
 .recipe-card--locked .intent-card__text small  { opacity: 0.45; }
@@ -5225,6 +5229,24 @@ body {
 .shot-match__compare {
   display: flex; flex-direction: column; gap: 0;
 }
+@media (min-width: 600px) {
+  .shot-match__compare {
+    flex-direction: row;
+    align-items: stretch;
+    gap: var(--space-sm);
+  }
+  .shot-match__compare .shot-match__upload-area { flex: 1; min-width: 0; }
+  .shot-match__vs {
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 var(--space-xs);
+    min-height: 160px;
+  }
+}
+@media (min-width: 1080px) {
+  /* More space for images on desktop */
+  .shot-match__image { max-height: 340px; }
+  .shot-match__upload-area img { max-height: 340px; }
+}
 .shot-match__upload-btn {
   display: flex; flex-direction: column; align-items: center; gap: var(--space-sm);
   width: 100%; padding: var(--space-2xl) var(--space-lg);
@@ -5276,6 +5298,55 @@ body {
 .shot-match__dim-status {
   font-size: var(--text-sm); color: var(--color-text-secondary);
 }
+.shot-match__dim-values {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+}
+.shot-match__dim-match { color: var(--color-success, #4ade80); font-weight: var(--weight-semibold); }
+.shot-match__dim-miss  { color: var(--color-error,   #f87171); }
+.shot-match__dim-na    { color: var(--color-text-dim); }
+.shot-match__score {
+  text-align: center; padding: var(--space-md);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); margin-bottom: var(--space-md);
+}
+.shot-match__score-pct {
+  font-size: var(--text-3xl); font-weight: var(--weight-black);
+  letter-spacing: -0.03em; color: var(--color-text);
+}
+.shot-match__score-label {
+  font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: 2px;
+}
+.shot-match__error {
+  color: var(--color-error, #f87171); font-size: var(--text-sm);
+  text-align: center; padding: var(--space-md);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); margin-bottom: var(--space-md);
+}
+/* Studio-tier gate */
+.shot-match__gate {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+.shot-match__gate-icon {
+  color: #c084fc; opacity: 0.8;
+  background: color-mix(in srgb, #c084fc 10%, transparent);
+  border-radius: 50%; padding: var(--space-md);
+}
+.shot-match__gate-title {
+  font-size: var(--text-lg); font-weight: var(--weight-semibold);
+  color: var(--color-text); margin: 0;
+}
+.shot-match__gate-body {
+  font-size: var(--text-sm); color: var(--color-text-secondary);
+  max-width: 360px; line-height: 1.6; margin: 0;
+}
+.shot-match__gate-sub {
+  font-size: var(--text-xs); color: var(--color-text-dim);
+  max-width: 300px; margin: 0;
+}
+.shot-match__gate .btn { max-width: 320px; }
 
 /* ── Lab ── */
 .lab-tabs {
@@ -12836,3 +12907,122 @@ body {
   border-color: rgba(255, 93, 93, 0.55);
   box-shadow: 0 0 12px rgba(255, 93, 93, 0.22);
 }
+
+/* ── Success Moment Paywall ──────────────────────────────────────────────── */
+/*
+ * Full-screen fixed overlay — fires after "Nailed it" outcome.
+ * value_triggered type: no blur, celebratory framing.
+ * z-index 210 — above ShootModePaywall (200) in case both fire.
+ */
+.success-paywall-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: rgba(0, 0, 0, 0.80);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  animation: sp-overlay-in 0.25s ease;
+}
+@keyframes sp-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.success-paywall {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-md);
+  animation: sp-card-in 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes sp-card-in {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.success-paywall__icon {
+  color: #C9A84C;
+  margin-bottom: var(--space-xs);
+}
+
+.success-paywall__headline {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.success-paywall__sub {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+  max-width: 320px;
+  line-height: 1.5;
+}
+
+.success-paywall__bullets {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-xs) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  text-align: left;
+  width: 100%;
+}
+.success-paywall__bullets li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+}
+.success-paywall__bullets li svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--color-accent, #C9A84C);
+}
+
+.success-paywall__cta {
+  width: 100%;
+  padding: 14px var(--space-lg);
+  background: var(--color-accent, #C9A84C);
+  color: #000;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  margin-top: var(--space-xs);
+}
+.success-paywall__cta:hover { opacity: 0.88; }
+
+.success-paywall__yearly {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  margin: 0;
+}
+
+.success-paywall__dismiss {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: var(--space-xs) 0;
+  transition: color 0.15s;
+}
+.success-paywall__dismiss:hover { color: var(--color-text-secondary); }
