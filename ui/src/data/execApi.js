@@ -32,3 +32,34 @@ export async function getExecDashboard(days = 7, origin = 'all') {
 export async function getExecTrends() {
   return execFetch('/dashboard/trends');
 }
+
+// ── Flag rollout API ───────────────────────────────────────────────────────────
+
+function flagFetch(path, options = {}) {
+  const token = getToken();
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+  return apiFetch(`/api${path}`, { headers, ...options });
+}
+
+/** Return full flag definitions including rollout %. Admin only. */
+export async function getAllFlags() {
+  const res = await flagFetch('/flags/all');
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `Flags API error (${res.status})`);
+  return data; // { flags: { [name]: { rollout_pct, enabled, group, ... } } }
+}
+
+/** Update a flag's rollout % and enabled state. Admin only. */
+export async function updateFlagRollout(flagName, rolloutPct, enabled) {
+  const res = await flagFetch(`/flags/${encodeURIComponent(flagName)}/rollout`, {
+    method: 'POST',
+    body: JSON.stringify({ rollout_pct: rolloutPct, enabled }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `Flag update error (${res.status})`);
+  return data;
+}

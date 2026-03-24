@@ -15,7 +15,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch } from '../context/AppContext';
-import { getExecDashboard, getExecTrends } from '../data/execApi';
+import { getExecDashboard, getExecTrends, getAllFlags, updateFlagRollout } from '../data/execApi';
 import { pct, usd, relTime } from '../lib/formatters';
 import ExperimentsPanel from '../components/analytics/ExperimentsPanel';
 
@@ -630,6 +630,167 @@ function ExperimentImpact({ experiments }) {
   );
 }
 
+// ── Flag Rollout Panel ────────────────────────────────────────────────────────
+
+const GROUP_COLORS = {
+  pricing:        'var(--color-accent)',
+  paywall_timing: '#f5b041',
+  cta_messaging:  '#9b7cff',
+  yearly_discount:'#39d98a',
+  paywall_value:  '#ff5d5d',
+};
+
+function FlagRolloutPanel() {
+  const [flags,   setFlags]   = useState(null);
+  const [saving,  setSaving]  = useState({});   // { [flagName]: true }
+  const [pending, setPending] = useState({});   // { [flagName]: { pct, enabled } }
+  const [error,   setError]   = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const data = await getAllFlags();
+      setFlags(data.flags || data);
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function getPending(name, key, fallback) {
+    return pending[name]?.[key] ?? fallback;
+  }
+
+  function setPct(name, val) {
+    const clamped = Math.max(0, Math.min(100, Number(val)));
+    setPending(p => ({ ...p, [name]: { ...p[name], pct: clamped } }));
+  }
+
+  function setEnabled(name, val) {
+    setPending(p => ({ ...p, [name]: { ...p[name], enabled: val } }));
+  }
+
+  async function save(name, currentPct, currentEnabled) {
+    const pctVal     = getPending(name, 'pct',     currentPct);
+    const enabledVal = getPending(name, 'enabled', currentEnabled);
+    setSaving(s => ({ ...s, [name]: true }));
+    try {
+      await updateFlagRollout(name, pctVal, enabledVal);
+      // Reflect saved values back into flags state
+      setFlags(f => ({
+        ...f,
+        [name]: { ...f[name], rollout_pct: pctVal, enabled: enabledVal },
+      }));
+      setPending(p => { const n = { ...p }; delete n[name]; return n; });
+      setError(null);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(s => ({ ...s, [name]: false }));
+    }
+  }
+
+  if (!flags && !error) {
+    return (
+      <div className="ed-card ed-card--wide">
+        <div className="ed-card__hdr"><span className="ed-card__title">Feature Flags</span></div>
+        <div className="ed-flag-loading">Loading flags…</div>
+      </div>
+    );
+  }
+
+  const entries = flags ? Object.entries(flags) : [];
+  // Group by group field
+  const grouped = entries.reduce((acc, [name, def]) => {
+    const g = def.group || 'other';
+    if (!acc[g]) acc[g] = [];
+    acc[g].push([name, def]);
+    return acc;
+  }, {});
+
+  return (
+    <div className="ed-card ed-card--wide">
+      <div className="ed-card__hdr">
+        <span className="ed-card__title">Feature Flags</span>
+        <span className="ed-card__sub">{entries.length} flags</span>
+        <button className="ed-flag-refresh" onClick={load} title="Refresh flags">↻</button>
+      </div>
+
+      {error && (
+        <div className="ed-flag-error">⚠ {error}</div>
+      )}
+
+      <div className="ed-flag-groups">
+        {Object.entries(grouped).map(([group, groupFlags]) => (
+          <div key={group} className="ed-flag-group">
+            <div
+              className="ed-flag-group__label"
+              style={{ color: GROUP_COLORS[group] || 'var(--color-text-dim)' }}
+            >
+              {group.replace(/_/g, ' ')}
+            </div>
+
+            {groupFlags.map(([name, def]) => {
+              const currentPct     = def.rollout_pct ?? 0;
+              const currentEnabled = def.enabled ?? false;
+              const pctVal         = getPending(name, 'pct',     currentPct);
+              const enabledVal     = getPending(name, 'enabled', currentEnabled);
+              const isDirty        = pctVal !== currentPct || enabledVal !== currentEnabled;
+              const isSaving       = saving[name];
+
+              return (
+                <div key={name} className={`ed-flag-row${isDirty ? ' ed-flag-row--dirty' : ''}`}>
+                  <div className="ed-flag-row__name" title={name}>{name}</div>
+
+                  {/* Enable/disable toggle */}
+                  <button
+                    className={`ed-flag-toggle${enabledVal ? ' ed-flag-toggle--on' : ''}`}
+                    onClick={() => setEnabled(name, !enabledVal)}
+                    title={enabledVal ? 'Disable flag' : 'Enable flag'}
+                    type="button"
+                  >
+                    {enabledVal ? 'ON' : 'OFF'}
+                  </button>
+
+                  {/* Rollout % slider */}
+                  <div className="ed-flag-slider-wrap">
+                    <input
+                      className="ed-flag-slider"
+                      type="range"
+                      min={0} max={100} step={5}
+                      value={pctVal}
+                      onChange={e => setPct(name, e.target.value)}
+                    />
+                    <input
+                      className="ed-flag-pct-input"
+                      type="number"
+                      min={0} max={100}
+                      value={pctVal}
+                      onChange={e => setPct(name, e.target.value)}
+                    />
+                    <span className="ed-flag-pct-sym">%</span>
+                  </div>
+
+                  {/* Save button — only shown when dirty */}
+                  <button
+                    className={`ed-flag-save${isDirty ? ' ed-flag-save--visible' : ''}`}
+                    onClick={() => save(name, currentPct, currentEnabled)}
+                    disabled={isSaving || !isDirty}
+                    type="button"
+                  >
+                    {isSaving ? '…' : 'Save'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Skeleton ──────────────────────────────────────────────────────────────────
 
 function Skeleton({ h = 20, w = '100%', mb = 8 }) {
@@ -844,6 +1005,12 @@ export default function ExecDashboard() {
           <div className="ed-section">
             <h2 className="ed-section-title">A/B Experiments</h2>
             <ExperimentsPanel days={days} />
+          </div>
+
+          {/* 9. Feature Flag Rollout */}
+          <div className="ed-section">
+            <h2 className="ed-section-title">Feature Flags</h2>
+            <FlagRolloutPanel />
           </div>
         </>
       )}
