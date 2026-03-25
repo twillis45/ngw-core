@@ -66,6 +66,31 @@ async def lifespan(app):
             "Set ENVIRONMENT=development or unset NGW_DEV_MODE."
         )
 
+    # ── Required env vars preflight (production only) ────────────────────────
+    if _env == "production":
+        _required = ["NGW_JWT_SECRET", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
+        _missing = [v for v in _required if not os.getenv(v)]
+        if _missing:
+            raise RuntimeError(
+                f"Missing required environment variables for production: {_missing}. "
+                "Set these before starting the server."
+            )
+
+    # ── Sentry (optional — only initialised when SENTRY_DSN is set) ──────────
+    _sentry_dsn = os.getenv("SENTRY_DSN")
+    if _sentry_dsn:
+        import sentry_sdk
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            environment=_env,
+            traces_sample_rate=0.1,
+        )
+        _startup_logger.info("✓ Sentry initialised (environment=%s)", _env)
+    else:
+        _startup_logger.warning(
+            "SENTRY_DSN not set — runtime errors will not be captured by Sentry"
+        )
+
     # Ensure runtime directories exist (safe on both local dev and Render/Docker)
     for d in ("data", "static/uploads", "static/www", "static/ui"):
         Path(d).mkdir(parents=True, exist_ok=True)
@@ -217,7 +242,16 @@ async def security_and_cache_headers(request: Request, call_next):
     return response
 
 @app.get("/health")
-def health() -> Dict[str, str]:
+def health() -> Dict[str, Any]:
+    from db.database import get_db
+    try:
+        with get_db() as conn:
+            conn.execute("SELECT 1").fetchone()
+    except Exception as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unhealthy", "detail": "database", "error": str(exc)},
+        )
     return {"status": "ok", "engine_version": ENGINE_VERSION}
 
 

@@ -44,3 +44,4 @@ openai>=1.30.0
 python-dotenv>=0.20.0
 stripe>=7.0.0
 PyYAML>=6.0
+sentry-sdk[fastapi]>=2.0.0
