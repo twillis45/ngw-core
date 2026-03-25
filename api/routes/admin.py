@@ -7,7 +7,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from auth.dev_guard import get_dev_user
 from pydantic import BaseModel, Field
 
 from db.database import (
@@ -19,7 +20,7 @@ from db.database import (
     save_image_ground_truth,
 )
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(get_dev_user)])
 
 SYSTEMS_PATH = Path("data/lighting_systems.json")
 PATCH_PATH = Path("data/systems_patch.json")
