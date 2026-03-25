@@ -9,9 +9,12 @@ This route only:
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from auth.security import get_optional_user
@@ -100,8 +103,13 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
             try:
                 sub = get_active_subscription(user_email)
                 is_paid = sub is not None
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.error("subscription check failed for user=%s: %s", user_email, exc)
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "SUBSCRIPTION_CHECK_FAILED",
+                            "message": "Unable to verify subscription. Please try again."},
+                )
 
     if not is_paid:
         session_id: str = (body.get("metadata") or {}).get("session_id", "")

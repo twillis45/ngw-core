@@ -296,13 +296,20 @@ def get_provenance_summary(days: int = 30, origin: Optional[str] = None) -> Dict
     """
     since = time.time() - days * 86400
 
-    # Build optional origin clause
+    # Validate origin against known values — prevents SQL injection
+    _VALID_ORIGINS = {'production', 'internal', 'expert_review', 'test', 'all'}
+    if origin and origin not in _VALID_ORIGINS:
+        raise ValueError(f"Invalid origin filter: {origin!r}. Must be one of {sorted(_VALID_ORIGINS)}")
+
+    # Build optional origin clause — parameterized, never interpolated
+    origin_params: tuple = ()
     if origin and origin != 'all':
         if origin == 'internal':
             # 'internal' tab covers internal, expert_review, and user-marked test sessions
             origin_clause = " AND session_origin IN ('internal','expert_review','test')"
         else:
-            origin_clause = f" AND session_origin='{origin}'"
+            origin_clause = " AND session_origin=?"
+            origin_params = (origin,)
     else:
         origin_clause = ""  # 'all' or no filter → full breakdown
 
@@ -316,31 +323,31 @@ def get_provenance_summary(days: int = 30, origin: Optional[str] = None) -> Dict
         # Total excluded from each dimension (scoped to selected origin)
         excl_learning = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE exclude_from_learning=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         excl_metrics = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE exclude_from_metrics=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         excl_conversion = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE exclude_from_conversion=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         excl_cohorts = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE exclude_from_cohorts=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         manually_promoted = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE manually_promote_for_learning_review=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         eligible_review = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE eligible_for_reference_review=1 AND created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
         total_known = conn.execute(
             f"SELECT COUNT(*) as cnt FROM session_provenance WHERE created_at>=?{origin_clause}",
-            (since,),
+            (since,) + origin_params,
         ).fetchone()["cnt"]
 
     by_origin = {r["session_origin"]: r["cnt"] for r in origin_rows}
