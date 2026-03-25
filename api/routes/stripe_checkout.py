@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 
 from auth.security import get_optional_user
-from db.database import create_subscription, cancel_subscription_by_stripe_id
+from db.database import create_subscription, cancel_subscription_by_stripe_id, get_subscription_by_stripe_session
 
 logger = logging.getLogger(__name__)
 
@@ -190,6 +190,14 @@ async def stripe_webhook(
         logger.info('Checkout completed: session=%s email=%s', session_id, customer_email)
 
         if session_id and customer_email:
+            existing = get_subscription_by_stripe_session(session_id)
+            if existing:
+                logger.info(
+                    'Duplicate webhook — subscription already exists for session=%s, skipping',
+                    session_id,
+                )
+                return {'received': True, 'status': 'already_processed'}
+
             try:
                 create_subscription(
                     stripe_session_id=session_id,
@@ -199,7 +207,7 @@ async def stripe_webhook(
                     stripe_customer_id=stripe_customer_id,
                     stripe_subscription_id=stripe_subscription_id,
                 )
-                logger.info('Subscription persisted for session=%s', session_id)
+                logger.info('Subscription created for session=%s email=%s', session_id, customer_email)
             except Exception as exc:
                 logger.error('Failed to persist subscription for session=%s: %s', session_id, exc)
 
