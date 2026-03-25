@@ -16,7 +16,14 @@ from db.database import get_user_by_id
 
 # ── Configuration ──────────────────────────────────────────
 
-SECRET_KEY = os.getenv("NGW_JWT_SECRET", "ngw-dev-secret-change-in-production")
+_NGW_JWT_SECRET = os.getenv("NGW_JWT_SECRET")
+_INSECURE_DEFAULT = "ngw-dev-secret-change-in-production"
+if not _NGW_JWT_SECRET or _NGW_JWT_SECRET.strip() == _INSECURE_DEFAULT:
+    raise RuntimeError(
+        "NGW_JWT_SECRET is not set or is using the insecure dev default. "
+        "Generate a safe value: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+SECRET_KEY = _NGW_JWT_SECRET
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_SECONDS = 60 * 60 * 24 * 7  # 7 days
 

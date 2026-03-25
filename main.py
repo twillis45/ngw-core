@@ -56,6 +56,16 @@ from engine.services.recommend_service import ENGINE_VERSION
 
 @asynccontextmanager
 async def lifespan(app):
+    # ── Production safety guards ──────────────────────────────────────────────
+    _dev_mode = os.getenv("NGW_DEV_MODE", "").strip().lower() in ("1", "true", "yes")
+    _env = os.getenv("ENVIRONMENT", "production").strip().lower()
+    if _dev_mode and _env == "production":
+        raise RuntimeError(
+            "NGW_DEV_MODE is enabled but ENVIRONMENT=production. "
+            "This bypasses all admin auth. Refusing to start. "
+            "Set ENVIRONMENT=development or unset NGW_DEV_MODE."
+        )
+
     # Ensure runtime directories exist (safe on both local dev and Render/Docker)
     for d in ("data", "static/uploads", "static/www", "static/ui"):
         Path(d).mkdir(parents=True, exist_ok=True)
