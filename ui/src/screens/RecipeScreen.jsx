@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { RECIPES, RECIPE_CATEGORIES, RECIPE_META } from '../data/recipes';
 import { fetchRecommendation } from '../api';
+import { getSessionId } from '../data/analytics';
 import { transformForUI } from '../transform';
 import { criteriaForGear } from '../gearPresets';
 import useSettings from '../hooks/useSettings';
@@ -243,7 +244,7 @@ export default function RecipeScreen() {
           environment: recipe.environment,
           ceiling_height: recipe.ceilingHeight,
         },
-        metadata: { source: 'recipe', recipeId: recipe.id },
+        metadata: { source: 'recipe', recipeId: recipe.id, session_id: getSessionId() || '' },
         modifiers_available: recipe.modifiers.length > 0
           ? recipe.modifiers
           : ['beauty_dish', 'softbox', 'umbrella', 'reflector', 'grid_spot'],

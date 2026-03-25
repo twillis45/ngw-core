@@ -11,6 +11,7 @@ from db.database import (
     save_user_kit, get_user_kit, delete_user_kit,
     save_user_setup, get_user_setups, delete_user_setup,
     save_user_feedback, get_user_feedback,
+    save_user_preference, get_all_user_preferences,
 )
 
 router = APIRouter(prefix="/user", tags=["user-data"])
@@ -94,6 +95,32 @@ def feedback_save(body: FeedbackBody, user=Depends(get_current_user)):
     return entry
 
 
+# ── User Preferences ───────────────────────────────────────
+# Generic key-value store for UI preferences (tab order, layout, etc.)
+# Values are arbitrary JSON — clients decide structure per key.
+
+_PREF_KEY_MAX = 64
+
+
+class PrefBody(BaseModel):
+    value: Any
+
+
+@router.get("/preferences")
+def preferences_get_all(user=Depends(get_current_user)):
+    """Return all stored preferences for the current user."""
+    return {"preferences": get_all_user_preferences(user["id"])}
+
+
+@router.put("/preferences/{key}", status_code=200)
+def preferences_save(key: str, body: PrefBody, user=Depends(get_current_user)):
+    """Upsert a single preference value. Key must be ≤64 chars."""
+    if len(key) > _PREF_KEY_MAX:
+        raise HTTPException(status_code=400, detail=f"Preference key must be ≤{_PREF_KEY_MAX} characters.")
+    save_user_preference(user["id"], key, body.value)
+    return {"status": "ok", "key": key}
+
+
 # ── Sync (download all user data) ─────────────────────────
 
 @router.get("/sync")
@@ -103,4 +130,5 @@ def sync_all(user=Depends(get_current_user)):
         "kit": get_user_kit(user["id"]),
         "setups": get_user_setups(user["id"]),
         "feedback": get_user_feedback(user["id"]),
+        "preferences": get_all_user_preferences(user["id"]),
     }

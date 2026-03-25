@@ -87,6 +87,14 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_user_feedback_user ON user_feedback(user_id);
 
+            CREATE TABLE IF NOT EXISTS user_preferences (
+                user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                pref_key   TEXT NOT NULL,
+                pref_value TEXT NOT NULL,
+                updated_at REAL NOT NULL,
+                PRIMARY KEY (user_id, pref_key)
+            );
+
             CREATE TABLE IF NOT EXISTS admin_changelog (
                 id          TEXT PRIMARY KEY,
                 entity_type TEXT NOT NULL,
@@ -144,6 +152,42 @@ def init_db():
                 updated_at          REAL NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_rule_candidates_status ON rule_candidates(status);
+
+            -- ── API key health events ─────────────────────────────────────
+            CREATE TABLE IF NOT EXISTS api_health_events (
+                id         TEXT PRIMARY KEY,
+                created_at REAL NOT NULL,
+                provider   TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                detail     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_api_health_created ON api_health_events(created_at DESC);
+
+            -- ── VLM call metrics ──────────────────────────────────────────
+            -- One row per VLM API invocation: latency, success, caller context.
+            CREATE TABLE IF NOT EXISTS vlm_call_metrics (
+                id          TEXT PRIMARY KEY,
+                called_at   REAL NOT NULL,
+                provider    TEXT NOT NULL,
+                model       TEXT,
+                latency_ms  REAL,
+                ok          INTEGER NOT NULL DEFAULT 1,
+                caller      TEXT,
+                error       TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_vlm_calls_at ON vlm_call_metrics(called_at DESC);
+
+            -- ── Revenue simulation history ────────────────────────────────
+            -- One row per completed simulation run.  Keeps full projections +
+            -- summary as JSON so the frontend can restore any past run.
+            CREATE TABLE IF NOT EXISTS simulation_runs (
+                id          TEXT PRIMARY KEY,
+                run_at      REAL NOT NULL,
+                run_by      TEXT,
+                summary     TEXT NOT NULL,
+                projections TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_sim_runs_run_at ON simulation_runs(run_at DESC);
 
             -- ── Stripe subscriptions ──────────────────────────────────────
             -- One row per completed Stripe Checkout session.
@@ -325,11 +369,47 @@ def get_subscription_by_stripe_session(stripe_session_id: str) -> Optional[Dict[
     return dict(row) if row else None
 
 
+def cancel_subscription_by_stripe_id(stripe_subscription_id: str) -> bool:
+    """Mark a subscription as cancelled by its Stripe subscription ID.
+
+    Called when Stripe fires customer.subscription.deleted.
+    Returns True if a row was updated, False if no matching row found.
+    """
+    import time as _time
+    with get_db() as conn:
+        cursor = conn.execute(
+            """UPDATE subscriptions
+               SET status = 'cancelled', updated_at = ?
+               WHERE stripe_subscription_id = ? AND status = 'active'""",
+            (_time.time(), stripe_subscription_id),
+        )
+    return cursor.rowcount > 0
+
+
 # ── Analysis Count CRUD ────────────────────────────────────
 
-def increment_analysis_count(session_id: str) -> Dict[str, Any]:
-    """Increment the server-side analysis count for a session.
-    Returns {'count': int, 'updated_at': float}."""
+def _analysis_key(session_id: str, user_id: Optional[str] = None) -> str:
+    """Return the canonical key for analysis counting.
+
+    Authenticated users get a ``user:<id>`` key so counts are portable across
+    devices and sessions.  Anonymous users fall back to ``session_id``.
+    """
+    return f"user:{user_id}" if user_id else session_id
+
+
+def increment_analysis_count(
+    session_id: str,
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Increment the server-side analysis count for a session or user.
+
+    When *user_id* is provided the count is keyed by ``user:<user_id>`` so it
+    follows the user across browsers/devices.  Falls back to *session_id* for
+    anonymous callers.
+
+    Returns ``{'count': int, 'updated_at': float}``.
+    """
+    key = _analysis_key(session_id, user_id)
     now = time.time()
     with get_db() as conn:
         conn.execute(
@@ -337,21 +417,25 @@ def increment_analysis_count(session_id: str) -> Dict[str, Any]:
                VALUES (?, 1, ?)
                ON CONFLICT(session_id) DO UPDATE
                SET count = count + 1, updated_at = excluded.updated_at""",
-            (session_id, now),
+            (key, now),
         )
         row = conn.execute(
             "SELECT count, updated_at FROM session_analysis_counts WHERE session_id = ?",
-            (session_id,),
+            (key,),
         ).fetchone()
     return {"count": row["count"], "updated_at": row["updated_at"]}
 
 
-def get_analysis_count(session_id: str) -> int:
-    """Return the current analysis count for a session (0 if not found)."""
+def get_analysis_count(
+    session_id: str,
+    user_id: Optional[str] = None,
+) -> int:
+    """Return the current analysis count for a session or user (0 if not found)."""
+    key = _analysis_key(session_id, user_id)
     with get_db() as conn:
         row = conn.execute(
             "SELECT count FROM session_analysis_counts WHERE session_id = ?",
-            (session_id,),
+            (key,),
         ).fetchone()
     return row["count"] if row else 0
 
@@ -438,6 +522,43 @@ def get_user_feedback(user_id: str, limit: int = 100) -> List[Dict[str, Any]]:
             (user_id, limit),
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── User Preferences ──────────────────────────────────────
+# Generic key-value store for per-user UI preferences (e.g. tab order).
+# Values are JSON-encoded so any serialisable type can be stored.
+
+def save_user_preference(user_id: str, key: str, value: Any) -> None:
+    """Upsert a single preference value for a user."""
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO user_preferences (user_id, pref_key, pref_value, updated_at)
+               VALUES (?, ?, ?, ?)
+               ON CONFLICT(user_id, pref_key)
+               DO UPDATE SET pref_value = excluded.pref_value,
+                             updated_at  = excluded.updated_at""",
+            (user_id, key, json.dumps(value), time.time()),
+        )
+
+
+def get_user_preference(user_id: str, key: str) -> Optional[Any]:
+    """Return a single preference value, or None if not set."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT pref_value FROM user_preferences WHERE user_id = ? AND pref_key = ?",
+            (user_id, key),
+        ).fetchone()
+    return json.loads(row["pref_value"]) if row else None
+
+
+def get_all_user_preferences(user_id: str) -> Dict[str, Any]:
+    """Return all preferences for a user as a plain dict."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT pref_key, pref_value FROM user_preferences WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+    return {r["pref_key"]: json.loads(r["pref_value"]) for r in rows}
 
 
 # ── Admin Changelog ───────────────────────────────────────
@@ -682,16 +803,24 @@ def get_rule_candidates(
     status: Optional[str] = None,
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
+    # Left-join with gold_set_entries to include source image path on each candidate
+    base_sql = """
+        SELECT rc.*,
+               gs.image_path AS source_image_path
+        FROM rule_candidates rc
+        LEFT JOIN gold_set_entries gs ON rc.source_gold_set_id = gs.id
+        {where}
+        ORDER BY rc.created_at DESC
+        LIMIT ?
+    """
     with get_db() as conn:
         if status:
             rows = conn.execute(
-                "SELECT * FROM rule_candidates WHERE status = ? ORDER BY created_at DESC LIMIT ?",
-                (status, limit),
+                base_sql.format(where="WHERE rc.status = ?"), (status, limit)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT * FROM rule_candidates ORDER BY created_at DESC LIMIT ?",
-                (limit,),
+                base_sql.format(where=""), (limit,)
             ).fetchall()
     results = []
     for r in rows:
@@ -705,7 +834,11 @@ def get_rule_candidates(
 def get_rule_candidate(candidate_id: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         row = conn.execute(
-            "SELECT * FROM rule_candidates WHERE id = ?", (candidate_id,)
+            """SELECT rc.*, gs.image_path AS source_image_path
+               FROM rule_candidates rc
+               LEFT JOIN gold_set_entries gs ON rc.source_gold_set_id = gs.id
+               WHERE rc.id = ?""",
+            (candidate_id,),
         ).fetchone()
     if not row:
         return None
@@ -739,3 +872,142 @@ def delete_rule_candidate(candidate_id: str) -> bool:
     with get_db() as conn:
         c = conn.execute("DELETE FROM rule_candidates WHERE id = ?", (candidate_id,))
     return c.rowcount > 0
+
+
+# ── Simulation run history ────────────────────────────────────────────────────
+
+def save_simulation_run(
+    summary: dict,
+    projections: list,
+    run_by: str = None,
+) -> dict:
+    """Persist a completed simulation run and return it with its id + run_at."""
+    rid  = uuid.uuid4().hex
+    now  = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO simulation_runs (id, run_at, run_by, summary, projections) VALUES (?,?,?,?,?)",
+            (rid, now, run_by, json.dumps(summary), json.dumps(projections)),
+        )
+    return {"id": rid, "run_at": now, "run_by": run_by, "summary": summary, "projections": projections}
+
+
+def list_simulation_runs(limit: int = 20) -> List[Dict[str, Any]]:
+    """Return the most recent simulation runs, newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, run_at, run_by, summary, projections FROM simulation_runs ORDER BY run_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["summary"]     = json.loads(d["summary"])
+        d["projections"] = json.loads(d["projections"])
+        out.append(d)
+    return out
+
+
+def get_latest_simulation_run() -> Optional[Dict[str, Any]]:
+    """Return the single most recent simulation run, or None."""
+    runs = list_simulation_runs(limit=1)
+    return runs[0] if runs else None
+
+
+# ── API key health events ─────────────────────────────────────────────────────
+
+def log_api_health_event(provider: str, event_type: str, detail: str = None) -> None:
+    """Log an API key health event (401_error, probe_ok, probe_fail, startup_ok, startup_fail)."""
+    eid = uuid.uuid4().hex
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO api_health_events (id, created_at, provider, event_type, detail) VALUES (?,?,?,?,?)",
+            (eid, now, provider, event_type, detail),
+        )
+
+
+def get_api_health_events(limit: int = 50) -> List[Dict[str, Any]]:
+    """Return recent API health events, newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM api_health_events ORDER BY created_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_latest_api_health(provider: str) -> Optional[Dict[str, Any]]:
+    """Return the most recent health event for a given provider."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM api_health_events WHERE provider = ? ORDER BY created_at DESC LIMIT 1",
+            (provider,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+# ── VLM call metrics ──────────────────────────────────────────────────────────
+
+def log_vlm_call(provider: str, model: str, latency_ms: float, ok: bool,
+                 caller: str = None, error: str = None) -> None:
+    """Record a single VLM API call with timing and outcome."""
+    cid = uuid.uuid4().hex
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO vlm_call_metrics (id, called_at, provider, model, latency_ms, ok, caller, error) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (cid, now, provider, model, latency_ms, 1 if ok else 0, caller, error),
+        )
+
+
+def get_vlm_call_stats(hours: int = 24) -> Dict[str, Any]:
+    """Return aggregate VLM call stats for the last N hours."""
+    cutoff = time.time() - hours * 3600
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM vlm_call_metrics WHERE called_at > ? ORDER BY called_at DESC",
+            (cutoff,),
+        ).fetchall()
+
+    calls = [dict(r) for r in rows]
+    total = len(calls)
+    ok_count = sum(1 for c in calls if c["ok"])
+    err_count = total - ok_count
+    latencies = [c["latency_ms"] for c in calls if c["latency_ms"] is not None and c["ok"]]
+    avg_latency = round(sum(latencies) / len(latencies), 1) if latencies else None
+    p95_latency = round(sorted(latencies)[int((len(latencies) - 1) * 0.95)], 1) if len(latencies) >= 5 else None
+
+    # Bucketed timeline for sparkline.
+    # ≤48h → one bar per hour (up to 48 bars).
+    # >48h (7d) → one bar per day (up to 7 bars).
+    now = time.time()
+    if hours <= 48:
+        bucket_secs = 3600       # 1 hour per bar
+        n_buckets   = hours
+    else:
+        bucket_secs = 86400      # 1 day per bar
+        n_buckets   = hours // 24
+
+    buckets: Dict[int, int] = {}
+    for c in calls:
+        idx = int((now - c["called_at"]) // bucket_secs)
+        buckets[idx] = buckets.get(idx, 0) + 1
+    # hours_ago stores the bucket start in hours for tooltip consistency
+    hourly = [
+        {"hours_ago": h * (bucket_secs // 3600), "count": buckets.get(h, 0)}
+        for h in range(n_buckets)
+    ]
+
+    return {
+        "window_hours":   hours,
+        "total":          total,
+        "ok":             ok_count,
+        "errors":         err_count,
+        "error_rate":     round(err_count / total, 3) if total else 0.0,
+        "avg_latency_ms": avg_latency,
+        "p95_latency_ms": p95_latency,
+        "hourly":         hourly,
+        "recent":         calls[:10],
+    }

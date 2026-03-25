@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from auth.security import get_optional_user
 from db.database import get_analysis_count, get_active_subscription
+from db.provenance import get_internal_emails
 from engine.services.recommend_service import (
     build_recommend_result,
     ENGINE_VERSION,
@@ -91,16 +92,29 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
     # ── Paywall gate ─────────────────────────────────────────────────────────
     is_paid = False
     if user:
-        try:
-            sub = get_active_subscription(user.get("email", ""))
-            is_paid = sub is not None
-        except Exception:
-            pass
+        # Admin/internal emails always bypass the paywall — no subscription needed
+        user_email = user.get("email", "")
+        if user_email.lower() in get_internal_emails():
+            is_paid = True
+        else:
+            try:
+                sub = get_active_subscription(user_email)
+                is_paid = sub is not None
+            except Exception:
+                pass
 
     if not is_paid:
         session_id: str = (body.get("metadata") or {}).get("session_id", "")
+        if not session_id:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "SESSION_ID_REQUIRED", "message": "session_id is required in metadata."},
+            )
+        user_id: Optional[str] = None
+        if user:
+            user_id = user.get("id") or user.get("sub") or None
         if session_id:
-            count = get_analysis_count(session_id)
+            count = get_analysis_count(session_id, user_id=user_id)
             threshold = _DEFAULT_PAYWALL_THRESHOLD
             try:
                 from db.flags import get_flags_for_session

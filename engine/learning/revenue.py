@@ -265,7 +265,8 @@ def project_30_day_metrics(
         baseline_cvr     = float(sc["baseline_cvr"])
         target_cvr       = float(sc["target_cvr"])
         arpu             = float(sc.get("arpu", DEFAULT_ARPU_USD))
-        daily_signals    = float(sc.get("daily_new_signals", sessions_pd * 0.3))
+        _raw_signals     = sc.get("daily_new_signals")
+        daily_signals    = float(_raw_signals) if _raw_signals is not None else sessions_pd * 0.3
 
         threshold = MIN_SIGNALS.get(risk_level, MIN_SIGNALS["medium"])
 

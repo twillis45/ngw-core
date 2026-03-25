@@ -1,11 +1,12 @@
 import { apiFetch } from './lib/apiClient';
+import { authHeaders } from './data/authApi';
 
 /** POST /recommend and return the raw API response. */
 
 export async function fetchRecommendation(payload) {
   const resp = await apiFetch('/recommend', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
   });
 
@@ -28,6 +29,7 @@ export async function uploadReferenceImage(file) {
 
   const resp = await apiFetch('/api/upload-reference', {
     method: 'POST',
+    headers: { ...authHeaders() },  // JWT required — get_current_user gate
     body: form,
   });
 
@@ -47,7 +49,7 @@ export async function uploadReferenceImage(file) {
 export async function fetchShootMatch(wizardState) {
   const resp = await apiFetch('/api/shoot-match', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(wizardState),
   });
 

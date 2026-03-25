@@ -1,6 +1,7 @@
 import { useAppState, useDispatch } from '../context/AppContext';
 import { fetchRecommendation, fetchShootMatch, uploadReferenceImage } from '../api';
 import { transformForUI, transformShootMatch } from '../transform';
+import { getSessionId } from '../data/analytics';
 import { criteriaForGear, GEAR_CRITERIA, GEAR_SHORT_NAMES } from '../gearPresets';
 
 import GearModeToggle from '../components/GearModeToggle';
@@ -54,7 +55,7 @@ function buildPayload(state) {
   return {
     systems,
     input: { mood: effectiveMood },
-    metadata: {},
+    metadata: { session_id: getSessionId() || '' },
     modifiers_available: modifiers.length > 0 ? modifiers : ['softbox', 'umbrella'],
   };
 }

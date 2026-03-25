@@ -11,16 +11,37 @@
  *   pattern    — string — the lighting pattern they just nailed (e.g. "Rembrandt")
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { trackEvent } from '../data/analytics';
 import { broadcastConversion, trackExposure } from '../data/experimentTracker';
 import { getActiveInGroup } from '../data/flagsStore';
-import { getActivePricing } from '../data/pricingStore';
 import { markSuccessMomentShown } from '../data/paywallTrigger';
+import { useAdaptivePaywall } from '../hooks/useAdaptivePaywall';
+import PricingScreen from './PricingScreen';
 
-export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
-  const pricing = getActivePricing();
-  const ctaText = `Unlock Full Access — $${pricing.price_monthly}/mo`;
+/**
+ * SuccessMomentPaywall — Part 16.6
+ * Uses adaptive pricing: SUCCESS_MOMENT state → $59, outcome-anchor messaging.
+ *
+ * Props:
+ *   onUnlock    — called when user taps the upgrade CTA
+ *   onDismiss   — called when user dismisses
+ *   pattern     — string — the lighting pattern they just nailed (e.g. "Rembrandt")
+ *   usageCount  — number of analyses this session (for state detection)
+ */
+export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern, usageCount = 0 }) {
+  const { pricing, recordImpression, recordConverted, recordDismissed } = useAdaptivePaywall({
+    recentOutcome: 'nailed_it',
+    usageCount,
+    triggerType: 'success_moment',
+  });
+
+  const ctaText = pricing.messaging?.cta || `Keep This Result — $${pricing.priceMonthly}/mo`;
+  const headline = pricing.messaging?.headline || 'You just nailed it — make it repeatable';
+  const subheadline = pricing.messaging?.subheadline || 'Save this exact setup. Reproduce it on every shoot.';
+  const urgency = pricing.messaging?.urgency || null;
+
+  const [showPricing, setShowPricing] = useState(false);
 
   const patternLabel = pattern
     ? pattern.charAt(0).toUpperCase() + pattern.slice(1).replace(/_/g, ' ')
@@ -28,6 +49,7 @@ export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
 
   useEffect(() => {
     markSuccessMomentShown();
+    recordImpression();
 
     const pricingFlag = getActiveInGroup('pricing');
     const paywallFlag = getActiveInGroup('paywall_timing');
@@ -37,17 +59,27 @@ export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
     trackEvent('PAYWALL_TRIGGERED', {
       trigger: 'success_moment',
       type: 'value_triggered',
+      price: pricing.priceMonthly,
+      value_state: 'success_moment',
       pricing_flag: pricingFlag?.name || 'default',
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleUnlock() {
-    trackEvent('UPGRADE_CLICKED', { trigger: 'success_moment', type: 'value_triggered' });
-    broadcastConversion('UPGRADE_CLICKED', { trigger: 'success_moment' });
-    onUnlock?.();
+    recordConverted();
+    trackEvent('UPGRADE_CLICKED', { trigger: 'success_moment', type: 'value_triggered',
+                                    price: pricing.priceMonthly });
+    broadcastConversion('UPGRADE_CLICKED', { trigger: 'success_moment', price: pricing.priceMonthly });
+    setShowPricing(true);
+  }
+
+  function handlePricingUnlock(plan) {
+    setShowPricing(false);
+    onUnlock?.(plan);
   }
 
   function handleDismiss() {
+    recordDismissed();
     trackEvent('PAYWALL_DISMISSED', { trigger: 'success_moment', type: 'value_triggered' });
     onDismiss?.();
   }
@@ -66,21 +98,26 @@ export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
           </svg>
         </div>
 
-        {/* Headline */}
+        {/* Headline — adaptive (state-driven) */}
         <h2 className="success-paywall__headline">
-          That's the shot.
+          {headline}
         </h2>
 
         {/* Context line */}
         {patternLabel ? (
           <p className="success-paywall__sub">
-            You just nailed a {patternLabel} setup.
-            Lock in every setup like this.
+            You just nailed a {patternLabel} setup.{' '}
+            {subheadline}
           </p>
         ) : (
           <p className="success-paywall__sub">
-            Unlock every setup this precise — every time.
+            {subheadline}
           </p>
+        )}
+
+        {/* Urgency line (state-driven) */}
+        {urgency && (
+          <p className="success-paywall__urgency">{urgency}</p>
         )}
 
         {/* Bullets */}
@@ -112,9 +149,9 @@ export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
         </button>
 
         {/* Yearly badge */}
-        {pricing.price_yearly && (
+        {pricing.priceYearly && (
           <p className="success-paywall__yearly">
-            Save {pricing.yearly_discount_pct || 20}% · Pay yearly
+            Save {pricing.yearlyDiscountPct || 17}% · Pay yearly — ${pricing.priceYearly}/yr
           </p>
         )}
 
@@ -128,6 +165,15 @@ export default function SuccessMomentPaywall({ onUnlock, onDismiss, pattern }) {
         </button>
 
       </div>
+
+      {showPricing && (
+        <PricingScreen
+          trigger="success_moment"
+          source="SuccessMomentPaywall"
+          onClose={() => setShowPricing(false)}
+          onUnlock={handlePricingUnlock}
+        />
+      )}
     </div>
   );
 }

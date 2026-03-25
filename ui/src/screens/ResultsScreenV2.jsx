@@ -9,6 +9,7 @@ import useSignal from '../hooks/useSignal';
 import useMode from '../hooks/useMode';
 import usePaywallTrigger from '../hooks/usePaywallTrigger';
 import OutcomeCapture from '../components/OutcomeCapture';
+import OutcomeFeedback from '../components/OutcomeFeedback';
 import SuccessMomentPaywall from '../components/SuccessMomentPaywall';
 import ResultConfidenceExplainer from '../components/results/ResultConfidenceExplainer';
 import ResultPatternComparePrompt from '../components/results/ResultPatternComparePrompt';
@@ -399,6 +400,10 @@ export default function ResultsScreenV2() {
     }
   );
 
+  // MISSED_IT — failure event tracking
+  const [failureEventId, setFailureEventId] = useState(null);
+  const [showFailureFeedback, setShowFailureFeedback] = useState(false);
+
   // Shoot Mode paywall modal — shared by ShootModeCTA and FirstAttemptBanner
   const [shootPaywallOpen, setShootPaywallOpen] = useState(false);
   const [shootPaywallVariant, setShootPaywallVariant] = useState('default');
@@ -710,7 +715,7 @@ export default function ResultsScreenV2() {
           sendSignal(outcome);
           if (outcome === 'nailed_it') {
             fireGate('NAILED_IT');
-            // Attribute outcome to experiment variants — needed for CVR metrics
+            // Attribute NAILED_IT to experiment variants
             fetch('/api/paywall/event', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -723,7 +728,68 @@ export default function ResultsScreenV2() {
                 analysis_count: analysisCount,
                 active_flags: [],
               }),
-            }).catch(() => {}); // fire-and-forget — never block UX
+            }).catch(() => {});
+            // Record enriched NAILED_IT event for the intelligence system
+            // Symmetric with MISSED_IT → /api/failures/event
+            {
+              const _sr = result?.signalReliability || {};
+              const _sq = typeof _sr.overallSignalStrength === 'number' ? _sr.overallSignalStrength : null;
+              fetch('/api/intelligence/nailed-it', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  session_id: getSessionId(),
+                  user_id: user?.id || null,
+                  predicted_pattern: result?.bestMatch?.lightingPattern || 'unknown',
+                  confidence: result?.bestMatch?.reliabilityScore ?? null,
+                  signal_quality: _sq,
+                  blueprint_id: result?.bestMatch?.systemId || null,
+                  image_hash: result?.imageHash || null,
+                  subject_type: result?.subjectType || null,
+                  environment: result?.environment || null,
+                  shadow_density: result?.shadowDensity ?? null,
+                  lighting_geometry: result?.bestMatch?.lightingGeometry || null,
+                  edge_case_flags: result?.edgeCaseFlags || {},
+                }),
+              }).catch(() => {});
+            }
+          }
+          if (outcome === 'failed') {
+            // Fire MISSED_IT — enriched failure event for the learning pipeline
+            const edgeCaseFlags = result?.edgeCaseFlags || {};
+            const signalReliability = result?.signalReliability || {};
+            const signalQuality = typeof signalReliability.overallSignalStrength === 'number'
+              ? signalReliability.overallSignalStrength
+              : null;
+            fetch('/api/failures/event', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                session_id: getSessionId(),
+                user_id: user?.id || null,
+                predicted_pattern: result?.bestMatch?.lightingPattern || 'unknown',
+                confidence: result?.bestMatch?.reliabilityScore ?? null,
+                signal_quality: signalQuality,
+                blueprint_id: result?.bestMatch?.systemId || null,
+                image_hash: result?.imageHash || null,
+                edge_case_flags: edgeCaseFlags,
+              }),
+            })
+              .then(r => r.ok ? r.json() : null)
+              .then(data => {
+                if (data?.id) {
+                  setFailureEventId(data.id);
+                  // Show structured feedback prompt after a short delay
+                  setTimeout(() => setShowFailureFeedback(true), 600);
+                }
+              })
+              .catch(() => {});
+            trackEvent('OUTCOME_MISSED_IT', {
+              pattern: result?.bestMatch?.lightingPattern,
+              confidence: result?.bestMatch?.reliabilityScore,
+            });
           }
         }}
         loading={signalLoading}
@@ -732,6 +798,15 @@ export default function ResultsScreenV2() {
         mood={result.mood}
         pattern={result.bestMatch?.lightingPattern}
       />
+
+      {/* MISSED_IT structured feedback — appears after 'Off' is confirmed */}
+      {showFailureFeedback && failureEventId && (
+        <OutcomeFeedback
+          failureEventId={failureEventId}
+          sessionId={getSessionId()}
+          onDone={() => setShowFailureFeedback(false)}
+        />
+      )}
 
       </div>{/* end results-two-col__primary */}
       <div className="results-two-col__secondary">

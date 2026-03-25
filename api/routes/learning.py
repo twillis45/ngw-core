@@ -28,7 +28,7 @@ POST /lab/learning/monitoring/sweep
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -38,6 +38,9 @@ from db.database import (
     get_rule_candidate,
     update_rule_candidate,
     get_rule_candidates,
+    create_gold_set_entry,
+    get_gold_set_entries,
+    update_gold_set_entry,
 )
 from db.learning import (
     get_failure_clusters,
@@ -990,9 +993,8 @@ def simulate_revenue(
     projections = project_30_day_metrics(sc_dicts)
     summary     = summarise_revenue_impact(projections)
 
-    return {
-        "summary": summary,
-        "projections": [
+    from db.database import save_simulation_run
+    result_projections = [
             {
                 "scenario_name":          p.scenario_name,
                 "pattern_id":             p.pattern_id,
@@ -1017,5 +1019,188 @@ def simulate_revenue(
                 ],
             }
             for p in projections
-        ],
+        ]
+
+    # Persist run to DB so history survives logout/cache-clear
+    run_by = user.get("email") if user else None
+    saved  = save_simulation_run(summary=summary, projections=result_projections, run_by=run_by)
+
+    return {
+        "id":          saved["id"],
+        "run_at":      saved["run_at"],
+        "summary":     summary,
+        "projections": result_projections,
+    }
+
+
+@router.get("/revenue/simulate/history")
+def get_simulation_history(
+    limit: int = 20,
+    user=Depends(get_dev_user),
+):
+    """Return past simulation runs, newest first (max 20)."""
+    from db.database import list_simulation_runs
+    runs = list_simulation_runs(limit=min(limit, 20))
+    return {"runs": runs, "count": len(runs)}
+
+
+@router.get("/revenue/simulate/latest")
+def get_latest_simulation(user=Depends(get_dev_user)):
+    """Return the most recent simulation run, or 404 if none exists."""
+    from db.database import get_latest_simulation_run
+    run = get_latest_simulation_run()
+    if not run:
+        raise HTTPException(status_code=404, detail="No simulation runs found")
+    return run
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Gold Set — Seed from Reference Dataset
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# POST /lab/learning/gold-set/seed-from-reference
+#   Bulk-promotes reference dataset entries into the Gold Set.
+#   Defaults to tier=gold (benchmark_verified, entry_trust_score ≥ 0.85).
+#   Skips entries whose image_path is already in the Gold Set (idempotent).
+
+
+class SeedGoldSetRequest(BaseModel):
+    tier:        str            = Field("gold", description="dataset_tier to import ('gold', 'community', 'all')")
+    pattern_id:  Optional[str]  = Field(None, description="Limit to a single pattern. Omit for all patterns.")
+    image_paths: Optional[List[str]] = Field(None, description="If set, only process these specific image paths.")
+    force:       bool           = Field(False, description="If true, re-import even if already in the Gold Set (refresh expected_analysis).")
+    dry_run:     bool           = Field(False, description="If true, return what would be created without writing.")
+
+
+@router.post("/gold-set/seed-from-reference")
+def seed_gold_set_from_reference(
+    body: SeedGoldSetRequest,
+    user=Depends(get_dev_user),
+):
+    """
+    Promote reference dataset entries into the Gold Set.
+
+    Gold-tier reference entries already have:
+      - Verified image files on disk
+      - ground_truth.expected_pattern (authoritative label)
+      - Photographer = benchmark_verified + entry_trust_score ≥ 0.85
+
+    Each imported entry is created as status='approved' so it
+    immediately participates in candidate sandbox evaluations.
+
+    Idempotent — skips any image already present in the Gold Set.
+    """
+    from engine.reference_dataset import list_entries, DATASET_ROOT
+
+    # 1. Load reference entries matching the requested tier / pattern
+    filters: dict = {}
+    if body.tier and body.tier != "all":
+        filters["tier"] = body.tier
+    if body.pattern_id:
+        filters["pattern_id"] = body.pattern_id
+
+    ref_entries = list_entries(**filters)
+
+    # 2. Build set of image paths already in the Gold Set (for dedup / force-update)
+    existing = get_gold_set_entries(limit=5000)
+    existing_map = {e["image_path"]: e["id"] for e in existing}  # path → entry_id
+
+    # Normalise the caller-supplied image_paths filter to a set for O(1) lookup
+    filter_paths: Optional[set] = set(body.image_paths) if body.image_paths else None
+
+    created = []
+    skipped = []
+
+    for entry in ref_entries:
+        meta = entry.get("metadata") or {}
+        pattern_id   = entry.get("pattern_id") or meta.get("pattern_id")
+        reference_id = entry.get("reference_id") or meta.get("reference_id")
+        gt = meta.get("ground_truth") or {}
+
+        if not pattern_id or not reference_id:
+            skipped.append({"reason": "missing pattern_id or reference_id", "entry": str(entry)[:80]})
+            continue
+
+        # Verify image exists on disk
+        img_path = DATASET_ROOT / pattern_id / reference_id / "image.jpg"
+        if not img_path.exists():
+            img_path = DATASET_ROOT / pattern_id / reference_id / "image.png"
+        if not img_path.exists():
+            skipped.append({"reason": "image file not found on disk", "pattern": pattern_id, "reference_id": reference_id})
+            continue
+
+        # Use a consistent relative path from project root
+        rel_path = str(img_path.relative_to(DATASET_ROOT.parent.parent))
+
+        # If caller restricted to specific paths, skip anything not in that set
+        if filter_paths is not None and rel_path not in filter_paths:
+            continue
+
+        already_exists = rel_path in existing_map
+        if already_exists and not body.force:
+            skipped.append({"reason": "already in Gold Set", "pattern": pattern_id, "reference_id": reference_id})
+            continue
+
+        # Build expected_analysis from ground_truth
+        expected_analysis = {
+            "pattern":       gt.get("expected_pattern"),
+            "light_count":   gt.get("expected_light_count"),
+            "acceptable_patterns": gt.get("acceptable_patterns", []),
+            "acceptable_light_count_range": gt.get("acceptable_light_count_range"),
+            "key_direction": gt.get("expected_key_direction"),
+            "source":        "reference_dataset",
+            "reference_id":  reference_id,
+            "dataset_tier":  meta.get("dataset_tier", "gold"),
+            "trust_score":   meta.get("entry_trust_score"),
+        }
+
+        seed_notes = f"[Seeded from reference dataset — {meta.get('dataset_tier','gold')} tier] {meta.get('notes', '')}".strip()
+
+        if body.dry_run:
+            created.append({
+                "image_path": rel_path,
+                "pattern":    gt.get("expected_pattern"),
+                "notes":      meta.get("notes", "")[:80],
+                "action":     "update" if already_exists else "create",
+                "dry_run":    True,
+            })
+            continue
+
+        if already_exists and body.force:
+            # Update the existing Gold Set entry with refreshed reference data
+            entry_id = existing_map[rel_path]
+            update_gold_set_entry(
+                entry_id,
+                expected_analysis=expected_analysis,
+                notes=seed_notes,
+                status="approved",
+            )
+            created.append({
+                "id":         entry_id,
+                "image_path": rel_path,
+                "pattern":    gt.get("expected_pattern"),
+                "action":     "updated",
+            })
+        else:
+            gs_entry = create_gold_set_entry(
+                image_path=rel_path,
+                expected_analysis=expected_analysis,
+                notes=seed_notes,
+                status="approved",
+                created_by=user.get("email", "lab-seed"),
+            )
+            created.append({
+                "id":         gs_entry["id"],
+                "image_path": rel_path,
+                "pattern":    gt.get("expected_pattern"),
+                "action":     "created",
+            })
+        existing_map[rel_path] = created[-1]["id"]  # prevent dupes within this batch
+
+    return {
+        "created":      len(created),
+        "skipped":      len(skipped),
+        "dry_run":      body.dry_run,
+        "entries":      created,
+        "skip_reasons": skipped,
     }

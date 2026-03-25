@@ -122,7 +122,42 @@ const PRE_SHOOT_ITEMS = {
   ],
 };
 
-function getPostShootItems(mode, goodSigns, warnings) {
+function getSkinToneCheckItems(skinToneAdj, mode) {
+  if (!skinToneAdj) return [];
+  const tone = skinToneAdj.skinTone;
+
+  const items = [];
+
+  if (tone === 'dark') {
+    items.push(
+      { id: 'st-exposure', label: mode === 'assistant' ? 'Exposure +2/3–1 stop set' : 'Exposure set +2/3 to +1 stop over meter — dark skin is routinely underexposed by cameras',
+        ...(mode === 'learning' ? { note: 'Camera meters assume 18% grey — dark skin absorbs more light so it falls below that target. Add exposure before you shoot, not after.' } : {}) },
+      { id: 'st-histogram', label: mode === 'assistant' ? 'Histogram right-third (not clipping)' : 'Histogram: skin data sits in right third, no clipping — ETTR for dark skin',
+        ...(mode === 'learning' ? { note: 'Expose to the right (ETTR) — dark skin detail lives in the shadow-to-midtone transition. Clipped highlights are recoverable; crushed shadows are not.' } : {}) },
+      { id: 'st-shadow-detail', label: mode === 'assistant' ? 'Shadow detail visible (zoom in)' : 'Zoom in: shadow-side skin shows detail, not crushed black',
+        ...(mode === 'learning' ? { note: 'Deep shadows on dark skin lose texture fast. Lower fill ratio (1.5:1 to 2:1) is more forgiving — increase fill before reducing exposure.' } : {}) },
+      { id: 'st-wb', label: mode === 'assistant' ? 'WB locked — daylight 5500K' : 'White balance locked to Daylight (5500K) — not Auto',
+        ...(mode === 'learning' ? { note: 'AWB drifts across a session. Lock to Daylight (5500K) or slightly cool (5200–5400K) to preserve the natural richness of dark skin tones.' } : {}) },
+    );
+  } else if (tone === 'light') {
+    items.push(
+      { id: 'st-highlight', label: mode === 'assistant' ? 'Highlight specular check' : 'No blown specular highlights on skin — light skin clips fast',
+        ...(mode === 'learning' ? { note: 'Light skin reflects more — back off key power 1/3 stop if the right histogram edge clips. Specular on skin reads as overexposed even at zero histogram warning.' } : {}) },
+    );
+  } else if (tone === 'mixed') {
+    items.push(
+      { id: 'st-darkest', label: mode === 'assistant' ? 'Exposed for darkest subject' : 'Exposure locked to darkest subject — lighter subjects will hold',
+        ...(mode === 'learning' ? { note: 'Underexposing dark skin cannot be fixed in post. Lock exposure to the darkest subject; lighter subjects will have recoverable highlights.' } : {}) },
+      { id: 'st-mixed-wb', label: mode === 'assistant' ? 'WB locked — not Auto' : 'White balance locked (5500K) — never Auto across a multi-subject run',
+        ...(mode === 'learning' ? { note: 'AWB shifts between subjects, changing apparent skin tone consistency. Set once on your lightest subject, lock, and do not touch.' } : {}) },
+    );
+  }
+
+  return items;
+}
+
+function getPostShootItems(mode, goodSigns, warnings, skinToneAdj = null) {
+  const skinItems = getSkinToneCheckItems(skinToneAdj, mode);
   const evalItems = [
     ...(goodSigns?.length > 0
       ? goodSigns.map((s, i) => ({ id: `good-${i}`, label: typeof s === 'string' ? s : s.text }))
@@ -139,6 +174,7 @@ function getPostShootItems(mode, goodSigns, warnings) {
       ...(mode === 'learning' ? { note: 'Spill from the key or fill washing the background reduces separation and can blow out a white background unevenly.' } : {}) },
     { id: 'separation', label: mode === 'assistant' ? 'Subject separates cleanly' : 'Subject separates cleanly from background',
       ...(mode === 'learning' ? { note: 'Separation is driven by the ratio between background light and rim/hair light — adjust independently if this fails.' } : {}) },
+    ...skinItems,
   ];
   return evalItems;
 }
@@ -270,17 +306,24 @@ export default function ShootModeScreen() {
     return (
       <div className="screen">
         <div className="shoot-mode__empty">
-          <p>No setup loaded.</p>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            Run a recommendation first, then open Shoot Mode from the results.
+          <p style={{ fontWeight: 600, marginBottom: 6 }}>No setup loaded</p>
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', marginBottom: 16 }}>
+            Load a saved setup or run a new analysis to get your step-by-step shoot guide.
           </p>
-          <button
-            className="btn btn--primary btn--sm"
-            onClick={() => dispatch({ type: 'GO_BACK' })}
-            style={{ marginTop: 'var(--space-md)' }}
-          >
-            Go Back
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+            >
+              Load Saved Setup
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
+            >
+              Run New Analysis
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -806,7 +849,7 @@ export default function ShootModeScreen() {
           icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
           defaultOpen={false}
           mode={mode}
-          items={getPostShootItems(mode, result.goodSigns, result.warnings)}
+          items={getPostShootItems(mode, result.goodSigns, result.warnings, result.skinToneAdjustments)}
           storageKey="post_shoot"
         />
 

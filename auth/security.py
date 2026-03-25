@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
+from threading import Lock
 from typing import Optional
 
 from jose import JWTError, jwt
@@ -32,11 +34,34 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
+# ── JWT revocation (in-memory JTI blocklist) ────────────────
+# Survives within a process lifetime. On restart the blocklist clears, but
+# tokens also expire after ACCESS_TOKEN_EXPIRE_SECONDS (7 days) so the window
+# of exposure is bounded. For persistent revocation, swap this set for a
+# Redis SETEX store keyed by jti with TTL = token expiry.
+
+_revoked_jtis: set[str] = set()
+_revoked_lock = Lock()
+
+
+def revoke_token(jti: str) -> None:
+    """Add a token's JTI to the in-process revocation list."""
+    with _revoked_lock:
+        _revoked_jtis.add(jti)
+
+
+def is_revoked(jti: str) -> bool:
+    with _revoked_lock:
+        return jti in _revoked_jtis
+
+
 # ── JWT ────────────────────────────────────────────────────
 
 def create_access_token(user_id: str) -> str:
+    jti = str(uuid.uuid4())
     payload = {
         "sub": user_id,
+        "jti": jti,
         "iat": int(time.time()),
         "exp": int(time.time()) + ACCESS_TOKEN_EXPIRE_SECONDS,
     }
@@ -44,18 +69,45 @@ def create_access_token(user_id: str) -> str:
 
 
 def decode_token(token: str) -> Optional[str]:
-    """Return user_id or None."""
+    """Return user_id or None. Also checks JTI revocation."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        if jti and is_revoked(jti):
+            return None
         return payload.get("sub")
     except JWTError:
         return None
 
 
+def decode_token_payload(token: str) -> Optional[dict]:
+    """Return full payload dict or None (no revocation check — use for logout)."""
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return None
+
+
+# ── Dev mode ───────────────────────────────────────────────
+
+_DEV_MODE_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
+
+
+def _dev_mode_active() -> bool:
+    """Return True when NGW_DEV_MODE is set to a truthy value."""
+    return os.getenv("NGW_DEV_MODE", "").strip().lower() in ("1", "true", "yes")
+
+
 # ── Dependency ─────────────────────────────────────────────
 
 async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)):
-    """FastAPI dependency — returns user dict or raises 401."""
+    """FastAPI dependency — returns user dict or raises 401.
+
+    When NGW_DEV_MODE=1, bypasses all token checks and returns a mock dev user.
+    Never enable NGW_DEV_MODE in production.
+    """
+    if _dev_mode_active():
+        return _DEV_MODE_USER
     if not creds:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     user_id = decode_token(creds.credentials)

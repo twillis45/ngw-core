@@ -232,19 +232,31 @@ async def join_waitlist(payload: WaitlistRequest):
     return {"status": "ok", "already_registered": False}
 
 
+def _get_admin_secret() -> str:
+    """Return the admin secret for waitlist endpoints.
+
+    Prefer the dedicated NGW_ADMIN_SECRET env var (set this in production).
+    Falls back to NGW_JWT_SECRET only when the dedicated var is absent, so
+    existing deployments keep working without an immediate config change.
+    Separating the two secrets means a compromised JWT key doesn't also
+    expose admin endpoints, and vice-versa.
+    """
+    return os.getenv("NGW_ADMIN_SECRET") or os.getenv("NGW_JWT_SECRET", "")
+
+
 @router.get("")
 async def list_waitlist(request: Request):
     """
     Admin endpoint — returns all waitlist entries as JSON.
-    Requires ?secret=<NGW_JWT_SECRET> or the X-Admin-Token header.
-    Not production auth — just a lightweight guard against casual crawling.
+    Requires ?secret=<NGW_ADMIN_SECRET> or the X-Admin-Token header.
+    Set NGW_ADMIN_SECRET in the environment; falls back to NGW_JWT_SECRET.
     """
-    jwt_secret = os.getenv("NGW_JWT_SECRET", "")
-    provided   = (
+    admin_secret = _get_admin_secret()
+    provided     = (
         request.query_params.get("secret", "")
         or request.headers.get("X-Admin-Token", "")
     )
-    if not jwt_secret or provided != jwt_secret:
+    if not admin_secret or provided != admin_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     entries = _load()
@@ -255,15 +267,15 @@ async def list_waitlist(request: Request):
 async def run_sequence(request: Request):
     """
     Admin endpoint — manually trigger the follow-up email sequence check.
-    Requires ?secret=<NGW_JWT_SECRET> or the X-Admin-Token header.
+    Requires ?secret=<NGW_ADMIN_SECRET> or the X-Admin-Token header.
     Useful for testing and forcing a check without waiting for the 4-hour loop.
     """
-    jwt_secret = os.getenv("NGW_JWT_SECRET", "")
-    provided   = (
+    admin_secret = _get_admin_secret()
+    provided     = (
         request.query_params.get("secret", "")
         or request.headers.get("X-Admin-Token", "")
     )
-    if not jwt_secret or provided != jwt_secret:
+    if not admin_secret or provided != admin_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:

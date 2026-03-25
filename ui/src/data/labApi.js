@@ -20,8 +20,34 @@ async function labFetch(path, options = {}) {
   const res = await apiFetch(`/api/lab${path}`, { headers, ...options });
   const data = await res.json();
   if (!res.ok) {
-    const msg = data.detail || `Lab API error (${res.status})`;
-    throw new Error(msg);
+    // FastAPI validation errors return detail as an array of {loc, msg, type} objects
+    let msg;
+    if (Array.isArray(data.detail)) {
+      msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
+    } else {
+      msg = data.detail || `Lab API error (${res.status})`;
+    }
+    throw new Error(`[${res.status}] ${msg}`);
+  }
+  return data;
+}
+
+/** Fetch from top-level /api routes (intelligence, paywall, etc — not under /api/lab). */
+async function coreFetch(path, options = {}) {
+  const headers = { ...authHeaders(), ...options.headers };
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const res = await apiFetch(`/api${path}`, { headers, ...options });
+  const data = await res.json();
+  if (!res.ok) {
+    let msg;
+    if (Array.isArray(data.detail)) {
+      msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
+    } else {
+      msg = data.detail || `API error (${res.status})`;
+    }
+    throw new Error(`[${res.status}] ${msg}`);
   }
   return data;
 }
@@ -115,6 +141,26 @@ export async function evaluateGoldSet(limit = 50) {
   const params = new URLSearchParams();
   params.set('limit', String(limit));
   return labFetch(`/gold-set/evaluate?${params}`, { method: 'POST' });
+}
+
+/**
+ * Bulk-seed the Gold Set from reference dataset entries.
+ * @param {Object} opts
+ * @param {string} [opts.tier='gold']       - dataset_tier to import
+ * @param {string} [opts.patternId]         - limit to one pattern (optional)
+ * @param {boolean} [opts.dryRun=false]     - preview without writing
+ */
+export async function seedGoldSetFromReference({ tier = 'gold', patternId = null, imagePaths = null, force = false, dryRun = false } = {}) {
+  return labFetch('/learning/gold-set/seed-from-reference', {
+    method: 'POST',
+    body: JSON.stringify({
+      tier,
+      pattern_id:  patternId || null,
+      image_paths: imagePaths || null,
+      force,
+      dry_run:     dryRun,
+    }),
+  });
 }
 
 
@@ -310,6 +356,10 @@ export async function recordRelease(candidateId, { releaseVersion, expectedLift 
 
 export async function getMonitoringSummary() {
   return labFetch('/learning/monitoring');
+}
+
+export async function getMonitoringReport(attributionId) {
+  return labFetch(`/learning/monitoring/${attributionId}`);
 }
 
 export async function triggerMonitoringSweep(windowDays = 30) {
@@ -514,4 +564,110 @@ export async function simulateRevenue(scenarios) {
     method: 'POST',
     body: JSON.stringify({ scenarios }),
   });
+}
+
+/** Fetch simulation run history from the backend (survives logout/cache-clear). */
+export async function getSimulationHistory(limit = 20) {
+  return labFetch(`/learning/revenue/simulate/history?limit=${limit}`);
+}
+
+/** Fetch the latest simulation run from the backend, or null if none. */
+export async function getLatestSimulation() {
+  try {
+    return await labFetch('/learning/revenue/simulate/latest');
+  } catch (err) {
+    if (err.message?.includes('[404]')) return null;
+    throw err;
+  }
+}
+
+// ── Intelligence & Autonomy API ───────────────────────────────────────────────
+
+/** Get current global intelligence score (cached by default). */
+export async function getIntelligenceScore(days = 30, force = false) {
+  return coreFetch(`/intelligence/score?days=${days}&force=${force}`);
+}
+
+/** Get intelligence score trend history. */
+export async function getIntelligenceScoreHistory(days = 30, limit = 30) {
+  return coreFetch(`/intelligence/score/history?days=${days}&limit=${limit}`);
+}
+
+/** Get per-pattern intelligence scores. */
+export async function getIntelligencePatterns(days = 30, force = false) {
+  return coreFetch(`/intelligence/patterns?days=${days}&force=${force}`);
+}
+
+/** Get intelligence cluster report (failure + success clusters). */
+export async function getIntelligenceClusters(days = 30) {
+  return coreFetch(`/intelligence/clusters?days=${days}`);
+}
+
+/** Force-recompute global + pattern intelligence scores. */
+export async function forceComputeIntelligence(days = 30) {
+  return coreFetch(`/intelligence/compute?days=${days}`, { method: 'POST' });
+}
+
+/** Get nailed-it event stats. */
+export async function getNailedItStats(days = 30) {
+  return coreFetch(`/intelligence/nailed-it/stats?days=${days}`);
+}
+
+/** Get autonomy action queue (pending MEDIUM/HIGH risk actions). */
+export async function getAutonomyQueue() {
+  return coreFetch('/intelligence/autonomy/queue');
+}
+
+/** Get full autonomy audit log. */
+export async function getAutonomyLog({ limit = 50, riskTier = null, status = null } = {}) {
+  const params = new URLSearchParams({ limit });
+  if (riskTier) params.set('risk_tier', riskTier);
+  if (status) params.set('status', status);
+  return coreFetch(`/intelligence/autonomy/log?${params}`);
+}
+
+/** Get autonomy dashboard summary (active actions, rollbacks, guardrail status). */
+export async function getAutonomyDashboard(days = 7) {
+  return coreFetch(`/intelligence/autonomy/dashboard?days=${days}`);
+}
+
+/** Run one pass of the autonomous optimization loop manually. */
+export async function runAutonomyLoop(days = 30) {
+  return coreFetch(`/intelligence/autonomy/run?days=${days}`, { method: 'POST' });
+}
+
+/** Approve a queued MEDIUM/HIGH risk autonomy action. */
+export async function approveAutonomyAction(actionId, approvedBy) {
+  return coreFetch(`/intelligence/autonomy/approve/${actionId}`, {
+    method: 'POST',
+    body: JSON.stringify({ approved_by: approvedBy }),
+  });
+}
+
+/** Reject a queued autonomy action. */
+export async function rejectAutonomyAction(actionId, rejectedBy, reason = '') {
+  return coreFetch(`/intelligence/autonomy/reject/${actionId}`, {
+    method: 'POST',
+    body: JSON.stringify({ rejected_by: rejectedBy, reason }),
+  });
+}
+
+/** Get intelligence feature flags (thresholds, guardrails). */
+export async function getIntelligenceFlags() {
+  return coreFetch('/intelligence/flags');
+}
+
+/** Fetch API key health status (admin only). */
+export async function getApiKeyHealth() {
+  return coreFetch('/health/api-keys');
+}
+
+/** Force a live API key probe (admin only). */
+export async function probeApiKey() {
+  return coreFetch('/health/api-keys/probe', { method: 'POST' });
+}
+
+/** Return aggregated VLM call metrics for the last N hours. */
+export async function getApiMetrics(hours = 24) {
+  return labFetch(`/api-metrics?hours=${hours}`);
 }

@@ -341,6 +341,7 @@ def get_run_results(run_id: str) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """SELECT r.*,
                       c.pattern_id, c.difficulty, c.image_path,
+                      c.source_gold_set_id,
                       c.expected_analysis, c.expected_blueprint, c.expected_fixes
                FROM benchmark_results r
                JOIN benchmark_cases c ON r.case_id = c.id

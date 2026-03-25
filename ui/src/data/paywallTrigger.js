@@ -1,20 +1,22 @@
 /**
  * paywallTrigger — pure function to evaluate which paywall (if any) should fire.
  *
- * Priority hierarchy:
- *   1. SUCCESS_MOMENT  — user tapped "Nailed it" or saved a setup (highest intent)
- *   2. SHOOT_MODE      — user attempted to enter Shoot Mode
- *   3. ANALYSIS_LIMIT  — analysis count >= threshold
- *   4. PASSIVE_NUDGE   — analysis count >= 2 (non-blocking)
+ * Priority hierarchy (Part 16.4):
+ *   1. SUCCESS_MOMENT   — user tapped "Nailed it" or saved a setup (highest intent)
+ *   2. FAILURE_TENSION  — user tapped "Missed it" (fix-focused, urgency)
+ *   3. SHOOT_MODE       — user attempted to enter Shoot Mode
+ *   4. ANALYSIS_LIMIT   — analysis count >= threshold
+ *   5. PASSIVE_NUDGE    — analysis count >= 2 (non-blocking)
  */
 
 import { getPaywallConfig } from './pricingStore';
 
 export const TRIGGER = {
-  SUCCESS_MOMENT: 'success_moment',
-  SHOOT_MODE:     'shoot_mode',
-  ANALYSIS_LIMIT: 'analysis_limit',
-  PASSIVE_NUDGE:  'passive_nudge',
+  SUCCESS_MOMENT:  'success_moment',
+  FAILURE_TENSION: 'failure_tension',
+  SHOOT_MODE:      'shoot_mode',
+  ANALYSIS_LIMIT:  'analysis_limit',
+  PASSIVE_NUDGE:   'passive_nudge',
 };
 
 const COOLDOWN_KEY = 'ngw_success_paywall_ts';
@@ -46,14 +48,22 @@ export function evaluatePaywallTrigger({ isPaid, analysisCount, event }) {
   const paywallCfg = getPaywallConfig();
   const threshold  = paywallCfg.threshold ?? 3;
 
-  // Priority 1 — success moment
+  // Priority 1 — success moment (highest intent, outcome anchor)
   if ((event === 'NAILED_IT' || event === 'ANALYSIS_SAVED') && !isSuccessCoolingDown()) {
-    return { trigger: TRIGGER.SUCCESS_MOMENT, paywallType: 'value_triggered', copyVariant: null };
+    return { trigger: TRIGGER.SUCCESS_MOMENT, paywallType: 'value_triggered', copyVariant: null,
+             recentOutcome: 'nailed_it' };
   }
 
-  // Priority 2 — shoot mode entry
+  // Priority 2 — failure tension (fix-focused, urgency)
+  if (event === 'MISSED_IT') {
+    return { trigger: TRIGGER.FAILURE_TENSION, paywallType: 'value_triggered', copyVariant: null,
+             recentOutcome: 'missed_it' };
+  }
+
+  // Priority 3 — shoot mode entry
   if (event === 'SHOOT_MODE_ENTER') {
-    return { trigger: TRIGGER.SHOOT_MODE, paywallType: 'shoot_mode', copyVariant: null };
+    return { trigger: TRIGGER.SHOOT_MODE, paywallType: 'shoot_mode', copyVariant: null,
+             recentOutcome: null };
   }
 
   // Priority 3 — analysis limit

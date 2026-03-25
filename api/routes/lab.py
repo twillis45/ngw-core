@@ -220,6 +220,7 @@ async def lab_analyze(
             "reference_analysis": ar.reference_analysis.model_dump() if ar.reference_analysis else {},
             "vlm": vlm_data,
             "vlm_available": vlm_is_available,
+            "vlm_error": ar.vlm_error,  # None on success; error string if VLM call failed
             "vlm_reconstruction": ar.vlm_reconstruction,
             "cv": cv_data,
             "classification": ar.classification,
@@ -1244,3 +1245,24 @@ async def reprocess_dataset_entry(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Reprocessing failed: {exc}")
+
+
+# ── API Metrics ────────────────────────────────────────────────────────────────
+
+@router.get("/api-metrics")
+async def get_api_metrics(
+    hours: int = Query(24, ge=1, le=168),
+    user: Dict = Depends(get_dev_user),
+):
+    """
+    Return aggregated VLM call metrics for the last N hours.
+    Includes call count, error rate, avg/p95 latency, hourly buckets, and recent calls.
+    Also reports whether VLM is currently configured so the UI can show a clear state.
+    """
+    from db.database import get_vlm_call_stats
+    from engine.vlm import vlm_available, _VLM_PROVIDER, _VLM_MODEL
+    stats = get_vlm_call_stats(hours=hours)
+    stats["vlm_configured"] = vlm_available()
+    stats["vlm_provider"]   = _VLM_PROVIDER
+    stats["vlm_model"]      = _VLM_MODEL or None
+    return stats

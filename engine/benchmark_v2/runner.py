@@ -18,10 +18,14 @@ Regression rules (hard-coded per spec):
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Per-case timeout — prevents a single stuck image from blocking the entire run
+CASE_TIMEOUT_SECONDS = 30
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 
@@ -74,10 +78,36 @@ def run_benchmark(
     prev_overall = prev_run["overall_score"] if prev_run else None
     prev_pattern = get_previous_pattern_scores(run_id)
 
-    # 5. Run and score each case
+    # 5. Run and score each case — parallel with per-case timeout.
+    # Workers = min(8, case_count) to avoid saturating CPU on large runs.
     per_case: List[Dict[str, Any]] = []
-    for case in cases:
-        per_case.append(_run_single_case(case, run_id, fix_rates))
+    max_workers = min(8, len(cases))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {
+            pool.submit(_run_single_case, case, run_id, fix_rates): case
+            for case in cases
+        }
+        for future, case in futures.items():
+            try:
+                per_case.append(future.result(timeout=CASE_TIMEOUT_SECONDS))
+            except FuturesTimeoutError:
+                logger.warning("Case %s timed out after %ss", case.get("id"), CASE_TIMEOUT_SECONDS)
+                per_case.append({
+                    "case_id": case.get("id"), "run_id": run_id,
+                    "error": f"Timed out after {CASE_TIMEOUT_SECONDS}s",
+                    "pattern_correct": False, "final_score": 0.0,
+                    "blueprint_score": 0.0, "confidence_error": 0.0,
+                    "pattern_id": case.get("pattern_id", "unknown"),
+                })
+            except Exception as exc:
+                logger.warning("Case %s failed: %s", case.get("id"), exc)
+                per_case.append({
+                    "case_id": case.get("id"), "run_id": run_id,
+                    "error": str(exc)[:200],
+                    "pattern_correct": False, "final_score": 0.0,
+                    "blueprint_score": 0.0, "confidence_error": 0.0,
+                    "pattern_id": case.get("pattern_id", "unknown"),
+                })
 
     # 6. Aggregate
     valid = [r for r in per_case if not r.get("error")]
@@ -178,7 +208,8 @@ def _run_single_case(
     image_path = case["image_path"]
     exp_bp     = case.get("expected_blueprint") or {}
     exp_an     = case.get("expected_analysis") or {}
-    exp_pat    = exp_an.get("lighting_family") or exp_an.get("expected_pattern") or pattern_id
+    exp_pat            = exp_an.get("lighting_family") or exp_an.get("expected_pattern") or pattern_id
+    acceptable_pats    = exp_an.get("acceptable_patterns") or []
 
     try:
         analysis = _run_pipeline(image_path)
@@ -187,12 +218,15 @@ def _run_single_case(
         pred_blueprint  = extract_predicted_blueprint(analysis)
         pred_confidence = extract_predicted_confidence(analysis)
 
-        pat_score  = score_pattern(exp_pat, pred_pattern)
+        pat_score  = score_pattern(exp_pat, pred_pattern, acceptable_patterns=acceptable_pats)
         bp_score   = score_blueprint(exp_bp, pred_blueprint)
         fix_score  = score_fix_effectiveness(pattern_id, fix_rates)
 
-        # Use live success rate as proxy for actual outcome (falls back to pat_score)
-        actual_rate = fix_rates.get(f"{pattern_id}:success_rate", pat_score)
+        # Use historical fix success rate as actual outcome for calibration.
+        # Fall back to None (neutral 0.5) when no fix rate data exists — using
+        # pat_score (0 or 1) as the actual_rate distorts calibration because
+        # CV-only confidence scores are legitimately lower than binary outcomes.
+        actual_rate = fix_rates.get(f"{pattern_id}:success_rate") or None
         conf_score, conf_error = score_confidence(pred_confidence, actual_rate)
 
         final_score = compute_final_score(pat_score, bp_score, fix_score, conf_score)
@@ -277,10 +311,16 @@ def _run_pipeline(image_path: str) -> Dict[str, Any]:
         from dataclasses import asdict
         return asdict(result)
     except Exception:
+        li = getattr(result, "lighting_intel", {})
         return {
+            # Top-level resolved pattern — the authoritative output of the pipeline
+            "authoritative_pattern":        getattr(result, "authoritative_pattern", None),
+            "authoritative_pattern_source": getattr(result, "authoritative_pattern_source", None),
+            "pattern_confidence":           getattr(result, "pattern_confidence", None),
             "reference_analysis": getattr(result, "reference_analysis", {}),
             "classification":     getattr(result, "classification", {}),
-            "lighting_intel":     getattr(result, "lighting_intel", {}),
+            # Convert LightingInference object → dict so _get() path lookups work
+            "lighting_intel":     vars(li) if hasattr(li, "__dict__") else (li or {}),
             "solver":             getattr(result, "solver_result", {}),
             "cv":                 getattr(result, "vision_data", {}),
             "vlm_reconstruction": getattr(result, "vlm_reconstruction", {}),

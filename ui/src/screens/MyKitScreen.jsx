@@ -8,6 +8,7 @@ import VendorLogo from '../components/VendorLogo';
 import { fetchRecommendation } from '../api';
 import { transformForUI } from '../transform';
 import { criteriaForGear } from '../gearPresets';
+import { getSessionId } from '../data/analytics';
 import useSettings from '../hooks/useSettings';
 
 function getBHUrl(query) {
@@ -117,7 +118,7 @@ export default function MyKitScreen() {
           environment: recipe.environment,
           ceiling_height: recipe.ceilingHeight,
         },
-        metadata: { source: 'recipe', recipeId: recipe.id },
+        metadata: { source: 'recipe', recipeId: recipe.id, session_id: getSessionId() || '' },
         modifiers_available: recipe.modifiers.length > 0
           ? recipe.modifiers
           : ['beauty_dish', 'softbox', 'umbrella', 'reflector', 'grid_spot'],

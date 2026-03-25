@@ -809,6 +809,7 @@ class AnalysisResult:
         "cue_report", "cue_inference_result", "lighting_intel",
         "reference_analysis",
         "pipeline_results", "vlm_description", "vlm_reconstruction",
+        "vlm_error",
         "solver_result", "debug_data", "notes",
         "authoritative_pattern", "authoritative_pattern_source",
         "pattern_candidates", "pattern_confidence", "pattern_confidence_label",
@@ -828,6 +829,7 @@ class AnalysisResult:
         self.pipeline_results: Optional[Dict[str, Any]] = None
         self.vlm_description: Any = None
         self.vlm_reconstruction: Any = None
+        self.vlm_error: Optional[str] = None
         self.solver_result: Any = None
         self.debug_data: Dict[str, Any] = {}
         self.notes: List[str] = []
@@ -872,6 +874,17 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     if not cr or not cls:
         return None
 
+    # Face presence check — available before FaceValidation is computed.
+    # Used to guard specialty rules that only apply to portrait/human subjects.
+    _face_box = result.debug_data.get("face_box") if result.debug_data else None
+    _face_detected = _face_box is not None
+    # Secondary: region_attribution face detection score
+    if not _face_detected and result.vision_data:
+        _ra = result.vision_data.get("region_attribution", {})
+        _fds = _ra.get("face_detection_score")
+        if _fds is not None and _fds > 0.5:
+            _face_detected = True
+
     # Guard: cue_report must be a real VisualCueReport, not a dict stub
     if not hasattr(cr, "contrast_ratio"):
         return None
@@ -887,6 +900,22 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     bg_bright = bg and getattr(bg, "brightness_relative", "") == "brighter" if bg else False
     bg_dark = bg and getattr(bg, "brightness_relative", "") in ("darker", "dark") if bg else False
     mood = (cls.get("mood") or "").lower()
+
+    # ── Correction: golden_hour without face ─────────────────────────
+    # When reference_read classifies a scene as golden_hour but no face
+    # is detected, the classification may be a product/tabletop shot with
+    # warm tones that triggered the outdoor-sun heuristic.  Override the
+    # prior golden_hour classification with a more appropriate specialty
+    # (tabletop_soft_product) when all of the following hold:
+    #   1. Current base is already "golden_hour" (set by reference_read)
+    #   2. No face detected
+    #   3. Mood is not outdoors/portrait (editorial, commercial, or neutral)
+    # This returns early so the rest of the specialty rules are skipped.
+    if base == "golden_hour" and not _face_detected:
+        _gh_mood = mood in ("editorial", "commercial", "natural", "")
+        if _gh_mood:
+            # Use tabletop_soft_product as the correction for no-face warm shots
+            return "tabletop_soft_product"
 
     # ── High-key: mood classifier says "high_key" ───────────────────
     # Pixel-level brightness/contrast are unreliable for high-key detection
@@ -914,12 +943,15 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # When the mood classifier says "editorial" or "beauty" instead of
     # "high_key" but the image is clearly high-key (bright background +
     # high overall brightness), promote to high_key.  Only fire for
-    # soft/flat base patterns that are compatible with multi-light
-    # high-key setups — exclude dramatic/directional patterns like
-    # rembrandt, triangle, split, short.
-    # For non-clamshell bases the bright-bg guard is sufficient.
+    # soft base patterns compatible with multi-light high-key setups —
+    # exclude dramatic/directional patterns (rembrandt, triangle, split,
+    # short) AND flat_fashion.  flat_fashion is excluded because white-
+    # seamless catalog shots naturally have bright backgrounds — they are
+    # on-axis even studio setups, not high-key scene lighting.  Promoting
+    # flat_fashion to high_key produces systematic false positives on
+    # catalog/product portraits.
     if bg_bright and brightness in ("high", "very_high") and \
-       base in ("loop", "butterfly", "broad", "flat_fashion"):
+       base in ("loop", "butterfly", "broad"):
         return "high_key"
     # Clamshell in a bright high-key environment (beauty dish editorial) can
     # also be high_key, but requires an additional guard: the catchlight
@@ -978,10 +1010,14 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     if env and getattr(env, "is_natural_light", False):
         env_type = getattr(env, "environment_type", "")
         cct = getattr(li, "detected_cct_kelvin", None) if li else None
-        if cct and cct < 4000 and env_type == "outdoor_sun":
+        # Guard: require face detection for golden_hour classification.
+        # Warm-toned product shots (no face) can trigger CCT < 4000K and
+        # outdoor_sun misclassification — requiring a face prevents these
+        # false positives while preserving accurate golden_hour on portraits.
+        if cct and cct < 4000 and env_type == "outdoor_sun" and _face_detected:
             return "golden_hour"
         # Fallback: warm color convergence without explicit CCT
-        if env_type in ("outdoor_sun", "outdoor_shade") and bg_bright:
+        if env_type in ("outdoor_sun", "outdoor_shade") and bg_bright and _face_detected:
             _esc = getattr(cr, "environmental_shadow_continuity", None)
             _env_hints = getattr(_esc, "environment_hints", []) if _esc else []
             if "warm_overall" in _env_hints and "warm_background" in _env_hints:
@@ -994,11 +1030,20 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # golden-hour character.  Restrict to diffuse base patterns only —
     # hard-edge patterns (split, rembrandt) would indicate a studio key,
     # not a golden-hour wash, even with warm environment hints.
+    #
+    # Guard: require a detected face OR confirmed natural light.
+    # Without a face (e.g. product/tabletop shots with warm backgrounds),
+    # warm_overall + warm_background signals are too ambiguous to reliably
+    # indicate golden hour vs. warm-toned studio/product lighting.
+    # This prevents tabletop product shots with warm surfaces from being
+    # misclassified as golden_hour.
+    _env_is_natural = env and getattr(env, "is_natural_light", False)
     if bg_bright and base in ("butterfly", "loop", "broad", "short"):
-        _esc2 = getattr(cr, "environmental_shadow_continuity", None)
-        _hints2 = getattr(_esc2, "environment_hints", []) if _esc2 else []
-        if "warm_overall" in _hints2 and "warm_background" in _hints2:
-            return "golden_hour"
+        if _face_detected or _env_is_natural:
+            _esc2 = getattr(cr, "environmental_shadow_continuity", None)
+            _hints2 = getattr(_esc2, "environment_hints", []) if _esc2 else []
+            if "warm_overall" in _hints2 and "warm_background" in _hints2:
+                return "golden_hour"
 
     # ── Overcast natural: outdoor shade + soft + low contrast ─────────
     # Requires: outdoor_shade + soft shadows + low contrast.
@@ -1121,10 +1166,36 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # (hair/rim/kicker) that distinguishes the Hurley triangle from clamshell.
     # Guard: light_count≥4 routes to high_key above (high-key beauty-dish
     # specular inflation); only count==3 fires here.
+    # Guard: mood=high_key + bright background indicates a multi-light
+    # high-key setup where the third catchlight is a background/hair light
+    # rather than a Hurley kicker.  Do not classify as triangle in that case
+    # — the mood and background signals are more reliable than light_count=3
+    # in bright studio environments where specular reflections inflate count.
     if base == "clamshell":
         _htri_lc = getattr(li, "light_count", 0) if li else 0
-        if _htri_lc == 3:
+        _is_high_key_mood = mood == "high_key" or (bg_bright and brightness in ("high", "very_high"))
+        if _htri_lc == 3 and not _is_high_key_mood:
             return "triangle"
+
+    # ── Tabletop soft product: studio overhead product shot ───────────────
+    # Studio tabletop product shots use an overhead or near-overhead softbox,
+    # producing butterfly-like geometry on a small subject with no face.
+    # Key discriminators vs. portrait butterfly/clamshell:
+    #   1. No face detected (product shots have no human face)
+    #   2. Base is butterfly or broad (overhead/near-overhead key)
+    #   3. Background is even/neutral — not dramatically bright or dark
+    # The mood classifier often classifies product shots as "editorial" or
+    # "natural" — not high_key — since the lighting is product-optimised.
+    # Guard: only fire when mood is not "high_key" (high_key product setups
+    # have their own path); exclude when natural light is confirmed (window
+    # products are handled separately).
+    if not _face_detected and base in ("butterfly", "broad", "loop"):
+        _is_product_mood = (cls.get("mood") or "").lower() in ("editorial", "natural", "commercial", "")
+        _not_natural = not _env_is_natural
+        _not_high_key_mood = (cls.get("mood") or "").lower() != "high_key"
+        _bg_neutral = not bg_bright and not bg_dark  # neutral product background
+        if _is_product_mood and _not_natural and _not_high_key_mood and _bg_neutral:
+            return "tabletop_soft_product"
 
     # ── Tabletop soft product: dappled foliage shadows → outdoor product ──
     # Tabletop product or beauty shots outdoors or near foliage produce
@@ -1502,6 +1573,7 @@ def analyze_image(
         result.description = {k: v for k, v in raw.items() if not k.startswith("_")}
         result.cue_report = raw.get("_cue_report")
         result.vlm_description = raw.get("_vlm_description")
+        result.vlm_error = raw.get("_vlm_error")
         result.vision_data = raw.get("vision", {})
         result.classification = raw.get("classification", {})
 

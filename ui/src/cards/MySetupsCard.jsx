@@ -4,10 +4,12 @@ import { loadSetups, getStylePattern } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
 import CardIcon from '../components/CardIcon';
 
+const _DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 function formatDate(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleDateString(undefined, { timeZone: _DEVICE_TZ, month: 'short', day: 'numeric' });
 }
 
 export default function MySetupsCard() {

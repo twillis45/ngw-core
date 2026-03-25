@@ -24,10 +24,11 @@ import logging
 from typing import Optional
 
 import stripe
-from fastapi import APIRouter, HTTPException, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, Request, Header
 from pydantic import BaseModel
 
-from db.database import create_subscription
+from auth.security import get_optional_user
+from db.database import create_subscription, cancel_subscription_by_stripe_id
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +76,34 @@ class CheckoutSessionResponse(BaseModel):
 # POST /api/stripe/create-checkout-session
 # ---------------------------------------------------------------------------
 
+_ALLOWED_ORIGINS = [o.strip() for o in os.getenv('ALLOWED_ORIGINS', '').split(',') if o.strip()]
+
+
 @router.post('/stripe/create-checkout-session', response_model=CheckoutSessionResponse)
-async def create_checkout_session(body: CheckoutSessionRequest):
-    """Create a Stripe Checkout Session and return the hosted checkout URL."""
+async def create_checkout_session(
+    body: CheckoutSessionRequest,
+    user=Depends(get_optional_user),
+):
+    """Create a Stripe Checkout Session and return the hosted checkout URL.
+
+    Requires a valid JWT — only registered users can initiate checkout.
+    This prevents anonymous actors from creating Stripe sessions on behalf
+    of the app, which could be used for phishing/misuse of the Stripe account.
+    """
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required to start checkout. Please log in first.",
+        )
 
     if body.plan != 'pro':
         raise HTTPException(400, f'Unsupported plan: {body.plan}')
+
+    # Validate success_url and cancel_url origins to prevent open-redirect abuse.
+    if _ALLOWED_ORIGINS:
+        for url in (body.success_url, body.cancel_url):
+            if not any(url.startswith(o) for o in _ALLOWED_ORIGINS):
+                raise HTTPException(400, 'Invalid redirect URL origin.')
 
     price_id = PRICE_IDS.get(body.billing_period)
     if not price_id:
@@ -134,9 +157,10 @@ async def stripe_webhook(
             logger.warning('Stripe webhook signature verification failed')
             raise HTTPException(400, 'Invalid signature')
     else:
-        # No secret configured — accept without verification (dev only)
-        import json
-        event = json.loads(payload)
+        # No secret configured — reject rather than accept unverified events.
+        # Set STRIPE_WEBHOOK_SECRET in the environment to enable webhooks.
+        logger.error('Stripe webhook received but STRIPE_WEBHOOK_SECRET is not configured — rejecting')
+        raise HTTPException(400, 'Webhook secret not configured — cannot verify event')
 
     event_type = event.get('type') if isinstance(event, dict) else event.type
 
@@ -178,5 +202,27 @@ async def stripe_webhook(
                 logger.info('Subscription persisted for session=%s', session_id)
             except Exception as exc:
                 logger.error('Failed to persist subscription for session=%s: %s', session_id, exc)
+
+    elif event_type == 'customer.subscription.deleted':
+        # Stripe fires this when a subscription is cancelled (immediately or at period end).
+        # Mark the local subscription record as cancelled so access is revoked promptly.
+        sub_obj = event['data']['object'] if isinstance(event, dict) else event.data.object
+        stripe_sub_id = (
+            sub_obj.get('id') if isinstance(sub_obj, dict) else getattr(sub_obj, 'id', None)
+        )
+        logger.info('Subscription cancelled: stripe_subscription_id=%s', stripe_sub_id)
+        if stripe_sub_id:
+            try:
+                updated = cancel_subscription_by_stripe_id(stripe_sub_id)
+                if updated:
+                    logger.info('Subscription marked cancelled: stripe_subscription_id=%s', stripe_sub_id)
+                else:
+                    logger.warning(
+                        'No active subscription found to cancel for stripe_subscription_id=%s', stripe_sub_id
+                    )
+            except Exception as exc:
+                logger.error(
+                    'Failed to cancel subscription for stripe_subscription_id=%s: %s', stripe_sub_id, exc
+                )
 
     return {'received': True}

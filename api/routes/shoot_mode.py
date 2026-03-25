@@ -13,8 +13,11 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from auth.security import get_optional_user
+from db.database import get_active_subscription
+from db.provenance import get_internal_emails
 
 router = APIRouter()
 
@@ -361,9 +364,22 @@ class EvaluateTestShotRequest(BaseModel):
 
 # ── Endpoints ─────────────────────────────────────────────
 
+def _is_authorized(user) -> bool:
+    """Return True if the user has access to paid features (active sub or admin email)."""
+    if not user:
+        return False
+    email = user.get("email", "")
+    if email.lower() in get_internal_emails():
+        return True
+    sub = get_active_subscription(email)
+    return sub is not None
+
+
 @router.post("/shoot-mode/start")
-def shoot_mode_start(req: ShootModeStartRequest) -> Dict[str, Any]:
-    """Transform a shoot-match result into step-by-step workflow."""
+def shoot_mode_start(req: ShootModeStartRequest, user=Depends(get_optional_user)) -> Dict[str, Any]:
+    """Transform a shoot-match result into step-by-step workflow. Requires active subscription."""
+    if not _is_authorized(user):
+        raise HTTPException(status_code=402, detail="Shoot Mode requires a Pro subscription.")
     if req.role not in ("photographer", "assistant", "second_shooter"):
         raise HTTPException(status_code=422, detail="Invalid role. Use: photographer, assistant, second_shooter")
 
@@ -404,8 +420,10 @@ def shoot_mode_start(req: ShootModeStartRequest) -> Dict[str, Any]:
 
 
 @router.post("/shoot-mode/evaluate-test-shot")
-async def evaluate_test_shot(req: EvaluateTestShotRequest) -> Dict[str, Any]:
-    """Analyze a test shot and provide basic feedback."""
+async def evaluate_test_shot(req: EvaluateTestShotRequest, user=Depends(get_optional_user)) -> Dict[str, Any]:
+    """Analyze a test shot and provide basic feedback. Requires active subscription."""
+    if not _is_authorized(user):
+        raise HTTPException(status_code=402, detail="Shoot Mode requires a Pro subscription.")
     image_path = Path(req.testShotPath)
     # Web-relative paths starting with '/' are treated as absolute by Path()
     # but are relative to the project root — strip the leading slash and retry.

@@ -8,6 +8,7 @@ import ZoomOverlay from '../cards/ZoomOverlay';
 import usePaywall from '../hooks/usePaywall';
 import { trackEvent } from '../data/analytics';
 import { getToken } from '../data/authApi';
+import { resolveError } from '../lib/errors';
 
 // ── Pattern / mood option lists — fallback defaults (overridden by /api/config) ─
 
@@ -37,8 +38,16 @@ const DEFAULT_ISSUE_TYPES = [
 
 // ── Admin: submit ground truth ─────────────────────────────────────────────
 
+// Option constants for correction form
+const SHADOW_PATTERN_OPTIONS = ['rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad', 'short', 'rim_only', 'high_key', 'low_key', 'natural_window', 'dramatic_key', 'three_point', 'beauty_dish', 'unknown'];
+const SOURCE_DIRECTION_OPTIONS = ['left-45', 'right-45', 'left-90', 'right-90', 'front', 'top', 'left-135', 'right-135', 'overhead', 'unknown'];
+const FILL_OPTIONS = ['none', 'subtle', 'moderate', 'strong', 'unknown'];
+const LIGHTING_FAMILY_OPTIONS = ['broad', 'narrow', 'front', 'split', 'rim', 'high_key', 'low_key', 'beauty', 'unknown'];
+const ENVIRONMENT_OPTIONS = ['studio', 'indoor_natural', 'outdoor', 'mixed', 'unknown'];
+
 async function submitGroundTruth({
   imagePath, expectedPattern, expectedMood, lightCount, notes,
+  shadowPattern, sourceDirection, fillPresence, lightingFamily, environment,
 }) {
   const token = getToken();
   const headers = {
@@ -46,8 +55,13 @@ async function submitGroundTruth({
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const corrections = {};
-  if (lightCount) corrections.light_count = parseInt(lightCount, 10);
-  if (notes)      corrections.notes       = notes;
+  if (lightCount)      corrections.light_count      = parseInt(lightCount, 10);
+  if (shadowPattern)   corrections.shadow_pattern   = shadowPattern;
+  if (sourceDirection) corrections.source_direction = sourceDirection;
+  if (fillPresence)    corrections.fill_presence    = fillPresence;
+  if (lightingFamily)  corrections.lighting_family  = lightingFamily;
+  if (environment)     corrections.environment      = environment;
+  if (notes)           corrections.notes            = notes;
   const res = await fetch('/api/admin/image-labels', {
     method: 'POST',
     headers,
@@ -72,12 +86,18 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
   const [pattern, setPattern]   = useState('');
   const [mood, setMood]         = useState('');
   const [lightCount, setLightCount] = useState('');
+  const [shadowPattern, setShadowPattern]   = useState('');
+  const [sourceDirection, setSourceDirection] = useState('');
+  const [fillPresence, setFillPresence]     = useState('');
+  const [lightingFamily, setLightingFamily] = useState('');
+  const [environment, setEnvironment]       = useState('');
   const [notes, setNotes]       = useState('');
   const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
   const [err, setErr]           = useState(null);
 
-  const rs = analysis?.description?.referenceAnalysis?.recreation_setup;
+  const rs          = analysis?.description?.referenceAnalysis?.recreation_setup;
+  const lightingRead = analysis?.description?.referenceAnalysis?.image_read || {};
 
   // Pre-fill fields with detected values when panel opens
   useEffect(() => {
@@ -85,6 +105,11 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
       setPattern(analysis?.classification?.lightingPattern || '');
       setMood(analysis?.classification?.mood || '');
       setLightCount(rs?.light_count != null ? String(rs.light_count) : '');
+      setShadowPattern(lightingRead.shadow_pattern || '');
+      setSourceDirection(lightingRead.source_direction || '');
+      setFillPresence(lightingRead.fill_presence || '');
+      setLightingFamily(lightingRead.lighting_family || '');
+      setEnvironment(lightingRead.environment || analysis?.description?.referenceAnalysis?.environment || '');
       setNotes('');
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -98,6 +123,11 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
         expectedPattern: pattern,
         expectedMood: mood,
         lightCount,
+        shadowPattern,
+        sourceDirection,
+        fillPresence,
+        lightingFamily,
+        environment,
         notes,
       });
       setSaved(true);
@@ -179,6 +209,59 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
               value={lightCount}
               onChange={e => setLightCount(e.target.value)}
             />
+          </div>
+
+          {/* Shadow Pattern + Source Direction */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Shadow Pattern</label>
+              <select className="ref-correction__select" value={shadowPattern} onChange={e => setShadowPattern(e.target.value)}>
+                <option value="">— as detected —</option>
+                {SHADOW_PATTERN_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Source Direction</label>
+              <select className="ref-correction__select" value={sourceDirection} onChange={e => setSourceDirection(e.target.value)}>
+                <option value="">— as detected —</option>
+                {SOURCE_DIRECTION_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Fill Presence + Lighting Family + Environment */}
+          <div className="ref-correction__fields">
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Fill Presence</label>
+              <select className="ref-correction__select" value={fillPresence} onChange={e => setFillPresence(e.target.value)}>
+                <option value="">— as detected —</option>
+                {FILL_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Lighting Family</label>
+              <select className="ref-correction__select" value={lightingFamily} onChange={e => setLightingFamily(e.target.value)}>
+                <option value="">— as detected —</option>
+                {LIGHTING_FAMILY_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
+            <div className="ref-correction__field">
+              <label className="ref-correction__label">Environment</label>
+              <select className="ref-correction__select" value={environment} onChange={e => setEnvironment(e.target.value)}>
+                <option value="">— as detected —</option>
+                {ENVIRONMENT_OPTIONS.map(o => (
+                  <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="ref-correction__field">
@@ -801,7 +884,10 @@ export default function ReferenceEvalScreen() {
   const [loading, setLoading]           = useState(true);
   const [analysis, setAnalysis]         = useState(null);
   const [selectedMood, setSelectedMood] = useState(null);
-  const [error, setError]               = useState(null);
+  const [error, setError]               = useState(null);  // { code, message, hint }
+  function makeError(err) {
+    return resolveError(err, 'REF_EVAL');
+  }
   const [zoomSrc, setZoomSrc]           = useState(null);
 
   // Option lists from the truth layer — fall back to defaults while loading
@@ -834,7 +920,7 @@ export default function ReferenceEvalScreen() {
         setLoading(false);
       } else {
         setLoading(false);
-        setError('No image selected');
+        setError(makeError('No image selected'));
       }
       return;
     }
@@ -853,7 +939,7 @@ export default function ReferenceEvalScreen() {
       })
       .catch(() => {
         if (cancelled) return;
-        setError('Could not analyze image');
+        setError(makeError('Could not analyze image'));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -901,7 +987,7 @@ export default function ReferenceEvalScreen() {
       setAnalysis(result.analysis);
       setSelectedMood(result.analysis?.classification?.mood || null);
     } catch (err) {
-      setError(err.message || 'Analysis failed');
+      setError(makeError(err));
     } finally {
       setLoading(false);
     }
@@ -1022,8 +1108,14 @@ export default function ReferenceEvalScreen() {
       {/* Error state */}
       {error && !loading && (
         <div className="ref-eval__error">
-          <p>{error}</p>
-          <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <p className="ref-eval__error-msg">{error.message || String(error)}</p>
+          {error.code && (
+            <p className="ref-eval__error-code">{error.code}</p>
+          )}
+          {error.hint && (
+            <p className="ref-eval__error-hint">{error.hint}</p>
+          )}
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', justifyContent: 'center', flexWrap: 'wrap', marginTop: 'var(--space-sm)' }}>
             <button className="btn btn--ghost btn--sm" onClick={handleAnalyzeAnother}>
               Try another image
             </button>

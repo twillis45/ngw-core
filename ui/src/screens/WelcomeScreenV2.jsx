@@ -25,7 +25,7 @@ const HERO_DIAGRAM_SPEC = {
 };
 
 export default function WelcomeScreenV2() {
-  const { user, gearPreference } = useAppState();
+  const { user, gearPreference, result } = useAppState();
   const tapTimestamps = useRef([]);
   const [toast, setToast] = useState({ message: '', visible: false });
   const [activeExample, setActiveExample] = useState(0);
@@ -129,7 +129,13 @@ export default function WelcomeScreenV2() {
         break;
       case 'shoot':
         dispatch({ type: 'SET_APP_MODE', mode: 'shoot' });
-        dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+        // If a result is already loaded, jump straight into shoot mode.
+        // Otherwise go to saved setups so the user can pick a setup first.
+        if (result) {
+          dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+        } else {
+          dispatch({ type: 'NAVIGATE', screen: 'saved_setups' });
+        }
         break;
     }
   }

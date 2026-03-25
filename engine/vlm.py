@@ -240,6 +240,17 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return "429" in str(exc)
 
 
+def _is_auth_error(exc: Exception) -> bool:
+    """Return True if the exception indicates an invalid/expired API key (401)."""
+    cls_name = type(exc).__name__
+    if "AuthenticationError" in cls_name or "Unauthorized" in cls_name:
+        return True
+    status = getattr(exc, "status_code", None)
+    if status == 401:
+        return True
+    return "401" in str(exc) and ("api key" in str(exc).lower() or "invalid" in str(exc).lower())
+
+
 def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
     """Call fn(image_path) with exponential back-off on 429 rate-limit errors."""
     last_exc: Exception = RuntimeError("unreachable")
@@ -248,7 +259,24 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
             return fn(image_path)
         except Exception as exc:
             last_exc = exc
-            if _is_rate_limit_error(exc) and delay is not None:
+            if _is_auth_error(exc):
+                # Log 401 to DB for health monitoring, then re-raise immediately
+                try:
+                    from db.database import log_api_health_event
+                    log_api_health_event(
+                        provider=provider_name.lower(),
+                        event_type="401_error",
+                        detail=str(exc)[:500],
+                    )
+                except Exception:
+                    pass  # never let health logging break the main flow
+                logger.error(
+                    "%s VLM authentication failed (401) — API key invalid or expired. "
+                    "Update %s_API_KEY in .env and restart.",
+                    provider_name, provider_name.upper(),
+                )
+                raise
+            elif _is_rate_limit_error(exc) and delay is not None:
                 logger.warning(
                     "%s VLM rate-limited (429) on attempt %d — retrying in %ds",
                     provider_name, attempt, delay,
@@ -259,6 +287,49 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
     # All retries exhausted
     logger.error("%s VLM still rate-limited after %d attempts", provider_name, len(_RETRY_DELAYS) + 1)
     raise last_exc
+
+
+def probe_api_key() -> dict:
+    """Test the configured API key with a cheap non-token call.
+
+    For OpenAI: calls GET /v1/models (free, no token cost).
+    For Anthropic: calls models list endpoint.
+
+    Returns:
+        {"ok": bool, "provider": str, "detail": str}
+    """
+    from db.database import log_api_health_event
+
+    if _VLM_PROVIDER == "openai":
+        try:
+            from openai import OpenAI
+            client = OpenAI(timeout=10)
+            client.models.list()
+            log_api_health_event("openai", "probe_ok", f"model={_VLM_MODEL}")
+            logger.info("OpenAI API key probe: OK (model=%s)", _VLM_MODEL)
+            return {"ok": True, "provider": "openai", "detail": f"model={_VLM_MODEL}"}
+        except Exception as exc:
+            event = "401_error" if _is_auth_error(exc) else "probe_fail"
+            log_api_health_event("openai", event, str(exc)[:500])
+            logger.error("OpenAI API key probe FAILED: %s", exc)
+            return {"ok": False, "provider": "openai", "detail": str(exc)[:200]}
+
+    elif _VLM_PROVIDER == "anthropic":
+        try:
+            import anthropic
+            client = anthropic.Anthropic(timeout=10)
+            client.models.list()
+            log_api_health_event("anthropic", "probe_ok", f"model={_VLM_MODEL}")
+            logger.info("Anthropic API key probe: OK (model=%s)", _VLM_MODEL)
+            return {"ok": True, "provider": "anthropic", "detail": f"model={_VLM_MODEL}"}
+        except Exception as exc:
+            event = "401_error" if _is_auth_error(exc) else "probe_fail"
+            log_api_health_event("anthropic", event, str(exc)[:500])
+            logger.error("Anthropic API key probe FAILED: %s", exc)
+            return {"ok": False, "provider": "anthropic", "detail": str(exc)[:200]}
+
+    else:
+        return {"ok": False, "provider": _VLM_PROVIDER, "detail": "VLM not configured"}
 
 
 # ── Provider: OpenAI ─────────────────────────────────────────────────────
@@ -298,6 +369,7 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
             max_tokens=2200,
             temperature=0.2,
             response_format={"type": "json_object"},
+            timeout=30,
         )
         raw_text = response.choices[0].message.content or "{}"
         return json.loads(raw_text)
@@ -325,6 +397,7 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
             model=_VLM_MODEL,
             max_tokens=2200,
             system=_SYSTEM_PROMPT,
+            timeout=30,
             messages=[
                 {
                     "role": "user",
@@ -418,8 +491,10 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         logger.warning("VLM: image not found at %s", image_path)
         return None
 
+    t0 = time.time()
     try:
         raw = None
+        used_provider = _VLM_PROVIDER
         if _VLM_PROVIDER == "openai":
             try:
                 raw = _call_openai(image_path)
@@ -428,6 +503,7 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
                 if os.environ.get("ANTHROPIC_API_KEY"):
                     logger.warning("OpenAI VLM failed (%s), falling back to Anthropic", openai_exc)
                     raw = _call_anthropic(image_path)
+                    used_provider = "anthropic"
                 else:
                     raise openai_exc
         elif _VLM_PROVIDER == "anthropic":
@@ -435,6 +511,13 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         else:
             logger.warning("Unknown VLM provider: %s", _VLM_PROVIDER)
             return None
+
+        latency_ms = (time.time() - t0) * 1000
+        try:
+            from db.database import log_vlm_call
+            log_vlm_call(used_provider, _VLM_MODEL, latency_ms, ok=True, caller="analyze_image")
+        except Exception:
+            pass  # metrics logging must never break analysis
 
         # Parse signals namespace (graceful — each sub-model independent)
         signals = _parse_signals(raw.get("signals", {}))
@@ -460,5 +543,12 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
             ok=True,
         )
     except Exception as exc:
+        latency_ms = (time.time() - t0) * 1000
+        try:
+            from db.database import log_vlm_call
+            log_vlm_call(_VLM_PROVIDER, _VLM_MODEL, latency_ms, ok=False,
+                         caller="analyze_image", error=str(exc)[:500])
+        except Exception:
+            pass
         logger.warning("VLM call failed: %s", exc, exc_info=True)
         return VLMDescription(ok=False, notes=[f"VLM call failed: {exc}"])

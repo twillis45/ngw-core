@@ -12,8 +12,9 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { trackEvent } from '../data/analytics';
+import { trackEvent, getSessionId } from '../data/analytics';
 import { getPaywallConfig } from '../data/pricingStore';
+import { authHeaders } from '../data/authApi';
 
 const STORAGE_KEY = 'ngw_paid';
 const COUNT_KEY = 'ngw_analysis_count';
@@ -26,8 +27,10 @@ function writeCount(n) {
   try { sessionStorage.setItem(COUNT_KEY, String(n)); } catch {}
 }
 
-/** Returns true if QA free-mode is active (?qa_free=1 was used this session). */
-function isQaFreeMode() {
+/** Returns true if QA free-mode is active (?qa_free=1 was used this session).
+ *  Requires an admin email — non-admin users cannot activate QA free mode. */
+function isQaFreeMode(email) {
+  if (!isAdminEmail(email)) return false;
   try { return sessionStorage.getItem(QA_FREE_KEY) === '1'; } catch { return false; }
 }
 
@@ -52,7 +55,7 @@ function readPlanTier() {
 }
 
 export default function usePaywall(userEmail) {
-  const qaFree = isQaFreeMode(); // computed once — stable for the lifetime of this render
+  const qaFree = isQaFreeMode(userEmail); // admin-only QA override
 
   // QA free-mode overrides both admin and localStorage paid state so paywall
   // flows can be tested without clearing storage after every session.
@@ -76,13 +79,44 @@ export default function usePaywall(userEmail) {
   }, [userEmail, qaFree]);
 
   // Server verification — runs once on mount.
-  // If there is a pending Stripe session ID in localStorage, validate it against
-  // /api/auth/subscription-status and promote isPaid to true if the server confirms.
-  // Clears ngw_stripe_session after verification so it only runs once per checkout.
+  // Two paths:
+  //   A) Pending Stripe session in localStorage → post-checkout confirmation.
+  //   B) localStorage says paid but no Stripe session → silent re-verify to prevent
+  //      localStorage tampering (e.g. DevTools hack). Clears paid flag if server
+  //      does not confirm. Network failures leave the flag intact (benefit of doubt).
   useEffect(() => {
-    if (qaFree) return; // skip in QA free-mode — keep free-tier state for testing
+    if (qaFree) return;
+    if (effectiveAdmin) return; // admin emails always trusted — no server round-trip needed
+
     let stripeSession = null;
     try { stripeSession = localStorage.getItem('ngw_stripe_session'); } catch { /* ignore */ }
+
+    // Path B: localStorage says paid but no Stripe session pending — re-verify silently.
+    // Must include the JWT (authHeaders) so the server can validate the email param;
+    // without it the server now rejects cross-user email lookups and returns is_paid=false.
+    if (!stripeSession && readPaid() && userEmail) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/auth/subscription-status?email=${encodeURIComponent(userEmail)}`,
+            { credentials: 'include', headers: { ...authHeaders() } },
+          );
+          if (!res.ok) return; // network/server error — leave paid state as-is
+          const data = await res.json();
+          if (!cancelled && !data.is_paid) {
+            // Server says not paid — localStorage was tampered or subscription lapsed.
+            try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+            try { localStorage.removeItem('ngw_subscription_plan'); } catch { /* ignore */ }
+            setIsPaid(false);
+            setPlanTier(null);
+          }
+        } catch { /* network error — leave paid state as-is */ }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    // Path A: Post-checkout Stripe session present — confirm with server.
     if (!stripeSession) return;
 
     let cancelled = false;
@@ -98,7 +132,6 @@ export default function usePaywall(userEmail) {
         const data = await res.json();
         if (!cancelled && data.is_paid) {
           try { localStorage.setItem(STORAGE_KEY, 'true'); } catch { /* ignore */ }
-          // Persist plan tier so isStudio stays correct across page loads
           if (data.plan) {
             try { localStorage.setItem('ngw_subscription_plan', data.plan); } catch { /* ignore */ }
             setPlanTier(data.plan);
@@ -112,7 +145,7 @@ export default function usePaywall(userEmail) {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally runs once on mount only
+  }, [userEmail]); // re-run when email becomes known (async auth resolution)
 
   const unlock = useCallback(() => {
     try { localStorage.setItem(STORAGE_KEY, 'true'); } catch {}
@@ -132,6 +165,18 @@ export default function usePaywall(userEmail) {
       const next = prev + 1;
       writeCount(next);
       trackEvent('ANALYSIS_COUNT_HIT', { count: next, threshold });
+
+      // HIGH-1 fix: also sync count to the server so /recommend paywall gate
+      // fires correctly. Fire-and-forget — never blocks the UI.
+      const sessionId = getSessionId();
+      if (sessionId) {
+        fetch('/api/usage/increment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          body: JSON.stringify({ session_id: sessionId, event: 'analysis_complete' }),
+        }).catch(() => { /* network error — sessionStorage count is the fallback */ });
+      }
+
       return next;
     });
   }, [threshold]);

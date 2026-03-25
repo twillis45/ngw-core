@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
+import { savePreference, loadPreferences } from '../data/authApi';
 import LearningOpsTab from '../components/lab/LearningOpsTab';
 import BenchmarkTab from '../components/lab/BenchmarkTab';
 import SignalsTab from '../components/lab/SignalsTab';
+import ControlCenterTab from '../components/lab/ControlCenterTab';
+import { C } from '../lib/statusColors';
 import {
   analyzeImage,
   listGoldSet,
@@ -26,7 +29,29 @@ import {
   reprocessReference,
   updateReferenceMetadata,
   labFetchBlob,
+  evaluateCandidate,
+  getCandidateEvaluations,
+  applyCandidate,
+  seedGoldSetFromReference,
+  getMonitoringSummary,
+  getBenchmarkSummary,
+  getIntelligenceScore,
+  getApiKeyHealth,
 } from '../data/labApi';
+
+/** Device timezone — explicit in all date formatting calls. */
+const _TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** Format a Unix timestamp or ISO string as a short date+time in device timezone. */
+const fmtDT = v => {
+  if (!v) return '—';
+  const d = typeof v === 'number' ? new Date(v < 1e12 ? v * 1000 : v) : new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  return d.toLocaleString(undefined, { timeZone: _TZ, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+/** Format a number with locale comma separators. Returns '—' for null/undefined. */
+const fmtN = n => (n == null ? '—' : Number(n).toLocaleString());
 
 /**
  * AuthImage — fetches a lab image endpoint with Bearer auth and renders it.
@@ -62,6 +87,431 @@ function AuthImage({ path, alt, className, style }) {
   return <img src={src} alt={alt} className={className} style={style} />;
 }
 
+// ── Zoomable lightbox (shared by Workbench overlay + RefDetailImage) ──────────
+/**
+ * Full-screen lightbox with scroll-to-zoom and drag-to-pan.
+ * Pass the image/content as children; handles all pointer events.
+ */
+function ZoomableLightbox({ onClose, children }) {
+  const [scale, setScale] = useState(1);
+  const [pan, setPan]     = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragRef      = useRef(null);
+  const scaleRef     = useRef(1);
+  const panRef       = useRef({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  scaleRef.current = scale;
+  panRef.current   = pan;
+
+  // Wheel zoom — non-passive so we can preventDefault
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const next = Math.min(Math.max(scaleRef.current * factor, 0.5), 8);
+      scaleRef.current = next;
+      setScale(next);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Escape key closes the lightbox
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  function onPointerDown(e) {
+    // Don't capture pointer when clicking buttons/controls — they need their own click events
+    if (e.target.closest('button')) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+    dragRef.current = { sx: e.clientX, sy: e.clientY, px: panRef.current.x, py: panRef.current.y };
+  }
+  function onPointerMove(e) {
+    if (!dragRef.current) return;
+    const next = {
+      x: dragRef.current.px + e.clientX - dragRef.current.sx,
+      y: dragRef.current.py + e.clientY - dragRef.current.sy,
+    };
+    panRef.current = next;
+    setPan(next);
+  }
+  function onPointerUp() { dragRef.current = null; setDragging(false); }
+  function onDoubleClick(e) {
+    if (e.target.closest('button')) return;
+    if (scaleRef.current > 1.2) { setScale(1); setPan({ x: 0, y: 0 }); }
+    else { setScale(2.5); }
+  }
+  const zoomIn    = () => setScale(s => Math.min(s * 1.3, 8));
+  const zoomOut   = () => setScale(s => Math.max(s / 1.3, 0.5));
+  const zoomReset = () => { setScale(1); setPan({ x: 0, y: 0 }); };
+
+  const cursor = dragging ? 'grabbing' : (scale > 1.05 ? 'grab' : 'zoom-in');
+
+  return (
+    // Outer backdrop — click anywhere outside the controls to close
+    <div className="lab-overlay-lightbox" onClick={onClose}>
+      {/* Inner container — stopPropagation only on the drag area, not buttons */}
+      <div
+        ref={containerRef}
+        className="lab-overlay-lightbox__inner"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onDoubleClick={onDoubleClick}
+        style={{ cursor, touchAction: 'none', overflow: 'hidden' }}
+      >
+        {/* Close button — stopPropagation so backdrop onClick doesn't also fire */}
+        <button
+          className="lab-overlay-lightbox__close"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+        >
+          ✕
+        </button>
+
+        {/* Transformed image layer — pointer-events none so drag goes to container */}
+        <div
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+            transformOrigin: 'center center',
+            transition: dragging ? 'none' : 'transform 0.12s ease',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            pointerEvents: 'none',
+            width: '100%', height: '100%',
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {children}
+        </div>
+
+        {/* Zoom controls strip — stopPropagation so clicking them doesn't close */}
+        <div
+          className="lab-overlay-lightbox__zoom-controls"
+          onClick={e => e.stopPropagation()}
+        >
+          <button onClick={zoomOut} title="Zoom out">−</button>
+          <span>{Math.round(scale * 100)}%</span>
+          <button onClick={zoomIn} title="Zoom in">+</button>
+          <button onClick={zoomReset} title="Fit to screen">Fit</button>
+        </div>
+        <p className="lab-overlay-lightbox__hint">Scroll to zoom · drag to pan · double-click to fit · Esc to close</p>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAB HELP CONTENT  (one entry per tab)
+// ─────────────────────────────────────────────────────────────────────────────
+const LAB_HELP = {
+  workbench: {
+    title: 'Workbench',
+    what: 'Run the full 7-stage VLM analysis pipeline on any photo. Upload an image, trigger analysis, and inspect every output field — pattern, modifiers, confidence, scene read, recreation setup, and optional debug overlays.',
+    features: [
+      { label: 'Upload & Analyze', desc: 'Drag-drop or pick any photo. Hit Analyze to run the full pipeline against the current ruleset.' },
+      { label: 'Result Inspector', desc: 'Expand any result field — lighting read, pattern candidates, recreation setup, signal quality flags.' },
+      { label: 'Save to Gold Set', desc: 'Good result? Push it directly to the Gold Set as a labeled training example.' },
+      { label: 'Propose Rule', desc: 'Disagreement with the output? Open a Candidate rule change pre-filled with this analysis.' },
+      { label: 'Debug Overlays', desc: 'Toggle face-box, shadow arrows, catchlight dots, and region annotations for visual inspection.' },
+    ],
+    tips: [
+      'Workbench always runs against the live ruleset — not a snapshot. Re-run after promoting a candidate to see the delta.',
+      'Switch to Gold Set tab immediately after a good analysis — your result pre-fills the form.',
+    ],
+  },
+  gold_set: {
+    title: 'Gold Set',
+    what: 'The labeled ground-truth library used to evaluate the analysis engine. Each entry pairs an image with its expected analysis output. The Gold Set drives benchmark scoring and catches regressions.',
+    features: [
+      { label: 'Entry List', desc: 'Browse all labeled examples. Filter by pattern, confidence tier, or date added.' },
+      { label: 'Add Entry', desc: 'Create a new labeled example manually or accept a pre-fill from Workbench.' },
+      { label: 'Edit / Delete', desc: 'Correct wrong labels, update expected outputs, or remove stale examples.' },
+      { label: 'Run Evaluation', desc: 'Score the current engine against the entire Gold Set. Results feed the Benchmarks tab.' },
+      { label: 'Image Preview', desc: 'View the gold-set image alongside its expected vs. actual analysis.' },
+    ],
+    tips: [
+      'Aim for ≥10 entries per pattern for reliable benchmark coverage.',
+      'After promoting a Candidate, run a Gold Set evaluation to confirm no regressions before shipping.',
+    ],
+  },
+  candidates: {
+    title: 'Candidates',
+    what: 'Proposed ruleset changes waiting for evaluation. A Candidate describes a targeted adjustment — scoring weight, confidence threshold, modifier mapping — with rationale and evidence. Candidates move through Draft → Evaluated → Promoted lifecycle.',
+    features: [
+      { label: 'Candidate List', desc: 'All open proposals. Filter by status (draft, evaluated, promoted, rejected).' },
+      { label: 'Create Candidate', desc: 'Write a new rule change with title, description, rationale, and proposed JSON delta.' },
+      { label: 'Evaluate', desc: 'Run the candidate against the Gold Set to measure impact on accuracy and confidence.' },
+      { label: 'Promote', desc: 'Apply an evaluated candidate to the live ruleset. Creates a monitoring window automatically.' },
+      { label: 'Release / Rollback', desc: 'Close the monitoring window or roll back a promoted candidate that caused a regression.' },
+    ],
+    tips: [
+      'Always evaluate against the Gold Set before promoting — check the accuracy delta.',
+      'Use Learning Ops → Clusters to find failure patterns before writing candidates.',
+    ],
+  },
+  ref_dataset: {
+    title: 'Reference Dataset',
+    what: 'Curated photographer reference images organized by lighting pattern. Each entry is a multi-stage processed image: ingested → VLM-analyzed → approved/rejected. Approved entries become the embedding index for shoot-match similarity search.',
+    features: [
+      { label: 'Browse by Pattern', desc: 'View all reference images grouped by the 28 lighting patterns.' },
+      { label: 'Ingest', desc: 'Add new reference images. Triggers VLM analysis and embedding generation automatically.' },
+      { label: 'Approve / Reject', desc: 'Review auto-ingested images. Approved images join the active shoot-match index.' },
+      { label: 'Reprocess', desc: 'Re-run VLM analysis on a reference image (e.g. after a ruleset update).' },
+      { label: 'Debug Overlay', desc: 'View face-box and lighting annotation overlays on any reference image.' },
+    ],
+    tips: [
+      'Reject blurry, over-cropped, or ambiguous images — they degrade shoot-match quality.',
+      'Target 5–15 approved images per pattern for a balanced embedding index.',
+    ],
+  },
+  signals: {
+    title: 'Signals',
+    what: 'Live user outcome events — nailed-it, missed-it, and outcome-unknown — that drive intelligence scoring, calibration hints, and the autonomy loop. Signals are the ground-truth feedback channel from real shoots.',
+    features: [
+      { label: 'Signal List', desc: 'Browse all recent outcome events with pattern, confidence, and outcome type.' },
+      { label: 'Hygiene Check', desc: 'Audit signal health: count, freshness, balance, and seeded vs. real split.' },
+      { label: 'Seed Signals', desc: 'Inject synthetic signals for testing. Use for dev-mode calibration.' },
+      { label: 'Calibration View', desc: 'Per-environment calibration breakdown — confidence vs. actual outcome agreement.' },
+      { label: 'Recalibration Hints', desc: 'Patterns where confidence is mis-calibrated. Surfaced in Control Center → Support.' },
+    ],
+    tips: [
+      'A signal imbalance (all nailed-it, no missed-it) inflates the intelligence score artificially. Use Seed Signals to balance if needed.',
+      'Gold Set Suggestions (Control Center → Support) surface patterns with low signal coverage.',
+    ],
+  },
+  learning: {
+    title: 'Learning Ops',
+    what: 'The closed-loop learning pipeline. Surfaces failure clusters, manages pattern knowledge, runs the ingestion scheduler, monitors post-release regressions, and simulates revenue impact of proposed changes.',
+    features: [
+      { label: 'Overview', desc: 'Ops summary: open clusters, pending evaluations, active monitoring windows, alerts.' },
+      { label: 'Clusters', desc: 'Failure clusters grouped by pattern and error type. Generate a Candidate directly from any cluster.' },
+      { label: 'Monitoring', desc: 'Post-release monitoring windows. View drift alerts and trigger sweep to check live performance.' },
+      { label: 'Knowledge Base', desc: 'Per-pattern ruleset knowledge: signal counts by risk tier, required thresholds, current risk level.' },
+      { label: 'Revenue', desc: 'Simulate 30-day revenue delta under Conservative / Moderate / Aggressive deployment scenarios.' },
+      { label: 'Scheduler', desc: 'Background ingestion scheduler: enable/disable, configure interval, trigger a manual run.' },
+    ],
+    tips: [
+      'Revenue simulation uses real pattern signal data — run it before promoting any high-risk candidate.',
+      'Set the scheduler to run every 24h in production. Use "Run Now" for immediate cluster updates after bulk signal ingestion.',
+    ],
+  },
+  benchmarks: {
+    title: 'Benchmarks',
+    what: 'Automated accuracy scoring of the analysis engine against the Gold Set. Tracks score history, pattern-level metrics, and drift. Use before and after promoting Candidates to measure real impact.',
+    features: [
+      { label: 'Run Benchmark', desc: 'Score the current engine against all Gold Set entries. Produces accuracy, precision, recall, and F1 per pattern.' },
+      { label: 'Baseline', desc: 'Lock a snapshot as the performance baseline. Future runs compare against it.' },
+      { label: 'Score History', desc: 'Trend chart of benchmark scores over time. Spot regressions quickly.' },
+      { label: 'Pattern Metrics', desc: 'Drill into per-pattern accuracy, miss rate, and confidence alignment.' },
+      { label: 'Drift Check', desc: 'Compare current performance to the locked baseline. Flags patterns with significant drift.' },
+      { label: 'CI Gate', desc: 'Run a CI-mode benchmark to enforce minimum accuracy thresholds. Fails fast on regressions.' },
+    ],
+    tips: [
+      'Overall score target: ≥80% (green). ≥60% is marginal (amber). <60% is a regression — investigate before promoting any Candidate.',
+      'Pattern Accuracy target: ≥80%. If a single pattern falls below 65%, open a Cluster review for that pattern.',
+      'Blueprint Score target: ≥80%. Low blueprint scores mean the VLM is correctly naming the pattern but predicting the wrong key position or fill ratio.',
+      'Confidence Error target: <±0.04. Values above ±0.04 mean the engine is over- or under-confident relative to real outcomes — miscalibration.',
+      'Drift thresholds in the auto-check: overall >2% drop triggers an alert; per-pattern >4% drop triggers a warning; conf. error >±0.04 triggers review.',
+      'Set a baseline immediately after each successful Candidate promotion. Future drift checks compare against that snapshot.',
+    ],
+  },
+  control_center: {
+    title: 'Control Center',
+    what: 'Central maintenance and operations dashboard. Manage the ingestion scheduler, monitor intelligence score health, test the adaptive paywall, and review support signals like miscalibrated patterns and VLM corrections.',
+    features: [
+      { label: 'System', desc: 'Scheduler on/off, interval config, manual ingestion trigger, health overview (clusters, alerts, pending evals).' },
+      { label: 'Intelligence', desc: 'Global intelligence score (target ≥70), per-pattern breakdown, autonomy queue review, failure cluster map.' },
+      { label: 'Paywall', desc: 'Value state map, paywall type reference, live pricing test with real signal simulation.' },
+      { label: 'Support', desc: 'Recalibration hints (mis-calibrated patterns), gold set coverage gaps, and VLM correction log.' },
+    ],
+    tips: [
+      'Intelligence score of 50 means insufficient data — seed signals or run a benchmark pass first.',
+      'Live Paywall Test lets you verify each value state detects correctly before pushing to production.',
+    ],
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GLOSSARY  (shown at bottom of every help panel)
+// ─────────────────────────────────────────────────────────────────────────────
+const LAB_GLOSSARY = [
+  { term: 'VLM',    def: 'Vision Language Model — the AI that reads a photo and outputs pattern, confidence, modifiers, and scene description.' },
+  { term: 'CV',     def: 'Computer Vision — traditional image analysis (face detection, region segmentation) that runs before and alongside VLM.' },
+  { term: 'CVR',    def: 'Conversion Rate — % of active users who subscribe. Primary revenue metric driving autonomy and paywall decisions.' },
+  { term: 'ARPU',   def: 'Average Revenue Per User — monthly subscription revenue ÷ active users. Used in revenue simulation.' },
+  { term: 'Conf.',  def: 'Confidence — 0–1 score for engine certainty about a pattern ID. Good: ≥0.65. Mismatch vs. outcome = miscalibration.' },
+  { term: 'δ / Δ',  def: 'Delta — change in a metric between two runs or time periods (e.g. benchmark score delta vs. previous run).' },
+  { term: 'GS',     def: 'Gold Set — labeled ground-truth image library used to benchmark the engine. Aim for ≥10 entries per pattern.' },
+  { term: 'LO',     def: 'Learning Ops — closed-loop pipeline: ingests signals, clusters failures, generates candidates, monitors releases.' },
+  { term: 'BM',     def: 'Benchmark — automated accuracy scoring of the analysis engine against the Gold Set. Target overall: ≥80%.' },
+  { term: 'Sig.',   def: 'Signal — a user outcome event (nailed-it / missed-it / unknown) from a real shoot. Drives intelligence scoring.' },
+  { term: 'NGW',    def: 'No Guesswork — the product and system name.' },
+  { term: 'Conf. δ',def: 'Confidence Delta — how much the engine\'s confidence score shifted vs. baseline. Threshold: ≤±0.04.' },
+];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ZOOM IMG — drop-in <img> replacement with click-to-lightbox
+// ─────────────────────────────────────────────────────────────────────────────
+function ZoomImg({ src, alt = '', className, style, onError }) {
+  const [zoomed, setZoomed] = useState(false);
+  if (!src) return null;
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt}
+        className={className}
+        style={{ ...style, cursor: 'zoom-in' }}
+        onError={onError}
+        onClick={() => setZoomed(true)}
+      />
+      {zoomed && (
+        <ZoomableLightbox onClose={() => setZoomed(false)}>
+          <img
+            src={src}
+            alt={alt}
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }}
+          />
+        </ZoomableLightbox>
+      )}
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELP PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+function LabHelpPanel({ tabId, onClose }) {
+  const h = LAB_HELP[tabId];
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+  if (!h) return null;
+  return (
+    <div style={{
+      background: 'var(--color-surface)',
+      border: '1px solid var(--color-border)',
+      borderRadius: 'var(--radius-lg)',
+      padding: 'var(--space-md)',
+      marginBottom: 'var(--space-md)',
+      position: 'relative',
+    }}>
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        aria-label="Close help"
+        style={{
+          position: 'absolute', top: 'var(--space-sm)', right: 'var(--space-sm)',
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--color-text-secondary)', padding: '2px 6px',
+          fontSize: 'var(--text-base)', lineHeight: 1,
+          borderRadius: 'var(--radius-sm)',
+        }}
+      >✕</button>
+
+      {/* Header */}
+      <div style={{ marginBottom: 'var(--space-sm)', paddingRight: 'var(--space-xl)' }}>
+        <span style={{
+          fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.08em',
+          color: 'var(--color-accent)', textTransform: 'uppercase',
+        }}>Help — {h.title}</span>
+        <p style={{
+          margin: 'var(--space-xs) 0 0',
+          fontSize: 'var(--text-sm)',
+          color: 'var(--color-text-secondary)',
+          lineHeight: 1.5,
+        }}>{h.what}</p>
+      </div>
+
+      {/* Features */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+        gap: 'var(--space-xs)',
+        marginBottom: 'var(--space-sm)',
+      }}>
+        {h.features.map(f => (
+          <div key={f.label} style={{
+            background: 'var(--color-surface-elevated)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-xs) var(--space-sm)',
+          }}>
+            <div style={{
+              fontSize: 'var(--text-xs)', fontWeight: 600,
+              color: 'var(--color-text)', marginBottom: 2,
+            }}>{f.label}</div>
+            <div style={{
+              fontSize: 'var(--text-xs)',
+              color: 'var(--color-text-secondary)',
+              lineHeight: 1.4,
+            }}>{f.desc}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tips */}
+      {h.tips?.length > 0 && (
+        <div style={{
+          borderTop: '1px solid var(--color-border)',
+          paddingTop: 'var(--space-xs)',
+          display: 'flex', flexDirection: 'column', gap: 4,
+          marginBottom: 'var(--space-xs)',
+        }}>
+          {h.tips.map((tip, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 'var(--space-xs)',
+              fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
+            }}>
+              <span style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 1 }}>→</span>
+              <span>{tip}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Glossary — collapsible, global across all tabs */}
+      <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-xs)' }}>
+        <button
+          onClick={() => setGlossaryOpen(o => !o)}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 'var(--text-xs)', fontWeight: 600,
+            color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}
+        >
+          <span style={{ fontSize: 'var(--text-xs)', opacity: 0.7 }}>{glossaryOpen ? '▾' : '▸'}</span>
+          LAB Glossary
+        </button>
+        {glossaryOpen && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+            gap: 4, marginTop: 'var(--space-xs)',
+          }}>
+            {LAB_GLOSSARY.map(({ term, def }) => (
+              <div key={term} style={{
+                fontSize: 'var(--text-xs)', lineHeight: 1.4,
+                padding: '3px 0',
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontWeight: 700,
+                  color: 'var(--color-accent)', marginRight: 6,
+                }}>{term}</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>{def}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * NGW Lab — internal dev tools.
  * Protected by enable_lab feature flag + logged-in user.
@@ -71,10 +521,125 @@ export default function LabScreen() {
   const { user, labPendingImage } = useAppState();
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('workbench');
+  // Lazy-mount: only mount a tab on first visit, then keep it alive.
+  // This prevents all 8 tabs from firing their useEffect API calls simultaneously
+  // on LabScreen load — only the initial active tab (workbench) loads up front.
+  const [mountedTabs, setMountedTabs] = useState(() => new Set(['workbench']));
+
+  /** Switch to a tab, mounting it on first visit. */
+  function switchTab(tabId) {
+    setMountedTabs(prev => {
+      if (prev.has(tabId)) return prev;
+      const next = new Set(prev);
+      next.add(tabId);
+      return next;
+    });
+    setActiveTab(tabId);
+  }
+
   const [goldSetPrefill, setGoldSetPrefill] = useState(null);
   const [candidatePrefill, setCandidatePrefill] = useState(null);
+  const [showHelp, setShowHelp] = useState(false);
   // Track what's currently loaded in WorkbenchTab so Gold Set can mirror it
   const [workbenchSnapshot, setWorkbenchSnapshot] = useState(null);
+  // Tab header metric pills — loaded once on mount
+  const [tabMetrics, setTabMetrics] = useState({});
+  // Cross-tab navigation — set by ControlCenterTab, consumed by LearningOpsTab
+  const [learningNavRequest, setLearningNavRequest] = useState(null);
+  // Drag-to-reorder tabs
+  const [dragSrc, setDragSrc] = useState(null);
+  const [tabOrder, setTabOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ngw_lab_tab_order') || 'null'); } catch { return null; }
+  });
+
+  // Sync tab order from server on mount (when logged in) — server wins over
+  // localStorage so the layout follows the user across devices.
+  useEffect(() => {
+    if (!user) return;
+    loadPreferences()
+      .then(prefs => {
+        const serverOrder = prefs['lab_tab_order'];
+        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
+          setTabOrder(serverOrder);
+          try { localStorage.setItem('ngw_lab_tab_order', JSON.stringify(serverOrder)); } catch {}
+        }
+      })
+      .catch(() => { /* network error — keep localStorage value */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]); // re-run only when the logged-in user changes
+
+  /** Navigate to a specific tab+panel, optionally with filter state. */
+  function handleNavigateTo({ tab, panel, status, severity, clusterId } = {}) {
+    if (tab) switchTab(tab);
+    if (panel || status || severity || clusterId) {
+      setLearningNavRequest({ panel, status, severity, clusterId });
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTabMetrics() {
+      const next = {};
+      await Promise.allSettled([
+        // Gold Set: approved count
+        listGoldSet('approved', 500)
+          .then(r => { next.gold_set = { value: fmtN(r.length), color: r.length > 0 ? 'green' : 'muted' }; })
+          .catch(() => {}),
+        // Candidates: pending count
+        listCandidates('pending', 200)
+          .then(r => { next.candidates = { value: fmtN(r.length), color: r.length > 0 ? 'amber' : 'muted' }; })
+          .catch(() => {}),
+        // Reference Dataset: total gold entries
+        listReferenceDataset({ tier: 'gold' })
+          .then(r => { next.ref_dataset = { value: fmtN(r.length), color: 'muted' }; })
+          .catch(() => {}),
+        // Signals: active monitoring alerts
+        getMonitoringSummary()
+          .then(r => {
+            const n = r?.active_alerts ?? 0;
+            next.signals = { value: n > 0 ? `${n} alert${n !== 1 ? 's' : ''}` : '✓ clear', color: n > 0 ? 'red' : 'green' };
+          })
+          .catch(() => {}),
+        // Learning Ops: intelligence score (0–100 scale, cached, fast)
+        getIntelligenceScore(30, false)
+          .then(r => {
+            if (r?.score != null) {
+              const pct = Math.round(r.score); // score is already 0–100
+              next.learning = { value: `${pct}%`, color: pct >= 70 ? 'green' : pct >= 50 ? 'amber' : 'red' };
+            }
+          })
+          .catch(() => {}),
+        // Benchmarks: pass rate from latest run
+        getBenchmarkSummary()
+          .then(r => {
+            if (r?.has_runs) {
+              if (r.passed_cases != null && r.total_cases > 0) {
+                const pct = Math.round((r.passed_cases / r.total_cases) * 100);
+                next.benchmarks = { value: `${pct}% pass`, color: pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red' };
+              } else if (r.overall_score != null) {
+                const pct = Math.round(r.overall_score * 100);
+                next.benchmarks = { value: `${pct}%`, color: pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red' };
+              }
+            }
+          })
+          .catch(() => {}),
+        // Control Center: API key health
+        getApiKeyHealth()
+          .then(r => {
+            const hasErr = r?.has_errors === true || r?.latest_event?.event_type === '401_error';
+            const available = r?.vlm_available !== false;
+            next.control_center = {
+              value: !available ? '✗ no VLM' : hasErr ? '✗ key err' : '✓ healthy',
+              color: (!available || hasErr) ? 'red' : 'green',
+            };
+          })
+          .catch(() => {}),
+      ]);
+      if (!cancelled) setTabMetrics(next);
+    }
+    loadTabMetrics();
+    return () => { cancelled = true; };
+  }, []);
 
   // Intercept all tab switches so we can auto-populate Gold Set from workbench
   function handleTabSwitch(tabId) {
@@ -85,24 +650,24 @@ export default function LabScreen() {
           ? (workbenchSnapshot.result.reference_analysis || workbenchSnapshot.result.description || {})
           : {},
         notes:             workbenchSnapshot.imagePath
-          ? `Workbench analysis ${new Date().toLocaleDateString()}`
+          ? `Workbench analysis ${new Date().toLocaleDateString(undefined, { timeZone: _TZ })}`
           : '',
         imagePreview: workbenchSnapshot.preview,
         imageFile:    workbenchSnapshot.file,
       });
     }
-    setActiveTab(tabId);
+    switchTab(tabId);
   }
 
   function handleSaveToGoldSet(result) {
     setGoldSetPrefill({
       image_path: result.image_path || '',
       expected_analysis: result.reference_analysis || result.description || {},
-      notes: `Workbench analysis ${new Date().toLocaleDateString()}`,
+      notes: `Workbench analysis ${new Date().toLocaleDateString(undefined, { timeZone: _TZ })}`,
       imagePreview: workbenchSnapshot?.preview || null,
       imageFile:    workbenchSnapshot?.file    || null,
     });
-    setActiveTab('gold_set');
+    switchTab('gold_set');
   }
 
   function handleProposeRule(result) {
@@ -115,7 +680,7 @@ export default function LabScreen() {
       rationale: `Based on workbench analysis of ${result.image_path || 'uploaded image'}`,
       proposed_change: { source_analysis: analysis },
     });
-    setActiveTab('candidates');
+    switchTab('candidates');
   }
 
   if (!user) {
@@ -138,15 +703,50 @@ export default function LabScreen() {
     );
   }
 
-  const tabs = [
-    { id: 'workbench',   label: 'Workbench' },
-    { id: 'gold_set',    label: 'Gold Set' },
-    { id: 'candidates',  label: 'Candidates' },
-    { id: 'ref_dataset', label: 'Reference Dataset' },
-    { id: 'signals',     label: 'Signals' },
-    { id: 'learning',    label: 'Learning Ops' },
-    { id: 'benchmarks',  label: 'Benchmarks' },
+  const TAB_DEFS = [
+    { id: 'workbench',      label: 'Workbench' },
+    { id: 'gold_set',       label: 'Gold Set',          metricKey: 'gold_set',       metricLabel: 'Approved gold set images' },
+    { id: 'candidates',     label: 'Candidates',         metricKey: 'candidates',     metricLabel: 'Pending candidates awaiting review' },
+    { id: 'ref_dataset',    label: 'Reference Dataset',  metricKey: 'ref_dataset',    metricLabel: 'Gold-tier reference dataset entries' },
+    { id: 'signals',        label: 'Signals',            metricKey: 'signals',        metricLabel: 'Active monitoring alerts' },
+    { id: 'learning',       label: 'Learning Ops',       metricKey: 'learning',       metricLabel: 'Intelligence score (0–100): composite of signal volume, pattern coverage, benchmark pass rate, and VLM correction rate over 30 days. ≥70 = healthy, 50–69 = needs attention, <50 = insufficient data.' },
+    { id: 'benchmarks',     label: 'Benchmarks',         metricKey: 'benchmarks',     metricLabel: 'Benchmark pass rate — latest run' },
+    { id: 'control_center', label: '⚙ Control Center',  metricKey: 'control_center', metricLabel: 'API / VLM health status' },
   ];
+
+  // Apply saved drag order (falls back to default order above)
+  const tabs = tabOrder
+    ? tabOrder.map(id => TAB_DEFS.find(t => t.id === id)).filter(Boolean)
+    : TAB_DEFS;
+
+  function handleDragStart(e, id) {
+    setDragSrc(id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function handleDragOver(e, id) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }
+  function handleDrop(e, targetId) {
+    e.preventDefault();
+    if (!dragSrc || dragSrc === targetId) return;
+    const ids = tabs.map(t => t.id);
+    const from = ids.indexOf(dragSrc);
+    const to   = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, dragSrc);
+    setTabOrder(next);
+    // Persist locally for instant restore on next visit
+    try { localStorage.setItem('ngw_lab_tab_order', JSON.stringify(next)); } catch {}
+    // Persist to server so it syncs across devices when logged in (fire-and-forget)
+    if (user) {
+      savePreference('lab_tab_order', next).catch(() => {});
+    }
+    setDragSrc(null);
+  }
+  function handleDragEnd() { setDragSrc(null); }
 
   return (
     <div className="screen lab-screen">
@@ -156,58 +756,120 @@ export default function LabScreen() {
       </p>
 
       {/* ── Tab Bar ── */}
-      <div className="lab-tabs">
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            className={`lab-tab${activeTab === tab.id ? ' lab-tab--active' : ''}`}
-            onClick={() => handleTabSwitch(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+        <div className="lab-tabs" style={{ flex: 1, marginBottom: 0 }}>
+          {tabs.map(tab => {
+            const metric   = tab.metricKey ? tabMetrics[tab.metricKey] : null;
+            const hasError = metric?.color === 'red';
+            const isDragging = dragSrc === tab.id;
+            return (
+              <button
+                key={tab.id}
+                className={`lab-tab${activeTab === tab.id ? ' lab-tab--active' : ''}${isDragging ? ' lab-tab--dragging' : ''}`}
+                onClick={() => handleTabSwitch(tab.id)}
+                draggable
+                onDragStart={e => handleDragStart(e, tab.id)}
+                onDragOver={e => handleDragOver(e, tab.id)}
+                onDrop={e => handleDrop(e, tab.id)}
+                onDragEnd={handleDragEnd}
+                style={{ position: 'relative', cursor: isDragging ? 'grabbing' : 'grab' }}
+              >
+                {/* Error dot on inactive tabs with a red metric */}
+                {hasError && activeTab !== tab.id && (
+                  <span style={{
+                    position: 'absolute', top: 3, right: 3,
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: C.red,
+                    boxShadow: '0 0 5px #f8717199',
+                  }} />
+                )}
+                {tab.label}
+                {metric && (
+                  <span className={`lab-tab__metric lab-tab__metric--${metric.color}`}>
+                    {metric.value}
+                    {tab.metricLabel && (
+                      <span className="lab-tab__metric-info" title={`${tab.metricLabel}: ${metric.value}`}>ⓘ</span>
+                    )}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          className={`lab-tab${showHelp ? ' lab-tab--active' : ''}`}
+          onClick={() => setShowHelp(v => !v)}
+          title="Toggle tab help"
+          aria-label="Toggle help"
+          style={{ flexShrink: 0, fontWeight: 600, marginTop: 'var(--space-sm)', marginBottom: 0 }}
+        >?</button>
       </div>
 
+      {/* ── Help Panel ── */}
+      {showHelp && (
+        <LabHelpPanel tabId={activeTab} onClose={() => setShowHelp(false)} />
+      )}
+
       {/* ── Tab Content ──
-           All tabs stay mounted once the lab screen loads so:
-           - Tab switches are instant (no re-fetch, no skeleton flash)
+           Lazy-mount strategy: a tab is mounted only on first visit, then kept alive.
+           - Initial load fires only the active tab's API calls (not all 8 at once)
+           - Subsequent visits to an already-mounted tab are instant (no re-fetch, no flash)
            - Workbench result is preserved when checking Signals and back
-           - Data-heavy tabs (Benchmark, LearningOps) pre-load in background
       ── */}
       <div className="lab-content">
-        <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
-          <WorkbenchTab
-            onSaveToGoldSet={handleSaveToGoldSet}
-            onProposeRule={handleProposeRule}
-            pendingImage={labPendingImage}
-            onPendingConsumed={() => dispatch({ type: 'CLEAR_LAB_PENDING_IMAGE' })}
-            onWorkbenchChange={setWorkbenchSnapshot}
-          />
-        </div>
-        <div style={{ display: activeTab === 'gold_set' ? 'block' : 'none' }}>
-          <GoldSetTab
-            prefill={goldSetPrefill}
-            onPrefillConsumed={() => setGoldSetPrefill(null)}
-          />
-        </div>
-        <div style={{ display: activeTab === 'candidates' ? 'block' : 'none' }}>
-          <CandidatesTab
-            prefill={candidatePrefill}
-            onPrefillConsumed={() => setCandidatePrefill(null)}
-          />
-        </div>
-        <div style={{ display: activeTab === 'ref_dataset' ? 'block' : 'none' }}>
-          <ReferenceDatasetTab />
-        </div>
-        <div style={{ display: activeTab === 'signals' ? 'block' : 'none' }}>
-          <SignalsTab />
-        </div>
-        <div style={{ display: activeTab === 'learning' ? 'block' : 'none' }}>
-          <LearningOpsTab />
-        </div>
-        <div style={{ display: activeTab === 'benchmarks' ? 'block' : 'none' }}>
-          <BenchmarkTab />
-        </div>
+        {mountedTabs.has('workbench') && (
+          <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
+            <WorkbenchTab
+              onSaveToGoldSet={handleSaveToGoldSet}
+              onProposeRule={handleProposeRule}
+              pendingImage={labPendingImage}
+              onPendingConsumed={() => dispatch({ type: 'CLEAR_LAB_PENDING_IMAGE' })}
+              onWorkbenchChange={setWorkbenchSnapshot}
+              onNavigateTo={handleNavigateTo}
+            />
+          </div>
+        )}
+        {mountedTabs.has('gold_set') && (
+          <div style={{ display: activeTab === 'gold_set' ? 'block' : 'none' }}>
+            <GoldSetTab
+              prefill={goldSetPrefill}
+              onPrefillConsumed={() => setGoldSetPrefill(null)}
+            />
+          </div>
+        )}
+        {mountedTabs.has('candidates') && (
+          <div style={{ display: activeTab === 'candidates' ? 'block' : 'none' }}>
+            <CandidatesTab
+              prefill={candidatePrefill}
+              onPrefillConsumed={() => setCandidatePrefill(null)}
+            />
+          </div>
+        )}
+        {mountedTabs.has('ref_dataset') && (
+          <div style={{ display: activeTab === 'ref_dataset' ? 'block' : 'none' }}>
+            <ReferenceDatasetTab />
+          </div>
+        )}
+        {mountedTabs.has('signals') && (
+          <div style={{ display: activeTab === 'signals' ? 'block' : 'none' }}>
+            <SignalsTab />
+          </div>
+        )}
+        {mountedTabs.has('learning') && (
+          <div style={{ display: activeTab === 'learning' ? 'block' : 'none' }}>
+            <LearningOpsTab navRequest={learningNavRequest} onNavConsumed={() => setLearningNavRequest(null)} />
+          </div>
+        )}
+        {mountedTabs.has('benchmarks') && (
+          <div style={{ display: activeTab === 'benchmarks' ? 'block' : 'none' }}>
+            <BenchmarkTab onNavigateTo={handleNavigateTo} />
+          </div>
+        )}
+        {mountedTabs.has('control_center') && (
+          <div style={{ display: activeTab === 'control_center' ? 'block' : 'none' }}>
+            <ControlCenterTab user={user} onNavigateTo={handleNavigateTo} />
+          </div>
+        )}
       </div>
 
       {/* Back */}
@@ -278,7 +940,7 @@ function JsonNode({ k, value, depth, defaultOpen }) {
   // Primitive
   let valStyle;
   if (value === null || value === undefined)   valStyle = { color: 'var(--color-text-secondary)' };
-  else if (typeof value === 'boolean')          valStyle = { color: '#FBBF24' };
+  else if (typeof value === 'boolean')          valStyle = { color: C.amber };
   else if (typeof value === 'number')           valStyle = { color: '#60A5FA' };
   else                                          valStyle = { color: '#4ADE80' };
 
@@ -316,7 +978,7 @@ function JsonTree({ data, defaultOpen }) {
    Workbench Tab — image upload + full pipeline analysis
    ═══════════════════════════════════════════════════════════ */
 
-function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingConsumed, onWorkbenchChange }) {
+function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingConsumed, onWorkbenchChange, onNavigateTo }) {
   const fileRef = useRef(null);
   const [file,      setFile]      = useState(null);
   const [preview,   setPreview]   = useState(null);
@@ -465,7 +1127,7 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
       {preview && (
         <div className="lab-workbench__preview">
           <div className={`lab-workbench__img-shell${loading ? ' lab-workbench__img-shell--analyzing' : ''}`}>
-            <img src={preview} alt="Selected for analysis" />
+            <ZoomImg src={preview} alt="Selected for analysis" />
             {loading && (
               <div className="ref-scan-overlay">
                 <div className="ref-scan-overlay__line" />
@@ -536,6 +1198,8 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
                 title={
                   result.vlm_available === false
                     ? 'VLM not configured — set OPENAI_API_KEY or ANTHROPIC_API_KEY in .env'
+                    : result.vlm_error
+                    ? `VLM error: ${result.vlm_error}`
                     : 'VLM analysis did not return data for this image'
                 }
               >
@@ -557,6 +1221,28 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
               </button>
             )}
           </div>
+
+          {/* VLM error banner — shown when VLM was available but call failed */}
+          {!result.vlm && result.vlm_available !== false && result.vlm_error && (
+            <div style={{
+              margin: '0 0 var(--space-sm)',
+              padding: '8px 12px',
+              background: 'color-mix(in srgb, var(--color-amber) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-amber) 30%, transparent)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: 'var(--text-xs)',
+              color: 'var(--color-amber)',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 6,
+            }}>
+              <span style={{ flexShrink: 0 }}>⚠</span>
+              <span>
+                <strong>VLM analysis failed</strong> — CV-only results shown.{' '}
+                <code style={{ fontSize: '0.9em', opacity: 0.85 }}>{result.vlm_error}</code>
+              </span>
+            </div>
+          )}
 
           {/* Color legend — only on the overlay tab */}
           {viewMode === 'overlay' && result.debug_overlay_url && (
@@ -591,14 +1277,16 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
                 className="lab-overlay-img lab-overlay-img--clickable"
                 onClick={() => setOverlayZoomed(true)}
               />
-              {/* Lightbox */}
+              {/* Zoomable lightbox */}
               {overlayZoomed && (
-                <div className="lab-overlay-lightbox" onClick={() => setOverlayZoomed(false)}>
-                  <div className="lab-overlay-lightbox__inner" onClick={e => e.stopPropagation()}>
-                    <button className="lab-overlay-lightbox__close" onClick={() => setOverlayZoomed(false)}>✕</button>
-                    <img src={result.debug_overlay_url} alt="Debug overlay (fullscreen)" />
-                  </div>
-                </div>
+                <ZoomableLightbox onClose={() => setOverlayZoomed(false)}>
+                  <img
+                    src={result.debug_overlay_url}
+                    alt="Debug overlay (fullscreen)"
+                    style={{ maxWidth: '95vw', maxHeight: '90dvh', width: 'auto', height: 'auto', display: 'block', objectFit: 'contain', userSelect: 'none' }}
+                    draggable={false}
+                  />
+                </ZoomableLightbox>
               )}
 
               {/* ── Solver values legend ── */}
@@ -629,6 +1317,20 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             >
               Propose Rule
             </button>
+            {(() => {
+              const patternSlug = result?.reference_analysis?.lighting_read?.shadow_pattern
+                || result?.cv?.lighting_read?.shadow_pattern;
+              if (!patternSlug || patternSlug === 'unknown' || !onNavigateTo) return null;
+              return (
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => onNavigateTo({ tab: 'learning', panel: 'knowledge', patternId: patternSlug })}
+                  title={`Open KB entry for "${patternSlug}"`}
+                >
+                  📖 Pattern KB
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1367,12 +2069,277 @@ function WorkbenchScanStatus() {
 
 
 /* ═══════════════════════════════════════════════════════════
+   Reference Queue Panel — pending reference images to review
+   before seeding into the Gold Set
+   ═══════════════════════════════════════════════════════════ */
+
+function ReferenceQueuePanel({ onSeeded }) {
+  const [refEntries, setRefEntries]     = useState([]);
+  const [goldPaths, setGoldPaths]       = useState(new Set());
+  const [selectedIds, setSelectedIds]   = useState(new Set());
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [seedRunning, setSeedRunning]   = useState(false);
+  const [seedResult, setSeedResult]     = useState(null);
+  const [justSeeded, setJustSeeded]     = useState(new Set()); // paths seeded this session
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [refData, goldData] = await Promise.all([
+        listReferenceDataset({ tier: 'gold' }),
+        listGoldSet(),
+      ]);
+      const gs = goldData.entries || goldData || [];
+      setGoldPaths(new Set(gs.map(e => e.image_path)));
+      setRefEntries(refData.entries || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Compute pending: gold-tier reference entries not yet in Gold Set
+  const pending = refEntries.filter(ref => {
+    const pid = ref.pattern_id;
+    const rid = ref.reference_id;
+    if (!pid || !rid) return false;
+    const relPath = `data/reference_dataset/${pid}/${rid}/image.jpg`;
+    return !goldPaths.has(relPath) && !justSeeded.has(relPath);
+  });
+
+  // Already seeded (in goldPaths) — shown in "Seeded" section
+  const seeded = refEntries.filter(ref => {
+    const pid = ref.pattern_id;
+    const rid = ref.reference_id;
+    if (!pid || !rid) return false;
+    const relPath = `data/reference_dataset/${pid}/${rid}/image.jpg`;
+    return goldPaths.has(relPath);
+  });
+
+  function toggleSelect(id) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === pending.length && pending.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pending.map(r => r.reference_id)));
+    }
+  }
+
+  async function handleSeed() {
+    const hasSelection = selectedIds.size > 0;
+    const targets = hasSelection ? pending.filter(r => selectedIds.has(r.reference_id)) : pending;
+    const imagePaths = targets.map(r =>
+      `data/reference_dataset/${r.pattern_id}/${r.reference_id}/image.jpg`
+    );
+    if (imagePaths.length === 0) return;
+
+    setSeedRunning(true);
+    setSeedResult(null);
+    try {
+      const data = await seedGoldSetFromReference({ tier: 'gold', imagePaths });
+      const actionAt = new Date().toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' });
+      setSeedResult({ ...data, actionAt });
+      if (data.created > 0) {
+        // Mark seeded paths so they move immediately
+        const newPaths = new Set(data.entries.map(e => e.image_path));
+        setJustSeeded(prev => new Set([...prev, ...newPaths]));
+        setGoldPaths(prev => new Set([...prev, ...newPaths]));
+        setSelectedIds(new Set());
+        onSeeded(); // refresh Gold Set list
+      }
+    } catch (err) {
+      setSeedResult({ error: err.message, actionAt: new Date().toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' }) });
+    } finally {
+      setSeedRunning(false);
+    }
+  }
+
+  if (loading) return <p className="lab-list__status">Loading queue…</p>;
+  if (error)   return <p className="lab-list__status lab-list__status--error">{error}</p>;
+
+  return (
+    <div className="lab-list">
+      {/* Toolbar */}
+      <div className="lab-list__toolbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
+          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)' }}>
+            {pending.length} pending
+          </span>
+          {pending.length > 0 && (
+            <button className="btn btn--ghost btn--sm" onClick={toggleSelectAll}>
+              {selectedIds.size === pending.length && pending.length > 0 ? '☑ All' : '☐ All'}
+            </button>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+          <button
+            className="btn btn--primary btn--sm"
+            onClick={handleSeed}
+            disabled={seedRunning || pending.length === 0}
+          >
+            {seedRunning
+              ? 'Seeding…'
+              : selectedIds.size > 0
+                ? `⬆ Seed ${selectedIds.size} Selected`
+                : `⬆ Seed All (${pending.length})`}
+          </button>
+          <button className="btn btn--ghost btn--sm" onClick={load} disabled={loading}>
+            ↺
+          </button>
+        </div>
+      </div>
+
+      {/* Seed result banner */}
+      {seedResult && (
+        <div className="lab-eval-banner" style={{ borderColor: seedResult.error ? 'var(--color-error)' : 'var(--color-success)' }}>
+          <div className="lab-eval-banner__header">
+            <span style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+              <strong>{seedResult.error ? 'Seed Failed' : 'Seeded'}</strong>
+              {seedResult.actionAt && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  {seedResult.actionAt}
+                </span>
+              )}
+            </span>
+            <button className="lab-eval-banner__close" onClick={() => setSeedResult(null)}>×</button>
+          </div>
+          {seedResult.error ? (
+            <div style={{ color: 'var(--color-error)', fontSize: 'var(--text-sm)' }}>{seedResult.error}</div>
+          ) : (
+            <div className="lab-eval-banner__stats">
+              <span style={{ color: 'var(--color-success)' }}>Created: {seedResult.created}</span>
+              <span style={{ color: 'var(--color-text-dim)' }}>Skipped: {seedResult.skipped}</span>
+              {seedResult.entries?.length > 0 && (
+                <span style={{ color: 'var(--color-text-dim)' }}>
+                  — {seedResult.entries.map(e => e.pattern).filter((v, i, a) => v && a.indexOf(v) === i).join(', ')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Pending cards */}
+      {pending.length === 0 && seeded.length > 0 && (
+        <div className="lab-content__placeholder" style={{ paddingTop: 'var(--space-lg)' }}>
+          <span style={{ fontSize: 'var(--text-2xl)' }}>✓</span>
+          <h3>All seeded</h3>
+          <p>All {seeded.length} gold-tier references are in the Gold Set.</p>
+        </div>
+      )}
+      {pending.length === 0 && seeded.length === 0 && (
+        <div className="lab-content__placeholder">
+          <h3>No gold-tier references</h3>
+          <p>Upload and approve reference images to populate this queue.</p>
+        </div>
+      )}
+
+      {pending.length > 0 && (
+        <>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', margin: '0 0 var(--space-xs)' }}>
+            PENDING — not yet in Gold Set
+          </p>
+          {pending.map(ref => {
+            const isChecked = selectedIds.has(ref.reference_id);
+            const meta = ref.metadata || {};
+            const gt = meta.ground_truth || {};
+            const thumbUrl = getReferenceThumbnailUrl(ref.pattern_id, ref.reference_id);
+            return (
+              <div
+                key={ref.reference_id}
+                className={`lab-card lab-card--selectable${isChecked ? ' lab-card--selected' : ''}`}
+                onClick={() => toggleSelect(ref.reference_id)}
+              >
+                <label className="lab-card__checkbox" onClick={e => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => toggleSelect(ref.reference_id)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                </label>
+                {ref.has_thumbnail && (
+                  <ZoomImg
+                    src={thumbUrl}
+                    alt={ref.reference_id}
+                    className="lab-queue-thumb"
+                    onError={e => { e.target.style.display = 'none'; }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="lab-card__top">
+                    <span className="lab-card__title">{gt.expected_pattern || ref.pattern_id}</span>
+                    <span className="lab-badge lab-badge--amber">{meta.dataset_tier || 'gold'}</span>
+                  </div>
+                  <p className="lab-card__sub">{ref.reference_id}</p>
+                  {meta.approval_status && (
+                    <span className="lab-card__meta">{meta.approval_status}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Seeded section */}
+      {seeded.length > 0 && (
+        <>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', margin: 'var(--space-md) 0 var(--space-xs)' }}>
+            SEEDED — {seeded.length} already in Gold Set
+          </p>
+          {seeded.map(ref => {
+            const meta = ref.metadata || {};
+            const gt = meta.ground_truth || {};
+            const thumbUrl = getReferenceThumbnailUrl(ref.pattern_id, ref.reference_id);
+            const isNew = justSeeded.has(`data/reference_dataset/${ref.pattern_id}/${ref.reference_id}/image.jpg`);
+            return (
+              <div key={ref.reference_id} className="lab-card" style={{ opacity: 0.6 }}>
+                {ref.has_thumbnail && (
+                  <ZoomImg
+                    src={thumbUrl}
+                    alt={ref.reference_id}
+                    className="lab-queue-thumb"
+                    onError={e => { e.target.style.display = 'none'; }}
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="lab-card__top">
+                    <span className="lab-card__title">{gt.expected_pattern || ref.pattern_id}</span>
+                    <span className="lab-badge lab-badge--green">{isNew ? '✓ just seeded' : '✓ seeded'}</span>
+                  </div>
+                  <p className="lab-card__sub">{ref.reference_id}</p>
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    Gold Set Tab — CRUD list + detail + batch evaluation
    ═══════════════════════════════════════════════════════════ */
 
 const GOLD_STATUSES = ['all', 'draft', 'approved', 'archived'];
 
 function GoldSetTab({ prefill, onPrefillConsumed }) {
+  const [activeTab, setActiveTab]       = useState('goldset'); // 'queue' | 'goldset'
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1381,6 +2348,10 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
   const [selected, setSelected] = useState(null);
   const [evalResult, setEvalResult] = useState(null);
   const [evalRunning, setEvalRunning] = useState(false);
+  const [seedRunning, setSeedRunning] = useState(false);
+  const [seedResult, setSeedResult] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkRunning, setBulkRunning] = useState(false);
 
   // Auto-open create form when prefill arrives
   useEffect(() => {
@@ -1390,6 +2361,7 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
   const fetchEntries = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSelectedIds(new Set());
     try {
       const data = await listGoldSet(statusFilter === 'all' ? null : statusFilter);
       setEntries(data.entries || data || []);
@@ -1426,16 +2398,87 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
     }
   }
 
+  async function handleSeedFromReference() {
+    setSeedRunning(true);
+    setSeedResult(null);
+    try {
+      // If entries are selected, seed only those specific image paths (force-refresh)
+      // If nothing selected, seed all gold-tier reference entries (new ones only)
+      const hasSelection = selectedIds.size > 0;
+      const imagePaths = hasSelection
+        ? entries.filter(e => selectedIds.has(e.id)).map(e => e.image_path).filter(Boolean)
+        : null;
+      const data = await seedGoldSetFromReference({
+        tier:       'gold',
+        imagePaths: imagePaths,
+        force:      hasSelection,   // force-refresh when targeting selected entries
+      });
+      const actionAt = new Date().toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' });
+      setSeedResult({ ...data, targeted: hasSelection, targetCount: imagePaths?.length, actionAt });
+      if (data.created > 0 || (hasSelection && data.entries?.length > 0)) fetchEntries();
+    } catch (err) {
+      setSeedResult({ error: err.message, actionAt: new Date().toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' }) });
+    } finally {
+      setSeedRunning(false);
+    }
+  }
+
   async function handleRunEval() {
     setEvalRunning(true);
     setEvalResult(null);
     try {
       const data = await evaluateGoldSet();
-      setEvalResult(data);
+      setEvalResult({ ...data, actionAt: new Date().toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' }) });
     } catch (err) {
       alert(err.message);
     } finally {
       setEvalRunning(false);
+    }
+  }
+
+  function toggleSelect(id, e) {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === entries.length && entries.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(entries.map(e => e.id)));
+    }
+  }
+
+  async function handleBulkStatus(newStatus) {
+    if (selectedIds.size === 0) return;
+    setBulkRunning(true);
+    try {
+      await Promise.all([...selectedIds].map(id => updateGoldSetEntry(id, { status: newStatus })));
+      setSelectedIds(new Set());
+      fetchEntries();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBulkRunning(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected entries? This cannot be undone.`)) return;
+    setBulkRunning(true);
+    try {
+      await Promise.all([...selectedIds].map(id => deleteGoldSetEntry(id)));
+      setSelectedIds(new Set());
+      fetchEntries();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setBulkRunning(false);
     }
   }
 
@@ -1474,6 +2517,29 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
   // ── List view ──
   return (
     <div className="lab-list">
+      {/* Top-level tab switcher: Queue / Gold Set */}
+      <div className="lab-list__tab-switcher">
+        <button
+          className={`lab-tab${activeTab === 'queue' ? ' lab-tab--active' : ''}`}
+          onClick={() => setActiveTab('queue')}
+        >
+          ⏳ Queue
+        </button>
+        <button
+          className={`lab-tab${activeTab === 'goldset' ? ' lab-tab--active' : ''}`}
+          onClick={() => setActiveTab('goldset')}
+        >
+          ★ Gold Set
+        </button>
+      </div>
+
+      {/* Queue view — reference images pending seeding */}
+      {activeTab === 'queue' && (
+        <ReferenceQueuePanel onSeeded={() => { fetchEntries(); setActiveTab('goldset'); }} />
+      )}
+
+      {/* Gold Set view */}
+      {activeTab === 'goldset' && <>
       {/* Toolbar */}
       <div className="lab-list__toolbar">
         <div className="lab-list__filters">
@@ -1487,9 +2553,32 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center' }}>
+          {entries.length > 0 && (
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={toggleSelectAll}
+              title={selectedIds.size === entries.length ? 'Deselect all' : 'Select all'}
+            >
+              {selectedIds.size === entries.length && entries.length > 0 ? '☑ All' : '☐ All'}
+            </button>
+          )}
           <button className="btn btn--primary btn--sm" onClick={() => setView('create')}>
             + New
+          </button>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={handleSeedFromReference}
+            disabled={seedRunning}
+            title={selectedIds.size > 0
+              ? `Re-seed ${selectedIds.size} selected entries from Reference Dataset (force-refresh)`
+              : 'Import all Gold-tier reference dataset images into the Gold Set as approved entries'}
+          >
+            {seedRunning
+              ? 'Seeding\u2026'
+              : selectedIds.size > 0
+                ? `\u2B06 Re-seed ${selectedIds.size} Selected`
+                : '\u2B06 Seed from Reference'}
           </button>
           <button
             className="btn btn--ghost btn--sm"
@@ -1501,11 +2590,107 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
         </div>
       </div>
 
+      {/* Bulk action bar — visible when entries are selected */}
+      {selectedIds.size > 0 && (
+        <div className="lab-bulk-bar">
+          <span className="lab-bulk-bar__count">{selectedIds.size} selected</span>
+          <div className="lab-bulk-bar__actions">
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleBulkStatus('approved')}
+              disabled={bulkRunning}
+              title="Approve selected entries (activate for eval)"
+            >
+              ✓ Approve
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleBulkStatus('archived')}
+              disabled={bulkRunning}
+            >
+              Archive
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => handleBulkStatus('draft')}
+              disabled={bulkRunning}
+            >
+              → Draft
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              style={{ color: 'var(--color-error)' }}
+              onClick={handleBulkDelete}
+              disabled={bulkRunning}
+            >
+              Delete
+            </button>
+          </div>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => setSelectedIds(new Set())}
+            style={{ marginLeft: 'auto', opacity: 0.6 }}
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
+      {/* Seed result banner */}
+      {seedResult && (
+        <div className="lab-eval-banner" style={{ borderColor: seedResult.error ? 'var(--color-error)' : 'var(--color-success)' }}>
+          <div className="lab-eval-banner__header">
+            <span style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+              <strong>
+                {seedResult.error
+                  ? 'Seed Failed'
+                  : seedResult.targeted
+                    ? `Re-seeded ${seedResult.targetCount} selected`
+                    : 'Seed Complete'}
+              </strong>
+              {seedResult.actionAt && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  {seedResult.actionAt}
+                </span>
+              )}
+            </span>
+            <button className="lab-eval-banner__close" onClick={() => setSeedResult(null)}>{'\u00D7'}</button>
+          </div>
+          {seedResult.error ? (
+            <div style={{ color: 'var(--color-error)', fontSize: 'var(--text-sm)' }}>{seedResult.error}</div>
+          ) : (
+            <div className="lab-eval-banner__stats">
+              {seedResult.targeted ? (
+                <span style={{ color: 'var(--color-success)' }}>
+                  Updated: {seedResult.entries?.filter(e => e.action === 'updated').length || 0}
+                  {' '}· Created: {seedResult.entries?.filter(e => e.action === 'created').length || 0}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--color-success)' }}>Created: {seedResult.created}</span>
+              )}
+              <span style={{ color: 'var(--color-text-dim)' }}>Skipped: {seedResult.skipped}</span>
+              {seedResult.entries?.length > 0 && (
+                <span style={{ color: 'var(--color-text-dim)' }}>
+                  — {seedResult.entries.map(e => e.pattern).filter((v, i, a) => v && a.indexOf(v) === i).join(', ')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Eval result banner */}
       {evalResult && (
         <div className="lab-eval-banner">
           <div className="lab-eval-banner__header">
-            <strong>Evaluation Complete</strong>
+            <span style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+              <strong>Evaluation Complete</strong>
+              {evalResult.actionAt && (
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', fontFamily: 'var(--font-mono)' }}>
+                  {evalResult.actionAt}
+                </span>
+              )}
+            </span>
             <button className="lab-eval-banner__close" onClick={() => setEvalResult(null)}>{'\u00D7'}</button>
           </div>
           {evalResult.summary && (
@@ -1537,22 +2722,41 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
       )}
 
       {/* Entry cards */}
-      {!loading && entries.map(entry => (
-        <button
-          key={entry.id}
-          className="lab-card"
-          onClick={() => { setSelected(entry); setView('detail'); }}
-        >
-          <div className="lab-card__top">
-            <span className="lab-card__title">{entry.image_path || entry.id}</span>
-            <StatusBadge status={entry.status} />
+      {!loading && entries.map(entry => {
+        const isChecked = selectedIds.has(entry.id);
+        return (
+          <div
+            key={entry.id}
+            className={`lab-card lab-card--selectable${isChecked ? ' lab-card--selected' : ''}`}
+            onClick={() => { setSelected(entry); setView('detail'); }}
+          >
+            <label
+              className="lab-card__checkbox"
+              onClick={e => toggleSelect(entry.id, e)}
+              title={isChecked ? 'Deselect' : 'Select'}
+            >
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={() => {}}
+                onClick={e => toggleSelect(entry.id, e)}
+                style={{ cursor: 'pointer' }}
+              />
+            </label>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="lab-card__top">
+                <span className="lab-card__title">{entry.image_path || entry.id}</span>
+                <StatusBadge status={entry.status} />
+              </div>
+              {entry.notes && <p className="lab-card__sub">{entry.notes}</p>}
+              {entry.created_at && (
+                <span className="lab-card__meta">{new Date(entry.created_at * 1000).toLocaleDateString(undefined, { timeZone: _TZ })}</span>
+              )}
+            </div>
           </div>
-          {entry.notes && <p className="lab-card__sub">{entry.notes}</p>}
-          {entry.created_at && (
-            <span className="lab-card__meta">{new Date(entry.created_at * 1000).toLocaleDateString()}</span>
-          )}
-        </button>
-      ))}
+        );
+      })}
+      </>}
     </div>
   );
 }
@@ -1627,7 +2831,7 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
       {/* Image preview */}
       {imageSrc ? (
         <div className="lab-detail__image-box">
-          <img src={imageSrc} alt="Gold set" className="lab-detail__image" />
+          <ZoomImg src={imageSrc} alt="Gold set" className="lab-detail__image" />
         </div>
       ) : (
         <div className="lab-detail__field">
@@ -1654,7 +2858,7 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
       {entry.created_at && (
         <div className="lab-detail__field">
           <span className="lab-detail__label">Created</span>
-          <span className="lab-detail__value">{new Date(entry.created_at * 1000).toLocaleString()}</span>
+          <span className="lab-detail__value">{new Date(entry.created_at * 1000).toLocaleString(undefined, { timeZone: _TZ })}</span>
         </div>
       )}
 
@@ -1790,7 +2994,7 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
         />
         {imagePreview ? (
           <div style={{ position: 'relative', marginTop: 'var(--space-xs)' }}>
-            <img
+            <ZoomImg
               src={imagePreview}
               alt="Selected"
               style={{ width: '100%', maxHeight: 200, objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block', background: 'var(--color-bg)' }}
@@ -1992,22 +3196,44 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
       )}
 
       {/* Candidate cards */}
-      {!loading && items.map(item => (
-        <button
-          key={item.id}
-          className="lab-card"
-          onClick={() => { setSelected(item); setView('detail'); }}
-        >
-          <div className="lab-card__top">
-            <span className="lab-card__title">{item.title}</span>
-            <StatusBadge status={item.status} />
-          </div>
-          {item.description && <p className="lab-card__sub">{item.description}</p>}
-          {item.created_at && (
-            <span className="lab-card__meta">{new Date(item.created_at * 1000).toLocaleDateString()}</span>
-          )}
-        </button>
-      ))}
+      {!loading && items.map(item => {
+        // Parse source_image_path → thumbnail URL
+        // Path shape: data/reference_dataset/{pattern_id}/{reference_id}/image.jpg
+        let thumbUrl = null;
+        if (item.source_image_path) {
+          const parts = item.source_image_path.replace(/\\/g, '/').split('/');
+          // parts: ['data', 'reference_dataset', pattern_id, reference_id, 'image.jpg']
+          if (parts.length >= 5 && parts[1] === 'reference_dataset') {
+            thumbUrl = getReferenceThumbnailUrl(parts[2], parts[3]);
+          }
+        }
+        return (
+          <button
+            key={item.id}
+            className="lab-card lab-card--with-thumb"
+            onClick={() => { setSelected(item); setView('detail'); }}
+          >
+            {thumbUrl && (
+              <ZoomImg
+                src={thumbUrl}
+                alt=""
+                className="lab-queue-thumb"
+                onError={e => { e.target.style.display = 'none'; }}
+              />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="lab-card__top">
+                <span className="lab-card__title">{item.title}</span>
+                <StatusBadge status={item.status} />
+              </div>
+              {item.description && <p className="lab-card__sub">{item.description}</p>}
+              {item.created_at && (
+                <span className="lab-card__meta">{new Date(item.created_at * 1000).toLocaleDateString(undefined, { timeZone: _TZ })}</span>
+              )}
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -2021,6 +3247,10 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
   const [editRationale, setEditRationale] = useState('');
   const [editJson, setEditJson] = useState('');
   const [jsonErr, setJsonErr] = useState(null);
+  const [evalResult, setEvalResult] = useState(null);
+  const [evaluations, setEvaluations] = useState(null);
+  const [pipelineAction, setPipelineAction] = useState(null); // 'evaluating'|'applying'|null
+  const [pipelineMsg, setPipelineMsg] = useState(null); // {ok, msg}
 
   function startEdit() {
     setEditTitle(selected.title || '');
@@ -2030,6 +3260,51 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
     setJsonErr(null);
     setEditing(true);
   }
+
+  async function handleEvaluate() {
+    setPipelineAction('evaluating');
+    setPipelineMsg(null);
+    try {
+      const res = await evaluateCandidate(selected.id, { auto_release_on_safe: false });
+      setEvalResult(res);
+      const evals = await getCandidateEvaluations(selected.id);
+      setEvaluations(evals);
+      setPipelineMsg({ ok: true, msg: `Evaluation complete — risk: ${res.risk_tier || '?'}, score: ${res.accuracy_score != null ? res.accuracy_score.toFixed(2) : '?'}` });
+    } catch (e) {
+      setPipelineMsg({ ok: false, msg: e.message });
+    } finally {
+      setPipelineAction(null);
+    }
+  }
+
+  async function handleApply() {
+    if (!confirm('Apply this candidate to the live ruleset? This will update pattern weights and trigger a monitoring window.')) return;
+    setPipelineAction('applying');
+    setPipelineMsg(null);
+    try {
+      await applyCandidate(selected.id, 'Applied via Candidates tab');
+      await onStatusChange(selected.id, 'implemented');
+      setPipelineMsg({ ok: true, msg: 'Candidate applied to live ruleset. Check Monitoring in Learning Ops.' });
+    } catch (e) {
+      setPipelineMsg({ ok: false, msg: e.message });
+    } finally {
+      setPipelineAction(null);
+    }
+  }
+
+  async function loadEvaluations() {
+    try {
+      const evals = await getCandidateEvaluations(selected.id);
+      setEvaluations(evals);
+    } catch { /* silent */ }
+  }
+
+  // Load evaluations on mount if candidate has been evaluated
+  useEffect(() => {
+    if (selected.status === 'accepted' || selected.status === 'implemented') {
+      loadEvaluations();
+    }
+  }, [selected.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function cancelEdit() {
     setEditing(false);
@@ -2149,7 +3424,7 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
       {selected.created_at && (
         <div className="lab-detail__field">
           <span className="lab-detail__label">Created</span>
-          <span className="lab-detail__value">{new Date(selected.created_at * 1000).toLocaleString()}</span>
+          <span className="lab-detail__value">{new Date(selected.created_at * 1000).toLocaleString(undefined, { timeZone: _TZ })}</span>
         </div>
       )}
 
@@ -2165,23 +3440,95 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
         </div>
       )}
 
+      {/* Pipeline message */}
+      {pipelineMsg && (
+        <div style={{
+          padding: 'var(--space-xs) var(--space-sm)', marginTop: 'var(--space-sm)',
+          borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
+          background: pipelineMsg.ok ? 'color-mix(in srgb, #34D399 12%, transparent)' : 'color-mix(in srgb, #F87171 12%, transparent)',
+          border: `1px solid ${pipelineMsg.ok ? '#34D39944' : '#F8717144'}`,
+          color: pipelineMsg.ok ? C.green : C.red,
+        }}>
+          {pipelineMsg.ok ? '✓' : '⚠'} {pipelineMsg.msg}
+        </div>
+      )}
+
+      {/* Evaluation results */}
+      {evalResult && (
+        <div style={{
+          marginTop: 'var(--space-sm)',
+          padding: 'var(--space-sm)',
+          background: 'var(--color-surface)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: 'var(--text-xs)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 'var(--space-xs)', color: 'var(--color-text)' }}>Evaluation Result</div>
+          <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+            {evalResult.risk_tier && (
+              <div>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Risk: </span>
+                <span style={{
+                  fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  color: evalResult.risk_tier === 'LOW' ? C.green : evalResult.risk_tier === 'HIGH' ? C.red : '#FCD34D',
+                }}>{evalResult.risk_tier}</span>
+              </div>
+            )}
+            {evalResult.accuracy_score != null && (
+              <div>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Score: </span>
+                <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{evalResult.accuracy_score.toFixed(3)}</span>
+              </div>
+            )}
+            {evalResult.approved != null && (
+              <div>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Gate: </span>
+                <span style={{ color: evalResult.approved ? C.green : C.red, fontWeight: 600 }}>
+                  {evalResult.approved ? '✓ Approved' : '✗ Blocked'}
+                </span>
+              </div>
+            )}
+          </div>
+          {evalResult.notes && (
+            <div style={{ marginTop: 'var(--space-xs)', color: 'var(--color-text-secondary)' }}>{evalResult.notes}</div>
+          )}
+        </div>
+      )}
+
       {/* Status workflow controls — hidden while editing */}
       {!editing && (
-        <div className="lab-detail__controls">
+        <div className="lab-detail__controls" style={{ flexWrap: 'wrap', gap: 'var(--space-xs)' }}>
+          {/* Learning pipeline actions */}
+          {(selected.status === 'proposed' || selected.status === 'accepted') && (
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={handleEvaluate}
+              disabled={pipelineAction !== null}
+            >
+              {pipelineAction === 'evaluating' ? 'Evaluating…' : '▶ Evaluate'}
+            </button>
+          )}
+          {selected.status === 'accepted' && evalResult?.approved && (
+            <button
+              className="btn btn--primary btn--sm"
+              onClick={handleApply}
+              disabled={pipelineAction !== null}
+              style={{ background: '#059669', borderColor: '#059669' }}
+            >
+              {pipelineAction === 'applying' ? 'Applying…' : '⬆ Apply to Ruleset'}
+            </button>
+          )}
+
+          {/* Simple status transitions */}
           {selected.status === 'proposed' && (
             <>
-              <button className="btn btn--primary btn--sm" onClick={() => onStatusChange(selected.id, 'accepted')}>
+              <button className="btn btn--ghost btn--sm" onClick={() => onStatusChange(selected.id, 'accepted')}>
                 Accept
               </button>
               <button className="btn btn--ghost btn--sm" onClick={() => onStatusChange(selected.id, 'rejected')}>
                 Reject
               </button>
             </>
-          )}
-          {selected.status === 'accepted' && (
-            <button className="btn btn--primary btn--sm" onClick={() => onStatusChange(selected.id, 'implemented')}>
-              Mark Implemented
-            </button>
           )}
           {selected.status === 'rejected' && (
             <button className="btn btn--ghost btn--sm" onClick={() => onStatusChange(selected.id, 'proposed')}>
@@ -2664,7 +4011,7 @@ function ReferenceDatasetTab() {
               {meta.source_type && <AnalysisRow label="Source Type" value={meta.source_type} />}
               {meta.notes && <AnalysisRow label="Notes" value={meta.notes} />}
               {meta.tags?.length > 0 && <AnalysisRow label="Tags" value={meta.tags.join(', ')} />}
-              {meta.ingested_at && <AnalysisRow label="Ingested" value={new Date(meta.ingested_at).toLocaleString()} />}
+              {meta.ingested_at && <AnalysisRow label="Ingested" value={new Date(meta.ingested_at).toLocaleString(undefined, { timeZone: _TZ })} />}
               {meta.approved_by && <AnalysisRow label="Approved By" value={meta.approved_by} />}
             </div>
           )}
@@ -2733,7 +4080,6 @@ function ReferenceDatasetTab() {
               key={t}
               className={`lab-tab${tierFilter === t ? ' lab-tab--active' : ''}`}
               onClick={() => setTierFilter(t)}
-              style={{ fontSize: 'var(--text-xs)' }}
             >
               {t === 'all' ? 'All Tiers' : t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -2902,7 +4248,7 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
         onDrop={handleDropzoneDrop}
       >
         {preview ? (
-          <img src={preview} className="ref-import__preview" alt="Preview" />
+          <ZoomImg src={preview} className="ref-import__preview" alt="Preview" />
         ) : (
           <div className="ref-import__placeholder">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2982,26 +4328,49 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
 /** Image viewer with debug overlay toggle — uses AuthImage for JWT-gated endpoints */
 function RefDetailImage({ patternId, referenceId, hasOverlay }) {
   const [showOverlay, setShowOverlay] = useState(false);
+  const [zoomed, setZoomed] = useState(false);
 
   // Strip /api/lab prefix — AuthImage prepends it via labFetchBlob
-  const imagePath = `/reference-dataset/${patternId}/${referenceId}/image`;
+  const imagePath   = `/reference-dataset/${patternId}/${referenceId}/image`;
   const overlayPath = `/reference-dataset/${patternId}/${referenceId}/debug-overlay`;
+  const activePath  = showOverlay && hasOverlay ? overlayPath : imagePath;
 
   return (
     <div className="ref-detail-image">
       <AuthImage
-        path={showOverlay && hasOverlay ? overlayPath : imagePath}
+        path={activePath}
         alt={referenceId}
         className="ref-detail-image__img"
       />
-      {hasOverlay && (
+
+      {/* Controls row */}
+      <div style={{ position: 'absolute', top: 'var(--space-sm)', right: 'var(--space-sm)', display: 'flex', gap: 4 }}>
+        {hasOverlay && (
+          <button
+            className={`btn btn--xs ${showOverlay ? 'btn--primary' : 'btn--ghost'}`}
+            onClick={() => setShowOverlay(!showOverlay)}
+          >
+            {showOverlay ? 'Original' : 'Debug Overlay'}
+          </button>
+        )}
         <button
-          className={`btn btn--xs ${showOverlay ? 'btn--primary' : 'btn--ghost'}`}
-          style={{ position: 'absolute', top: 'var(--space-sm)', right: 'var(--space-sm)' }}
-          onClick={() => setShowOverlay(!showOverlay)}
+          className="btn btn--xs btn--ghost"
+          onClick={() => setZoomed(true)}
+          title="Open zoomable view"
         >
-          {showOverlay ? 'Original' : 'Debug Overlay'}
+          ⊕ Zoom
         </button>
+      </div>
+
+      {/* Zoomable lightbox */}
+      {zoomed && (
+        <ZoomableLightbox onClose={() => setZoomed(false)}>
+          <AuthImage
+            path={activePath}
+            alt={`${referenceId} (zoomed)`}
+            style={{ maxWidth: '95vw', maxHeight: '90dvh', width: 'auto', height: 'auto', display: 'block', objectFit: 'contain', userSelect: 'none' }}
+          />
+        </ZoomableLightbox>
       )}
     </div>
   );

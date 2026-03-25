@@ -407,13 +407,14 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
 
         # ── Collect VLM result (started in parallel above) ───────────
         vlm_desc = None
+        _vlm_error: Optional[str] = None
         if _vlm_cached is not None:
             # Cache hit — reconstruct from disk
             try:
                 from engine.image_analysis_models import VLMDescription
                 vlm_desc = VLMDescription.model_validate(_vlm_cached)
-            except Exception:
-                pass
+            except Exception as _ce:
+                _vlm_error = f"Cache deserialize error: {_ce}"
         elif _vlm_future is not None:
             try:
                 vlm_desc = _vlm_future.result(timeout=60)
@@ -422,6 +423,15 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
             except Exception as _vlm_exc:
                 import logging as _log
                 _log.getLogger(__name__).warning("VLM call failed: %s", _vlm_exc)
+                _vlm_error = str(_vlm_exc)
+        else:
+            # _vlm_future was never submitted — vlm_available() returned False or import failed
+            try:
+                from engine.vlm import vlm_available as _va, _VLM_PROVIDER as _provider
+                if not _va():
+                    _vlm_error = f"VLM not configured (provider={_provider or 'none'})"
+            except Exception:
+                _vlm_error = "VLM module unavailable"
         if _vlm_executor is not None:
             _vlm_executor.shutdown(wait=False)
 
@@ -430,5 +440,6 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
         else:
             out["vlm_description"] = None
         out["_vlm_description"] = vlm_desc
+        out["_vlm_error"] = _vlm_error  # surfaced to UI for diagnostics
 
     return out

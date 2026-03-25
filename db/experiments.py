@@ -14,11 +14,41 @@ from typing import Any, Dict, List, Optional
 
 from db.database import get_db
 
+# ── Metrics TTL cache ────────────────────────────────────────────────────────
+# Experiment metrics queries can be expensive at scale; cache in-process for 5min.
+_METRICS_CACHE: Dict[str, Any] = {}   # key → {"ts": float, "value": Any}
+_METRICS_TTL = 300  # seconds
+
+def _cache_get(key: str) -> Any:
+    entry = _METRICS_CACHE.get(key)
+    if entry and time.time() - entry["ts"] < _METRICS_TTL:
+        return entry["value"]
+    return None
+
+def _cache_set(key: str, value: Any) -> None:
+    _METRICS_CACHE[key] = {"ts": time.time(), "value": value}
+
+def invalidate_metrics_cache() -> None:
+    """Call after recording events to ensure next read is fresh."""
+    _METRICS_CACHE.clear()
+
 
 # ── Schema ──────────────────────────────────────────────────────────────────
 
 def init_experiments_tables() -> None:
     with get_db() as conn:
+        conn.executescript("""
+            -- Migration: add group_name column if it was added after initial deploy
+            PRAGMA foreign_keys=off;
+        """)
+        # ALTER TABLE is not supported inside executescript with IF NOT EXISTS in SQLite;
+        # check column existence manually and migrate.
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(experiment_events)").fetchall()}
+        if "group_name" not in cols:
+            try:
+                conn.execute("ALTER TABLE experiment_events ADD COLUMN group_name TEXT")
+            except Exception:
+                pass  # Column may already exist on concurrent init
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS experiment_assignments (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +70,7 @@ def init_experiments_tables() -> None:
                 flag_name   TEXT NOT NULL,
                 variant     TEXT NOT NULL,
                 event_name  TEXT NOT NULL,
+                group_name  TEXT,
                 data_json   TEXT NOT NULL DEFAULT '{}',
                 created_at  REAL NOT NULL
             );
@@ -106,15 +137,16 @@ def record_experiment_event(
     variant: str,
     event_name: str,
     data: Optional[Dict[str, Any]] = None,
+    group: Optional[str] = None,
 ) -> None:
     with get_db() as conn:
         conn.execute(
             """
             INSERT INTO experiment_events
-                (session_id, flag_name, variant, event_name, data_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (session_id, flag_name, variant, event_name, group_name, data_json, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (session_id, flag_name, variant, event_name,
+            (session_id, flag_name, variant, event_name, group,
              json.dumps(data or {}), time.time()),
         )
 
@@ -125,7 +157,13 @@ def get_experiment_metrics(flag_name: str, days: int = 30) -> Dict:
     """
     Return per-variant metrics for a flag.
     Includes: sessions, analyses, conversions, conversion_rate, revenue_est, arpu_est.
+    Results are cached in-process for 5 minutes.
     """
+    cache_key = f"flag:{flag_name}:{days}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     cutoff = time.time() - days * 86400
 
     with get_db() as conn:
@@ -208,22 +246,32 @@ def get_experiment_metrics(flag_name: str, days: int = 30) -> Dict:
         m["revenue_est"] = round(c * price_per_conversion, 2)
         m["arpu_est"] = round(m["revenue_est"] / s, 2)
 
-    return {
+    result = {
         "flag_name": flag_name,
         "days": days,
         "variants": list(by_variant.values()),
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 def get_all_experiment_metrics(days: int = 30) -> List[Dict]:
-    """Return metrics for every flag that has any assignments in the window."""
+    """Return metrics for every flag that has any assignments in the window.
+    Results cached in-process for 5 minutes."""
+    cache_key = f"all:{days}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     cutoff = time.time() - days * 86400
     with get_db() as conn:
         rows = conn.execute(
             "SELECT DISTINCT flag_name FROM experiment_assignments WHERE assigned_at >= ?",
             (cutoff,),
         ).fetchall()
-    return [get_experiment_metrics(row["flag_name"], days) for row in rows]
+    result = [get_experiment_metrics(row["flag_name"], days) for row in rows]
+    _cache_set(cache_key, result)
+    return result
 
 
 # ── Decision Engine ──────────────────────────────────────────────────────────

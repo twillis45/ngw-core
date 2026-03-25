@@ -9,19 +9,43 @@ const FILTERS = [
   { value: 'studio', label: 'Studio' },
 ];
 
+const LAST_USED_KEY = 'ngw_last_used_setup';
+
+function getLastUsedId() {
+  try { return localStorage.getItem(LAST_USED_KEY); } catch { return null; }
+}
+
+function setLastUsedId(id) {
+  try { localStorage.setItem(LAST_USED_KEY, id); } catch {}
+}
+
 export default function SavedSetupsScreen() {
   const dispatch = useDispatch();
   const [setups, setSetups] = useState(() => loadSetups());
   const [filter, setFilter] = useState('all');
   const [deleteId, setDeleteId] = useState(null);
-  const [recreateId, setRecreateId] = useState(null);
+  const [lastUsedId, setLastUsedIdState] = useState(() => getLastUsedId());
 
   // Cross-tab sync — refresh when another tab saves or deletes a setup
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
-  const filtered = filter === 'all' ? setups : setups.filter(s => s.tag === filter);
+  // Build filtered list with last-used setup pinned to top
+  const base = filter === 'all' ? setups : setups.filter(s => s.tag === filter);
+  const filtered = lastUsedId
+    ? [...base].sort((a, b) => {
+        if (a.id === lastUsedId) return -1;
+        if (b.id === lastUsedId) return 1;
+        return 0;
+      })
+    : base;
+
+  function markLastUsed(id) {
+    setLastUsedId(id);
+    setLastUsedIdState(id);
+  }
 
   function handleLoad(setup) {
+    markLastUsed(setup.id);
     dispatch({ type: 'SET_RESULT', result: setup.result, apiResponse: null });
     dispatch({ type: 'NAVIGATE', screen: 'results' });
     trackEvent('SETUP_LOADED', { setupId: setup.id, name: setup.name });
@@ -29,6 +53,7 @@ export default function SavedSetupsScreen() {
 
   // Phase 7: Recreate flow — load the saved result and enter Shoot Mode
   function handleRecreate(setup) {
+    markLastUsed(setup.id);
     dispatch({ type: 'SET_RESULT', result: setup.result, apiResponse: null });
     dispatch({ type: 'SET_APP_MODE', mode: 'shoot' });
     dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
@@ -51,7 +76,10 @@ export default function SavedSetupsScreen() {
     const ms = ts < 1e12 ? ts * 1000 : ts;
     const d = new Date(ms);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(undefined, {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      month: 'short', day: 'numeric',
+    });
   }
 
   if (setups.length === 0) {
@@ -89,13 +117,18 @@ export default function SavedSetupsScreen() {
       </div>
 
       {filtered.map(setup => (
-        <div key={setup.id} className="result-card saved-setup-card">
+        <div key={setup.id} className={`result-card saved-setup-card${setup.id === lastUsedId ? ' saved-setup-card--last-used' : ''}`}>
           <div
             className="saved-setup-card__main"
             onClick={() => handleLoad(setup)}
             style={{ cursor: 'pointer' }}
           >
-            <div className="saved-setup-card__name">{setup.name}</div>
+            <div className="saved-setup-card__name">
+              {setup.name}
+              {setup.id === lastUsedId && (
+                <span className="saved-setup-card__last-used-badge">Last used</span>
+              )}
+            </div>
             <div className="saved-setup-card__meta">
               {setup.result?.bestMatch?.lightingPattern && (
                 <span className="saved-setup-card__pattern">

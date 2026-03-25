@@ -14,7 +14,7 @@
 
 import { useState, useEffect } from 'react';
 import { trackEvent } from '../data/analytics';
-import { trackExposure } from '../data/experimentTracker';
+import { broadcastConversion, trackExposure } from '../data/experimentTracker';
 import { getActiveInGroup } from '../data/flagsStore';
 import PricingScreen from './PricingScreen';
 
@@ -52,7 +52,9 @@ export default function ShootModePaywall({ onUnlock, onClose, variant = 'default
   }
 
   function handleClose() {
-    trackEvent('PAYWALL_DISMISSED', { trigger: 'shoot_mode', variant, type: 'shoot_mode' });
+    const dismissData = { trigger: 'shoot_mode', variant, type: 'shoot_mode' };
+    trackEvent('PAYWALL_DISMISSED', dismissData);
+    broadcastConversion('PAYWALL_DISMISSED', dismissData, ['pricing', 'paywall_timing', 'cta_messaging']);
     onClose?.();
   }
 

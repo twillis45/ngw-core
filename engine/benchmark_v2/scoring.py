@@ -53,12 +53,27 @@ _LIGHT_ROLES = ("key", "fill", "rim", "hair", "kicker", "background", "accent")
 
 # ── 1. Pattern Accuracy ───────────────────────────────────────────────────────
 
-def score_pattern(expected: str, predicted: Optional[str]) -> float:
-    """Binary match: 1.0 exact, 0.0 otherwise. Normalises separators."""
+def score_pattern(
+    expected: str,
+    predicted: Optional[str],
+    acceptable_patterns: Optional[List] = None,
+) -> float:
+    """Match score: 1.0 if predicted matches expected or any acceptable alternate.
+
+    acceptable_patterns — list of pattern IDs that are considered correct for
+    this case (e.g. visually ambiguous pairs like clamshell/butterfly).
+    Any match within the acceptable set scores 1.0 (full credit).
+    """
     if not predicted:
         return 0.0
     _n = lambda s: s.lower().replace("-", "_").replace(" ", "_").strip()
-    return 1.0 if _n(expected) == _n(predicted) else 0.0
+    norm_pred = _n(predicted)
+    if _n(expected) == norm_pred:
+        return 1.0
+    if acceptable_patterns:
+        if any(_n(a) == norm_pred for a in acceptable_patterns):
+            return 1.0
+    return 0.0
 
 
 # ── 2. Blueprint Score ────────────────────────────────────────────────────────
@@ -115,8 +130,10 @@ def _compare_modifier(exp: Optional[str], pred: Optional[str]) -> float:
 
 def _compare_power_ratio(exp: Optional[str], pred: Optional[str]) -> float:
     """Compare fill ratios like '2:1', '4:1'. Graded by relative error."""
+    if not exp and not pred:
+        return 1.0  # both absent: no disagreement
     if not exp or not pred:
-        return 0.5  # neutral when unknown
+        return 0.5  # one side absent: neutral
 
     def _parse(s: str) -> Optional[float]:
         try:
@@ -182,12 +199,15 @@ def compute_final_score(
     fix_score: float,
     confidence_score: float,
 ) -> float:
-    return (
+    raw = (
         SCORE_WEIGHTS["pattern"]    * pattern_score
         + SCORE_WEIGHTS["blueprint"]  * blueprint_score
         + SCORE_WEIGHTS["fix"]        * fix_score
         + SCORE_WEIGHTS["confidence"] * confidence_score
     )
+    # Round to 6 decimal places to eliminate IEEE 754 sub-precision noise
+    # (e.g. 0.30*1.0 + 0.30*1.0 + 0.20*0.5 + 0.20*0.5 = 0.7999999999999999 in Python)
+    return round(raw, 6)
 
 
 # ── Orchestrator Output Extractors ────────────────────────────────────────────
@@ -196,6 +216,9 @@ def extract_predicted_pattern(analysis: Dict[str, Any]) -> Optional[str]:
     """Extract the authoritative predicted pattern from pipeline output."""
     # Try multiple field paths — handle different pipeline versions
     paths = [
+        # Top-level authoritative_pattern (set by priority resolver — most reliable)
+        "authoritative_pattern",
+        # Nested paths for older/alternative serialisation shapes
         "reference_analysis.authoritative_pattern",
         "reference_analysis.pattern",
         "classification.archetype",
@@ -204,6 +227,12 @@ def extract_predicted_pattern(analysis: Dict[str, Any]) -> Optional[str]:
         "lighting_inference.pattern",
     ]
     for path in paths:
+        val = _get(analysis, path)
+        if val and isinstance(val, str) and val.lower() not in ("unknown", "none", ""):
+            return val
+    # Last-resort: accept 'unknown' rather than None so callers can distinguish
+    # "pipeline ran but couldn't classify" from "extraction failed entirely"
+    for path in ("authoritative_pattern", "lighting_intel.pattern"):
         val = _get(analysis, path)
         if val and isinstance(val, str):
             return val

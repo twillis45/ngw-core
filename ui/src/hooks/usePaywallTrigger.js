@@ -45,11 +45,15 @@ export default function usePaywallTrigger({ isPaid, analysisCount }) {
   const dismissGate = useCallback(() => {
     if (!activeGate) return;
     const elapsed = gateOpenedAt ? Date.now() - gateOpenedAt : null;
-    trackEvent('PAYWALL_DISMISSED', {
+    const dismissData = {
       trigger: activeGate.trigger,
       type: activeGate.paywallType,
       time_to_dismiss_ms: elapsed,
-    });
+    };
+    trackEvent('PAYWALL_DISMISSED', dismissData);
+    // Attribute dismissal to all active pricing + paywall experiments so
+    // we can measure dismiss-rate by variant, not just conversion.
+    broadcastConversion('PAYWALL_DISMISSED', dismissData);
     setActiveGate(null);
     setGateOpenedAt(null);
   }, [activeGate, gateOpenedAt]);

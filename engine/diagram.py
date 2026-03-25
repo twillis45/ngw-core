@@ -286,10 +286,16 @@ def build_diagram(system: Dict[str, Any], *, modifiers_available: Optional[List[
         is_reflector = fill_mod == "reflector"
         is_beauty = mood == "beauty"
 
-        if is_reflector and is_beauty:
-            # Clamshell: reflector below chin, centered
+        if is_beauty:
+            # Clamshell geometry is defined by the pattern, not the modifier.
+            # Beauty mode always places fill below chin on the camera axis — whether
+            # it's a reflector, a softbox, or a panel light.
             fill_angle, fill_height, fill_dist = 0.0, 1.2, 0.8
-            fill_note = "Reflector below chin for clamshell fill."
+            fill_note = (
+                "Reflector below chin for clamshell fill."
+                if is_reflector
+                else f"{fill_mod or 'Fill'} below chin — classic clamshell position."
+            )
         elif is_reflector:
             # Non-beauty reflector: bounce opposite key
             fill_angle = -_key_angle_for_mood(mood)

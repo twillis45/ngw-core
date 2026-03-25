@@ -3,6 +3,8 @@
  */
 import { useDispatch } from '../../context/AppContext';
 
+const _TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 const ORIGIN_OPTS = [
   { id: 'all',        label: 'All' },
   { id: 'production', label: 'Prod' },
@@ -62,8 +64,8 @@ export default function DashboardLayout({
             </button>
           ))}
           {lastRefresh && (
-            <span className="adb__last-refresh" title={new Date(lastRefresh).toLocaleTimeString()}>
-              {new Date(lastRefresh).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            <span className="adb__last-refresh" title={new Date(lastRefresh).toLocaleTimeString(undefined, { timeZone: _TZ })}>
+              {new Date(lastRefresh).toLocaleTimeString(undefined, { timeZone: _TZ, hour: '2-digit', minute: '2-digit' })}
             </span>
           )}
           <button

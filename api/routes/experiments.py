@@ -17,6 +17,7 @@ from db.experiments import (
     generate_candidates,
     get_all_experiment_metrics,
     get_experiment_metrics,
+    invalidate_metrics_cache,
     record_experiment_event,
 )
 
@@ -88,7 +89,10 @@ async def experiment_event(
             variant=body.variant,
             event_name=body.event_name,
             data=body.data,
+            group=body.group,
         )
+        # Invalidate cached metrics so the next dashboard read reflects the new event
+        invalidate_metrics_cache()
     except Exception:
         logger.exception("Failed to record experiment event")
     return None

@@ -115,6 +115,24 @@ async def get_case(case_id: str, user: Dict = Depends(get_dev_user)):
     return case
 
 
+@router.get("/cases/{case_id}/image")
+async def get_case_image(case_id: str, user: Dict = Depends(get_dev_user)):
+    """Serve the image file for a benchmark case."""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    case = get_benchmark_case(case_id)
+    if not case:
+        raise HTTPException(status_code=404, detail="Benchmark case not found")
+    image_path = Path(case.get("image_path", ""))
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found on disk")
+    suffix = image_path.suffix.lower()
+    media_type = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                  ".png": "image/png", ".webp": "image/webp",
+                  ".heic": "image/heic"}.get(suffix, "image/jpeg")
+    return FileResponse(str(image_path), media_type=media_type)
+
+
 @router.post("/cases", status_code=201)
 async def create_case(body: BenchmarkCaseCreate, user: Dict = Depends(get_dev_user)):
     return create_benchmark_case(

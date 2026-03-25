@@ -17,6 +17,7 @@
 import { useState } from 'react';
 import useSettings from '../hooks/useSettings';
 import HelpTip from '../components/HelpTip';
+import { getPattern } from '../knowledge';
 import {
   confidenceLevel, CONFIDENCE_LABELS, CONFIDENCE_CSS,
   CONFIDENCE_THRESHOLDS, patternSourceLabel,
@@ -75,12 +76,51 @@ function RiskBadge({ riskLevel }) {
   );
 }
 
+function PatternAbout({ pattern }) {
+  const [open, setOpen] = useState(false);
+  const s = pattern.summary;
+  return (
+    <div className="look-summary__reasoning">
+      <button
+        className="look-summary__reasoning-toggle"
+        onClick={() => setOpen(v => !v)}
+        type="button"
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>
+        </svg>
+        About {pattern.name}
+      </button>
+      {open && (
+        <div style={{ paddingTop: 8 }}>
+          {s.tagline && (
+            <p style={{ fontSize: 'var(--text-xs)', fontStyle: 'italic', color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {s.tagline}
+            </p>
+          )}
+          {s.description && (
+            <p className="look-summary__reasoning-text">{s.description}</p>
+          )}
+          {s.useCases?.length > 0 && (
+            <ul style={{ margin: '6px 0 0', paddingLeft: 14 }}>
+              {s.useCases.slice(0, 3).map((u, i) => (
+                <li key={i} style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 2 }}>{u}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LookSummaryCard({ bestMatch, lightingIntelligence, setupLightCount, patternRiskLevel }) {
   const { guidanceLevel, confidenceDisplay } = useSettings();
   const isMinimal  = guidanceLevel === 'minimal';
   const isCoaching = guidanceLevel === 'coaching';
   // Coaching auto-expands the "Why this pattern" section
   const [reasoningOpen, setReasoningOpen] = useState(isCoaching);
+  const [rationaleExpanded, setRationaleExpanded] = useState(false);
   if (!bestMatch) return null;
 
   const isRecipe = !!bestMatch.recipeId;
@@ -221,15 +261,28 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
         </div>
       )}
 
-      {bestMatch.rationale && (
-        <p className="look-summary__rationale">
-          {isCoaching
-            ? bestMatch.rationale
-            : bestMatch.rationale.length > 140
-              ? bestMatch.rationale.slice(0, 137) + '…'
-              : bestMatch.rationale}
-        </p>
-      )}
+      {bestMatch.rationale && (() => {
+        const LIMIT = 220;
+        const full = bestMatch.rationale;
+        const needsTrunc = !isCoaching && full.length > LIMIT;
+        const displayed = needsTrunc && !rationaleExpanded
+          ? full.slice(0, LIMIT - 1).trimEnd() + '…'
+          : full;
+        return (
+          <div>
+            <p className="look-summary__rationale">{displayed}</p>
+            {needsTrunc && (
+              <button
+                className="look-summary__rationale-toggle"
+                onClick={() => setRationaleExpanded(v => !v)}
+                type="button"
+              >
+                {rationaleExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {diagnosisLine && <p className="look-summary__diagnosis">{diagnosisLine}</p>}
 
@@ -257,6 +310,13 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
           )}
         </div>
       )}
+
+      {/* About this pattern — collapsible knowledge snippet from local KB */}
+      {patternKnown && (() => {
+        const kbPattern = getPattern(rawPattern);
+        if (!kbPattern?.summary) return null;
+        return <PatternAbout pattern={kbPattern} />;
+      })()}
 
       {!isRecipe && score < 0.5 && (
         <div className="look-summary__variability-signal">

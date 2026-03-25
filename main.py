@@ -5,6 +5,9 @@ from __future__ import annotations
 from dotenv import load_dotenv
 load_dotenv()
 
+import logging as _logging
+_startup_logger = _logging.getLogger("ngw.startup")
+
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List
@@ -43,6 +46,9 @@ from api.routes.experiments import router as experiments_router
 from api.routes.paywall import router as paywall_router
 from api.routes.stripe_checkout import router as stripe_router
 from api.routes.waitlist import router as waitlist_router
+from api.routes.failures import router as failures_router
+from api.routes.intelligence import router as intelligence_router
+from api.routes.health import router as health_router
 from db.database import init_db
 
 from engine.services.recommend_service import ENGINE_VERSION
@@ -63,6 +69,25 @@ async def lifespan(app):
     seed_signals()   # no-op if rows already exist
     from db.experiments import init_experiments_tables
     init_experiments_tables()
+
+    # Probe API keys at startup
+    try:
+        from engine.vlm import probe_api_key, vlm_available, _VLM_PROVIDER
+        if vlm_available():
+            result = probe_api_key()
+            if result["ok"]:
+                _startup_logger.info("✓ VLM API key OK (provider=%s)", result["provider"])
+            else:
+                _startup_logger.error(
+                    "✗ VLM API key INVALID — provider=%s detail=%s\n"
+                    "  → Update %s_API_KEY in .env and restart the server.",
+                    result["provider"], result["detail"],
+                    result["provider"].upper(),
+                )
+        else:
+            _startup_logger.warning("VLM not configured (VLM_PROVIDER=%s) — skipping key probe", _VLM_PROVIDER)
+    except Exception as exc:
+        _startup_logger.warning("API key probe failed at startup: %s", exc)
 
     # Start background scheduler (no-op if ENABLE_SCHEDULER is not set)
     from engine.scheduler import boot_scheduler, stop_scheduler
@@ -136,16 +161,49 @@ app.include_router(experiments_router, prefix="/api")
 app.include_router(paywall_router, prefix="/api")
 app.include_router(stripe_router, prefix="/api")
 app.include_router(waitlist_router)
+app.include_router(failures_router, prefix="/api")
+app.include_router(intelligence_router, prefix="/api")
+app.include_router(health_router, prefix="/api")
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.middleware("http")
-async def cache_headers(request: Request, call_next):
+async def security_and_cache_headers(request: Request, call_next):
     response = await call_next(request)
+
+    # ── Security headers ──────────────────────────────────────────────────────
+    # Prevent MIME-type sniffing.
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    # Block this app from being framed on other origins (clickjacking protection).
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    # Don't send the Referer header when navigating to a different origin.
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    # Opt out of FLoC / Topics API.
+    response.headers.setdefault("Permissions-Policy", "interest-cohort=()")
+    # Content Security Policy — restricts which resources the browser can load.
+    # 'unsafe-inline' / 'unsafe-eval' are required by React/Vite in production
+    # (inline styles, dynamic imports). Stripe JS requires frame-src allowance.
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https://api.stripe.com https://js.stripe.com; "
+            "frame-src https://js.stripe.com https://hooks.stripe.com; "
+            "font-src 'self' data:; "
+            "object-src 'none'; "
+            "base-uri 'self';"
+        ),
+    )
+
+    # ── Cache: immutable assets ───────────────────────────────────────────────
     # Vite build outputs content-hashed filenames under /static/ui/assets/.
     # These are safe to cache forever — new deploy = new hash = new URL.
     if request.url.path.startswith("/static/ui/assets/"):
         response.headers["Cache-Control"] = "max-age=31536000, immutable"
+
     return response
 
 @app.get("/health")
@@ -216,7 +274,7 @@ def docs_page(page: str = "index"):
 
 @app.get("/sitemap.xml")
 def sitemap():
-    base = "https://noguesswork.com"
+    base = "https://noguessworksystems.com"
     urls = [
         f"{base}/",
         f"{base}/features",
@@ -254,7 +312,7 @@ def robots_txt():
         "Disallow: /api/\n"
         "Disallow: /ui\n"
         "Disallow: /static/uploads/\n"
-        "Sitemap: https://noguesswork.com/sitemap.xml\n"
+        "Sitemap: https://noguessworksystems.com/sitemap.xml\n"
     )
     return HTMLResponse(content=content, media_type="text/plain")
 

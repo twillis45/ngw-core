@@ -50,6 +50,8 @@ from db.analytics import (
 # apply EXCL_METRICS / EXCL_CONVERSION / EXCL_LEARNING filters at the DB layer.
 # No additional filtering needed here.
 from db.learning import upsert_failure_cluster
+from db.failures import get_failure_stats
+from engine.learning.failure_classifier import severity_from_class_and_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +147,20 @@ def ingest_from_analytics(days: int = 30, origin: str = "production") -> Dict[st
     # 6 — Environment-segmented conversion gaps
     n = _ingest_conversion_gaps_by_environment(days, summary, dev_mode=(origin == "all"))
     summary["by_failure_mode"]["env_conversion_gap"] = n
+
+    # 7 — MISSED_IT failure events → misclassification / blueprint / low_conf clusters
+    n = _ingest_missed_it_failures(days, summary)
+    summary["by_failure_mode"]["missed_it"] = n
+
+    # 8 — Refresh intelligence score snapshots after each ingestion run
+    try:
+        from engine.intelligence.score import compute_global_score, compute_pattern_scores
+        compute_global_score(days=days, save=True)
+        compute_pattern_scores(days=days, save=True)
+        summary["by_failure_mode"]["intelligence_refresh"] = 1
+    except Exception as exc:
+        logger.warning("Intelligence score refresh failed: %s", exc)
+        summary["errors"].append(f"intelligence_refresh: {exc}")
 
     elapsed = round(time.time() - started_at, 2)
     summary["elapsed_secs"] = elapsed
@@ -466,3 +482,107 @@ def _ingest_trust_gap(success_conv: Dict[str, Any], kpi: Dict[str, Any], summary
         logger.warning("trust_gap upsert failed: %s", exc)
         summary["errors"].append(f"trust_gap: {exc}")
         return 0
+
+
+# ── MISSED_IT failure detector ──────────────────────────────────────────────────
+
+# Minimum failure count before we generate a cluster — avoids overfitting to noise
+_MIN_FAILURES_FOR_CLUSTER = 3
+# High-confidence failures are worth flagging even at low counts
+_MIN_FAILURES_HIGH_CONFIDENCE = 2
+_HIGH_CONFIDENCE_THRESHOLD = 0.65
+
+
+def _ingest_missed_it_failures(days: int, summary: Dict) -> int:
+    """
+    Ingest MISSED_IT failure events from failure_events table.
+
+    For each pattern with enough failures, creates/updates clusters grouped by
+    dominant failure class (misclassification, blueprint_failure, etc.).
+
+    SAFETY: minimum thresholds prevent overfitting on small sample sizes.
+    Returns number of clusters created/updated.
+    """
+    try:
+        stats = get_failure_stats(days=days)
+    except Exception as exc:
+        logger.warning("get_failure_stats failed: %s", exc)
+        summary["errors"].append(f"missed_it: {exc}")
+        return 0
+
+    count = 0
+    for row in stats:
+        pattern = row.get("predicted_pattern") or "unknown"
+        total = row.get("total_failures", 0)
+        avg_conf = row.get("avg_confidence") or 0.0
+        avg_sq = row.get("avg_signal_quality") or 0.0
+
+        if total < _MIN_FAILURES_FOR_CLUSTER:
+            # Allow high-confidence failures to surface earlier
+            if not (
+                total >= _MIN_FAILURES_HIGH_CONFIDENCE
+                and avg_conf >= _HIGH_CONFIDENCE_THRESHOLD
+            ):
+                continue
+
+        # Determine dominant failure class for this pattern
+        n_misclass = row.get("n_misclass", 0) or 0
+        n_blueprint = row.get("n_blueprint", 0) or 0
+        n_low_conf = row.get("n_low_conf", 0) or 0
+        n_edge = row.get("n_edge", 0) or 0
+
+        dominant_class = max(
+            [
+                ("misclassification", n_misclass),
+                ("blueprint_failure", n_blueprint),
+                ("low_confidence", n_low_conf),
+                ("edge_case", n_edge),
+            ],
+            key=lambda x: x[1],
+        )[0]
+
+        # Map to failure_mode names consistent with auto_candidate.py mapping
+        failure_mode_map = {
+            "misclassification":  "confidence_mismatch",  # high-conf wrong → recalibrate
+            "blueprint_failure":  "step_deviation",        # steps fail → fix blueprint
+            "low_confidence":     "confidence_mismatch",   # under-confident → recalibrate
+            "edge_case":          "pattern_drift",          # edge cases → may need data
+        }
+        failure_mode = failure_mode_map.get(dominant_class, "confidence_mismatch")
+
+        severity = severity_from_class_and_confidence(
+            dominant_class, avg_conf, total
+        )
+
+        evidence = {
+            "source": "missed_it_events",
+            "total_failures": total,
+            "dominant_class": dominant_class,
+            "avg_confidence": round(avg_conf, 3),
+            "avg_signal_quality": round(avg_sq, 3),
+            "class_breakdown": {
+                "misclassification": n_misclass,
+                "blueprint_failure": n_blueprint,
+                "low_confidence": n_low_conf,
+                "edge_case": n_edge,
+            },
+        }
+
+        try:
+            upsert_failure_cluster(
+                pattern_id=pattern,
+                environment=None,
+                subject_type=None,
+                failure_mode=failure_mode,
+                severity=severity,
+                frequency=total,
+                affected_sessions=total,
+                evidence=evidence,
+            )
+            count += 1
+        except Exception as exc:
+            logger.warning("missed_it cluster upsert failed for %s: %s", pattern, exc)
+            summary["errors"].append(f"missed_it/{pattern}: {exc}")
+
+    logger.info("missed_it ingestion: %d clusters from failure_events", count)
+    return count

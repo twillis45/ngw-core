@@ -82,6 +82,7 @@ export function broadcastConversion(eventName, data = {}, groups = ['pricing', '
       flag_name: flagName,
       variant: def.variant,
       event_name: eventName,
+      group: def.group || null,
       data,
     });
   }

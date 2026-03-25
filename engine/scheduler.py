@@ -112,6 +112,89 @@ async def _run_ingestion_once() -> None:
         _status["last_run_error"] = str(exc)
         logger.exception("[scheduler] ingestion failed: %s", exc)
 
+    # ── Autonomy loop — runs after every ingestion pass ───────────────────────
+    # LOW-risk decisions auto-apply; MEDIUM/HIGH queue for human review.
+    try:
+        from engine.intelligence.autonomy import run_decision_loop
+        autonomy_result = run_decision_loop()
+        auto_applied = autonomy_result.get("auto_applied", 0)
+        queued       = autonomy_result.get("queued_for_review", 0)
+        skipped      = autonomy_result.get("skipped", 0)
+        logger.info(
+            "[scheduler] autonomy complete — auto_applied=%d queued=%d skipped=%d",
+            auto_applied, queued, skipped,
+        )
+        if _status.get("last_run_result") and isinstance(_status["last_run_result"], dict):
+            _status["last_run_result"]["autonomy"] = {
+                "auto_applied": auto_applied,
+                "queued":       queued,
+                "skipped":      skipped,
+            }
+    except Exception as exc:
+        logger.warning("[scheduler] autonomy loop failed (non-fatal): %s", exc)
+
+    # ── Revenue simulation — runs after autonomy, keeps panel history fresh ───
+    # Uses the same three default scenarios as the UI Revenue panel.
+    # Non-fatal: a simulation failure never blocks the next ingestion cycle.
+    _DEFAULT_SIM_SCENARIOS = [
+        {"name": "Conservative",        "description": "High-confidence patterns only",
+         "pattern_id": "rembrandt",  "risk_level": "low",
+         "sessions_per_day": 500, "baseline_cvr": 0.08, "target_cvr": 0.10, "arpu": 49},
+        {"name": "Moderate",            "description": "Balanced risk and coverage",
+         "pattern_id": "loop",       "risk_level": "medium",
+         "sessions_per_day": 500, "baseline_cvr": 0.08, "target_cvr": 0.11, "arpu": 49},
+        {"name": "Controlled Autonomy", "description": "Broader pattern deployment",
+         "pattern_id": "clamshell",  "risk_level": "high",
+         "sessions_per_day": 500, "baseline_cvr": 0.08, "target_cvr": 0.13, "arpu": 49},
+    ]
+    try:
+        from engine.learning.revenue import project_30_day_metrics, summarise_revenue_impact
+        from db.database import save_simulation_run
+        projections = project_30_day_metrics(_DEFAULT_SIM_SCENARIOS)
+        summary     = summarise_revenue_impact(projections)
+        saved = save_simulation_run(
+            summary=summary,
+            projections=[
+                {
+                    "scenario_name":            p.scenario_name,
+                    "pattern_id":               p.pattern_id,
+                    "risk_level":               p.risk_level,
+                    "gate_unlock_day":          p.gate_unlock_day,
+                    "deploy_day":               p.deploy_day,
+                    "revenue_delta_30d":         p.revenue_delta_30d,
+                    "annualised_delta":          p.annualised_delta,
+                    "total_conversions_30d":     p.total_conversions_30d,
+                    "baseline_conversions_30d":  p.baseline_conversions_30d,
+                    "day_snapshots": [
+                        {
+                            "day":                snap.day,
+                            "cumulative_signals": snap.cumulative_signals,
+                            "gate_status":        snap.gate_status,
+                            "cvr":                snap.cvr,
+                            "sessions":           snap.sessions,
+                            "conversions":        snap.conversions,
+                            "revenue":            snap.revenue,
+                        }
+                        for snap in p.day_snapshots
+                    ],
+                }
+                for p in projections
+            ],
+            run_by="scheduler",
+        )
+        delta = summary.get("total_revenue_delta_30d", 0)
+        logger.info(
+            "[scheduler] revenue simulation complete — id=%s delta_30d=%.2f",
+            saved.get("id"), delta,
+        )
+        if _status.get("last_run_result") and isinstance(_status["last_run_result"], dict):
+            _status["last_run_result"]["revenue_simulation"] = {
+                "id":                      saved.get("id"),
+                "total_revenue_delta_30d": delta,
+            }
+    except Exception as exc:
+        logger.warning("[scheduler] revenue simulation failed (non-fatal): %s", exc)
+
 
 async def _scheduler_loop(warmup_secs: int = 60) -> None:
     """

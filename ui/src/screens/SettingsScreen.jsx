@@ -686,10 +686,22 @@ export default function SettingsScreen() {
       {/* ── Account ─────────────────────────────────────────────────────── */}
       <div className="stg-account">
         {user ? (
-          <div className="stg-account__row">
-            <span className="stg-account__label">Signed in as</span>
-            <span className="stg-account__value">{user.username}</span>
-          </div>
+          <>
+            <div className="stg-account__row">
+              <span className="stg-account__label">Signed in as</span>
+              <span className="stg-account__value">{user.username}</span>
+            </div>
+            <div className="stg-account__row" style={{ marginTop: 'var(--space-xs)' }}>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                style={{ fontSize: 'var(--text-xs)' }}
+                onClick={() => dispatch({ type: 'NAVIGATE', screen: 'onboarding' })}
+              >
+                Edit photographer profile
+              </button>
+            </div>
+          </>
         ) : (
           <div className="stg-account__row">
             <span className="stg-account__label">Account</span>

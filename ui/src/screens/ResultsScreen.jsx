@@ -97,6 +97,66 @@ function CollapsibleSection({ title, icon, children, defaultOpen = false }) {
   );
 }
 
+/** Drag-to-reorder wrapper for result card blocks.
+ *  Shows a subtle grip handle on hover.  Calls onDragStart/onDragOver/onDrop
+ *  from the parent drag-order hook. */
+function DraggableCardBlock({ id, dragSrc, onDragStart, onDragOver, onDrop, onDragEnd, children }) {
+  const isDragging = dragSrc === id;
+  return (
+    <div
+      className={`results-draggable-block${isDragging ? ' results-draggable-block--dragging' : ''}`}
+      draggable
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart(id); }}
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver(id); }}
+      onDrop={e => { e.preventDefault(); onDrop(id); }}
+      onDragEnd={onDragEnd}
+    >
+      <span className="results-draggable-block__grip" aria-hidden="true" title="Drag to reorder">
+        {/* 6-dot grip */}
+        <svg width="10" height="14" viewBox="0 0 10 14" fill="none">
+          {[0,4,8].map(y => [1,6].map(x => (
+            <circle key={`${x}-${y}`} cx={x} cy={y+3} r="1.3" fill="currentColor" />
+          )))}
+        </svg>
+      </span>
+      {children}
+    </div>
+  );
+}
+
+/** Hook: manage drag order for a named set of card IDs.  Persists to localStorage. */
+function useDragCardOrder(storageKey, defaultIds) {
+  const [order, setOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {}
+    return defaultIds;
+  });
+  const [dragSrc, setDragSrc] = useState(null);
+  const dragOver = useRef(null);
+
+  function onDragStart(id) { setDragSrc(id); }
+  function onDragOver(id) { dragOver.current = id; }
+  function onDrop(targetId) {
+    if (!dragSrc || dragSrc === targetId) { setDragSrc(null); return; }
+    setOrder(prev => {
+      const ids = [...prev];
+      const from = ids.indexOf(dragSrc);
+      const to   = ids.indexOf(targetId);
+      if (from === -1 || to === -1) return prev;
+      ids.splice(from, 1);
+      ids.splice(to, 0, dragSrc);
+      try { localStorage.setItem(storageKey, JSON.stringify(ids)); } catch {}
+      return ids;
+    });
+    setDragSrc(null);
+  }
+  function onDragEnd() { setDragSrc(null); }
+
+  return { order, dragSrc, onDragStart, onDragOver, onDrop, onDragEnd };
+}
+
 // ── Shoot Mode CTA (Phase 4) ────────────────────────────────────────────────
 
 function ShootModeCTA({ isPaid, onUnlock, mode }) {
@@ -273,6 +333,8 @@ export default function ResultsScreen() {
   const [zoomSrc, setZoomSrc] = useState(null);
   const [tab, setTab] = useState('blueprint');
   const appMode = useMode();
+  // Drag-to-reorder for blueprint secondary cards
+  const blueprintDrag = useDragCardOrder('ngw_blueprint_card_order', ['diagram', 'space_check', 'ref_analysis']);
   const activePricing = getActivePricing();
 
   useEffect(() => {
@@ -520,47 +582,70 @@ export default function ResultsScreen() {
         {/* Shoot Mode CTA */}
         <ShootModeCTA isPaid={effectiveIsPaid} onUnlock={unlock} mode={appMode} />
 
-        {/* Diagram */}
-        {(detectedDiagramSpec || result.diagram) && (
-          <CollapsibleSection title="Lighting Diagram" icon={ICON.map} defaultOpen={!hasRefAnalysis}>
-            <DiagramCard
-              spec={detectedDiagramSpec || result.diagram}
-              title="Lighting"
-              cameraSettings={result.cameraSettings}
-              spaceCheck={result.spaceCheck}
-              roomDimensions={roomDimensions}
-            />
-          </CollapsibleSection>
-        )}
-
-        <SpaceCheckCard
-          data={result.spaceCheck}
-          defaultOpen={result.spaceCheck?.warnings?.length > 0}
-        />
-
-        {/* Reference Analysis (full ref image) or Lighting Analysis (wizard-flow synthetic) */}
-        {(hasRefAnalysis || syntheticLightingRead) && (
-          <div className="results-section">
-            <PhaseLabel label={hasRefAnalysis ? 'Reference Analysis' : 'Lighting Analysis'} first />
-            <div className="results-section__cards">
-              <CollapsibleSection title="Lighting Analysis" icon={ICON.lighting} defaultOpen={!hasRefAnalysis}>
-                <RefLightingCard
-                  lightingRead={lightingRead || syntheticLightingRead}
-                  lightingIntelligence={result.lightingIntelligence}
-                />
-                {hasRefAnalysis && (
-                  <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
-                )}
-              </CollapsibleSection>
-              {hasRefAnalysis && (
-                <CollapsibleSection title="Scene & Setup" icon={ICON.image}>
-                  <RefImageReadCard imageRead={imageRead} />
-                  <RefRecreationCard recreationSetup={recreationSetup} />
+        {/* ── Reorderable secondary cards ── drag the grip handle to reorder ── */}
+        {blueprintDrag.order.map(cardId => {
+          const dragProps = {
+            key: cardId, id: cardId, dragSrc: blueprintDrag.dragSrc,
+            onDragStart: blueprintDrag.onDragStart,
+            onDragOver:  blueprintDrag.onDragOver,
+            onDrop:      blueprintDrag.onDrop,
+            onDragEnd:   blueprintDrag.onDragEnd,
+          };
+          if (cardId === 'diagram') {
+            if (!(detectedDiagramSpec || result.diagram)) return null;
+            return (
+              <DraggableCardBlock {...dragProps}>
+                <CollapsibleSection title="Lighting Diagram" icon={ICON.map} defaultOpen={!hasRefAnalysis}>
+                  <DiagramCard
+                    spec={detectedDiagramSpec || result.diagram}
+                    title="Lighting"
+                    cameraSettings={result.cameraSettings}
+                    spaceCheck={result.spaceCheck}
+                    roomDimensions={roomDimensions}
+                  />
                 </CollapsibleSection>
-              )}
-            </div>
-          </div>
-        )}
+              </DraggableCardBlock>
+            );
+          }
+          if (cardId === 'space_check') {
+            return (
+              <DraggableCardBlock {...dragProps}>
+                <SpaceCheckCard
+                  data={result.spaceCheck}
+                  defaultOpen={result.spaceCheck?.warnings?.length > 0}
+                />
+              </DraggableCardBlock>
+            );
+          }
+          if (cardId === 'ref_analysis') {
+            if (!(hasRefAnalysis || syntheticLightingRead)) return null;
+            return (
+              <DraggableCardBlock {...dragProps}>
+                <div className="results-section">
+                  <PhaseLabel label={hasRefAnalysis ? 'Reference Analysis' : 'Lighting Analysis'} first />
+                  <div className="results-section__cards">
+                    <CollapsibleSection title="Lighting Analysis" icon={ICON.lighting} defaultOpen={!hasRefAnalysis}>
+                      <RefLightingCard
+                        lightingRead={lightingRead || syntheticLightingRead}
+                        lightingIntelligence={result.lightingIntelligence}
+                      />
+                      {hasRefAnalysis && (
+                        <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
+                      )}
+                    </CollapsibleSection>
+                    {hasRefAnalysis && (
+                      <CollapsibleSection title="Scene & Setup" icon={ICON.image}>
+                        <RefImageReadCard imageRead={imageRead} />
+                        <RefRecreationCard recreationSetup={recreationSetup} />
+                      </CollapsibleSection>
+                    )}
+                  </div>
+                </div>
+              </DraggableCardBlock>
+            );
+          }
+          return null;
+        })}
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────

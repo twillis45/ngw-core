@@ -37,7 +37,7 @@ export function clearAuth() {
   localStorage.removeItem(USER_KEY);
 }
 
-function authHeaders() {
+export function authHeaders() {
   const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
@@ -134,4 +134,20 @@ export async function syncFeedback(setupId, mood, pattern, rating, comment) {
 
 export async function fetchAllUserData() {
   return apiFetch('/user/sync');
+}
+
+// ── User Preferences ──────────────────────────────────────
+// Syncs arbitrary UI preferences (tab order, layout, etc.) to the server
+// so they persist across devices and sessions.
+
+export async function savePreference(key, value) {
+  return apiFetch(`/user/preferences/${encodeURIComponent(key)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  });
+}
+
+export async function loadPreferences() {
+  const data = await apiFetch('/user/preferences');
+  return data.preferences || {};
 }

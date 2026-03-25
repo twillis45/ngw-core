@@ -15,6 +15,7 @@ import RecipeScreen from './screens/RecipeScreen';
 import MyKitScreen from './screens/MyKitScreen';
 import SavedSetupsScreen from './screens/SavedSetupsScreen';
 import AuthScreen from './screens/AuthScreen';
+import OnboardingScreen from './screens/OnboardingScreen';
 import ReferenceEvalScreen from './screens/ReferenceEvalScreen';
 import ShootModeScreen from './screens/ShootModeScreen';
 import ShotMatchScreen from './screens/ShotMatchScreen';
@@ -37,6 +38,7 @@ const SCREENS = {
   my_kit:  MyKitScreen,
   saved_setups: SavedSetupsScreen,
   auth: AuthScreen,
+  onboarding: OnboardingScreen,
   ref_eval: ReferenceEvalScreen,
   shoot_mode: ShootModeScreen,
   shot_match: ShotMatchScreen,

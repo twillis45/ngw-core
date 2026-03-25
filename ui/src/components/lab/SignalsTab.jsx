@@ -33,7 +33,8 @@ import {
   getRecalibrationHints,
   getCalibrationByEnvironment,
 } from '../../data/labApi';
-import { pct, usd, relTime } from '../../lib/formatters';
+import { pct, usd, relTime, fmtDateTime } from '../../lib/formatters';
+import { C } from '../../lib/statusColors';
 function outcomeClass(o) {
   if (o === 'nailed_it') return 'sig-outcome--success';
   if (o === 'close')     return 'sig-outcome--close';
@@ -191,6 +192,7 @@ const PAT_COLS = [
 function PatternTable({ patterns, loading }) {
   const [sortKey, setSortKey] = useState('success_rate');
   const [sortDir, setSortDir] = useState('desc');
+  const [expandedPat, setExpandedPat] = useState(null);
 
   if (loading) return <div className="sig-skel" style={{ height: 160 }} />;
   if (!patterns || patterns.length === 0) {
@@ -213,11 +215,16 @@ function PatternTable({ patterns, loading }) {
     else { setSortKey(key); setSortDir('desc'); }
   }
 
+  // Total columns = PAT_COLS.length + 1 (expand indicator column)
+  const totalCols = PAT_COLS.length + 1;
+
   return (
     <div className="sig-table-wrap">
       <table className="sig-table">
         <thead>
           <tr>
+            {/* Expand indicator column — no sort */}
+            <th className="sig-table__th" style={{ width: 20, padding: '4px 6px', cursor: 'default' }} />
             {PAT_COLS.map(c => (
               <th key={c.key} className="sig-table__th"
                 onClick={() => toggleSort(c.key)}>
@@ -233,14 +240,117 @@ function PatternTable({ patterns, loading }) {
           {sorted.map(p => {
             const rowClass = p.success_rate > 0.70 ? 'sig-row--good'
               : p.success_rate < 0.35 ? 'sig-row--bad' : '';
+            const isExpanded = expandedPat === p.pattern_id;
+
+            // Derived values for expanded panel
+            const successVal  = p.success_rate  ?? 0;
+            const closeVal    = p.close_rate    ?? 0;
+            const failVal     = p.fail_rate     ?? 0;
+            const avgConf     = p.avg_confidence ?? 0;
+            const gap         = avgConf - successVal;
+            const gapColor    = gap > 0.30 ? C.red : gap > 0.15 ? C.amber : C.green;
+            const gapLabel    = gap <= 0.10 ? 'calibrated ✓' : gap > 0.30 ? 'severely overconfident' : 'overconfident';
+            const revPerSess  = p.sessions > 0 ? ((p.revenue ?? 0) / p.sessions).toFixed(2) : '—';
+            const cvr         = p.sessions > 0 ? pct((p.conversions ?? 0) / p.sessions) : '—';
+            const devVal      = p.avg_deviations ?? 0;
+            const devColor    = devVal <= 2 ? C.green : devVal <= 4 ? C.amber : C.red;
+
             return (
-              <tr key={p.pattern_id} className={`sig-table__row ${rowClass}`}>
-                {PAT_COLS.map(c => (
-                  <td key={c.key} className="sig-table__td">
-                    {c.fmt ? c.fmt(p[c.key]) : (p[c.key] ?? '—')}
+              <>
+                <tr
+                  key={p.pattern_id}
+                  className={`sig-table__row ${rowClass}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setExpandedPat(e => e === p.pattern_id ? null : p.pattern_id)}
+                >
+                  <td className="sig-table__td" style={{ width: 20, padding: '4px 6px', color: 'var(--color-text-dim)', fontSize: 11 }}>
+                    {isExpanded ? '▾' : '▸'}
                   </td>
-                ))}
-              </tr>
+                  {PAT_COLS.map(c => (
+                    <td key={c.key} className="sig-table__td">
+                      {c.fmt ? c.fmt(p[c.key]) : (p[c.key] ?? '—')}
+                    </td>
+                  ))}
+                </tr>
+                {isExpanded && (
+                  <tr key={`${p.pattern_id}__expand`}>
+                    <td colSpan={totalCols} style={{ padding: 0 }}>
+                      <div style={{
+                        background: 'var(--color-surface)',
+                        borderTop: '1px solid var(--color-border)',
+                        padding: 'var(--space-sm) var(--space-md)',
+                        fontSize: 'var(--text-xs)',
+                      }}>
+                        {/* Outcome breakdown bar */}
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ color: 'var(--color-text-dim)', marginBottom: 4, fontWeight: 'var(--weight-semibold)' }}>
+                            Outcome Breakdown
+                          </div>
+                          <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
+                            <div style={{ width: `${successVal * 100}%`, background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                              {successVal > 0.1 && pct(successVal)}
+                            </div>
+                            <div style={{ width: `${closeVal * 100}%`, background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                              {closeVal > 0.1 && pct(closeVal)}
+                            </div>
+                            <div style={{ width: `${failVal * 100}%`, background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                              {failVal > 0.1 && pct(failVal)}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--color-text-dim)' }}>
+                            <span><span style={{ color: '#22c55e' }}>■</span> Nailed It {pct(successVal)}</span>
+                            <span><span style={{ color: '#f59e0b' }}>■</span> Close {pct(closeVal)}</span>
+                            <span><span style={{ color: '#ef4444' }}>■</span> Failed {pct(failVal)}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px 20px' }}>
+                          {/* Calibration status */}
+                          <div>
+                            <span style={{ color: 'var(--color-text-dim)', display: 'block', marginBottom: 2 }}>Calibration</span>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <span>Conf <strong>{pct(avgConf)}</strong></span>
+                              <span style={{ color: 'var(--color-text-dim)' }}>vs</span>
+                              <span>Success <strong>{pct(successVal)}</strong></span>
+                            </div>
+                            <div style={{ marginTop: 2 }}>
+                              <span style={{ color: gapColor, fontWeight: 'var(--weight-semibold)' }}>
+                                Gap {gap > 0 ? '+' : ''}{pct(gap)} — {gapLabel}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Economics */}
+                          <div>
+                            <span style={{ color: 'var(--color-text-dim)', display: 'block', marginBottom: 2 }}>Economics</span>
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              <div>
+                                <span style={{ color: 'var(--color-text-dim)', display: 'block' }}>Rev / Session</span>
+                                <span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>${revPerSess}</span>
+                              </div>
+                              <div>
+                                <span style={{ color: 'var(--color-text-dim)', display: 'block' }}>CVR</span>
+                                <span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>{cvr}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Deviations */}
+                          <div>
+                            <span style={{ color: 'var(--color-text-dim)', display: 'block', marginBottom: 2 }}>Avg Deviations</span>
+                            <span style={{ color: devColor, fontWeight: 'var(--weight-semibold)' }}>
+                              {devVal?.toFixed(1) ?? '—'}
+                            </span>
+                            <span style={{ color: 'var(--color-text-dim)', marginLeft: 6 }}>
+                              (good: &lt;2)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             );
           })}
         </tbody>
@@ -326,7 +436,7 @@ function CalibrationPanel({ calibration, days }) {
                   padding: '6px 10px', marginBottom: 4,
                   background: 'var(--color-warning-subtle)',
                   border: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
-                  borderRadius: 6, fontSize: 12,
+                  borderRadius: 6, fontSize: 'var(--text-xs)',
                   color: 'var(--color-warning)',
                 }}>
                   → {h.action}
@@ -387,34 +497,92 @@ function CalibrationPanel({ calibration, days }) {
 // ── Recent Feed ───────────────────────────────────────────────────────────────
 
 function RecentFeed({ recent }) {
+  const [expandedSig, setExpandedSig] = useState(null);
+
   if (!recent || recent.length === 0) {
     return <div className="sig-empty">No signals recorded yet.</div>;
   }
+
+  function fmtFieldValue(key, val) {
+    if (val == null) return null;
+    if (key === 'confidence_score') return pct(val);
+    if (key === 'revenue_value')    return usd(val);
+    if (key === 'created_at')       return fmtDateTime(val);
+    return String(val);
+  }
+
+  const ID_KEYS = new Set(['id', 'session_id', 'user_id', 'pattern_id']);
+
   return (
     <div className="sig-feed">
-      {recent.slice(0, 20).map(s => (
-        <div key={s.id} className="sig-feed-row">
-          <span className={`sig-outcome ${outcomeClass(s.outcome)}`}>
-            {outcomeLabel(s.outcome)}
-          </span>
-          <span className="sig-feed-pat">{s.pattern_id}</span>
-          {s.confidence_score != null && (
-            <span className="sig-feed-conf">{pct(s.confidence_score)}</span>
-          )}
-          {s.signal_source && s.signal_source !== 'live' && (
-            <span className={`sig-src-badge ${sourceBadgeClass(s.signal_source)}`}>
-              {sourceLabel(s.signal_source)}
-            </span>
-          )}
-          {s.environment && (
-            <span className="sig-feed-env">{s.environment}</span>
-          )}
-          {s.revenue_value > 0 && (
-            <span className="sig-feed-rev">{usd(s.revenue_value)}</span>
-          )}
-          <span className="sig-feed-time">{relTime(s.created_at)}</span>
-        </div>
-      ))}
+      {recent.slice(0, 20).map(s => {
+        const isExpanded = expandedSig === s.id;
+        return (
+          <div key={s.id}>
+            <div
+              className="sig-feed-row"
+              style={{ cursor: 'pointer' }}
+              onClick={() => setExpandedSig(e => e === s.id ? null : s.id)}
+            >
+              <span className={`sig-outcome ${outcomeClass(s.outcome)}`}>
+                {outcomeLabel(s.outcome)}
+              </span>
+              <span className="sig-feed-pat">{s.pattern_id}</span>
+              {s.confidence_score != null && (
+                <span className="sig-feed-conf">{pct(s.confidence_score)}</span>
+              )}
+              {s.signal_source && s.signal_source !== 'live' && (
+                <span className={`sig-src-badge ${sourceBadgeClass(s.signal_source)}`}>
+                  {sourceLabel(s.signal_source)}
+                </span>
+              )}
+              {s.environment && (
+                <span className="sig-feed-env">{s.environment}</span>
+              )}
+              {s.revenue_value > 0 && (
+                <span className="sig-feed-rev">{usd(s.revenue_value)}</span>
+              )}
+              <span className="sig-feed-time">{relTime(s.created_at)}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--color-text-dim)', fontSize: 11 }}>
+                {isExpanded ? '▾' : '▸'}
+              </span>
+            </div>
+            {isExpanded && (
+              <div style={{
+                background: 'var(--color-surface)',
+                borderTop: '1px solid var(--color-border)',
+                padding: 'var(--space-sm) var(--space-md)',
+                fontSize: 'var(--text-xs)',
+                marginBottom: 2,
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '4px 16px' }}>
+                  {Object.entries(s)
+                    .filter(([, v]) => v != null)
+                    .map(([k, v]) => {
+                      const formatted = fmtFieldValue(k, v);
+                      if (formatted == null) return null;
+                      const isMono = ID_KEYS.has(k);
+                      return (
+                        <div key={k}>
+                          <span style={{ color: 'var(--color-text-dim)', display: 'block' }}>
+                            {k.replace(/_/g, ' ')}
+                          </span>
+                          <span style={{
+                            color: 'var(--color-text)',
+                            fontFamily: isMono ? 'var(--font-mono)' : undefined,
+                            wordBreak: 'break-all',
+                          }}>
+                            {formatted}
+                          </span>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

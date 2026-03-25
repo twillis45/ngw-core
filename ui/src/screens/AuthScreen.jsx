@@ -21,7 +21,7 @@ export default function AuthScreen() {
     try {
       if (mode === 'register') {
         await register(email, name, password);
-        setRegistered(true); // show "check your email" screen
+        setRegistered(true); // show "check your email" → then onboarding
       } else {
         const user = await login(email, password);
         dispatch({ type: 'SET_USER', user });
@@ -70,10 +70,10 @@ export default function AuthScreen() {
             className="btn btn--ghost auth-form__submit"
             type="button"
             onClick={() => {
-              dispatch({ type: 'NAVIGATE', screen: 'welcome' });
+              dispatch({ type: 'NAVIGATE', screen: 'onboarding' });
             }}
           >
-            Continue to app
+            Continue to app →
           </button>
         </div>
       </div>
