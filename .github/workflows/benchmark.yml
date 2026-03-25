@@ -46,6 +46,14 @@ jobs:
       - name: Run benchmark via CI endpoint
         id: benchmark
         run: |
+          if [[ -z "${CI_BENCHMARK_SECRET}" ]]; then
+            echo "⚠️  CI_BENCHMARK_SECRET not set — skipping benchmark (add secret once app is deployed)."
+            exit 0
+          fi
+          if [[ "${NGW_BASE_URL}" == "http://localhost:8000" ]]; then
+            echo "⚠️  NGW_BASE_URL not configured — skipping benchmark (set secret to deployed URL)."
+            exit 0
+          fi
           bash scripts/ci_benchmark.sh
         env:
           CI_COMMIT_SHA: ${{ github.sha }}
