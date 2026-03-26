@@ -653,6 +653,31 @@ def infer_lighting_from_vision(
                 "Extra catchlights likely from reflective surfaces."
             ]
 
+    # Split asymmetry gate: a genuine 90° side key produces strong left-right
+    # facial shadow asymmetry.  When a catchlight lands at 3/9 o'clock but
+    # the face is nearly evenly lit (left_right_asymmetry < 0.12), the
+    # catchlight is from a reflective surface (jewellery, glasses, specular
+    # clothing) — not the key light itself.  Demote to loop at the detected
+    # side so downstream pattern resolution can refine with nose-shadow data.
+    if pattern_result.get("pattern") == "split" and cue_report is not None:
+        _ls = getattr(cue_report, "light_structure", None)
+        _lra = getattr(_ls, "left_right_asymmetry", None)
+        if _lra is not None and _lra < 0.12:
+            # Identify which side the spurious catchlight was on so we keep
+            # the correct key direction.
+            _spurious_notes = pattern_result.get("notes", [])
+            _side = "left" if any("9 o'clock" in n for n in _spurious_notes) else "right"
+            _kpt = "30-45 off-axis left" if _side == "right" else "30-45 off-axis right"
+            pattern_result = dict(pattern_result)
+            pattern_result["pattern"] = "loop"
+            pattern_result["pattern_confidence"] = 0.30
+            pattern_result["key_position_text"] = _kpt
+            pattern_result["notes"] = [
+                f"Split rejected: catchlight at 3/9 o'clock but left_right_asymmetry={_lra:.3f} "
+                "(<0.12) contradicts 90° side key. Catchlight likely from jewellery or "
+                "reflective surface. Downgraded to loop; nose-shadow will refine."
+            ]
+
     all_notes.extend(pattern_result.get("notes", []))
 
     # ── Cross-validate palette mood with catchlight pattern ──
