@@ -222,6 +222,84 @@ async def lab_analyze(
                 else vars(ar.edge_case_flags)
             )
 
+        # ── Signal diagnostics — catchlight clock positions + key signal values ──
+        # Surfaces the raw inputs to pattern gates so classification decisions
+        # can be inspected in the Lab Workbench.
+        signal_diagnostics: Dict[str, Any] = {}
+        try:
+            # Catchlight clock positions
+            _cl_raw = ar.vision_data.get("catchlights", {})
+            _cl_list = _cl_raw.get("catchlights", []) if _cl_raw.get("ok") else []
+            _cl_table = []
+            for _c in _cl_list:
+                _pos = _c.get("position", "")
+                try:
+                    _hour = int(_pos.split()[0]) if _pos else None
+                except Exception:
+                    _hour = None
+                _quad = None
+                if _hour is not None:
+                    if _hour in (10, 11): _quad = "upper_left"
+                    elif _hour in (1, 2): _quad = "upper_right"
+                    elif _hour == 12: _quad = "top_center"
+                    elif _hour == 3: _quad = "hard_right"
+                    elif _hour == 9: _quad = "hard_left"
+                    elif 4 <= _hour <= 8: _quad = "lower"
+                _cl_table.append({
+                    "eye": _c.get("eye"),
+                    "position": _pos,
+                    "hour": _hour,
+                    "quad": _quad,
+                    "shape": _c.get("shape"),
+                    "size": _c.get("size"),
+                })
+            signal_diagnostics["catchlights"] = _cl_table
+
+            # Key signals from light_structure
+            _cr = getattr(ar, "cue_report", None)
+            _ls = getattr(_cr, "light_structure", None) if _cr else None
+            signal_diagnostics["signals"] = {
+                "left_right_asymmetry":   round(getattr(_ls, "left_right_asymmetry", 0.0), 4),
+                "shadow_density":          round(getattr(_ls, "shadow_density", 0.0), 4),
+                "triangle_isolation":      round(getattr(_ls, "triangle_isolation", 0.0), 4),
+                "highlight_width_ratio":   round(getattr(_ls, "highlight_width_ratio", 0.0), 4),
+                "nose_shadow_angle_deg":   round(getattr(_ls, "nose_shadow_centroid_angle_deg", 0.0), 1),
+                "nose_shadow_distance":    round(getattr(_ls, "nose_shadow_centroid_distance", 0.0), 4),
+            }
+
+            # Gate evaluations — which gates fired and what they decided
+            _pattern = (lighting_data.get("pattern") or "")
+            _lra = signal_diagnostics["signals"]["left_right_asymmetry"]
+            _cr_label = ""
+            _contrast_obj = getattr(_cr, "contrast_ratio", None) if _cr else None
+            if _contrast_obj:
+                _cr_label = (getattr(_contrast_obj, "label", "") or "").lower()
+
+            signal_diagnostics["gates"] = [
+                {
+                    "name": "split_asymmetry_gate",
+                    "description": "Veto split/90° when lr_asymmetry < 0.12 (no facial shadow supports a 90° key)",
+                    "checked": True,
+                    "triggered": _lra < 0.12,
+                    "value": _lra,
+                    "threshold": 0.12,
+                    "result": "vetoed → loop" if _lra < 0.12 else "passed",
+                },
+                {
+                    "name": "triangle_contrast_gate",
+                    "description": "Veto triangle when contrast is high/extreme (extra catchlights are reflections)",
+                    "checked": True,
+                    "triggered": _cr_label in ("high", "extreme"),
+                    "value": _cr_label or "n/a",
+                    "threshold": "high | extreme",
+                    "result": "vetoed → unknown" if _cr_label in ("high", "extreme") else "passed",
+                },
+            ]
+
+            signal_diagnostics["final_pattern"] = _pattern
+        except Exception as _diag_exc:
+            signal_diagnostics["error"] = str(_diag_exc)
+
         response = {
             "status": "ok",
             "image_path": str(fpath),
@@ -237,6 +315,7 @@ async def lab_analyze(
             "solver": solver_data,
             "reconstruction": pipeline_recon,
             "edge_case_flags": pipeline_edge_flags,
+            "signal_diagnostics": signal_diagnostics,
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
         }

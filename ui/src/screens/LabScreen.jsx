@@ -1274,6 +1274,12 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             >
               Raw JSON
             </button>
+            <button
+              className={`lab-tab${viewMode === 'signals' ? ' lab-tab--active' : ''}`}
+              onClick={() => setViewMode('signals')}
+            >
+              Signal Diagnostics
+            </button>
             {result.debug_overlay_url && (
               <button
                 className={`lab-tab${viewMode === 'overlay' ? ' lab-tab--active' : ''}`}
@@ -1361,6 +1367,8 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             <JsonTree data={result} defaultOpen={1} />
           ) : viewMode === 'compare' ? (
             <VlmCvCompare data={result} onAccept={(updated) => { setResult(updated); setVlmDirty(true); }} />
+          ) : viewMode === 'signals' ? (
+            <SignalDiagnosticsPanel data={result} />
           ) : (
             <WorkbenchFormatted data={result} />
           )}
@@ -1508,6 +1516,219 @@ function OverlayWarnings({ result }) {
 }
 
 /** Formatted view of workbench analysis result */
+// ── Signal Diagnostics Panel ────────────────────────────────────────────────
+// Shows catchlight clock positions, key signal values, and gate decisions
+// for every analysis run — makes it easy to diagnose misclassifications.
+
+function SignalDiagnosticsPanel({ data }) {
+  const diag = data?.signal_diagnostics || {};
+  const catchlights = diag.catchlights || [];
+  const signals = diag.signals || {};
+  const gates = diag.gates || [];
+  const finalPattern = diag.final_pattern || data?.lighting_inference?.pattern || '—';
+  const lightInf = data?.lighting_inference || {};
+
+  const C = {
+    green: '#4ade80', amber: '#FBBF24', red: '#f87171',
+    blue: '#60a5fa', muted: 'var(--color-text-dim)',
+    border: 'var(--color-border)', surface: 'var(--color-surface)',
+    text: 'var(--color-text)', textSec: 'var(--color-text-secondary)',
+  };
+
+  const _th = {
+    padding: '4px 10px', fontSize: 11, fontWeight: 700,
+    color: C.textSec, textAlign: 'left', borderBottom: `1px solid ${C.border}`,
+    background: 'var(--color-surface-raised, #1e293b)',
+  };
+  const _td = {
+    padding: '4px 10px', fontSize: 12, color: C.text,
+    borderBottom: `1px solid ${C.border}`,
+  };
+
+  // Map quad to a human direction
+  const quadLabel = { upper_left: '↖ upper-left', upper_right: '↗ upper-right',
+    top_center: '↑ top-center', hard_left: '← hard left (9 o\'clock)',
+    hard_right: '→ hard right (3 o\'clock)', lower: '↓ lower' };
+
+  // Colour a signal value against a threshold
+  function sigColor(val, threshLow, threshHigh) {
+    if (typeof val !== 'number') return C.muted;
+    if (val < threshLow) return C.amber;
+    if (threshHigh && val > threshHigh) return C.red;
+    return C.green;
+  }
+
+  const section = (title, children) => (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+        letterSpacing: '0.07em', color: C.textSec, marginBottom: 8 }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{ padding: '16px 4px', display: 'grid', gap: 20 }}>
+
+      {/* ── Pattern Decision ── */}
+      {section('Pattern Decision', (
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {[
+            ['Final Pattern',   finalPattern],
+            ['Key Position',    lightInf.key_position_text || '—'],
+            ['Confidence',      lightInf.pattern_confidence != null
+              ? `${(lightInf.pattern_confidence * 100).toFixed(0)}%` : '—'],
+            ['Light Count',     lightInf.light_count ?? '—'],
+            ['Modifier',        lightInf.modifier_family || '—'],
+          ].map(([lbl, val]) => (
+            <div key={lbl}>
+              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{lbl}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{String(val)}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {/* ── Catchlight Clock Positions ── */}
+      {section(`Catchlights (${catchlights.length} detected)`, (
+        catchlights.length === 0
+          ? <p style={{ fontSize: 12, color: C.muted }}>No catchlights detected.</p>
+          : (
+            <table style={{ width: '100%', borderCollapse: 'collapse',
+              border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
+              <thead>
+                <tr>
+                  {['Eye', 'Position', 'Hour', 'Quad → Direction', 'Shape', 'Size'].map(h => (
+                    <th key={h} style={_th}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {catchlights.map((cl, i) => {
+                  const isProblematic = cl.quad === 'hard_left' || cl.quad === 'hard_right';
+                  return (
+                    <tr key={i} style={{ background: isProblematic ? '#7c2d1220' : 'transparent' }}>
+                      <td style={_td}>{cl.eye || '—'}</td>
+                      <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                        color: isProblematic ? C.amber : C.text }}>
+                        {cl.position || '—'}
+                      </td>
+                      <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>{cl.hour ?? '—'}</td>
+                      <td style={{ ..._td, color: isProblematic ? C.amber : C.text }}>
+                        {quadLabel[cl.quad] || cl.quad || '—'}
+                        {isProblematic && (
+                          <span style={{ fontSize: 10, color: C.amber, marginLeft: 6 }}>
+                            ⚠ jewellery / reflection risk
+                          </span>
+                        )}
+                      </td>
+                      <td style={_td}>{cl.shape || '—'}</td>
+                      <td style={_td}>{cl.size || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )
+      ))}
+
+      {/* ── Key Signals ── */}
+      {section('Key Signals', (
+        <table style={{ width: '100%', borderCollapse: 'collapse',
+          border: `1px solid ${C.border}` }}>
+          <thead>
+            <tr>
+              {['Signal', 'Value', 'What it measures'].map(h => (
+                <th key={h} style={_th}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              ['left_right_asymmetry', signals.left_right_asymmetry,
+                'Face shadow imbalance L vs R — <0.12 = near-flat lighting; >0.25 = clear side key',
+                0.12, 0.8],
+              ['shadow_density', signals.shadow_density,
+                'Shadow pixel ratio in nose region — higher = harder/deeper shadows',
+                0.05, 0.7],
+              ['triangle_isolation', signals.triangle_isolation,
+                'Rembrandt triangle contrast vs surround — >0.15 = genuine triangle',
+                0.15, null],
+              ['highlight_width_ratio', signals.highlight_width_ratio,
+                'Fraction of face width in highlight — >0.5 = broad; <0.3 = short/narrow',
+                0.1, null],
+              ['nose_shadow_angle_deg', signals.nose_shadow_angle_deg,
+                'Nose shadow direction 0–360° — indicates key light angle',
+                null, null],
+              ['nose_shadow_distance', signals.nose_shadow_distance,
+                'Normalised nose shadow throw — 0=under nose, 1=far cheek',
+                null, null],
+            ].map(([key, val, desc, tLow, tHigh]) => (
+              <tr key={key}>
+                <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{key}</td>
+                <td style={{ ..._td, fontFamily: 'var(--font-mono)',
+                  color: tLow != null ? sigColor(val, tLow, tHigh) : C.text, fontWeight: 700 }}>
+                  {val != null ? val : '—'}
+                </td>
+                <td style={{ ..._td, color: C.textSec, fontSize: 11 }}>{desc}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ))}
+
+      {/* ── Gate Decisions ── */}
+      {section('Pattern Gates', (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {gates.length === 0
+            ? <p style={{ fontSize: 12, color: C.muted }}>No gate data available — re-analyse to see gates.</p>
+            : gates.map((g, i) => (
+              <div key={i} style={{
+                background: C.surface, border: `1px solid ${g.triggered ? C.amber : C.border}`,
+                borderRadius: 6, padding: '10px 14px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontSize: 16 }}>{g.triggered ? '⚡' : '✓'}</span>
+                  <span style={{ fontWeight: 700, fontSize: 12, fontFamily: 'var(--font-mono)',
+                    color: g.triggered ? C.amber : C.green }}>
+                    {g.name}
+                  </span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700,
+                    color: g.triggered ? C.amber : C.green }}>
+                    {g.result}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: C.textSec, marginBottom: 6 }}>{g.description}</div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                  <span style={{ color: C.textSec }}>value: <strong style={{ color: C.text }}>{String(g.value)}</strong></span>
+                  <span style={{ color: C.textSec }}>threshold: <strong style={{ color: C.text }}>{String(g.threshold)}</strong></span>
+                </div>
+              </div>
+            ))
+          }
+        </div>
+      ))}
+
+      {/* ── Inference Notes ── */}
+      {lightInf.notes && lightInf.notes.length > 0 && section('Inference Notes', (
+        <ul style={{ margin: 0, padding: '0 0 0 16px', display: 'grid', gap: 4 }}>
+          {lightInf.notes.map((n, i) => (
+            <li key={i} style={{ fontSize: 12, color: C.textSec }}>{n}</li>
+          ))}
+        </ul>
+      ))}
+
+      {diag.error && (
+        <div style={{ fontSize: 11, color: C.red, fontFamily: 'var(--font-mono)' }}>
+          Diagnostics error: {diag.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 function WorkbenchFormatted({ data }) {
   const desc = data.description || {};
   const analysis = data.reference_analysis || data.analysis || {};
