@@ -210,6 +210,9 @@ async def stripe_webhook(
                 logger.info('Subscription created for session=%s email=%s', session_id, customer_email)
             except Exception as exc:
                 logger.error('Failed to persist subscription for session=%s: %s', session_id, exc)
+                # Return 500 so Stripe retries the webhook on transient DB failures.
+                # Without this, a failed write silently succeeds from Stripe's perspective.
+                raise HTTPException(500, 'Failed to persist subscription — will retry')
 
     elif event_type == 'customer.subscription.deleted':
         # Stripe fires this when a subscription is cancelled (immediately or at period end).

@@ -14,9 +14,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from auth.rate_limit import check_rate_limit
 from engine.orchestrator import analyze_image
 from engine.services.live_feedback_service import analyze_shoot_deviation
 
@@ -31,7 +32,7 @@ class LiveFeedbackRequest(BaseModel):
 
 
 @router.post("/live-feedback")
-async def live_feedback(req: LiveFeedbackRequest) -> Dict[str, Any]:
+async def live_feedback(req: LiveFeedbackRequest, request: Request) -> Dict[str, Any]:
     """Compare a test shot against a reference image and return corrective actions.
 
     Both images must be reachable server-side (use /upload-reference first).
@@ -43,6 +44,7 @@ async def live_feedback(req: LiveFeedbackRequest) -> Dict[str, Any]:
         priorityAction   most important corrective action
         summary          human-readable one-liner
     """
+    check_rate_limit("live_feedback", request, limit=20, window=60)
     # Normalize web-relative paths with leading slash
     def _norm(p: str) -> str:
         if p.startswith('/') and not Path(p).exists():

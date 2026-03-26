@@ -13,9 +13,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from auth.rate_limit import check_rate_limit
 from engine.orchestrator import analyze_image
 from engine.services.blueprint_service import build_lighting_blueprint
 
@@ -44,7 +45,7 @@ class _StubAnalysisResult:
 
 
 @router.post("/blueprint")
-async def get_blueprint(req: BlueprintRequest) -> Dict[str, Any]:
+async def get_blueprint(req: BlueprintRequest, request: Request) -> Dict[str, Any]:
     """Generate a physically-shootable lighting blueprint.
 
     Provide either:
@@ -54,6 +55,7 @@ async def get_blueprint(req: BlueprintRequest) -> Dict[str, Any]:
     Returns a complete blueprint with light positions, modifiers, camera
     settings, fallback options, and recommended gear kits (good/better/best).
     """
+    check_rate_limit("blueprint", request, limit=20, window=60)
     analysis_result: Any
 
     if req.imagePath:

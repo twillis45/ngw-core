@@ -9,9 +9,10 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from auth.rate_limit import check_rate_limit
 from engine.orchestrator import analyze_image
 from engine.services.style_dna_service import analyze_user_portfolio
 
@@ -29,7 +30,7 @@ class StyleDNARequest(BaseModel):
 
 
 @router.post("/style-dna")
-async def style_dna(req: StyleDNARequest) -> Dict[str, Any]:
+async def style_dna(req: StyleDNARequest, request: Request) -> Dict[str, Any]:
     """Analyze a portfolio of images and return Style DNA.
 
     Upload images first via /upload-reference, then pass their server paths here.
@@ -44,6 +45,9 @@ async def style_dna(req: StyleDNARequest) -> Dict[str, Any]:
         keySidePreference    left / right / unknown key light preference
         suggestions          improvement suggestions based on portfolio analysis
     """
+    # Style DNA runs VLM on every image — 5/hour per IP to cap cost.
+    check_rate_limit("style_dna", request, limit=5, window=3600)
+
     if len(req.imagePaths) > 50:
         raise HTTPException(
             status_code=422,

@@ -95,6 +95,8 @@ async def lifespan(app):
     for d in ("data", "static/uploads", "static/www", "static/ui"):
         Path(d).mkdir(parents=True, exist_ok=True)
     init_db()
+    from db.database import DB_PATH
+    _startup_logger.info("✓ Database path: %s", DB_PATH)
     from db.benchmark import init_benchmark_tables
     init_benchmark_tables()
     from db.benchmark_baseline import init_baseline_tables
