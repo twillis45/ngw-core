@@ -40,8 +40,9 @@ logs/
 # User uploads
 data/uploads/
 
-# Built UI assets (Vite output — regenerate with npm run build)
-static/ui/assets/
+# Built UI assets — committed to git so Render doesn't need npm/vite at build time.
+# Run `cd ui && npm run build` locally before committing frontend changes.
+# static/ui/assets/
 
 # Debug output
 static/debug/

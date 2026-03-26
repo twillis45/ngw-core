@@ -1,18 +1,6 @@
-# ── Stage 1: Build Vite frontend ─────────────────────────────────────────────
-FROM node:22-slim AS ui-builder
+# Frontend assets are pre-built locally (cd ui && npm run build) and
+# committed to git under static/ui/. No Node/npm step needed at build time.
 
-WORKDIR /build/ui
-COPY ui/package*.json ./
-RUN npm ci --silent
-COPY ui/ ./
-# node_modules is excluded by .dockerignore so npm ci's Linux-native
-# binaries (esbuild, rollup) are not overwritten by macOS-built ones.
-# --max-old-space-size prevents OOM on constrained build environments.
-RUN NODE_OPTIONS=--max-old-space-size=2048 npm run build
-# Output lands at /build/static/ui (vite outDir: '../static/ui')
-
-
-# ── Stage 2: Python runtime ───────────────────────────────────────────────────
 FROM python:3.10-slim
 
 # System libraries required by mediapipe + opencv
@@ -31,11 +19,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application source
+# Copy application source (node_modules excluded by .dockerignore)
 COPY . .
-
-# Overlay built frontend from Stage 1 (replaces any stale local build)
-COPY --from=ui-builder /build/static/ui ./static/ui
 
 # Ensure runtime directories always exist
 RUN mkdir -p data static/uploads static/www static/ui
