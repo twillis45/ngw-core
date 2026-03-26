@@ -5,6 +5,7 @@ import LearningOpsTab from '../components/lab/LearningOpsTab';
 import BenchmarkTab from '../components/lab/BenchmarkTab';
 import SignalsTab from '../components/lab/SignalsTab';
 import ControlCenterTab from '../components/lab/ControlCenterTab';
+import UserTab from '../components/lab/UserTab';
 import { C } from '../lib/statusColors';
 import {
   analyzeImage,
@@ -712,6 +713,7 @@ export default function LabScreen() {
     { id: 'learning',       label: 'Learning Ops',       metricKey: 'learning',       metricLabel: 'Intelligence score (0–100): composite of signal volume, pattern coverage, benchmark pass rate, and VLM correction rate over 30 days. ≥70 = healthy, 50–69 = needs attention, <50 = insufficient data.' },
     { id: 'benchmarks',     label: 'Benchmarks',         metricKey: 'benchmarks',     metricLabel: 'Benchmark pass rate — latest run' },
     { id: 'control_center', label: '⚙ Control Center',  metricKey: 'control_center', metricLabel: 'API / VLM health status' },
+    { id: 'user',           label: '👤 User',                                                                                  metricLabel: 'Local auth, paywall, feature flags, and storage inspector' },
   ];
 
   // Apply saved drag order (falls back to default order above)
@@ -868,6 +870,11 @@ export default function LabScreen() {
         {mountedTabs.has('control_center') && (
           <div style={{ display: activeTab === 'control_center' ? 'block' : 'none' }}>
             <ControlCenterTab user={user} onNavigateTo={handleNavigateTo} />
+          </div>
+        )}
+        {mountedTabs.has('user') && (
+          <div style={{ display: activeTab === 'user' ? 'block' : 'none' }}>
+            <UserTab />
           </div>
         )}
       </div>
