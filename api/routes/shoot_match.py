@@ -11,6 +11,7 @@ This route only:
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -63,7 +64,11 @@ class ShootMatchRequest(BaseModel):
     priorAnalysis: Optional[Dict[str, Any]] = None
 
 
-UPLOAD_DIR = Path("static/uploads")
+# NGW_UPLOAD_DIR overrides the upload location (e.g. a Render persistent disk path).
+# The returned path is always relative to the project root for static file serving,
+# so point this at the same location that main.py mounts as /static.
+# Default: static/uploads (served at /static/uploads/...)
+UPLOAD_DIR = Path(os.environ.get("NGW_UPLOAD_DIR", "static/uploads"))
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 _ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tiff", ".tif"}

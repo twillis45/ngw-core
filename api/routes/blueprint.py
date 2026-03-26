@@ -13,10 +13,11 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from auth.rate_limit import check_rate_limit
+from auth.security import get_current_user
 from engine.orchestrator import analyze_image
 from engine.services.blueprint_service import build_lighting_blueprint
 
@@ -45,7 +46,7 @@ class _StubAnalysisResult:
 
 
 @router.post("/blueprint")
-async def get_blueprint(req: BlueprintRequest, request: Request) -> Dict[str, Any]:
+async def get_blueprint(req: BlueprintRequest, request: Request, user=Depends(get_current_user)) -> Dict[str, Any]:
     """Generate a physically-shootable lighting blueprint.
 
     Provide either:

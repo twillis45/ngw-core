@@ -14,10 +14,11 @@ import logging
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from auth.rate_limit import check_rate_limit
+from auth.security import get_current_user
 from engine.orchestrator import analyze_image
 from engine.services.live_feedback_service import analyze_shoot_deviation
 
@@ -32,7 +33,7 @@ class LiveFeedbackRequest(BaseModel):
 
 
 @router.post("/live-feedback")
-async def live_feedback(req: LiveFeedbackRequest, request: Request) -> Dict[str, Any]:
+async def live_feedback(req: LiveFeedbackRequest, request: Request, user=Depends(get_current_user)) -> Dict[str, Any]:
     """Compare a test shot against a reference image and return corrective actions.
 
     Both images must be reachable server-side (use /upload-reference first).

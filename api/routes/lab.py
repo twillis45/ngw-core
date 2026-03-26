@@ -26,6 +26,7 @@ from pydantic import BaseModel, Field
 from auth.dev_guard import get_dev_user
 from auth.rate_limit import check_rate_limit
 from db.database import (
+    DATA_DIR,
     get_db,
     create_gold_set_entry,
     get_gold_set_entries,
@@ -41,7 +42,7 @@ from db.database import (
 
 router = APIRouter(prefix="/lab", tags=["lab"])
 
-UPLOAD_DIR = Path("data/uploads/lab")
+UPLOAD_DIR = DATA_DIR / "uploads" / "lab"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
@@ -634,7 +635,7 @@ class ReferenceIngestMetadata(BaseModel):
     lighting_notes: Optional[str] = None
 
 
-REFERENCE_UPLOAD_DIR = Path("data/uploads/reference_ingest")
+REFERENCE_UPLOAD_DIR = DATA_DIR / "uploads" / "reference_ingest"
 REFERENCE_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -1052,7 +1053,7 @@ class ReferenceDatasetIngestMeta(BaseModel):
     master_profile_id: Optional[str] = None     # penn|karsh|leibovitz|hurley|etc
 
 
-DATASET_UPLOAD_DIR = Path("data/uploads/reference_dataset")
+DATASET_UPLOAD_DIR = DATA_DIR / "uploads" / "reference_dataset"
 DATASET_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 

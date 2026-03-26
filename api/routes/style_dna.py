@@ -9,10 +9,11 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from auth.rate_limit import check_rate_limit
+from auth.security import get_current_user
 from engine.orchestrator import analyze_image
 from engine.services.style_dna_service import analyze_user_portfolio
 
@@ -30,7 +31,7 @@ class StyleDNARequest(BaseModel):
 
 
 @router.post("/style-dna")
-async def style_dna(req: StyleDNARequest, request: Request) -> Dict[str, Any]:
+async def style_dna(req: StyleDNARequest, request: Request, user=Depends(get_current_user)) -> Dict[str, Any]:
     """Analyze a portfolio of images and return Style DNA.
 
     Upload images first via /upload-reference, then pass their server paths here.
