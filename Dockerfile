@@ -1,11 +1,14 @@
 # ── Stage 1: Build Vite frontend ─────────────────────────────────────────────
-FROM node:18-slim AS ui-builder
+FROM node:22-slim AS ui-builder
 
 WORKDIR /build/ui
 COPY ui/package*.json ./
 RUN npm ci --silent
 COPY ui/ ./
-RUN npm run build
+# node_modules is excluded by .dockerignore so npm ci's Linux-native
+# binaries (esbuild, rollup) are not overwritten by macOS-built ones.
+# --max-old-space-size prevents OOM on constrained build environments.
+RUN NODE_OPTIONS=--max-old-space-size=2048 npm run build
 # Output lands at /build/static/ui (vite outDir: '../static/ui')
 
 

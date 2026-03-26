@@ -1,0 +1,29 @@
+# Never send these to the Docker build context
+.git
+.gitignore
+.env
+.env.*
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+
+# Node — platform-native binaries installed by npm ci inside the container
+# must not be overwritten by macOS-built node_modules from the host
+ui/node_modules
+
+# Vite dev artifacts
+ui/.vite
+ui/dist
+
+# Python virtualenv
+.venv
+venv
+
+# Local data / uploads (not needed for build; runtime paths are configurable)
+data/
+static/uploads/
+
+# Docs / scripts (not needed at runtime)
+docs/
+scripts/
