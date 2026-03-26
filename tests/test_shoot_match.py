@@ -4,6 +4,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from auth.security import get_current_user, get_optional_user
+
+_DEV_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _override_shoot_match_auth():
+    """Bypass auth for the duration of this test module only."""
+    app.dependency_overrides[get_current_user] = lambda: _DEV_USER
+    app.dependency_overrides[get_optional_user] = lambda: _DEV_USER
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_optional_user, None)
+
 
 client = TestClient(app)
 

@@ -366,6 +366,10 @@ class EvaluateTestShotRequest(BaseModel):
 
 def _is_authorized(user) -> bool:
     """Return True if the user has access to paid features (active sub or admin email)."""
+    import os
+    # Dev mode bypass — NGW_DEV_MODE=1 skips all auth and subscription checks
+    if os.getenv("NGW_DEV_MODE", "").strip().lower() in ("1", "true", "yes"):
+        return True
     if not user:
         return False
     email = user.get("email", "")

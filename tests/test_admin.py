@@ -7,8 +7,19 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from auth.dev_guard import get_dev_user
+
+_DEV_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _override_admin_auth():
+    """Bypass get_dev_user for the duration of this module only."""
+    app.dependency_overrides[get_dev_user] = lambda: _DEV_USER
+    yield
+    app.dependency_overrides.pop(get_dev_user, None)
 
 SYSTEMS_PATH = Path("data/lighting_systems.json")
 BACKUP_PATH = Path("data/lighting_systems.json.bak")

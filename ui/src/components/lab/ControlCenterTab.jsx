@@ -296,11 +296,13 @@ const _DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 function fmtTime(iso) {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    // Accept both Unix timestamps (seconds, number < 1e12) and ISO strings / ms timestamps
+    const ms = typeof iso === 'number' && iso < 1e12 ? iso * 1000 : iso;
+    return new Date(ms).toLocaleString(undefined, {
       timeZone: _DEVICE_TZ,
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
-  } catch { return iso; }
+  } catch { return String(iso); }
 }
 
 // ── Score Gauge ───────────────────────────────────────────────────────────────

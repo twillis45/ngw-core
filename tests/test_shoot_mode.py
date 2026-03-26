@@ -6,7 +6,9 @@ POST /api/shoot-mode/evaluate-test-shot
 """
 import json
 import unittest
+from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from main import app
@@ -106,6 +108,13 @@ SAMPLE_RESULT = {
         ],
     },
 }
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _override_shoot_mode_auth():
+    """Bypass _is_authorized for the duration of this test module only."""
+    with patch("api.routes.shoot_mode._is_authorized", return_value=True):
+        yield
 
 
 class TestShootModeStart(unittest.TestCase):

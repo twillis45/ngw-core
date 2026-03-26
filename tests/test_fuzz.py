@@ -15,6 +15,18 @@ from engine.scoring import score_system
 from engine.selector import select_best_system
 from engine.diagram import build_diagram
 from main import app
+from auth.dev_guard import get_dev_user
+
+_DEV_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _override_admin_auth():
+    """Bypass get_dev_user for admin fuzz tests in this module only."""
+    app.dependency_overrides[get_dev_user] = lambda: _DEV_USER
+    yield
+    app.dependency_overrides.pop(get_dev_user, None)
+
 
 client = TestClient(app)
 
@@ -257,7 +269,7 @@ class TestRecommendAPIFuzz:
                 s["modifier"] = 1.0
             systems.append(s)
 
-        payload = {"systems": systems}
+        payload = {"systems": systems, "metadata": {"session_id": f"fuzz-{i}"}}
         try:
             resp = client.post("/recommend", json=payload)
         except (UnicodeEncodeError, ValueError):
@@ -267,7 +279,7 @@ class TestRecommendAPIFuzz:
     def test_deeply_nested_metadata(self):
         payload = {
             "systems": [{"id": "nest", "name": "Nested", "criteria": {"brightness": 5000}}],
-            "metadata": {"a": {"b": {"c": {"d": {"e": "deep"}}}}},
+            "metadata": {"session_id": "fuzz-nested", "a": {"b": {"c": {"d": {"e": "deep"}}}}},
         }
         resp = client.post("/recommend", json=payload)
         assert resp.status_code == 200
@@ -278,7 +290,8 @@ class TestRecommendAPIFuzz:
                 "id": "huge", "name": "Huge",
                 "criteria": {"brightness": 1e15, "color_accuracy": 1e15},
                 "features": {"dimmable": True},
-            }]
+            }],
+            "metadata": {"session_id": "fuzz-huge"},
         }
         resp = client.post("/recommend", json=payload)
         assert resp.status_code == 200
@@ -289,7 +302,8 @@ class TestRecommendAPIFuzz:
                 "id": "sys/with spaces & <special> 'chars'",
                 "name": "Special Chars System",
                 "criteria": {"brightness": 5000},
-            }]
+            }],
+            "metadata": {"session_id": "fuzz-special"},
         }
         resp = client.post("/recommend", json=payload)
         assert resp.status_code == 200
@@ -300,7 +314,8 @@ class TestRecommendAPIFuzz:
                 "id": "unicode-sys",
                 "name": "Systeme d'eclairage cinematographique",
                 "criteria": {"brightness": 5000},
-            }]
+            }],
+            "metadata": {"session_id": "fuzz-unicode"},
         }
         resp = client.post("/recommend", json=payload)
         assert resp.status_code == 200
@@ -309,6 +324,7 @@ class TestRecommendAPIFuzz:
         payload = {
             "systems": [{"id": "x", "name": "X", "criteria": {}}],
             "extra_field": "should_fail",
+            "metadata": {"session_id": "fuzz-extra"},
         }
         resp = client.post("/recommend", json=payload)
         assert resp.status_code == 422

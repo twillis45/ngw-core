@@ -6,6 +6,19 @@
   "entry_trust_score": 0.5,
   "environment": "studio",
   "approval_status": "draft",
+  "notes": "Multi-panel Hurley setup with high light_count — clamshell geometry but can appear high_key due to multiple sources inflating catchlight count. Acceptable to classify as either clamshell or high_key.",
+  "ground_truth": {
+    "expected_pattern": "clamshell",
+    "acceptable_patterns": ["clamshell", "high_key", "butterfly"],
+    "expected_light_count": 4,
+    "acceptable_light_count_range": [3, 6],
+    "known_challenges": ["high_light_count_from_multiplate_setup_may_trigger_high_key_promotion"]
+  },
+  "benchmark_metadata": {
+    "category": "multi_light",
+    "difficulty": "hard",
+    "added_date": "2026-03-12"
+  },
   "ingested_at": "2026-03-12T22:49:46.798096+00:00",
   "has_signals": true,
   "has_vlm_reconstruction": true,

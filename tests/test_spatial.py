@@ -11,11 +11,19 @@ Tests cover:
 """
 import math
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _override_spatial_auth():
+    """Bypass _is_authorized for shoot-mode integration tests in this module."""
+    with patch("api.routes.shoot_mode._is_authorized", return_value=True):
+        yield
 
 
 # ── Fixtures ──────────────────────────────────────────────

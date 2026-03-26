@@ -29,6 +29,7 @@ def _payload(*systems, **meta) -> dict:
                 "features": {"dimmable": True},
             }
         ]
+    meta.setdefault("session_id", "test-session-api")
     return {"systems": list(systems), "metadata": meta}
 
 
@@ -198,11 +199,11 @@ class TestRecommendHappyPath:
 class TestRecommendErrors:
     def test_empty_systems_returns_422(self):
         """FastAPI's own validation catches min_length=1."""
-        resp = client.post("/recommend", json={"systems": []})
+        resp = client.post("/recommend", json={"systems": [], "metadata": {"session_id": "test-err"}})
         assert resp.status_code == 422
 
     def test_missing_systems_key_returns_422(self):
-        resp = client.post("/recommend", json={"metadata": {}})
+        resp = client.post("/recommend", json={"metadata": {"session_id": "test-err"}})
         assert resp.status_code == 422
 
     def test_invalid_json_returns_422(self):

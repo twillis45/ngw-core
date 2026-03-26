@@ -25,8 +25,8 @@
     "pose_highlight_interference": false,
     "occluded_regions": [
       "torso_right",
-      "leg_crossing",
-      "torso_left"
+      "torso_left",
+      "leg_crossing"
     ],
     "self_shadow_regions": [
       "torso_right",
@@ -1260,184 +1260,25 @@
   },
   "vlm_reconstruction": {
     "primary_reconstruction": {
-      "dominant_source_direction_deg": 0.1,
-      "dominant_source_height_class": "slightly_above_eye",
-      "dominant_source_height_deg_estimate": 10.0,
-      "dominant_source_distance_class": "far",
-      "dominant_source_distance_ft": 9.9,
-      "source_size_class": "very_large",
-      "modifier_family_candidates": [
-        {
-          "type": "softbox",
-          "confidence": 0.65
-        },
-        {
-          "type": "stripbox",
-          "confidence": 0.65
-        },
-        {
-          "type": "window",
-          "confidence": 0.63
-        }
-      ],
-      "environment": "window",
-      "likely_light_count": 1,
-      "roles": {
-        "key": {
-          "present": true,
-          "confidence": 0.9
-        },
-        "fill": {
-          "present": false,
-          "confidence": 0.15
-        },
-        "negative_fill": {
-          "present": false,
-          "confidence": 0.35
-        },
-        "rim": {
-          "present": false,
-          "confidence": 0.0
-        },
-        "kicker": {
-          "present": false,
-          "confidence": 0.0
-        },
-        "background": {
-          "present": false,
-          "confidence": 0.0
-        },
-        "bounce": {
-          "present": true,
-          "confidence": 1.0
-        }
-      },
-      "reconstruction_confidence": 0.72,
-      "ambiguity_notes": [
-        "Catchlights absent; catchlight geometry unavailable.",
-        "Shadow direction and dominant light vector show some inconsistency.",
-        "Pose occlusion and self-shadowing may obscure some light cues.",
-        "Bounce fill is strong, but not a dedicated fill source."
-      ],
-      "contradiction_notes": [
-        "Shadow direction (309.6\u00b0) does not perfectly align with dominant light vector (0.1\u00b0).",
-        "Estimated distance (9.9ft) is at the far end for a softbox; window candidate is plausible."
-      ]
+      "dominant_source_direction_deg": null,
+      "dominant_source_height_class": null,
+      "dominant_source_height_deg_estimate": null,
+      "dominant_source_distance_class": null,
+      "dominant_source_distance_ft": null,
+      "source_size_class": null,
+      "modifier_family_candidates": [],
+      "environment": "unknown",
+      "likely_light_count": null,
+      "roles": null,
+      "reconstruction_confidence": 0.0,
+      "ambiguity_notes": [],
+      "contradiction_notes": []
     },
-    "candidates": [
-      {
-        "candidate_id": "candidate_1",
-        "key_light_angle_deg": 0.1,
-        "key_light_height_class": "slightly_above_eye",
-        "key_light_height_deg_estimate": 10.0,
-        "key_light_distance_class": "far",
-        "key_light_distance_ft_estimate": 9.9,
-        "source_size_class": "very_large",
-        "modifier_family_candidates": [
-          {
-            "type": "softbox",
-            "confidence": 0.65
-          },
-          {
-            "type": "stripbox",
-            "confidence": 0.65
-          }
-        ],
-        "environment": "window",
-        "likely_light_count": 1,
-        "roles": {
-          "key": {
-            "present": true,
-            "confidence": 0.9
-          },
-          "fill": {
-            "present": false,
-            "confidence": 0.15
-          },
-          "negative_fill": {
-            "present": false,
-            "confidence": 0.35
-          },
-          "rim": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "kicker": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "background": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "bounce": {
-            "present": true,
-            "confidence": 1.0
-          }
-        },
-        "confidence_score": 0.72,
-        "ambiguity_notes": [
-          "Catchlights absent; catchlight geometry unavailable.",
-          "Shadow direction and dominant light vector show some inconsistency.",
-          "Bounce fill is strong, but not a dedicated fill source."
-        ]
-      },
-      {
-        "candidate_id": "candidate_2",
-        "key_light_angle_deg": 309.6,
-        "key_light_height_class": "eye_level",
-        "key_light_height_deg_estimate": 0.0,
-        "key_light_distance_class": "far",
-        "key_light_distance_ft_estimate": 9.9,
-        "source_size_class": "very_large",
-        "modifier_family_candidates": [
-          {
-            "type": "window",
-            "confidence": 0.63
-          }
-        ],
-        "environment": "window",
-        "likely_light_count": 1,
-        "roles": {
-          "key": {
-            "present": true,
-            "confidence": 0.85
-          },
-          "fill": {
-            "present": false,
-            "confidence": 0.15
-          },
-          "negative_fill": {
-            "present": false,
-            "confidence": 0.35
-          },
-          "rim": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "kicker": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "background": {
-            "present": false,
-            "confidence": 0.0
-          },
-          "bounce": {
-            "present": true,
-            "confidence": 1.0
-          }
-        },
-        "confidence_score": 0.65,
-        "ambiguity_notes": [
-          "Shadow direction (309.6\u00b0) used as key; possible window source.",
-          "Reflection and penumbra suggest very large, soft source.",
-          "Bounce fill is strong, but not a dedicated fill source."
-        ]
-      }
+    "candidates": [],
+    "ok": false,
+    "notes": [
+      "VLM reconstruction call failed: Error code: 401 - {'error': {'message': 'Incorrect API key provided: sk-proj-********************************************************************************************************************************************************bfQA. You can find your API key at https://platform.openai.com/account/api-keys.', 'type': 'invalid_request_error', 'code': 'invalid_api_key', 'param': None}, 'status': 401}"
     ],
-    "ok": true,
-    "notes": [],
     "needs_review": false,
     "needs_review_reasons": [],
     "validation_scores": null,
