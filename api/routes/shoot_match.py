@@ -93,10 +93,12 @@ async def _validate_upload(file: UploadFile) -> bytes:
 
 @router.post("/upload-reference")
 async def upload_reference(
+    request: Request,
     file: UploadFile = File(...),
     user=Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Save an uploaded reference image, run basic analysis, and return both."""
+    check_rate_limit("upload_reference", request, limit=20, window=60)
     content = await _validate_upload(file)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     ext = Path(file.filename or "photo.jpg").suffix.lower() or ".jpg"
