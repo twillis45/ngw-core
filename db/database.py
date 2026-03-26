@@ -147,6 +147,7 @@ def init_db():
                 description         TEXT NOT NULL,
                 rationale           TEXT,
                 source_gold_set_id  TEXT,
+                source_image_path   TEXT,
                 proposed_change     TEXT,
                 status              TEXT NOT NULL DEFAULT 'proposed',
                 created_by          TEXT,
@@ -228,6 +229,12 @@ def init_db():
         if "email_verified" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1")
             # Default existing accounts to verified so they're not locked out
+
+    # Migrate rule_candidates — add source_image_path if missing
+    with get_db() as conn:
+        rc_cols = [r[1] for r in conn.execute("PRAGMA table_info(rule_candidates)").fetchall()]
+        if "source_image_path" not in rc_cols:
+            conn.execute("ALTER TABLE rule_candidates ADD COLUMN source_image_path TEXT")
 
     from db.analytics import init_analytics_table
     init_analytics_table()
@@ -777,6 +784,7 @@ def create_rule_candidate(
     description: str,
     rationale: Optional[str] = None,
     source_gold_set_id: Optional[str] = None,
+    source_image_path: Optional[str] = None,
     proposed_change: Optional[Dict[str, Any]] = None,
     status: str = "proposed",
     created_by: Optional[str] = None,
@@ -786,15 +794,16 @@ def create_rule_candidate(
     with get_db() as conn:
         conn.execute(
             """INSERT INTO rule_candidates
-               (id, title, description, rationale, source_gold_set_id, proposed_change, status, created_by, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (cid, title, description, rationale, source_gold_set_id,
+               (id, title, description, rationale, source_gold_set_id, source_image_path, proposed_change, status, created_by, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (cid, title, description, rationale, source_gold_set_id, source_image_path,
              json.dumps(proposed_change) if proposed_change else None,
              status, created_by, now, now),
         )
     return {
         "id": cid, "title": title, "description": description,
         "rationale": rationale, "source_gold_set_id": source_gold_set_id,
+        "source_image_path": source_image_path,
         "proposed_change": proposed_change, "status": status,
         "created_by": created_by,
         "created_at": now, "updated_at": now,
@@ -805,10 +814,10 @@ def get_rule_candidates(
     status: Optional[str] = None,
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
-    # Left-join with gold_set_entries to include source image path on each candidate
+    # Left-join with gold_set_entries; direct source_image_path column wins, else use gold set image
     base_sql = """
         SELECT rc.*,
-               gs.image_path AS source_image_path
+               COALESCE(rc.source_image_path, gs.image_path) AS source_image_path
         FROM rule_candidates rc
         LEFT JOIN gold_set_entries gs ON rc.source_gold_set_id = gs.id
         {where}
@@ -854,7 +863,7 @@ def update_rule_candidate(candidate_id: str, **kwargs) -> Optional[Dict[str, Any
     now = time.time()
     sets = ["updated_at = ?"]
     vals: list = [now]
-    for key in ("title", "description", "rationale", "proposed_change", "status"):
+    for key in ("title", "description", "rationale", "source_image_path", "proposed_change", "status"):
         if key in kwargs:
             v = kwargs[key]
             if key == "proposed_change" and isinstance(v, dict):

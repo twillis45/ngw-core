@@ -90,6 +90,7 @@ class RuleCandidateCreate(BaseModel):
     description: str
     rationale: Optional[str] = None
     source_gold_set_id: Optional[str] = None
+    source_image_path: Optional[str] = None
     proposed_change: Dict[str, Any] = Field(default_factory=dict)
     status: str = "proposed"  # proposed | accepted | rejected | implemented
 
@@ -98,6 +99,7 @@ class RuleCandidateUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     rationale: Optional[str] = None
+    source_image_path: Optional[str] = None
     proposed_change: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
 
@@ -564,6 +566,7 @@ async def create_candidate(body: RuleCandidateCreate, user: Dict = Depends(get_d
         description=body.description,
         rationale=body.rationale,
         source_gold_set_id=body.source_gold_set_id,
+        source_image_path=body.source_image_path,
         proposed_change=body.proposed_change,
         status=body.status,
         created_by=user.get("email", "unknown"),

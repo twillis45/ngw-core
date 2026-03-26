@@ -691,16 +691,24 @@ export default function LabScreen() {
     switchTab('gold_set');
   }
 
-  function handleProposeRule(result) {
-    const analysis = result.reference_analysis || {};
-    const lighting = analysis.lighting_read || {};
-    const setup = analysis.recreation_setup || {};
-    setCandidatePrefill({
-      title: `Rule from ${setup.setup_family || lighting.lighting_family || 'analysis'}`,
-      description: '',
-      rationale: `Based on workbench analysis of ${result.image_path || 'uploaded image'}`,
-      proposed_change: { source_analysis: analysis },
-    });
+  function handleProposeRule(result, prefill) {
+    const imagePreview = workbenchSnapshot?.preview || null;
+    const imagePath    = result?.image_path || workbenchSnapshot?.imagePath || null;
+    if (prefill) {
+      setCandidatePrefill({ ...prefill, imagePreview, source_image_path: imagePath });
+    } else {
+      const analysis = result.reference_analysis || {};
+      const lighting = analysis.lighting_read || {};
+      const setup = analysis.recreation_setup || {};
+      setCandidatePrefill({
+        title: `Rule from ${setup.setup_family || lighting.lighting_family || 'analysis'}`,
+        description: '',
+        rationale: `Based on workbench analysis of ${imagePath || 'uploaded image'}`,
+        proposed_change: { source_analysis: analysis },
+        imagePreview,
+        source_image_path: imagePath,
+      });
+    }
     switchTab('candidates');
   }
 
@@ -1368,7 +1376,10 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
           ) : viewMode === 'compare' ? (
             <VlmCvCompare data={result} onAccept={(updated) => { setResult(updated); setVlmDirty(true); }} />
           ) : viewMode === 'signals' ? (
-            <SignalDiagnosticsPanel data={result} />
+            <SignalDiagnosticsPanel
+              data={result}
+              onPropose={(prefill) => onProposeRule(result, prefill)}
+            />
           ) : (
             <WorkbenchFormatted data={result} />
           )}
@@ -1519,14 +1530,174 @@ function OverlayWarnings({ result }) {
 // ── Signal Diagnostics Panel ────────────────────────────────────────────────
 // Shows catchlight clock positions, key signal values, and gate decisions
 // for every analysis run — makes it easy to diagnose misclassifications.
+// When the user flags a parameter as wrong and enters the correct value,
+// it auto-generates a pre-filled rule candidate of the appropriate type.
 
-function SignalDiagnosticsPanel({ data }) {
+// Derive a rule candidate prefill from a flagged parameter correction.
+function _buildRulePrefill(param, detectedValue, correctValue, note, data) {
+  const diag = data?.signal_diagnostics || {};
+  const signals = diag.signals || {};
+  const catchlights = diag.catchlights || [];
+  const lightInf = data?.lighting_inference || {};
+  const lra = signals.left_right_asymmetry ?? null;
+  const sd = signals.shadow_density ?? null;
+  const ti = signals.triangle_isolation ?? null;
+  const detectedPattern = lightInf.pattern || '';
+  const hasHardCatchlight = catchlights.some(
+    c => c.quad === 'hard_left' || c.quad === 'hard_right'
+  );
+  const signalSummary = Object.entries(signals)
+    .filter(([, v]) => v != null && v !== 0)
+    .map(([k, v]) => `${k}=${v}`)
+    .join(', ');
+  const clSummary = catchlights
+    .map(c => `${c.eye} ${c.position} (${c.quad})`)
+    .join('; ') || 'none';
+
+  // ── Pattern is wrong ────────────────────────────────────────────────────
+  if (param === 'pattern') {
+    const detected = String(detectedValue);
+    const correct = String(correctValue).trim();
+
+    // Split false-positive from jewellery / reflective surface
+    if (detected === 'split' && hasHardCatchlight && lra != null && lra < 0.20) {
+      return {
+        title: `[split] Jewellery false-positive — lr_asymmetry=${lra} contradicts 90° key`,
+        description:
+          `System returned split (90° key) because a catchlight landed at 3 or 9 o'clock, ` +
+          `but left_right_asymmetry=${lra} shows the face is nearly evenly lit. ` +
+          `Correct pattern is ${correct || 'loop'}. Catchlight is from jewellery or a ` +
+          `reflective surface, not the key light.`,
+        rationale:
+          `Observed: lr_asymmetry=${lra} (<0.12 threshold). Hard catchlight at 3/9 o'clock ` +
+          `(${clSummary}). Real split lighting produces asymmetry 0.25–0.45.` +
+          (note ? ` — ${note}` : ''),
+        proposed_change: {
+          type: 'signal_override',
+          signal: 'lr_asymmetry',
+          condition: '< 0.12',
+          overrides: ['split'],
+          confidence_penalty: 1.0,
+          notes:
+            `Jewellery/reflective-surface false positive. Catchlight at hard position ` +
+            `when face asymmetry < 0.12 → demote split to ${correct || 'loop'}.`,
+        },
+      };
+    }
+
+    // Generic pattern confusion
+    return {
+      title: `[${detected}/${correct || '?'}] Pattern confusion — detected ${detected}, should be ${correct || '?'}`,
+      description:
+        `System classified as ${detected} but the correct pattern is ${correct || '(see rationale)'}. ` +
+        (note || 'Signals do not clearly separate these two patterns.'),
+      rationale:
+        `Observed signals: ${signalSummary || 'n/a'}. Catchlights: ${clSummary}.` +
+        (note ? ` — ${note}` : ''),
+      proposed_change: {
+        type: 'pattern_confusion',
+        pattern_a: correct || '',
+        pattern_b: detected,
+        confusion_rate: 0.5,
+        action: 'review_classifier_boundaries',
+        key_signals: signalSummary,
+        notes: note || '',
+      },
+    };
+  }
+
+  // ── Key position is wrong ───────────────────────────────────────────────
+  if (param === 'key_position') {
+    const detected = String(detectedValue);
+    const correct = String(correctValue).trim();
+    // 90° position driven by split — same jewellery gate logic
+    if (detected === '90' && hasHardCatchlight && lra != null && lra < 0.20) {
+      return {
+        title: `[split] Key position 90° wrong — lr_asymmetry=${lra} contradicts side key`,
+        description:
+          `Key position reported as 90° but the face is evenly lit (lr_asymmetry=${lra}). ` +
+          `Correct position should be ${correct || '30-45 off-axis'}. ` +
+          `Catchlight at 3/9 o'clock is from jewellery, not the key.`,
+        rationale:
+          `Signals: ${signalSummary || 'n/a'}. Catchlights: ${clSummary}.` +
+          (note ? ` — ${note}` : ''),
+        proposed_change: {
+          type: 'signal_override',
+          signal: 'lr_asymmetry',
+          condition: '< 0.12',
+          overrides: ['split'],
+          confidence_penalty: 1.0,
+          notes: note || '',
+        },
+      };
+    }
+    return {
+      title: `[${detectedPattern}] Key position incorrect — detected ${detected}, should be ${correct || '?'}`,
+      description:
+        `Key position was reported as ${detected} but should be ${correct || '(see rationale)'}. ` +
+        (note || ''),
+      rationale:
+        `Signals: ${signalSummary || 'n/a'}. Catchlights: ${clSummary}.` +
+        (note ? ` — ${note}` : ''),
+      proposed_change: {
+        type: 'blueprint_correction',
+        pattern_id: detectedPattern,
+        action: 'review_detection_threshold',
+        current_cvr: lightInf.pattern_confidence ?? null,
+        notes: `Key position: detected=${detected}, expected=${correct}. ${note || ''}`,
+      },
+    };
+  }
+
+  // ── Confidence is wrong ─────────────────────────────────────────────────
+  if (param === 'confidence') {
+    const detected = Number(detectedValue);
+    const correct = parseFloat(correctValue) || 0;
+    const tooHigh = detected > correct;
+    return {
+      title: `[${detectedPattern}] Confidence ${tooHigh ? 'too high' : 'too low'} — ${(detected * 100).toFixed(0)}%, should be ~${(correct * 100).toFixed(0)}%`,
+      description:
+        `Confidence of ${(detected * 100).toFixed(0)}% does not reflect actual pattern reliability ` +
+        `for this case. Correct confidence should be ~${(correct * 100).toFixed(0)}%.`,
+      rationale:
+        `Signals: ${signalSummary || 'n/a'}.` + (note ? ` — ${note}` : ''),
+      proposed_change: {
+        type: 'confidence_recalibration',
+        pattern_id: detectedPattern,
+        action: 'reduce_confidence_floor',
+        current_cvr: detected,
+        fleet_mean_cvr: correct,
+        notes: note || '',
+      },
+    };
+  }
+
+  // ── Modifier / light count / other ──────────────────────────────────────
+  return {
+    title: `[${detectedPattern}] ${param} incorrect — detected "${detectedValue}", should be "${correctValue}"`,
+    description:
+      `${param} was detected as "${detectedValue}" but should be "${correctValue}". ` +
+      (note || ''),
+    rationale: `Signals: ${signalSummary || 'n/a'}. Catchlights: ${clSummary}.` + (note ? ` — ${note}` : ''),
+    proposed_change: {
+      type: 'needs_investigation',
+      pattern_id: detectedPattern,
+      reason: `${param}: detected="${detectedValue}", expected="${correctValue}". ${note || ''}`,
+    },
+  };
+}
+
+function SignalDiagnosticsPanel({ data, onPropose }) {
   const diag = data?.signal_diagnostics || {};
   const catchlights = diag.catchlights || [];
   const signals = diag.signals || {};
   const gates = diag.gates || [];
   const finalPattern = diag.final_pattern || data?.lighting_inference?.pattern || '—';
   const lightInf = data?.lighting_inference || {};
+
+  // Correction state — tracks which parameter the user has flagged as wrong
+  const [correction, setCorrection] = useState({ param: null, correctValue: '', note: '' });
+  const isFlagging = correction.param !== null;
 
   const C = {
     green: '#4ade80', amber: '#FBBF24', red: '#f87171',
@@ -1572,23 +1743,158 @@ function SignalDiagnosticsPanel({ data }) {
     <div style={{ padding: '16px 4px', display: 'grid', gap: 20 }}>
 
       {/* ── Pattern Decision ── */}
-      {section('Pattern Decision', (
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-          {[
-            ['Final Pattern',   finalPattern],
-            ['Key Position',    lightInf.key_position_text || '—'],
-            ['Confidence',      lightInf.pattern_confidence != null
-              ? `${(lightInf.pattern_confidence * 100).toFixed(0)}%` : '—'],
-            ['Light Count',     lightInf.light_count ?? '—'],
-            ['Modifier',        lightInf.modifier_family || '—'],
-          ].map(([lbl, val]) => (
-            <div key={lbl}>
-              <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>{lbl}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{String(val)}</div>
+      {section('Pattern Decision — flag any value that is wrong', (() => {
+        // Parameters the user can flag as incorrect
+        const params = [
+          { id: 'pattern',      label: 'Final Pattern',  val: finalPattern,
+            inputType: 'pattern' },
+          { id: 'key_position', label: 'Key Position',   val: lightInf.key_position_text || '—',
+            inputType: 'text' },
+          { id: 'confidence',   label: 'Confidence',
+            val: lightInf.pattern_confidence != null
+              ? lightInf.pattern_confidence : null,
+            display: lightInf.pattern_confidence != null
+              ? `${(lightInf.pattern_confidence * 100).toFixed(0)}%` : '—',
+            inputType: 'number' },
+          { id: 'modifier',     label: 'Modifier',       val: lightInf.modifier_family || '—',
+            inputType: 'text' },
+          { id: 'light_count',  label: 'Light Count',    val: lightInf.light_count ?? '—',
+            inputType: 'number' },
+        ];
+        return (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              {params.map(({ id, label, val, display }) => {
+                const isFlagged = correction.param === id;
+                return (
+                  <div key={id} style={{
+                    background: isFlagged ? '#7c2d1220' : C.surface,
+                    border: `1px solid ${isFlagged ? C.amber : C.border}`,
+                    borderRadius: 6, padding: '8px 12px', minWidth: 90,
+                  }}>
+                    <div style={{ fontSize: 10, color: C.textSec, marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: isFlagged ? C.amber : C.text }}>
+                      {String(display ?? val)}
+                    </div>
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: 6, fontSize: 10, padding: '2px 6px',
+                        background: 'transparent', border: `1px solid ${isFlagged ? C.amber : C.border}`,
+                        borderRadius: 4, color: isFlagged ? C.amber : C.textSec, cursor: 'pointer',
+                      }}
+                      onClick={() => setCorrection(
+                        isFlagged
+                          ? { param: null, correctValue: '', note: '' }
+                          : { param: id, detectedValue: val, correctValue: '', note: '' }
+                      )}
+                    >
+                      {isFlagged ? '✕ cancel' : '⚑ flag as wrong'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-      ))}
+
+            {/* ── Correction form — shown when a parameter is flagged ── */}
+            {isFlagging && (() => {
+              const flaggedParam = params.find(p => p.id === correction.param);
+              return (
+                <div style={{
+                  background: '#7c2d1210',
+                  border: `1px solid ${C.amber}`, borderRadius: 8, padding: '14px 16px',
+                }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, marginBottom: 10 }}>
+                    ⚑ Correcting: <strong>{flaggedParam?.label}</strong>
+                    &nbsp;·&nbsp;
+                    <span style={{ fontWeight: 400, color: C.textSec }}>
+                      Detected: <code style={{ fontFamily: 'var(--font-mono)' }}>
+                        {String(correction.detectedValue)}
+                      </code>
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <label style={{ fontSize: 11, color: C.textSec }}>
+                      Correct value should be:
+                      {flaggedParam?.inputType === 'pattern' ? (
+                        <select
+                          value={correction.correctValue}
+                          onChange={e => setCorrection(p => ({ ...p, correctValue: e.target.value }))}
+                          style={{
+                            display: 'block', marginTop: 4, width: '100%',
+                            background: 'var(--color-surface)', border: `1px solid ${C.border}`,
+                            borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                            color: 'var(--color-text)',
+                          }}
+                        >
+                          <option value="">— select correct pattern —</option>
+                          {_PC_PATTERNS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          type={flaggedParam?.inputType === 'number' ? 'number' : 'text'}
+                          step={flaggedParam?.inputType === 'number' ? 0.01 : undefined}
+                          min={flaggedParam?.inputType === 'number' ? 0 : undefined}
+                          max={flaggedParam?.inputType === 'number' ? 1 : undefined}
+                          value={correction.correctValue}
+                          onChange={e => setCorrection(p => ({ ...p, correctValue: e.target.value }))}
+                          placeholder={flaggedParam?.inputType === 'number' ? '0.00–1.00' : 'enter correct value'}
+                          style={{
+                            display: 'block', marginTop: 4, width: '100%',
+                            background: 'var(--color-surface)', border: `1px solid ${C.border}`,
+                            borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                            color: 'var(--color-text)', boxSizing: 'border-box',
+                          }}
+                        />
+                      )}
+                    </label>
+                    <label style={{ fontSize: 11, color: C.textSec }}>
+                      Why is this wrong? (optional)
+                      <input
+                        type="text"
+                        value={correction.note}
+                        onChange={e => setCorrection(p => ({ ...p, note: e.target.value }))}
+                        placeholder="e.g. large hoop earrings at 3 o'clock triggering side-key detection"
+                        style={{
+                          display: 'block', marginTop: 4, width: '100%',
+                          background: 'var(--color-surface)', border: `1px solid ${C.border}`,
+                          borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                          color: 'var(--color-text)', boxSizing: 'border-box',
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!correction.correctValue}
+                      onClick={() => {
+                        const prefill = _buildRulePrefill(
+                          correction.param,
+                          correction.detectedValue,
+                          correction.correctValue,
+                          correction.note,
+                          data,
+                        );
+                        setCorrection({ param: null, correctValue: '', note: '' });
+                        onPropose && onPropose(prefill);
+                      }}
+                      style={{
+                        marginTop: 4, padding: '6px 14px', fontSize: 12, fontWeight: 700,
+                        background: correction.correctValue ? C.amber : 'transparent',
+                        color: correction.correctValue ? '#000' : C.muted,
+                        border: `1px solid ${correction.correctValue ? C.amber : C.border}`,
+                        borderRadius: 6, cursor: correction.correctValue ? 'pointer' : 'default',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      Generate Rule →
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        );
+      })())}
 
       {/* ── Catchlight Clock Positions ── */}
       {section(`Catchlights (${catchlights.length} detected)`, (
@@ -4102,6 +4408,37 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
         )}
       </div>
 
+      {/* Source image — shown when candidate was generated from a workbench analysis */}
+      {selected.source_image_path && (() => {
+        const p = selected.source_image_path.replace(/\\/g, '/');
+        // Uploads path: static/uploads/lab_*.jpg → serve as /static/uploads/...
+        const imgUrl = p.startsWith('static/')
+          ? `/${p}`
+          : p.startsWith('data/reference_dataset/')
+            ? (() => {
+                const parts = p.split('/');
+                return parts.length >= 5 ? getReferenceThumbnailUrl(parts[2], parts[3]) : null;
+              })()
+            : null;
+        if (!imgUrl) return null;
+        return (
+          <div style={{ marginBottom: 12 }}>
+            <div className="lab-detail__label" style={{ marginBottom: 6 }}>Source Image</div>
+            <img
+              src={imgUrl}
+              alt="Source image for this rule candidate"
+              style={{
+                width: '100%', maxHeight: 260, objectFit: 'cover',
+                borderRadius: 6, border: '1px solid var(--color-border)', display: 'block',
+              }}
+              onError={e => { e.target.style.display = 'none'; }}
+            />
+            <div style={{ fontSize: 10, color: 'var(--color-text-dim)',
+              fontFamily: 'var(--font-mono)', marginTop: 4 }}>{p}</div>
+          </div>
+        );
+      })()}
+
       <div className="lab-detail__field">
         <span className="lab-detail__label">ID</span>
         <span className="lab-detail__value lab-detail__value--mono">{selected.id}</span>
@@ -4285,6 +4622,9 @@ function CandidateForm({ onSave, onCancel, prefill }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  const imagePreview = prefill?.imagePreview || null;
+  const sourceImagePath = prefill?.source_image_path || null;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
@@ -4295,6 +4635,7 @@ function CandidateForm({ onSave, onCancel, prefill }) {
         description,
         rationale: rationale || undefined,
         source_gold_set_id: sourceGoldSetId || undefined,
+        source_image_path: sourceImagePath || undefined,
         proposed_change: proposedChange,
         status: 'proposed',
       });
@@ -4310,6 +4651,28 @@ function CandidateForm({ onSave, onCancel, prefill }) {
         {'\u2190'} Cancel
       </button>
       <h4 className="lab-form__title">New Rule Candidate</h4>
+
+      {/* Source image — shown when the candidate was generated from a workbench analysis */}
+      {imagePreview && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="lab-form__label" style={{ marginBottom: 6 }}>Source Image</div>
+          <img
+            src={imagePreview}
+            alt="Source image for this rule candidate"
+            style={{
+              width: '100%', maxHeight: 240, objectFit: 'cover',
+              borderRadius: 6, border: '1px solid var(--color-border)',
+              display: 'block',
+            }}
+          />
+          {sourceImagePath && (
+            <div style={{ fontSize: 10, color: 'var(--color-text-dim)',
+              fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+              {sourceImagePath}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className="lab-form__error">{error}</div>}
 
