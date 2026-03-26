@@ -20,8 +20,13 @@ ui/dist
 .venv
 venv
 
-# Local data / uploads (not needed for build; runtime paths are configurable)
-data/
+# Runtime / user-generated data — excluded from image (lives on persistent disk)
+# Static app data (data/taxonomy/, data/systems/, etc.) IS included — engine needs it.
+data/uploads/
+data/gold_set/
+data/confusion_set/
+data/intelligence_runs/
+data/*.db
 static/uploads/
 
 # Docs / scripts (not needed at runtime)
