@@ -3318,18 +3318,30 @@ const _PC_SIGNALS = [
 ];
 
 const _PC_TYPES = [
-  { value: 'blueprint_correction',     label: 'Blueprint Correction' },
-  { value: 'confidence_recalibration', label: 'Confidence Recalibration' },
-  { value: 'shoot_mode_step_fix',      label: 'Shoot Mode Step Fix' },
-  { value: 'dataset_promotion',        label: 'Dataset Promotion' },
-  { value: 'signal_override',          label: 'Signal Override' },
-  { value: 'pattern_confusion',        label: 'Pattern Confusion' },
-  { value: 'reference_correction',     label: 'Reference Correction' },
-  { value: 'vlm_prompt_fix',           label: 'VLM Prompt Fix' },
-  { value: 'edge_case_handling',       label: 'Edge Case Handling' },
-  { value: 'new_pattern_proposal',     label: 'New Pattern Proposal' },
-  { value: 'trust_safety',             label: 'Trust & Safety' },
-  { value: 'needs_investigation',      label: 'Needs Investigation' },
+  { value: 'blueprint_correction',     label: 'Blueprint Correction',
+    desc: "A pattern's recommended lighting setup needs updated gear, modifier, or step sequence — e.g. wrong softbox size, missing fill step." },
+  { value: 'confidence_recalibration', label: 'Confidence Recalibration',
+    desc: "A pattern is being over- or under-estimated by the classifier. Adjusts the confidence floor/ceiling for a specific pattern." },
+  { value: 'shoot_mode_step_fix',      label: 'Shoot Mode Step Fix',
+    desc: "A step in the Shoot Mode checklist is wrong, missing, or out of order for a specific pattern." },
+  { value: 'dataset_promotion',        label: 'Dataset Promotion',
+    desc: "Promote an image from the community set to the gold set, or flag an existing gold set entry for removal." },
+  { value: 'signal_override',          label: 'Signal Override',
+    desc: "When a specific computed signal (e.g. triangle_isolation) exceeds a threshold, force or block a pattern match regardless of classifier output." },
+  { value: 'pattern_confusion',        label: 'Pattern Confusion',
+    desc: "Two patterns are routinely mistaken for each other. Propose a disambiguating signal or classifier boundary change." },
+  { value: 'reference_correction',     label: 'Reference Correction',
+    desc: "A reference dataset entry has the wrong label. Propose a relabel, removal, or replacement image." },
+  { value: 'vlm_prompt_fix',           label: 'VLM Prompt Fix',
+    desc: "The VLM system prompt or few-shot examples produce wrong output for a pattern. Propose a specific prompt edit." },
+  { value: 'edge_case_handling',       label: 'Edge Case Handling',
+    desc: "Add a guard for unusual input conditions: B&W photos, blown highlights, no face detected, multiple subjects, etc." },
+  { value: 'new_pattern_proposal',     label: 'New Pattern Proposal',
+    desc: "Propose a lighting pattern that doesn't exist in the current 28-pattern taxonomy. Requires signal spec and example images." },
+  { value: 'trust_safety',             label: 'Trust & Safety',
+    desc: "Track post-match conversion quality or user safety improvements — framing, harm avoidance, confidence floor." },
+  { value: 'needs_investigation',      label: 'Needs Investigation',
+    desc: "Flag an anomaly for triage without a specific fix yet — benchmark regression, unexpected output, or unexplained drop in accuracy." },
 ];
 
 const _PC_ACTIONS = {
@@ -3353,14 +3365,18 @@ const _PC_SCHEMA = {
   blueprint_correction: [
     { key: 'pattern_id',   label: 'Pattern',        kind: 'pattern' },
     { key: 'action',       label: 'Action',          kind: 'action' },
-    { key: 'current_cvr',  label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00' },
-    { key: 'target_cvr_min', label: 'Target CVR Min',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00' },
+    { key: 'current_cvr',  label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00',
+      hint: 'CVR = Classifier Validation Rate — fraction of gold set images correctly identified for this pattern. Range 0–1.' },
+    { key: 'target_cvr_min', label: 'Target CVR Min',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00',
+      hint: 'Minimum CVR the proposed change must achieve to be accepted. Sets the review acceptance threshold.' },
   ],
   confidence_recalibration: [
     { key: 'pattern_id',    label: 'Pattern',        kind: 'pattern' },
     { key: 'action',        label: 'Action',          kind: 'action' },
-    { key: 'current_cvr',   label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1 },
-    { key: 'fleet_mean_cvr',label: 'Fleet Mean CVR',  kind: 'number', step: 0.01, min: 0, max: 1 },
+    { key: 'current_cvr',   label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1,
+      hint: 'CVR = Classifier Validation Rate — current correct-identification rate on the gold set. Range 0–1.' },
+    { key: 'fleet_mean_cvr',label: 'Fleet Mean CVR',  kind: 'number', step: 0.01, min: 0, max: 1,
+      hint: 'Average CVR across all 28 patterns — used as a baseline to judge whether this pattern is an outlier.' },
   ],
   shoot_mode_step_fix: [
     { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
@@ -3371,44 +3387,66 @@ const _PC_SCHEMA = {
     { key: 'action',     label: 'Action',  kind: 'action' },
   ],
   signal_override: [
-    { key: 'signal',             label: 'Signal',            kind: 'signal' },
-    { key: 'condition',          label: 'Condition',         kind: 'text', placeholder: 'e.g. > 0.12 or between 9.5 and 11.5' },
-    { key: 'override',           label: 'Override → Pattern',kind: 'pattern' },
-    { key: 'overrides',          label: 'Overrides (csv)',   kind: 'multi_pattern', placeholder: 'split, loop' },
-    { key: 'confidence_penalty', label: 'Confidence Penalty',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.15' },
+    { key: 'signal',             label: 'Signal',            kind: 'signal',
+      hint: 'The computed pixel/geometry signal that triggers this override. Signals are extracted by the CV pipeline from each image.' },
+    { key: 'condition',          label: 'Condition',         kind: 'text', placeholder: 'e.g. > 0.12 or between 9.5 and 11.5',
+      hint: 'Numeric condition on the signal value. Use Python-style comparisons: > 0.12, < 0.5, between 9.5 and 11.5.' },
+    { key: 'override',           label: 'Override → Pattern',kind: 'pattern',
+      hint: 'When the condition is true, force the classifier to return this pattern instead of its normal output.' },
+    { key: 'overrides',          label: 'Overrides (csv)',   kind: 'multi_pattern', placeholder: 'split, loop',
+      hint: 'Comma-separated list of patterns that this signal should block — e.g. prevent "loop" when the signal is too high.' },
+    { key: 'confidence_penalty', label: 'Confidence Penalty',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.15',
+      hint: 'Amount subtracted from the pattern confidence score when the condition is met. Use to down-rank ambiguous detections.' },
   ],
   pattern_confusion: [
-    { key: 'pattern_a',      label: 'Pattern A (confused)',  kind: 'pattern' },
-    { key: 'pattern_b',      label: 'Pattern B (confused as)', kind: 'pattern' },
-    { key: 'confusion_rate', label: 'Confusion Rate',        kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.40' },
+    { key: 'pattern_a',      label: 'Pattern A (being confused)',  kind: 'pattern',
+      hint: 'The pattern the classifier is incorrectly identifying — the "real" pattern in the image.' },
+    { key: 'pattern_b',      label: 'Pattern B (wrongly returned)', kind: 'pattern',
+      hint: 'The pattern the classifier is returning instead — the wrong answer.' },
+    { key: 'confusion_rate', label: 'Confusion Rate',        kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.40',
+      hint: 'Estimated fraction of pattern_a images that are mis-classified as pattern_b. 0.40 = wrong 40% of the time.' },
     { key: 'action',         label: 'Action',                kind: 'action' },
-    { key: 'key_signals',    label: 'Key Disambiguating Signals (csv)', kind: 'text', placeholder: 'shadow_density, lr_asymmetry' },
+    { key: 'key_signals',    label: 'Key Disambiguating Signals (csv)', kind: 'text', placeholder: 'shadow_density, lr_asymmetry',
+      hint: 'Signals that differ between pattern_a and pattern_b and could be used to separate them. Comma-separated.' },
   ],
   reference_correction: [
-    { key: 'reference_id',   label: 'Reference ID (UUID)',  kind: 'text', placeholder: 'UUID from Reference Dataset' },
-    { key: 'current_label',  label: 'Current Label',        kind: 'pattern' },
-    { key: 'correct_label',  label: 'Correct Label',        kind: 'pattern' },
+    { key: 'reference_id',   label: 'Reference ID (UUID)',  kind: 'text', placeholder: 'UUID from Reference Dataset',
+      hint: 'Find this in the Reference Dataset tab — click an entry to copy its UUID.' },
+    { key: 'current_label',  label: 'Current Label',        kind: 'pattern',
+      hint: 'The pattern currently assigned to this reference image (the incorrect one).' },
+    { key: 'correct_label',  label: 'Correct Label',        kind: 'pattern',
+      hint: 'The pattern that should be assigned to this image.' },
     { key: 'action',         label: 'Action',               kind: 'action' },
   ],
   vlm_prompt_fix: [
-    { key: 'pattern_id',           label: 'Affected Pattern',       kind: 'pattern' },
+    { key: 'pattern_id',           label: 'Affected Pattern',       kind: 'pattern',
+      hint: 'The pattern whose VLM description or detection is being improved.' },
     { key: 'action',               label: 'Action',                 kind: 'action' },
-    { key: 'current_instruction',  label: 'Current Instruction',    kind: 'text', placeholder: 'Quote the problematic instruction' },
-    { key: 'suggested_instruction',label: 'Suggested Instruction',  kind: 'text', placeholder: 'Proposed replacement text' },
+    { key: 'current_instruction',  label: 'Current Instruction',    kind: 'text', placeholder: 'Quote the problematic instruction',
+      hint: 'Copy the exact sentence or clause from the VLM system prompt that is producing wrong output.' },
+    { key: 'suggested_instruction',label: 'Suggested Instruction',  kind: 'text', placeholder: 'Proposed replacement text',
+      hint: 'The replacement text. Keep the same voice and format as the existing prompt.' },
   ],
   edge_case_handling: [
     { key: 'edge_case',          label: 'Edge Case',          kind: 'select',
-      options: ['bw_photo','blown_highlights','no_face','multiple_subjects','extreme_backlight','low_key_face','mixed_lighting','heavy_grain','motion_blur','other'] },
-    { key: 'affected_patterns',  label: 'Affected Patterns (csv)', kind: 'text', placeholder: 'rembrandt, loop' },
+      options: ['bw_photo','blown_highlights','no_face','multiple_subjects','extreme_backlight','low_key_face','mixed_lighting','heavy_grain','motion_blur','other'],
+      hint: 'The input condition that causes the pipeline to fail or produce poor output.' },
+    { key: 'affected_patterns',  label: 'Affected Patterns (csv)', kind: 'text', placeholder: 'rembrandt, loop',
+      hint: 'Patterns whose detection is degraded by this edge case. Leave blank if all patterns are affected.' },
     { key: 'action',             label: 'Action',             kind: 'action' },
-    { key: 'proposed_handling',  label: 'Proposed Handling',  kind: 'text', placeholder: 'e.g. Return low_signal instead of guessing' },
+    { key: 'proposed_handling',  label: 'Proposed Handling',  kind: 'text', placeholder: 'e.g. Return low_signal instead of guessing',
+      hint: 'What should the pipeline do when this condition is detected? E.g. lower confidence, skip pattern match, return a special code.' },
   ],
   new_pattern_proposal: [
-    { key: 'proposed_name',    label: 'Proposed Pattern Name', kind: 'text', placeholder: 'e.g. halo_light' },
+    { key: 'proposed_name',    label: 'Proposed Pattern Name', kind: 'text', placeholder: 'e.g. halo_light',
+      hint: 'Use snake_case. Should be descriptive and distinct from existing pattern names.' },
     { key: 'action',           label: 'Action',                kind: 'action' },
-    { key: 'closest_existing', label: 'Closest Existing Pattern', kind: 'pattern' },
-    { key: 'key_signals',      label: 'Key Identifying Signals', kind: 'text', placeholder: 'catchlight_position > 11, triangle_isolation < 0.3' },
-    { key: 'example_count',    label: 'Example Images Available', kind: 'number', step: 1, min: 0, placeholder: '0' },
+    { key: 'closest_existing', label: 'Closest Existing Pattern', kind: 'pattern',
+      hint: 'The most similar pattern already in the taxonomy — helps reviewers understand the distinction.' },
+    { key: 'key_signals',      label: 'Key Identifying Signals', kind: 'text', placeholder: 'catchlight_position > 11, triangle_isolation < 0.3',
+      hint: 'Measurable CV signals that uniquely identify this pattern. Use the same signal names as the signal_override type.' },
+    { key: 'example_count',    label: 'Example Images Available', kind: 'number', step: 1, min: 0, placeholder: '0',
+      hint: 'Number of labeled example images you can provide. Proposals with 0 examples are hard to prototype.' },
   ],
   trust_safety: [
     { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
@@ -3416,9 +3454,11 @@ const _PC_SCHEMA = {
   ],
   needs_investigation: [
     { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
-    { key: 'reason',     label: 'Reason',  kind: 'text', placeholder: 'e.g. benchmark_regression' },
+    { key: 'reason',     label: 'Reason',  kind: 'text', placeholder: 'e.g. benchmark_regression',
+      hint: 'Brief description of what you observed. Include numbers if you have them — e.g. "CVR dropped from 0.82 to 0.61 after last deploy".' },
     { key: 'status',     label: 'Status',  kind: 'select',
-      options: ['needs_investigation','deferred','acknowledged'] },
+      options: ['needs_investigation','deferred','acknowledged'],
+      hint: 'needs_investigation = not yet looked at · deferred = low priority for now · acknowledged = seen, root cause unknown' },
   ],
 };
 
@@ -3481,6 +3521,10 @@ function KvJsonEditor({ value = {}, onChange }) {
     fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
     fontWeight: 600, marginBottom: 2, display: 'block',
   };
+  const _hint = {
+    fontSize: 10, color: 'var(--color-text-dim)', lineHeight: 1.4,
+    marginTop: 2, display: 'block',
+  };
   const _row = { display: 'grid', gap: 4, marginBottom: 6 };
 
   function renderField(f) {
@@ -3495,6 +3539,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             <option value="">— select —</option>
             {_PC_PATTERNS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3506,6 +3551,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             <option value="">— select —</option>
             {_PC_SIGNALS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3517,6 +3563,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             <option value="">— select —</option>
             {actions.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3528,6 +3575,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             <option value="">— select —</option>
             {f.options.map(o => <option key={o} value={o}>{o}</option>)}
           </select>
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3545,6 +3593,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             onChange={e => set(f.key, e.target.value === '' ? undefined : parseFloat(e.target.value))}
             style={_base}
           />
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3565,6 +3614,7 @@ function KvJsonEditor({ value = {}, onChange }) {
             list={`pc-patterns-list`}
             style={_base}
           />
+          {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
       );
     }
@@ -3579,6 +3629,7 @@ function KvJsonEditor({ value = {}, onChange }) {
           onChange={e => set(f.key, e.target.value || undefined)}
           style={_base}
         />
+        {f.hint && <span style={_hint}>{f.hint}</span>}
       </div>
     );
   }
@@ -3650,6 +3701,10 @@ function KvJsonEditor({ value = {}, onChange }) {
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </select>
+            {pcType && (() => {
+              const td = _PC_TYPES.find(t => t.value === pcType);
+              return td?.desc ? <span style={_hint}>{td.desc}</span> : null;
+            })()}
           </div>
 
           {/* schema fields for selected type */}
@@ -4062,6 +4117,9 @@ function CandidateForm({ onSave, onCancel, prefill }) {
           rows={3}
           required
         />
+        <span className="lab-form__hint">
+          One or two sentences summarising what this rule changes — shown in the candidate list and detail view.
+        </span>
       </label>
 
       <label className="lab-form__label">
@@ -4073,6 +4131,10 @@ function CandidateForm({ onSave, onCancel, prefill }) {
           placeholder="Why is this change needed?"
           rows={2}
         />
+        <span className="lab-form__hint">
+          Evidence for the change: benchmark data, observed failure rate, session count, or a specific photo example.
+          Optional but highly recommended — candidates without rationale are harder to review.
+        </span>
       </label>
 
       <label className="lab-form__label">
@@ -4083,6 +4145,10 @@ function CandidateForm({ onSave, onCancel, prefill }) {
           onChange={e => setSourceGoldSetId(e.target.value)}
           placeholder="UUID of related gold set entry"
         />
+        <span className="lab-form__hint">
+          If this candidate was triggered by a specific gold set image, paste its UUID here.
+          Find UUIDs in the Gold Set tab — click an entry to see its ID.
+        </span>
       </label>
 
       <div className="lab-form__label">Proposed Change</div>
