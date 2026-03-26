@@ -38,6 +38,7 @@ import {
   probeApiKey,
   getIntelligenceScoreHistory,
   getApiMetrics,
+  getMonitoringStats,
   createGoldSetEntry,
 } from '../../data/labApi';
 import { C, EVENT_COLORS, okColor, pctColor } from '../../lib/statusColors';
@@ -725,7 +726,101 @@ function SystemSection({ onNavigateTo }) {
 
       {/* VLM Call Metrics */}
       <VlmMetricsCard />
+
+      {/* Recent Autonomy Activity */}
+      <RecentActivityCard onNavigateTo={onNavigateTo} />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECENT AUTONOMY ACTIVITY CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+function RecentActivityCard({ onNavigateTo }) {
+  const [log, setLog]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded]   = useState(false);
+
+  async function loadLog() {
+    setLoading(true);
+    try {
+      const d = await getAutonomyLog({ limit: 10 });
+      const items = d.log || d.actions || (Array.isArray(d) ? d : []);
+      setLog(items);
+      setLoaded(true);
+    } catch { setLog([]); setLoaded(true); }
+    finally { setLoading(false); }
+  }
+
+  const STATUS_COLOR = { approved: C.green, rejected: C.red, pending: C.amber, applied: C.blue };
+
+  return (
+    <Card
+      title="Recent Autonomy Activity"
+      description="Last 10 actions evaluated or applied by the autonomy loop."
+      action={
+        loaded
+          ? <InlineBtn onClick={loadLog} loading={loading}>{Icons.refresh}</InlineBtn>
+          : <InlineBtn variant="primary" onClick={loadLog} loading={loading}>{Icons.play} Load</InlineBtn>
+      }
+    >
+      {!loaded && !loading && (
+        <EmptyState message="Click Load to view recent autonomy actions." />
+      )}
+      {loading && <EmptyState message="Loading…" />}
+      {loaded && log?.length === 0 && (
+        <EmptyState message="No autonomy actions recorded yet." />
+      )}
+      {loaded && log?.length > 0 && (
+        <div>
+          {log.map((a, i) => {
+            const status = a.status || a.decision || 'pending';
+            const color  = STATUS_COLOR[status] || 'var(--color-text-dim)';
+            return (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+                padding: '8px 0', borderBottom: '1px solid var(--color-border)',
+              }}>
+                <span style={{
+                  flexShrink: 0, marginTop: 2,
+                  width: 7, height: 7, borderRadius: '50%', background: color,
+                  boxShadow: status === 'alert' ? `0 0 5px ${color}` : 'none',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 'var(--weight-semibold)' }}>
+                    {a.action_type || a.type || a.description || 'Action'}
+                  </div>
+                  {a.pattern_id && (
+                    <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>
+                      Pattern: <code>{a.pattern_id}</code>
+                    </div>
+                  )}
+                  {a.notes && (
+                    <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1, fontStyle: 'italic' }}>
+                      {a.notes}
+                    </div>
+                  )}
+                </div>
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <Badge label={status} color={color} />
+                  <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginTop: 3 }}>
+                    {fmtTime(a.created_at || a.evaluated_at || a.decided_at)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {onNavigateTo && (
+            <div style={{ textAlign: 'right', marginTop: 8 }}>
+              <button className="btn btn--ghost btn--sm" onClick={() => onNavigateTo({ tab: 'learning' })}>
+                View all in Learning Ops →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -1628,12 +1723,30 @@ const PAYWALL_TYPES = [
   { type: 'nudge',           desc: 'Non-blocking inline prompt. Shows gated content beneath. Fires at analysis ≥ 2.' },
 ];
 
-function PaywallSection() {
-  const [liveTest, setLiveTest]   = useState(null);
-  const [testState, setTestState] = useState('success_moment');
-  const [testing, setTesting]     = useState(false);
-  const [notice, setNotice]       = useState(null);
-  const [subTab, setSubTab]       = useState('states');
+function PaywallSection({ onNavigateTo, onCCSection }) {
+  const [liveTest, setLiveTest]       = useState(null);
+  const [testState, setTestState]     = useState('success_moment');
+  const [testing, setTesting]         = useState(false);
+  const [notice, setNotice]           = useState(null);
+  const [subTab, setSubTab]           = useState('states');
+  const [funnelData, setFunnelData]   = useState(null);
+  const [funnelLoading, setFunnelLoading] = useState(false);
+
+  async function loadFunnel() {
+    setFunnelLoading(true);
+    try {
+      const d = await getMonitoringStats(168); // 7-day window
+      setFunnelData(d);
+    } catch (e) {
+      showNotice('err', e.message);
+    } finally {
+      setFunnelLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (subTab === 'funnel' && !funnelData && !funnelLoading) loadFunnel();
+  }, [subTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function showNotice(type, msg) {
     setNotice({ type, msg });
@@ -1672,6 +1785,7 @@ function PaywallSection() {
     { id: 'states', label: 'Value States' },
     { id: 'types',  label: 'Paywall Types' },
     { id: 'test',   label: 'Live Test' },
+    { id: 'funnel', label: 'Funnel' },
   ];
 
   return (
@@ -1744,6 +1858,79 @@ function PaywallSection() {
           <div style={{ marginTop: 'var(--space-md)', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
             Priority order: success_moment → failure_tension → shoot_mode → analysis_limit → passive_nudge
           </div>
+        </Card>
+      )}
+
+      {/* ── Funnel ── */}
+      {subTab === 'funnel' && (
+        <Card
+          title="Conversion Funnel"
+          description="Subscription activity and engagement signals — 7-day window."
+          action={<InlineBtn onClick={loadFunnel} loading={funnelLoading}>{Icons.refresh} Refresh</InlineBtn>}
+        >
+          {funnelLoading && <EmptyState message="Loading…" />}
+          {!funnelLoading && !funnelData && (
+            <div style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+              <InlineBtn variant="primary" onClick={loadFunnel}>{Icons.play} Load Funnel Data</InlineBtn>
+            </div>
+          )}
+          {!funnelLoading && funnelData && (() => {
+            const { funnel = {}, stripe = {} } = funnelData;
+            return (
+              <div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+                  <ClickStat
+                    label="Active Subscribers"
+                    value={stripe.total_active_subs ?? '—'}
+                    color={stripe.total_active_subs > 0 ? C.green : 'var(--color-text-dim)'}
+                    hint={stripe.total_active_subs > 0 ? 'View users →' : null}
+                    onClick={onCCSection ? () => onCCSection('user') : null}
+                  />
+                  <ClickStat
+                    label="Analyses (7d)"
+                    value={funnel.sessions_with_analysis ?? '—'}
+                    color={C.blue}
+                    hint="Workbench →"
+                    onClick={onNavigateTo ? () => onNavigateTo({ tab: 'workbench' }) : null}
+                  />
+                  <Stat
+                    label="VLM Calls (7d)"
+                    value={funnel.vlm_calls_total ?? '—'}
+                    color={C.blue}
+                  />
+                  {funnel.success_rate != null && (
+                    <Stat
+                      label="VLM Success"
+                      value={`${(funnel.success_rate * 100).toFixed(1)}%`}
+                      color={funnel.success_rate >= 0.9 ? C.green : funnel.success_rate >= 0.7 ? C.amber : C.red}
+                    />
+                  )}
+                </div>
+                <SectionTitle>Recent Conversions</SectionTitle>
+                {stripe.recent_subs?.length > 0 ? (
+                  stripe.recent_subs.map((sub, i) => (
+                    <div key={i} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: 'var(--text-xs)',
+                    }}>
+                      <span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>
+                        {sub.customer_email}
+                      </span>
+                      <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <Badge label={sub.plan} color={C.blue} />
+                        <Badge label={sub.status} color={sub.status === 'active' ? C.green : C.amber} />
+                        <span style={{ color: 'var(--color-text-dim)' }}>
+                          {new Date(sub.created_at * 1000).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyState message="No recent subscriptions." />
+                )}
+              </div>
+            );
+          })()}
         </Card>
       )}
 
@@ -1877,6 +2064,26 @@ function SupportSection({ onNavigateTo }) {
   return (
     <div>
       {notice && <Notice message={notice.msg} type={notice.type} />}
+
+      {/* Quick Actions */}
+      <Card title="Quick Actions" description="Jump to related workflows without leaving Control Center.">
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+          {[
+            { label: '→ Workbench', tab: 'workbench' },
+            { label: '→ Gold Set',  tab: 'gold_set' },
+            { label: '→ Candidates', tab: 'candidates' },
+            { label: '→ Benchmarks', tab: 'benchmarks' },
+          ].map(({ label, tab }) => (
+            <button
+              key={tab}
+              className="btn btn--ghost btn--sm"
+              onClick={() => onNavigateTo?.({ tab })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Card>
 
       {/* Recalibration Hints */}
       <Card
@@ -2175,7 +2382,12 @@ function SupportSection({ onNavigateTo }) {
           return (
             <div>
               <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
-                <Stat label="Total corrections" value={total} />
+                <ClickStat
+                  label="Total corrections"
+                  value={total}
+                  hint="View benchmarks →"
+                  onClick={onNavigateTo ? () => onNavigateTo({ tab: 'benchmarks' }) : null}
+                />
                 {Object.entries(byType).map(([k, v]) => (
                   <Stat key={k} label={k} value={v} />
                 ))}
@@ -2337,12 +2549,20 @@ function DiagRow({ label, value, mono, copy, dim, badge, badgeColor }) {
   );
 }
 
-function UserSection() {
+const DEV_FLAG_DEFS = [
+  { key: 'ngw_debug_overlays',   label: 'Debug overlays',    desc: 'Show face/shadow/catchlight overlay on analysis results' },
+  { key: 'ngw_verbose_analysis', label: 'Verbose analysis',  desc: 'Log full pipeline steps to console.log' },
+  { key: 'ngw_test_vlm',         label: 'Test VLM mode',     desc: 'Skip actual VLM call — return stub result for UI testing' },
+  { key: 'ngw_mock_stripe',      label: 'Mock Stripe',       desc: 'Use test mode checkout — no real charges' },
+];
+
+function UserSection({ onCCSection }) {
   const [sub, setSub] = useState(null);
   const [flags, setFlags] = useState(null);
   const [syncResult, setSyncResult] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [cleared, setCleared] = useState(false);
+  const [flagTick, setFlagTick] = useState(0); // forces re-render after localStorage writes
 
   // Use reactive context user so this section re-renders on login/profile changes.
   // Fall back to localStorage for cases where context user hasn't hydrated yet.
@@ -2437,7 +2657,15 @@ function UserSection() {
       </Card>
 
       {/* Subscription */}
-      <Card title="Subscription" description="Stripe subscription status from /auth/subscription-status">
+      <Card
+        title="Subscription"
+        description="Stripe subscription status from /auth/subscription-status"
+        action={onCCSection ? (
+          <button className="btn btn--ghost btn--sm" onClick={() => onCCSection('paywall')}>
+            Paywall →
+          </button>
+        ) : null}
+      >
         {sub === null ? (
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
             {token ? 'Loading…' : 'Not authenticated'}
@@ -2490,6 +2718,51 @@ function UserSection() {
           value={lsStats.lastEventAt ? new Date(lsStats.lastEventAt).toLocaleString(undefined, { timeZone: _DEVICE_TZ }) : null} dim />
       </Card>
 
+      {/* Dev Flag Overrides */}
+      <Card title="Dev Flag Overrides" description="localStorage-based overrides — this browser only. Reload to apply.">
+        {DEV_FLAG_DEFS.map(f => {
+          const isOn = (() => { try { return !!localStorage.getItem(f.key); } catch { return false; } })();
+          // flagTick drives re-render so isOn reflects latest state
+          void flagTick;
+          return (
+            <div key={f.key} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 0', borderBottom: '1px solid var(--color-border)',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>
+                  {f.label}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>{f.desc}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    if (isOn) localStorage.removeItem(f.key);
+                    else localStorage.setItem(f.key, '1');
+                    setFlagTick(t => t + 1);
+                  } catch {}
+                }}
+                style={{
+                  flexShrink: 0, marginLeft: 12, padding: '3px 10px',
+                  fontSize: 'var(--text-xs)',
+                  background: isOn ? C.green + '22' : 'var(--color-surface-elevated)',
+                  color: isOn ? C.green : 'var(--color-text-dim)',
+                  border: `1px solid ${isOn ? C.green + '44' : 'var(--color-border)'}`,
+                  borderRadius: 'var(--radius-full)', cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {isOn ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          );
+        })}
+        <div style={{ marginTop: 'var(--space-sm)', fontSize: 10, color: 'var(--color-text-dim)' }}>
+          Overrides persist in localStorage until cleared. Reload the page to apply.
+        </div>
+      </Card>
+
       {/* Actions */}
       <Card title="Actions">
         <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2534,6 +2807,503 @@ function UserSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MONITORING SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Module-level error log — captures before the component mounts, persists across re-renders
+const _errorLog = [];
+const _MAX_ERRORS = 200;
+
+function _addError(entry) {
+  _errorLog.unshift(entry);
+  if (_errorLog.length > _MAX_ERRORS) _errorLog.length = _MAX_ERRORS;
+  // Notify any listeners
+  window.__ngw_error_listeners?.forEach(fn => fn());
+}
+
+// Install global interceptors exactly once
+if (!window.__ngw_error_interceptors_installed) {
+  window.__ngw_error_interceptors_installed = true;
+  window.__ngw_error_listeners = [];
+
+  const _origError = console.error.bind(console);
+  console.error = (...args) => {
+    _origError(...args);
+    _addError({ type: 'console.error', msg: args.map(a => {
+      try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch { return String(a); }
+    }).join(' '), ts: Date.now() });
+  };
+
+  const _origWarn = console.warn.bind(console);
+  console.warn = (...args) => {
+    _origWarn(...args);
+    _addError({ type: 'console.warn', msg: args.map(a => {
+      try { return typeof a === 'object' ? JSON.stringify(a) : String(a); } catch { return String(a); }
+    }).join(' '), ts: Date.now() });
+  };
+
+  window.addEventListener('error', ev => {
+    _addError({ type: 'js-error', msg: `${ev.message} @ ${ev.filename}:${ev.lineno}`, ts: Date.now() });
+  });
+
+  window.addEventListener('unhandledrejection', ev => {
+    _addError({ type: 'unhandled-promise', msg: String(ev.reason?.message || ev.reason), ts: Date.now() });
+  });
+}
+
+const ALERT_RULES = [
+  {
+    id: 'vlm_error_rate',
+    label: 'VLM Error Rate',
+    desc: 'Fires if VLM call error rate exceeds 20% in the last 24 h.',
+    threshold: 0.20,
+    getValue: m => m?.error_rate ?? null,
+    evaluate: (v, t) => v === null ? 'unknown' : v >= t ? 'alert' : v >= t * 0.5 ? 'warn' : 'ok',
+    format: v => v === null ? '—' : `${(v * 100).toFixed(1)}%`,
+  },
+  {
+    id: 'vlm_no_calls',
+    label: 'VLM Call Volume',
+    desc: 'Alerts if no VLM calls were made in the last 24 h (possible integration failure).',
+    threshold: 1,
+    getValue: m => m?.total ?? null,
+    evaluate: (v, t) => v === null ? 'unknown' : v === 0 ? 'warn' : 'ok',
+    format: v => v === null ? '—' : `${v} calls`,
+  },
+  {
+    id: 'vlm_p95_latency',
+    label: 'VLM p95 Latency',
+    desc: 'Alerts if p95 latency exceeds 8 000 ms — may indicate provider degradation.',
+    threshold: 8000,
+    getValue: m => m?.p95_latency_ms ?? null,
+    evaluate: (v, t) => v === null ? 'unknown' : v >= t ? 'alert' : v >= t * 0.6 ? 'warn' : 'ok',
+    format: v => v === null ? '—' : `${(v / 1000).toFixed(1)} s`,
+  },
+];
+
+const ALERT_COLORS = { ok: C.green, warn: C.amber, alert: C.red, unknown: 'var(--color-text-dim)' };
+const ALERT_LABELS = { ok: 'OK', warn: 'Warning', alert: 'ALERT', unknown: 'No data' };
+
+function MonitoringSection({ onNavigateTo, onCCSection }) {
+  const [stats, setStats]         = useState(null);
+  const [mLoading, setMLoading]   = useState(true);
+  const [errors, setErrors]       = useState([..._errorLog]);
+  const [filterType, setFilterType] = useState('all');
+  const [tick, setTick]           = useState(0);
+
+  // Register for new error notifications
+  useEffect(() => {
+    const listener = () => setErrors([..._errorLog]);
+    window.__ngw_error_listeners = window.__ngw_error_listeners || [];
+    window.__ngw_error_listeners.push(listener);
+    return () => {
+      window.__ngw_error_listeners = window.__ngw_error_listeners.filter(f => f !== listener);
+    };
+  }, []);
+
+  const load = useCallback(async () => {
+    setMLoading(true);
+    try {
+      const s = await getMonitoringStats(24);
+      setStats(s);
+    } catch { setStats(null); }
+    finally { setMLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load, tick]);
+
+  // Auto-refresh every 60 s
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Derive alert-rule inputs from stats (same VLM fields as before via api-metrics compat)
+  const metricsCompat = stats ? {
+    error_rate:     stats.funnel?.vlm_calls_total
+                      ? (stats.funnel.vlm_calls_error / stats.funnel.vlm_calls_total)
+                      : 0,
+    total:          stats.funnel?.vlm_calls_total ?? 0,
+    p95_latency_ms: null, // not returned from monitoring-stats; alert will show "No data"
+  } : null;
+
+  const filtered = filterType === 'all' ? errors : errors.filter(e => e.type === filterType);
+  const typeSet  = [...new Set(errors.map(e => e.type))];
+  const alertCounts = { ok: 0, warn: 0, alert: 0, unknown: 0 };
+  ALERT_RULES.forEach(r => { alertCounts[r.evaluate(r.getValue(metricsCompat), r.threshold)]++; });
+
+  const sparkline  = stats?.sparkline  ?? [];
+  const funnel     = stats?.funnel     ?? {};
+  const stripe     = stats?.stripe     ?? {};
+
+  // Sparkline max for bar scaling
+  const sparkMax = Math.max(1, ...sparkline.map(b => b.total));
+
+  // Funnel step definitions
+  const funnelSteps = [
+    { label: 'Sessions w/ Analysis', value: funnel.sessions_with_analysis, color: C.blue },
+    { label: 'VLM Calls Total',      value: funnel.vlm_calls_total,        color: C.blue },
+    { label: 'VLM Succeeded',        value: funnel.vlm_calls_ok,           color: C.green },
+    { label: 'VLM Errors',           value: funnel.vlm_calls_error,        color: C.red },
+  ];
+  const funnelMax = Math.max(1, funnel.vlm_calls_total ?? 0);
+
+  return (
+    <div>
+
+      {/* ── Alert Engine ── */}
+      <Card
+        title="Alert Engine"
+        description="Live rule evaluation against VLM call metrics. Auto-refreshes every 60 s."
+        action={
+          <InlineBtn onClick={() => setTick(t => t + 1)} loading={mLoading}>
+            {Icons.refresh} Refresh
+          </InlineBtn>
+        }
+      >
+        {/* Summary pills */}
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
+          {Object.entries(alertCounts).filter(([, v]) => v > 0).map(([state, count]) => (
+            <span key={state} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '3px 10px', borderRadius: 'var(--radius-full)',
+              background: ALERT_COLORS[state] + '18',
+              border: `1px solid ${ALERT_COLORS[state]}44`,
+              color: ALERT_COLORS[state],
+              fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)',
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: ALERT_COLORS[state],
+                boxShadow: state === 'alert' ? `0 0 6px ${ALERT_COLORS[state]}` : 'none',
+              }} />
+              {count} {ALERT_LABELS[state]}
+            </span>
+          ))}
+        </div>
+
+        {/* Rule table */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {ALERT_RULES.map(rule => {
+            const val   = rule.getValue(metricsCompat);
+            const state = rule.evaluate(val, rule.threshold);
+            const color = ALERT_COLORS[state];
+            return (
+              <div key={rule.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 12px',
+                background: state === 'alert'
+                  ? `color-mix(in srgb, ${C.red} 8%, var(--color-surface-elevated))`
+                  : 'var(--color-surface-elevated)',
+                border: `1px solid ${state === 'alert' ? C.redBorder : 'var(--color-border)'}`,
+                borderRadius: 'var(--radius-md)',
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                  background: color,
+                  boxShadow: state === 'alert' ? `0 0 6px ${color}88` : 'none',
+                }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>
+                    {rule.label}
+                  </div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 1 }}>
+                    {rule.desc}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-bold)', color }}>
+                    {mLoading ? '…' : rule.format(val)}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>
+                    {ALERT_LABELS[state]}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* ── VLM Call Sparkline ── */}
+      <Card
+        title="VLM Call Volume"
+        description={`Hourly VLM calls — last ${stats?.window_hours ?? 24} h. Green = success, red = error.`}
+        action={<InlineBtn onClick={() => setTick(t => t + 1)} loading={mLoading}>{Icons.refresh} Refresh</InlineBtn>}
+      >
+        {mLoading ? <EmptyState message="Loading…" /> : sparkline.every(b => b.total === 0) ? (
+          <EmptyState message="No VLM calls in the selected window." />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 60, paddingBottom: 4 }}>
+            {sparkline.slice(0, 48).reverse().map((bucket, i) => {
+              const pct    = bucket.total / sparkMax;
+              const errPct = bucket.total > 0 ? bucket.err / bucket.total : 0;
+              const h      = Math.max(2, Math.round(pct * 52));
+              const label  = bucket.hours_ago === 0 ? 'now'
+                           : bucket.hours_ago === 1 ? '1h ago'
+                           : `${bucket.hours_ago}h ago`;
+              return (
+                <div
+                  key={i}
+                  title={`${label}: ${bucket.ok} ok, ${bucket.err} err`}
+                  style={{
+                    flex: 1, minWidth: 3, height: h,
+                    borderRadius: '2px 2px 0 0',
+                    background: errPct > 0.5 ? C.red
+                               : errPct > 0   ? C.amber
+                               : C.green,
+                    opacity: bucket.total === 0 ? 0.15 : 0.85,
+                    cursor: 'default',
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 10, color: 'var(--color-text-dim)' }}>
+          {[['All OK', C.green], ['Some errors', C.amber], ['>50% errors', C.red]].map(([label, color]) => (
+            <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: color, opacity: 0.85 }} />
+              {label}
+            </span>
+          ))}
+          {stats && (
+            <span style={{ marginLeft: 'auto' }}>
+              {funnel.vlm_calls_total ?? 0} calls · {funnel.vlm_calls_error ?? 0} errors
+            </span>
+          )}
+        </div>
+      </Card>
+
+      {/* ── Analysis Funnel ── */}
+      <Card
+        title="Analysis Funnel"
+        description={`VLM call outcomes — last ${stats?.window_hours ?? 24} h.`}
+      >
+        {mLoading ? <EmptyState message="Loading…" /> : (
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+              {funnelSteps.map(step => {
+                // Sessions w/ Analysis → Workbench; VLM Errors → System tab
+                const clickProps = step.label === 'Sessions w/ Analysis' && onNavigateTo
+                  ? { hint: 'Workbench →', onClick: () => onNavigateTo({ tab: 'workbench' }) }
+                  : step.label === 'VLM Errors' && onCCSection && (step.value ?? 0) > 0
+                  ? { hint: 'System →', onClick: () => onCCSection('system'), urgent: (step.value ?? 0) > 0, color: C.red }
+                  : null;
+                return clickProps ? (
+                  <ClickStat
+                    key={step.label}
+                    label={step.label}
+                    value={step.value ?? '—'}
+                    color={(step.value ?? 0) > 0 ? (clickProps.color || step.color) : 'var(--color-text-dim)'}
+                    hint={clickProps.hint}
+                    urgent={clickProps.urgent}
+                    onClick={clickProps.onClick}
+                  />
+                ) : (
+                  <Stat
+                    key={step.label}
+                    label={step.label}
+                    value={step.value ?? '—'}
+                    color={step.value > 0 ? step.color : 'var(--color-text-dim)'}
+                  />
+                );
+              })}
+              {funnel.success_rate !== null && funnel.success_rate !== undefined && (
+                <Stat
+                  label="Success Rate"
+                  value={`${(funnel.success_rate * 100).toFixed(1)}%`}
+                  color={funnel.success_rate >= 0.9 ? C.green : funnel.success_rate >= 0.7 ? C.amber : C.red}
+                />
+              )}
+            </div>
+            {/* Bar chart */}
+            {funnelSteps.filter(s => s.value > 0).map(step => (
+              <div key={step.label} style={{ marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-dim)', marginBottom: 2 }}>
+                  <span>{step.label}</span>
+                  <span style={{ color: step.color }}>{step.value ?? 0}</span>
+                </div>
+                <div style={{ height: 6, background: 'var(--color-surface-elevated)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.round(((step.value ?? 0) / funnelMax) * 100)}%`,
+                    background: step.color,
+                    borderRadius: 3,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Stripe Webhook Health ── */}
+      <Card
+        title="Stripe Webhook Health"
+        description="Last subscription event received via Stripe webhook."
+      >
+        {mLoading ? <EmptyState message="Loading…" /> : (
+          <div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)' }}>
+              <ClickStat
+                label="Active Subscriptions"
+                value={stripe.total_active_subs ?? 0}
+                color={stripe.total_active_subs > 0 ? C.green : 'var(--color-text-dim)'}
+                hint={stripe.total_active_subs > 0 ? 'Paywall →' : null}
+                onClick={onCCSection ? () => onCCSection('paywall') : null}
+              />
+              <div style={{
+                background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)', padding: 'var(--space-sm) var(--space-md)',
+                textAlign: 'center', minWidth: 80,
+              }}>
+                <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)', color: stripe.webhook_secret_configured ? C.green : C.red }}>
+                  {stripe.webhook_secret_configured ? '✓' : '✗'}
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>Webhook Secret</div>
+              </div>
+              <div style={{
+                background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)', padding: 'var(--space-sm) var(--space-md)',
+                textAlign: 'center', minWidth: 120,
+              }}>
+                <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-bold)', color: 'var(--color-text)' }}>
+                  {stripe.last_webhook_at
+                    ? new Date(stripe.last_webhook_at * 1000).toLocaleDateString()
+                    : 'None'}
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>Last Webhook</div>
+              </div>
+            </div>
+
+            {/* Recent subscriptions */}
+            {stripe.recent_subs?.length > 0 && (
+              <div>
+                <SectionTitle>Recent Subscriptions</SectionTitle>
+                {stripe.recent_subs.map(sub => (
+                  <div key={sub.id} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '6px 0',
+                    borderBottom: '1px solid var(--color-border)',
+                    fontSize: 'var(--text-xs)',
+                  }}>
+                    <span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>
+                      {sub.customer_email}
+                    </span>
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--color-text-dim)' }}>
+                      <Badge label={sub.plan} color={C.blue} />
+                      <Badge
+                        label={sub.status}
+                        color={sub.status === 'active' ? C.green : C.amber}
+                      />
+                      <span>{new Date(sub.created_at * 1000).toLocaleDateString()}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!stripe.webhook_secret_configured && (
+              <div style={{
+                marginTop: 'var(--space-sm)',
+                padding: '8px 12px',
+                background: C.red + '12', border: `1px solid ${C.red}33`,
+                borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: C.red,
+              }}>
+                ⚠ STRIPE_WEBHOOK_SECRET not configured — webhooks will be rejected. Set it in env vars.
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* ── Frontend Console ── */}
+      <Card
+        title={`Frontend Console ${errors.length > 0 ? `(${errors.length})` : ''}`}
+        description="Captures console.error, console.warn, unhandled rejections, and JS errors in this session."
+        action={
+          <div style={{ display: 'flex', gap: 6 }}>
+            {typeSet.length > 1 && (
+              <select
+                value={filterType}
+                onChange={e => setFilterType(e.target.value)}
+                style={{
+                  fontSize: 'var(--text-xs)', padding: '2px 6px',
+                  background: 'var(--color-surface-elevated)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+                }}
+              >
+                <option value="all">All types</option>
+                {typeSet.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            <InlineBtn
+              onClick={() => { _errorLog.length = 0; setErrors([]); }}
+              variant="ghost"
+            >
+              Clear
+            </InlineBtn>
+          </div>
+        }
+        noPad
+      >
+        {filtered.length === 0 ? (
+          <EmptyState message="No errors captured this session." />
+        ) : (
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {filtered.map((entry, i) => {
+              const TYPE_COLOR = {
+                'console.error': C.red,
+                'console.warn': C.amber,
+                'js-error': C.red,
+                'unhandled-promise': C.red,
+              };
+              const color = TYPE_COLOR[entry.type] || C.blue;
+              const time  = new Date(entry.ts).toLocaleTimeString();
+              return (
+                <div key={i} style={{
+                  display: 'flex', gap: 8, alignItems: 'flex-start',
+                  padding: '6px 12px',
+                  borderBottom: i < filtered.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  background: i % 2 === 0 ? 'transparent' : 'var(--color-surface-elevated)',
+                }}>
+                  <span style={{
+                    flexShrink: 0, fontSize: 9, padding: '2px 6px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: color + '22', color,
+                    fontWeight: 'var(--weight-semibold)', whiteSpace: 'nowrap', marginTop: 1,
+                  }}>
+                    {entry.type}
+                  </span>
+                  <span style={{
+                    flex: 1, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
+                    fontFamily: 'var(--font-mono)', wordBreak: 'break-all',
+                    lineHeight: 1.5,
+                  }}>
+                    {entry.msg}
+                  </span>
+                  <span style={{
+                    flexShrink: 0, fontSize: 9, color: 'var(--color-text-dim)',
+                    whiteSpace: 'nowrap', marginTop: 2,
+                  }}>
+                    {time}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2542,6 +3312,7 @@ const SECTIONS = [
   { id: 'intelligence', label: 'Intelligence',  icon: Icons.intelligence },
   { id: 'paywall',      label: 'Paywall',       icon: Icons.paywall },
   { id: 'support',      label: 'Support',       icon: Icons.support },
+  { id: 'monitoring',   label: '🔔 Monitoring', icon: null },
   { id: 'user',         label: 'User',          icon: (
     <Icon size={14}>
       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
@@ -2555,42 +3326,259 @@ const SECTION_DESC = {
   intelligence: 'Global intelligence score, per-pattern breakdown, autonomy queue, and cluster review.',
   paywall:      'Adaptive pricing value state map, paywall type reference, and live pricing test.',
   support:      'Recalibration hints, VLM correction audit, and gold-set promotion suggestions.',
+  monitoring:   'Frontend error console, VLM alert rules, and live metric watchpoints.',
   user:         'Account identity, subscription status, session diagnostics, feature flags, and local data — for prod support and debugging.',
 };
 
+const CC_HELP = {
+  system: {
+    features: [
+      { label: 'System Health', desc: 'Live cluster counts, alert states, pending evaluations, and monitoring windows.' },
+      { label: 'Ingestion Scheduler', desc: 'Background analytics loop. Controls interval (1–168 h) and analysis window (7–90 d).' },
+      { label: 'Manual Ingestion', desc: 'Trigger an immediate analytics pass outside the scheduler. Use after seeding test data.' },
+      { label: 'VLM API Key Health', desc: 'Live probe of the configured VLM provider key. Shows 401 errors and recent health events.' },
+      { label: 'VLM Call Metrics', desc: 'Call volume, latency (avg + p95), error rate, and hourly sparkline. Auto-refreshes every 30 s.' },
+      { label: 'Recent Activity', desc: 'Last 10 autonomy loop actions — approved, rejected, or pending pattern changes.' },
+    ],
+    tips: [
+      'Click any stat tile to navigate to the related detail view.',
+      'Run Now triggers a one-off scheduler pass without changing the schedule.',
+      'After seeding reference images, trigger Manual Ingestion before checking Learning Ops.',
+    ],
+  },
+  intelligence: {
+    features: [
+      { label: 'Intelligence Score', desc: 'Composite 0–100 score across all patterns. Target ≥ 80 for production confidence.' },
+      { label: 'Per-Pattern Scores', desc: 'Individual pattern breakdown — confidence, success rate, sample count, trend direction.' },
+      { label: 'Autonomy Queue', desc: 'Pending system-proposed changes awaiting human approval or rejection.' },
+      { label: 'Cluster Review', desc: 'Failure clusters grouped by pattern — surface systematic mis-classifications.' },
+      { label: 'Revenue Simulation', desc: 'Model the conversion impact of intelligence score improvements on ARR.' },
+    ],
+    tips: [
+      'Force-compute refreshes the score from scratch using current signals.',
+      'Approve autonomy actions in batches — review the proposed change before accepting.',
+      'Clusters with severity "critical" block the CI gate and need immediate attention.',
+    ],
+  },
+  paywall: {
+    features: [
+      { label: 'Value States', desc: 'Five session states (success_moment → low_value) that drive adaptive price and messaging.' },
+      { label: 'Paywall Types', desc: 'Visual treatment selector — blur, full-block, or passive nudge.' },
+      { label: 'Live Test', desc: 'Send synthetic signals to the pricing engine and inspect the returned state, price, and messaging copy.' },
+      { label: 'Funnel', desc: 'Subscription activity — active subscriber count, 7-day analyses, and recent conversions.' },
+    ],
+    tips: [
+      'The anti-discount guardrail prevents anchoring down — once a price is shown, it never drops in the same session.',
+      'Funnel → Active Subscribers navigates to the User section for per-user inspection.',
+      'Test all 5 value states before changing pricing thresholds in production.',
+    ],
+  },
+  support: {
+    features: [
+      { label: 'Quick Actions', desc: 'Direct navigation to Workbench, Gold Set, Candidates, and Benchmarks from a single card.' },
+      { label: 'Recalibration Hints', desc: 'Patterns where model confidence is misaligned with actual success rate. Click a row to expand and see the recommended floor.' },
+      { label: 'Gold Set Suggestions', desc: 'High-quality live signals eligible for gold set promotion. Creates a draft entry with one click.' },
+      { label: 'VLM Correction Log', desc: 'Corrections where CV or expert analysis overrode the VLM prediction. High volume → add reference examples for that pattern.' },
+    ],
+    tips: [
+      'Promote gold set suggestions in batches — update the image_path in the Gold Set tab before approving.',
+      'A calibration gap > 0.30 is urgent — the model is significantly overconfident for that pattern.',
+      '"Total corrections" is clickable and navigates to Benchmarks for root cause review.',
+    ],
+  },
+  monitoring: {
+    features: [
+      { label: 'Alert Engine', desc: 'Three live rules: VLM error rate (>20%), call volume (0 calls = dead integration), p95 latency (>8 s).' },
+      { label: 'VLM Call Volume', desc: 'Hourly sparkline for the last 24 h — green = clean, amber = some errors, red = majority errors.' },
+      { label: 'Analysis Funnel', desc: 'Sessions with analyses, VLM call totals, success/error split. Click tiles to navigate to detail views.' },
+      { label: 'Stripe Webhook Health', desc: 'Active subscription count, webhook secret status, and last-received webhook timestamp.' },
+      { label: 'Frontend Console', desc: 'Captures console.error, console.warn, JS errors, and unhandled promise rejections in this session.' },
+    ],
+    tips: [
+      '"Sessions w/ Analysis" navigates to Workbench; "VLM Errors" navigates to System.',
+      '"Active Subscriptions" navigates to Paywall → Funnel for conversion context.',
+      'The console viewer persists errors across component re-renders — check it before reloading.',
+    ],
+  },
+  user: {
+    features: [
+      { label: 'Account', desc: 'Email, username, user ID, and dev-access status from the decoded JWT.' },
+      { label: 'Subscription', desc: 'Stripe subscription tier, plan, status, and billing period. Links to Paywall for pricing context.' },
+      { label: 'Session', desc: 'Current session ID and JWT token snippet — copy for manual API testing.' },
+      { label: 'Feature Flags', desc: 'Server-side flags loaded for this session via /api/flags.' },
+      { label: 'Dev Flag Overrides', desc: 'localStorage-based flags for this browser only — toggle without server restarts.' },
+      { label: 'Local Data', desc: 'Kit item count, event queue size, and last-used setup ID from localStorage.' },
+    ],
+    tips: [
+      'Dev flag overrides persist in localStorage — clear them when done testing to avoid stale state.',
+      'Force sync pushes localStorage state to the server without waiting for the background flush.',
+      '"Copy all IDs" gives you userId + email + sessionId in one shot for filing support tickets.',
+    ],
+  },
+};
+
+const CC_ORDER_KEY = 'ngw_cc_section_order';
+
 export default function ControlCenterTab({ user, onNavigateTo }) {
-  const [section, setSection] = useState('system');
+  const [section, setSection]     = useState('system');
+  const [sectionOrder, setSectionOrder] = useState(() => {
+    try { const s = localStorage.getItem(CC_ORDER_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [ccDragSrc, setCcDragSrc] = useState(null);
+  const [ccHelpOpen, setCcHelpOpen] = useState(false);
+
+  const sections = sectionOrder
+    ? sectionOrder.map(id => SECTIONS.find(s => s.id === id)).filter(Boolean)
+    : SECTIONS;
+
+  function ccDragStart(e, id) { setCcDragSrc(id); e.dataTransfer.effectAllowed = 'move'; }
+  function ccDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+  function ccDrop(e, targetId) {
+    e.preventDefault();
+    if (!ccDragSrc || ccDragSrc === targetId) return;
+    const ids  = sections.map(s => s.id);
+    const from = ids.indexOf(ccDragSrc);
+    const to   = ids.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...ids];
+    next.splice(from, 1);
+    next.splice(to, 0, ccDragSrc);
+    setSectionOrder(next);
+    try { localStorage.setItem(CC_ORDER_KEY, JSON.stringify(next)); } catch {}
+    setCcDragSrc(null);
+  }
+  function ccDragEnd() { setCcDragSrc(null); }
 
   return (
     <div style={{ paddingBottom: 'var(--space-2xl)' }}>
 
-      {/* Section nav — uses lab-tab class to match all other inner tab bars */}
+      {/* Section nav — draggable to reorder */}
       <div style={{ marginBottom: 'var(--space-lg)' }}>
-        <div className="lab-tabs">
-          {SECTIONS.map(s => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+          <div className="lab-tabs" style={{ flex: 1, marginBottom: 0 }}>
+            {sections.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                className={`lab-tab${section === s.id ? ' lab-tab--active' : ''}${ccDragSrc === s.id ? ' lab-tab--dragging' : ''}`}
+                onClick={() => setSection(s.id)}
+                draggable
+                onDragStart={e => ccDragStart(e, s.id)}
+                onDragOver={ccDragOver}
+                onDrop={e => ccDrop(e, s.id)}
+                onDragEnd={ccDragEnd}
+                style={{ cursor: ccDragSrc === s.id ? 'grabbing' : 'grab' }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  {s.icon}
+                  {s.label}
+                </span>
+              </button>
+            ))}
+          </div>
+          {sectionOrder && (
             <button
-              key={s.id}
-              type="button"
-              className={`lab-tab${section === s.id ? ' lab-tab--active' : ''}`}
-              onClick={() => setSection(s.id)}
-            >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                {s.icon}
-                {s.label}
-              </span>
-            </button>
-          ))}
+              className="lab-tab"
+              onClick={() => {
+                setSectionOrder(null);
+                try { localStorage.removeItem(CC_ORDER_KEY); } catch {}
+              }}
+              title="Reset section order to default"
+              style={{ flexShrink: 0, opacity: 0.7 }}
+            >↺</button>
+          )}
+          <button
+            className="lab-tab"
+            onClick={() => setCcHelpOpen(o => !o)}
+            title="Toggle section help"
+            aria-label="Toggle help"
+            style={{ flexShrink: 0, opacity: ccHelpOpen ? 1 : 0.5 }}
+          >?</button>
         </div>
+
+        {/* Inline description */}
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', margin: 'var(--space-xs) 0 0 2px' }}>
           {SECTION_DESC[section]}
         </p>
+
+        {/* Expandable help panel */}
+        {ccHelpOpen && CC_HELP[section] && (() => {
+          const h = CC_HELP[section];
+          return (
+            <div style={{
+              marginTop: 'var(--space-sm)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-lg)',
+              padding: 'var(--space-md)',
+              position: 'relative',
+            }}>
+              <button
+                onClick={() => setCcHelpOpen(false)}
+                aria-label="Close help"
+                style={{
+                  position: 'absolute', top: 'var(--space-sm)', right: 'var(--space-sm)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--color-text-secondary)', padding: '2px 6px',
+                  fontSize: 'var(--text-base)', lineHeight: 1, borderRadius: 'var(--radius-sm)',
+                }}
+              >✕</button>
+              <span style={{
+                fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.08em',
+                color: 'var(--color-accent)', textTransform: 'uppercase',
+                display: 'block', marginBottom: 'var(--space-sm)', paddingRight: 'var(--space-xl)',
+              }}>
+                Help — {SECTIONS.find(s => s.id === section)?.label ?? section}
+              </span>
+              {/* Feature cards grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: 'var(--space-xs)',
+                marginBottom: h.tips?.length > 0 ? 'var(--space-sm)' : 0,
+              }}>
+                {h.features.map(f => (
+                  <div key={f.label} style={{
+                    background: 'var(--color-surface-elevated)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 'var(--space-xs) var(--space-sm)',
+                  }}>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text)', marginBottom: 2 }}>
+                      {f.label}
+                    </div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+                      {f.desc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Tips */}
+              {h.tips?.length > 0 && (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 'var(--space-xs)' }}>
+                  {h.tips.map((tip, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 'var(--space-xs)',
+                      fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
+                      marginBottom: i < h.tips.length - 1 ? 4 : 0,
+                    }}>
+                      <span style={{ color: 'var(--color-accent)', flexShrink: 0, marginTop: 1 }}>→</span>
+                      {tip}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {section === 'system'       && <SystemSection onNavigateTo={onNavigateTo} />}
       {section === 'intelligence' && <IntelligenceSection user={user} onNavigateTo={onNavigateTo} />}
-      {section === 'paywall'      && <PaywallSection />}
+      {section === 'paywall'      && <PaywallSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
       {section === 'support'      && <SupportSection onNavigateTo={onNavigateTo} />}
-      {section === 'user'         && <UserSection />}
+      {section === 'monitoring'   && <MonitoringSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
+      {section === 'user'         && <UserSection onCCSection={setSection} />}
     </div>
   );
 }

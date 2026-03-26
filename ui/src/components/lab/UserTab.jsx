@@ -352,25 +352,101 @@ export default function UserTab() {
         subtitle="Server-synced setups and kit (GET /api/user/setups, /api/user/kit)"
         action={<ServerStatus loading={serverLoad} error={null} />}
       >
-        <Row label="Saved setups" value={setupCount != null ? String(setupCount) : serverLoad ? 'loading…' : '—'} />
-        <Row label="Kit items"    value={kitItems   != null ? String(kitItems)   : serverLoad ? 'loading…' : '—'} />
+        {/* Summary row */}
+        <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
+          {[
+            { label: 'Saved Setups', value: setupCount != null ? setupCount : serverLoad ? '…' : '—', color: C.blue },
+            { label: 'Kit Items',    value: kitItems   != null ? kitItems   : serverLoad ? '…' : '—', color: C.green },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: 'var(--color-surface-elevated)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-xs) var(--space-md)',
+              textAlign: 'center', minWidth: 90,
+            }}>
+              <div style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: stat.color }}>{stat.value}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Setup cards */}
+        {serverLoad && !Array.isArray(setups) && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', padding: '8px 0' }}>Loading setups…</div>
+        )}
+        {Array.isArray(setups) && setups.length === 0 && (
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', padding: '8px 0' }}>No setups saved yet.</div>
+        )}
         {Array.isArray(setups) && setups.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            {setups.slice(0, 5).map(s => (
-              <div key={s.id || s.name} style={{
-                fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
-                padding: '2px 0', borderBottom: '1px solid var(--color-border)',
-                display: 'flex', gap: 8,
-              }}>
-                <span style={{ flex: 1 }}>{s.name || '(unnamed)'}</span>
-                {s.tag && <span style={{ color: 'var(--color-text-dim)' }}>{s.tag}</span>}
-              </div>
-            ))}
-            {setups.length > 5 && (
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 4 }}>
-                + {setups.length - 5} more
-              </div>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {setups.map((s, i) => {
+              const result  = s.result || {};
+              const pattern = result.pattern || result.lighting_pattern || result.look || null;
+              const env     = result.environment || result.space || null;
+              const created = s.created_at ? new Date(s.created_at * 1000).toLocaleDateString() : null;
+              const TAG_COLOR = { personal: C.blue, client: C.green, test: C.amber };
+              const tagColor  = TAG_COLOR[s.tag] || 'var(--color-text-dim)';
+              return (
+                <div key={s.id || i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  padding: '8px 10px',
+                  background: 'var(--color-surface-elevated)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                }}>
+                  {/* Index badge */}
+                  <span style={{
+                    flexShrink: 0, width: 20, height: 20,
+                    borderRadius: '50%',
+                    background: 'var(--color-border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 9, fontWeight: 700, color: 'var(--color-text-dim)',
+                    marginTop: 1,
+                  }}>{i + 1}</span>
+
+                  {/* Main content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text)', marginBottom: 3 }}>
+                      {s.name || '(unnamed)'}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                      {pattern && (
+                        <span style={{
+                          fontSize: 9, padding: '1px 6px',
+                          borderRadius: 'var(--radius-full)',
+                          background: C.blue + '22', color: C.blue,
+                          border: `1px solid ${C.blue}33`, fontWeight: 600,
+                        }}>{pattern}</span>
+                      )}
+                      {env && (
+                        <span style={{
+                          fontSize: 9, padding: '1px 6px',
+                          borderRadius: 'var(--radius-full)',
+                          background: 'var(--color-border)',
+                          color: 'var(--color-text-secondary)',
+                        }}>{env}</span>
+                      )}
+                      {s.tag && (
+                        <span style={{
+                          fontSize: 9, padding: '1px 6px',
+                          borderRadius: 'var(--radius-full)',
+                          background: tagColor + '22', color: tagColor,
+                          border: `1px solid ${tagColor}33`, fontWeight: 600,
+                        }}>{s.tag}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Date */}
+                  {created && (
+                    <span style={{ flexShrink: 0, fontSize: 9, color: 'var(--color-text-dim)', marginTop: 3 }}>
+                      {created}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>

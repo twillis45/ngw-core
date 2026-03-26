@@ -1320,15 +1320,17 @@ export default function BenchmarkTab({ onNavigateTo }) {
           {/* Global metrics + run button */}
           <GlobalMetrics
             summary={summary}
-            trend={
-              // Both sources are newest-first; reverse to oldest-first so Sparkline
-              // renders left=past → right=recent without any internal reversal.
-              summary?.trend?.length >= 2
-                ? [...summary.trend].reverse()
-                : runs.length >= 2
-                  ? [...runs].reverse().map(r => r.overall_score)
-                  : null
-            }
+            trend={(() => {
+              // Primary: backend-filtered scores (completed only, no nulls). Newest-first → reverse to oldest-first.
+              const fromSummary = (summary?.trend ?? []).filter(v => v != null);
+              if (fromSummary.length >= 2) return [...fromSummary].reverse();
+              // Fallback: filter out null (failed/in-progress) runs before mapping. Newest-first → oldest-first.
+              const fromRuns = runs
+                .filter(r => r.overall_score != null)
+                .map(r => r.overall_score)
+                .reverse();
+              return fromRuns.length >= 2 ? fromRuns : null;
+            })()}
             onRun={handleRun}
             running={running}
             runElapsed={runElapsed}

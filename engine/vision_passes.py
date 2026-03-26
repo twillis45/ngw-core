@@ -6200,6 +6200,7 @@ def run_extended_pipeline(
     backward compatibility.
     """
     from engine.reference_matcher import match_reference_images as reference_match_fn
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     results: Dict[str, Any] = {}
 
@@ -6218,48 +6219,42 @@ def run_extended_pipeline(
         logger.warning("pose_solver_pass failed: %s", exc)
         results["pose_solver"] = {"ok": False, "error": str(exc)}
 
-    # ── Surface class pass ───────────────────────────────────────────
-    try:
-        results["surface_class"] = surface_class_pass(
-            img_bgr,
-            person_mask=person_mask,
-            skin_mask=skin_mask,
-            face_box=face_box,
-            background_mask=background_mask,
-        )
-    except Exception as exc:
-        logger.warning("surface_class_pass failed: %s", exc)
-        results["surface_class"] = {"ok": False, "error": str(exc)}
-
-    # ── Shadow pass ──────────────────────────────────────────────────
-    try:
-        results["shadow"] = shadow_pass(
+    # ── Wave 1: Independent passes — run concurrently ────────────────
+    # These passes read only img_bgr + masks; none depend on each other.
+    _wave1_tasks = {
+        "surface_class": lambda: surface_class_pass(
+            img_bgr, person_mask=person_mask, skin_mask=skin_mask,
+            face_box=face_box, background_mask=background_mask,
+        ),
+        "shadow": lambda: shadow_pass(
             img_bgr, person_mask=person_mask,
             skin_mask=skin_mask, face_box=face_box,
-        )
-    except Exception as exc:
-        logger.warning("shadow_pass failed: %s", exc)
-        results["shadow"] = {"ok": False, "error": str(exc)}
-
-    # ── Highlight pass ───────────────────────────────────────────────
-    try:
-        results["highlight"] = highlight_pass(
+        ),
+        "highlight": lambda: highlight_pass(
             img_bgr, person_mask=person_mask,
             skin_mask=skin_mask, face_box=face_box,
-        )
-    except Exception as exc:
-        logger.warning("highlight_pass failed: %s", exc)
-        results["highlight"] = {"ok": False, "error": str(exc)}
-
-    # ── Catchlight pass (enhanced) ───────────────────────────────────
-    try:
-        results["catchlight"] = catchlight_pass(
+        ),
+        "catchlight": lambda: catchlight_pass(
             img_bgr, face_box=face_box,
             existing_catchlights=existing_catchlights,
-        )
-    except Exception as exc:
-        logger.warning("catchlight_pass failed: %s", exc)
-        results["catchlight"] = {"ok": False, "error": str(exc)}
+        ),
+        "background": lambda: background_pass(
+            img_bgr, background_mask=background_mask,
+        ),
+        "specular_surface": lambda: specular_surface_pass(
+            img_bgr, person_mask=person_mask,
+            skin_mask=skin_mask, face_box=face_box,
+        ),
+    }
+    with ThreadPoolExecutor(max_workers=len(_wave1_tasks)) as _pool:
+        _futures = {_pool.submit(fn): key for key, fn in _wave1_tasks.items()}
+        for _fut in as_completed(_futures):
+            _key = _futures[_fut]
+            try:
+                results[_key] = _fut.result()
+            except Exception as exc:
+                logger.warning("%s_pass failed: %s", _key, exc)
+                results[_key] = {"ok": False, "error": str(exc)}
 
     # ── Catchlight topology pass (multi-catchlight analysis) ─────────
     try:
@@ -6360,25 +6355,6 @@ def run_extended_pipeline(
     except Exception as exc:
         logger.warning("light_structure_pass failed: %s", exc)
         results["light_structure"] = {"ok": False, "error": str(exc)}
-
-    # ── Background pass ──────────────────────────────────────────────
-    try:
-        results["background"] = background_pass(
-            img_bgr, background_mask=background_mask,
-        )
-    except Exception as exc:
-        logger.warning("background_pass failed: %s", exc)
-        results["background"] = {"ok": False, "error": str(exc)}
-
-    # ── Specular surface pass ────────────────────────────────────────
-    try:
-        results["specular_surface"] = specular_surface_pass(
-            img_bgr, person_mask=person_mask,
-            skin_mask=skin_mask, face_box=face_box,
-        )
-    except Exception as exc:
-        logger.warning("specular_surface_pass failed: %s", exc)
-        results["specular_surface"] = {"ok": False, "error": str(exc)}
 
     # ══════════════════════════════════════════════════════════════════
     # NEW SIGNAL EXTRACTION PASSES

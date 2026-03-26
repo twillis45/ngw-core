@@ -15,6 +15,8 @@ import {
   updateClusterStatus,
   evaluateCandidate,
   getCandidateEvaluations,
+  updateCandidate,
+  getCandidate,
   getMonitoringSummary,
   getMonitoringReport,
   triggerMonitoringSweep,
@@ -864,6 +866,14 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
   const [selectedIds,     setSelectedIds]     = useState(new Set()); // selected cluster IDs
   const [bulkWorking,     setBulkWorking]     = useState(false);
   const clusterRefs = useRef({});
+  const [editingCandidateId, setEditingCandidateId] = useState(null);
+  const [editFields,         setEditFields]         = useState({ title: '', description: '', rationale: '' });
+  const [editJson,           setEditJson]           = useState('{}');
+  const [jsonError,          setJsonError]          = useState(null);
+  const [editSaving,         setEditSaving]         = useState(false);
+  const [editLoading,        setEditLoading]        = useState(false);
+  const [rawMode,            setRawMode]            = useState(false);
+  const [kvPairs,            setKvPairs]            = useState([]);  // [{key, val}]
 
   function showNotice(type, msg) {
     setNotice({ type, msg });
@@ -1054,6 +1064,85 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
     clearSelection();
     setBulkWorking(false);
     showNotice('success', `Evaluated ${ok} candidate${ok !== 1 ? 's' : ''}${fail ? ` (${fail} failed)` : ''}`);
+  }
+
+  function jsonToKvPairs(obj) {
+    return Object.entries(obj).map(([key, val]) => ({
+      key,
+      val: typeof val === 'string' ? val : JSON.stringify(val),
+    }));
+  }
+
+  function kvPairsToObj(pairs) {
+    const obj = {};
+    for (const { key, val } of pairs) {
+      if (!key.trim()) continue;
+      try { obj[key.trim()] = JSON.parse(val); }
+      catch { obj[key.trim()] = val; }
+    }
+    return obj;
+  }
+
+  async function handleEditOpen(candidateId) {
+    if (editingCandidateId === candidateId) {
+      setEditingCandidateId(null);
+      return;
+    }
+    setEditLoading(true);
+    setEditingCandidateId(candidateId);
+    setJsonError(null);
+    setRawMode(false);
+    try {
+      const data = await getCandidate(candidateId);
+      const change = data.proposed_change ?? {};
+      setEditFields({ title: data.title || '', description: data.description || '', rationale: data.rationale || '' });
+      setEditJson(JSON.stringify(change, null, 2));
+      setKvPairs(jsonToKvPairs(change));
+    } catch (err) {
+      showNotice('error', `Could not load candidate: ${err.message}`);
+      setEditingCandidateId(null);
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  function handleToggleRawMode() {
+    if (!rawMode) {
+      // entering raw — serialize current kvPairs
+      setEditJson(JSON.stringify(kvPairsToObj(kvPairs), null, 2));
+      setJsonError(null);
+    } else {
+      // leaving raw — parse editJson back to kvPairs
+      try {
+        setKvPairs(jsonToKvPairs(JSON.parse(editJson)));
+        setJsonError(null);
+      } catch {
+        setJsonError('Fix JSON before switching to structured view');
+        return;
+      }
+    }
+    setRawMode(v => !v);
+  }
+
+  async function handleSaveCandidate(candidateId) {
+    let parsed;
+    if (rawMode) {
+      try { parsed = JSON.parse(editJson); }
+      catch { setJsonError('Invalid JSON — fix before saving'); return; }
+    } else {
+      parsed = kvPairsToObj(kvPairs);
+    }
+    setEditSaving(true);
+    try {
+      await updateCandidate(candidateId, { ...editFields, proposed_change: parsed });
+      showNotice('success', 'Candidate saved');
+      setEditingCandidateId(null);
+      await load();
+    } catch (err) {
+      showNotice('error', `Save failed: ${err.message}`);
+    } finally {
+      setEditSaving(false);
+    }
   }
 
   // Derived bulk capabilities from current selection
@@ -1293,6 +1382,204 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
                 >
                   {working[c.candidate_id] === 'applying' ? 'Applying…' : 'Apply to Engine'}
                 </button>
+              )}
+              <button
+                className="btn btn--ghost btn--sm"
+                style={{
+                  fontSize: 'var(--text-xs)',
+                  color: editingCandidateId === c.candidate_id ? 'var(--color-text)' : 'var(--color-text-dim)',
+                  borderColor: editingCandidateId === c.candidate_id ? 'var(--color-border)' : 'transparent',
+                  marginLeft: 'auto',
+                }}
+                onClick={() => handleEditOpen(c.candidate_id)}
+                title="Edit candidate fields and proposed_change JSON"
+              >
+                {editingCandidateId === c.candidate_id ? '✕ Close' : '✎ Edit'}
+              </button>
+            </div>
+          )}
+
+          {c.candidate_id && editingCandidateId === c.candidate_id && (
+            <div style={{
+              marginTop: 8, padding: '12px 14px',
+              background: 'var(--color-surface-elevated)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--color-border)',
+            }}>
+              {editLoading ? (
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Loading…</div>
+              ) : (
+                <>
+                  <div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
+                    <label style={{ display: 'grid', gap: 3, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      Title
+                      <input
+                        value={editFields.title}
+                        onChange={e => setEditFields(f => ({ ...f, title: e.target.value }))}
+                        style={{
+                          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-sm)', padding: '4px 8px',
+                          fontSize: 'var(--text-sm)', color: 'var(--color-text)',
+                          outline: 'none', width: '100%', boxSizing: 'border-box',
+                        }}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 3, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      Description
+                      <textarea
+                        rows={2}
+                        value={editFields.description}
+                        onChange={e => setEditFields(f => ({ ...f, description: e.target.value }))}
+                        style={{
+                          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-sm)', padding: '4px 8px',
+                          fontSize: 'var(--text-sm)', color: 'var(--color-text)',
+                          outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                        }}
+                      />
+                    </label>
+                    <label style={{ display: 'grid', gap: 3, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                      Rationale
+                      <textarea
+                        rows={2}
+                        value={editFields.rationale}
+                        onChange={e => setEditFields(f => ({ ...f, rationale: e.target.value }))}
+                        style={{
+                          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                          borderRadius: 'var(--radius-sm)', padding: '4px 8px',
+                          fontSize: 'var(--text-sm)', color: 'var(--color-text)',
+                          outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical',
+                        }}
+                      />
+                    </label>
+                    {/* proposed_change editor — structured KV or raw JSON */}
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                          proposed_change
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={handleToggleRawMode}
+                          style={{ fontSize: 10, padding: '1px 7px', color: rawMode ? C.amber : 'var(--color-text-dim)', borderColor: rawMode ? '#FBBF2444' : 'transparent' }}
+                          title={rawMode ? 'Switch to structured field editor' : 'Switch to raw JSON editor'}
+                        >
+                          {rawMode ? '⊞ Structured' : '{ } Raw'}
+                        </button>
+                      </div>
+
+                      {rawMode ? (
+                        /* ── Raw JSON textarea ── */
+                        <>
+                          <textarea
+                            rows={10}
+                            value={editJson}
+                            onChange={e => { setEditJson(e.target.value); setJsonError(null); }}
+                            onBlur={() => {
+                              try {
+                                setEditJson(JSON.stringify(JSON.parse(editJson), null, 2));
+                                setJsonError(null);
+                              } catch {
+                                setJsonError('Invalid JSON');
+                              }
+                            }}
+                            spellCheck={false}
+                            style={{
+                              background: 'var(--color-surface)',
+                              border: `1px solid ${jsonError ? C.red : 'var(--color-border)'}`,
+                              borderRadius: 'var(--radius-sm)', padding: '6px 8px',
+                              fontFamily: 'var(--font-mono, "Fira Mono", monospace)',
+                              fontSize: 11, color: 'var(--color-text)',
+                              outline: 'none', width: '100%', boxSizing: 'border-box',
+                              resize: 'vertical', lineHeight: 1.6,
+                            }}
+                          />
+                          {jsonError && (
+                            <div style={{ fontSize: 'var(--text-xs)', color: C.red }}>{jsonError}</div>
+                          )}
+                        </>
+                      ) : (
+                        /* ── Structured KV editor ── */
+                        <>
+                          <div style={{ display: 'grid', gap: 4 }}>
+                            {kvPairs.map((pair, i) => (
+                              <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  value={pair.key}
+                                  onChange={e => setKvPairs(p => p.map((r, j) => j === i ? { ...r, key: e.target.value } : r))}
+                                  placeholder="field"
+                                  style={{
+                                    background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-sm)', padding: '3px 7px',
+                                    fontFamily: 'var(--font-mono, monospace)', fontSize: 11,
+                                    color: C.blue, outline: 'none',
+                                    width: 130, flexShrink: 0, boxSizing: 'border-box',
+                                  }}
+                                />
+                                <input
+                                  value={pair.val}
+                                  onChange={e => setKvPairs(p => p.map((r, j) => j === i ? { ...r, val: e.target.value } : r))}
+                                  placeholder="value"
+                                  style={{
+                                    background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                                    borderRadius: 'var(--radius-sm)', padding: '3px 7px',
+                                    fontFamily: 'var(--font-mono, monospace)', fontSize: 11,
+                                    color: 'var(--color-text)', outline: 'none',
+                                    flex: 1, boxSizing: 'border-box',
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setKvPairs(p => p.filter((_, j) => j !== i))}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.red, fontSize: 13, padding: '0 4px', flexShrink: 0, lineHeight: 1 }}
+                                  title="Remove field"
+                                >✕</button>
+                              </div>
+                            ))}
+                            <button
+                              type="button"
+                              className="btn btn--ghost btn--sm"
+                              onClick={() => setKvPairs(p => [...p, { key: '', val: '' }])}
+                              style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: '#4DA3FF44', alignSelf: 'flex-start', marginTop: 2 }}
+                            >+ Add field</button>
+                          </div>
+
+                          {/* Live JSON preview */}
+                          <div>
+                            <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                              JSON preview
+                            </div>
+                            <pre style={{
+                              background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+                              borderRadius: 'var(--radius-sm)', padding: '6px 8px',
+                              fontFamily: 'var(--font-mono, monospace)', fontSize: 10,
+                              color: 'var(--color-text-secondary)', margin: 0,
+                              maxHeight: 110, overflowY: 'auto', overflowX: 'auto', lineHeight: 1.5,
+                            }}>
+                              {JSON.stringify(kvPairsToObj(kvPairs), null, 2)}
+                            </pre>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn--primary btn--sm"
+                      onClick={() => handleSaveCandidate(c.candidate_id)}
+                      disabled={editSaving || !!jsonError}
+                    >
+                      {editSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setEditingCandidateId(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
               )}
             </div>
           )}

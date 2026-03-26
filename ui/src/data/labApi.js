@@ -671,3 +671,7 @@ export async function probeApiKey() {
 export async function getApiMetrics(hours = 24) {
   return labFetch(`/api-metrics?hours=${hours}`);
 }
+
+export async function getMonitoringStats(hours = 24) {
+  return labFetch(`/monitoring-stats?hours=${hours}`);
+}

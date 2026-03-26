@@ -16,8 +16,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from auth.security import get_current_user
+from auth.rate_limit import check_rate_limit
 from pydantic import BaseModel, Field
 
 # Service layer — all business logic
@@ -261,13 +262,14 @@ async def upload_reference(
 # ═══════════════════════════════════════════════════════════════════════════
 
 @router.post("/shoot-match")
-def shoot_match(req: ShootMatchRequest) -> Dict[str, Any]:
+def shoot_match(request: Request, req: ShootMatchRequest) -> Dict[str, Any]:
     """Match user inputs to a lighting setup.
 
     This route is a thin HTTP layer. All business logic — system filtering,
     pattern resolution, card assembly, reference enrichment — lives in
     engine.services.shoot_match_service.build_shoot_match_result().
     """
+    check_rate_limit("shoot_match", request, limit=30, window=60)
     # Resolve taxonomy labels → internal codes
     mood = MOOD_MAP.get(req.mood, "natural")
     environment = ENVIRONMENT_MAP.get(req.environment, "studio_small")

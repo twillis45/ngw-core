@@ -225,7 +225,7 @@ async def security_and_cache_headers(request: Request, call_next):
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com; "
             "style-src 'self' 'unsafe-inline'; "
             "img-src 'self' data: blob: https:; "
-            "connect-src 'self' https://api.stripe.com https://js.stripe.com; "
+            "connect-src 'self' https://api.stripe.com https://js.stripe.com https://o*.ingest.sentry.io; "
             "frame-src https://js.stripe.com https://hooks.stripe.com; "
             "font-src 'self' data:; "
             "object-src 'none'; "

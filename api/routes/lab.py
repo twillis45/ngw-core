@@ -9,19 +9,22 @@ Provides:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
 import time
 import uuid
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from auth.dev_guard import get_dev_user
+from auth.rate_limit import check_rate_limit
 from db.database import (
     get_db,
     create_gold_set_entry,
@@ -115,6 +118,7 @@ async def lab_status(user: Dict = Depends(get_dev_user)):
 
 @router.post("/analyze")
 async def lab_analyze(
+    request: Request,
     image: UploadFile = File(...),
     debug: bool = Query(False, description="Generate debug overlay image"),
     user: Dict = Depends(get_dev_user),
@@ -125,6 +129,7 @@ async def lab_analyze(
     When debug=True, also generates a visual debug overlay showing
     all detected signals and returns the overlay URL.
     """
+    check_rate_limit("lab_analyze", request, limit=10, window=60)
     content = await _validate_upload(image)
     # Save uploaded file
     ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
@@ -134,11 +139,15 @@ async def lab_analyze(
     with open(fpath, "wb") as f:
         f.write(content)
 
-    # Run full analysis pipeline via orchestrator
+    # Run full analysis pipeline via orchestrator (in thread — CPU-bound)
     try:
         from engine.orchestrator import analyze_image
 
-        ar = analyze_image(str(fpath), run_extended=True, run_vlm=True, debug=debug)
+        loop = asyncio.get_event_loop()
+        ar = await loop.run_in_executor(
+            None,
+            partial(analyze_image, str(fpath), run_extended=True, run_vlm=True, debug=debug),
+        )
 
         if not ar.ok:
             raise HTTPException(status_code=500, detail="; ".join(ar.notes))
@@ -1003,12 +1012,17 @@ async def ingest_dataset_reference(
         f.write(image_content)
 
     try:
-        result = _ingest(
-            tmp_path,
-            metadata,
-            run_pipeline=run_pipeline,
-            run_vlm=run_vlm,
-            overwrite=overwrite,
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            partial(
+                _ingest,
+                tmp_path,
+                metadata,
+                run_pipeline=run_pipeline,
+                run_vlm=run_vlm,
+                overwrite=overwrite,
+            ),
         )
         result["ingested_by"] = user.get("email")
         return result
@@ -1235,9 +1249,10 @@ async def reprocess_dataset_entry(
     from engine.reference_dataset import reprocess_entry
 
     try:
-        result = reprocess_entry(
-            pattern_id, reference_id,
-            run_vlm=run_vlm,
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            None,
+            partial(reprocess_entry, pattern_id, reference_id, run_vlm=run_vlm),
         )
         result["reprocessed_by"] = user.get("email")
         return result
@@ -1245,6 +1260,95 @@ async def reprocess_dataset_entry(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Reprocessing failed: {exc}")
+
+
+# ── Monitoring Stats ───────────────────────────────────────────────────────────
+
+@router.get("/monitoring-stats")
+async def get_monitoring_stats(
+    hours: int = Query(24, ge=1, le=168),
+    user: Dict = Depends(get_dev_user),
+):
+    """
+    Single endpoint for the Monitoring section: VLM sparkline, analysis funnel,
+    and Stripe webhook health.  Returns all three datasets in one round trip.
+    """
+    cutoff = time.time() - hours * 3600
+
+    with get_db() as conn:
+        # ── VLM sparkline (hourly call counts with ok/err breakdown) ──────────
+        vlm_rows = conn.execute(
+            "SELECT called_at, ok FROM vlm_call_metrics WHERE called_at > ? ORDER BY called_at DESC",
+            (cutoff,),
+        ).fetchall()
+
+        now = time.time()
+        bucket_secs = 3600
+        n_buckets = hours
+        ok_buckets: Dict[int, int] = {}
+        err_buckets: Dict[int, int] = {}
+        for r in vlm_rows:
+            idx = int((now - r["called_at"]) // bucket_secs)
+            if idx < n_buckets:
+                if r["ok"]:
+                    ok_buckets[idx] = ok_buckets.get(idx, 0) + 1
+                else:
+                    err_buckets[idx] = err_buckets.get(idx, 0) + 1
+
+        sparkline = [
+            {
+                "hours_ago": h,
+                "ok": ok_buckets.get(h, 0),
+                "err": err_buckets.get(h, 0),
+                "total": ok_buckets.get(h, 0) + err_buckets.get(h, 0),
+            }
+            for h in range(n_buckets)
+        ]
+
+        # ── Analysis funnel (VLM calls by caller, last N hours) ──────────────
+        total_vlm   = len(vlm_rows)
+        ok_vlm      = sum(1 for r in vlm_rows if r["ok"])
+        err_vlm     = total_vlm - ok_vlm
+
+        # Distinct sessions that ran at least one analysis
+        session_rows = conn.execute(
+            "SELECT COUNT(*) as cnt FROM session_analysis_counts WHERE updated_at > ?",
+            (cutoff,),
+        ).fetchone()
+        active_sessions = session_rows["cnt"] if session_rows else 0
+
+        funnel = {
+            "sessions_with_analysis": active_sessions,
+            "vlm_calls_total":  total_vlm,
+            "vlm_calls_ok":     ok_vlm,
+            "vlm_calls_error":  err_vlm,
+            "success_rate":     round(ok_vlm / total_vlm, 3) if total_vlm else None,
+        }
+
+        # ── Stripe webhook health ─────────────────────────────────────────────
+        sub_rows = conn.execute(
+            "SELECT id, customer_email, plan, billing_period, status, created_at "
+            "FROM subscriptions ORDER BY created_at DESC LIMIT 10",
+        ).fetchall()
+        subs = [dict(r) for r in sub_rows]
+        last_webhook_at = subs[0]["created_at"] if subs else None
+        active_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM subscriptions WHERE status='active'"
+        ).fetchone()["cnt"]
+
+    stripe_health = {
+        "webhook_secret_configured": bool(os.getenv("STRIPE_WEBHOOK_SECRET")),
+        "last_webhook_at":   last_webhook_at,
+        "total_active_subs": active_count,
+        "recent_subs":       subs[:5],
+    }
+
+    return {
+        "window_hours": hours,
+        "sparkline":    sparkline,
+        "funnel":       funnel,
+        "stripe":       stripe_health,
+    }
 
 
 # ── API Metrics ────────────────────────────────────────────────────────────────

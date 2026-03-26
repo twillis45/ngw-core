@@ -324,16 +324,36 @@ const LAB_HELP = {
   },
   control_center: {
     title: 'Control Center',
-    what: 'Central maintenance and operations dashboard. Manage the ingestion scheduler, monitor intelligence score health, test the adaptive paywall, and review support signals like miscalibrated patterns and VLM corrections.',
+    what: 'Central maintenance and operations dashboard. Six sub-sections cover the scheduler, intelligence score, paywall, support signals, live monitoring, and account inspection.',
     features: [
       { label: 'System', desc: 'Scheduler on/off, interval config, manual ingestion trigger, health overview (clusters, alerts, pending evals).' },
       { label: 'Intelligence', desc: 'Global intelligence score (target ≥70), per-pattern breakdown, autonomy queue review, failure cluster map.' },
       { label: 'Paywall', desc: 'Value state map, paywall type reference, live pricing test with real signal simulation.' },
       { label: 'Support', desc: 'Recalibration hints (mis-calibrated patterns), gold set coverage gaps, and VLM correction log.' },
+      { label: 'Monitoring', desc: 'Alert engine (VLM error rate, volume, latency rules), VLM call sparkline, analysis funnel, Stripe webhook health, and frontend error console.' },
+      { label: 'User', desc: 'Account identity, subscription status, session diagnostics, feature flags, and local storage inspector for prod support.' },
     ],
     tips: [
       'Intelligence score of 50 means insufficient data — seed signals or run a benchmark pass first.',
       'Live Paywall Test lets you verify each value state detects correctly before pushing to production.',
+      'Monitoring auto-refreshes every 60s. Alert Engine turns red when VLM error rate exceeds 20% or call volume drops to zero.',
+      'Sub-sections are draggable — reorder them to match your workflow. ↺ resets to default.',
+    ],
+  },
+  user: {
+    title: 'User',
+    what: 'Local data inspector for the currently loaded session. Shows auth state, subscription tier, feature flags, server-loaded account identity, and raw ngw_* localStorage entries.',
+    features: [
+      { label: 'Identity', desc: 'Server-verified email, user ID, and account flags from /api/auth/me.' },
+      { label: 'Subscription', desc: 'Current plan tier, billing period, and status from the backend subscription record.' },
+      { label: 'Feature Flags', desc: 'All active flags with live toggle switches. Changes persist to localStorage immediately.' },
+      { label: 'Saved Data', desc: 'Count of saved setups and kit items from the server.' },
+      { label: 'Local Storage', desc: 'Full dump of all ngw_* localStorage keys. Useful for diagnosing auth or flag issues.' },
+    ],
+    tips: [
+      'Feature flag toggles write directly to localStorage — useful for testing flag-gated features without a backend config change.',
+      'If Identity shows "Dev Mode" instead of an email, the backend is running with NGW_DEV_MODE=1.',
+      'Use the refresh button (↺) to re-fetch all server data without reloading the page.',
     ],
   },
 };
@@ -705,15 +725,18 @@ export default function LabScreen() {
   }
 
   const TAB_DEFS = [
-    { id: 'workbench',      label: 'Workbench' },
-    { id: 'gold_set',       label: 'Gold Set',          metricKey: 'gold_set',       metricLabel: 'Approved gold set images' },
-    { id: 'candidates',     label: 'Candidates',         metricKey: 'candidates',     metricLabel: 'Pending candidates awaiting review' },
-    { id: 'ref_dataset',    label: 'Reference Dataset',  metricKey: 'ref_dataset',    metricLabel: 'Gold-tier reference dataset entries' },
-    { id: 'signals',        label: 'Signals',            metricKey: 'signals',        metricLabel: 'Active monitoring alerts' },
-    { id: 'learning',       label: 'Learning Ops',       metricKey: 'learning',       metricLabel: 'Intelligence score (0–100): composite of signal volume, pattern coverage, benchmark pass rate, and VLM correction rate over 30 days. ≥70 = healthy, 50–69 = needs attention, <50 = insufficient data.' },
-    { id: 'benchmarks',     label: 'Benchmarks',         metricKey: 'benchmarks',     metricLabel: 'Benchmark pass rate — latest run' },
-    { id: 'control_center', label: '⚙ Control Center',  metricKey: 'control_center', metricLabel: 'API / VLM health status' },
-    { id: 'user',           label: '👤 User',                                                                                  metricLabel: 'Local auth, paywall, feature flags, and storage inspector' },
+    // ── Analysis ──
+    { id: 'workbench',      label: 'Workbench',          group: 'Analysis' },
+    { id: 'gold_set',       label: 'Gold Set',           group: 'Analysis',   metricKey: 'gold_set',       metricLabel: 'Approved gold set images' },
+    { id: 'candidates',     label: 'Candidates',          group: 'Analysis',   metricKey: 'candidates',     metricLabel: 'Pending candidates awaiting review' },
+    { id: 'ref_dataset',    label: 'Reference Dataset',   group: 'Analysis',   metricKey: 'ref_dataset',    metricLabel: 'Gold-tier reference dataset entries' },
+    // ── Intelligence ──
+    { id: 'signals',        label: 'Signals',             group: 'Intelligence', metricKey: 'signals',      metricLabel: 'Active monitoring alerts' },
+    { id: 'learning',       label: 'Learning Ops',        group: 'Intelligence', metricKey: 'learning',     metricLabel: 'Intelligence score (0–100): composite of signal volume, pattern coverage, benchmark pass rate, and VLM correction rate over 30 days. ≥70 = healthy, 50–69 = needs attention, <50 = insufficient data.' },
+    { id: 'benchmarks',     label: 'Benchmarks',          group: 'Intelligence', metricKey: 'benchmarks',   metricLabel: 'Benchmark pass rate — latest run' },
+    // ── System ──
+    { id: 'control_center', label: '⚙ Control Center',   group: 'System',     metricKey: 'control_center', metricLabel: 'API / VLM health status' },
+    { id: 'user',           label: '👤 User',             group: 'System',                                  metricLabel: 'Local auth, paywall, feature flags, and storage inspector' },
   ];
 
   // Apply saved drag order (falls back to default order above)
@@ -760,11 +783,28 @@ export default function LabScreen() {
       {/* ── Tab Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
         <div className="lab-tabs" style={{ flex: 1, marginBottom: 0 }}>
-          {tabs.map(tab => {
-            const metric   = tab.metricKey ? tabMetrics[tab.metricKey] : null;
-            const hasError = metric?.color === 'red';
+          {tabs.flatMap((tab, idx) => {
+            const metric     = tab.metricKey ? tabMetrics[tab.metricKey] : null;
+            const hasError   = metric?.color === 'red';
             const isDragging = dragSrc === tab.id;
-            return (
+            const prevGroup  = idx > 0 ? tabs[idx - 1].group : null;
+            const showDivider = tab.group && prevGroup && tab.group !== prevGroup;
+            const elems = [];
+            if (showDivider) {
+              elems.push(
+                <span
+                  key={`div-${tab.id}`}
+                  aria-hidden="true"
+                  style={{
+                    display: 'inline-flex', alignSelf: 'center',
+                    width: 1, height: 20,
+                    background: 'var(--color-border)',
+                    margin: '0 4px', flexShrink: 0,
+                  }}
+                />
+              );
+            }
+            elems.push(
               <button
                 key={tab.id}
                 className={`lab-tab${activeTab === tab.id ? ' lab-tab--active' : ''}${isDragging ? ' lab-tab--dragging' : ''}`}
@@ -775,8 +815,8 @@ export default function LabScreen() {
                 onDrop={e => handleDrop(e, tab.id)}
                 onDragEnd={handleDragEnd}
                 style={{ position: 'relative', cursor: isDragging ? 'grabbing' : 'grab' }}
+                title={tab.group ? `${tab.group}: ${tab.label}` : tab.label}
               >
-                {/* Error dot on inactive tabs with a red metric */}
                 {hasError && activeTab !== tab.id && (
                   <span style={{
                     position: 'absolute', top: 3, right: 3,
@@ -796,8 +836,23 @@ export default function LabScreen() {
                 )}
               </button>
             );
+            return elems;
           })}
         </div>
+        {/* Reset order — only shown when a custom order is active */}
+        {tabOrder && (
+          <button
+            className="lab-tab"
+            onClick={() => {
+              setTabOrder(null);
+              try { localStorage.removeItem('ngw_lab_tab_order'); } catch {}
+              if (user) savePreference('lab_tab_order', null).catch(() => {});
+            }}
+            title="Reset tab order to default"
+            aria-label="Reset tab order"
+            style={{ flexShrink: 0, marginTop: 'var(--space-sm)', marginBottom: 0, opacity: 0.7 }}
+          >↺</button>
+        )}
         <button
           className={`lab-tab${showHelp ? ' lab-tab--active' : ''}`}
           onClick={() => setShowHelp(v => !v)}
@@ -3245,6 +3300,418 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
   );
 }
 
+// ── Proposed Change Editor — schema-aware dropdown form ──────────────────
+
+const _PC_PATTERNS = [
+  'rembrandt','clamshell','loop','split','butterfly','broad','short',
+  'rim_only','high_key','low_key','flat_fashion','window_portrait',
+  'golden_hour','overcast_natural','ring_light','bare_bulb_editorial',
+  'strip_dramatic','short_fashion_key','soft_editorial_key',
+  'editorial_rim_key','tabletop_soft_product','bottle_backlight',
+  'athletic_rim_sculpt','window_negative_fill',
+];
+
+const _PC_SIGNALS = [
+  'triangle_isolation','shadow_density','highlight_width_ratio',
+  'lr_asymmetry','shadow_continuity','nose_shadow_centroid_distance',
+  'catchlight_position','environmental_shadow_continuity',
+];
+
+const _PC_TYPES = [
+  { value: 'blueprint_correction',     label: 'Blueprint Correction' },
+  { value: 'confidence_recalibration', label: 'Confidence Recalibration' },
+  { value: 'shoot_mode_step_fix',      label: 'Shoot Mode Step Fix' },
+  { value: 'dataset_promotion',        label: 'Dataset Promotion' },
+  { value: 'signal_override',          label: 'Signal Override' },
+  { value: 'pattern_confusion',        label: 'Pattern Confusion' },
+  { value: 'reference_correction',     label: 'Reference Correction' },
+  { value: 'vlm_prompt_fix',           label: 'VLM Prompt Fix' },
+  { value: 'edge_case_handling',       label: 'Edge Case Handling' },
+  { value: 'new_pattern_proposal',     label: 'New Pattern Proposal' },
+  { value: 'trust_safety',             label: 'Trust & Safety' },
+  { value: 'needs_investigation',      label: 'Needs Investigation' },
+];
+
+const _PC_ACTIONS = {
+  blueprint_correction:     ['review_detection_threshold','review_pattern_boundary'],
+  confidence_recalibration: ['reduce_confidence_floor'],
+  shoot_mode_step_fix:      ['audit_step_instructions'],
+  dataset_promotion:        ['promote_recent_sessions_to_reference'],
+  signal_override:          [],
+  pattern_confusion:        ['review_classifier_boundaries','add_disambiguating_signal'],
+  reference_correction:     ['relabel','remove','replace'],
+  vlm_prompt_fix:           ['update_system_prompt','add_few_shot_example'],
+  edge_case_handling:       ['add_guard','add_fallback','flag_for_review'],
+  new_pattern_proposal:     ['prototype','defer','reject'],
+  trust_safety:             ['improve_post_match_conversion'],
+  needs_investigation:      ['investigate','triage','escalate'],
+};
+
+// Field schema per type — each entry: { key, label, kind, ...opts }
+// kinds: 'select', 'pattern', 'signal', 'number', 'text', 'multi_pattern'
+const _PC_SCHEMA = {
+  blueprint_correction: [
+    { key: 'pattern_id',   label: 'Pattern',        kind: 'pattern' },
+    { key: 'action',       label: 'Action',          kind: 'action' },
+    { key: 'current_cvr',  label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00' },
+    { key: 'target_cvr_min', label: 'Target CVR Min',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.00' },
+  ],
+  confidence_recalibration: [
+    { key: 'pattern_id',    label: 'Pattern',        kind: 'pattern' },
+    { key: 'action',        label: 'Action',          kind: 'action' },
+    { key: 'current_cvr',   label: 'Current CVR',     kind: 'number', step: 0.01, min: 0, max: 1 },
+    { key: 'fleet_mean_cvr',label: 'Fleet Mean CVR',  kind: 'number', step: 0.01, min: 0, max: 1 },
+  ],
+  shoot_mode_step_fix: [
+    { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
+    { key: 'action',     label: 'Action',  kind: 'action' },
+  ],
+  dataset_promotion: [
+    { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
+    { key: 'action',     label: 'Action',  kind: 'action' },
+  ],
+  signal_override: [
+    { key: 'signal',             label: 'Signal',            kind: 'signal' },
+    { key: 'condition',          label: 'Condition',         kind: 'text', placeholder: 'e.g. > 0.12 or between 9.5 and 11.5' },
+    { key: 'override',           label: 'Override → Pattern',kind: 'pattern' },
+    { key: 'overrides',          label: 'Overrides (csv)',   kind: 'multi_pattern', placeholder: 'split, loop' },
+    { key: 'confidence_penalty', label: 'Confidence Penalty',kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.15' },
+  ],
+  pattern_confusion: [
+    { key: 'pattern_a',      label: 'Pattern A (confused)',  kind: 'pattern' },
+    { key: 'pattern_b',      label: 'Pattern B (confused as)', kind: 'pattern' },
+    { key: 'confusion_rate', label: 'Confusion Rate',        kind: 'number', step: 0.01, min: 0, max: 1, placeholder: '0.40' },
+    { key: 'action',         label: 'Action',                kind: 'action' },
+    { key: 'key_signals',    label: 'Key Disambiguating Signals (csv)', kind: 'text', placeholder: 'shadow_density, lr_asymmetry' },
+  ],
+  reference_correction: [
+    { key: 'reference_id',   label: 'Reference ID (UUID)',  kind: 'text', placeholder: 'UUID from Reference Dataset' },
+    { key: 'current_label',  label: 'Current Label',        kind: 'pattern' },
+    { key: 'correct_label',  label: 'Correct Label',        kind: 'pattern' },
+    { key: 'action',         label: 'Action',               kind: 'action' },
+  ],
+  vlm_prompt_fix: [
+    { key: 'pattern_id',           label: 'Affected Pattern',       kind: 'pattern' },
+    { key: 'action',               label: 'Action',                 kind: 'action' },
+    { key: 'current_instruction',  label: 'Current Instruction',    kind: 'text', placeholder: 'Quote the problematic instruction' },
+    { key: 'suggested_instruction',label: 'Suggested Instruction',  kind: 'text', placeholder: 'Proposed replacement text' },
+  ],
+  edge_case_handling: [
+    { key: 'edge_case',          label: 'Edge Case',          kind: 'select',
+      options: ['bw_photo','blown_highlights','no_face','multiple_subjects','extreme_backlight','low_key_face','mixed_lighting','heavy_grain','motion_blur','other'] },
+    { key: 'affected_patterns',  label: 'Affected Patterns (csv)', kind: 'text', placeholder: 'rembrandt, loop' },
+    { key: 'action',             label: 'Action',             kind: 'action' },
+    { key: 'proposed_handling',  label: 'Proposed Handling',  kind: 'text', placeholder: 'e.g. Return low_signal instead of guessing' },
+  ],
+  new_pattern_proposal: [
+    { key: 'proposed_name',    label: 'Proposed Pattern Name', kind: 'text', placeholder: 'e.g. halo_light' },
+    { key: 'action',           label: 'Action',                kind: 'action' },
+    { key: 'closest_existing', label: 'Closest Existing Pattern', kind: 'pattern' },
+    { key: 'key_signals',      label: 'Key Identifying Signals', kind: 'text', placeholder: 'catchlight_position > 11, triangle_isolation < 0.3' },
+    { key: 'example_count',    label: 'Example Images Available', kind: 'number', step: 1, min: 0, placeholder: '0' },
+  ],
+  trust_safety: [
+    { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
+    { key: 'action',     label: 'Action',  kind: 'action' },
+  ],
+  needs_investigation: [
+    { key: 'pattern_id', label: 'Pattern', kind: 'pattern' },
+    { key: 'reason',     label: 'Reason',  kind: 'text', placeholder: 'e.g. benchmark_regression' },
+    { key: 'status',     label: 'Status',  kind: 'select',
+      options: ['needs_investigation','deferred','acknowledged'] },
+  ],
+};
+
+/**
+ * Schema-aware proposed_change editor.
+ * Renders typed dropdowns for known fields; raw JSON escape hatch always available.
+ */
+function KvJsonEditor({ value = {}, onChange }) {
+  const [rawMode,   setRawMode]   = useState(false);
+  const [rawJson,   setRawJson]   = useState(() => JSON.stringify(value, null, 2));
+  const [jsonError, setJsonError] = useState(null);
+
+  const pcType    = value.type || '';
+  const schema    = _PC_SCHEMA[pcType] || [];
+  const schemaKeys = new Set(['type', ...schema.map(f => f.key)]);
+
+  // Extra keys not in schema (from auto-generated candidates, _meta, etc.)
+  const extraKeys = Object.keys(value).filter(k => !schemaKeys.has(k));
+
+  function set(key, val) {
+    onChange({ ...value, [key]: val });
+  }
+  function setType(t) {
+    // Preserve pattern_id and notes when switching types
+    const next = { type: t };
+    if (value.pattern_id) next.pattern_id = value.pattern_id;
+    if (value.notes) next.notes = value.notes;
+    onChange(next);
+  }
+
+  function handleToggleRaw() {
+    if (!rawMode) {
+      setRawJson(JSON.stringify(value, null, 2));
+      setJsonError(null);
+    } else {
+      try {
+        const parsed = JSON.parse(rawJson);
+        onChange(parsed);
+        setJsonError(null);
+      } catch {
+        setJsonError('Fix JSON before switching to structured view');
+        return;
+      }
+    }
+    setRawMode(v => !v);
+  }
+
+  // Keep rawJson in sync when external value changes (e.g. parent reset)
+  // but only when not actively editing raw mode
+  const rawJsonRef = useRef(rawJson);
+  if (!rawMode) rawJsonRef.current = JSON.stringify(value, null, 2);
+
+  const _base = {
+    background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', padding: '4px 8px',
+    fontSize: 12, color: 'var(--color-text)', outline: 'none',
+    boxSizing: 'border-box', width: '100%',
+  };
+  const _label = {
+    fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)',
+    fontWeight: 600, marginBottom: 2, display: 'block',
+  };
+  const _row = { display: 'grid', gap: 4, marginBottom: 6 };
+
+  function renderField(f) {
+    const v = value[f.key];
+    const actions = _PC_ACTIONS[pcType] || [];
+
+    if (f.kind === 'pattern') {
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <select value={v || ''} onChange={e => set(f.key, e.target.value)} style={_base}>
+            <option value="">— select —</option>
+            {_PC_PATTERNS.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (f.kind === 'signal') {
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <select value={v || ''} onChange={e => set(f.key, e.target.value)} style={_base}>
+            <option value="">— select —</option>
+            {_PC_SIGNALS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (f.kind === 'action') {
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <select value={v || ''} onChange={e => set(f.key, e.target.value)} style={_base}>
+            <option value="">— select —</option>
+            {actions.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (f.kind === 'select') {
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <select value={v || ''} onChange={e => set(f.key, e.target.value)} style={_base}>
+            <option value="">— select —</option>
+            {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+      );
+    }
+    if (f.kind === 'number') {
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <input
+            type="number"
+            value={v ?? ''}
+            step={f.step}
+            min={f.min}
+            max={f.max}
+            placeholder={f.placeholder}
+            onChange={e => set(f.key, e.target.value === '' ? undefined : parseFloat(e.target.value))}
+            style={_base}
+          />
+        </div>
+      );
+    }
+    if (f.kind === 'multi_pattern') {
+      // stored as array, edited as csv string
+      const csv = Array.isArray(v) ? v.join(', ') : (v || '');
+      return (
+        <div key={f.key} style={_row}>
+          <label style={_label}>{f.label}</label>
+          <input
+            type="text"
+            value={csv}
+            placeholder={f.placeholder}
+            onChange={e => {
+              const arr = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+              set(f.key, arr.length ? arr : undefined);
+            }}
+            list={`pc-patterns-list`}
+            style={_base}
+          />
+        </div>
+      );
+    }
+    // text
+    return (
+      <div key={f.key} style={_row}>
+        <label style={_label}>{f.label}</label>
+        <input
+          type="text"
+          value={v || ''}
+          placeholder={f.placeholder}
+          onChange={e => set(f.key, e.target.value || undefined)}
+          style={_base}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
+      <datalist id="pc-patterns-list">
+        {_PC_PATTERNS.map(p => <option key={p} value={p} />)}
+      </datalist>
+
+      {/* header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+          proposed_change
+        </span>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={handleToggleRaw}
+          style={{
+            fontSize: 10, padding: '1px 7px',
+            color: rawMode ? C.amber : 'var(--color-text-dim)',
+            borderColor: rawMode ? '#FBBF2444' : 'transparent',
+          }}
+          title={rawMode ? 'Switch to structured editor' : 'Edit raw JSON'}
+        >
+          {rawMode ? '⊞ Structured' : '{ } Raw'}
+        </button>
+      </div>
+
+      {rawMode ? (
+        <>
+          <textarea
+            rows={10}
+            value={rawJson}
+            onChange={e => { setRawJson(e.target.value); setJsonError(null); }}
+            onBlur={() => {
+              try {
+                const pretty = JSON.stringify(JSON.parse(rawJson), null, 2);
+                setRawJson(pretty);
+                onChange(JSON.parse(pretty));
+                setJsonError(null);
+              } catch {
+                setJsonError('Invalid JSON');
+              }
+            }}
+            spellCheck={false}
+            style={{
+              background: 'var(--color-surface)', border: `1px solid ${jsonError ? C.red : 'var(--color-border)'}`,
+              borderRadius: 'var(--radius-sm)', padding: '6px 8px', width: '100%',
+              fontFamily: 'var(--font-mono, monospace)', fontSize: 11,
+              color: 'var(--color-text)', outline: 'none', resize: 'vertical', lineHeight: 1.6,
+              boxSizing: 'border-box',
+            }}
+          />
+          {jsonError && <div style={{ fontSize: 'var(--text-xs)', color: C.red }}>{jsonError}</div>}
+        </>
+      ) : (
+        <div style={{
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-sm)', padding: '10px 12px',
+        }}>
+          {/* type selector — always first */}
+          <div style={_row}>
+            <label style={_label}>type</label>
+            <select value={pcType} onChange={e => setType(e.target.value)} style={_base}>
+              <option value="">— select type —</option>
+              {_PC_TYPES.map(t => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* schema fields for selected type */}
+          {schema.map(f => renderField(f))}
+
+          {/* extra keys (auto-generated fields like _meta, delta, etc.) */}
+          {extraKeys.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--color-border)', marginTop: 6, paddingTop: 6 }}>
+              <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Additional fields
+              </div>
+              {extraKeys.map(k => (
+                <div key={k} style={_row}>
+                  <label style={{ ..._label, color: C.amber }}>{k}</label>
+                  <input
+                    type="text"
+                    value={typeof value[k] === 'object' ? JSON.stringify(value[k]) : String(value[k] ?? '')}
+                    onChange={e => {
+                      let parsed;
+                      try { parsed = JSON.parse(e.target.value); } catch { parsed = e.target.value; }
+                      set(k, parsed);
+                    }}
+                    style={_base}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* notes — optional free-text for all types */}
+          <div style={{ borderTop: '1px solid var(--color-border)', marginTop: 6, paddingTop: 6 }}>
+            <label style={_label}>notes (optional)</label>
+            <input
+              type="text"
+              value={value.notes || ''}
+              onChange={e => set('notes', e.target.value || undefined)}
+              placeholder="Additional context for reviewers"
+              style={_base}
+            />
+          </div>
+
+          {/* JSON preview */}
+          <div style={{ marginTop: 8 }}>
+            <div style={{ fontSize: 9, color: 'var(--color-text-dim)', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              JSON preview
+            </div>
+            <pre style={{
+              background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)', padding: '6px 8px',
+              fontFamily: 'var(--font-mono, monospace)', fontSize: 10,
+              color: 'var(--color-text-secondary)', margin: 0,
+              maxHeight: 110, overflowY: 'auto', lineHeight: 1.5,
+            }}>
+              {JSON.stringify(value, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Candidate detail view with inline edit mode */
 function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpdated }) {
   const [editing, setEditing] = useState(false);
@@ -3252,8 +3719,7 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
   const [editTitle, setEditTitle] = useState('');
   const [editDesc, setEditDesc] = useState('');
   const [editRationale, setEditRationale] = useState('');
-  const [editJson, setEditJson] = useState('');
-  const [jsonErr, setJsonErr] = useState(null);
+  const [editChange, setEditChange] = useState({});
   const [evalResult, setEvalResult] = useState(null);
   const [evaluations, setEvaluations] = useState(null);
   const [pipelineAction, setPipelineAction] = useState(null); // 'evaluating'|'applying'|null
@@ -3263,8 +3729,7 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
     setEditTitle(selected.title || '');
     setEditDesc(selected.description || '');
     setEditRationale(selected.rationale || '');
-    setEditJson(selected.proposed_change ? JSON.stringify(selected.proposed_change, null, 2) : '{}');
-    setJsonErr(null);
+    setEditChange(selected.proposed_change || {});
     setEditing(true);
   }
 
@@ -3315,24 +3780,16 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
 
   function cancelEdit() {
     setEditing(false);
-    setJsonErr(null);
   }
 
   async function saveEdit() {
-    let parsed;
-    try {
-      parsed = JSON.parse(editJson);
-    } catch {
-      setJsonErr('Invalid JSON — fix before saving.');
-      return;
-    }
     setSaving(true);
     try {
       const updated = await updateCandidate(selected.id, {
         title: editTitle,
         description: editDesc,
         rationale: editRationale || undefined,
-        proposed_change: parsed,
+        proposed_change: editChange,
       });
       setEditing(false);
       onUpdated(updated);
@@ -3413,16 +3870,7 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
       <div className="lab-detail__field">
         <span className="lab-detail__label">Proposed Change</span>
         {editing ? (
-          <>
-            <textarea
-              className="lab-form__textarea lab-form__textarea--code"
-              value={editJson}
-              onChange={e => { setEditJson(e.target.value); setJsonErr(null); }}
-              rows={14}
-              spellCheck={false}
-            />
-            {jsonErr && <div className="lab-form__error">{jsonErr}</div>}
-          </>
+          <KvJsonEditor value={editChange} onChange={setEditChange} />
         ) : (
           <JsonTree data={selected.proposed_change} />
         )}
@@ -3557,9 +4005,7 @@ function CandidateForm({ onSave, onCancel, prefill }) {
   const [description, setDescription] = useState(prefill?.description || '');
   const [rationale, setRationale] = useState(prefill?.rationale || '');
   const [sourceGoldSetId, setSourceGoldSetId] = useState('');
-  const [proposedJson, setProposedJson] = useState(
-    prefill?.proposed_change ? JSON.stringify(prefill.proposed_change, null, 2) : '{}'
-  );
+  const [proposedChange, setProposedChange] = useState(prefill?.proposed_change || {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -3568,14 +4014,12 @@ function CandidateForm({ onSave, onCancel, prefill }) {
     setSaving(true);
     setError(null);
     try {
-      let proposed = {};
-      try { proposed = JSON.parse(proposedJson); } catch { throw new Error('Proposed change must be valid JSON'); }
       await onSave({
         title,
         description,
         rationale: rationale || undefined,
         source_gold_set_id: sourceGoldSetId || undefined,
-        proposed_change: proposed,
+        proposed_change: proposedChange,
         status: 'proposed',
       });
     } catch (err) {
@@ -3641,15 +4085,8 @@ function CandidateForm({ onSave, onCancel, prefill }) {
         />
       </label>
 
-      <label className="lab-form__label">
-        Proposed Change (JSON)
-        <textarea
-          className="lab-form__textarea"
-          value={proposedJson}
-          onChange={e => setProposedJson(e.target.value)}
-          rows={4}
-        />
-      </label>
+      <div className="lab-form__label">Proposed Change</div>
+      <KvJsonEditor value={proposedChange} onChange={setProposedChange} />
 
       <button className="btn btn--primary" type="submit" disabled={saving || !title || !description}>
         {saving ? 'Saving\u2026' : 'Create Candidate'}

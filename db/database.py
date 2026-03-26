@@ -9,7 +9,9 @@ from pathlib import Path
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "ngw_users.db"
+import os as _os
+_data_dir = Path(_os.environ.get("NGW_DATA_DIR", "")).resolve() if _os.environ.get("NGW_DATA_DIR") else Path(__file__).resolve().parent.parent / "data"
+DB_PATH = _data_dir / "ngw_users.db"
 
 
 def _get_conn() -> sqlite3.Connection:
