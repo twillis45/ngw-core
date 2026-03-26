@@ -10,6 +10,8 @@
  * re-renders or race conditions.
  */
 
+import { authHeaders } from './authApi';
+
 const API_BASE = '/api';
 
 /**
@@ -25,7 +27,7 @@ export async function startStripeCheckout({ billingPeriod = 'monthly' } = {}) {
 
   const res = await fetch(`${API_BASE}/stripe/create-checkout-session`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({
       billing_period: billingPeriod,
       plan:           'pro',

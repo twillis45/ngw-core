@@ -128,6 +128,8 @@ async def get_current_user(creds: Optional[HTTPAuthorizationCredentials] = Depen
 
 async def get_optional_user(creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme)):
     """FastAPI dependency — returns user dict or None (no error)."""
+    if _dev_mode_active():
+        return _DEV_MODE_USER
     if not creds:
         return None
     user_id = decode_token(creds.credentials)

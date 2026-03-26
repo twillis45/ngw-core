@@ -11,6 +11,7 @@ import { getGearProfile } from '../data/lightCatalog';
 import usePaywall from '../hooks/usePaywall';
 import usePreviewMode from '../hooks/usePreviewMode';
 import { meetsPlan } from '../data/planStore';
+import PricingScreen from '../components/PricingScreen';
 
 const DIFFICULTY_LABEL = { 1: 'Easy', 2: 'Moderate', 3: 'Advanced' };
 const CONSISTENCY_LABEL = { high: 'Consistent', medium: 'Requires calibration' };
@@ -181,6 +182,7 @@ export default function RecipeScreen() {
     return effectiveIsPaid;                       // 'paid' requires paid plan
   }
   const [filter, setFilter] = useState(null);
+  const [showPricing, setShowPricing] = useState(false);
   const EXPANDED_KEY = 'ngw_recipe_expanded';
   const [expandedId, setExpandedId] = useState(() => {
     try { return sessionStorage.getItem(EXPANDED_KEY) || null; } catch { return null; }
@@ -306,7 +308,7 @@ export default function RecipeScreen() {
               {/* Main tap area — expands detail */}
               <button
                 className="recipe-card__main"
-                onClick={() => unlocked && handleExpand(recipe.id)}
+                onClick={() => unlocked ? handleExpand(recipe.id) : setShowPricing(true)}
                 type="button"
               >
                 <span className="intent-card__text">
@@ -420,6 +422,14 @@ export default function RecipeScreen() {
           );
         })}
       </div>
+      {showPricing && (
+        <PricingScreen
+          trigger="recipe_locked"
+          source="RecipeScreen"
+          onClose={() => setShowPricing(false)}
+          onUnlock={() => setShowPricing(false)}
+        />
+      )}
     </div>
   );
 }
