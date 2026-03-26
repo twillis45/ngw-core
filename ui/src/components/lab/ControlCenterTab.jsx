@@ -738,15 +738,23 @@ function VlmMetricsCard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [expandedCall, setExpandedCall] = useState(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     setLoading(true);
     setErr(null);
     getApiMetrics(hours)
-      .then(d => setData(d))
+      .then(d => { setData(d); setLastRefresh(new Date()); })
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, [hours]);
+
+  useEffect(() => {
+    fetchData();
+    const timer = setInterval(fetchData, 30000); // auto-refresh every 30s
+    return () => clearInterval(timer);
+  }, [fetchData]);
 
   const errRate = data ? (data.error_rate * 100).toFixed(1) : null;
   const errColor = data
@@ -758,22 +766,42 @@ function VlmMetricsCard() {
   return (
     <Card
       title="VLM Call Metrics"
-      description={`API calls to the vision model — last ${hours}h`}
+      description={`Every image analysis calls the vision model (VLM). This card tracks call volume, latency, and errors. Auto-refreshes every 30s.`}
       action={
-        <select
-          value={hours}
-          onChange={e => setHours(Number(e.target.value))}
-          style={{
-            fontSize: 'var(--text-xs)', padding: '2px 6px',
-            background: 'var(--color-surface-elevated)',
-            color: 'var(--color-text)', border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-          }}
-        >
-          {[6, 24, 48, 168].map(h => (
-            <option key={h} value={h}>{h === 168 ? '7 days' : `${h}h`}</option>
-          ))}
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {lastRefresh && (
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
+              {lastRefresh.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            style={{
+              fontSize: 'var(--text-xs)', padding: '2px 8px',
+              background: 'var(--color-surface-elevated)',
+              color: 'var(--color-text)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)', cursor: loading ? 'default' : 'pointer',
+              opacity: loading ? 0.5 : 1,
+            }}
+          >
+            {loading ? '…' : '↻ Refresh'}
+          </button>
+          <select
+            value={hours}
+            onChange={e => setHours(Number(e.target.value))}
+            style={{
+              fontSize: 'var(--text-xs)', padding: '2px 6px',
+              background: 'var(--color-surface-elevated)',
+              color: 'var(--color-text)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+            }}
+          >
+            {[6, 24, 48, 168].map(h => (
+              <option key={h} value={h}>{h === 168 ? '7 days' : `${h}h`}</option>
+            ))}
+          </select>
+        </div>
       }
     >
       {loading && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Loading…</div>}
@@ -848,26 +876,53 @@ function VlmMetricsCard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.recent.map(c => (
-                    <tr key={c.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td style={{ padding: '4px 6px', color: 'var(--color-text-dim)' }}>
-                        {new Date(c.called_at * 1000).toLocaleTimeString(undefined, { timeZone: _DEVICE_TZ, hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td style={{ padding: '4px 6px', fontFamily: 'var(--font-mono)' }}>
-                        {c.provider}{c.model ? `/${c.model}` : ''}
-                      </td>
-                      <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                        {c.latency_ms != null ? `${Math.round(c.latency_ms)}ms` : '—'}
-                      </td>
-                      <td style={{ padding: '4px 6px', textAlign: 'center' }}>
-                        {c.ok ? (
-                          <span style={{ color: C.green }}>✓</span>
-                        ) : (
-                          <span style={{ color: C.red }} title={c.error || ''}>✗</span>
+                  {data.recent.map(c => {
+                    const isExpanded = expandedCall === c.id;
+                    return (
+                      <>
+                        <tr
+                          key={c.id}
+                          onClick={() => setExpandedCall(isExpanded ? null : c.id)}
+                          style={{
+                            borderBottom: isExpanded ? 'none' : '1px solid var(--color-border)',
+                            cursor: 'pointer',
+                            background: isExpanded ? 'var(--color-surface-elevated)' : undefined,
+                          }}
+                          title="Click to expand details"
+                        >
+                          <td style={{ padding: '4px 6px', color: 'var(--color-text-dim)' }}>
+                            {new Date(c.called_at * 1000).toLocaleTimeString(undefined, { timeZone: _DEVICE_TZ, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </td>
+                          <td style={{ padding: '4px 6px', fontFamily: 'var(--font-mono)' }}>
+                            {c.provider}{c.model ? `/${c.model}` : ''}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                            {c.latency_ms != null ? `${Math.round(c.latency_ms)}ms` : '—'}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'center' }}>
+                            {c.ok ? (
+                              <span style={{ color: C.green }}>✓</span>
+                            ) : (
+                              <span style={{ color: C.red }}>✗</span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${c.id}-detail`} style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-elevated)' }}>
+                            <td colSpan={4} style={{ padding: '4px 12px 8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
+                              <span><strong>Time:</strong> {new Date(c.called_at * 1000).toLocaleString(undefined, { timeZone: _DEVICE_TZ })}</span>
+                              {c.caller && <span style={{ marginLeft: 12 }}><strong>Caller:</strong> {c.caller}</span>}
+                              {!c.ok && c.error && (
+                                <div style={{ marginTop: 4, color: C.red, fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                                  <strong>Error:</strong> {c.error}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  ))}
+                      </>
+                    );
+                  })}
                 </tbody>
               </table>
               </div>
