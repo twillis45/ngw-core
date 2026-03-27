@@ -265,6 +265,10 @@ def _is_mobile(request: Request) -> bool:
 
 @app.get("/")
 def root(request: Request):
+    # app.noguessworksystems.com → always serve the product UI
+    host = (request.headers.get("host") or "").lower()
+    if host.startswith("app."):
+        return ui()
     # Mobile → straight to the app (tool UI)
     if _is_mobile(request):
         return RedirectResponse(url="/ui", status_code=307)
