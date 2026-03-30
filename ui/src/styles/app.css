@@ -14429,7 +14429,7 @@ body {
 
 /* Section label */
 .stgx-section-hdr {
-  font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  font-size: 10px; font-weight: var(--weight-semibold);
   text-transform: uppercase; letter-spacing: 0.07em;
   color: var(--color-text-secondary);
   padding: var(--space-md) 0 var(--space-xs);
@@ -14446,15 +14446,17 @@ body {
 .stgx-list--billing { border-color: var(--color-accent); }
 .stgx-list--destructive { border-color: var(--color-error, #ef4444); }
 
-/* Row base */
+/* Row base — Figma spec: 44px row height */
 .stgx-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-sm);
-  min-height: 56px;
+  min-height: 44px;
   padding: 0 var(--space-md);
+  border: none;
   border-bottom: 1px solid var(--color-border);
   background: none; width: 100%; text-align: left;
   cursor: default;
+  appearance: none;
 }
 .stgx-row:last-child { border-bottom: none; }
 .stgx-row--nav { cursor: pointer; }
@@ -14478,22 +14480,22 @@ body {
   font-size: var(--text-md); color: var(--color-text-dim, #555);
 }
 
-/* Toggle switch */
+/* Toggle switch — Figma spec: 44×24px, knob 20×20 */
 .stgx-toggle {
-  width: 44px; height: 26px; border-radius: 13px;
+  width: 44px; height: 24px; border-radius: 12px;
   background: var(--color-border); border: none;
   position: relative; cursor: pointer; flex-shrink: 0;
   transition: background var(--duration-fast);
 }
 .stgx-toggle--on { background: var(--color-accent); }
 .stgx-toggle__knob {
-  position: absolute; top: 3px; left: 3px;
+  position: absolute; top: 2px; left: 2px;
   width: 20px; height: 20px; border-radius: 50%;
   background: #fff;
   transition: transform var(--duration-fast);
   box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
-.stgx-toggle--on .stgx-toggle__knob { transform: translateX(18px); }
+.stgx-toggle--on .stgx-toggle__knob { transform: translateX(20px); }
 
 /* User card (taps to account) */
 .stgx-user-card {

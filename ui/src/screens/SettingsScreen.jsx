@@ -673,10 +673,6 @@ export default function SettingsScreen() {
           value={settings.viewMode === 'full' ? 'Full' : 'Lights first'}
           onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
         />
-        <NavRow
-          label="Preferences"
-          onClick={() => setSubScreen('preferences')}
-        />
       </ListCard>
 
       {/* SUPPORT */}
