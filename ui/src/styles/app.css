@@ -4791,6 +4791,47 @@ body {
   font-family: var(--font-mono);
 }
 
+
+/* ── Shoot Mode: Light Specs Grid ── */
+.shoot-mode__light-specs {
+  margin-bottom: var(--space-md);
+}
+.shoot-mode__light-specs-grid {
+  display: flex; flex-wrap: wrap; gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+.shoot-mode__light-spec-card {
+  flex: 1 1 140px; min-width: 120px; max-width: 200px;
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); padding: var(--space-sm);
+}
+.shoot-mode__light-spec-role {
+  font-size: var(--text-xs); font-weight: var(--weight-bold);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.shoot-mode__light-spec-modifier {
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+.shoot-mode__light-spec-rows {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.shoot-mode__light-spec-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--space-xs);
+}
+.shoot-mode__light-spec-label {
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+.shoot-mode__light-spec-value {
+  font-size: var(--text-xs); font-weight: var(--weight-medium);
+  font-family: var(--font-mono); text-align: right;
+  color: var(--color-text-primary);
+}
+
+
 /* ── Shoot Step Card ── */
 .shoot-step {
   background: var(--color-surface); border: 1px solid var(--color-border);

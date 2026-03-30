@@ -7,9 +7,10 @@ import { saveMode } from '../data/modeStore';
 import useMode from '../hooks/useMode';
 import { createSession, loadSession, clearSession, getShareUrl } from '../data/teamStore';
 import { trackEvent } from '../data/analytics';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import usePreviewMode from '../hooks/usePreviewMode';
 import useSettings from '../hooks/useSettings';
+import useWakeLock from '../hooks/useWakeLock';
 import DiagramCard from '../cards/DiagramCard';
 import ShootStepCard from '../components/ShootStepCard';
 import ShootLightCard from '../components/ShootLightCard';
@@ -181,7 +182,7 @@ function getPostShootItems(mode, goodSigns, warnings, skinToneAdj = null) {
 
 const MODE_META = {
   photographer: {
-    label: 'Narrated',
+    label: 'Photographer',
     tagline: 'Full context — placement, rationale, pro tips',
     icon: (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -190,7 +191,7 @@ const MODE_META = {
     ),
   },
   assistant: {
-    label: 'Brief',
+    label: 'Assistant',
     tagline: 'Commands only — no context, faster scanning',
     icon: (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -199,7 +200,7 @@ const MODE_META = {
     ),
   },
   learning: {
-    label: 'Learn',
+    label: 'Learning',
     tagline: 'Cause & effect — explains why each step works',
     icon: (
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -240,12 +241,12 @@ function ModeToggle({ mode, onChange }) {
  * Three role-based views:
  *   - Photographer: full 6-step workflow
  *   - Assistant: large, swipeable light cards
- *   - Second Shooter: camera settings + test checklist
+ *   - Learning: cause & effect — explains why each step works
  */
 export default function ShootModeScreen() {
   const { result, ceilingHeight, shootRole, roomDimensions, user, pendingFix } = useAppState();
   const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const userEmail = resolveUserEmail(user);
   const { isPaid, unlock } = usePaywall(userEmail);
   const { access: previewAccess } = usePreviewMode();
   const effectiveIsPaid = previewAccess !== null
@@ -253,6 +254,7 @@ export default function ShootModeScreen() {
     : isPaid;
   const { shootModeStyle } = useSettings();
   const isChecklistMode = shootModeStyle === 'checklist';
+  const { isActive: wakeLockActive } = useWakeLock(!!result);
 
   // Local state
   const [role, setRole] = useState(shootRole || loadShootRole() || null);
@@ -289,6 +291,10 @@ export default function ShootModeScreen() {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallVariant, setPaywallVariant] = useState('default');
 
+  // Test Shot verification mode (Figma: Cockpit -- Test Shot)
+  const [testShotMode, setTestShotMode] = useState(false);
+  const [testShotChecks, setTestShotChecks] = useState(new Set());
+
   // Struggle detection — count step un-checks
   const retryCountRef = useRef(0);
   const [struggleShown, setStruggleShown] = useState(false);
@@ -319,7 +325,7 @@ export default function ShootModeScreen() {
             </button>
             <button
               className="btn btn--ghost btn--sm"
-              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
             >
               Run New Analysis
             </button>
@@ -495,8 +501,23 @@ export default function ShootModeScreen() {
 
   // ── Shot Match navigation ──
   function handleShotMatch() {
-    dispatch({ type: 'SET_APP_MODE', mode: 'shot_match' });
-    dispatch({ type: 'NAVIGATE', screen: 'shot_match' });
+    // Enter test shot verification mode instead of navigating away
+    setTestShotMode(true);
+    setTestShotChecks(new Set());
+    trackEvent('TEST_SHOT_STARTED', { setupName: (result?.bestMatch || {}).name });
+  }
+
+  function handleTestShotRetest() {
+    setTestShotChecks(new Set());
+    trackEvent('TEST_SHOT_RETEST');
+  }
+
+  function toggleTestShotCheck(id) {
+    setTestShotChecks(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   }
 
   // ── Change role ──
@@ -556,60 +577,12 @@ export default function ShootModeScreen() {
   const detectedDiagramSpec = result.referenceImageAnalysis?.detectedDiagram?.raw;
   const diagram = result.diagram || result.cards?.diagram;
 
-  // ── Role Selector ──
+  // ── Role fallback ──
+  // Role selection now happens via bottom sheet on SetupSheetScreen.
+  // If somehow no role is set (e.g. direct nav), default to photographer.
   if (!role) {
-    const savedMode = mode; // already loaded from modeStore
-    return (
-      <div className="screen">
-        <div className="shoot-mode__role-selector">
-          <h2 className="shoot-mode__role-title">Choose Your Role</h2>
-          <p className="shoot-mode__role-subtitle">
-            {savedMode === 'assistant'
-              ? 'Assistant mode active — pick a view below.'
-              : 'Each view is optimized for a different crew position.'}
-          </p>
-
-          <button
-            className="shoot-mode__role-card"
-            onClick={() => handleRoleSelect('photographer')}
-          >
-            <span className="shoot-mode__role-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-            </span>
-            <div className="shoot-mode__role-info">
-              <strong>Photographer</strong>
-              <span>Full step-by-step workflow with all details</span>
-            </div>
-          </button>
-
-          <button
-            className="shoot-mode__role-card"
-            onClick={() => handleRoleSelect('assistant')}
-          >
-            <span className="shoot-mode__role-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-            </span>
-            <div className="shoot-mode__role-info">
-              <strong>Assistant</strong>
-              <span>Large light cards — one at a time, easy to read</span>
-            </div>
-          </button>
-
-          <button
-            className="shoot-mode__role-card"
-            onClick={() => handleRoleSelect('second_shooter')}
-          >
-            <span className="shoot-mode__role-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-            </span>
-            <div className="shoot-mode__role-info">
-              <strong>Second Shooter</strong>
-              <span>Camera settings and framing guide</span>
-            </div>
-          </button>
-        </div>
-      </div>
-    );
+    handleRoleSelect('photographer');
+    return null;
   }
 
   // ── Loading state ──
@@ -718,35 +691,41 @@ export default function ShootModeScreen() {
           </div>
         )}
 
-        {/* Phase 6: Match Lock Banner */}
+        {/* Phase 6: Match Lock — Figma "Cockpit -- Locked" panel */}
         {matchLocked && (
-          <>
-            <div className="shoot-mode__lock-banner">
-              <div className="shoot-mode__lock-icon">✓</div>
-              <div className="shoot-mode__lock-text">
-                <strong>Lighting locked — this will hold across shots.</strong>
-                <span>{saved ? 'Saved. Reproducible on your next shoot.' : 'Save it. Same result, every time you run it.'}</span>
-              </div>
-              <button
-                className="shoot-mode__lock-save"
-                onClick={handleSave}
-                disabled={saved}
-                type="button"
-              >
-                {saved ? '✓ Locked' : 'Lock This Setup'}
-              </button>
-            </div>
-            <OutcomeCapture
-              compact
-              setupId={bestMatch.systemId || bestMatch.name}
-              mood={result?.mood}
-              pattern={bestMatch.lightingPattern}
-            />
-          </>
+          <div className="sm-locked">
+            <div className="sm-locked__check">✓</div>
+            <h3 className="sm-locked__title">Setup Locked</h3>
+            <p className="sm-locked__subtitle">This lighting will hold across shots.</p>
+            <button
+              className="sm-locked__save-cta"
+              onClick={handleSave}
+              disabled={saved}
+              type="button"
+            >
+              {saved ? '✓ Saved' : 'Save This Setup'}
+            </button>
+            <button
+              className="sm-locked__share-btn"
+              onClick={handleStartTeam}
+              type="button"
+            >
+              Share with Team
+            </button>
+            <button
+              className="sm-locked__feedback-link"
+              onClick={() => {
+                trackEvent('SHOOT_MODE_FEEDBACK_PROMPT');
+              }}
+              type="button"
+            >
+              How did it go?
+            </button>
+          </div>
         )}
 
-        {/* Setup Header */}
-        <div className="shoot-mode__section">
+        {/* Setup Header — cockpit header zone, not a content card */}
+        <div className="shoot-mode__cockpit-header">
           <div className="shoot-mode__summary">
             <span className="shoot-mode__active-label">Active Setup</span>
             <h2 className="shoot-mode__setup-name">{bestMatch.name}</h2>
@@ -755,6 +734,11 @@ export default function ShootModeScreen() {
             )}
           </div>
           <div className="shoot-mode__header-actions">
+            {wakeLockActive && (
+              <span className="shoot-mode__awake-badge" title="Screen stays awake">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+              </span>
+            )}
             <button
               className={`shoot-mode__liveview-btn${!effectiveIsPaid ? ' shoot-mode__liveview-btn--tease' : ''}`}
               onClick={handleLiveView}
@@ -818,6 +802,50 @@ export default function ShootModeScreen() {
           </div>
         )}
 
+        {/* Per-light props grid — compact at-a-glance reference */}
+        {steps.filter(s => s.type === 'light_placement').length > 0 && (() => {
+          const lightSteps = steps.filter(s => s.type === 'light_placement');
+          return (
+            <div className="shoot-mode__light-specs">
+              <span className="shoot-mode__section-title">Light Specs</span>
+              <div className="shoot-mode__light-specs-grid">
+                {lightSteps.map((step, i) => {
+                  const l = step.data;
+                  const rows = [
+                    l.height      && { label: 'Height',    value: l.height },
+                    l.distance    && { label: 'Distance',  value: l.distance },
+                    l.angle       && { label: 'Angle',     value: l.angle },
+                    l.direction   && { label: 'Direction', value: l.direction },
+                    l.powerHint   && { label: 'Power',     value: l.powerHint },
+                    l.featherHint && { label: 'Feather',   value: l.featherHint },
+                  ].filter(Boolean);
+                  return (
+                    <div key={i} className="shoot-mode__light-spec-card">
+                      <div
+                        className="shoot-mode__light-spec-role"
+                        style={{ color: l.roleColor || 'var(--color-accent)' }}
+                      >
+                        {l.roleKey?.toUpperCase() || `LIGHT ${i + 1}`}
+                      </div>
+                      {l.modifier && (
+                        <div className="shoot-mode__light-spec-modifier">{l.modifier}</div>
+                      )}
+                      <div className="shoot-mode__light-spec-rows">
+                        {rows.map(row => (
+                          <div key={row.label} className="shoot-mode__light-spec-row">
+                            <span className="shoot-mode__light-spec-label">{row.label}</span>
+                            <span className="shoot-mode__light-spec-value">{row.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Before You Start checklist */}
         <ChecklistBlock
           title="Before You Start"
@@ -843,52 +871,92 @@ export default function ShootModeScreen() {
           ))}
         </div>
 
-        {/* After Testing checklist */}
-        <ChecklistBlock
-          title="After Testing"
-          icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
-          defaultOpen={false}
-          mode={mode}
-          items={getPostShootItems(mode, result.goodSigns, result.warnings, result.skinToneAdjustments)}
-          storageKey="post_shoot"
-        />
+        {/* Test Shot Verification Panel — Figma "Cockpit -- Test Shot" */}
+        {testShotMode && !matchLocked && (() => {
+          const testItems = getPostShootItems(mode, result.goodSigns, result.warnings, result.skinToneAdjustments);
+          return (
+            <div className="sm-test-shot">
+              <span className="sm-test-shot__label">TEST SHOT</span>
+              <h3 className="sm-test-shot__title">Verify your setup</h3>
+              <div className="sm-test-shot__divider" />
+              <ul className="sm-test-shot__list">
+                {testItems.map(item => {
+                  const checked = testShotChecks.has(item.id);
+                  return (
+                    <li key={item.id} className="sm-test-shot__item">
+                      <button
+                        className={`sm-test-shot__check${checked ? ' sm-test-shot__check--done' : ''}`}
+                        onClick={() => toggleTestShotCheck(item.id)}
+                        type="button"
+                        aria-label={checked ? `${item.label} — done` : item.label}
+                      >
+                        {checked && (
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        )}
+                      </button>
+                      <span className={`sm-test-shot__label-text${checked ? ' sm-test-shot__label-text--done' : ''}`}>
+                        {item.label}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="sm-test-shot__hint">Tap each item after checking your test frame</p>
+            </div>
+          );
+        })()}
 
-        {/* Sticky Action Bar */}
-        <div className="shoot-mode__actions">
-          {!isChecklistMode && (
-            <button
-              className="shoot-mode__action-btn"
-              onClick={() => goToStep(currentStep - 1)}
-              disabled={currentStep <= 0}
-            >
-              {'\u25C0'} Prev
-            </button>
-          )}
+        {/* After Testing checklist (shown when not in test-shot mode) */}
+        {!testShotMode && (
+          <ChecklistBlock
+            title="After Testing"
+            icon={<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>}
+            defaultOpen={false}
+            mode={mode}
+            items={getPostShootItems(mode, result.goodSigns, result.warnings, result.skinToneAdjustments)}
+            storageKey="post_shoot"
+          />
+        )}
+
+        {/* Cockpit Bottom Bar — matches Figma */}
+        <div className="sm-bottom-bar">
           <button
-            className="shoot-mode__action-btn"
-            onClick={handleSave}
-            disabled={saved}
+            className="sm-bottom-bar__live"
+            onClick={handleLiveView}
+            type="button"
           >
-            {saved ? '\u2713 Locked' : 'Lock'}
+            Live
           </button>
           <button
-            className="shoot-mode__action-btn shoot-mode__action-btn--primary"
-            disabled={loading || steps.length === 0}
+            className="sm-bottom-bar__center"
             onClick={() => {
-              if (steps.length === 0) return;
-              if (isChecklistMode || currentStep >= steps.length - 1) {
+              if (testShotMode) {
+                handleTestShotRetest();
+              } else if (matchLocked) {
+                dispatch({ type: 'GO_BACK' });
+              } else if (isChecklistMode || currentStep >= steps.length - 1) {
                 handleShotMatch();
               } else {
                 goToStep(currentStep + 1);
               }
             }}
+            disabled={loading || (!testShotMode && !matchLocked && steps.length === 0)}
+            type="button"
           >
-            {(!isChecklistMode && currentStep < steps.length - 1) ? 'Next \u25B6' : 'Verify'}
+            {testShotMode ? 'Retest' : matchLocked ? 'Close' : (!isChecklistMode && currentStep < steps.length - 1) ? 'Next' : 'Verify'}
+          </button>
+          <button
+            className="sm-bottom-bar__more"
+            onClick={handleSave}
+            type="button"
+            aria-label="More options"
+          >
+            •••
           </button>
         </div>
 
-        {/* Bottom spacer for sticky bar */}
-        <div style={{ height: 80 }} />
+        {/* Bottom spacer for bottom bar */}
+        <div style={{ height: 72 }} />
       </div>
     );
   }
@@ -914,8 +982,8 @@ export default function ShootModeScreen() {
 
     return (
       <div className="screen shoot-mode">
-        {/* Header */}
-        <div className="shoot-mode__section">
+        {/* Header — cockpit header zone, not a content card */}
+        <div className="shoot-mode__cockpit-header">
           <div className="shoot-mode__summary">
             <h2 className="shoot-mode__setup-name">{bestMatch.name}</h2>
           </div>
@@ -959,20 +1027,20 @@ export default function ShootModeScreen() {
     );
   }
 
-  // ── SECOND SHOOTER VIEW ──
-  if (role === 'second_shooter') {
+  // ── LEARNING VIEW ──
+  if (role === 'learning') {
     const cameraStep = steps.find(s => s.type === 'camera_setup');
     const testStep = steps.find(s => s.type === 'test_exposure');
 
     return (
       <div className="screen shoot-mode">
-        {/* Header */}
-        <div className="shoot-mode__section">
+        {/* Header — cockpit header zone, not a content card */}
+        <div className="shoot-mode__cockpit-header">
           <div className="shoot-mode__summary">
             <h2 className="shoot-mode__setup-name">{bestMatch.name}</h2>
           </div>
           <button className="shoot-mode__role-switch" onClick={handleChangeRole}>
-            Second Shooter
+            Learning
             <span className="shoot-mode__role-switch-cta">{'\u2192'} Switch</span>
           </button>
         </div>

@@ -3,146 +3,78 @@ import { useDispatch, useAppState } from '../context/AppContext';
 import { loadSetups, onSetupsChanged } from '../data/setupStore';
 import usePlan from '../hooks/usePlan';
 
-/* Static floor-plan SVG shown in the proof preview — no data dependency */
-function DiagramPlaceholder() {
-  return (
-    <svg
-      className="home-v2__proof-diagram"
-      viewBox="0 0 280 160"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-    >
-      {/* Room floor outline */}
-      <rect x="20" y="10" width="240" height="140" rx="6" stroke="var(--color-border)" strokeWidth="1.5" strokeDasharray="4 3" />
+/* ─── Derive stage card data from last result / saved setup ─────────── */
+const STAGE_BARE = new Set(['none', 'bare', 'direct', 'ambient']);
 
-      {/* Subject (circle at center) */}
-      <circle cx="140" cy="95" r="10" fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth="1.5" />
-      <text x="140" y="118" textAnchor="middle" fontSize="9" fill="var(--color-text-dim)" fontFamily="system-ui, sans-serif">subject</text>
-
-      {/* Camera (bottom center) */}
-      <rect x="128" y="132" width="24" height="14" rx="3" fill="var(--color-surface-raised)" stroke="var(--color-text-secondary)" strokeWidth="1.2" />
-      <text x="140" y="156" textAnchor="middle" fontSize="9" fill="var(--color-text-dim)" fontFamily="system-ui, sans-serif">camera</text>
-
-      {/* Key light (top-left) */}
-      <circle cx="68" cy="38" r="11" fill="var(--color-key, #60a5fa)" fillOpacity="0.18" stroke="var(--color-key, #60a5fa)" strokeWidth="1.5" />
-      <text x="68" y="22" textAnchor="middle" fontSize="8" fill="var(--color-key, #60a5fa)" fontFamily="system-ui, sans-serif" fontWeight="600">KEY</text>
-      {/* Key → subject line */}
-      <line x1="78" y1="46" x2="132" y2="86" stroke="var(--color-key, #60a5fa)" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="3 3" />
-
-      {/* Fill light (top-right) */}
-      <circle cx="212" cy="38" r="11" fill="var(--color-fill, #34d399)" fillOpacity="0.18" stroke="var(--color-fill, #34d399)" strokeWidth="1.5" />
-      <text x="212" y="22" textAnchor="middle" fontSize="8" fill="var(--color-fill, #34d399)" fontFamily="system-ui, sans-serif" fontWeight="600">FILL</text>
-      {/* Fill → subject line */}
-      <line x1="202" y1="46" x2="148" y2="86" stroke="var(--color-fill, #34d399)" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="3 3" />
-
-      {/* Hair / rim light (top center-ish, behind subject) */}
-      <circle cx="140" cy="28" r="9" fill="var(--color-rim, #f59e0b)" fillOpacity="0.18" stroke="var(--color-rim, #f59e0b)" strokeWidth="1.4" />
-      <text x="140" y="15" textAnchor="middle" fontSize="8" fill="var(--color-rim, #f59e0b)" fontFamily="system-ui, sans-serif" fontWeight="600">RIM</text>
-      {/* Rim → subject line */}
-      <line x1="140" y1="37" x2="140" y2="85" stroke="var(--color-rim, #f59e0b)" strokeWidth="1" strokeOpacity="0.5" strokeDasharray="3 3" />
-    </svg>
-  );
+function stageCardData(result, lastSetup) {
+  const bm = result?.bestMatch || lastSetup?.result?.bestMatch;
+  if (!bm) return null;
+  const name = bm.lightingPattern || bm.name || null;
+  // reliabilityScore: 0–1 from transform, or legacy 0–100; confidence: 0–1
+  const raw = bm.reliabilityScore ?? bm.confidence ?? null;
+  const pct = raw != null ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw)) : null;
+  // Derive signal chips from real analysis data — never hardcoded
+  const li = result?.lightingIntelligence || lastSetup?.result?.lightingIntelligence || {};
+  const chips = [];
+  if (li.keyPosition) chips.push(li.keyPosition);
+  if (bm.lightingGeometry) chips.push(bm.lightingGeometry);
+  if (li.catchlightDetected) chips.push('Catchlight');
+  const mod = li.detectedModifier;
+  if (mod && !STAGE_BARE.has(mod.toLowerCase().trim())) chips.push(mod);
+  return { name, pct, chips: chips.slice(0, 4) };
 }
 
-export default function HomeScreenV2() {
-  const dispatch = useDispatch();
-  const { user } = useAppState();
-  const { isPaid } = usePlan(user?.email);
-  const fileRef = useRef(null);
-
-  const [setups, setSetups] = useState(() => loadSetups());
-
-  // Cross-tab sync — refresh when another tab saves or deletes a setup
-  useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
-
-  const savedSetups = setups;
-  const lastSetup = savedSetups.length > 0 ? savedSetups[savedSetups.length - 1] : null;
-
-  function handleFileChange(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const reads = files.map(file => new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = () => resolve({ file, preview: reader.result, serverPath: null });
-      reader.readAsDataURL(file);
-    }));
-
-    Promise.all(reads).then(images => {
-      dispatch({ type: 'SET_APP_MODE', mode: 'match' });
-      dispatch({ type: 'SET_REFERENCE_IMAGES', payload: images });
-      dispatch({ type: 'NAVIGATE', screen: 'ref_eval' });
-    });
-  }
-
-  function triggerUpload() {
-    fileRef.current?.click();
-  }
-
-  function handleWizard() {
-    dispatch({ type: 'SET_APP_MODE', mode: 'build' });
-    dispatch({ type: 'SET_INTENT', intent: 'mood' });
-  }
-
+/* ─── Free home ─────────────────────────────────────────────────────── */
+function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch }) {
+  const stage = stageCardData(null, lastSetup);
   return (
-    <div className="home-v2">
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        multiple
-        style={{ display: 'none' }}
-        onChange={handleFileChange}
-      />
-
-      {/* ── Hero ── */}
+    <>
       <div className="home-v2__hero">
-        {isPaid ? (
-          <>
-            <h1 className="home-v2__headline">What are you shooting?</h1>
-            <p className="home-v2__sub">Upload a reference or build from scratch.</p>
-          </>
-        ) : (
-          <>
-            <h1 className="home-v2__headline">Get this shot right —<br />first try.</h1>
-            <p className="home-v2__sub">Upload any photo. Get the exact lighting setup in seconds.</p>
-          </>
-        )}
+        <h1 className="home-v2__headline">See your light.</h1>
+        <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
       </div>
 
-      {/* ── Primary CTA ── */}
-      <div className="home-v2__cta-wrap">
-        <button
-          type="button"
-          className="home-v2__primary-cta"
-          onClick={triggerUpload}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <circle cx="8.5" cy="8.5" r="1.5" />
-            <path d="m21 15-5-5L5 21" />
-          </svg>
-          {isPaid ? 'Analyze a photo' : 'Try it now'}
-        </button>
-        {!isPaid && <span className="home-v2__cta-hint">Free — no account needed</span>}
-      </div>
-
-      {/* ── Visual proof — free users only ── */}
-      {!isPaid && (
-        <div className="home-v2__proof-block">
-          <span className="home-v2__proof-label">Setup Preview</span>
-          <DiagramPlaceholder />
-          <p className="home-v2__trust-line">Exact positions. Power ratios. Tested setups that hold across shots.</p>
-          <div className="home-v2__proof-chips">
-            <span className="home-v2__proof-chip">Beauty Clamshell</span>
-            <span className="home-v2__proof-chip">Rembrandt</span>
-            <span className="home-v2__proof-chip">Window Light</span>
+      {stage && (
+        <div className="home-v2__stage">
+          <div className="home-v2__stage-photo">
+            <div className="home-v2__stage-photo-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
           </div>
+          <div className="home-v2__stage-result">
+            <div className="home-v2__stage-result-left">
+              <span className="home-v2__stage-label">LIGHTING PATTERN</span>
+              <span className="home-v2__stage-pattern">{stage.name}</span>
+            </div>
+            {stage.pct > 0 && (
+              <span className="home-v2__stage-confidence">{stage.pct}%</span>
+            )}
+          </div>
+          {stage.chips.length > 0 && (
+            <div className="home-v2__stage-chips">
+              {stage.chips.map((chip, i) => (
+                <span key={i} className="home-v2__stage-chip">{chip}</span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Secondary actions ── */}
+      <div className="home-v2__cta-wrap">
+        <button
+          type="button"
+          className="ngw-primary-btn home-v2__primary-cta"
+          onClick={triggerUpload}
+        >
+          Analyze a Photo
+        </button>
+        <span className="home-v2__cta-hint">Trusted by photographers who care about light</span>
+      </div>
+
       <div className="home-v2__secondary">
         <button
           type="button"
@@ -174,7 +106,6 @@ export default function HomeScreenV2() {
         </button>
       </div>
 
-      {/* ── Continue / Saved (conditional) ── */}
       {lastSetup && (
         <button
           type="button"
@@ -187,6 +118,226 @@ export default function HomeScreenV2() {
           <span className="home-v2__continue-label">Continue your last setup</span>
           <span className="home-v2__continue-name">{lastSetup.name || 'Last setup'}</span>
         </button>
+      )}
+    </>
+  );
+}
+
+/* ─── Paid home ─────────────────────────────────────────────────────── */
+function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handleWizard, dispatch }) {
+  const hasResult  = !!result;
+  const hasSaved   = !!lastSetup;
+  const continueTarget = hasResult ? 'results' : hasSaved ? 'saved_setups' : null;
+  const continueName   = hasResult ? (result.bestMatch?.name || 'View result') : (lastSetup?.name || 'Last setup');
+  const continueLabel  = hasResult ? 'Resume last analysis' : 'Continue last setup';
+  const stage = stageCardData(result, lastSetup);
+
+  return (
+    <>
+      <div className="home-v2__hero">
+        <h1 className="home-v2__headline">See your light.</h1>
+        <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
+      </div>
+
+      {/* ── Continue card (elevated) — only when there's something to resume ── */}
+      {continueTarget && (
+        <div className="home-v2__continue-card">
+          <button
+            type="button"
+            className="home-v2__continue-card-btn"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: continueTarget })}
+          >
+            <div className="home-v2__continue-card-icon">
+              {hasResult ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="m21 15-5-5L5 21" />
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+                </svg>
+              )}
+            </div>
+            <div className="home-v2__continue-card-text">
+              <span className="home-v2__continue-card-label">{continueLabel}</span>
+              <span className="home-v2__continue-card-name">{continueName}</span>
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="home-v2__continue-card-chevron">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {stage && (
+        <div className="home-v2__stage">
+          <div className="home-v2__stage-photo">
+            <div className="home-v2__stage-photo-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+                <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+                <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div className="home-v2__stage-result">
+            <div className="home-v2__stage-result-left">
+              <span className="home-v2__stage-label">LIGHTING PATTERN</span>
+              <span className="home-v2__stage-pattern">{stage.name}</span>
+            </div>
+            {stage.pct > 0 && (
+              <span className="home-v2__stage-confidence">{stage.pct}%</span>
+            )}
+          </div>
+          {stage.chips.length > 0 && (
+            <div className="home-v2__stage-chips">
+              {stage.chips.map((chip, i) => (
+                <span key={i} className="home-v2__stage-chip">{chip}</span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="home-v2__cta-wrap">
+        <button
+          type="button"
+          className="ngw-primary-btn home-v2__primary-cta"
+          onClick={triggerUpload}
+        >
+          Analyze a Photo
+        </button>
+        <span className="home-v2__cta-hint">Trusted by photographers who care about light</span>
+      </div>
+
+      <div className="home-v2__secondary">
+        <button
+          type="button"
+          className="home-v2__secondary-btn"
+          onClick={() => dispatch({ type: 'NAVIGATE', screen: 'recipes' })}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>
+          </svg>
+          <div className="home-v2__secondary-text">
+            <span className="home-v2__secondary-label">Browse Proven Setups</span>
+            <span className="home-v2__secondary-hint">Pick a look — run it today</span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="home-v2__secondary-btn"
+          onClick={handleWizard}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <div className="home-v2__secondary-text">
+            <span className="home-v2__secondary-label">Build from Scratch</span>
+            <span className="home-v2__secondary-hint">Describe your subject and space</span>
+          </div>
+        </button>
+      </div>
+
+      {/* ── Recent setups ── */}
+      {recentSetups.length > 0 && (
+        <div className="home-v2__recents">
+          <div className="home-v2__recents-header">
+            <span className="home-v2__recents-title">Recent setups</span>
+            <button
+              type="button"
+              className="home-v2__recents-all"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+            >
+              See all
+            </button>
+          </div>
+          {recentSetups.map((setup, i) => (
+            <button
+              key={setup.id || i}
+              type="button"
+              className="home-v2__recent-row"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+            >
+              <span className="home-v2__recent-name">{setup.name || 'Untitled setup'}</span>
+              {setup.subject && <span className="home-v2__recent-meta">{setup.subject}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ─── Screen ─────────────────────────────────────────────────────────── */
+export default function HomeScreenV2() {
+  const dispatch = useDispatch();
+  const { user, result } = useAppState();
+  const { isPaid } = usePlan(user?.email);
+  const fileRef = useRef(null);
+
+  const [setups, setSetups] = useState(() => loadSetups());
+  useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
+
+  const savedSetups   = setups;
+  const lastSetup     = savedSetups.length > 0 ? savedSetups[savedSetups.length - 1] : null;
+  // Up to 3 most-recent setups excluding the very last (shown in continue card)
+  const recentSetups  = savedSetups.length > 1
+    ? savedSetups.slice(0, -1).slice(-3).reverse()
+    : [];
+
+  function handleFileChange(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const reads = files.map(file => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ file, preview: reader.result, serverPath: null });
+      reader.readAsDataURL(file);
+    }));
+    Promise.all(reads).then(images => {
+      dispatch({ type: 'SET_APP_MODE', mode: 'match' });
+      dispatch({ type: 'SET_REFERENCE_IMAGES', payload: images });
+      dispatch({ type: 'NAVIGATE', screen: 'ref_eval' });
+    });
+  }
+
+  function triggerUpload() { fileRef.current?.click(); }
+
+  function handleWizard() {
+    dispatch({ type: 'SET_APP_MODE', mode: 'build' });
+    dispatch({ type: 'SET_INTENT', intent: 'mood' });
+  }
+
+  return (
+    <div className="home-v2">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
+      {isPaid ? (
+        <PaidHomeContent
+          result={result}
+          lastSetup={lastSetup}
+          recentSetups={recentSetups}
+          triggerUpload={triggerUpload}
+          handleWizard={handleWizard}
+          dispatch={dispatch}
+        />
+      ) : (
+        <FreeHomeContent
+          triggerUpload={triggerUpload}
+          handleWizard={handleWizard}
+          lastSetup={lastSetup}
+          dispatch={dispatch}
+        />
       )}
     </div>
   );

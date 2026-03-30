@@ -2,39 +2,30 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { saveSetup, getImprovementSignal } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
-import { buildRefTestSteps, buildRefQuickFixes } from '../transform';
+import { buildRefQuickFixes } from '../transform';
+import WBSpectrum from '../components/WBSpectrum';
+import { wbTempClass } from '../utils/units';
 import useSettings from '../hooks/useSettings';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import useSignal from '../hooks/useSignal';
 import useMode from '../hooks/useMode';
 import usePaywallTrigger from '../hooks/usePaywallTrigger';
 import OutcomeCapture from '../components/OutcomeCapture';
 import OutcomeFeedback from '../components/OutcomeFeedback';
-import SuccessMomentPaywall from '../components/SuccessMomentPaywall';
-import ResultConfidenceExplainer from '../components/results/ResultConfidenceExplainer';
-import ResultPatternComparePrompt from '../components/results/ResultPatternComparePrompt';
-import ResultSymptomSuggestions from '../components/results/ResultSymptomSuggestions';
 import ResultCTAGroup from '../components/results/ResultCTAGroup';
-import { getSymptomsFromSignals } from '../data/symptoms';
 import { BLUEPRINT_BULLETS, CAMERA_BULLETS } from '../data/paywallBullets';
 import { getSessionId } from '../data/flagsStore';
 
 // Gate / upgrade components
 import PaywallGate from '../components/PaywallGate';
-import ExitIntercept from '../components/ExitIntercept';
 import ShootModePaywall from '../components/ShootModePaywall';
 
 // Cards
 import ZoomOverlay from '../cards/ZoomOverlay';
 import LookSummaryCard from '../cards/LookSummaryCard';
 import BlueprintCard from '../cards/BlueprintCard';
-import RecommendedKitsCard from '../cards/RecommendedKitsCard';
 import SignalQualityCard from '../cards/SignalQualityCard';
 import ReferenceImageCard from '../cards/ReferenceImageCard';
-import RefImageReadCard from '../cards/RefImageReadCard';
-import RefLightingCard from '../cards/RefLightingCard';
-import RefRecreationCard from '../cards/RefRecreationCard';
-import RefInterpretationsCard from '../cards/RefInterpretationsCard';
 import DiagramCard from '../cards/DiagramCard';
 import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
@@ -95,10 +86,10 @@ function DebugBlock({ content }) {
 }
 
 // ── Collapsible section (identical to V1) ────────────────────────────────────
-function CollapsibleSection({ title, icon, children, defaultOpen = false }) {
+function CollapsibleSection({ title, icon, children, defaultOpen = false, locked = false }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`collapsible-section${open ? ' collapsible-section--open' : ''}`}>
+    <div className={`collapsible-section${open ? ' collapsible-section--open' : ''}${locked ? ' collapsible-section--locked' : ''}`}>
       <button
         className="collapsible-section__trigger"
         onClick={() => setOpen(v => !v)}
@@ -107,6 +98,14 @@ function CollapsibleSection({ title, icon, children, defaultOpen = false }) {
       >
         {icon && <span className="collapsible-section__icon">{icon}</span>}
         <span className="collapsible-section__title">{title}</span>
+        {locked && (
+          <svg className="collapsible-section__lock" width="12" height="12" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        )}
         <svg
           className="collapsible-section__chevron"
           width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -120,6 +119,293 @@ function CollapsibleSection({ title, icon, children, defaultOpen = false }) {
           {children}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Role color map (matches DiagramCard palette) ─────────────────────────────
+const ROLE_COLORS = {
+  key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7',
+  background: '#10b981', hair: '#ec4899',
+};
+function roleColor(role) {
+  if (!role) return 'var(--color-text-secondary)';
+  const r = role.toLowerCase();
+  for (const [k, v] of Object.entries(ROLE_COLORS)) {
+    if (r.startsWith(k)) return v;
+  }
+  return 'var(--color-text-secondary)';
+}
+
+// ── Diagram detail panel — Cockpit Active Light (matches Figma) ─────────────
+
+/** Extract a height description from diagramLight or positionText. */
+function heightLabel(setupLight, diagramLight, units) {
+  const hm = diagramLight?.height_m;
+  if (!hm) return null;
+  const val = units === 'metric' ? `${hm.toFixed(1)} m` : `${Math.round(hm * 3.281)} ft`;
+  let desc = '';
+  if (hm > 1.9) desc = ' · Above head';
+  else if (hm > 1.7) desc = ' · High';
+  else if (hm < 1.4) desc = ' · Low';
+  else desc = ' · Eye level';
+  return val + desc;
+}
+
+/** Extract angle text from diagramLight. */
+function angleLabel(diagramLight) {
+  const deg = diagramLight?.angle_deg;
+  if (deg == null) return null;
+  const side = deg < -10 ? 'camera-left' : deg > 10 ? 'camera-right' : 'center';
+  return `${Math.abs(Math.round(deg))}° ${side}`;
+}
+
+/** Extract direction/elevation text from positionText. */
+function directionLabel(setupLight) {
+  const pt = setupLight?.positionText;
+  if (!pt) return null;
+  // positionText is "side, height" — take the height portion
+  const parts = pt.split(',').map(s => s.trim());
+  return parts.length > 1 ? parts[1] : parts[0];
+}
+
+function DiagramDetailPanel({ item, lights, diagram, cameraSettings, lightingIntelligence, subject, background, spaceCheck }) {
+  const { units } = useSettings();
+  if (!item) return null;
+
+  if (item.type === 'camera') {
+    const camDist = diagram?.camera?.distance_m;
+    const camHeightM = diagram?.camera?.height_m;
+    const cam = cameraSettings;
+    const li = lightingIntelligence;
+
+    // Camera height — prefer cameraSettings text, fall back to diagram numeric
+    const camHeight = cam?.height
+      || (camHeightM != null ? (units === 'metric'
+          ? `${camHeightM.toFixed(1)} m`
+          : `${Math.round(camHeightM * 3.281)} ft`)
+        : null);
+
+    // Hero stats — the big 4 exposure values
+    const heroStats = [
+      cam?.aperture && { label: 'Aperture', value: cam.aperture },
+      cam?.iso && { label: 'ISO', value: String(cam.iso) },
+      cam?.shutter && { label: 'Shutter', value: cam.shutter },
+    ].filter(Boolean);
+
+    // Detail specs — secondary info in 2-column grid
+    const detailSpecs = [
+      camHeight && { label: 'Height', value: camHeight },
+      cam?.angle && { label: 'Angle', value: cam.angle },
+      camDist && { label: 'Distance', value: units === 'metric'
+        ? `${camDist.toFixed(1)} m`
+        : `${Math.round(camDist * 3.281)} ft` },
+      cam?.lens && { label: 'Lens', value: cam.lens },
+    ].filter(Boolean);
+
+    return (
+      <div className="cockpit-panel">
+        <div className="cockpit-panel__card">
+          <div className="cockpit-panel__role-row">
+            <span className="cockpit-panel__dot" style={{ background: '#64748b' }} />
+            <span className="cockpit-panel__role" style={{ color: '#64748b' }}>CAMERA</span>
+          </div>
+
+          {/* Hero exposure bar */}
+          {heroStats.length > 0 && (
+            <div className="cockpit-camera__hero">
+              {heroStats.map(s => (
+                <div className="cockpit-camera__hero-stat" key={s.label}>
+                  <span className="cockpit-camera__hero-value">{s.value}</span>
+                  <span className="cockpit-camera__hero-label">{s.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* WB section with spectrum */}
+          {cam?.wb && (
+            <div className="cockpit-camera__wb">
+              <div className="cockpit-camera__wb-row">
+                <span className="cockpit-camera__wb-label">White Balance</span>
+                <span className={`cockpit-camera__wb-value ${wbTempClass(cam.wb)}`}>{cam.wb}</span>
+              </div>
+              <WBSpectrum wb={cam.wb} />
+              {li?.detectedCCT && (
+                <span className={`cockpit-camera__cct ${wbTempClass(String(li.detectedCCT))}`}>
+                  Detected: {li.detectedCCT} K
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Detail grid */}
+          {detailSpecs.length > 0 && (
+            <>
+              <div className="cockpit-panel__divider" />
+              <div className="cockpit-panel__grid">
+                {detailSpecs.map(s => (
+                  <div className="cockpit-panel__spec" key={s.label}>
+                    <span className="cockpit-panel__spec-label">{s.label}</span>
+                    <span className="cockpit-panel__spec-value">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Photographer tip / notes */}
+          {cam?.tip && (
+            <div className="cockpit-panel__notes">
+              <p className="cockpit-panel__note">{cam.tip}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.type === 'subject') {
+    const camDist = diagram?.camera?.distance_m;
+    const subjectSpecs = [
+      camDist && { label: 'To Camera', value: units === 'metric'
+        ? `${camDist.toFixed(1)} m`
+        : `${Math.round(camDist * 3.281)} ft` },
+      subject?.distanceFromBackground && { label: 'To Background', value: subject.distanceFromBackground },
+      spaceCheck?.subjectToBackground && !subject?.distanceFromBackground
+        && { label: 'To Background', value: spaceCheck.subjectToBackground },
+      subject?.poseNote && { label: 'Pose', value: subject.poseNote },
+    ].filter(Boolean);
+
+    // Per-light distances from diagram data
+    const lightDistSpecs = (diagram?.lights || []).map(dl => {
+      const role = dl.role || 'key';
+      const label = role.charAt(0).toUpperCase() + role.slice(1);
+      const dist = dl.distance_m;
+      if (!dist) return null;
+      return { label: `To ${label}`, value: units === 'metric'
+        ? `${dist.toFixed(1)} m`
+        : `${Math.round(dist * 3.281)} ft` };
+    }).filter(Boolean);
+
+    return (
+      <div className="cockpit-panel">
+        <div className="cockpit-panel__card">
+          <div className="cockpit-panel__role-row">
+            <span className="cockpit-panel__dot" style={{ background: '#94a3b8' }} />
+            <span className="cockpit-panel__role" style={{ color: '#94a3b8' }}>SUBJECT</span>
+          </div>
+          <p className="cockpit-panel__title">
+            {lights.length} light{lights.length !== 1 ? 's' : ''} aimed at subject
+          </p>
+          {(subjectSpecs.length > 0 || lightDistSpecs.length > 0) && (
+            <>
+              <div className="cockpit-panel__divider" />
+              <div className="cockpit-panel__grid">
+                {subjectSpecs.map(s => (
+                  <div className="cockpit-panel__spec" key={s.label}>
+                    <span className="cockpit-panel__spec-label">{s.label}</span>
+                    <span className="cockpit-panel__spec-value">{s.value}</span>
+                  </div>
+                ))}
+                {lightDistSpecs.map(s => (
+                  <div className="cockpit-panel__spec" key={s.label}>
+                    <span className="cockpit-panel__spec-label">{s.label}</span>
+                    <span className="cockpit-panel__spec-value">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Light selected — find matching setup light + diagram light
+  const setupLight = lights.find(l =>
+    l.role?.toLowerCase() === item.role?.toLowerCase() ||
+    l.label?.toLowerCase().includes(item.role?.toLowerCase())
+  );
+  const diagramLight = diagram?.lights?.find(l => l.role === item.role);
+  if (!setupLight) return null;
+
+  const color = roleColor(item.role);
+  const modName = cleanMod(setupLight.modifier) || setupLight.type || 'Light';
+  const modSize = setupLight.modifierSize ? ` (${setupLight.modifierSize})` : '';
+  const modSearch = modName + (modSize ? ' ' + modSize : '');
+  const dist = units === 'metric' ? setupLight.distanceM : setupLight.distanceFt;
+  const height = heightLabel(setupLight, diagramLight, units);
+  const angle = angleLabel(diagramLight);
+  const direction = directionLabel(setupLight);
+  const power = setupLight.powerHint || setupLight.power || null;
+  const isKey = item.role?.toLowerCase().startsWith('key');
+  const notes = setupLight.notes || [];
+
+  // Build spec pairs for the 2-column grid
+  const specs = [
+    height && { label: 'Height', value: height },
+    dist && { label: 'Distance', value: dist },
+    angle && { label: 'Angle', value: angle },
+    direction && { label: 'Direction', value: direction },
+    power && { label: 'Power', value: power },
+    setupLight.positionText && !angle && !direction && { label: 'Position', value: setupLight.positionText },
+  ].filter(Boolean);
+
+  // Hint for key light
+  const hint = isKey && angle ? `${angle}, ${direction || 'just above eye level'}` : null;
+
+  return (
+    <div className="cockpit-panel">
+      <div className="cockpit-panel__card">
+        <div className="cockpit-panel__role-row">
+          <span className="cockpit-panel__dot" style={{ background: color }} />
+          <span className="cockpit-panel__role" style={{ color }}>
+            {(setupLight.label || item.role || '').toUpperCase()}
+          </span>
+        </div>
+        <p className="cockpit-panel__title">
+          {cleanMod(setupLight.modifier) ? (
+            <a
+              href={getBHUrl(modSearch)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cockpit-panel__mod-link"
+            >
+              {modName}{modSize}
+              <svg className="cockpit-panel__link-icon" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          ) : (
+            <>{modName}{modSize}</>
+          )}
+        </p>
+        {specs.length > 0 && (
+          <>
+            <div className="cockpit-panel__divider" />
+            <div className="cockpit-panel__grid">
+              {specs.map(s => (
+                <div className="cockpit-panel__spec" key={s.label}>
+                  <span className="cockpit-panel__spec-label">{s.label}</span>
+                  <span className="cockpit-panel__spec-value">{s.value}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        {hint && (
+          <div className="cockpit-panel__hint" style={{ '--hint-color': color }}>
+            <span className="cockpit-panel__hint-label">Start here</span>
+            <span className="cockpit-panel__hint-body">{hint}</span>
+          </div>
+        )}
+        {notes.length > 0 && (
+          <div className="cockpit-panel__notes">
+            {notes.map((n, i) => <p className="cockpit-panel__note" key={i}>{n}</p>)}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -198,7 +484,7 @@ function ShootModeCTA({ isPaid, onUnlock, onOpenPaywall }) {
       return;
     }
     dispatch({ type: 'SET_APP_MODE', mode: 'shoot' });
-    dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+    dispatch({ type: 'NAVIGATE', screen: 'setup_sheet' });
   }
 
   return (
@@ -331,13 +617,17 @@ function SaveBar({ result }) {
           </span>
         ) : (
           <>
-            <span className="save-setup-bar__warning">You&rsquo;ll lose this setup when you leave.</span>
-            <button className="btn btn--ghost btn--sm" onClick={() => setForm(f => ({ ...f, open: !f.open }))} type="button">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+            <button
+              className="save-setup-bar__action"
+              onClick={() => setForm(f => ({ ...f, open: !f.open }))}
+              type="button"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}
+            >
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-premium-accent, #C8A96E)' }}>Save This Setup</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-premium-accent, #C8A96E)"
+                strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
               </svg>
-              Lock This Setup
             </button>
           </>
         )}
@@ -382,14 +672,39 @@ function SaveBar({ result }) {
 // Main screen
 // ═══════════════════════════════════════════════════════════════════════════
 
-export default function ResultsScreenV2() {
+export default function ResultsScreenV2({ onShare } = {}) {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const userEmail = resolveUserEmail(user);
   const { isPaid, unlock, isAdmin, analysisCount, incrementCount } = usePaywall(userEmail);
-  const { activeGate, fireGate, dismissGate } = usePaywallTrigger({ isPaid, analysisCount });
+  const { fireGate } = usePaywallTrigger({ isPaid, analysisCount });
   const [zoomSrc, setZoomSrc] = useState(null);
   const appMode = useMode();
+  const { units } = useSettings();
+
+  // ── Assistant Mode + Large-View Mode ──
+  const [assistantMode, setAssistantMode] = useState(false);
+  const [largeView, setLargeView] = useState(false);
+  // ── Diagram item selection (Setup Sheet-style detail) ──
+  const [selectedDiagramItem, setSelectedDiagramItem] = useState(null);
+
+  function toggleLargeView() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setLargeView(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setLargeView(false);
+    }
+  }
+
+  useEffect(() => {
+    function onFsChange() {
+      if (!document.fullscreenElement) setLargeView(false);
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   // Session signal — outcome capture (did they get the shot?)
   const { sendSignal, sent: signalSent, outcome: signalOutcome, loading: signalLoading } = useSignal(
@@ -416,9 +731,9 @@ export default function ResultsScreenV2() {
   function handleShootPaywallUnlock() {
     unlock();
     setShootPaywallOpen(false);
-    // Navigate into Shoot Mode immediately after unlocking
+    // Navigate to Setup Sheet for review before Shoot Mode
     dispatch({ type: 'SET_APP_MODE', mode: 'shoot' });
-    dispatch({ type: 'NAVIGATE', screen: 'shoot_mode' });
+    dispatch({ type: 'NAVIGATE', screen: 'setup_sheet' });
   }
 
   useEffect(() => {
@@ -451,8 +766,20 @@ export default function ResultsScreenV2() {
   const lightingRead    = hasRefAnalysis ? refAnalysis.lighting_read    : null;
   const recreationSetup = hasRefAnalysis ? refAnalysis.recreation_setup : null;
 
-  const refTestSteps  = useMemo(() => hasRefAnalysis ? buildRefTestSteps(lightingRead, recreationSetup)  : [], [hasRefAnalysis, lightingRead, recreationSetup]);
   const refQuickFixes = useMemo(() => hasRefAnalysis ? buildRefQuickFixes(lightingRead, recreationSetup) : [], [hasRefAnalysis, lightingRead, recreationSetup]);
+
+  // Build signal chips for identity zone (Figma design)
+  const signalChips = useMemo(() => {
+    const chips = [];
+    const li = result?.lightingIntelligence || {};
+    const bm = result?.bestMatch || {};
+    if (li.keyPosition) chips.push(li.keyPosition);
+    if (bm.lightingGeometry) chips.push(bm.lightingGeometry);
+    if (li.catchlightDetected) chips.push('Catchlight');
+    const mod = li.detectedModifier;
+    if (mod && !BARE_TOKENS.has(mod.toLowerCase().trim())) chips.push(mod);
+    return chips.slice(0, 4);
+  }, [result?.lightingIntelligence, result?.bestMatch]);
 
   if (error) {
     return (
@@ -481,25 +808,7 @@ export default function ResultsScreenV2() {
     ? [...refQuickFixes, ...(result.quickFixes || [])]
     : result.quickFixes;
 
-  const modifierFamily      = result.lightingIntelligence?.detectedModifier || null;
   const hasDiagram          = !!result.diagram;
-
-  // Symptom detection from signal flags — memoised so getSymptomsFromSignals
-  // doesn't re-run on every render that doesn't change signal data.
-  const detectedSymptoms = useMemo(() => getSymptomsFromSignals({
-    ambiguityFlags:   result.signalReliability?.ambiguityFlags           || {},
-    edgeCaseFlags:    result.edgeCaseFlags                               || {},
-    reliabilityScore: result.bestMatch?.reliabilityScore                 ?? 1,
-    signalStrength:   result.signalReliability?.overallSignalStrength    ?? 1,
-  }), [
-    result.signalReliability,
-    result.edgeCaseFlags,
-    result.bestMatch?.reliabilityScore,
-  ]);
-
-  function handleSymptomNavigate(slug) {
-    dispatch({ type: 'NAVIGATE_SYMPTOM', slug });
-  }
 
   function handleAnalyzeAnother() {
     dispatch({ type: 'RESET' });
@@ -515,13 +824,106 @@ export default function ResultsScreenV2() {
   const analyzeLabel = isPhotoSource ? 'Analyze Another Photo' : 'New Setup';
   const buildLabel   = isPhotoSource ? 'Build This Setup'      : 'Start Over';
 
+  const lights = result?.setup?.lights || [];
+
+  // ── ASSISTANT MODE — stripped-down view for on-set assistants ──
+  if (assistantMode) {
+    return (
+      <div className={`screen rs-assistant${largeView ? ' rs-large-view' : ''}`}>
+        <div className="rs-assistant__toolbar">
+          <button className="rs-assistant__back" onClick={() => setAssistantMode(false)} type="button">
+            ‹ Full View
+          </button>
+          <span className="rs-assistant__label">Assistant View</span>
+          <button className="rs-assistant__fullscreen" onClick={toggleLargeView} type="button" title={largeView ? 'Exit fullscreen' : 'Large view'}>
+            {largeView ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            )}
+          </button>
+        </div>
+
+        <div className="rs-assistant__pattern">
+          <span className="rs-assistant__pattern-label">LIGHTING PATTERN</span>
+          <h2 className="rs-assistant__pattern-name">
+            {result.bestMatch?.lightingPattern
+              ? result.bestMatch.lightingPattern.charAt(0).toUpperCase() + result.bestMatch.lightingPattern.slice(1)
+              : 'Unknown'}
+          </h2>
+        </div>
+
+        {hasDiagram && (
+          <DiagramCard
+            spec={result.diagram}
+            title=""
+            cameraSettings={result.cameraSettings}
+            spaceCheck={result.spaceCheck}
+            roomDimensions={roomDimensions}
+            twoHostSetup={result.twoHostSetup}
+            inline
+          />
+        )}
+
+        <div className="rs-assistant__lights">
+          {lights.map((l, i) => (
+            <div className="rs-assistant__light" key={i}>
+              <span className={`rs-assistant__light-role rs-assistant__light-role--${l.role || l._role || 'key'}`}>
+                {l.label || l.role || 'Light'}
+              </span>
+              <div className="rs-assistant__light-specs">
+                {l.modifier && !BARE_TOKENS.has((l.modifier || '').toLowerCase().trim()) && (
+                  <span>{l.modifier}{l.modifierSize ? ` (${l.modifierSize})` : ''}</span>
+                )}
+                {l.positionText && <span>{l.positionText}</span>}
+                {(units === 'metric' ? l.distanceM : l.distanceFt) && (
+                  <span>{units === 'metric' ? l.distanceM : l.distanceFt}</span>
+                )}
+                {l.powerHint && <span className="rs-assistant__power">{l.powerHint}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {result.cameraSettings && (
+          <div className="rs-assistant__camera">
+            {[
+              result.cameraSettings.aperture,
+              result.cameraSettings.iso && `ISO ${result.cameraSettings.iso}`,
+              result.cameraSettings.shutter,
+              result.cameraSettings.wb && `${result.cameraSettings.wb} WB`,
+            ].filter(Boolean).join(' · ')}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="screen">
-      <h2 className="screen-heading">
-        {result.referenceImage ? 'Reference Analysis' : (result.bestMatch?.name || 'Your Results')}
-      </h2>
+    <div className={`screen${largeView ? ' rs-large-view' : ''}`}>
+      {/* ── View mode toolbar ─────────────────────────────────────────── */}
+      <div className="rs-view-toolbar">
+        <button
+          className={`rs-view-toolbar__btn${assistantMode ? ' rs-view-toolbar__btn--active' : ''}`}
+          onClick={() => setAssistantMode(true)}
+          type="button"
+          title="Simplified view for assistants"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Assistant
+        </button>
+        <button
+          className="rs-view-toolbar__btn"
+          onClick={toggleLargeView}
+          type="button"
+          title="Large view — readable from a distance"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          Large View
+        </button>
+      </div>
+
       {zoomSrc && <ZoomOverlay src={zoomSrc} alt="Reference photo" onClose={() => setZoomSrc(null)} />}
-      {!isPaid && <ExitIntercept onUnlock={unlock} />}
 
       {/* Shoot Mode paywall — triggered from CTA and first-attempt banner */}
       {shootPaywallOpen && (
@@ -529,15 +931,6 @@ export default function ResultsScreenV2() {
           variant={shootPaywallVariant}
           onUnlock={handleShootPaywallUnlock}
           onClose={() => setShootPaywallOpen(false)}
-        />
-      )}
-
-      {/* Success-moment paywall — fires after "Nailed it" outcome */}
-      {activeGate?.trigger === 'success_moment' && (
-        <SuccessMomentPaywall
-          onUnlock={() => { unlock(); dismissGate(); }}
-          onDismiss={dismissGate}
-          pattern={result.bestMatch?.lightingPattern}
         />
       )}
 
@@ -584,39 +977,29 @@ export default function ResultsScreenV2() {
           1. LOOK SUMMARY
           Always free — pattern name, confidence, rationale.
           ──────────────────────────────────────────────────────────────── */}
-      <LookSummaryCard
-        bestMatch={result.bestMatch}
-        lightingIntelligence={result.lightingIntelligence}
-        setupLightCount={result.setup?.lights?.length ?? null}
-      />
-
-      {/* ────────────────────────────────────────────────────────────────────
-          1b. CONFIDENCE EXPLAINER + SYMPTOM SIGNALS
-          Inline below the look summary — tells users what drove the result
-          and surfaces any detected issues with the image.
-          ──────────────────────────────────────────────────────────────── */}
-      <ResultConfidenceExplainer
-        bestMatch={result.bestMatch}
-        signalReliability={result.signalReliability}
-        edgeCaseFlags={result.edgeCaseFlags}
-      />
-
-      {detectedSymptoms.length > 0 && (
-        <ResultSymptomSuggestions
-          symptoms={detectedSymptoms}
-          patternId={result.bestMatch?.lightingPattern}
-          onSymptom={handleSymptomNavigate}
-        />
-      )}
-
-      {/* Low-confidence compare prompt */}
-      {result.alternatives?.length > 0 && (
-        <ResultPatternComparePrompt
-          bestMatch={result.bestMatch}
-          alternatives={result.alternatives}
-          onCompare={() => openShootPaywall('compare_patterns')}
-        />
-      )}
+      <div className="rs-identity-zone">
+        <span className="rs-pattern-label">LIGHTING PATTERN</span>
+        <h2 className="rs-pattern-name">
+          {result.bestMatch?.lightingPattern
+            ? result.bestMatch.lightingPattern.charAt(0).toUpperCase() + result.bestMatch.lightingPattern.slice(1)
+            : 'Unknown'}
+        </h2>
+        <div className="rs-confidence-row">
+          <span className="rs-confidence-row__pct">
+            {Math.round((result.bestMatch?.reliabilityScore ?? 0) * 100)}%
+          </span>
+          <span className="rs-confidence-row__label">
+            {(result.bestMatch?.reliabilityScore ?? 0) >= 0.75 ? 'High confidence'
+              : (result.bestMatch?.reliabilityScore ?? 0) >= 0.5 ? 'Moderate confidence'
+              : 'Low confidence'}
+          </span>
+        </div>
+        {signalChips.length > 0 && (
+          <div className="rs-signal-chips">
+            {signalChips.map(c => <span className="rs-signal-chip" key={c}>{c}</span>)}
+          </div>
+        )}
+      </div>
 
       {/* ════════════════════════════════════════════════════════════════════
           TWO-COLUMN LAYOUT  (1080px+ desktop)
@@ -634,66 +1017,81 @@ export default function ResultsScreenV2() {
       {hasDiagram && (
         <DiagramCard
           spec={result.diagram}
-          title="Lighting Diagram"
+          title="Setup Diagram"
           cameraSettings={result.cameraSettings}
           spaceCheck={result.spaceCheck}
           roomDimensions={roomDimensions}
           twoHostSetup={result.twoHostSetup}
+          legendCollapsed
+          onItemSelect={setSelectedDiagramItem}
         />
       )}
 
       {/* ────────────────────────────────────────────────────────────────────
-          3. RECREATE THIS SHOT  (free only — teaser before the paywall)
-          Paid users go directly to Blueprint — no duplicate card.
+          3. SETUP DETAIL PANEL — shown when a diagram item is selected
+          Tapping a light/subject/camera illuminates it and shows details
+          in the Setup Sheet style. Falls back to RecreateCard when nothing
+          is selected (free users only).
           ──────────────────────────────────────────────────────────────── */}
-      {!isPaid && (
+      {selectedDiagramItem ? (
+        <DiagramDetailPanel
+          item={selectedDiagramItem}
+          lights={result.setup?.lights || []}
+          diagram={result.diagram}
+          cameraSettings={result.cameraSettings}
+          lightingIntelligence={result.lightingIntelligence}
+          subject={result.subject}
+          background={result.background}
+          spaceCheck={result.spaceCheck}
+        />
+      ) : !isPaid ? (
         <RecreateCard
           lights={result.setup.lights}
           cameraSettings={result.cameraSettings}
         />
-      )}
+      ) : null}
 
       {/* ────────────────────────────────────────────────────────────────────
           4. BLUEPRINT PREVIEW + MAIN PAYWALL GATE
           Single paywall moment. Outcome-driven CTA.
+          Hidden when a diagram item is selected (cockpit panel replaces it).
           ──────────────────────────────────────────────────────────────── */}
-      <PaywallGate
-        isPaid={isPaid}
-        onUnlock={unlock}
-        headline="Build this exactly — positions, modifiers, power ratios."
-        bullets={BLUEPRINT_BULLETS}
-      >
-        <BlueprintCard
-          lights={result.setup.lights}
-          lightingIntelligence={result.lightingIntelligence}
-          cameraSettings={result.cameraSettings}
-          lightType={result.bestMatch?.lightType}
-          lightTypeNote={result.bestMatch?.lightTypeNote}
-          mode={appMode}
-          twoHostSetup={result.twoHostSetup}
-        />
-      </PaywallGate>
+      {!selectedDiagramItem && (
+        <PaywallGate
+          isPaid={isPaid}
+          onUnlock={unlock}
+          headline="Build this exactly — positions, modifiers, power ratios."
+          bullets={BLUEPRINT_BULLETS}
+        >
+          <BlueprintCard
+            lights={result.setup.lights}
+            lightingIntelligence={result.lightingIntelligence}
+            cameraSettings={result.cameraSettings}
+            lightType={result.bestMatch?.lightType}
+            lightTypeNote={result.bestMatch?.lightTypeNote}
+            mode={appMode}
+            twoHostSetup={result.twoHostSetup}
+          />
+        </PaywallGate>
+      )}
 
       {/* ────────────────────────────────────────────────────────────────────
-          5. SHOOT MODE CTA
-          Placed directly after Blueprint. "Match This Lighting Live."
+          5. ACTION ZONE — ShootMode CTA + secondary actions, grouped.
+          Placed directly after Blueprint as a coherent action cluster.
           Free users: "Recreate This Shot" → ShootModePaywall modal.
           ──────────────────────────────────────────────────────────────── */}
-      <ShootModeCTA isPaid={isPaid} onUnlock={unlock} onOpenPaywall={openShootPaywall} />
-
-      {/* Trigger 1: first-attempt friction banner (free, once per session) */}
-      {!isPaid && <FirstAttemptBanner onOpenPaywall={openShootPaywall} />}
-
-      {/* ────────────────────────────────────────────────────────────────────
-          5b. ACTION CTA GROUP — secondary actions below the main CTA
-          ──────────────────────────────────────────────────────────────── */}
-      <ResultCTAGroup
-        patternId={result.bestMatch?.lightingPattern}
-        onAnalyze={handleAnalyzeAnother}
-        onBuild={handleBuildSetup}
-        analyzeLabel={analyzeLabel}
-        buildLabel={buildLabel}
-      />
+      <div className="rs-action-zone">
+        <ShootModeCTA isPaid={isPaid} onUnlock={unlock} onOpenPaywall={openShootPaywall} />
+        {!isPaid && <FirstAttemptBanner onOpenPaywall={openShootPaywall} />}
+        <ResultCTAGroup
+          patternId={result.bestMatch?.lightingPattern}
+          onAnalyze={handleAnalyzeAnother}
+          onBuild={handleBuildSetup}
+          onShare={onShare}
+          analyzeLabel={analyzeLabel}
+          buildLabel={buildLabel}
+        />
+      </div>
 
       {/* ────────────────────────────────────────────────────────────────────
           6. REFINE YOUR SHOT  (secondary — appears after the attempt)
@@ -827,7 +1225,7 @@ export default function ResultsScreenV2() {
         </CollapsibleSection>
       )}
 
-      <CollapsibleSection title="Camera & Subject" icon={ICON.camera}>
+      <CollapsibleSection title="Camera & Subject" icon={ICON.camera} locked={!isPaid}>
         <PaywallGate
           isPaid={isPaid}
           onUnlock={unlock}
@@ -843,50 +1241,23 @@ export default function ResultsScreenV2() {
         </PaywallGate>
       </CollapsibleSection>
 
-      <CollapsibleSection title="Gear" icon={ICON.bag}>
-        {result.gearMatch && !result.gearMatch.isExact && (
-          <div className={`gear-match-banner gear-match-banner--${result.gearMatch.tier}`}>
-            <span className="gear-match-banner__label">{result.gearMatch.label}</span>
-            {result.gearMatch.adaptNote && (
-              <p className="gear-match-banner__note">{result.gearMatch.adaptNote}</p>
-            )}
-          </div>
-        )}
-        <PaywallGate
-          isPaid={isPaid}
-          onUnlock={unlock}
-          headline="Gear that gets this result every time."
-          preview={false}
-        >
-          <RecommendedKitsCard modifierFamily={modifierFamily} setupLights={result.setup?.lights} lightType={result.bestMatch?.lightType} />
-        </PaywallGate>
-        {(result.alternatives?.length > 0 || result.substitutions?.length > 0) && (
-          <OtherSetupsCard
-            alternatives={result.alternatives}
-            substitutions={result.substitutions}
-          />
-        )}
-      </CollapsibleSection>
-
-      {/* Reference Analysis — only when photo was uploaded */}
-      {hasRefAnalysis && (
-        <>
-          <CollapsibleSection title="Lighting Read" icon={ICON.lighting}>
-            <RefLightingCard
-              lightingRead={lightingRead}
-              lightingIntelligence={result.lightingIntelligence}
+      {(result.gearMatch || result.alternatives?.length > 0 || result.substitutions?.length > 0) && (
+        <CollapsibleSection title="Gear" icon={ICON.bag} locked={!isPaid}>
+          {result.gearMatch && !result.gearMatch.isExact && (
+            <div className={`gear-match-banner gear-match-banner--${result.gearMatch.tier}`}>
+              <span className="gear-match-banner__label">{result.gearMatch.label}</span>
+              {result.gearMatch.adaptNote && (
+                <p className="gear-match-banner__note">{result.gearMatch.adaptNote}</p>
+              )}
+            </div>
+          )}
+          {(result.alternatives?.length > 0 || result.substitutions?.length > 0) && (
+            <OtherSetupsCard
+              alternatives={result.alternatives}
+              substitutions={result.substitutions}
             />
-          </CollapsibleSection>
-          <CollapsibleSection title="Image Read" icon={ICON.image}>
-            <RefImageReadCard imageRead={imageRead} />
-          </CollapsibleSection>
-          <CollapsibleSection title="Recreation Setup" icon={ICON.target}>
-            <RefRecreationCard recreationSetup={recreationSetup} />
-          </CollapsibleSection>
-          <CollapsibleSection title="Interpretations" icon={ICON.search}>
-            <RefInterpretationsCard lightingRead={lightingRead} recreationSetup={recreationSetup} />
-          </CollapsibleSection>
-        </>
+          )}
+        </CollapsibleSection>
       )}
 
       <CollapsibleSection title="Signal Quality" icon={ICON.activity}>
@@ -897,10 +1268,10 @@ export default function ResultsScreenV2() {
         />
       </CollapsibleSection>
 
+      <MySetupsCard />
+
       </div>{/* end results-two-col__secondary */}
       </div>{/* end results-two-col */}
-
-      <MySetupsCard />
 
       {/* ── Admin debug section ───────────────────────────────────────────── */}
       {isAdmin && (
