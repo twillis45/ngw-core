@@ -14681,3 +14681,446 @@ body {
   cursor: pointer;
   flex-shrink: 0;
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   SETUP SHEET SCREEN
+   ─ Base mobile styles for SetupSheetScreen.jsx
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Screen container ── */
+.setup-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  min-height: 100dvh;
+  background: var(--color-bg);
+}
+
+/* ── Header ── */
+.setup-sheet__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-height: 52px;
+}
+.setup-sheet__back {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 1.25rem;
+  padding: 4px 8px 4px 0;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.setup-sheet__back:hover { color: var(--color-text-primary); }
+.setup-sheet__title {
+  flex: 1;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.setup-sheet__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+.setup-sheet__action-btn {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  padding: 6px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.setup-sheet__action-btn:hover { color: var(--color-text-primary); background: var(--color-surface-raised); }
+.setup-sheet__action-btn--saved { color: var(--color-accent); }
+.setup-sheet__premium-badge {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--color-warning, #f59e0b);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+}
+
+/* ── Diagram area ── */
+.setup-sheet__diagram {
+  padding: var(--space-sm) var(--space-md);
+}
+
+/* ── Camera settings bar ── */
+.setup-sheet__camera-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md) var(--space-sm);
+  flex-wrap: wrap;
+}
+.setup-sheet__camera-bar--locked {
+  opacity: 0.4;
+  pointer-events: none;
+}
+.setup-sheet__cam-aperture {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+.setup-sheet__cam-divider {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+.setup-sheet__cam-value {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}
+.setup-sheet__cam-wb {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+.setup-sheet__cam-wb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-blue, #60a5fa);
+  flex-shrink: 0;
+}
+
+/* ── Lights section ── */
+.setup-sheet__lights-wrapper {
+  position: relative;
+  padding: var(--space-sm) var(--space-md);
+}
+.setup-sheet__lights {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.setup-sheet__light-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+.setup-sheet__light-card--dimmed {
+  opacity: 0.15;
+  pointer-events: none;
+  user-select: none;
+}
+.setup-sheet__light-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.setup-sheet__light-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.setup-sheet__light-role {
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.08em;
+}
+.setup-sheet__light-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+.setup-sheet__light-meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+/* ── Paywall scrim ── */
+.setup-sheet__lock-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--color-bg) 30%, rgba(0,0,0,0) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: var(--space-lg);
+  pointer-events: none;
+}
+.setup-sheet__lock-icon {
+  color: var(--color-text-secondary);
+  opacity: 0.7;
+}
+
+/* ── Links (details / room planner) ── */
+.setup-sheet__details-link,
+.setup-sheet__room-planner-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: var(--space-xs) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+}
+.setup-sheet__details-link:hover,
+.setup-sheet__room-planner-link:hover { text-decoration: underline; }
+
+/* ── Bottom CTA bar ── */
+.setup-sheet__bottom-bar {
+  margin-top: auto;
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+.setup-sheet__cta {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.setup-sheet__cta:hover { opacity: 0.88; }
+.setup-sheet__cta--locked {
+  background: var(--color-warning, #f59e0b);
+  color: #000;
+}
+
+/* ── Mode picker bottom sheet ── */
+.mode-sheet__scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+.mode-sheet {
+  width: 100%;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-md);
+  max-height: 80dvh;
+  overflow-y: auto;
+}
+.mode-sheet__handle {
+  width: 40px;
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  margin: 0 auto var(--space-md);
+}
+.mode-sheet__title {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-xs);
+}
+.mode-sheet__subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0 0 var(--space-md);
+}
+.mode-sheet__pills {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+.mode-sheet__pill {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.mode-sheet__pill:hover { border-color: var(--color-accent); }
+.mode-sheet__pill--active {
+  border-color: var(--color-accent);
+  background: rgba(var(--color-accent-rgb, 234, 179, 8), 0.08);
+}
+.mode-sheet__pill-label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+}
+.mode-sheet__pill-desc {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+.mode-sheet__cta {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.mode-sheet__cta:hover { opacity: 0.88; }
+
+
+/* ═══════════════════════════════════════════════════════
+   SM-SPLIT — Cockpit tablet split layout
+   ─ Mobile: panel first (order:1), diagram below (order:2)
+   ─ Tablet 820px+: 52/48 grid, diagram col-1 sticky
+   ═══════════════════════════════════════════════════════ */
+
+.sm-split {
+  display: flex;
+  flex-direction: column;
+}
+.sm-split__diagram { order: 2; }
+.sm-split__panel   { order: 1; flex: 1; }
+
+@media (min-width: 820px) {
+  .sm-split {
+    display: grid;
+    grid-template-columns: 52% 48%;
+    gap: var(--space-md);
+    align-items: start;
+    padding: 0 var(--space-md) var(--space-md);
+  }
+  .sm-split__diagram {
+    order: 0;
+    grid-column: 1;
+    position: sticky;
+    top: var(--space-sm);
+  }
+  .sm-split__panel {
+    order: 0;
+    grid-column: 2;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   RESULTS — Tablet 820px seed layout
+   ─ Promotes two-column grid 260px earlier than 1080px
+   ═══════════════════════════════════════════════════════ */
+
+@media (min-width: 820px) {
+  .results-two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto;
+    align-items: start;
+    gap: var(--space-lg);
+    max-width: 960px;
+    margin-inline: auto;
+  }
+  .results-two-col__primary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-self: start;
+  }
+  .results-two-col__secondary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-self: start;
+  }
+  .results-two-col__primary .results-section__cards,
+  .results-two-col__secondary .results-section__cards {
+    gap: var(--space-sm);
+    order: unset;
+  }
+  .results-two-col__primary .result-card,
+  .results-two-col__secondary .result-card {
+    margin-bottom: 0;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   SETUP SHEET — Tablet 820px seed layout
+   ─ 55/45 grid: diagram+camera left, lights right
+   ═══════════════════════════════════════════════════════ */
+
+@media (min-width: 820px) {
+  .screen.setup-sheet {
+    display: grid;
+    grid-template-columns: 55% 45%;
+    grid-template-rows: auto;
+    align-items: start;
+    gap: 0 var(--space-md);
+    padding-bottom: 72px; /* room for sticky bottom bar */
+  }
+  .setup-sheet__header {
+    grid-column: 1 / -1;
+    position: sticky;
+    top: 0;
+  }
+  .setup-sheet__diagram {
+    grid-column: 1;
+    padding-top: var(--space-md);
+  }
+  .setup-sheet__camera-bar {
+    grid-column: 1;
+  }
+  .setup-sheet__lights-wrapper {
+    grid-column: 2;
+    grid-row: 2 / 5;
+    padding-top: var(--space-md);
+  }
+  .setup-sheet__lights {
+    /* On tablet, allow lights to stack naturally in the right column */
+  }
+  .setup-sheet__details-link,
+  .setup-sheet__room-planner-link {
+    grid-column: 1;
+  }
+  .setup-sheet__bottom-bar {
+    grid-column: 1 / -1;
+    position: sticky;
+    bottom: 0;
+  }
+  .setup-sheet__cta {
+    max-width: 480px;
+  }
+}
