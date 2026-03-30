@@ -332,7 +332,7 @@ export default function RecipeScreen() {
 
   return (
     <div className="screen recipe-screen">
-      <h2 className="screen-heading">Lighting Setups</h2>
+      <h2 className="screen-heading">Recipes</h2>
 
       <div className="chip-grid" style={{ marginBottom: 16 }}>
         <button
@@ -399,6 +399,18 @@ export default function RecipeScreen() {
                     onClick={() => unlocked ? handleExpand(recipe.id) : setShowPricing(true)}
                     type="button"
                   >
+                    {/* Thumb icon — matches Figma card structure */}
+                    <span className={`recipe-card__thumb${unlocked ? '' : ' recipe-card__thumb--locked'}`}>
+                      {unlocked ? (
+                        <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
+                          <circle cx="32" cy="38" r="10" fill="var(--color-accent)" opacity="0.85" />
+                          <rect x="6" y="13" width="18" height="2" rx="1" fill="var(--color-accent)" transform="rotate(30 6 13)" />
+                          <rect x="38" y="10" width="16" height="2" rx="1" fill="var(--color-accent)" opacity="0.6" transform="rotate(-25 38 10)" />
+                        </svg>
+                      ) : (
+                        <span className="recipe-card__thumb-pro">PRO<br />Only</span>
+                      )}
+                    </span>
                     <span className="intent-card__text">
                       <strong>{recipe.name}</strong>
                       <small>{recipe.description}</small>

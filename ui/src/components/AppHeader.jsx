@@ -15,8 +15,9 @@ function resolvedTheme() {
 
 export default function AppHeader() {
   const { screen, history, wizardStep, user, masterMode } = useAppState();
+  const isCockpit = screen === 'shoot_mode';
   const dispatch = useDispatch();
-  const canGoBack = screen !== 'welcome' && screen !== 'loading';
+  const canGoBack = screen !== 'home' && screen !== 'loading';
   const [theme, setTheme] = useState(resolvedTheme);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const masterEnabled = isEnabled('enable_master_mode');
@@ -35,7 +36,7 @@ export default function AppHeader() {
           probeAndEnableLab().then(() => forceUpdate(n => n + 1));
           pullKitFromServer();
           pullSetupsFromServer();
-          dispatch({ type: 'NAVIGATE', screen: 'welcome' });
+          dispatch({ type: 'NAVIGATE', screen: 'home' });
         })
         .catch(() => { /* invalid/expired — user can request resend */ });
       return;
@@ -77,7 +78,7 @@ export default function AppHeader() {
   }
 
   return (
-    <header className="app-header">
+    <header className={`app-header${isCockpit ? ' app-header--cockpit' : ''}`}>
       {canGoBack && (
         <button
           type="button"
@@ -90,9 +91,12 @@ export default function AppHeader() {
       )}
       <button
         className="app-header__title"
-        onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
+        onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
         type="button"
-      >No Guesswork Lighting</button>
+      >
+        <span className="app-header__title-main">NO GUESSWORK </span>
+        <span className="app-header__title-sub">LIGHTING</span>
+      </button>
       {masterEnabled && activeMaster && (
         <button
           className="header__master-badge"
@@ -106,39 +110,17 @@ export default function AppHeader() {
       <button
         className="app-header__theme-toggle"
         onClick={toggleTheme}
-        aria-label={`Switch to ${THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]} mode`}
-        title={theme === 'photoshop' ? 'Ps' : theme === 'daynote' ? 'DN' : undefined}
+        aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         type="button"
       >
         {theme === 'dark' ? (
-          /* Sun icon — shown in dark mode, click → light */
+          /* Sun icon — dark mode, click → light */
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="5"/>
             <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
           </svg>
-        ) : theme === 'light' ? (
-          /* Grid/panels icon — shown in light mode, click → photoshop */
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="9" rx="1"/>
-            <rect x="14" y="3" width="7" height="5" rx="1"/>
-            <rect x="14" y="12" width="7" height="9" rx="1"/>
-            <rect x="3" y="16" width="7" height="5" rx="1"/>
-          </svg>
-        ) : theme === 'photoshop' ? (
-          /* Sliders icon — shown in photoshop mode, click → daynote */
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="4" y1="21" x2="4" y2="14"/>
-            <line x1="4" y1="10" x2="4" y2="3"/>
-            <line x1="12" y1="21" x2="12" y2="12"/>
-            <line x1="12" y1="8" x2="12" y2="3"/>
-            <line x1="20" y1="21" x2="20" y2="16"/>
-            <line x1="20" y1="12" x2="20" y2="3"/>
-            <line x1="1" y1="14" x2="7" y2="14"/>
-            <line x1="9" y1="8" x2="15" y2="8"/>
-            <line x1="17" y1="16" x2="23" y2="16"/>
-          </svg>
         ) : (
-          /* Moon icon — shown in daynote mode, click → dark */
+          /* Moon icon — light mode, click → dark */
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
           </svg>
@@ -179,10 +161,10 @@ export default function AppHeader() {
             apiLogout();
             dispatch({ type: 'LOGOUT' });
           }}
-          title={`${user.username} — tap to sign out`}
+          title={`${user.username || user.email || 'User'} — tap to sign out`}
           type="button"
         >
-          <span className="app-header__avatar">{user.username[0].toUpperCase()}</span>
+          <span className="app-header__avatar">{(user.username || user.email || '?')[0].toUpperCase()}</span>
         </button>
       ) : (
         <button
