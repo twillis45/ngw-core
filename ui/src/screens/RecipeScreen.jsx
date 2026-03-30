@@ -16,6 +16,33 @@ import PricingScreen from '../components/PricingScreen';
 const DIFFICULTY_LABEL = { 1: 'Easy', 2: 'Moderate', 3: 'Advanced' };
 const CONSISTENCY_LABEL = { high: 'Consistent', medium: 'Requires calibration' };
 
+// ── Card meta helpers ──────────────────────────────────────────────────────
+
+const CATEGORY_LABEL = {
+  portrait: 'Portrait', commercial: 'Commercial', editorial: 'Editorial',
+  product: 'Product', video: 'Video',
+};
+const MODIFIER_LABEL = {
+  beauty_dish: 'Beauty dish', softbox_rect: 'Softbox', softbox_octa: 'Octa',
+  umbrella: 'Umbrella', ring_light: 'Ring light', grid_spot: 'Grid',
+  on_camera_flash: 'On-camera flash', diffusion_panel: 'Diffusion',
+  softbox: 'Softbox', stripbox: 'Stripbox', led_panel: 'LED panel',
+};
+
+function humanCategory(cat) {
+  return CATEGORY_LABEL[cat] || (cat || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function humanModifier(modFamily, modifiers) {
+  const key = modFamily || modifiers?.[0];
+  if (!key) return '';
+  return MODIFIER_LABEL[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+function lightCountChip(setupTime) {
+  if (!setupTime) return null;
+  const m = setupTime.match(/^(\d+\s+lights?)/i);
+  return m ? m[1] : setupTime.split(' · ')[0];
+}
+
 /**
  * Expand a single-subject result into a two-host crossed-key layout.
  * Replaces any key + fill combo with symmetrical keys — one per host.
@@ -413,38 +440,34 @@ export default function RecipeScreen() {
                     </span>
                     <span className="intent-card__text">
                       <strong>{recipe.name}</strong>
-                      <small>{recipe.description}</small>
+                      <span className="recipe-card__meta">
+                        {humanCategory(recipe.category)}
+                        {humanModifier(recipe.modifierFamily, recipe.modifiers) && (
+                          <> &middot; {humanModifier(recipe.modifierFamily, recipe.modifiers)}</>
+                        )}
+                      </span>
                       <span className="intent-card__footer">
-                        {recipe.patternPreview && (
-                          <span className="best-match__pattern">{recipe.patternPreview}</span>
-                        )}
-                        {recipe.setupTime && (
-                          <span className="recipe-setup-time">{recipe.setupTime}</span>
-                        )}
-                        {recipe.consistency && (
-                          <span className={`recipe-consistency recipe-consistency--${recipe.consistency}`}>
-                            {CONSISTENCY_LABEL[recipe.consistency]}
+                        {lightCountChip(recipe.setupTime) && (
+                          <span className="recipe-card__gear-badge">
+                            {lightCountChip(recipe.setupTime)}
                           </span>
                         )}
-                        {lightType === 'continuous' && (
-                          <span className="recipe-light-type recipe-light-type--continuous">Video-ready</span>
-                        )}
-                        {lightType === 'strobe' && (
-                          <span className="recipe-light-type recipe-light-type--strobe">Flash only</span>
-                        )}
-                        {!unlocked && isStudioOnly && (
-                          <span className="recipe-lock-badge recipe-lock-badge--studio">Studio</span>
-                        )}
-                        {!unlocked && isPaidOnly && !isStudioOnly && (
-                          <span className="recipe-lock-badge">Paid</span>
-                        )}
-                        {!unlocked && effectiveIsGuest && (
-                          <span className="recipe-lock-badge recipe-lock-badge--signin">Sign in</span>
+                        {unlocked && recipe.recommended && (
+                          <span className="recipe-card__popular-badge">Popular</span>
                         )}
                         {unlocked && kitMatch && (
                           <span className={`recipe-kit-match recipe-kit-match--${kitMatch.status}`}>
                             {kitMatch.label}
                           </span>
+                        )}
+                        {!unlocked && isStudioOnly && (
+                          <span className="recipe-lock-badge recipe-lock-badge--studio">Studio</span>
+                        )}
+                        {!unlocked && isPaidOnly && !isStudioOnly && (
+                          <span className="recipe-lock-badge">Pro</span>
+                        )}
+                        {!unlocked && effectiveIsGuest && (
+                          <span className="recipe-lock-badge recipe-lock-badge--signin">Sign in</span>
                         )}
                       </span>
                     </span>
