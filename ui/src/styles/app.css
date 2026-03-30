@@ -14401,11 +14401,11 @@ body {
    (main → General / preferences → Preferences / account → Account & Billing)
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Page wrapper */
+/* Page wrapper — Figma: 16px horizontal margins, 343px cards on mobile, 520px on tablet+ */
 .stgx {
   display: flex; flex-direction: column;
-  max-width: 480px; margin: 0 auto;
-  padding: var(--space-md) var(--space-md) var(--space-xl);
+  width: 100%; max-width: 552px; margin: 0 auto;
+  padding: var(--space-md) 16px var(--space-xl);
   min-height: 100%;
 }
 
@@ -16045,11 +16045,6 @@ body {
     margin-inline: auto;
   }
 
-  /* ── Settings: bump max-width from 480px to 520px ────
-     Minor widening for better label/value spacing. */
-  .stgx {
-    max-width: 520px;
-  }
 }
 
 
