@@ -25,28 +25,25 @@ function setLastUsedId(id) {
 /** Tiny inline SVG diagram thumbnail — abstract representation of the setup. */
 function MiniDiagram({ lights = [], starred }) {
   const count = lights.length || 1;
-  // Simple abstract shapes representing lights around a subject
   return (
     <div className="ss-card__thumb">
       <svg width="72" height="72" viewBox="0 0 72 72" fill="none">
-        {/* Subject circle */}
-        <circle cx="36" cy="42" r="8" stroke="var(--color-text-secondary)" strokeWidth="1" opacity="0.5" />
-        {/* Key light — always present */}
-        <circle cx="18" cy="22" r="7" stroke="#c8a96e" strokeWidth="1.2" fill="none" />
-        <line x1="24" y1="24" x2="42" y2="30" stroke="#c8a96e" strokeWidth="0.8" opacity="0.5" />
-        {/* Fill light — 2+ lights */}
+        {/* Subject — gold stroke circle */}
+        <circle cx="38" cy="46" r="11" stroke="var(--color-accent)" strokeWidth="1.5" fill="var(--color-surface-elevated)" />
+        {/* Key light — filled gold circle + ray */}
+        <circle cx="18" cy="22" r="8" fill="var(--color-accent)" />
+        <rect x="26" y="21" width="14" height="2" rx="1" fill="var(--color-accent)" />
+        {/* Fill light — 2+ lights, muted outline */}
         {count >= 2 && (
-          <>
-            <circle cx="54" cy="22" r="7" stroke="var(--color-text-secondary)" strokeWidth="1" fill="none" opacity="0.6" />
-          </>
+          <circle cx="56" cy="22" r="7" stroke="var(--color-text-dim)" strokeWidth="1" fill="none" opacity="0.7" />
         )}
         {/* Hair/rim — 3+ lights */}
         {count >= 3 && (
-          <circle cx="36" cy="14" r="5" stroke="var(--color-text-secondary)" strokeWidth="1" fill="none" opacity="0.4" />
+          <circle cx="38" cy="12" r="5" stroke="var(--color-text-dim)" strokeWidth="1" fill="none" opacity="0.5" />
         )}
       </svg>
       {starred && (
-        <span className="ss-card__star">Star</span>
+        <span className="ss-card__star">★</span>
       )}
     </div>
   );
