@@ -43,6 +43,83 @@ function lightCountChip(setupTime) {
   return m ? m[1] : setupTime.split(' · ')[0];
 }
 
+// ── Pattern-specific top-down lighting thumbnails ──────────────────────────
+
+const A = 'var(--color-accent)';
+const DIM = 'var(--color-text-dim)';
+const SURF = 'var(--color-surface-elevated)';
+
+/** Subject circle — same for every pattern */
+function Subj() {
+  return <circle cx="32" cy="38" r="8" stroke={A} strokeWidth="1.5" fill={SURF} />;
+}
+
+const PATTERN_SVG = {
+  rembrandt: (
+    <>
+      <circle cx="12" cy="14" r="7" fill={A} />
+      <line x1="18" y1="19" x2="26" y2="31" stroke={A} strokeWidth="1.2" opacity="0.5" />
+      <circle cx="52" cy="22" r="5" stroke={DIM} strokeWidth="1" fill="none" opacity="0.55" />
+      <Subj />
+    </>
+  ),
+  loop: (
+    <>
+      <circle cx="14" cy="16" r="7" fill={A} />
+      <line x1="20" y1="21" x2="28" y2="31" stroke={A} strokeWidth="1.2" opacity="0.5" />
+      <circle cx="52" cy="18" r="5" stroke={DIM} strokeWidth="1" fill="none" opacity="0.55" />
+      <Subj />
+    </>
+  ),
+  butterfly: (
+    <>
+      <circle cx="32" cy="10" r="7" fill={A} />
+      <line x1="32" y1="17" x2="32" y2="30" stroke={A} strokeWidth="1.2" opacity="0.5" />
+      <circle cx="32" cy="57" r="5" stroke={DIM} strokeWidth="1" fill="none" opacity="0.45" />
+      <Subj />
+    </>
+  ),
+  clamshell: (
+    <>
+      <circle cx="32" cy="10" r="7" fill={A} />
+      <line x1="32" y1="17" x2="32" y2="30" stroke={A} strokeWidth="1.2" opacity="0.5" />
+      <circle cx="32" cy="56" r="6" fill={A} opacity="0.65" />
+      <line x1="32" y1="50" x2="32" y2="46" stroke={A} strokeWidth="1.2" opacity="0.4" />
+      <Subj />
+    </>
+  ),
+  split: (
+    <>
+      <circle cx="8" cy="34" r="7" fill={A} />
+      <line x1="15" y1="34" x2="24" y2="36" stroke={A} strokeWidth="1.2" opacity="0.5" />
+      <Subj />
+    </>
+  ),
+  high_key: (
+    <>
+      <circle cx="16" cy="16" r="6" fill={A} />
+      <circle cx="48" cy="16" r="6" fill={A} />
+      <line x1="21" y1="20" x2="28" y2="31" stroke={A} strokeWidth="1" opacity="0.4" />
+      <line x1="43" y1="20" x2="36" y2="31" stroke={A} strokeWidth="1" opacity="0.4" />
+      <Subj />
+    </>
+  ),
+};
+
+/** Top-down lighting diagram thumbnail — pattern-specific */
+function RecipeThumb({ pattern }) {
+  const shapes = PATTERN_SVG[pattern] || (
+    <>
+      <circle cx="14" cy="16" r="7" fill={A} />
+      <rect x="22" y="15" width="12" height="2" rx="1" fill={A} />
+      <Subj />
+    </>
+  );
+  return (
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none">{shapes}</svg>
+  );
+}
+
 /**
  * Expand a single-subject result into a two-host crossed-key layout.
  * Replaces any key + fill combo with symmetrical keys — one per host.
@@ -426,14 +503,10 @@ export default function RecipeScreen() {
                     onClick={() => unlocked ? handleExpand(recipe.id) : setShowPricing(true)}
                     type="button"
                   >
-                    {/* Thumb icon — matches Figma card structure */}
+                    {/* Thumb icon — pattern-specific lighting diagram */}
                     <span className={`recipe-card__thumb${unlocked ? '' : ' recipe-card__thumb--locked'}`}>
                       {unlocked ? (
-                        <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
-                          <circle cx="32" cy="38" r="10" fill="var(--color-accent)" opacity="0.85" />
-                          <rect x="6" y="13" width="18" height="2" rx="1" fill="var(--color-accent)" transform="rotate(30 6 13)" />
-                          <rect x="38" y="10" width="16" height="2" rx="1" fill="var(--color-accent)" opacity="0.6" transform="rotate(-25 38 10)" />
-                        </svg>
+                        <RecipeThumb pattern={recipe.pattern} />
                       ) : (
                         <span className="recipe-card__thumb-pro">PRO<br />Only</span>
                       )}
