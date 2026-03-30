@@ -1,182 +1,147 @@
 /**
- * SettingsScreen — NGW Settings v2
+ * SettingsScreen — Figma-matched layout
  *
- * Four top-level sections: Experience · Intelligence · Data & Privacy · Advanced
+ * Three sub-screens via internal state:
+ *   main       → Settings (user card + GENERAL / SUPPORT / LEGAL)
+ *   preferences → Preferences (ANALYSIS / SHOOT MODE / RECIPES / DISPLAY)
+ *   account    → Account & Billing (plan card + ACCOUNT / billing / destructive)
  *
- * All existing functionality preserved:
- *   - Appearance (theme, typeface, size, density) inside Experience
- *   - Units, power readout, confidence scores inside Experience
- *   - Role mode inside Experience
- *   - Dev tools gated by enable_lab feature flag
- *   - Secret version tap to toggle dev mode
- *   - Account display
- *   - Reset to defaults
+ * Back navigation:
+ *   sub-screens → return to main
+ *   main        → dispatch GO_BACK (previous app screen)
  */
 import { useState, useRef, useCallback } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import usePreviewMode from '../hooks/usePreviewMode';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import usePlan from '../hooks/usePlan';
 import { PLAN_LABELS } from '../data/planStore';
 import {
   loadSettings, saveSetting, applySettings, resetSettings,
-  FONT_SIZES, FONT_FAMILIES, DENSITY_OPTIONS,
-  UNIT_OPTIONS, POWER_DISPLAY_OPTIONS,
+  FONT_SIZES, FONT_FAMILIES, DENSITY_OPTIONS, POWER_DISPLAY_OPTIONS, NAV_STYLE_OPTIONS,
 } from '../data/settingsStore';
 import { loadTheme, saveTheme, applyTheme, THEMES } from '../data/themeStore';
-import { saveMode } from '../data/modeStore';
+import { loadMode, saveMode } from '../data/modeStore';
 import useMode from '../hooks/useMode';
 import { isEnabled, setFlag } from '../modes/featureFlags';
 import { excludeCurrentSession } from '../data/analytics';
+import { logout as apiLogout } from '../data/authApi';
 import Toast from '../components/Toast';
-import SettingsSection    from '../components/settings/SettingsSection';
-import SettingsCard       from '../components/settings/SettingsCard';
-import SegmentedSetting   from '../components/settings/SegmentedSetting';
-import ToggleSetting      from '../components/settings/ToggleSetting';
-import ActionSetting      from '../components/settings/ActionSetting';
 import ConfirmActionModal from '../components/settings/ConfirmActionModal';
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEV_TAP_COUNT  = 5;
 const DEV_TAP_WINDOW = 3000;
 const APP_VERSION    = 'v1.4.0';
 
-const THEME_ORDER  = ['daynote', 'light', 'photoshop', 'dark'];
-const THEME_LABELS = {
-  daynote:   { label: 'Daynote',   name: 'Daynote' },
-  light:     { label: 'Light',     name: 'Light' },
-  photoshop: { label: 'Ps',        name: 'Photoshop' },
-  dark:      { label: 'Dark',      name: 'Dark' },
-};
-const FONT_STYLES = {
-  system: { fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' },
-  inter:  { fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif' },
-  source: { fontFamily: '"Source Sans 3", "Source Sans Pro", -apple-system, sans-serif' },
-  mono:   { fontFamily: '"SF Mono", "JetBrains Mono", "Fira Code", monospace' },
-  serif:  { fontFamily: '"Playfair Display", Georgia, "Times New Roman", serif' },
-};
-const SIZE_STYLES = {
-  xs: { fontSize: '11px' }, small: { fontSize: '13px' },
-  medium: { fontSize: '15px' }, large: { fontSize: '17px' }, xl: { fontSize: '20px' },
-};
+// ─── Row sub-components ──────────────────────────────────────────────────────
 
-// ─── Option sets ──────────────────────────────────────────────────────────────
+function NavRow({ label, value, onClick, danger, billing }) {
+  return (
+    <button
+      className={`stgx-row stgx-row--nav${danger ? ' stgx-row--danger' : ''}${billing ? ' stgx-row--billing' : ''}`}
+      onClick={onClick}
+      type="button"
+    >
+      <span className="stgx-row__label">{label}</span>
+      <span className="stgx-row__right">
+        {value && <span className="stgx-row__value">{value}</span>}
+        <span className="stgx-row__chevron">›</span>
+      </span>
+    </button>
+  );
+}
 
-const ROLE_OPTIONS = [
-  { id: 'photographer', label: 'Photographer' },
-  { id: 'assistant',    label: 'Assistant' },
-];
-const VIEW_MODE_OPTIONS = [
-  { id: 'quick', label: 'Quick',    title: 'Quick Reference' },
-  { id: 'full',  label: 'Full',     title: 'Full Analysis' },
-];
-const GUIDANCE_OPTIONS = [
-  { id: 'minimal', label: 'Minimal' },
-  { id: 'guided',  label: 'Guided' },
-  { id: 'full',    label: 'Coaching' },
-];
-const CONFIDENCE_DISPLAY_OPTIONS = [
-  { id: 'simple',   label: 'Simple' },
-  { id: 'numeric',  label: 'Numeric' },
-  { id: 'detailed', label: 'Detailed' },
-];
-const COMPARISON_PROMPTS_OPTIONS = [
-  { id: 'auto',          label: 'Auto' },
-  { id: 'low_conf_only', label: 'Low conf' },
-  { id: 'off',           label: 'Off' },
-];
-const SHOOT_MODE_STYLE_OPTIONS = [
-  { id: 'step',      label: 'Step-by-step' },
-  { id: 'checklist', label: 'Checklist' },
-];
-const AUTONOMY_OPTIONS = [
-  { id: 'manual',   label: 'Manual' },
-  { id: 'assisted', label: 'Assisted' },
-  { id: 'adaptive', label: 'Adaptive' },
-];
-const FIX_GUIDANCE_OPTIONS = [
-  { id: 'quick',    label: 'Quick' },
-  { id: 'balanced', label: 'Balanced' },
-  { id: 'detailed', label: 'Detailed' },
-];
-const PATTERN_SENSITIVITY_OPTIONS = [
-  { id: 'strict',   label: 'Strict' },
-  { id: 'balanced', label: 'Balanced' },
-  { id: 'flexible', label: 'Flexible' },
-];
-const EXPLANATION_DEPTH_OPTIONS = [
-  { id: 'brief',     label: 'Brief' },
-  { id: 'standard',  label: 'Standard' },
-  { id: 'technical', label: 'Technical' },
-];
-const SESSION_STORAGE_OPTIONS = [
-  { id: 'auto',   label: 'Auto' },
-  { id: 'manual', label: 'Manual' },
-  { id: 'off',    label: 'Off' },
-];
-const IMAGE_HANDLING_OPTIONS = [
-  { id: 'store',  label: 'Store' },
-  { id: 'delete', label: 'Delete after' },
-];
+function ToggleRow({ label, value, onChange }) {
+  return (
+    <div className="stgx-row stgx-row--toggle">
+      <span className="stgx-row__label">{label}</span>
+      <button
+        className={`stgx-toggle${value ? ' stgx-toggle--on' : ''}`}
+        onClick={() => onChange(!value)}
+        type="button"
+        role="switch"
+        aria-checked={value}
+      >
+        <span className="stgx-toggle__knob" />
+      </button>
+    </div>
+  );
+}
 
-// ─── Tab config ───────────────────────────────────────────────────────────────
+function InfoRow({ label, value }) {
+  return (
+    <div className="stgx-row">
+      <span className="stgx-row__label">{label}</span>
+      <span className="stgx-row__value stgx-row__value--info">{value}</span>
+    </div>
+  );
+}
 
-const TABS = [
-  { id: 'experience',  label: 'Experience' },
-  { id: 'intelligence', label: 'Intelligence' },
-  { id: 'privacy',     label: 'Privacy' },
-  { id: 'advanced',    label: 'Advanced' },
-];
+function SectionHdr({ label }) {
+  return <div className="stgx-section-hdr">{label}</div>;
+}
 
-// ─── View-as options (Dev Tools preview) ──────────────────────────────────────
+function ListCard({ children, className = '' }) {
+  return <div className={`stgx-list${className ? ` ${className}` : ''}`}>{children}</div>;
+}
 
-const VIEW_AS_ACCESS = [
-  { id: null,    label: 'Actual',  quota: null },
-  { id: 'guest', label: 'Guest',   quota: '0 / mo' },
-  { id: 'free',  label: 'Free',    quota: '5 / mo' },
-  { id: 'paid',  label: 'Paid',    quota: '50 / mo' },
-  { id: 'admin', label: 'Admin',   quota: 'Unlimited' },
-];
-const VIEW_AS_ROLE = [
-  { id: null,          label: 'Actual' },
-  { id: 'photographer', label: 'Photographer' },
-  { id: 'assistant',    label: 'Assistant' },
-];
+function ScreenHeader({ title, backLabel, onBack }) {
+  return (
+    <div className="stgx-hdr">
+      <button className="stgx-hdr__back" onClick={onBack} type="button">
+        ‹ {backLabel}
+      </button>
+      <h2 className="stgx-hdr__title">{title}</h2>
+      <div className="stgx-hdr__spacer" />
+    </div>
+  );
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
-  const { user }   = useAppState();
-  const dispatch   = useDispatch();
-  const userEmail  = user?.email || user?.username || null;
-  const { isPaid, unlock, lock, isAdmin } = usePaywall(userEmail);
-  const { plan, setPlan }                 = usePlan(userEmail);
+  const { user }  = useAppState();
+  const dispatch  = useDispatch();
+  const userEmail = resolveUserEmail(user);
+  const { isPaid, unlock, isAdmin } = usePaywall(userEmail);
+  const { plan, setPlan }           = usePlan(userEmail);
 
-  const [activeTab, setActiveTab]     = useState('experience');
-  const [settings, setSettings]       = useState(loadSettings);
-  const [theme, setTheme]             = useState(() => loadTheme() || 'dark');
-  const roleMode = useMode();
-  const [toast, setToast]             = useState({ message: '', visible: false });
-  const [confirm, setConfirm]         = useState(null);
-
-  // View As — shared global hook (syncs banner on every screen)
-  const { access: viewAsAccess, role: viewAsRole, setAccess: setViewAsAccess, setRole: setViewAsRole, clear: clearPreview, isPreviewing } = usePreviewMode();
-
-  // Derive effective values from the view-as overrides
-  const effectiveIsAdmin = viewAsAccess !== null ? viewAsAccess === 'admin' : isAdmin;
-  const effectiveIsPaid  = viewAsAccess !== null ? (viewAsAccess === 'paid' || viewAsAccess === 'admin') : isPaid;
-  const effectiveIsGuest = viewAsAccess !== null ? viewAsAccess === 'guest' : !user;
-  const effectiveRole    = viewAsRole   !== null ? viewAsRole : roleMode;
+  const [subScreen, setSubScreen] = useState('main');
+  const [settings, setSettings]   = useState(loadSettings);
+  const [theme, setTheme]         = useState(() => loadTheme() || 'dark');
+  const [toast, setToast]         = useState({ message: '', visible: false });
+  const [confirm, setConfirm]     = useState(null);
   const [isTestSession, setIsTestSession] = useState(() => {
     try { return sessionStorage.getItem('ngw_test_session') === '1'; } catch { return false; }
   });
+  const mode = useMode();
 
   const tapTimestamps = useRef([]);
+  const { access: viewAsAccess, role: viewAsRole,
+          setAccess: setViewAsAccess, setRole: setViewAsRole,
+          isPreviewing } = usePreviewMode();
 
-  function showToast(message) {
-    setToast({ message, visible: true });
-  }
+  // Derived effective values
+  const effectiveIsAdmin = viewAsAccess !== null ? viewAsAccess === 'admin' : isAdmin;
+  const effectiveIsPaid  = viewAsAccess !== null
+    ? (viewAsAccess === 'paid' || viewAsAccess === 'admin')
+    : isPaid;
+
+  // Display helpers
+  const rawName     = user?.username || user?.email || '';
+  const displayName = rawName.includes('@') ? rawName.split('@')[0] : rawName;
+  const displayEmail = user?.email || user?.username || '';
+  const planLabel   = effectiveIsAdmin ? 'Admin' : effectiveIsPaid ? 'Pro' : 'Free';
+  const unitsLabel  = settings.units === 'metric' ? 'Metric' : 'Imperial';
+  const themeLabel  = theme.charAt(0).toUpperCase() + theme.slice(1);
+  const modeLabel   = mode === 'assistant' ? 'Assistant' : mode === 'learning' ? 'Learning' : 'Photographer';
+  const fontLabel   = (FONT_FAMILIES.find(f => f.id === settings.fontFamily) || FONT_FAMILIES[0]).label;
+  const sizeLabel   = (FONT_SIZES.find(f => f.id === settings.fontSize) || FONT_SIZES[2]).label;
+  const densityLabel = (DENSITY_OPTIONS.find(d => d.id === settings.density) || DENSITY_OPTIONS[1]).label;
+  const powerLabel  = (POWER_DISPLAY_OPTIONS.find(p => p.id === settings.powerDisplay) || POWER_DISPLAY_OPTIONS[0]).label;
+  const navLabel    = (NAV_STYLE_OPTIONS.find(n => n.id === settings.navStyle) || NAV_STYLE_OPTIONS[0]).label;
+
+  function showToast(message) { setToast({ message, visible: true }); }
 
   function update(key, value) {
     saveSetting(key, value);
@@ -185,8 +150,23 @@ export default function SettingsScreen() {
     applySettings(next);
   }
 
-  function handleThemeChange(t) {
-    saveTheme(t); applyTheme(t); setTheme(t);
+  function goBack() {
+    if (subScreen !== 'main') { setSubScreen('main'); }
+    else { dispatch({ type: 'GO_BACK' }); }
+  }
+
+  function handleSignOut() {
+    setConfirm({
+      title: 'Sign Out',
+      message: 'You will be signed out of your account.',
+      confirmText: 'Sign Out',
+      destructive: true,
+      onConfirm: () => {
+        apiLogout();
+        dispatch({ type: 'LOGOUT' });
+        setConfirm(null);
+      },
+    });
   }
 
   function handleReset() {
@@ -239,6 +219,32 @@ export default function SettingsScreen() {
     });
   }
 
+  function handleSimulateLowConf() {
+    try { sessionStorage.setItem('ngw_sim_low_conf', '1'); } catch (_) {}
+    showToast('Low confidence simulation active — reload results to see effect');
+  }
+
+  function cycleOption(key, options) {
+    const idx = options.findIndex(o => o.id === settings[key]);
+    const next = options[(idx + 1) % options.length];
+    update(key, next.id);
+  }
+
+  function cycleTheme() {
+    const idx = THEMES.indexOf(theme);
+    const next = THEMES[(idx + 1) % THEMES.length];
+    saveTheme(next);
+    applyTheme(next);
+    setTheme(next);
+  }
+
+  function cycleMode() {
+    const modes = ['photographer', 'assistant', 'learning'];
+    const idx = modes.indexOf(mode);
+    const next = modes[(idx + 1) % modes.length];
+    saveMode(next);
+  }
+
   async function handleTestSessionToggle(v) {
     const ok = await excludeCurrentSession(v);
     if (ok) {
@@ -246,13 +252,8 @@ export default function SettingsScreen() {
       setIsTestSession(v);
       showToast(v ? 'Session excluded from analytics' : 'Session restored to analytics');
     } else {
-      showToast(user ? 'Could not update session — try again' : 'Sign in to exclude sessions');
+      showToast(user ? 'Could not update — try again' : 'Sign in to exclude sessions');
     }
-  }
-
-  function handleSimulateLowConf() {
-    try { sessionStorage.setItem('ngw_sim_low_conf', '1'); } catch (_) {}
-    showToast('Low confidence simulation active — reload results to see effect');
   }
 
   const handleVersionTap = useCallback(() => {
@@ -268,460 +269,10 @@ export default function SettingsScreen() {
     }
   }, []);
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ── Modals (shared across all sub-screens) ────────────────────────────────
 
-  return (
-    <div className="stg">
-      <h2 className="stg__title">Settings</h2>
-
-      {/* ── Tab bar ───────────────────────────────────────────────────── */}
-      <div className="stg__tabs">
-        {TABS.map(tab => (
-          <button
-            key={tab.id}
-            className={`stg__tab${activeTab === tab.id ? ' stg__tab--on' : ''}`}
-            onClick={() => setActiveTab(tab.id)}
-            type="button"
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── 1. EXPERIENCE ─────────────────────────────────────────────── */}
-      {activeTab === 'experience' && (
-        <>
-          <SettingsCard label="Results">
-            <SegmentedSetting
-              label="View Mode"
-              description="Quick Reference shows key outputs only. Full Analysis shows all cards and reasoning."
-              options={VIEW_MODE_OPTIONS}
-              value={settings.viewMode}
-              onChange={v => update('viewMode', v)}
-            />
-            <SegmentedSetting
-              label="Guidance Level"
-              description="How much coaching language appears in results and fix suggestions."
-              options={GUIDANCE_OPTIONS}
-              value={settings.guidanceLevel}
-              onChange={v => update('guidanceLevel', v)}
-            />
-            <SegmentedSetting
-              label="Confidence Display"
-              description="Simple shows pass/fail only. Numeric shows scores. Detailed shows per-signal breakdown."
-              options={CONFIDENCE_DISPLAY_OPTIONS}
-              value={settings.confidenceDisplay}
-              onChange={v => {
-                update('confidenceDisplay', v);
-                update('showConfidenceScore', v !== 'simple');
-              }}
-            />
-            <SegmentedSetting
-              label="Comparison Prompts"
-              description="When to suggest comparing your setup to a reference image."
-              options={COMPARISON_PROMPTS_OPTIONS}
-              value={settings.comparisonPrompts}
-              onChange={v => update('comparisonPrompts', v)}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Shoot Mode">
-            <SegmentedSetting
-              label="Style"
-              description="Step-by-step guides one action at a time. Checklist shows all steps at once."
-              options={SHOOT_MODE_STYLE_OPTIONS}
-              value={settings.shootModeStyle}
-              onChange={v => update('shootModeStyle', v)}
-            />
-            <SegmentedSetting
-              label="Role Mode"
-              description={effectiveRole === 'assistant'
-                ? 'Direct commands — short, no explanation.'
-                : 'Outcome context — results and reasoning.'}
-              options={ROLE_OPTIONS}
-              value={effectiveRole}
-              onChange={v => { if (!isPreviewing) saveMode(v); }}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Measurement">
-            <SegmentedSetting
-              label="Units"
-              options={UNIT_OPTIONS}
-              value={settings.units}
-              onChange={v => update('units', v)}
-            />
-            <SegmentedSetting
-              label="Power Readout"
-              description="How strobe power levels appear in diagrams and cards."
-              options={POWER_DISPLAY_OPTIONS}
-              value={settings.powerDisplay}
-              onChange={v => update('powerDisplay', v)}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Appearance">
-            <div className="stg-row">
-              <div className="stg-row__meta"><span className="stg-row__label">Theme</span></div>
-              <div className="stg__seg">
-                {THEME_ORDER.filter(t => THEMES.includes(t)).map(t => (
-                  <button
-                    key={t}
-                    className={`stg__seg-btn${theme === t ? ' stg__seg-btn--on' : ''}`}
-                    onClick={() => handleThemeChange(t)}
-                    title={THEME_LABELS[t]?.name}
-                    type="button"
-                  >
-                    {THEME_LABELS[t]?.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="stg-row">
-              <div className="stg-row__meta"><span className="stg-row__label">Typeface</span></div>
-              <div className="stg__seg">
-                {FONT_FAMILIES.map(ff => (
-                  <button
-                    key={ff.id}
-                    className={`stg__seg-btn${settings.fontFamily === ff.id ? ' stg__seg-btn--on' : ''}`}
-                    onClick={() => update('fontFamily', ff.id)}
-                    style={FONT_STYLES[ff.id]}
-                    type="button"
-                  >
-                    {ff.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="stg-row">
-              <div className="stg-row__meta"><span className="stg-row__label">Size</span></div>
-              <div className="stg__seg">
-                {FONT_SIZES.map(fs => (
-                  <button
-                    key={fs.id}
-                    className={`stg__seg-btn${settings.fontSize === fs.id ? ' stg__seg-btn--on' : ''}`}
-                    onClick={() => update('fontSize', fs.id)}
-                    style={SIZE_STYLES[fs.id]}
-                    type="button"
-                  >
-                    {fs.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="stg-row">
-              <div className="stg-row__meta"><span className="stg-row__label">Density</span></div>
-              <div className="stg__seg">
-                {DENSITY_OPTIONS.map(d => (
-                  <button
-                    key={d.id}
-                    className={`stg__seg-btn${settings.density === d.id ? ' stg__seg-btn--on' : ''}`}
-                    onClick={() => update('density', d.id)}
-                    type="button"
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </SettingsCard>
-        </>
-      )}
-
-      {/* ── 2. INTELLIGENCE ───────────────────────────────────────────── */}
-      {activeTab === 'intelligence' && (
-        <SettingsCard>
-          {!effectiveIsPaid && (
-            <div className="stg-upsell">
-              <span className="stg-upsell__text">Intelligence settings require a paid plan.</span>
-              {!isPreviewing && (
-                <button className="stg-upsell__btn" type="button" onClick={unlock}>Upgrade</button>
-              )}
-            </div>
-          )}
-          <SegmentedSetting
-            label="Autonomy Level"
-            description="Manual: you decide everything. Assisted: system flags issues. Adaptive: suggestions improve over time."
-            options={AUTONOMY_OPTIONS}
-            value={settings.autonomyLevel}
-            onChange={v => update('autonomyLevel', v)}
-          />
-          <SegmentedSetting
-            label="Fix Guidance Style"
-            description="How quick-fix suggestions are ordered and presented."
-            options={FIX_GUIDANCE_OPTIONS}
-            value={settings.fixGuidanceStyle}
-            onChange={v => update('fixGuidanceStyle', v)}
-          />
-          <SegmentedSetting
-            label="Pattern Sensitivity"
-            description="Strict requires strong signal agreement. Flexible accepts partial matches."
-            options={PATTERN_SENSITIVITY_OPTIONS}
-            value={settings.patternSensitivity}
-            onChange={v => update('patternSensitivity', v)}
-          />
-          <SegmentedSetting
-            label="Explanation Depth"
-            description="How much technical reasoning appears in results and fix cards."
-            options={EXPLANATION_DEPTH_OPTIONS}
-            value={settings.explanationDepth}
-            onChange={v => update('explanationDepth', v)}
-          />
-        </SettingsCard>
-      )}
-
-      {/* ── 3. PRIVACY ────────────────────────────────────────────────── */}
-      {activeTab === 'privacy' && (
-        <>
-          <SettingsCard label="Learning & Analytics">
-            <ToggleSetting
-              label="Allow Learning from Sessions"
-              description="Outcome signals improve pattern detection. Never linked to your identity."
-              value={settings.allowLearning}
-              onChange={v => update('allowLearning', v)}
-            />
-            <ToggleSetting
-              label="Allow Analytics Tracking"
-              description="Anonymous usage data helps improve the app. No images or results included."
-              value={settings.allowAnalytics}
-              onChange={v => update('allowAnalytics', v)}
-            />
-            <ToggleSetting
-              label="This is a test session"
-              description="Excludes this browser session from usage metrics and dashboards."
-              value={isTestSession}
-              onChange={handleTestSessionToggle}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Storage">
-            <SegmentedSetting
-              label="Session Storage"
-              description="Auto saves sessions automatically. Manual requires you to save. Off stores nothing."
-              options={SESSION_STORAGE_OPTIONS}
-              value={settings.sessionStorage}
-              onChange={v => update('sessionStorage', v)}
-            />
-            <SegmentedSetting
-              label="Image Handling"
-              description="Store keeps reference images for future sessions. Delete after analysis removes them immediately."
-              options={IMAGE_HANDLING_OPTIONS}
-              value={settings.imageHandling}
-              onChange={v => update('imageHandling', v)}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Analytics">
-            {effectiveIsGuest ? (
-              <div className="stg-row">
-                <div className="stg-row__meta">
-                  <span className="stg-row__label">Analytics unavailable</span>
-                  <span className="stg-row__desc">Sign in to access session history and usage data.</span>
-                </div>
-              </div>
-            ) : (
-              <ActionSetting
-                label="Usage Analytics"
-                description="View your session history, pattern detection stats, and usage trends."
-                buttonText="View Analytics"
-                onClick={() => { if (!isPreviewing) dispatch({ type: 'NAVIGATE', screen: 'analytics' }); }}
-              />
-            )}
-            {effectiveIsAdmin && (
-              <ActionSetting
-                label="Exec Dashboard"
-                description="Executive metrics and aggregate system statistics (admin only)."
-                buttonText="View Dashboard"
-                onClick={() => { if (!isPreviewing) dispatch({ type: 'NAVIGATE', screen: 'exec' }); }}
-              />
-            )}
-          </SettingsCard>
-        </>
-      )}
-
-      {/* ── 4. ADVANCED ───────────────────────────────────────────────── */}
-      {activeTab === 'advanced' && (
-        <>
-          <SettingsCard label="Autonomy Controls">
-            <ToggleSetting
-              label="UI Self-Tuning"
-              description="Allows the interface to adjust card order and layout based on your usage patterns."
-              value={settings.uiSelfTuning}
-              onChange={v => update('uiSelfTuning', v)}
-            />
-            <ToggleSetting
-              label="Experiment Participation"
-              description="Opt in to receive early-access features and A/B test variants."
-              value={settings.experimentParticipation}
-              onChange={v => update('experimentParticipation', v)}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="Debug & Diagnostics">
-            <ToggleSetting
-              label="Show Debug Signals"
-              description="Overlays raw vision signals and confidence scores on results cards."
-              value={settings.showDebugSignals}
-              onChange={v => update('showDebugSignals', v)}
-            />
-            <ActionSetting
-              label="View Event Logs"
-              description="Browse recent system events and analysis logs."
-              buttonText="View Logs"
-              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
-            />
-            <ActionSetting
-              label="Simulate Low Confidence"
-              description="Forces a low-confidence state in the next analysis run."
-              buttonText="Simulate"
-              onClick={handleSimulateLowConf}
-            />
-            <ActionSetting
-              label="Reset System State"
-              description="Clears locally stored learning data, session state, and cached results."
-              buttonText="Reset State"
-              destructive
-              onClick={handleSystemReset}
-            />
-          </SettingsCard>
-
-          <SettingsCard label="System Safety">
-            <ToggleSetting
-              label="Stability Mode"
-              description="Prevents autonomous adjustments from stacking. Recommended while learning the system."
-              value={settings.stabilityMode}
-              onChange={v => update('stabilityMode', v)}
-            />
-            <ActionSetting
-              label="Recent System Adjustments"
-              description="View a log of recent autonomous changes."
-              buttonText="View Log"
-              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
-            />
-            <ActionSetting
-              label="Rollback Last Adjustment"
-              description="Reverse the most recent autonomous system adjustment."
-              buttonText="Rollback"
-              destructive
-              onClick={handleRollback}
-            />
-          </SettingsCard>
-
-          {/* Preview As — available to all users */}
-          <SettingsCard label="Preview As">
-            <div className="stg-row stg-row--action stg-row--view-as">
-              <div className="stg-row__meta">
-                <span className="stg-row__label">Access Level</span>
-                <span className="stg-row__desc">See the app as a different account type — paywalls, feature access, and cards adapt to the selection.</span>
-              </div>
-              <div className="stg__view-as-group">
-                <div className="stg__view-as-row">
-                  <span className="stg__view-as-sublabel">Access</span>
-                  <div className="stg__seg stg__seg--quota">
-                    {VIEW_AS_ACCESS.map(o => (
-                      <button
-                        key={String(o.id)}
-                        className={`stg__seg-btn stg__seg-btn--quota${viewAsAccess === o.id ? ' stg__seg-btn--on' : ''}`}
-                        onClick={() => setViewAsAccess(o.id)}
-                        type="button"
-                      >
-                        <span className="stg__seg-btn-label">{o.label}</span>
-                        {o.quota && <span className="stg__seg-btn-quota">{o.quota}</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="stg__view-as-row">
-                  <span className="stg__view-as-sublabel">Role</span>
-                  <div className="stg__seg">
-                    {VIEW_AS_ROLE.map(o => (
-                      <button
-                        key={String(o.id)}
-                        className={`stg__seg-btn${viewAsRole === o.id ? ' stg__seg-btn--on' : ''}`}
-                        onClick={() => setViewAsRole(o.id)}
-                        type="button"
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </SettingsCard>
-
-          {isEnabled('enable_lab') && isAdmin && (
-            <SettingsCard label="Dev Tools">
-              {/* Plan tier (actual — not preview) */}
-              <div className="stg-row stg-row--action">
-                <div className="stg-row__meta">
-                  <span className="stg-row__label">Plan Tier</span>
-                  <span className="stg-row__desc">
-                    {isAdmin ? 'Admin — always Enterprise' : 'Simulate plan tier for testing'}
-                  </span>
-                </div>
-                <div className="stg__seg stg__seg--plan">
-                  {['free', 'paid', 'pro', 'enterprise'].map(p => (
-                    <button
-                      key={p}
-                      className={`stg__seg-btn${plan === p ? ' stg__seg-btn--on' : ''}`}
-                      onClick={() => {
-                        if (isAdmin) { showToast('Admin is always Enterprise'); return; }
-                        setPlan(p);
-                        if (p !== 'free') unlock(); else lock();
-                        showToast(`Plan set to ${PLAN_LABELS[p]}`);
-                      }}
-                      type="button"
-                    >
-                      {PLAN_LABELS[p]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </SettingsCard>
-          )}
-        </>
-      )}
-
-      {/* ── Account ─────────────────────────────────────────────────────── */}
-      <div className="stg-account">
-        {user ? (
-          <>
-            <div className="stg-account__row">
-              <span className="stg-account__label">Signed in as</span>
-              <span className="stg-account__value">{user.username}</span>
-            </div>
-            <div className="stg-account__row" style={{ marginTop: 'var(--space-xs)' }}>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                style={{ fontSize: 'var(--text-xs)' }}
-                onClick={() => dispatch({ type: 'NAVIGATE', screen: 'onboarding' })}
-              >
-                Edit photographer profile
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="stg-account__row">
-            <span className="stg-account__label">Account</span>
-            <span className="stg-account__value stg-account__value--dim">Not signed in</span>
-          </div>
-        )}
-      </div>
-
-      {/* ── Reset ───────────────────────────────────────────────────────── */}
-      <button className="stg__reset" onClick={handleReset} type="button">
-        Reset to Defaults
-      </button>
-
-      {/* ── About (5× tap toggles dev mode) ─────────────────────────────── */}
-      <div className="stg__about" onClick={handleVersionTap} role="presentation">
-        <span className="stg__about-name">No Guesswork Lighting</span>
-        <span className="stg__about-version">{APP_VERSION}</span>
-      </div>
-
-      {/* ── Modals ──────────────────────────────────────────────────────── */}
+  const Modals = (
+    <>
       <ConfirmActionModal
         open={!!confirm}
         title={confirm?.title}
@@ -731,12 +282,432 @@ export default function SettingsScreen() {
         onConfirm={confirm?.onConfirm}
         onCancel={() => setConfirm(null)}
       />
-
       <Toast
         message={toast.message}
         visible={toast.visible}
         onDone={() => setToast(t => ({ ...t, visible: false }))}
       />
+    </>
+  );
+
+  // ── PREFERENCES ───────────────────────────────────────────────────────────
+
+  if (subScreen === 'preferences') {
+    return (
+      <div className="stgx">
+        <ScreenHeader title="Preferences" backLabel="Settings" onBack={goBack} />
+
+        <SectionHdr label="ANALYSIS" />
+        <ListCard>
+          <NavRow
+            label="Primary display"
+            value={settings.viewMode === 'full' ? 'Full' : 'Blueprint'}
+            onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
+          />
+          <NavRow
+            label="Guidance level"
+            value={settings.guidanceLevel === 'minimal' ? 'Minimal' : settings.guidanceLevel === 'full' ? 'Coaching' : 'Guided'}
+            onClick={() => {
+              const levels = ['minimal', 'guided', 'full'];
+              const idx = levels.indexOf(settings.guidanceLevel || 'guided');
+              update('guidanceLevel', levels[(idx + 1) % levels.length]);
+            }}
+          />
+          <NavRow
+            label="Confidence display"
+            value={settings.confidenceDisplay === 'numeric' ? 'Numeric' : settings.confidenceDisplay === 'detailed' ? 'Detailed' : 'Simple'}
+            onClick={() => {
+              const opts = ['simple', 'numeric', 'detailed'];
+              const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
+              update('confidenceDisplay', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <ToggleRow
+            label="Show confidence score"
+            value={!!settings.showConfidenceScore}
+            onChange={v => update('showConfidenceScore', v)}
+          />
+          <NavRow
+            label="Explanation depth"
+            value={settings.explanationDepth === 'brief' ? 'Brief' : settings.explanationDepth === 'technical' ? 'Technical' : 'Standard'}
+            onClick={() => {
+              const opts = ['brief', 'standard', 'technical'];
+              const idx = opts.indexOf(settings.explanationDepth || 'standard');
+              update('explanationDepth', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <NavRow
+            label="Pattern sensitivity"
+            value={settings.patternSensitivity === 'strict' ? 'Strict' : settings.patternSensitivity === 'flexible' ? 'Flexible' : 'Balanced'}
+            onClick={() => {
+              const opts = ['strict', 'balanced', 'flexible'];
+              const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
+              update('patternSensitivity', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <NavRow
+            label="Session storage"
+            value={settings.sessionStorage === 'auto' ? 'Auto' : settings.sessionStorage === 'off' ? 'Off' : 'Manual'}
+            onClick={() => {
+              const opts = ['auto', 'manual', 'off'];
+              const idx = opts.indexOf(settings.sessionStorage || 'auto');
+              update('sessionStorage', opts[(idx + 1) % opts.length]);
+            }}
+          />
+        </ListCard>
+
+        <SectionHdr label="SHOOT MODE" />
+        <ListCard>
+          <NavRow
+            label="Comparison prompts"
+            value={settings.comparisonPrompts === 'auto' ? 'Auto' : settings.comparisonPrompts === 'low_conf_only' ? 'Low conf' : 'Off'}
+            onClick={() => {
+              const opts = ['auto', 'low_conf_only', 'off'];
+              const idx = opts.indexOf(settings.comparisonPrompts || 'auto');
+              update('comparisonPrompts', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <NavRow
+            label="Shoot mode style"
+            value={settings.shootModeStyle === 'checklist' ? 'Checklist' : 'Step-by-step'}
+            onClick={() => update('shootModeStyle', settings.shootModeStyle === 'checklist' ? 'step' : 'checklist')}
+          />
+          <ToggleRow
+            label="Live overlay"
+            value={!!settings.uiSelfTuning}
+            onChange={v => update('uiSelfTuning', v)}
+          />
+          <NavRow
+            label="Power readout"
+            value={powerLabel}
+            onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
+          />
+        </ListCard>
+
+        <SectionHdr label="RECIPES" />
+        <ListCard>
+          <ToggleRow
+            label="Show descriptions"
+            value={settings.allowLearning !== false}
+            onChange={v => update('allowLearning', v)}
+          />
+          <NavRow label="Default sort" value="Recent" onClick={() => {}} />
+        </ListCard>
+
+        <SectionHdr label="APPEARANCE" />
+        <ListCard>
+          <NavRow
+            label="Theme"
+            value={themeLabel}
+            onClick={cycleTheme}
+          />
+          <NavRow
+            label="Typeface"
+            value={fontLabel}
+            onClick={() => cycleOption('fontFamily', FONT_FAMILIES)}
+          />
+          <NavRow
+            label="Font size"
+            value={sizeLabel}
+            onClick={() => cycleOption('fontSize', FONT_SIZES)}
+          />
+          <NavRow
+            label="Density"
+            value={densityLabel}
+            onClick={() => cycleOption('density', DENSITY_OPTIONS)}
+          />
+          <NavRow
+            label="Diagram style"
+            value="Blueprint"
+            onClick={() => {}}
+          />
+          <NavRow
+            label="Unit system"
+            value={unitsLabel}
+            onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+          />
+          <ToggleRow
+            label="Reduce motion"
+            value={!!settings.reduceMotion}
+            onChange={v => update('reduceMotion', v)}
+          />
+          <ToggleRow
+            label="Haptic feedback"
+            value={settings.hapticFeedback !== false}
+            onChange={v => update('hapticFeedback', v)}
+          />
+          <NavRow
+            label="Navigation bar"
+            value={navLabel}
+            onClick={() => cycleOption('navStyle', NAV_STYLE_OPTIONS)}
+          />
+        </ListCard>
+
+        <SectionHdr label="INTELLIGENCE" />
+        <ListCard>
+          <NavRow
+            label="Role mode"
+            value={modeLabel}
+            onClick={cycleMode}
+          />
+          <NavRow
+            label="Autonomy level"
+            value={settings.autonomyLevel === 'manual' ? 'Manual' : settings.autonomyLevel === 'adaptive' ? 'Adaptive' : 'Assisted'}
+            onClick={() => {
+              const opts = ['manual', 'assisted', 'adaptive'];
+              const idx = opts.indexOf(settings.autonomyLevel || 'assisted');
+              update('autonomyLevel', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <NavRow
+            label="Fix guidance"
+            value={settings.fixGuidance === 'quick' ? 'Quick' : settings.fixGuidance === 'detailed' ? 'Detailed' : 'Balanced'}
+            onClick={() => {
+              const opts = ['quick', 'balanced', 'detailed'];
+              const idx = opts.indexOf(settings.fixGuidance || 'balanced');
+              update('fixGuidance', opts[(idx + 1) % opts.length]);
+            }}
+          />
+          <ToggleRow
+            label="Stability mode"
+            value={!!settings.stabilityMode}
+            onChange={v => update('stabilityMode', v)}
+          />
+        </ListCard>
+
+        <SectionHdr label="PRIVACY" />
+        <ListCard>
+          <ToggleRow
+            label="Allow analytics"
+            value={settings.allowAnalytics !== false}
+            onChange={v => update('allowAnalytics', v)}
+          />
+          <NavRow
+            label="Image handling"
+            value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
+            onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
+          />
+        </ListCard>
+
+        <ListCard className="stgx-list--destructive">
+          <NavRow label="Reset to Defaults" danger onClick={handleReset} />
+        </ListCard>
+
+        {Modals}
+      </div>
+    );
+  }
+
+  // ── ACCOUNT & BILLING ─────────────────────────────────────────────────────
+
+  if (subScreen === 'account') {
+    const planName = effectiveIsAdmin ? 'Enterprise Plan' : effectiveIsPaid ? 'Pro Plan' : 'Free Plan';
+    const planSub  = effectiveIsPaid ? 'Active subscription' : 'Limited access — 5 analyses/mo';
+
+    return (
+      <div className="stgx">
+        <ScreenHeader title="Account & Billing" backLabel="Settings" onBack={goBack} />
+
+        {/* Plan card */}
+        <div className={`stgx-plan-card${effectiveIsPaid ? ' stgx-plan-card--paid' : ''}`}>
+          <div className="stgx-plan-card__body">
+            <div className="stgx-plan-card__name">{planName}</div>
+            <div className="stgx-plan-card__sub">{planSub}</div>
+            {effectiveIsPaid && (
+              <div className="stgx-plan-card__renew">Renews April 28, 2026</div>
+            )}
+          </div>
+          <span className={`stgx-plan-badge${effectiveIsPaid ? ' stgx-plan-badge--active' : ''}`}>
+            {effectiveIsPaid ? 'Active' : 'Free'}
+          </span>
+        </div>
+
+        {/* ACCOUNT */}
+        <SectionHdr label="ACCOUNT" />
+        <ListCard>
+          <InfoRow label="Email" value={displayEmail || '—'} />
+          <NavRow label="Password" onClick={() => {}} />
+          <NavRow
+            label="Connected kit"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'my_kit' })}
+          />
+        </ListCard>
+
+        {/* Billing row */}
+        <ListCard className="stgx-list--billing">
+          {effectiveIsPaid ? (
+            <NavRow label="Manage billing & invoices" billing onClick={() => {}} />
+          ) : (
+            <NavRow label="Upgrade to Pro" billing onClick={unlock} />
+          )}
+        </ListCard>
+
+        {/* PROFILE & ANALYTICS */}
+        <SectionHdr label="PROFILE" />
+        <ListCard>
+          <NavRow
+            label="Edit photographer profile"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'onboarding' })}
+          />
+          <NavRow
+            label="View analytics"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+          />
+          {effectiveIsAdmin && (
+            <NavRow
+              label="Exec dashboard"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'analytics' })}
+            />
+          )}
+        </ListCard>
+
+        {/* CONTROLS */}
+        <SectionHdr label="CONTROLS" />
+        <ListCard>
+          <ToggleRow
+            label="Experiment participation"
+            value={settings.experimentParticipation !== false}
+            onChange={v => update('experimentParticipation', v)}
+          />
+        </ListCard>
+
+        {/* Destructive actions */}
+        <ListCard className="stgx-list--destructive">
+          <NavRow label="Delete account" danger onClick={() => {}} />
+          <NavRow label="Sign out" danger onClick={handleSignOut} />
+        </ListCard>
+
+        {/* Dev tools — lab enabled, admin or dev mode */}
+        {isEnabled('enable_lab') && (
+          <>
+            <SectionHdr label="DEV TOOLS" />
+            <ListCard>
+              {effectiveIsAdmin && (
+                <NavRow
+                  label="Preview As"
+                  value={viewAsAccess ? `${viewAsAccess}` : 'Actual'}
+                  onClick={() => {
+                    const opts = [null, 'free', 'paid', 'admin'];
+                    const idx = opts.indexOf(viewAsAccess);
+                    setViewAsAccess(opts[(idx + 1) % opts.length]);
+                  }}
+                />
+              )}
+              <ToggleRow
+                label="Show debug signals"
+                value={!!settings.showDebugSignals}
+                onChange={v => update('showDebugSignals', v)}
+              />
+              <NavRow
+                label="Simulate low confidence"
+                onClick={handleSimulateLowConf}
+              />
+              <NavRow
+                label="View event logs"
+                onClick={() => {
+                  try {
+                    const logs = JSON.parse(localStorage.getItem('ngw_event_log') || '[]');
+                    showToast(`${logs.length} events logged`);
+                  } catch { showToast('No event logs found'); }
+                }}
+              />
+              <ToggleRow
+                label="Test session"
+                value={isTestSession}
+                onChange={handleTestSessionToggle}
+              />
+              <NavRow label="Reset system state" danger onClick={handleSystemReset} />
+              <NavRow label="Rollback last adjustment" danger onClick={handleRollback} />
+            </ListCard>
+          </>
+        )}
+
+        {Modals}
+      </div>
+    );
+  }
+
+  // ── MAIN SETTINGS ─────────────────────────────────────────────────────────
+
+  return (
+    <div className="stgx">
+      <ScreenHeader title="Settings" backLabel="Back" onBack={goBack} />
+
+      {/* User card — taps to Account & Billing */}
+      <button
+        className="stgx-user-card"
+        onClick={() => setSubScreen('account')}
+        type="button"
+      >
+        <div className="stgx-user-card__avatar">
+          {(displayName || 'G').charAt(0).toUpperCase()}
+        </div>
+        <div className="stgx-user-card__info">
+          <div className="stgx-user-card__name">
+            {displayName || 'Guest'}
+          </div>
+          {displayEmail && (
+            <div className="stgx-user-card__email">{displayEmail}</div>
+          )}
+        </div>
+        <span className={`stgx-user-badge${effectiveIsPaid ? ' stgx-user-badge--paid' : ''}`}>
+          {planLabel}
+        </span>
+      </button>
+
+      {/* GENERAL */}
+      <SectionHdr label="GENERAL" />
+      <ListCard>
+        <NavRow
+          label="Units"
+          value={unitsLabel}
+          onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+        />
+        <ToggleRow
+          label="Analysis auto-save"
+          value={settings.sessionStorage === 'auto'}
+          onChange={v => update('sessionStorage', v ? 'auto' : 'manual')}
+        />
+        <NavRow
+          label="Default kit view"
+          value={settings.viewMode === 'full' ? 'Full' : 'Lights first'}
+          onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
+        />
+        <NavRow
+          label="Preferences"
+          onClick={() => setSubScreen('preferences')}
+        />
+      </ListCard>
+
+      {/* SUPPORT */}
+      <SectionHdr label="SUPPORT" />
+      <ListCard>
+        <NavRow label="Help & FAQ" onClick={() => {}} />
+        <NavRow label="Contact support" onClick={() => {}} />
+        <NavRow label="Rate NGW" onClick={() => {}} />
+      </ListCard>
+
+      {/* LEGAL */}
+      <SectionHdr label="LEGAL" />
+      <ListCard>
+        <NavRow label="Privacy Policy" onClick={() => {}} />
+        <NavRow label="Terms of Service" onClick={() => {}} />
+      </ListCard>
+
+      {/* Sign out */}
+      {user && (
+        <ListCard className="stgx-list--destructive">
+          <NavRow label="Sign out" danger onClick={handleSignOut} />
+        </ListCard>
+      )}
+
+      {/* Hidden version tap — 5× to toggle dev mode */}
+      <div className="stgx-about" onClick={handleVersionTap} role="presentation">
+        <span className="stgx-about__app">No Guesswork Lighting</span>
+        <span className="stgx-about__ver">{APP_VERSION}</span>
+      </div>
+
+      {Modals}
     </div>
   );
 }
