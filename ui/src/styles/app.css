@@ -15141,20 +15141,36 @@ body {
      Supersedes legacy 1fr 1fr rule (~line 4052).
      Canonical desktop ratio from Figma seed: 55/45.
      Left = primary/setup dominant.
-     Right = secondary/analysis supportive. */
+     Right = secondary/analysis supportive.
+     min-width: 0 prevents long saved-setup names from
+     expanding the secondary track beyond its fr share. */
   .results-two-col {
     grid-template-columns: 55fr 45fr;
     max-width: 1200px;
   }
+  .results-two-col__primary,
+  .results-two-col__secondary {
+    min-width: 0;
+  }
 
   /* ── Setup Sheet ─────────────────────────────────────
      Tablet 55/45 → Desktop 58/42. Diagram gains canvas.
-     Override global desktop .screen padding so the
-     sticky header and CTA bar remain edge-to-edge. */
+     padding-top: 0 removes the top inset from the base
+     1080px .screen rule; horizontal padding is preserved
+     so the diagram tab bar aligns with the sticky header.
+     .screen.setup-sheet > * overrides the 1400px+ rule
+     that auto-centers .screen > * with max-width and
+     margin-inline: auto — prevents header/diagram
+     left-edge misalignment at wide viewports. */
   .screen.setup-sheet {
-    padding: 0;
+    padding-top: 0;
     padding-bottom: 72px;     /* preserve sticky CTA clearance */
     grid-template-columns: 58fr 42fr;
+  }
+  .screen.setup-sheet > * {
+    max-width: none;
+    margin-inline: 0;
+    width: 100%;
   }
   .setup-sheet__diagram {
     padding-top: var(--space-lg);
