@@ -272,8 +272,66 @@ export default function RecipeScreen() {
     }
   }
 
+  // Detail content shared between inline (mobile) and panel (tablet+)
+  function RecipeDetailContent({ recipe }) {
+    return (
+      <>
+        <div className="recipe-card__signals">
+          <span className="recipe-signal">
+            <span className="recipe-signal__label">Difficulty</span>
+            <span className="recipe-signal__value">{DIFFICULTY_LABEL[recipe.difficulty] || recipe.difficulty}</span>
+          </span>
+          {recipe.useCase && (
+            <span className="recipe-signal">
+              <span className="recipe-signal__label">Use case</span>
+              <span className="recipe-signal__value">{recipe.useCase}</span>
+            </span>
+          )}
+          {recipe.gearFlexibility && (
+            <span className="recipe-signal">
+              <span className="recipe-signal__label">Gear</span>
+              <span className="recipe-signal__value">{recipe.gearFlexibility}</span>
+            </span>
+          )}
+        </div>
+        {recipe.whyItWorks && (
+          <div className="recipe-card__why">{recipe.whyItWorks}</div>
+        )}
+        {recipe.warning && (
+          <div className="recipe-card__warning">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            {recipe.warning}
+          </div>
+        )}
+        {recipe.variations?.length > 0 && (
+          <div className="recipe-card__variations">
+            <span className="recipe-card__variations-label">Variations</span>
+            {recipe.variations.map((v, i) => (
+              <div key={i} className="recipe-card__variation">
+                <strong>{v.label}:</strong> {v.mod}
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          className="btn btn--primary btn--sm recipe-card__run-btn"
+          onClick={() => selectRecipe(recipe)}
+          type="button"
+        >
+          Run this setup
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 6 }}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </>
+    );
+  }
+
+  // Resolved expanded recipe for right-panel rendering at tablet+
+  const panelRecipe = expandedId ? filtered.find(r => r.id === expandedId) : null;
+  const panelMeta   = panelRecipe ? (RECIPE_META[panelRecipe.id] || {}) : null;
+  const panelUnlocked = panelRecipe ? canRunRecipe(panelMeta) : false;
+
   return (
-    <div className="screen">
+    <div className="screen recipe-screen">
       <h2 className="screen-heading">Lighting Setups</h2>
 
       <div className="chip-grid" style={{ marginBottom: 16 }}>
@@ -290,166 +348,136 @@ export default function RecipeScreen() {
         ))}
       </div>
 
-      <div className="recipe-list">
-        {filtered.length === 0 && (
-          <div className="recipe-empty-state">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-              style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}
-            >
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <p className="recipe-empty-state__title">
-              No setups in{' '}
-              {filter
-                ? `"${RECIPE_CATEGORIES.find(c => c.value === filter)?.label ?? filter}"`
-                : 'this category'}
-            </p>
-            <p className="recipe-empty-state__sub">
-              Try a different category or browse all setups.
-            </p>
-            {filter && (
-              <button
-                className="btn btn--ghost btn--sm"
-                onClick={() => setFilter(null)}
-                type="button"
-              >
-                Browse all setups
-              </button>
-            )}
-          </div>
-        )}
-        {filtered.map(recipe => {
-          const isExpanded = expandedId === recipe.id;
-          const kitMatch     = checkKitMatch(recipe);
-          const meta         = RECIPE_META[recipe.id] || {};
-          const lightType    = meta.lightType;
-          const unlocked     = canRunRecipe(meta);
-          const isPaidOnly   = (meta.minPlan === 'paid') && !unlocked;
-          const isStudioOnly = (meta.minPlan === 'studio') && !unlocked;
-          return (
-            <div
-              key={recipe.id}
-              ref={el => { cardRefs.current[recipe.id] = el; }}
-              className={`intent-card recipe-card${recipe.recommended ? ' intent-card--recommended' : ''}${isExpanded ? ' recipe-card--expanded' : ''}${!unlocked ? ' recipe-card--locked' : ''}`}
-            >
-              {/* Main tap area — expands detail */}
-              <button
-                className="recipe-card__main"
-                onClick={() => unlocked ? handleExpand(recipe.id) : setShowPricing(true)}
-                type="button"
-              >
-                <span className="intent-card__text">
-                  <strong>{recipe.name}</strong>
-                  <small>{recipe.description}</small>
-                  <span className="intent-card__footer">
-                    {recipe.patternPreview && (
-                      <span className="best-match__pattern">{recipe.patternPreview}</span>
-                    )}
-                    {recipe.setupTime && (
-                      <span className="recipe-setup-time">{recipe.setupTime}</span>
-                    )}
-                    {recipe.consistency && (
-                      <span className={`recipe-consistency recipe-consistency--${recipe.consistency}`}>
-                        {CONSISTENCY_LABEL[recipe.consistency]}
-                      </span>
-                    )}
-                    {lightType === 'continuous' && (
-                      <span className="recipe-light-type recipe-light-type--continuous">Video-ready</span>
-                    )}
-                    {lightType === 'strobe' && (
-                      <span className="recipe-light-type recipe-light-type--strobe">Flash only</span>
-                    )}
-                    {!unlocked && isStudioOnly && (
-                      <span className="recipe-lock-badge recipe-lock-badge--studio">Studio</span>
-                    )}
-                    {!unlocked && isPaidOnly && !isStudioOnly && (
-                      <span className="recipe-lock-badge">Paid</span>
-                    )}
-                    {!unlocked && effectiveIsGuest && (
-                      <span className="recipe-lock-badge recipe-lock-badge--signin">Sign in</span>
-                    )}
-                    {unlocked && kitMatch && (
-                      <span className={`recipe-kit-match recipe-kit-match--${kitMatch.status}`}>
-                        {kitMatch.label}
-                      </span>
-                    )}
-                  </span>
-                </span>
-                {unlocked
-                  ? <span className="intent-card__arrow">{isExpanded ? '\u2039' : '\u203A'}</span>
-                  : <span className="recipe-card__lock-icon">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0110 0v4"/>
-                      </svg>
-                    </span>
-                }
-              </button>
-
-              {/* Expanded detail */}
-              {isExpanded && unlocked && (
-                <div className="recipe-card__detail">
-                  {/* Confidence signals */}
-                  <div className="recipe-card__signals">
-                    <span className="recipe-signal">
-                      <span className="recipe-signal__label">Difficulty</span>
-                      <span className="recipe-signal__value">{DIFFICULTY_LABEL[recipe.difficulty] || recipe.difficulty}</span>
-                    </span>
-                    {recipe.useCase && (
-                      <span className="recipe-signal">
-                        <span className="recipe-signal__label">Use case</span>
-                        <span className="recipe-signal__value">{recipe.useCase}</span>
-                      </span>
-                    )}
-                    {recipe.gearFlexibility && (
-                      <span className="recipe-signal">
-                        <span className="recipe-signal__label">Gear</span>
-                        <span className="recipe-signal__value">{recipe.gearFlexibility}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Why it works */}
-                  {recipe.whyItWorks && (
-                    <div className="recipe-card__why">{recipe.whyItWorks}</div>
-                  )}
-
-                  {/* Warning */}
-                  {recipe.warning && (
-                    <div className="recipe-card__warning">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      {recipe.warning}
-                    </div>
-                  )}
-
-                  {/* Variations */}
-                  {recipe.variations?.length > 0 && (
-                    <div className="recipe-card__variations">
-                      <span className="recipe-card__variations-label">Variations</span>
-                      {recipe.variations.map((v, i) => (
-                        <div key={i} className="recipe-card__variation">
-                          <strong>{v.label}:</strong> {v.mod}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* CTA */}
+      <div className="recipe-screen__body">
+        {/* ── List column ─────────────────────────────── */}
+        <div className="recipe-screen__list-col">
+          <div className="recipe-list">
+            {filtered.length === 0 && (
+              <div className="recipe-empty-state">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}
+                >
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <p className="recipe-empty-state__title">
+                  No setups in{' '}
+                  {filter
+                    ? `"${RECIPE_CATEGORIES.find(c => c.value === filter)?.label ?? filter}"`
+                    : 'this category'}
+                </p>
+                <p className="recipe-empty-state__sub">
+                  Try a different category or browse all setups.
+                </p>
+                {filter && (
                   <button
-                    className="btn btn--primary btn--sm recipe-card__run-btn"
-                    onClick={() => selectRecipe(recipe)}
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => setFilter(null)}
                     type="button"
                   >
-                    Run this setup
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 6 }}><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                    Browse all setups
                   </button>
+                )}
+              </div>
+            )}
+            {filtered.map(recipe => {
+              const isExpanded = expandedId === recipe.id;
+              const kitMatch     = checkKitMatch(recipe);
+              const meta         = RECIPE_META[recipe.id] || {};
+              const lightType    = meta.lightType;
+              const unlocked     = canRunRecipe(meta);
+              const isPaidOnly   = (meta.minPlan === 'paid') && !unlocked;
+              const isStudioOnly = (meta.minPlan === 'studio') && !unlocked;
+              return (
+                <div
+                  key={recipe.id}
+                  ref={el => { cardRefs.current[recipe.id] = el; }}
+                  className={`intent-card recipe-card${recipe.recommended ? ' intent-card--recommended' : ''}${isExpanded ? ' recipe-card--expanded' : ''}${!unlocked ? ' recipe-card--locked' : ''}`}
+                >
+                  <button
+                    className="recipe-card__main"
+                    onClick={() => unlocked ? handleExpand(recipe.id) : setShowPricing(true)}
+                    type="button"
+                  >
+                    <span className="intent-card__text">
+                      <strong>{recipe.name}</strong>
+                      <small>{recipe.description}</small>
+                      <span className="intent-card__footer">
+                        {recipe.patternPreview && (
+                          <span className="best-match__pattern">{recipe.patternPreview}</span>
+                        )}
+                        {recipe.setupTime && (
+                          <span className="recipe-setup-time">{recipe.setupTime}</span>
+                        )}
+                        {recipe.consistency && (
+                          <span className={`recipe-consistency recipe-consistency--${recipe.consistency}`}>
+                            {CONSISTENCY_LABEL[recipe.consistency]}
+                          </span>
+                        )}
+                        {lightType === 'continuous' && (
+                          <span className="recipe-light-type recipe-light-type--continuous">Video-ready</span>
+                        )}
+                        {lightType === 'strobe' && (
+                          <span className="recipe-light-type recipe-light-type--strobe">Flash only</span>
+                        )}
+                        {!unlocked && isStudioOnly && (
+                          <span className="recipe-lock-badge recipe-lock-badge--studio">Studio</span>
+                        )}
+                        {!unlocked && isPaidOnly && !isStudioOnly && (
+                          <span className="recipe-lock-badge">Paid</span>
+                        )}
+                        {!unlocked && effectiveIsGuest && (
+                          <span className="recipe-lock-badge recipe-lock-badge--signin">Sign in</span>
+                        )}
+                        {unlocked && kitMatch && (
+                          <span className={`recipe-kit-match recipe-kit-match--${kitMatch.status}`}>
+                            {kitMatch.label}
+                          </span>
+                        )}
+                      </span>
+                    </span>
+                    {unlocked
+                      ? <span className="intent-card__arrow">{isExpanded ? '\u2039' : '\u203A'}</span>
+                      : <span className="recipe-card__lock-icon">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                            <path d="M7 11V7a5 5 0 0110 0v4"/>
+                          </svg>
+                        </span>
+                    }
+                  </button>
+
+                  {/* Inline detail — mobile only (hidden at 820px+ via CSS) */}
+                  {isExpanded && unlocked && (
+                    <div className="recipe-card__detail recipe-card__detail--inline">
+                      <RecipeDetailContent recipe={recipe} />
+                    </div>
+                  )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Detail panel — tablet+ only (hidden on mobile via CSS) ── */}
+        <div className="recipe-screen__detail-col">
+          {panelRecipe && panelUnlocked ? (
+            <div className="recipe-screen__detail-panel">
+              <strong className="recipe-screen__detail-name">{panelRecipe.name}</strong>
+              <p className="recipe-screen__detail-desc">{panelRecipe.description}</p>
+              <RecipeDetailContent recipe={panelRecipe} />
             </div>
-          );
-        })}
+          ) : (
+            <div className="recipe-screen__detail-empty">
+              {panelRecipe && !panelUnlocked
+                ? <button className="btn btn--primary btn--sm" onClick={() => setShowPricing(true)} type="button">View Plans</button>
+                : <span>Select a setup to see details</span>
+              }
+            </div>
+          )}
+        </div>
       </div>
+
       {showPricing && (
         <PricingScreen
           trigger="recipe_locked"
