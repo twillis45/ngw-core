@@ -7234,6 +7234,15 @@ body {
   opacity: 0.45;
   pointer-events: none;
 }
+@media (max-width: 480px) {
+  /* Non-toggle, non-action rows (segmented controls) stack vertically to
+     prevent label + multi-option control overflow on narrow screens */
+  .stg-row:not(.stg-row--toggle):not(.stg-row--action) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+}
 
 /* ── stg-card — grouped settings card */
 .stg-card {

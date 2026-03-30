@@ -5,8 +5,7 @@ import AppHeader from './components/AppHeader';
 import PreviewBanner from './components/PreviewBanner';
 import BottomNav from './components/BottomNav';
 import Toast from './components/Toast';
-import WelcomeScreen from './screens/WelcomeScreen';
-import HomeScreenV2 from './screens/HomeScreenV2';
+import HomeScreen from './screens/HomeScreenV2';
 import SetupWizard from './screens/SetupWizard';
 import LoadingScreen from './screens/LoadingScreen';
 import ResultsScreenV2 from './screens/ResultsScreenV2';
@@ -17,20 +16,20 @@ import SavedSetupsScreen from './screens/SavedSetupsScreen';
 import AuthScreen from './screens/AuthScreen';
 import OnboardingScreen from './screens/OnboardingScreen';
 import ReferenceEvalScreen from './screens/ReferenceEvalScreen';
+import SetupSheetScreen from './screens/SetupSheetScreen';
 import ShootModeScreen from './screens/ShootModeScreen';
 import ShotMatchScreen from './screens/ShotMatchScreen';
 import LabScreen from './screens/LabScreen';
 import RoomPlannerScreen from './screens/RoomPlannerScreen';
 import SettingsScreen from './screens/SettingsScreen';
-import WelcomeScreenV2 from './screens/WelcomeScreenV2';
+// WelcomeScreenV2 (marketing landing) — removed from in-app shell.
+// File kept for potential standalone marketing route.
 import AnalyticsDashboard from './screens/AnalyticsDashboard';
 import ExecDashboard from './screens/ExecDashboard';
 import SymptomPage from './screens/SymptomPage';
 
 const SCREENS = {
-  welcome: HomeScreenV2,
-  welcome_v1: WelcomeScreen,
-  welcome_v2: WelcomeScreenV2,
+  home:    HomeScreen,
   wizard:  SetupWizard,
   loading: LoadingScreen,
   results: ResultsScreenV2,
@@ -40,6 +39,7 @@ const SCREENS = {
   auth: AuthScreen,
   onboarding: OnboardingScreen,
   ref_eval: ReferenceEvalScreen,
+  setup_sheet: SetupSheetScreen,
   shoot_mode: ShootModeScreen,
   shot_match: ShotMatchScreen,
   lab: LabScreen,
@@ -86,7 +86,7 @@ function buildShareText(result) {
 export default function App() {
   const { screen, result } = useAppState();
   const dispatch = useDispatch();
-  const Screen = SCREENS[screen] || WelcomeScreen;
+  const Screen = SCREENS[screen] || HomeScreen;
   const [toast, setToast] = useState(null);
   const dismissToast = useCallback(() => setToast(null), []);
 
@@ -137,15 +137,21 @@ export default function App() {
     }
   }
 
-  const isV2 = screen === 'welcome_v2';
+  /* Bottom nav visible only on hub / browse screens */
+  const HUB_SCREENS = new Set(['home', 'recipes', 'my_kit', 'saved_setups']);
+  const showBottomNav = HUB_SCREENS.has(screen);
+
+  /* AppHeader only on screens that don't have their own standalone header chrome */
+  const HEADER_SCREENS = new Set(['home', 'results', 'shoot_mode', 'loading']);
+  const showAppHeader = HEADER_SCREENS.has(screen);
 
   return (
     <>
-      {!isV2 && <AppHeader />}
-      {!isV2 && <PreviewBanner />}
+      {showAppHeader && <AppHeader />}
+      <PreviewBanner />
       <div className="app-layout">
-        {!isV2 && <BottomNav onShare={handleShare} />}
-        <Screen />
+        {showBottomNav && <BottomNav />}
+        <Screen onShare={handleShare} />
       </div>
       <Toast message={toast} visible={!!toast} onDone={dismissToast} />
 
