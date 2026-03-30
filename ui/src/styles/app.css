@@ -286,6 +286,19 @@ body {
 
 /* ── Recipe list container ──────────────────────────── */
 .recipe-list { display: flex; flex-direction: column; overflow-x: hidden; }
+/* ── Recipe empty state ─────────────────────────────── */
+.recipe-empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-sm); padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+.recipe-empty-state__title {
+  font-size: var(--text-sm); font-weight: var(--weight-semibold);
+  color: var(--color-text-primary); margin: 0;
+}
+.recipe-empty-state__sub {
+  font-size: var(--text-xs); color: var(--color-text-secondary); margin: 0;
+}
 
 /* ── Recipe card expandable detail ─────────────────── */
 .recipe-card { display: flex; flex-direction: column; }
@@ -2620,6 +2633,22 @@ body {
   text-decoration: underline; text-underline-offset: 2px;
 }
 .auth-card__link:hover { opacity: 0.8; }
+.auth-card__link--forgot {
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+  text-decoration: none; opacity: 0.75;
+}
+.auth-card__link--forgot:hover { opacity: 1; }
+.auth-card__close {
+  position: absolute; top: var(--space-md); right: var(--space-md);
+  background: none; border: none; cursor: pointer;
+  color: var(--color-text-secondary); padding: 4px; line-height: 0;
+  border-radius: var(--radius-sm);
+}
+.auth-card__close:hover { color: var(--color-text); background: var(--color-surface-elevated); }
+.auth-card__divider {
+  height: 1px; background: var(--color-border);
+  margin: var(--space-md) 0;
+}
 .auth-card__reset-info {
   margin-top: var(--space-md); padding: var(--space-md);
   background: rgba(77,163,255,0.06); border: 1px solid rgba(77,163,255,0.2);
@@ -9537,6 +9566,9 @@ body {
 .adb__origin-banner strong { color: var(--color-text); }
 
 .adb__loading { color: var(--color-text-dim); padding: var(--space-xl) 0; text-align: center; }
+.adb__skeleton { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md) 0; }
+.adb__skel-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-sm); }
+.adb__skel-kpi { display: flex; flex-direction: column; gap: 4px; }
 .adb__error {
   background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.3);
   color: #F87171; padding: var(--space-md); border-radius: var(--radius-md);
@@ -12564,6 +12596,21 @@ body {
 
 .symptom-screen {
   max-width: 720px;
+}
+/* ── Symptom not-found recovery state ── */
+.symptom-not-found {
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-sm); padding: var(--space-xl) var(--space-md);
+  text-align: center;
+}
+.symptom-not-found__icon { color: var(--color-text-dim); flex-shrink: 0; }
+.symptom-not-found__title {
+  font-size: var(--text-sm); font-weight: var(--weight-semibold);
+  color: var(--color-text-primary); margin: 0;
+}
+.symptom-not-found__sub {
+  font-size: var(--text-xs); color: var(--color-text-secondary);
+  max-width: 280px; line-height: 1.5; margin: 0;
 }
 
 .symptom-back {

@@ -8,7 +8,7 @@ import { criteriaForGear } from '../gearPresets';
 import useSettings from '../hooks/useSettings';
 import { loadKit } from '../data/kitStore';
 import { getGearProfile } from '../data/lightCatalog';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import usePreviewMode from '../hooks/usePreviewMode';
 import { meetsPlan } from '../data/planStore';
 import PricingScreen from '../components/PricingScreen';
@@ -164,7 +164,7 @@ export default function RecipeScreen() {
   const { user } = useAppState();
   const dispatch = useDispatch();
   const { powerDisplay, units } = useSettings();
-  const { isPaid, isStudio } = usePaywall(user?.email || user?.username || null);
+  const { isPaid, isStudio } = usePaywall(resolveUserEmail(user));
   const { access: previewAccess } = usePreviewMode();
 
   // Effective plan: preview overrides actual
@@ -225,7 +225,7 @@ export default function RecipeScreen() {
     : sorted;
 
   async function selectRecipe(recipe) {
-    dispatch({ type: 'SET_LOADING' });
+    dispatch({ type: 'SET_LOADING', mode: 'match' });
     try {
       const gearProfile = recipe.gearProfile || 'strobe_mono';
       const payload = {
@@ -291,6 +291,34 @@ export default function RecipeScreen() {
       </div>
 
       <div className="recipe-list">
+        {filtered.length === 0 && (
+          <div className="recipe-empty-state">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ color: 'var(--color-text-dim)', flexShrink: 0 }}
+            >
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <p className="recipe-empty-state__title">
+              No setups in{' '}
+              {filter
+                ? `"${RECIPE_CATEGORIES.find(c => c.value === filter)?.label ?? filter}"`
+                : 'this category'}
+            </p>
+            <p className="recipe-empty-state__sub">
+              Try a different category or browse all setups.
+            </p>
+            {filter && (
+              <button
+                className="btn btn--ghost btn--sm"
+                onClick={() => setFilter(null)}
+                type="button"
+              >
+                Browse all setups
+              </button>
+            )}
+          </div>
+        )}
         {filtered.map(recipe => {
           const isExpanded = expandedId === recipe.id;
           const kitMatch     = checkKitMatch(recipe);

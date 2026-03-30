@@ -29,7 +29,7 @@ export default function AnalyticsDashboard() {
   const [origin, setOrigin] = useState('all');
   const [data, setData] = useState(null);
   const [provenance, setProvenance] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const timerRef = useRef(null);

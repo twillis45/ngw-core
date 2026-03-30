@@ -44,6 +44,26 @@ export async function uploadReferenceImage(file) {
   return resp.json();
 }
 
+/** POST /api/merge-analyses — consensus analysis from multiple uploaded images. */
+
+export async function mergeAnalyses(imagePaths) {
+  const resp = await apiFetch('/api/merge-analyses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ imagePaths }),
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    const msg = typeof err.detail === 'string'
+      ? err.detail
+      : JSON.stringify(err.detail || err, null, 2);
+    throw new Error(msg || 'Failed to merge analyses');
+  }
+
+  return resp.json();
+}
+
 /** POST /api/shoot-match and return UI-ready card data. */
 
 export async function fetchShootMatch(wizardState) {

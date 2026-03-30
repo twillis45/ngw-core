@@ -1,39 +1,43 @@
 /**
  * OnboardingScreen — shown once after first registration.
  *
- * Captures photographer profile: display name, experience level,
- * primary genre, typical setting, primary modifier.
+ * Multi-step wizard: Step 1 (experience + genre), Step 2 (setting + modifier),
+ * then a completion summary. Matches Figma "Onboarding — Step (Dark)" and
+ * "Onboarding — Complete (Dark)" designs.
  *
  * Data saved to user_preferences under key 'photographer_profile'.
- * Navigates to 'welcome' on save or skip.
+ * Navigates to 'home' on save or skip.
  */
 
 import { useState, useEffect } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { savePreference, loadPreferences, getUser } from '../data/authApi';
 
-// ── Option sets ────────────────────────────────────────────────────────────────
+// ── Option sets (labels match Figma) ─────────────────────────────────────────
 
 const EXPERIENCE = [
-  { value: 'hobbyist',   label: 'Hobbyist',   desc: 'Learning the craft' },
-  { value: 'enthusiast', label: 'Enthusiast', desc: 'Serious about it' },
-  { value: 'semi_pro',   label: 'Semi-pro',   desc: 'Paid work sometimes' },
-  { value: 'pro',        label: 'Professional', desc: 'Full-time photographer' },
+  { value: 'beginner',   label: 'Beginner' },
+  { value: 'hobbyist',   label: 'Hobbyist' },
+  { value: 'semi_pro',   label: 'Semi-pro' },
+  { value: 'working_pro', label: 'Working pro' },
+  { value: 'educator',   label: 'Educator' },
 ];
 
 const GENRE = [
-  { value: 'portrait',   label: 'Portrait' },
-  { value: 'wedding',    label: 'Wedding' },
-  { value: 'commercial', label: 'Commercial' },
-  { value: 'editorial',  label: 'Editorial / Fashion' },
-  { value: 'event',      label: 'Event' },
-  { value: 'other',      label: 'Other' },
+  { value: 'portrait',    label: 'Portrait' },
+  { value: 'wedding',     label: 'Wedding' },
+  { value: 'commercial',  label: 'Commercial' },
+  { value: 'headshots',   label: 'Headshots' },
+  { value: 'fashion',     label: 'Fashion' },
+  { value: 'events',      label: 'Events' },
+  { value: 'product',     label: 'Product' },
+  { value: 'other',       label: 'Other' },
 ];
 
 const SETTING = [
-  { value: 'studio',    label: 'Studio',      icon: '🏢' },
-  { value: 'location',  label: 'On-location', icon: '🌤' },
-  { value: 'mixed',     label: 'Both',        icon: '↔' },
+  { value: 'studio',   label: 'Studio' },
+  { value: 'location', label: 'On-location' },
+  { value: 'mixed',    label: 'Both' },
 ];
 
 const MODIFIER = [
@@ -45,21 +49,30 @@ const MODIFIER = [
   { value: 'varies',      label: 'Varies' },
 ];
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+const TOTAL_STEPS = 2;
 
-function FieldLabel({ children, hint }) {
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{
-        fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)',
-        color: 'var(--color-text)', marginBottom: hint ? 2 : 0,
-      }}>{children}</div>
-      {hint && (
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{hint}</div>
-      )}
-    </div>
-  );
-}
+// ── Steps config ─────────────────────────────────────────────────────────────
+
+const STEPS = [
+  {
+    title: 'How do you describe\nyour experience?',
+    subtitle: 'This helps us tune the guidance to your level',
+    sections: [
+      { key: 'experience', label: 'EXPERIENCE LEVEL', options: EXPERIENCE, multi: false },
+      { key: 'genre',      label: 'YOUR GENRE',       options: GENRE,      multi: true },
+    ],
+  },
+  {
+    title: 'Where and how\ndo you shoot?',
+    subtitle: 'We\'ll tailor setups and gear suggestions',
+    sections: [
+      { key: 'setting',  label: 'SHOOTING ENVIRONMENT', options: SETTING,  multi: false },
+      { key: 'modifier', label: 'GO-TO MODIFIER',       options: MODIFIER, multi: false },
+    ],
+  },
+];
+
+// ── Sub-components ───────────────────────────────────────────────────────────
 
 function PillGroup({ options, value, onChange, multi = false }) {
   function toggle(v) {
@@ -71,71 +84,70 @@ function PillGroup({ options, value, onChange, multi = false }) {
     return multi ? (Array.isArray(value) && value.includes(v)) : value === v;
   }
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-      {options.map(opt => {
-        const sel = isSelected(opt.value);
-        return (
-          <button
-            key={opt.value}
-            type="button"
-            onClick={() => toggle(opt.value)}
-            style={{
-              padding: '7px 14px',
-              borderRadius: 999,
-              border: `1.5px solid ${sel ? 'var(--color-accent)' : 'var(--color-border)'}`,
-              background: sel ? 'var(--color-accent)' : 'var(--color-surface-elevated)',
-              color: sel ? '#fff' : 'var(--color-text)',
-              fontSize: 'var(--text-sm)',
-              fontWeight: sel ? 'var(--weight-semibold)' : 'var(--weight-normal)',
-              cursor: 'pointer',
-              transition: 'border-color 0.15s, background 0.15s',
-              lineHeight: 1.3,
-            }}
-          >
-            {opt.icon && <span style={{ marginRight: 5 }}>{opt.icon}</span>}
-            {opt.label}
-            {opt.desc && (
-              <span style={{
-                display: 'block', fontSize: 'var(--text-xs)',
-                opacity: sel ? 0.85 : 0.6, fontWeight: 'var(--weight-normal)',
-              }}>{opt.desc}</span>
-            )}
-          </button>
-        );
-      })}
+    <div className="ob-pills">
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`ob-pill${isSelected(opt.value) ? ' ob-pill--selected' : ''}`}
+          onClick={() => toggle(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 }
 
-// ── Main screen ────────────────────────────────────────────────────────────────
+function ProgressDots({ current, total }) {
+  return (
+    <div className="ob-dots">
+      {Array.from({ length: total }, (_, i) => (
+        <div key={i} className={`ob-dots__dot${i === current ? ' ob-dots__dot--active' : ''}`} />
+      ))}
+    </div>
+  );
+}
+
+function SummaryChip({ label }) {
+  return <span className="ob-summary-chip">{label}</span>;
+}
+
+// ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
   const dispatch = useDispatch();
-
-  // Pre-fill display name from the registered user object
   const storedUser = getUser();
-  const [displayName, setDisplayName] = useState(storedUser?.username || '');
-  const [experience, setExperience]   = useState(null);
-  const [genre, setGenre]             = useState([]);   // multi-select
-  const [setting, setSetting]         = useState(null);
-  const [modifier, setModifier]       = useState(null);
-  const [saving, setSaving]           = useState(false);
-  const [isEdit, setIsEdit]           = useState(false); // true when editing existing profile
 
-  // Load existing profile if one was saved previously
+  const [step, setStep] = useState(0); // 0..TOTAL_STEPS-1, then TOTAL_STEPS = complete
+  const [experience, setExperience] = useState(null);
+  const [genre, setGenre]           = useState([]);
+  const [setting, setSetting]       = useState(null);
+  const [modifier, setModifier]     = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [isEdit, setIsEdit]         = useState(false);
+
+  const values = { experience, genre, setting, modifier };
+  const setters = {
+    experience: setExperience,
+    genre: setGenre,
+    setting: setSetting,
+    modifier: setModifier,
+  };
+
+  // Load existing profile if editing
   useEffect(() => {
     loadPreferences()
       .then(prefs => {
         const p = prefs?.photographer_profile;
         if (!p || p.skipped) return;
         setIsEdit(true);
-        if (p.display_name) setDisplayName(p.display_name);
-        if (p.experience)   setExperience(p.experience);
-        if (p.genre)        setGenre(Array.isArray(p.genre) ? p.genre : [p.genre]);
-        if (p.setting)      setSetting(p.setting);
-        if (p.modifier)     setModifier(p.modifier);
+        if (p.experience) setExperience(p.experience);
+        if (p.genre)      setGenre(Array.isArray(p.genre) ? p.genre : [p.genre]);
+        if (p.setting)    setSetting(p.setting);
+        if (p.modifier)   setModifier(p.modifier);
       })
-      .catch(() => { /* non-fatal */ });
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -143,138 +155,130 @@ export default function OnboardingScreen() {
     setSaving(true);
     try {
       const profile = {
-        display_name: displayName.trim() || null,
-        experience:   experience,
-        genre:        genre.length > 0 ? genre : null,
-        setting:      setting,
-        modifier:     modifier,
+        display_name: storedUser?.username || null,
+        experience,
+        genre: genre.length > 0 ? genre : null,
+        setting,
+        modifier,
         completed_at: Date.now(),
       };
       await savePreference('photographer_profile', profile);
     } catch {
-      // Non-fatal — profile is nice-to-have, not required
+      // Non-fatal
     } finally {
       setSaving(false);
     }
-    dispatch({ type: 'NAVIGATE', screen: 'welcome' });
+    dispatch({ type: 'NAVIGATE', screen: 'home' });
   }
 
   function handleSkip() {
-    // Mark as seen so we don't show again
     savePreference('photographer_profile', { skipped: true, completed_at: Date.now() }).catch(() => {});
-    dispatch({ type: 'NAVIGATE', screen: 'welcome' });
+    dispatch({ type: 'NAVIGATE', screen: 'home' });
   }
 
-  return (
-    <div className="screen" style={{ paddingBottom: 'calc(var(--space-xl) * 2)' }}>
-      <div style={{
-        maxWidth: 520,
-        margin: '0 auto',
-        padding: '0 var(--space-md)',
-      }}>
+  function handleNext() {
+    if (step < TOTAL_STEPS - 1) {
+      setStep(step + 1);
+    } else {
+      setStep(TOTAL_STEPS); // go to complete
+    }
+  }
 
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: 'var(--space-xl)', paddingTop: 'var(--space-lg)' }}>
-          <div style={{
-            width: 48, height: 48,
-            borderRadius: '50%',
-            background: 'var(--color-accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto var(--space-md)',
-          }}>
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-              stroke="#fff" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
+  // ── Complete screen ──
+  if (step === TOTAL_STEPS) {
+    const chips = [];
+    if (experience) {
+      const exp = EXPERIENCE.find(e => e.value === experience);
+      if (exp) chips.push(exp.label);
+    }
+    if (genre.length > 0) {
+      const g = GENRE.find(g => g.value === genre[0]);
+      if (g) chips.push(g.label);
+    }
+    if (modifier) {
+      const m = MODIFIER.find(m => m.value === modifier);
+      if (m) chips.push(m.label);
+    }
+
+    return (
+      <div className="screen ob-screen ob-screen--complete">
+        <div className="ob-complete">
+          <div className="ob-complete__icon">
+            <span className="ob-complete__sparkle">✦</span>
           </div>
-          <h2 style={{
-            fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-bold)',
-            color: 'var(--color-text)', margin: '0 0 var(--space-xs)',
-          }}>{isEdit ? 'Your photographer profile' : 'Tell us about your photography'}</h2>
-          <p style={{
-            fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)',
-            margin: 0, lineHeight: 1.5,
-          }}>
-            {isEdit
-              ? 'Update your profile at any time. Changes take effect immediately.'
-              : 'This helps personalise lighting guidance and recommendations. You can update this in Settings at any time.'}
+          <h2 className="ob-complete__title">You're all set.</h2>
+          <p className="ob-complete__subtitle">
+            Your profile is saved. Start your first analysis whenever you're ready.
           </p>
-        </div>
-
-        {/* Form */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
-
-          {/* Display name */}
-          <div>
-            <FieldLabel hint="How you'll appear in the app">Your name</FieldLabel>
-            <input
-              type="text"
-              value={displayName}
-              onChange={e => setDisplayName(e.target.value)}
-              placeholder="Display name"
-              maxLength={48}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                padding: '10px 14px',
-                background: 'var(--color-surface-elevated)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--color-text)',
-                fontSize: 'var(--text-sm)',
-              }}
-            />
-          </div>
-
-          {/* Experience */}
-          <div>
-            <FieldLabel>Experience level</FieldLabel>
-            <PillGroup options={EXPERIENCE} value={experience} onChange={setExperience} />
-          </div>
-
-          {/* Genre */}
-          <div>
-            <FieldLabel hint="Pick all that apply">Primary genre</FieldLabel>
-            <PillGroup options={GENRE} value={genre} onChange={setGenre} multi />
-          </div>
-
-          {/* Setting */}
-          <div>
-            <FieldLabel>Typical shooting environment</FieldLabel>
-            <PillGroup options={SETTING} value={setting} onChange={setSetting} />
-          </div>
-
-          {/* Modifier */}
-          <div>
-            <FieldLabel hint="What you reach for most often">Favourite light modifier</FieldLabel>
-            <PillGroup options={MODIFIER} value={modifier} onChange={setModifier} />
-          </div>
-
-        </div>
-
-        {/* Actions */}
-        <div style={{
-          marginTop: 'var(--space-xl)',
-          display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)',
-        }}>
+          {chips.length > 0 && (
+            <div className="ob-complete__chips">
+              {chips.map(c => <SummaryChip key={c} label={c} />)}
+            </div>
+          )}
           <button
-            className="btn btn--primary"
-            style={{ width: '100%' }}
+            className="ob-cta"
+            type="button"
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? 'Saving…' : 'Get started →'}
-          </button>
-          <button
-            className="btn btn--ghost"
-            style={{ width: '100%' }}
-            onClick={handleSkip}
-            disabled={saving}
-          >
-            Skip for now
+            {saving ? 'Saving…' : 'Start analyzing  →'}
           </button>
         </div>
+      </div>
+    );
+  }
 
+  // ── Step screen ──
+  const currentStep = STEPS[step];
+
+  return (
+    <div className="screen ob-screen">
+      {/* Top bar */}
+      <div className="ob-topbar">
+        <span className="ob-topbar__title">
+          {isEdit ? 'Edit your profile' : 'Set up your profile'}
+        </span>
+        <button className="ob-topbar__skip" type="button" onClick={handleSkip}>
+          Skip
+        </button>
+      </div>
+
+      {/* Progress dots */}
+      <ProgressDots current={step} total={TOTAL_STEPS} />
+
+      {/* Content */}
+      <div className="ob-content">
+        <div className="ob-step-header">
+          <h2 className="ob-step-header__title">
+            {currentStep.title.split('\n').map((line, i) => (
+              <span key={i}>{line}{i < currentStep.title.split('\n').length - 1 && <br />}</span>
+            ))}
+          </h2>
+          <p className="ob-step-header__sub">{currentStep.subtitle}</p>
+        </div>
+
+        {currentStep.sections.map(section => (
+          <div key={section.key} className="ob-section">
+            <span className="ob-section__label">{section.label}</span>
+            <PillGroup
+              options={section.options}
+              value={values[section.key]}
+              onChange={setters[section.key]}
+              multi={section.multi}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom sticky bar */}
+      <div className="ob-bottom-bar">
+        <button
+          className="ob-cta"
+          type="button"
+          onClick={handleNext}
+        >
+          Next  →
+        </button>
       </div>
     </div>
   );

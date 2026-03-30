@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
-import { uploadReferenceImage } from '../api';
+import { uploadReferenceImage, mergeAnalyses } from '../api';
 import { RECIPES } from '../data/recipes';
 import DiagramCard from '../cards/DiagramCard';
 import CollapsibleCard from '../cards/CollapsibleCard';
 import ZoomOverlay from '../cards/ZoomOverlay';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import { trackEvent } from '../data/analytics';
 import { getToken } from '../data/authApi';
 import { resolveError } from '../lib/errors';
@@ -142,36 +142,18 @@ function AdminCorrectionPanel({ analysis, imagePath, onNavigateLab, patternOptio
   }
 
   return (
-    <div className="ref-correction ref-correction--admin">
-      <div className="ref-correction__row">
-        <span className="ref-correction__admin-badge">Admin</span>
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={() => setOpen(v => !v)}
-          type="button"
-        >
-          {open ? 'Cancel' : 'Correct This Analysis'}
-        </button>
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={onNavigateLab}
-          type="button"
-        >
-          Open in Lab
-        </button>
-        {saved && (
-          <span className="ref-correction__saved">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            Ground truth saved
-          </span>
-        )}
-      </div>
+    <div className="ref-correction ref-correction--admin" style={{ display: 'contents' }}>
+      <button
+        className="btn btn--ghost btn--sm"
+        onClick={() => setOpen(v => !v)}
+        type="button"
+        style={{ fontSize: 11 }}
+      >
+        {saved ? '✓ Saved' : open ? 'Cancel' : 'Correct'}
+      </button>
 
       {open && (
-        <div className="ref-correction__form">
+        <div className="ref-correction__form" style={{ width: '100%', flexBasis: '100%' }}>
           <p className="ref-correction__form-intro">
             Override detected values. Pre-filled from current analysis — change only what's wrong.
           </p>
@@ -342,20 +324,18 @@ function AdminVLMPanel({ analysis }) {
   }
 
   return (
-    <div className="ref-correction ref-correction--admin" style={{ marginTop: 8 }}>
-      <div className="ref-correction__row">
-        <span className="ref-correction__admin-badge">Admin</span>
-        <button
-          className="btn btn--ghost btn--sm"
-          onClick={() => setOpen(v => !v)}
-          type="button"
-        >
-          {open ? 'Hide VLM Data' : 'VLM Data ↓'}
-        </button>
-      </div>
+    <div className="ref-correction ref-correction--admin" style={{ display: 'contents' }}>
+      <button
+        className="btn btn--ghost btn--sm"
+        onClick={() => setOpen(v => !v)}
+        type="button"
+        style={{ fontSize: 11 }}
+      >
+        {open ? 'Hide VLM' : 'VLM'}
+      </button>
 
       {open && (
-        <div style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)' }}>
+        <div style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', width: '100%', flexBasis: '100%' }}>
 
           {/* ── Classification scores ── */}
           <Section title="Classification">
@@ -619,27 +599,46 @@ function UserCorrectionForm({ analysis, referenceImagePreview, issueTypes = DEFA
   );
 }
 
-// ── Scan status ────────────────────────────────────────────────────────────
+// ── Inline analysis overlay (replaces old ScanStatus) ──────────────────────
 
 const SCAN_PHASES = [
   'Reading the light\u2026',
   'Analyzing shadows\u2026',
+  'Resolving shadow geometry\u2026',
   'Identifying setup\u2026',
   'Evaluating mood\u2026',
   'Checking modifiers\u2026',
 ];
+const SCAN_INTERVAL = 3200;
 
-function ScanStatus() {
-  const [phase, setPhase] = useState(0);
+/** Image overlay — scan line + "ANALYZING" label.  Absolutely positioned over the image. */
+function ScanImageOverlay() {
+  return (
+    <div className="ref-analyze-overlay">
+      <div className="ref-analyze-overlay__scan-line" />
+      <div className="ref-analyze-overlay__scan-accent" />
+      <div className="ref-analyze-overlay__fade" />
+      <span className="ref-analyze-overlay__label">ANALYZING</span>
+    </div>
+  );
+}
+
+/** Status bar — rotating phase text + progress dots.  Normal flow element below the image. */
+function ScanStatusBar() {
+  const [phaseIdx, setPhaseIdx] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setPhase(p => (p + 1) % SCAN_PHASES.length), 3200);
+    const id = setInterval(() => setPhaseIdx(i => (i + 1) % SCAN_PHASES.length), SCAN_INTERVAL);
     return () => clearInterval(id);
   }, []);
+  const activeDot = phaseIdx < 2 ? 0 : phaseIdx < 4 ? 1 : 2;
   return (
-    <div className="ref-scan-status">
-      {/* key forces remount → fade-in re-runs on each phase */}
-      <span className="ref-scan-status__dot" />
-      <span className="ref-scan-status__text" key={phase}>{SCAN_PHASES[phase]}</span>
+    <div className="ref-analyze-status-bar">
+      <p className="ref-analyze-status-bar__text" key={phaseIdx}>{SCAN_PHASES[phaseIdx]}</p>
+      <div className="ref-analyze-status-bar__dots">
+        {[0, 1, 2].map(i => (
+          <span key={i} className={`ref-analyze-status-bar__dot${i === activeDot ? ' ref-analyze-status-bar__dot--active' : ''}`} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -875,7 +874,7 @@ function ColorPalettePanelToggle({ colorPalette }) {
 export default function ReferenceEvalScreen() {
   const { referenceImage, referenceImages, user, refAnalysis: storedAnalysis } = useAppState();
   const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const userEmail = resolveUserEmail(user);
   const { isAdmin } = usePaywall(userEmail);
 
   const imageCount = referenceImages?.length || (referenceImage ? 1 : 0);
@@ -883,6 +882,8 @@ export default function ReferenceEvalScreen() {
   const fileRef = useRef(null);
   const [loading, setLoading]           = useState(true);
   const [analysis, setAnalysis]         = useState(null);
+  const [perImageAnalysis, setPerImageAnalysis] = useState({}); // { index: analysis }
+  const [consensus, setConsensus]       = useState(null);       // merged multi-image consensus
   const [selectedMood, setSelectedMood] = useState(null);
   const [error, setError]               = useState(null);  // { code, message, hint }
   function makeError(err) {
@@ -911,13 +912,18 @@ export default function ReferenceEvalScreen() {
   }, []);
 
   useEffect(() => {
-    if (!referenceImage?.file) {
+    const images = referenceImages?.length ? referenceImages : (referenceImage ? [referenceImage] : []);
+    if (!images[0]?.file) {
       // Dev demo: if analysis was pre-populated in app state (e.g. via ?_demo=ref_eval),
       // hydrate local state from it instead of showing the error banner.
       if (storedAnalysis) {
-        setAnalysis(storedAnalysis);
-        setSelectedMood(storedAnalysis?.classification?.mood || null);
-        setLoading(false);
+        // ?_loading=1 freezes the loading overlay for visual testing
+        const holdLoading = new URLSearchParams(window.location.search).get('_loading') === '1';
+        if (!holdLoading) {
+          setAnalysis(storedAnalysis);
+          setSelectedMood(storedAnalysis?.classification?.mood || null);
+          setLoading(false);
+        }
       } else {
         setLoading(false);
         setError(makeError('No image selected'));
@@ -926,24 +932,52 @@ export default function ReferenceEvalScreen() {
     }
 
     let cancelled = false;
-    uploadReferenceImage(referenceImage.file)
-      .then(result => {
-        if (cancelled) return;
-        setAnalysis(result.analysis);
-        setSelectedMood(result.analysis?.classification?.mood || null);
-        dispatch({
-          type: 'SET_REFERENCE_IMAGE',
-          payload: { ...referenceImage, serverPath: result.path },
-        });
-        dispatch({ type: 'SET_REF_ANALYSIS', analysis: result.analysis });
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError(makeError('Could not analyze image'));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+    // Upload all images in parallel, use first result as primary analysis
+    Promise.all(
+      images.map((img, idx) =>
+        uploadReferenceImage(img.file)
+          .then(result => ({ idx, img, result, error: null }))
+          .catch(err => ({ idx, img, result: null, error: err }))
+      )
+    ).then(outcomes => {
+      if (cancelled) return;
+      // Update referenceImages with server paths
+      const updated = images.map((img, idx) => {
+        const outcome = outcomes[idx];
+        return outcome.result
+          ? { ...img, serverPath: outcome.result.path }
+          : img;
       });
+      dispatch({ type: 'SET_REFERENCE_IMAGES', payload: updated });
+
+      // Collect per-image analyses
+      const analyses = {};
+      outcomes.forEach(o => {
+        if (o.result?.analysis) analyses[o.idx] = o.result.analysis;
+      });
+      setPerImageAnalysis(analyses);
+
+      // Use the first successful analysis as the primary
+      const primary = outcomes.find(o => o.result?.analysis);
+      if (primary) {
+        setAnalysis(primary.result.analysis);
+        setSelectedMood(primary.result.analysis?.classification?.mood || null);
+        dispatch({ type: 'SET_REF_ANALYSIS', analysis: primary.result.analysis });
+      } else {
+        // All uploads failed
+        setError(makeError('Could not analyze image'));
+      }
+
+      // Multi-image: request consensus merge from backend
+      const serverPaths = updated.filter(img => img.serverPath).map(img => img.serverPath);
+      if (serverPaths.length >= 2) {
+        mergeAnalyses(serverPaths)
+          .then(merged => { if (!cancelled) setConsensus(merged.consensus); })
+          .catch(() => { /* consensus is optional — individual analyses still work */ });
+      }
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
 
     return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -970,22 +1004,63 @@ export default function ReferenceEvalScreen() {
   }
 
   async function handleFileSelected(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     if (fileRef.current) fileRef.current.value = '';
-    const preview = URL.createObjectURL(f);
-    const imageObj = { file: f, preview, serverPath: null };
-    dispatch({ type: 'SET_REFERENCE_IMAGE', payload: imageObj });
-    dispatch({ type: 'SET_REFERENCE_IMAGES', payload: [imageObj] });
-    setAnalysis(null);
+
+    const newImages = files.map(f => ({
+      file: f,
+      preview: URL.createObjectURL(f),
+      serverPath: null,
+    }));
+    // Append to existing images
+    const allImages = [...(referenceImages || []), ...newImages];
+    dispatch({ type: 'SET_REFERENCE_IMAGES', payload: allImages });
     setError(null);
-    setSelectedMood(null);
     setLoading(true);
+
+    // Upload only the newly added images
     try {
-      const result = await uploadReferenceImage(f);
-      dispatch({ type: 'SET_REFERENCE_IMAGE', payload: { ...imageObj, serverPath: result.path } });
-      setAnalysis(result.analysis);
-      setSelectedMood(result.analysis?.classification?.mood || null);
+      const outcomes = await Promise.all(
+        newImages.map((img, i) =>
+          uploadReferenceImage(img.file)
+            .then(result => ({ img, result, error: null }))
+            .catch(err => ({ img, result: null, error: err }))
+        )
+      );
+
+      // Update images with server paths
+      const updatedNew = newImages.map((img, i) => {
+        const outcome = outcomes[i];
+        return outcome.result ? { ...img, serverPath: outcome.result.path } : img;
+      });
+      const merged = [...(referenceImages || []), ...updatedNew];
+      dispatch({ type: 'SET_REFERENCE_IMAGES', payload: merged });
+
+      // Collect per-image analyses for new images
+      const newAnalyses = { ...perImageAnalysis };
+      const baseIdx = (referenceImages || []).length;
+      outcomes.forEach((o, i) => {
+        if (o.result?.analysis) newAnalyses[baseIdx + i] = o.result.analysis;
+      });
+      setPerImageAnalysis(newAnalyses);
+
+      // Use the first new successful analysis as primary (if we didn't have one)
+      const firstSuccess = outcomes.find(o => o.result?.analysis);
+      if (firstSuccess) {
+        setAnalysis(firstSuccess.result.analysis);
+        setSelectedMood(firstSuccess.result.analysis?.classification?.mood || null);
+      } else if (outcomes.every(o => o.error)) {
+        setError(makeError('Could not analyze image'));
+      }
+
+      // Re-run multi-image merge with all images
+      const allPaths = merged.filter(img => img.serverPath).map(img => img.serverPath);
+      if (allPaths.length >= 2) {
+        mergeAnalyses(allPaths)
+          .then(result => setConsensus(result.consensus))
+          .catch(() => { /* optional */ });
+      }
     } catch (err) {
       setError(makeError(err));
     } finally {
@@ -1012,6 +1087,55 @@ export default function ReferenceEvalScreen() {
   const recreationSetup   = refAnalysis?.recreation_setup;
   const colorPalette      = refAnalysis?.color_palette;
 
+  // ── Signal quality helper ──────────────────────────────────────────────
+  function getSignals() {
+    const signals = [];
+    const sr = analysis?.signalReliability;
+
+    // Face detection
+    const faceOk = sr?.faceDetected;
+    signals.push({
+      label: 'Face detection',
+      detail: faceOk ? (imageRead?.subject_count > 1 ? `${imageRead.subject_count} subjects` : 'Detected') : 'Not detected',
+      status: faceOk ? 'green' : 'amber',
+    });
+
+    // Catchlight quality
+    const catchOk = sr?.catchlightDetected;
+    signals.push({
+      label: 'Catchlight quality',
+      detail: catchOk
+        ? (lightingRead?.catchlight_shape || lightingRead?.catchlight_position || 'Present')
+        : 'Not found',
+      status: catchOk ? 'green' : 'amber',
+    });
+
+    // Shadow edge
+    const shadowQuality = sr?.shadowEdgeQuality || 'unknown';
+    const shadowOk = shadowQuality === 'strong' || shadowQuality === 'moderate';
+    signals.push({
+      label: 'Shadow edge',
+      detail: shadowQuality !== 'unknown' ? shadowQuality.charAt(0).toUpperCase() + shadowQuality.slice(1) : 'Unknown',
+      status: shadowOk ? 'green' : 'amber',
+    });
+
+    // Background separation
+    const bgRel = imageRead?.background_relationship;
+    const bgOk = bgRel && bgRel !== 'unknown' && !bgRel.toLowerCase().includes('merged') && !bgRel.toLowerCase().includes('cluttered');
+    signals.push({
+      label: 'Background separation',
+      detail: bgRel && bgRel !== 'unknown' ? bgRel : 'Unknown',
+      status: bgOk ? 'green' : 'amber',
+    });
+
+    return signals;
+  }
+
+  // ── Confidence as integer 0-100 ─────────────────────────────────────────
+  const confidencePct = classification?.confidence != null
+    ? Math.round(classification.confidence > 1 ? classification.confidence : classification.confidence * 100)
+    : null;
+
   return (
     <div className="screen ref-eval-screen">
 
@@ -1024,86 +1148,69 @@ export default function ReferenceEvalScreen() {
         onChange={handleFileSelected}
       />
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 var(--space-md)', marginBottom: 'var(--space-xs)' }}>
-        <h2 className="screen-heading" style={{ margin: 0 }}>Reference Evaluation</h2>
-        {(analysis || error) && !loading && (
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={handleAnalyzeAnother}
-            style={{ flexShrink: 0 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            Analyze another
-          </button>
-        )}
-      </div>
+      {/* 1. Title bar */}
+      <h2 className="screen-heading" style={{ padding: '0 var(--space-md)', marginBottom: 'var(--space-xs)' }}>Reference Analysis</h2>
 
       {/* Zoom overlay */}
       {zoomSrc && <ZoomOverlay src={zoomSrc} alt="Reference photo" onClose={() => setZoomSrc(null)} />}
 
-      {/* ── Floating image preview ───────────────────────────────────────── */}
+      {/* 2. Reference Photo Zone */}
       {referenceImage?.preview && (
-        <div className={`ref-eval__preview-wrap${loading ? ' ref-eval__preview-wrap--analyzing' : ''}`}>
-          {imageCount > 1 ? (
-            /* Gallery: grid layout, no individual float */
-            <div className={`ref-eval__gallery${loading ? ' ref-eval__gallery--scanning' : ''}`}>
-              {referenceImages.map((img, i) => (
-                <img
-                  key={i}
-                  src={img.preview}
-                  alt={`Reference photo ${i + 1}`}
-                  onClick={() => !loading && setZoomSrc(img.preview)}
-                />
-              ))}
-              {loading && <div className="ref-scan-overlay"><div className="ref-scan-overlay__line" /></div>}
-            </div>
-          ) : (
-            /* Single image: dramatic float */
+        <div className="ref-photo-zone">
+          <div className={`ref-eval__preview-wrap${loading ? ' ref-eval__preview-wrap--analyzing' : ''}`}>
             <div
-              className={`lab-workbench__img-shell${
-                loading
-                  ? ' lab-workbench__img-shell--analyzing'
-                  : ' lab-workbench__img-shell--settled'
-              }`}
+              className={`ref-eval__img-stage${loading ? ' ref-eval__img-stage--analyzing' : ''}`}
               onClick={() => !loading && setZoomSrc(referenceImage.preview)}
             >
               <img
                 src={referenceImage.preview}
                 alt="Reference photo"
-                className="ref-eval__img"
+                className={`ref-eval__img${loading ? ' ref-eval__img--blurred' : ''}`}
               />
-              {loading && <div className="ref-scan-overlay"><div className="ref-scan-overlay__line" /></div>}
+              {loading && <ScanImageOverlay />}
+            </div>
+            {loading && <ScanStatusBar />}
+          </div>
+          {!loading && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
+              <span style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Photo</span>
+              <span
+                style={{ fontSize: 9, fontWeight: 500, color: 'var(--color-text-secondary)', cursor: 'pointer' }}
+                onClick={() => setZoomSrc(referenceImage.preview)}
+              >
+                Tap to expand
+              </span>
             </div>
           )}
-          {/* Scan status lives inside the preview wrap so it's always
-              visible directly below the image without scrolling */}
-          {loading && <ScanStatus />}
         </div>
       )}
 
-      {/* Narrative — directly under image */}
-      {!loading && imageRead?.narrative && (
-        <div className="ref-hero__narrative">
-          <span className="ref-hero__narrative-label">At a Glance</span>
-          <p className="ref-hero__narrative-text">{imageRead.narrative}</p>
-          {(imageRead.pose_notes || imageRead.scene_description) && (
-            <p className="ref-hero__narrative-action">
-              {imageRead.pose_notes || imageRead.scene_description}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Image count badge */}
-      {!loading && analysis && imageCount > 0 && (
-        <div className="ref-image-count">
-          <span className="ref-image-count__badge">
-            {imageCount} reference image{imageCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-      )}
+      {/* Narrative — first sentence visible, rest collapsible */}
+      {!loading && imageRead?.narrative && (() => {
+        const firstSentence = imageRead.narrative.split(/(?<=[.!?])\s+/)[0] || imageRead.narrative;
+        const rest = imageRead.narrative.slice(firstSentence.length).trim();
+        const hasMore = rest || imageRead.pose_notes || imageRead.scene_description;
+        return (
+          <div className="ref-hero__narrative">
+            <span className="ref-hero__narrative-label">At a Glance</span>
+            <p className="ref-hero__narrative-text">{firstSentence}</p>
+            {hasMore && (
+              <details style={{ marginTop: 0 }}>
+                <summary style={{ cursor: 'pointer', listStyle: 'none', fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>More</span>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                {rest && <p className="ref-hero__narrative-text" style={{ marginTop: 4 }}>{rest}</p>}
+                {(imageRead.pose_notes || imageRead.scene_description) && (
+                  <p className="ref-hero__narrative-action">
+                    {imageRead.pose_notes || imageRead.scene_description}
+                  </p>
+                )}
+              </details>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Error state */}
       {error && !loading && (
@@ -1129,341 +1236,188 @@ export default function ReferenceEvalScreen() {
       {/* Analysis results */}
       {!loading && analysis && (
         <>
-          {/* ── The Light ── */}
-          {lightingRead && (
-            <CollapsibleCard
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>}
-              title="The Light"
-            >
-              <div className="ref-analysis">
-                {lightingRead.lighting_family && lightingRead.lighting_family !== 'unknown' && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Lighting Family</span>
-                    <span className="ref-analysis__value">{lightingRead.lighting_family.replace(/[-_]/g, ' ')}</span>
-                  </div>
-                )}
-                {lightingRead.source_quality && lightingRead.source_quality !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Source Quality</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{lightingRead.source_quality}</span>
-                  </div>
-                )}
-                {lightingRead.source_direction && lightingRead.source_direction !== 'unknown' && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Direction</span>
-                    <span className="ref-analysis__value">{lightingRead.source_direction}</span>
-                  </div>
-                )}
-                {lightingRead.shadow_pattern && lightingRead.shadow_pattern !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Shadow Pattern</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{lightingRead.shadow_pattern}</span>
-                  </div>
-                )}
-                {lightingRead.fill_presence && lightingRead.fill_presence !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Fill</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{lightingRead.fill_presence}</span>
-                  </div>
-                )}
-                {lightingRead.rim_presence && lightingRead.rim_presence !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Rim Light</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{lightingRead.rim_presence}</span>
-                  </div>
-                )}
-                {typeof lightingRead.light_count === 'number' && lightingRead.light_count > 0 && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Light Count</span>
-                    <span className="ref-analysis__value">{lightingRead.light_count}</span>
-                  </div>
-                )}
-                {classification?.colorTemperature && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className={`ref-analysis__label ref-analysis__temp-${classification.colorTemperature}`}>Color Temp</span>
-                    <span className={`ref-analysis__value ref-analysis__temp-${classification.colorTemperature}`}>
-                      <span className={`ref-analysis__temp-dot ref-analysis__temp-dot--${classification.colorTemperature}`} />
-                      {classification.colorTemperature.charAt(0).toUpperCase() + classification.colorTemperature.slice(1)}
-                      {classification.colorTemperatureKelvin ? ` (${classification.colorTemperatureKelvin.toLocaleString()} K)` : ''}
-                    </span>
-                  </div>
-                )}
-                {lightingRead.tonal_processing_notes && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Processing</span>
-                    <span className="ref-analysis__value">{lightingRead.tonal_processing_notes}</span>
-                  </div>
+          {/* 3. Detected Pattern Card */}
+          <div className="ref-pattern-card" style={{ padding: '0 var(--space-md)' }}>
+            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Detected Pattern</div>
+            <div style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 12,
+              padding: 16,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: 18, fontWeight: 600, color: 'var(--color-text)' }}>
+                  {classification?.patternLabel || classification?.lightingPattern?.replace(/[-_]/g, ' ') || 'Unknown'}
+                </span>
+                {confidencePct != null && (
+                  <span style={{
+                    background: '#2e4033',
+                    color: '#48ba88',
+                    fontSize: 10,
+                    fontWeight: 500,
+                    padding: '3px 8px',
+                    borderRadius: 8,
+                  }}>
+                    {confidencePct}%
+                  </span>
                 )}
               </div>
-              {lightingRead.key_observations?.length > 0 && (
-                <ul className="three-layer-read__notes">
-                  {lightingRead.key_observations.map((n, i) => <li key={i}>{n}</li>)}
-                </ul>
-              )}
-              {lightingRead.ambiguity_notes?.length > 0 && (
-                <div className="ref-card__warning">
-                  <span className="ref-card__warning-icon">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  </span>
-                  <div>
-                    {lightingRead.ambiguity_notes.map((n, i) => <p key={i}>{n}</p>)}
-                  </div>
+              {confidencePct != null && (
+                <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface-elevated)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${confidencePct}%`, background: '#48ba88', borderRadius: 3, transition: 'width 0.4s ease' }} />
                 </div>
               )}
-            </CollapsibleCard>
-          )}
-
-          {/* ── Lighting Diagram ── */}
-          {analysis?.detectedDiagram?.raw && (
-            <CollapsibleCard
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="5" r="3"/><path d="M7 9L4 22h16L17 9"/></svg>}
-              title="Lighting"
-            >
-              <DiagramCard spec={analysis.detectedDiagram.raw} title="" inline />
-            </CollapsibleCard>
-          )}
-
-          {/* ── The Shot ── */}
-          {(subject || imageRead || classification) && (
-            <CollapsibleCard
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
-              title="The Shot"
-            >
-              <div className="ref-analysis">
-                {imageRead?.genre && imageRead.genre !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Genre</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{imageRead.genre}</span>
-                  </div>
-                )}
-                {classification?.mood && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Mood</span>
-                    <span className="ref-analysis__value">
-                      {moodLabels[classification.mood] || classification.mood}
-                    </span>
-                  </div>
-                )}
-                {imageRead?.subject_type && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Subject</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>
-                      {imageRead.subject_type}
-                      {imageRead.subject_count > 1 ? ` (${imageRead.subject_count})` : ''}
-                    </span>
-                  </div>
-                )}
-                {imageRead?.subject_skin_tones?.length > 0 && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Skin Tone{imageRead.subject_skin_tones.length > 1 ? 's' : ''}</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>
-                      {imageRead.subject_skin_tones.join(', ')}
-                      {imageRead.skin_tone_mixed ? ' (mixed)' : ''}
-                    </span>
-                  </div>
-                )}
-                {(imageRead?.camera_subject_relationship || subject?.framing) && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Framing</span>
-                    <span className="ref-analysis__value">
-                      {imageRead?.camera_subject_relationship || subject?.framing}
-                    </span>
-                  </div>
-                )}
-                {imageRead?.pose_notes ? (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Pose</span>
-                    <span className="ref-analysis__value">{imageRead.pose_notes}</span>
-                  </div>
-                ) : !imageRead && subject?.pose && subject.pose !== 'unknown' ? (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Pose</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{subject.pose}</span>
-                  </div>
-                ) : null}
-                {imageRead?.visual_intent && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Visual Intent</span>
-                    <span className="ref-analysis__value">{imageRead.visual_intent}</span>
-                  </div>
-                )}
-                {imageRead?.scene_description && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Scene</span>
-                    <span className="ref-analysis__value">{imageRead.scene_description}</span>
-                  </div>
-                )}
-                {imageRead?.background_relationship && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Background</span>
-                    <span className="ref-analysis__value">{imageRead.background_relationship}</span>
-                  </div>
-                )}
-                {imageRead?.lighting_style && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Lighting Style</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{imageRead.lighting_style}</span>
-                  </div>
-                )}
-                {imageRead?.likely_photographer && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Style Reference</span>
-                    <span className="ref-analysis__value">{imageRead.likely_photographer}</span>
-                  </div>
-                )}
-                {recipeName && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Suggested Recipe</span>
-                    <span className="ref-analysis__value">{recipeName}</span>
-                  </div>
-                )}
-                {imageRead?.notable_visual_devices?.length > 0 && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Visual Devices</span>
-                    <span className="ref-analysis__value">{imageRead.notable_visual_devices.join(', ')}</span>
-                  </div>
-                )}
-              </div>
-              {palette.length > 0 && (
-                <>
-                  <div className="ref-analysis__label" style={{ marginTop: 'var(--space-sm)' }}>Palette</div>
-                  <div className="ref-palette">
-                    {palette.slice(0, 6).map((c, i) => (
-                      <div className="ref-palette__swatch" key={i}>
-                        <div className="ref-palette__color" style={{ background: c.hex }} title={`${c.name} (${c.hex})`} />
-                        <span className="ref-palette__name">{c.name}</span>
-                        <span className="ref-palette__pct">{Math.round(c.pct)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-
-              {/* VLM color palette — richer character analysis, collapsed by default */}
-              {colorPalette && (colorPalette.palette_character || colorPalette.dominant_colors?.length > 0) && (
-                <ColorPalettePanelToggle colorPalette={colorPalette} />
-              )}
-            </CollapsibleCard>
-          )}
-
-          {/* ── How To Recreate It ── */}
-          {recreationSetup && (
-            <CollapsibleCard
-              icon={<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>}
-              title="How To Recreate It"
-            >
-              <div className="ref-analysis">
-                {recreationSetup.setup_family && recreationSetup.setup_family !== 'unknown' && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Setup Style</span>
-                    <span className="ref-analysis__value" style={{ textTransform: 'capitalize' }}>{recreationSetup.setup_family.replace(/[-_]/g, ' ')}</span>
-                  </div>
-                )}
-                {recreationSetup.modifier_suggestion && recreationSetup.modifier_suggestion !== 'unknown' && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Key Modifier</span>
-                    <span className="ref-analysis__value">{recreationSetup.modifier_suggestion}</span>
-                  </div>
-                )}
-                {recreationSetup.light_count > 0 && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Lights Needed</span>
-                    <span className="ref-analysis__value">{recreationSetup.light_count}</span>
-                  </div>
-                )}
-                {recreationSetup.key_placement && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Key Placement</span>
-                    <span className="ref-analysis__value">{recreationSetup.key_placement}</span>
-                  </div>
-                )}
-                {recreationSetup.fill_strategy && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Fill Strategy</span>
-                    <span className="ref-analysis__value">{recreationSetup.fill_strategy}</span>
-                  </div>
-                )}
-                {recreationSetup.background_strategy && (
-                  <div className="ref-analysis__row">
-                    <span className="ref-analysis__label">Background</span>
-                    <span className="ref-analysis__value">{recreationSetup.background_strategy}</span>
-                  </div>
-                )}
-                {(recreationSetup.focal_length || recreationSetup.aperture) && (
-                  <div className="ref-analysis__row ref-analysis__row--inline">
-                    <span className="ref-analysis__label">Camera</span>
-                    <span className="ref-analysis__value">
-                      {[recreationSetup.focal_length, recreationSetup.aperture].filter(Boolean).join('  ·  ')}
-                    </span>
-                  </div>
-                )}
-              </div>
-              {recreationSetup.setup_notes?.length > 0 && (
-                <ul className="three-layer-read__notes">
-                  {recreationSetup.setup_notes.map((n, i) => <li key={i}>{n}</li>)}
-                </ul>
-              )}
-            </CollapsibleCard>
-          )}
-
-          {/* ── Confirm vibe ── */}
-          <div className="result-card">
-            <div className="result-card__header">
-              <span className="result-card__icon">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-              </span>
-              <span>Confirm Vibe</span>
             </div>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-dim)', marginBottom: 'var(--space-sm)' }}>
-              {classification?.mood
-                ? `We detected a ${moodLabels[classification.mood] || classification.mood} vibe. Tap to override.`
-                : 'Select the vibe you want to achieve.'}
-            </p>
-            <div className="chip-grid">
-              {moodOptions.map(m => (
-                <button
-                  key={m.value}
-                  className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}
-                  onClick={() => setSelectedMood(m.value)}
+          </div>
+
+          {/* 4. Lighting Blueprint Grid */}
+          <div className="ref-blueprint" style={{ padding: '0 var(--space-md)', marginTop: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Lighting Blueprint</div>
+            <div style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 12,
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gridTemplateRows: '1fr 1fr',
+              overflow: 'hidden',
+            }}>
+              {/* Top-left: Key Light Position */}
+              <div style={{ padding: 14, borderRight: '1px solid var(--color-border)', borderBottom: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Key Light Position</div>
+                {(() => {
+                  const raw = lightingRead?.source_direction?.replace(/[-_]/g, ' ') || 'Unknown';
+                  // Split "camera left, ~45 degrees, elevated" into main + sub
+                  const parts = raw.split(',').map(s => s.trim());
+                  const main = parts.length > 1 ? `${parts[1]} ${parts[0]}` : parts[0];
+                  const sub = parts.length > 2 ? parts.slice(2).join(', ') : null;
+                  return (
+                    <>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>{main}</div>
+                      {sub && <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>{sub}</div>}
+                    </>
+                  );
+                })()}
+              </div>
+              {/* Top-right: Light Ratio */}
+              <div style={{ padding: 14, borderBottom: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Light Ratio</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>
+                  {recreationSetup?.key_to_fill_ratio || (lightingRead?.light_count ? `${lightingRead.light_count}:1` : 'N/A')}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>key : fill</div>
+              </div>
+              {/* Bottom-left: Subject Distance */}
+              <div style={{ padding: 14, borderRight: '1px solid var(--color-border)' }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Subject Distance</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>
+                  {recreationSetup?.subject_distance || '~6 ft'}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>estimated</div>
+              </div>
+              {/* Bottom-right: Modifier */}
+              <div style={{ padding: 14 }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>Modifier</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text)', lineHeight: 1.3 }}>
+                  {(() => {
+                    const raw = lightingRead?.modifier_suggestion || recreationSetup?.modifier_suggestion || 'Unknown';
+                    // Extract just the modifier name (e.g. "softbox" from "medium to large softbox (2x3...)")
+                    const short = raw.split(/[,(]| or /)[0].trim().replace(/[-_]/g, ' ');
+                    return short.charAt(0).toUpperCase() + short.slice(1);
+                  })()}
+                </div>
+                {(recreationSetup?.modifier_size || lightingRead?.modifier_hint) && (
+                  <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                    {recreationSetup?.modifier_size || lightingRead?.modifier_hint || ''}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 5. Signal Analysis Card */}
+          <div className="ref-signals" style={{ padding: '0 var(--space-md)', marginTop: 16 }}>
+            <div style={{ fontSize: 10, fontWeight: 500, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Signal Analysis</div>
+            <div style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: 12,
+              overflow: 'hidden',
+            }}>
+              {getSignals().map((sig, i, arr) => (
+                <div
+                  key={sig.label}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '12px 14px',
+                    borderBottom: i < arr.length - 1 ? '1px solid var(--color-border)' : 'none',
+                  }}
                 >
-                  {m.label}
-                </button>
+                  <span style={{ fontSize: 13, color: 'var(--color-text)', flex: 1 }}>{sig.label}</span>
+                  <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', marginRight: 10, textAlign: 'right', maxWidth: '45%' }}>{sig.detail}</span>
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: sig.status === 'green' ? '#48ba88' : '#d4a843',
+                    flexShrink: 0,
+                  }} />
+                </div>
               ))}
             </div>
           </div>
 
-          {/* ── Correction panel (admin) / report issue (user) ── */}
-          {isAdmin ? (
-            <>
-              <AdminCorrectionPanel
-                analysis={analysis}
-                imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
-                onNavigateLab={handleOpenLab}
-                patternOptions={patternOptions}
-                moodOptions={moodOptions}
-              />
-              <AdminVLMPanel analysis={analysis} />
-            </>
-          ) : (
-            <UserCorrectionForm
-              analysis={analysis}
-              referenceImagePreview={referenceImage?.preview}
-              issueTypes={issueTypes}
-              moodOptions={moodOptions}
-            />
-          )}
-
-          {/* ── Confirm button ── */}
-          <div style={{ padding: 'var(--space-md) 0', paddingBottom: 'calc(var(--space-xl) + env(safe-area-inset-bottom, 0px))' }}>
+          {/* 6. CTA Button */}
+          <div className="ref-cta" style={{ padding: 'var(--space-md)', paddingBottom: 'calc(var(--space-xl) + env(safe-area-inset-bottom, 0px))' }}>
             <button
-              className="btn btn--primary"
-              style={{ width: '100%' }}
-              disabled={!selectedMood}
               onClick={handleConfirm}
+              style={{
+                width: '100%',
+                height: 40,
+                borderRadius: 8,
+                background: '#c8a96e',
+                color: '#0a0b0e',
+                fontSize: 14,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+              }}
             >
-              Confirm &amp; Get Setup →
+              Use as Recipe Template
             </button>
           </div>
+
+          {/* 7. Admin zone — consolidated */}
+          {isAdmin && (
+            <div style={{ marginTop: 16, background: '#12110f', borderRadius: 10, border: '1px solid #f59e3433', overflow: 'hidden' }}>
+              <div style={{
+                background: '#1f170a',
+                padding: '6px 14px',
+                fontSize: 10,
+                fontWeight: 600,
+                color: '#f59e34',
+                letterSpacing: '0.05em',
+                textTransform: 'uppercase',
+                borderBottom: '1px solid #f59e3433',
+              }}>
+                Admin
+              </div>
+
+              <div style={{ display: 'flex', gap: 6, padding: '10px 12px', flexWrap: 'wrap' }}>
+                <button className="btn btn--ghost btn--sm" onClick={handleOpenLab} style={{ fontSize: 11 }}>Lab</button>
+                <button className="btn btn--ghost btn--sm" onClick={handleAnalyzeAnother} style={{ fontSize: 11 }}>Re-analyze</button>
+                <AdminCorrectionPanel
+                  analysis={analysis}
+                  imagePath={referenceImage?.serverPath || referenceImage?.file?.name || ''}
+                  onNavigateLab={handleOpenLab}
+                  patternOptions={patternOptions}
+                  moodOptions={moodOptions}
+                />
+                <AdminVLMPanel analysis={analysis} />
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -1471,25 +1425,24 @@ export default function ReferenceEvalScreen() {
       {!loading && !analysis && !error && (
         <div style={{ textAlign: 'center', padding: 'var(--space-xl)', color: 'var(--color-text-dim)' }}>
           <p>Could not analyze this image. You can still continue.</p>
-          <div className="chip-grid" style={{ marginTop: 'var(--space-md)' }}>
-            {moodOptions.map(m => (
-              <button
-                key={m.value}
-                className={`chip${selectedMood === m.value ? ' chip--selected' : ''}`}
-                onClick={() => setSelectedMood(m.value)}
-              >
-                {m.label}
-              </button>
-            ))}
+          <div className="ref-cta" style={{ marginTop: 'var(--space-md)' }}>
+            <button
+              onClick={handleConfirm}
+              style={{
+                width: '100%',
+                height: 40,
+                borderRadius: 8,
+                background: '#c8a96e',
+                color: '#0a0b0e',
+                fontSize: 14,
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              Use as Recipe Template
+            </button>
           </div>
-          <button
-            className="btn btn--primary"
-            style={{ width: '100%', marginTop: 'var(--space-md)' }}
-            disabled={!selectedMood}
-            onClick={handleConfirm}
-          >
-            Continue →
-          </button>
         </div>
       )}
     </div>

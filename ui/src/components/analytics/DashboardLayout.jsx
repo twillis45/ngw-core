@@ -86,7 +86,22 @@ export default function DashboardLayout({
         </div>
       )}
 
-      {loading && <div className="adb__loading">Loading…</div>}
+      {loading && (
+        <div className="adb__skeleton">
+          <div className="adb__skel-kpi-row">
+            {[1,2,3,4].map(i => (
+              <div key={i} className="adb__skel-kpi">
+                <div className="ed-skel" style={{ height: 11, width: '55%', marginBottom: 6 }} />
+                <div className="ed-skel" style={{ height: 26, width: '75%', marginBottom: 5 }} />
+                <div className="ed-skel" style={{ height: 9, width: '40%' }} />
+              </div>
+            ))}
+          </div>
+          <div className="ed-skel" style={{ height: 140, borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)' }} />
+          <div className="ed-skel" style={{ height: 120, borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)' }} />
+          <div className="ed-skel" style={{ height: 100, borderRadius: 'var(--radius-md)' }} />
+        </div>
+      )}
       {error && <div className="adb__error">{error}</div>}
       {!loading && !error && children}
     </div>
