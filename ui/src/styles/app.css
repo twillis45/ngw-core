@@ -10775,6 +10775,16 @@ body {
   letter-spacing: 0.01em;
 }
 
+.home-v2__stage-row-value--active {
+  color: var(--color-accent);
+  animation: home-stage-blink 1.1s ease-in-out infinite;
+}
+
+@keyframes home-stage-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
 /* Deprecated chip styles — kept for backward compat, hidden */
 .home-v2__stage-chips { display: none; }
 .home-v2__stage-chip  { display: none; }

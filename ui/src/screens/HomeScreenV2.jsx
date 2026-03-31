@@ -60,8 +60,10 @@ function stageCardData(result, lastSetup) {
   return { name, pct, rows };
 }
 
+const SOURCE_LABEL = { selected: 'selected', dropped: 'dropped', pasted: 'pasted from clipboard' };
+
 /* ─── Stage area — shared between Free and Paid ──────────────────────── */
-function StageArea({ stage }) {
+function StageArea({ stage, photoStatus }) {
   return (
     <div className="home-v2__stage">
       <div className="home-v2__stage-photo">
@@ -74,7 +76,24 @@ function StageArea({ stage }) {
         </div>
       </div>
 
-      {stage ? (
+      {photoStatus ? (
+        /* ── Photo just received — show discrete status ── */
+        <div className="home-v2__stage-body" style={{ padding: '10px 16px 12px' }}>
+          <div className="home-v2__stage-result">
+            <span className="home-v2__stage-pattern">{photoStatus.label}</span>
+          </div>
+          <dl className="home-v2__stage-rows">
+            <div className="home-v2__stage-row">
+              <dt className="home-v2__stage-row-label">Source</dt>
+              <dd className="home-v2__stage-row-value">{SOURCE_LABEL[photoStatus.source] || photoStatus.source}</dd>
+            </div>
+            <div className="home-v2__stage-row">
+              <dt className="home-v2__stage-row-label">Status</dt>
+              <dd className="home-v2__stage-row-value home-v2__stage-row-value--active">Reading…</dd>
+            </div>
+          </dl>
+        </div>
+      ) : stage ? (
         <div className="home-v2__stage-body">
           {/* Pattern name + confidence */}
           {(stage.name || stage.pct > 0) && (
@@ -106,7 +125,7 @@ function StageArea({ stage }) {
 }
 
 /* ─── Free home ─────────────────────────────────────────────────────── */
-function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, user }) {
+function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, user, photoStatus }) {
   const stage = stageCardData(null, lastSetup);
   return (
     <>
@@ -115,7 +134,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
         <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
       </div>
 
-      <StageArea stage={stage} />
+      <StageArea stage={stage} photoStatus={photoStatus} />
 
       <div className="home-v2__cta-wrap">
         <button
@@ -164,7 +183,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
 }
 
 /* ─── Paid home ─────────────────────────────────────────────────────── */
-function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handleWizard, dispatch }) {
+function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handleWizard, dispatch, photoStatus }) {
   const hasResult  = !!result;
   const hasSaved   = !!lastSetup;
   const continueTarget = hasResult ? 'results' : hasSaved ? 'saved_setups' : null;
@@ -211,7 +230,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
         </div>
       )}
 
-      <StageArea stage={stage} />
+      <StageArea stage={stage} photoStatus={photoStatus} />
 
       <div className="home-v2__cta-wrap">
         <button
@@ -280,8 +299,9 @@ export default function HomeScreenV2() {
   const fileRef    = useRef(null);
   const dragCount  = useRef(0);        // counter avoids flicker on child elements
 
-  const [setups,     setSetups]     = useState(() => loadSetups());
-  const [isDragging, setIsDragging] = useState(false);
+  const [setups,      setSetups]     = useState(() => loadSetups());
+  const [isDragging,  setIsDragging] = useState(false);
+  const [photoStatus, setPhotoStatus] = useState(null); // { label, source } shown in stage
 
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
@@ -291,26 +311,14 @@ export default function HomeScreenV2() {
     ? savedSetups.slice(0, -1).slice(-3).reverse()
     : [];
 
-  // ── Paste from clipboard ──────────────────────────────────────────────
-  useEffect(() => {
-    function onPaste(e) {
-      const items = Array.from(e.clipboardData?.items || []);
-      const imageFiles = items
-        .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
-        .map(it => it.getAsFile())
-        .filter(Boolean);
-      if (imageFiles.length > 0) processFiles(imageFiles);
-    }
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Process image files (shared by picker, drop, paste) ───────────────
-  function processFiles(files) {
-    const imageFiles = files.filter(f => f.type.startsWith('image/'));
-    if (imageFiles.length === 0) return;
-
-    const reads = imageFiles.map(file => new Promise(resolve => {
+  // ── Dispatch images to ref_eval ───────────────────────────────────────
+  function dispatchImages(files, source) {
+    if (files.length === 0) return;
+    const label = files.length === 1
+      ? (files[0].name || 'Photo')
+      : `${files.length} photos`;
+    setPhotoStatus({ label, source });
+    const reads = files.map(file => new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = () => resolve({ file, preview: reader.result, serverPath: null });
       reader.readAsDataURL(file);
@@ -322,11 +330,32 @@ export default function HomeScreenV2() {
     });
   }
 
+  // ── File picker (original working path) ──────────────────────────────
   function handleFileChange(e) {
     const files = Array.from(e.target.files || []);
-    processFiles(files);
-    e.target.value = '';
+    if (files.length === 0) return;
+    dispatchImages(files, 'selected');
   }
+
+  // ── Drop ──────────────────────────────────────────────────────────────
+  function handleDrop(files) {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    dispatchImages(imageFiles, 'dropped');
+  }
+
+  // ── Paste from clipboard ──────────────────────────────────────────────
+  useEffect(() => {
+    function onPaste(e) {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = items
+        .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
+        .map(it => it.getAsFile())
+        .filter(Boolean);
+      if (imageFiles.length > 0) dispatchImages(imageFiles, 'pasted');
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function triggerUpload() { fileRef.current?.click(); }
 
@@ -351,8 +380,7 @@ export default function HomeScreenV2() {
     e.preventDefault();
     dragCount.current = 0;
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files || []);
-    processFiles(files);
+    handleDrop(Array.from(e.dataTransfer.files || []));
   }
 
   return (
@@ -394,6 +422,7 @@ export default function HomeScreenV2() {
           triggerUpload={triggerUpload}
           handleWizard={handleWizard}
           dispatch={dispatch}
+          photoStatus={photoStatus}
         />
       ) : (
         <FreeHomeContent
@@ -402,6 +431,7 @@ export default function HomeScreenV2() {
           lastSetup={lastSetup}
           dispatch={dispatch}
           user={user}
+          photoStatus={photoStatus}
         />
       )}
     </div>
