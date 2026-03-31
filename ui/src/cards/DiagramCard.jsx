@@ -1269,7 +1269,8 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
   const [view, setView] = useState('top');
   const [zoomSrc, setZoomSrc] = useState(null);
   const [activeLight, setActiveLight] = useState(null); // role of selected/dragged light
-  const dragRef = useRef(null); // { role, startX, startY, canvasW, canvasH }
+  const [lightOverrides, setLightOverrides] = useState({}); // { [role]: { distance_m, height_m } } — live drag state
+  const dragRef = useRef(null); // { role, startX, startY, scaleX, scaleY, origDistM, origHeightM }
   const { units, powerDisplay } = useSettings();
 
   const handleCanvasZoom = useCallback(() => {
@@ -1311,11 +1312,44 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
     const role = hitTestLight(e);
     if (!role) return;
     e.preventDefault();
-    dragRef.current = { role, startX: e.clientX, startY: e.clientY };
+    const canvas = canvasRef.current;
+    const W = canvas ? canvas.width / (window.devicePixelRatio || 1) : 300;
+    const H = canvas ? canvas.height / (window.devicePixelRatio || 1) : 300;
+    const margin = 20;
+    const scaleX = (W - margin * 2) / 6;
+    const scaleY = (H - margin * 2) / 4;
+    const light = spec?.lights?.find(l => l.role === role);
+    dragRef.current = {
+      role,
+      startX: e.clientX,
+      startY: e.clientY,
+      scaleX,
+      scaleY,
+      origDistM: light?.distance_m ?? 2,
+      origHeightM: light?.height_m ?? 1.7,
+    };
     setActiveLight(role);
     dragStartHaptic();
     canvasRef.current?.setPointerCapture(e.pointerId);
-  }, [view, hitTestLight]);
+  }, [view, hitTestLight, spec]);
+
+  const handlePointerMove = useCallback((e) => {
+    const dr = dragRef.current;
+    if (!dr) return;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dpr = window.devicePixelRatio || 1;
+    // Convert client delta → canvas pixels → meters
+    const dxPx = (e.clientX - dr.startX) * (canvasRef.current.width / rect.width) / dpr;
+    const dyPx = (e.clientY - dr.startY) * (canvasRef.current.height / rect.height) / dpr;
+    // In top view: right = closer to subject (less distance), up = taller
+    const newDist   = Math.max(0.3, dr.origDistM   - dxPx / dr.scaleX);
+    const newHeight = Math.max(0.3, dr.origHeightM  - dyPx / dr.scaleY);
+    setLightOverrides(prev => ({
+      ...prev,
+      [dr.role]: { distance_m: newDist, height_m: newHeight },
+    }));
+  }, []);
 
   const handlePointerUp = useCallback((e) => {
     if (!dragRef.current) return;
@@ -1331,20 +1365,28 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
     else handleCanvasZoom();
   }, [view, hitTestLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Merge drag overrides into spec for live re-render
+  const effectiveSpec = Object.keys(lightOverrides).length === 0 ? spec : {
+    ...spec,
+    lights: (spec?.lights || []).map(l =>
+      lightOverrides[l.role] ? { ...l, ...lightOverrides[l.role] } : l
+    ),
+  };
+
   useEffect(() => {
     const draw = view === 'space'
-      ? (c) => drawFloorPlan(c, spec, units, spaceCheck, roomDimensions, highlightRole)
-      : view === 'side' ? (c) => drawSideView(c, spec, units, highlightRole) : (c) => drawTopView(c, spec, units, highlightRole, twoHostSetup);
+      ? (c) => drawFloorPlan(c, effectiveSpec, units, spaceCheck, roomDimensions, highlightRole)
+      : view === 'side' ? (c) => drawSideView(c, effectiveSpec, units, highlightRole) : (c) => drawTopView(c, effectiveSpec, units, highlightRole, twoHostSetup);
     draw(canvasRef.current);
 
     function onResize() { draw(canvasRef.current); }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [spec, view, units, spaceCheck, roomDimensions, highlightRole]);
+  }, [effectiveSpec, view, units, spaceCheck, roomDimensions, highlightRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!spec) return null;
 
-  const lights = spec.lights || [];
+  const lights = effectiveSpec.lights || [];
   const tc = getThemeColors();
 
   const inner = (
@@ -1390,6 +1432,7 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
             className="diagram-canvas"
             onClick={handleCanvasClick}
             onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             style={{ cursor: view === 'top' ? 'crosshair' : 'zoom-in', touchAction: 'none' }}
