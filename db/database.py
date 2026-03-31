@@ -63,6 +63,16 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_email_verif_token ON email_verifications(token);
             CREATE INDEX IF NOT EXISTS idx_email_verif_user  ON email_verifications(user_id);
 
+            CREATE TABLE IF NOT EXISTS magic_link_tokens (
+                id         TEXT PRIMARY KEY,
+                email      TEXT NOT NULL,
+                token      TEXT UNIQUE NOT NULL,
+                expires_at REAL NOT NULL,
+                used_at    REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_magic_link_token ON magic_link_tokens(token);
+            CREATE INDEX IF NOT EXISTS idx_magic_link_email ON magic_link_tokens(email);
+
             CREATE TABLE IF NOT EXISTS user_kits (
                 id          TEXT PRIMARY KEY,
                 user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -320,6 +330,70 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     with get_db() as conn:
         row = conn.execute("SELECT * FROM users WHERE email = ?", (email.lower(),)).fetchone()
     return dict(row) if row else None
+
+
+def get_or_create_passwordless_user(email: str, username: str | None = None) -> Dict[str, Any]:
+    """Get an existing user by email or create one with no password (Google / magic-link)."""
+    user = get_user_by_email(email)
+    if user:
+        return user
+    uid = uuid.uuid4().hex
+    now = time.time()
+    uname = (username or email.split("@")[0])[:32]
+    # Ensure username is unique
+    base = uname
+    suffix = 0
+    while True:
+        with get_db() as conn:
+            clash = conn.execute("SELECT id FROM users WHERE username = ?", (uname,)).fetchone()
+        if not clash:
+            break
+        suffix += 1
+        uname = f"{base}{suffix}"
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO users (id, email, username, hashed_pw, email_verified, created_at, updated_at) VALUES (?,?,?,?,1,?,?)",
+            (uid, email.lower(), uname, "__passwordless__", now, now),
+        )
+    return {"id": uid, "email": email.lower(), "username": uname, "email_verified": True}
+
+
+# ── Magic Link Tokens ───────────────────────────────────────
+
+def create_magic_link_token(email: str, expires_in: int = 900) -> str:
+    """Create a one-time magic link token for the given email (default 15 min)."""
+    import secrets
+    token = secrets.token_urlsafe(32)
+    tid = uuid.uuid4().hex
+    expires_at = time.time() + expires_in
+    with get_db() as conn:
+        # Invalidate existing unused tokens for this email
+        conn.execute(
+            "DELETE FROM magic_link_tokens WHERE email = ? AND used_at IS NULL",
+            (email.lower(),),
+        )
+        conn.execute(
+            "INSERT INTO magic_link_tokens (id, email, token, expires_at) VALUES (?,?,?,?)",
+            (tid, email.lower(), token, expires_at),
+        )
+    return token
+
+
+def consume_magic_link_token(token: str) -> Optional[str]:
+    """Validate and consume a magic link token. Returns the email, or None if invalid/expired."""
+    now = time.time()
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM magic_link_tokens WHERE token = ? AND used_at IS NULL AND expires_at > ?",
+            (token, now),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE magic_link_tokens SET used_at = ? WHERE id = ?",
+            (now, row["id"]),
+        )
+    return row["email"]
 
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:

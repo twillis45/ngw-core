@@ -45,6 +45,14 @@ try {
     params.delete('verify_token');
     dirty = true;
   }
+  // Magic link return — store token so App.jsx can verify it before first paint
+  const mt = params.get('magic_token');
+  if (mt) {
+    try { sessionStorage.setItem('ngw_magic_token', mt); } catch { /* ignore */ }
+    params.delete('magic_token');
+    dirty = true;
+  }
+
   // Stripe checkout return — set paid flag before React mounts so usePaywall
   // initialises with isPaid=true without needing a re-render or extra state sync.
   // Also stash the session_id so usePaywall can verify server-side on first render.

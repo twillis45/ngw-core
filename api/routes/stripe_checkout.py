@@ -116,14 +116,19 @@ async def create_checkout_session(
     _stripe = _get_stripe()
 
     try:
-        session = _stripe.checkout.Session.create(
+        session_params = dict(
             mode='subscription',
             line_items=[{'price': price_id, 'quantity': 1}],
             # Stripe appends session_id automatically when the placeholder is present
             success_url=body.success_url + '&session_id={CHECKOUT_SESSION_ID}',
             cancel_url=body.cancel_url,
             allow_promotion_codes=True,
+            metadata={'billing_period': body.billing_period},
         )
+        # Pre-fill email so the Stripe checkout form is ready to go
+        if user and user.get('email'):
+            session_params['customer_email'] = user['email']
+        session = _stripe.checkout.Session.create(**session_params)
     except _stripe.error.StripeError as exc:
         logger.error('Stripe error creating session: %s', exc)
         raise HTTPException(502, f'Stripe error: {exc.user_message or str(exc)}')

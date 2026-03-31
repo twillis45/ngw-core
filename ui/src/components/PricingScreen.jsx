@@ -11,12 +11,13 @@
  *   source       — string — component that opened this
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { trackEvent } from '../data/analytics';
 import { broadcastConversion } from '../data/experimentTracker';
 import { getActivePricing } from '../data/pricingStore';
 import { startStripeCheckout } from '../data/stripeCheckout';
 import { getToken } from '../data/authApi';
+import AuthModal from './AuthModal';
 
 const FREE_FEATURES_INCLUDED = [
   '3 analyses per session',
@@ -131,7 +132,24 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
   const [billingPeriod, setBillingPeriod] = useState('monthly');
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const pricing = getActivePricing();
+
+  // Restore upgrade intent — if user returns from magic link or re-opens pricing
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('ngw_upgrade_intent');
+      if (raw) {
+        const intent = JSON.parse(raw);
+        if (intent?.billingPeriod) setBillingPeriod(intent.billingPeriod);
+        // If already authenticated and intent exists, fire checkout automatically
+        if (getToken()) {
+          sessionStorage.removeItem('ngw_upgrade_intent');
+          handleCheckout(intent.billingPeriod || 'monthly');
+        }
+      }
+    } catch { /* ignore */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     trackEvent('PRICING_SCREEN_VIEWED', { trigger: trigger || 'direct', source: source || 'unknown' });
@@ -159,21 +177,25 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
     trackEvent('UPGRADE_STARTED', { plan: 'pro', billing_period: billingPeriod, price, trigger });
     broadcastConversion('UPGRADE_CLICKED', { plan: 'pro', billing_period: billingPeriod, price, trigger });
 
-    // Auth guard — must be logged in before hitting the backend
+    // Auth guard — show AuthModal instead of surfacing a raw error
     if (!getToken()) {
-      setCheckoutError('Please log in to start your subscription.');
+      setShowAuthModal(true);
       return;
     }
 
+    handleCheckout(billingPeriod);
+  }
+
+  async function handleCheckout(period) {
     setCheckoutLoading(true);
     setCheckoutError(null);
     try {
-      await startStripeCheckout({ billingPeriod });
-      // startStripeCheckout redirects on success — code below only runs on error
+      await startStripeCheckout({ billingPeriod: period });
+      // redirects on success — code below only runs on error
     } catch (err) {
       setCheckoutError(err.message || 'Something went wrong. Please try again.');
       setCheckoutLoading(false);
-      trackEvent('CHECKOUT_ERROR', { plan: 'pro', billing_period: billingPeriod, error: err.message });
+      trackEvent('CHECKOUT_ERROR', { plan: 'pro', billing_period: period, error: err.message });
     }
   }
 
@@ -183,6 +205,17 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
   }
 
   return (
+    <>
+    {showAuthModal && (
+      <AuthModal
+        billingPeriod={billingPeriod}
+        onSuccess={() => {
+          setShowAuthModal(false);
+          handleCheckout(billingPeriod);
+        }}
+        onClose={() => setShowAuthModal(false)}
+      />
+    )}
     <div className="pricing-screen-overlay" onClick={handleClose}>
       <div className="pricing-screen" onClick={e => e.stopPropagation()}>
 
@@ -252,5 +285,6 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
 
       </div>
     </div>
+    </>
   );
 }

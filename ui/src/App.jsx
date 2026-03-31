@@ -92,6 +92,35 @@ export default function App() {
 
   const [shareOpen, setShareOpen] = useState(false);
 
+  // Magic link return — verify token and authenticate before anything else renders.
+  useEffect(() => {
+    const mt = (() => { try { return sessionStorage.getItem('ngw_magic_token'); } catch { return null; } })();
+    if (!mt) return;
+    try { sessionStorage.removeItem('ngw_magic_token'); } catch { /* ignore */ }
+    fetch('/api/auth/magic-link/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: mt }),
+    }).then(async r => {
+      if (!r.ok) return;
+      const data = await r.json();
+      const { saveAuth } = await import('./data/authApi');
+      const { probeAndEnableLab } = await import('./data/labApi');
+      saveAuth(data.token, data.user);
+      dispatch({ type: 'SET_USER', user: data.user });
+      await probeAndEnableLab().catch(() => {});
+      // Restore upgrade intent if present
+      try {
+        const raw = sessionStorage.getItem('ngw_upgrade_intent');
+        if (raw) {
+          // Intent will be picked up by PricingScreen on next open
+          dispatch({ type: 'NAVIGATE', screen: 'home' });
+        }
+      } catch { /* ignore */ }
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Post-payment redirect — fires once on mount when returning from Stripe checkout.
   // main.jsx sets ngw_post_payment=1 in sessionStorage before React mounts.
   // sessionStorage resets on tab close so this only fires once per checkout.

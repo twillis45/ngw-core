@@ -99,3 +99,39 @@ def send_verification_email(to_email: str, token: str) -> None:
     )
 
     _send(to_email, "Verify your NGW email address", html, text)
+
+
+def send_magic_link_email(to_email: str, token: str) -> None:
+    magic_url = f"{APP_URL}/static/ui/?magic_token={token}"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#0f1117;color:#f9fafb;padding:40px 20px;margin:0">
+  <div style="max-width:480px;margin:0 auto;background:#1a1d26;border-radius:12px;padding:36px 32px;border:1px solid #2a2d3a">
+    <div style="text-align:center;margin-bottom:28px">
+      <p style="color:#C8A96E;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
+    </div>
+    <h1 style="font-size:1.375rem;font-weight:700;text-align:center;margin:0 0 8px">Your sign-in link</h1>
+    <p style="color:#9ca3af;text-align:center;font-size:.9rem;margin:0 0 28px">
+      Click below to sign in instantly — no password needed. This link expires in 15 minutes.
+    </p>
+    <a href="{magic_url}"
+       style="display:block;text-align:center;background:#C8A96E;color:#0f1117;text-decoration:none;
+              padding:14px 24px;border-radius:8px;font-weight:700;font-size:1rem;margin-bottom:24px">
+      Sign in to NGW
+    </a>
+    <p style="color:#6b7280;font-size:.8rem;text-align:center;margin:0">
+      If you didn't request this link, you can safely ignore this email.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    text = (
+        f"Your NGW sign-in link\n\n"
+        f"Click the link below to sign in — no password needed:\n{magic_url}\n\n"
+        f"This link expires in 15 minutes.\n"
+        f"If you didn't request this, ignore this email."
+    )
+
+    _send(to_email, "Your NGW sign-in link", html, text)

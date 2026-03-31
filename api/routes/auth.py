@@ -13,11 +13,13 @@ from auth.security import (
     get_optional_user, revoke_token, decode_token_payload,
 )
 
-from auth.email import send_verification_email
+import os
+from auth.email import send_verification_email, send_magic_link_email
 from db.database import (
-    create_user, get_user_by_email,
+    create_user, get_user_by_email, get_or_create_passwordless_user,
     create_verification_token, consume_verification_token,
     mark_email_verified,
+    create_magic_link_token, consume_magic_link_token,
     get_active_subscription, get_subscription_by_stripe_session,
 )
 
@@ -196,6 +198,67 @@ def logout(
             if jti:
                 revoke_token(jti)
     return {"detail": "Logged out"}
+
+
+# ── Magic Link ─────────────────────────────────────────────
+
+class MagicLinkRequestBody(BaseModel):
+    email: str = Field(..., min_length=3)
+
+class MagicLinkVerifyBody(BaseModel):
+    token: str
+
+@router.post("/magic-link/request")
+def request_magic_link(body: MagicLinkRequestBody, request: Request):
+    check_rate_limit("magic_link", request, limit=5, window=900, extra=body.email.lower())
+    token = create_magic_link_token(body.email.lower())
+    try:
+        send_magic_link_email(body.email.lower(), token)
+    except Exception:
+        pass  # non-fatal — token is stored, email failure shouldn't break the flow
+    return {"detail": "Magic link sent. Check your email."}
+
+@router.post("/magic-link/verify")
+def verify_magic_link(body: MagicLinkVerifyBody, request: Request):
+    email = consume_magic_link_token(body.token)
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid or expired magic link.")
+    user = get_or_create_passwordless_user(email)
+    token = create_access_token(user["id"])
+    return {"token": token, "user": _user_public(user)}
+
+
+# ── Google OAuth ────────────────────────────────────────────
+
+class GoogleAuthBody(BaseModel):
+    credential: str  # Google ID token
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+
+@router.post("/google")
+def google_auth(body: GoogleAuthBody, request: Request):
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google auth is not configured.")
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        idinfo = google_id_token.verify_oauth2_token(
+            body.credential,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID,
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid Google credential.")
+
+    email = idinfo.get("email", "")
+    name  = idinfo.get("name") or email.split("@")[0]
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email.")
+
+    check_rate_limit("google_auth", request, limit=20, window=900, extra=email.lower())
+    user  = get_or_create_passwordless_user(email, username=name)
+    token = create_access_token(user["id"])
+    return {"token": token, "user": _user_public(user)}
 
 
 @router.post("/resend-verification")
