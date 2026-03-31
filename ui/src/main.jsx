@@ -53,6 +53,14 @@ try {
     dirty = true;
   }
 
+  // Password reset return — store token so AuthScreen can pick it up on mount
+  const rt = params.get('reset_token');
+  if (rt) {
+    try { sessionStorage.setItem('ngw_reset_token', rt); } catch { /* ignore */ }
+    params.delete('reset_token');
+    dirty = true;
+  }
+
   // Stripe checkout return — set paid flag before React mounts so usePaywall
   // initialises with isPaid=true without needing a re-render or extra state sync.
   // Also stash the session_id so usePaywall can verify server-side on first render.

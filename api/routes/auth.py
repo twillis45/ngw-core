@@ -14,12 +14,13 @@ from auth.security import (
 )
 
 import os
-from auth.email import send_verification_email, send_magic_link_email
+from auth.email import send_verification_email, send_magic_link_email, send_password_reset_email
 from db.database import (
     create_user, get_user_by_email, get_or_create_passwordless_user,
     create_verification_token, consume_verification_token,
     mark_email_verified,
     create_magic_link_token, consume_magic_link_token,
+    create_password_reset_token, consume_password_reset_token, update_user_password,
     get_active_subscription, get_subscription_by_stripe_session,
 )
 
@@ -257,6 +258,44 @@ def google_auth(body: GoogleAuthBody, request: Request):
 
     check_rate_limit("google_auth", request, limit=20, window=900, extra=email.lower())
     user  = get_or_create_passwordless_user(email, username=name)
+    token = create_access_token(user["id"])
+    return {"token": token, "user": _user_public(user)}
+
+
+# ── Password Reset ──────────────────────────────────────────
+
+class PasswordResetRequestBody(BaseModel):
+    email: str = Field(..., min_length=3)
+
+class PasswordResetConfirmBody(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=6, max_length=128)
+
+@router.post("/password-reset/request")
+def request_password_reset(body: PasswordResetRequestBody, request: Request):
+    """Send a password-reset link. Always returns success to avoid email enumeration."""
+    check_rate_limit("password_reset", request, limit=3, window=900, extra=body.email.lower())
+    user = get_user_by_email(body.email.lower())
+    # Only send reset emails for password-based accounts (not Google/magic-link users)
+    if user and user.get("hashed_pw") != "__passwordless__":
+        token = create_password_reset_token(body.email.lower())
+        try:
+            send_password_reset_email(body.email.lower(), token)
+        except Exception:
+            pass  # non-fatal
+    return {"detail": "If that email has a password-based account, a reset link was sent."}
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(body: PasswordResetConfirmBody, request: Request):
+    """Validate reset token, update password, return new JWT."""
+    email = consume_password_reset_token(body.token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    user = get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=400, detail="Account not found.")
+    hashed = hash_password(body.new_password)
+    update_user_password(user["id"], hashed)
     token = create_access_token(user["id"])
     return {"token": token, "user": _user_public(user)}
 

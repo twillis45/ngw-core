@@ -236,6 +236,18 @@ def init_db():
                 count       INTEGER NOT NULL DEFAULT 0,
                 updated_at  REAL NOT NULL
             );
+
+            -- ── Password reset tokens ─────────────────────────────────────
+            -- One-time tokens for password reset. Expire after 1 hour.
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id         TEXT PRIMARY KEY,
+                email      TEXT NOT NULL,
+                token      TEXT UNIQUE NOT NULL,
+                expires_at REAL NOT NULL,
+                used_at    REAL
+            );
+            CREATE INDEX IF NOT EXISTS idx_pwd_reset_token ON password_reset_tokens(token);
+            CREATE INDEX IF NOT EXISTS idx_pwd_reset_email ON password_reset_tokens(email);
         """)
     # Migrate existing users table — add email_verified if missing
     with get_db() as conn:
@@ -394,6 +406,54 @@ def consume_magic_link_token(token: str) -> Optional[str]:
             (now, row["id"]),
         )
     return row["email"]
+
+
+# ── Password Reset Tokens ───────────────────────────────────
+
+def create_password_reset_token(email: str, expires_in: int = 3600) -> str:
+    """Create a one-time password-reset token (default 1 hour)."""
+    import secrets
+    token = secrets.token_urlsafe(32)
+    tid = uuid.uuid4().hex
+    expires_at = time.time() + expires_in
+    with get_db() as conn:
+        # Invalidate existing unused tokens for this email
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE email = ? AND used_at IS NULL",
+            (email.lower(),),
+        )
+        conn.execute(
+            "INSERT INTO password_reset_tokens (id, email, token, expires_at) VALUES (?,?,?,?)",
+            (tid, email.lower(), token, expires_at),
+        )
+    return token
+
+
+def consume_password_reset_token(token: str) -> Optional[str]:
+    """Validate and consume a reset token. Returns email, or None if invalid/expired."""
+    now = time.time()
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ? AND used_at IS NULL AND expires_at > ?",
+            (token, now),
+        ).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
+            (now, row["id"]),
+        )
+    return row["email"]
+
+
+def update_user_password(user_id: str, hashed_pw: str) -> None:
+    """Update a user's hashed password."""
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "UPDATE users SET hashed_pw = ?, updated_at = ? WHERE id = ?",
+            (hashed_pw, now, user_id),
+        )
 
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:

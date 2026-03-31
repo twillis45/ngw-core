@@ -135,3 +135,40 @@ def send_magic_link_email(to_email: str, token: str) -> None:
     )
 
     _send(to_email, "Your NGW sign-in link", html, text)
+
+
+def send_password_reset_email(to_email: str, token: str) -> None:
+    reset_url = f"{APP_URL}/static/ui/?reset_token={token}"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#0f1117;color:#f9fafb;padding:40px 20px;margin:0">
+  <div style="max-width:480px;margin:0 auto;background:#1a1d26;border-radius:12px;padding:36px 32px;border:1px solid #2a2d3a">
+    <div style="text-align:center;margin-bottom:28px">
+      <p style="color:#C8A96E;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
+    </div>
+    <h1 style="font-size:1.375rem;font-weight:700;text-align:center;margin:0 0 8px">Reset your password</h1>
+    <p style="color:#9ca3af;text-align:center;font-size:.9rem;margin:0 0 28px">
+      Click below to set a new password. This link expires in 1 hour.
+    </p>
+    <a href="{reset_url}"
+       style="display:block;text-align:center;background:#C8A96E;color:#0f1117;text-decoration:none;
+              padding:14px 24px;border-radius:8px;font-weight:700;font-size:1rem;margin-bottom:24px">
+      Reset Password
+    </a>
+    <p style="color:#6b7280;font-size:.8rem;text-align:center;margin:0">
+      If you didn't request a password reset, you can safely ignore this email.
+      Your password will not change.
+    </p>
+  </div>
+</body>
+</html>"""
+
+    text = (
+        f"Reset your NGW password\n\n"
+        f"Click the link below to set a new password:\n{reset_url}\n\n"
+        f"This link expires in 1 hour.\n"
+        f"If you didn't request this, ignore this email — your password won't change."
+    )
+
+    _send(to_email, "Reset your NGW password", html, text)
