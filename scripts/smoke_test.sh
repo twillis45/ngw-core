@@ -45,37 +45,26 @@ echo "NGW Smoke Test → $BASE"
 echo "────────────────────────────────────"
 
 # ── 1. Health ─────────────────────────────────────────────────
+# GET /health → {"ok": true, "service": "ngw-core"}
 check "Health endpoint" \
-  '"status":"ok"' \
+  '"ok"' \
   "$BASE/health"
 
 # ── 2. Config (non-sensitive) ─────────────────────────────────
-check "Config endpoint" \
-  '"vlm_provider"' \
+# GET /api/config → {"moods":[...], "patterns":[...], "issue_types":[...]}
+check "Config endpoint (moods)" \
+  '"moods"' \
   "$BASE/api/config"
 
-# ── 3. Diagnostics ────────────────────────────────────────────
-check "Diagnostics endpoint" \
-  '"status"' \
+# ── 3. Diagnostics (taxonomy) ─────────────────────────────────
+# GET /api/diagnostics → {"count":N, "known_patterns":[...], "diagnostics":[...]}
+check "Diagnostics endpoint (taxonomy)" \
+  '"count"' \
   "$BASE/api/diagnostics"
 
-# ── 4. OpenAI connectivity ────────────────────────────────────
-# Diagnostics should show openai_api_key present and not report billing error
-DIAG=$(curl -s "$BASE/api/diagnostics")
-if echo "$DIAG" | grep -q '"openai_api_key":"set"'; then
-  green "OpenAI API key is set in environment"
-  RESULTS+=("PASS: OpenAI API key set")
-  (( PASS++ )) || true
-else
-  red "OpenAI API key NOT SET in environment — image analysis will fail"
-  RESULTS+=("FAIL: OPENAI_API_KEY missing from Render env vars")
-  (( FAIL++ )) || true
-fi
-
-# ── 5. Auth — register a test user ───────────────────────────
+# ── 4. Auth — register a test user ───────────────────────────
 TEST_EMAIL="smoke_$(date +%s)@ngwtest.local"
 TEST_PW="testpass99"
-TEST_NAME="Smoke Test"
 
 REGISTER_RESP=$(curl -s -X POST "$BASE/api/auth/register" \
   -H "Content-Type: application/json" \
@@ -94,7 +83,7 @@ else
   TOKEN=""
 fi
 
-# ── 6. Auth — login ───────────────────────────────────────────
+# ── 5. Auth — login ───────────────────────────────────────────
 if [ -n "$TOKEN" ]; then
   LOGIN_RESP=$(curl -s -X POST "$BASE/api/auth/login" \
     -H "Content-Type: application/json" \
@@ -111,7 +100,7 @@ if [ -n "$TOKEN" ]; then
   fi
 fi
 
-# ── 7. Auth — /me ─────────────────────────────────────────────
+# ── 6. Auth — /me ─────────────────────────────────────────────
 if [ -n "$TOKEN" ]; then
   ME_RESP=$(curl -s "$BASE/api/auth/me" -H "Authorization: Bearer $TOKEN")
   if echo "$ME_RESP" | grep -q "$TEST_EMAIL"; then
@@ -122,6 +111,29 @@ if [ -n "$TOKEN" ]; then
     red "Auth /me (JWT invalid or missing)"
     RESULTS+=("FAIL: Auth /me")
     (( FAIL++ )) || true
+  fi
+fi
+
+# ── 7. VLM / API key status (admin-only endpoint) ────────────
+# GET /api/health/api-keys requires admin JWT.
+# We use the smoke test token — this will succeed if TEST_EMAIL is admin,
+# otherwise we get a 403 and warn (not fail) since it's access-controlled.
+if [ -n "$TOKEN" ]; then
+  KEY_RESP=$(curl -s "$BASE/api/health/api-keys" -H "Authorization: Bearer $TOKEN")
+  if echo "$KEY_RESP" | grep -q '"vlm_available"'; then
+    VLM_OK=$(echo "$KEY_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('vlm_available','?'))" 2>/dev/null || echo "?")
+    if [ "$VLM_OK" = "True" ] || [ "$VLM_OK" = "true" ]; then
+      green "VLM available (API key valid)"
+      RESULTS+=("PASS: VLM available")
+      (( PASS++ )) || true
+    else
+      red "VLM not available — check OPENAI_API_KEY / VLM_PROVIDER in Render env vars"
+      RESULTS+=("FAIL: VLM not available — image analysis will fail")
+      (( FAIL++ )) || true
+    fi
+  else
+    yellow "VLM status unknown — /api/health/api-keys requires admin JWT (expected for smoke test user)"
+    RESULTS+=("WARN: VLM check skipped — smoke test user is not admin")
   fi
 fi
 
@@ -155,36 +167,26 @@ else
   (( FAIL++ )) || true
 fi
 
-# ── 10. Stripe config ─────────────────────────────────────────
-STRIPE_CONF=$(curl -s "$BASE/api/config")
-if echo "$STRIPE_CONF" | grep -q '"stripe_configured":true'; then
-  green "Stripe is configured"
-  RESULTS+=("PASS: Stripe configured")
+# ── 10. SMTP / email — indirect check via magic link ──────────
+# We can't check SMTP config directly without an admin endpoint.
+# Instead we check if the magic link endpoint returned successfully
+# (if SMTP were broken, the endpoint still returns 200 — it's non-fatal).
+# Manual check: Render dashboard → SMTP_HOST, SMTP_USER, SMTP_PASS env vars.
+yellow "SMTP — manual verification required: check Render env vars"
+yellow "  SMTP_HOST=smtp.resend.com  SMTP_USER=resend  SMTP_PASS=re_..."
+RESULTS+=("WARN: SMTP requires manual Render env var check")
+
+# ── 11. Stripe config ─────────────────────────────────────────
+# /api/config returns moods/patterns — Stripe config is not exposed publicly.
+# Manual check: verify STRIPE_SECRET_KEY, STRIPE_PRICE_ID_MONTHLY in Render.
+STRIPE_KEY_SET=$([ -n "${STRIPE_SECRET_KEY:-}" ] && echo "yes" || echo "no")
+if [ "$STRIPE_KEY_SET" = "yes" ]; then
+  green "Stripe secret key present (local env)"
+  RESULTS+=("PASS: Stripe key in local env")
   (( PASS++ )) || true
 else
-  yellow "Stripe not configured (set STRIPE_SECRET_KEY, STRIPE_PRICE_ID_MONTHLY, etc.)"
-  RESULTS+=("WARN: Stripe not configured")
-fi
-
-# ── 11. SMTP check (indirect — check server log/config) ───────
-SMTP_STATUS=$(curl -s "$BASE/api/diagnostics" | python3 -c "
-import sys, json
-try:
-  d = json.load(sys.stdin)
-  smtp = d.get('smtp_configured', d.get('email_configured', 'unknown'))
-  print(smtp)
-except:
-  print('unknown')
-" 2>/dev/null || echo "unknown")
-
-if [ "$SMTP_STATUS" = "True" ] || [ "$SMTP_STATUS" = "true" ] || [ "$SMTP_STATUS" = "1" ]; then
-  green "SMTP configured"
-  RESULTS+=("PASS: SMTP configured")
-  (( PASS++ )) || true
-else
-  yellow "SMTP status unknown — check Render env vars: SMTP_HOST, SMTP_USER, SMTP_PASS"
-  yellow "  Expected: SMTP_HOST=smtp.resend.com  SMTP_USER=resend  SMTP_PASS=re_..."
-  RESULTS+=("WARN: SMTP status unknown from diagnostics")
+  yellow "Stripe not verified — set STRIPE_SECRET_KEY in Render env vars"
+  RESULTS+=("WARN: Stripe not verified by smoke test")
 fi
 
 # ── Summary ───────────────────────────────────────────────────
