@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { loadTheme, saveTheme, applyTheme, getSystemTheme, THEMES } from '../data/themeStore';
-import { getUser, getToken, fetchMe, saveAuth, logout as apiLogout, verifyEmail } from '../data/authApi';
+import { getUser, getToken, fetchMe, saveAuth, verifyEmail } from '../data/authApi';
 import { probeAndEnableLab } from '../data/labApi';
 import { isEnabled } from '../modes/featureFlags';
 import { pullKitFromServer } from '../data/kitStore';
@@ -157,11 +157,8 @@ export default function AppHeader() {
       {user ? (
         <button
           className="app-header__user-btn"
-          onClick={() => {
-            apiLogout();
-            dispatch({ type: 'LOGOUT' });
-          }}
-          title={`${user.username || user.email || 'User'} — tap to sign out`}
+          onClick={() => dispatch({ type: 'NAVIGATE', screen: 'settings' })}
+          title={`${user.username || user.email || 'User'} — tap to open settings`}
           type="button"
         >
           <span className="app-header__avatar">{(user.username || user.email || '?')[0].toUpperCase()}</span>

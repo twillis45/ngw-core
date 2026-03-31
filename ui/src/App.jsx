@@ -121,6 +121,17 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Deep-link to auth screen — fires when ?login=1 was in the URL (set by main.jsx).
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('ngw_goto_auth') === '1') {
+        sessionStorage.removeItem('ngw_goto_auth');
+        dispatch({ type: 'NAVIGATE', screen: 'auth' });
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Post-payment redirect — fires once on mount when returning from Stripe checkout.
   // main.jsx sets ngw_post_payment=1 in sessionStorage before React mounts.
   // sessionStorage resets on tab close so this only fires once per checkout.

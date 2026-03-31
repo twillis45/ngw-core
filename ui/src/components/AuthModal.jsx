@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useDispatch } from '../context/AppContext';
 import { register, login, saveAuth } from '../data/authApi';
 import { probeAndEnableLab } from '../data/labApi';
 
@@ -140,6 +141,7 @@ function MagicLinkForm({ onClose }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 export default function AuthModal({ onSuccess, onClose, billingPeriod }) {
+  const dispatch              = useDispatch();
   const [mode, setMode]       = useState('login');   // 'login' | 'register' | 'magic'
   const [email, setEmail]     = useState('');
   const [name, setName]       = useState('');
@@ -162,11 +164,10 @@ export default function AuthModal({ onSuccess, onClose, billingPeriod }) {
     setError(null);
     setLoading(true);
     try {
-      if (mode === 'register') {
-        await register(email, name, password);
-      } else {
-        await login(email, password);
-      }
+      const user = mode === 'register'
+        ? await register(email, name, password)
+        : await login(email, password);
+      dispatch({ type: 'SET_USER', user });
       await probeAndEnableLab().catch(() => {});
       // Clear upgrade intent — we're about to proceed to checkout
       try { sessionStorage.removeItem('ngw_upgrade_intent'); } catch { /* ignore */ }
@@ -190,6 +191,7 @@ export default function AuthModal({ onSuccess, onClose, billingPeriod }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Google sign-in failed');
       saveAuth(data.token, data.user);
+      dispatch({ type: 'SET_USER', user: data.user });
       await probeAndEnableLab().catch(() => {});
       try { sessionStorage.removeItem('ngw_upgrade_intent'); } catch { /* ignore */ }
       onSuccess();

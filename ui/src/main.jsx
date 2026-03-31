@@ -61,6 +61,15 @@ try {
     dirty = true;
   }
 
+  // Direct login deep-link — ?login=1 navigates to auth screen on mount.
+  // Share this URL to give users a reliable "sign in" link:
+  //   https://app.noguessworksystems.com/static/ui/?login=1
+  if (params.get('login') === '1') {
+    try { sessionStorage.setItem('ngw_goto_auth', '1'); } catch { /* ignore */ }
+    params.delete('login');
+    dirty = true;
+  }
+
   // Stripe checkout return — set paid flag before React mounts so usePaywall
   // initialises with isPaid=true without needing a re-render or extra state sync.
   // Also stash the session_id so usePaywall can verify server-side on first render.
