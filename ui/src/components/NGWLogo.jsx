@@ -19,48 +19,6 @@ const SIZES = {
   lg: { sym: 40, main: 22, sub: 14, gap: 10 },
 };
 
-/* Canon DSLR shutter — mirror-up slap + shutter blade click */
-function fireCanonShutter(audioCtx, time) {
-  const sr = audioCtx.sampleRate;
-
-  // Mirror-up slap — bandpass filtered noise, mid-heavy transient
-  const slapBuf  = audioCtx.createBuffer(1, sr * 0.022, sr);
-  const slapData = slapBuf.getChannelData(0);
-  for (let i = 0; i < slapData.length; i++) {
-    slapData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.004));
-  }
-  const slapSrc  = audioCtx.createBufferSource();
-  slapSrc.buffer = slapBuf;
-  const bp = audioCtx.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = 1600;
-  bp.Q.value = 0.7;
-  const slapGain = audioCtx.createGain();
-  slapGain.gain.value = 0.30;
-  slapSrc.connect(bp);
-  bp.connect(slapGain);
-  slapGain.connect(audioCtx.destination);
-  slapSrc.start(time);
-
-  // Shutter blade thwick — short, higher-pitched click
-  const bladeBuf  = audioCtx.createBuffer(1, sr * 0.010, sr);
-  const bladeData = bladeBuf.getChannelData(0);
-  for (let i = 0; i < bladeData.length; i++) {
-    bladeData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.0015));
-  }
-  const bladeSrc  = audioCtx.createBufferSource();
-  bladeSrc.buffer = bladeBuf;
-  const hpf = audioCtx.createBiquadFilter();
-  hpf.type = 'highpass';
-  hpf.frequency.value = 3500;
-  const bladeGain = audioCtx.createGain();
-  bladeGain.gain.value = 0.18;
-  bladeSrc.connect(hpf);
-  hpf.connect(bladeGain);
-  bladeGain.connect(audioCtx.destination);
-  bladeSrc.start(time + 0.005);
-}
-
 /* Profoto pack-head pop — three-layer synthesis.
  *   intensity : 0–1 scale for all gains
  *   short     : true = rapid burst pop (no tube layer, tighter thump)
@@ -87,11 +45,11 @@ function fireProfotoHead(audioCtx, time, intensity = 1.0, short = false) {
   const thump     = audioCtx.createOscillator();
   const thumpGain = audioCtx.createGain();
   thump.type      = 'sine';
-  thump.frequency.setValueAtTime(short ? 120 : 95, time);
-  thump.frequency.exponentialRampToValueAtTime(short ? 70 : 45, time + (short ? 0.06 : 0.12));
+  thump.frequency.setValueAtTime(short ? 100 : 75, time);
+  thump.frequency.exponentialRampToValueAtTime(short ? 50 : 30, time + (short ? 0.07 : 0.16));
   thumpGain.gain.setValueAtTime(0, time);
-  thumpGain.gain.linearRampToValueAtTime((short ? 0.28 : 0.7) * intensity, time + 0.004);
-  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + (short ? 0.06 : 0.18));
+  thumpGain.gain.linearRampToValueAtTime((short ? 0.38 : 0.85) * intensity, time + 0.004);
+  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + (short ? 0.08 : 0.22));
   thump.connect(thumpGain);
   thumpGain.connect(audioCtx.destination);
   thump.start(time);
@@ -102,15 +60,15 @@ function fireProfotoHead(audioCtx, time, intensity = 1.0, short = false) {
     const tube     = audioCtx.createOscillator();
     const tubeGain = audioCtx.createGain();
     tube.type      = 'triangle';
-    tube.frequency.setValueAtTime(180, time);
-    tube.frequency.exponentialRampToValueAtTime(60, time + 0.18);
+    tube.frequency.setValueAtTime(120, time);
+    tube.frequency.exponentialRampToValueAtTime(35, time + 0.26);
     tubeGain.gain.setValueAtTime(0, time);
-    tubeGain.gain.linearRampToValueAtTime(0.55 * intensity, time + 0.004);
-    tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+    tubeGain.gain.linearRampToValueAtTime(0.75 * intensity, time + 0.005);
+    tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.30);
     tube.connect(tubeGain);
     tubeGain.connect(audioCtx.destination);
     tube.start(time);
-    tube.stop(time + 0.25);
+    tube.stop(time + 0.32);
   }
 }
 
@@ -120,24 +78,21 @@ function fireSequence(audioCtx) {
   const t = audioCtx.currentTime + 0.05;
   const interval = 0.065; // 65ms between rapid pops
 
-  // 10 rapid short pops — Profoto short + Canon shutter each
+  // 10 rapid short pops
   for (let i = 0; i < 10; i++) {
     const offset = i * interval;
     const intensity = 1.0 - i * 0.025; // slight taper 1.0 → 0.775
-    fireCanonShutter(audioCtx, t + offset);
-    fireProfotoHead(audioCtx, t + offset + 0.005, intensity, true);
+    fireProfotoHead(audioCtx, t + offset, intensity, true);
   }
 
   // Beat gap after rapid pops
   const mainBase = t + 10 * interval + 0.22; // ~0.87s from start
 
-  // Main pop 1 — full Profoto + Canon shutter
-  fireCanonShutter(audioCtx, mainBase);
-  fireProfotoHead(audioCtx, mainBase + 0.005, 1.0, false);
+  // Main pop 1 — full Profoto
+  fireProfotoHead(audioCtx, mainBase, 1.0, false);
 
   // Main pop 2 — same, ~700ms after first
-  fireCanonShutter(audioCtx, mainBase + 0.7);
-  fireProfotoHead(audioCtx, mainBase + 0.705, 1.0, false);
+  fireProfotoHead(audioCtx, mainBase + 0.7, 1.0, false);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
