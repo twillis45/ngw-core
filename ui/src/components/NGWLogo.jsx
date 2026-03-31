@@ -19,24 +19,20 @@ const SIZES = {
   lg: { sym: 40, main: 22, sub: 14, gap: 10 },
 };
 
-/* Profoto pack-head pop — three-layer synthesis.
- *   intensity : 0–1 scale for all gains
- *   short     : true = rapid burst pop (no tube layer, tighter thump)
- */
-function fireProfotoHead(audioCtx, time, intensity = 1.0, short = false) {
+/* Profoto pack-head pop — three-layer synthesis */
+function fireProfotoHead(audioCtx, time) {
   const sr = audioCtx.sampleRate;
 
   // Layer 1: trigger crack
-  const crackBuf  = audioCtx.createBuffer(1, sr * (short ? 0.015 : 0.03), sr);
+  const crackBuf  = audioCtx.createBuffer(1, sr * 0.03, sr);
   const crackData = crackBuf.getChannelData(0);
-  const crackDecay = short ? 0.0015 : 0.003;
   for (let i = 0; i < crackData.length; i++) {
-    crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * crackDecay));
+    crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.003));
   }
   const crackSrc  = audioCtx.createBufferSource();
   crackSrc.buffer = crackBuf;
   const crackGain = audioCtx.createGain();
-  crackGain.gain.value = (short ? 0.45 : 0.55) * intensity;
+  crackGain.gain.value = 0.55;
   crackSrc.connect(crackGain);
   crackGain.connect(audioCtx.destination);
   crackSrc.start(time);
@@ -45,54 +41,37 @@ function fireProfotoHead(audioCtx, time, intensity = 1.0, short = false) {
   const thump     = audioCtx.createOscillator();
   const thumpGain = audioCtx.createGain();
   thump.type      = 'sine';
-  thump.frequency.setValueAtTime(short ? 100 : 75, time);
-  thump.frequency.exponentialRampToValueAtTime(short ? 50 : 30, time + (short ? 0.07 : 0.16));
+  thump.frequency.setValueAtTime(75, time);
+  thump.frequency.exponentialRampToValueAtTime(30, time + 0.16);
   thumpGain.gain.setValueAtTime(0, time);
-  thumpGain.gain.linearRampToValueAtTime((short ? 0.38 : 0.85) * intensity, time + 0.004);
-  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + (short ? 0.08 : 0.22));
+  thumpGain.gain.linearRampToValueAtTime(0.85, time + 0.004);
+  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
   thump.connect(thumpGain);
   thumpGain.connect(audioCtx.destination);
   thump.start(time);
-  thump.stop(time + (short ? 0.08 : 0.2));
+  thump.stop(time + 0.25);
 
-  if (!short) {
-    // Layer 3: tube resonance — deep body thud, full pops only
-    const tube     = audioCtx.createOscillator();
-    const tubeGain = audioCtx.createGain();
-    tube.type      = 'triangle';
-    tube.frequency.setValueAtTime(120, time);
-    tube.frequency.exponentialRampToValueAtTime(35, time + 0.26);
-    tubeGain.gain.setValueAtTime(0, time);
-    tubeGain.gain.linearRampToValueAtTime(0.75 * intensity, time + 0.005);
-    tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.30);
-    tube.connect(tubeGain);
-    tubeGain.connect(audioCtx.destination);
-    tube.start(time);
-    tube.stop(time + 0.32);
-  }
+  // Layer 3: tube resonance — deep body thud
+  const tube     = audioCtx.createOscillator();
+  const tubeGain = audioCtx.createGain();
+  tube.type      = 'triangle';
+  tube.frequency.setValueAtTime(120, time);
+  tube.frequency.exponentialRampToValueAtTime(35, time + 0.26);
+  tubeGain.gain.setValueAtTime(0, time);
+  tubeGain.gain.linearRampToValueAtTime(0.75, time + 0.005);
+  tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.30);
+  tube.connect(tubeGain);
+  tubeGain.connect(audioCtx.destination);
+  tube.start(time);
+  tube.stop(time + 0.32);
 }
 
-/* Full strobe sequence: 10 rapid Profoto+shutter pops → beat → 2 full Profoto+shutter pops → ready whines
- * All fires in one continuous run (~3.5s total) */
+/* Two full Profoto pack-head pops, ~700ms apart */
 function fireSequence(audioCtx) {
   const t = audioCtx.currentTime + 0.05;
-  const interval = 0.065; // 65ms between rapid pops
 
-  // 10 rapid short pops
-  for (let i = 0; i < 10; i++) {
-    const offset = i * interval;
-    const intensity = 1.0 - i * 0.025; // slight taper 1.0 → 0.775
-    fireProfotoHead(audioCtx, t + offset, intensity, true);
-  }
-
-  // Beat gap after rapid pops
-  const mainBase = t + 10 * interval + 0.22; // ~0.87s from start
-
-  // Main pop 1 — full Profoto
-  fireProfotoHead(audioCtx, mainBase, 1.0, false);
-
-  // Main pop 2 — same, ~700ms after first
-  fireProfotoHead(audioCtx, mainBase + 0.7, 1.0, false);
+  fireProfotoHead(audioCtx, t, 1.0, false);
+  fireProfotoHead(audioCtx, t + 0.7, 1.0, false);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
