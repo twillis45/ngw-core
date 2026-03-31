@@ -2,7 +2,7 @@
  * PricingScreen — full-screen 3-tier pricing overlay.
  *
  * Renders as a modal overlay triggered from any paywall upgrade CTA.
- * Tiers: Free (current) / Pro $59/mo / Studio (coming soon)
+ * Tiers: Free (current) / Pro $39/mo / Studio (coming soon)
  *
  * Props:
  *   onClose      — called when user dismisses without upgrading
@@ -17,10 +17,14 @@ import { broadcastConversion } from '../data/experimentTracker';
 import { getActivePricing } from '../data/pricingStore';
 import { startStripeCheckout } from '../data/stripeCheckout';
 
-const FREE_FEATURES = [
+const FREE_FEATURES_INCLUDED = [
   '3 analyses per session',
   'Basic pattern identification',
-  'Setup suggestions',
+];
+
+const FREE_FEATURES_GATED = [
+  'Full blueprints & distances',
+  'Shoot Mode',
 ];
 
 const PRO_FEATURES = [
@@ -69,9 +73,14 @@ function PricingTierCard({ tier, pricing, billingPeriod, onSelect, isCurrent, lo
   return (
     <div className={`pricing-tier${isPro ? ' pricing-tier--featured' : ''}${isStudio ? ' pricing-tier--muted' : ''}`}>
       <div className="pricing-tier__header">
-        <span className="pricing-tier__name">
-          {tier === 'free' ? 'Free' : tier === 'pro' ? 'Pro' : 'Studio'}
-        </span>
+        <div className="pricing-tier__name-group">
+          <span className="pricing-tier__name">
+            {tier === 'free' ? 'Free' : tier === 'pro' ? 'Pro' : 'Studio'}
+          </span>
+          {isPro && <span className="pricing-tier__cancel-note">cancel anytime</span>}
+        </div>
+        {isCurrent && <span className="pricing-tier__current-badge">Current plan</span>}
+        {isStudio && <span className="pricing-tier__current-badge">Coming soon</span>}
         {isPro && billingPeriod === 'yearly' && pricing.yearly_discount_pct && (
           <span className="pricing-tier__badge">Save {pricing.yearly_discount_pct}%</span>
         )}
@@ -95,7 +104,8 @@ function PricingTierCard({ tier, pricing, billingPeriod, onSelect, isCurrent, lo
       )}
 
       <ul className="pricing-tier__features">
-        {isFree  && FREE_FEATURES.map((f, i) => <FeatureRow key={i} text={f} included />)}
+        {isFree  && FREE_FEATURES_INCLUDED.map((f, i) => <FeatureRow key={i} text={f} included />)}
+        {isFree  && FREE_FEATURES_GATED.map((f, i) => <FeatureRow key={`g${i}`} text={f} included={false} />)}
         {isPro   && PRO_FEATURES.map((f, i)  => <FeatureRow key={i} text={f} included />)}
         {isStudio && STUDIO_FEATURES.map((f, i) => <FeatureRow key={i} text={f} included />)}
       </ul>
@@ -107,10 +117,10 @@ function PricingTierCard({ tier, pricing, billingPeriod, onSelect, isCurrent, lo
         disabled={isCurrent || isStudio || loading}
       >
         {isCurrent        ? 'Current plan'
-         : isStudio       ? 'Join waitlist'
+         : isStudio       ? 'Coming soon'
          : isFree         ? 'Stay free'
          : loading        ? 'Redirecting…'
-         : 'Get Pro Access'}
+         : `Start Pro — $${displayPrice}/mo  →`}
       </button>
     </div>
   );
@@ -176,9 +186,11 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
           </svg>
         </button>
 
+        <p className="pricing-screen__eyebrow">UNLOCK THE FULL SYSTEM</p>
         <h2 className="pricing-screen__title">
-          {checkoutLoading ? 'Redirecting to checkout…' : 'Choose your plan'}
+          {checkoutLoading ? 'Redirecting to checkout…' : 'Pro plan.\nUnlimited analyses.'}
         </h2>
+        <p className="pricing-screen__subtitle">Cancel anytime. No per-use limits.</p>
 
         {/* Checkout error */}
         {checkoutError && (
@@ -213,7 +225,7 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
 
         {/* Trust bar */}
         <p className="pricing-screen__trust">
-          30-day money-back guarantee · No contracts · Cancel any time
+          🔒  Secure checkout via Stripe · Cancel anytime
         </p>
 
         {/* FAQ */}

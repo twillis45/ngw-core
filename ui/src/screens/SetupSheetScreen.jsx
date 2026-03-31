@@ -31,6 +31,7 @@ export default function SetupSheetScreen() {
   const userEmail = resolveUserEmail(user);
   const { isPaid, unlock } = usePaywall(userEmail);
   const [saved, setSaved] = useState(false);
+  const [shared, setShared] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState('photographer');
   const [pricingOpen, setPricingOpen] = useState(false);
@@ -69,8 +70,24 @@ export default function SetupSheetScreen() {
     trackEvent('SETUP_SHEET_START', { setupName: patternName, mode: selectedMode });
   }
 
-  function handleShare() {
-    trackEvent('SETUP_SHEET_SHARE', { setupName: patternName });
+  async function handleShare() {
+    const shareText = `${patternName} — lighting setup via No Guess Work`;
+    const shareUrl = window.location.origin;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: patternName, text: shareText, url: shareUrl });
+        trackEvent('SETUP_SHEET_SHARE', { setupName: patternName, method: 'native' });
+      } else {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        trackEvent('SETUP_SHEET_SHARE', { setupName: patternName, method: 'clipboard' });
+        setShared(true);
+        setTimeout(() => setShared(false), 2500);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        trackEvent('SETUP_SHEET_SHARE_FAILED', { setupName: patternName, error: err.message });
+      }
+    }
   }
 
   function handleSave() {
@@ -109,16 +126,22 @@ export default function SetupSheetScreen() {
           ) : (
             <>
               <button
-                className="setup-sheet__action-btn"
+                className={`setup-sheet__action-btn${shared ? ' setup-sheet__action-btn--saved' : ''}`}
                 onClick={handleShare}
                 type="button"
-                aria-label="Share"
+                aria-label={shared ? 'Copied' : 'Share'}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/>
-                  <polyline points="16 6 12 2 8 6"/>
-                  <line x1="12" y1="2" x2="12" y2="15"/>
-                </svg>
+                {shared ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/>
+                    <polyline points="16 6 12 2 8 6"/>
+                    <line x1="12" y1="2" x2="12" y2="15"/>
+                  </svg>
+                )}
               </button>
               <button
                 className={`setup-sheet__action-btn${saved ? ' setup-sheet__action-btn--saved' : ''}`}
