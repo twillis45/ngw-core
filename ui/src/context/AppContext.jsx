@@ -1,4 +1,5 @@
-import { createContext, useContext, useReducer } from 'react';
+import { createContext, useContext, useReducer, useCallback } from 'react';
+import { navHaptic, selectHaptic, successHaptic, warnHaptic } from '../utils/haptics';
 
 /* -- default light factory (kept for backward compat) -- */
 
@@ -719,7 +720,36 @@ function _buildDemoInit(devModeUser) {
 export function AppProvider({ children, devModeUser }) {
   const demoInit = _buildDemoInit(devModeUser);
   const init = demoInit || (devModeUser ? { ...initialState, user: devModeUser } : initialState);
-  const [state, dispatch] = useReducer(reducer, init);
+  const [state, rawDispatch] = useReducer(reducer, init);
+
+  // Haptic-enhanced dispatch wrapper — fires tactile feedback before state changes
+  const dispatch = useCallback((action) => {
+    switch (action.type) {
+      case 'NAVIGATE':
+      case 'GO_BACK':
+      case 'NAVIGATE_SYMPTOM':
+        navHaptic(); break;
+      case 'SET_MOOD':
+      case 'SET_SUBJECT_TYPE':
+      case 'SET_ENVIRONMENT':
+      case 'SET_SKIN_TONE':
+      case 'SET_GEAR_MODE':
+      case 'SET_MASTER_MODE':
+      case 'SET_GEAR_PREFERENCE':
+      case 'SET_APP_MODE':
+      case 'SET_INTENT':
+      case 'TOGGLE_MODIFIER':
+      case 'SET_SHOOT_ROLE':
+        selectHaptic(); break;
+      case 'SET_RESULT':
+        successHaptic(); break;
+      case 'SET_ERROR':
+        warnHaptic(); break;
+      default: break;
+    }
+    rawDispatch(action);
+  }, [rawDispatch]);
+
   return (
     <StateCtx.Provider value={state}>
       <DispatchCtx.Provider value={dispatch}>

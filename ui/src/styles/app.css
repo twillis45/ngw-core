@@ -2088,6 +2088,10 @@ body {
   color: var(--color-text-secondary);
   display: flex; align-items: baseline; gap: 4px;
 }
+.diagram-legend__field--warn {
+  color: var(--color-warning, #f59e0b);
+  font-weight: var(--weight-medium);
+}
 .diagram-legend__field-key {
   font-size: 9px;
   text-transform: uppercase;
@@ -14525,6 +14529,12 @@ body {
   width: 100%; max-width: 552px; margin: 0 auto;
   padding: var(--space-md) 16px var(--space-xl);
   min-height: 100%;
+}
+/* Desktop: .stgx is a direct child of .app-layout (flex row, overflow:hidden).
+   It needs flex:1 + min-height:0 + overflow-y:auto to scroll within the shell
+   instead of being flex-compressed and clipping its list contents. */
+@media (min-width: 768px) {
+  .stgx { flex: 1; min-height: 0; overflow-y: auto; }
 }
 
 /* Sub-screen header bar */

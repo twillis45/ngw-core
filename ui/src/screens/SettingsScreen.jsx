@@ -444,7 +444,7 @@ export default function SettingsScreen() {
             value={settings.allowLearning !== false}
             onChange={v => update('allowLearning', v)}
           />
-          <NavRow label="Default sort" value="Recent" onClick={() => {}} />
+          <NavRow label="Default sort" value={settings.recipeSort === 'alpha' ? 'A–Z' : 'Recent'} onClick={() => update('recipeSort', settings.recipeSort === 'alpha' ? 'recent' : 'alpha')} />
         </ListCard>
 
         <SectionHdr label="APPEARANCE" />
@@ -471,8 +471,8 @@ export default function SettingsScreen() {
           />
           <NavRow
             label="Diagram style"
-            value="Blueprint"
-            onClick={() => {}}
+            value={settings.diagramStyle === 'minimal' ? 'Minimal' : 'Blueprint'}
+            onClick={() => update('diagramStyle', settings.diagramStyle === 'minimal' ? 'blueprint' : 'minimal')}
           />
           <NavRow
             label="Unit system"

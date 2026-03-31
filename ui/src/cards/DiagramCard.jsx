@@ -3,6 +3,24 @@ import ZoomOverlay from './ZoomOverlay';
 import CardIcon from '../components/CardIcon';
 import WBSpectrum from '../components/WBSpectrum';
 import { wbTempClass } from '../utils/units';
+import { dragStartHaptic, dropHaptic, selectHaptic } from '../utils/haptics';
+
+/**
+ * Compute elevation angle (degrees above horizontal) from height and distance.
+ * Key light optimal range: 25–55°. Outside that → warning.
+ */
+function elevationAngle(height_m, distance_m) {
+  const h = height_m || 1.7;
+  const d = distance_m || 2;
+  return Math.atan2(h - 1.6, d) * 180 / Math.PI; // 1.6m = avg eye level
+}
+function angleWarning(light) {
+  if (!['key', 'fill'].includes(light.role)) return null;
+  const elev = elevationAngle(light.height_m, light.distance_m);
+  if (elev < 20) return { msg: 'too flat — low shadow definition', level: 'warn' };
+  if (elev > 60) return { msg: 'too steep — harsh eye shadows', level: 'warn' };
+  return null;
+}
 
 const LIGHT_COLORS_DARK  = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#ec4899' };
 const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#be185d' };
@@ -1250,7 +1268,68 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
   const canvasRef = useRef(null);
   const [view, setView] = useState('top');
   const [zoomSrc, setZoomSrc] = useState(null);
+  const [activeLight, setActiveLight] = useState(null); // role of selected/dragged light
+  const dragRef = useRef(null); // { role, startX, startY, canvasW, canvasH }
   const { units, powerDisplay } = useSettings();
+
+  const handleCanvasZoom = useCallback(() => {
+    if (canvasRef.current) {
+      setZoomSrc(canvasRef.current.toDataURL('image/png'));
+    }
+  }, []);
+
+  // Hit-test: find light near canvas pointer position (top view only)
+  const hitTestLight = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !spec?.lights?.length) return null;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const py = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const lights = spec.lights;
+    const W = canvas.width / dpr;
+    const H = canvas.height / dpr;
+    const margin = 20;
+    const scaleX = (W - margin * 2) / 6;
+    const scaleY = (H - margin * 2) / 4;
+    const subjectX = W * 0.5;
+    const floorY = H - margin - 20;
+    for (const l of lights) {
+      const angleRad = (l.angle_deg || 0) * Math.PI / 180;
+      const depthM = (l.distance_m || 2) * Math.cos(angleRad);
+      const lx = subjectX - depthM * scaleX;
+      const ly = floorY - (l.height_m || 1.7) * scaleY;
+      const dx = px / dpr - lx;
+      const dy = py / dpr - ly;
+      if (Math.sqrt(dx * dx + dy * dy) < 18) return l.role;
+    }
+    return null;
+  }, [spec]);
+
+  const handlePointerDown = useCallback((e) => {
+    if (view !== 'top') return;
+    const role = hitTestLight(e);
+    if (!role) return;
+    e.preventDefault();
+    dragRef.current = { role, startX: e.clientX, startY: e.clientY };
+    setActiveLight(role);
+    dragStartHaptic();
+    canvasRef.current?.setPointerCapture(e.pointerId);
+  }, [view, hitTestLight]);
+
+  const handlePointerUp = useCallback((e) => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    dropHaptic();
+    canvasRef.current?.releasePointerCapture(e.pointerId);
+  }, []);
+
+  const handleCanvasClick = useCallback((e) => {
+    if (view !== 'top') { handleCanvasZoom(); return; }
+    const role = hitTestLight(e);
+    if (role) { setActiveLight(r => r === role ? null : role); selectHaptic(); }
+    else handleCanvasZoom();
+  }, [view, hitTestLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const draw = view === 'space'
@@ -1262,12 +1341,6 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [spec, view, units, spaceCheck, roomDimensions, highlightRole]);
-
-  const handleCanvasZoom = useCallback(() => {
-    if (canvasRef.current) {
-      setZoomSrc(canvasRef.current.toDataURL('image/png'));
-    }
-  }, []);
 
   if (!spec) return null;
 
@@ -1312,7 +1385,16 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
       </div>
       <div className="diagram-layout">
         <div className="diagram-layout__canvas">
-          <canvas ref={canvasRef} className="diagram-canvas" onClick={handleCanvasZoom} />
+          <canvas
+            ref={canvasRef}
+            className="diagram-canvas"
+            onClick={handleCanvasClick}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ cursor: view === 'top' ? 'crosshair' : 'zoom-in', touchAction: 'none' }}
+            title={view === 'top' ? 'Tap a light to select · drag to explore' : undefined}
+          />
           {cameraSettings && (
             <>
               <div className="diagram-camera-bar">
@@ -1364,6 +1446,11 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
                         {fmtDist(l.distance_m, units)}&nbsp;&middot;&nbsp;
                         {fmtDist(l.height_m || 1.7, units)} high
                       </span>
+                      {(() => { const w = angleWarning(l); return w ? (
+                        <span className="diagram-legend__field diagram-legend__field--warn" title={w.msg}>
+                          ⚠ {w.msg}
+                        </span>
+                      ) : null; })()}
                       {extra && (
                         <span className="diagram-legend__field">
                           <span className="diagram-legend__field-key">Pwr</span>{extra}
