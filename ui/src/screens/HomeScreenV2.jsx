@@ -42,32 +42,39 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
         <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
       </div>
 
-      {stage && (
-        <div className="home-v2__stage">
-          <div className="home-v2__stage-photo">
-            <div className="home-v2__stage-photo-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
+      {/* Stage area — always visible; shows camera icon placeholder until analysis exists */}
+      <div className="home-v2__stage">
+        <div className="home-v2__stage-photo">
+          <div className="home-v2__stage-photo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+              <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div className="home-v2__stage-result">
-            <span className="home-v2__stage-pattern">{stage.name}</span>
-            {stage.pct > 0 && (
-              <span className="home-v2__stage-confidence">{stage.pct}%</span>
-            )}
-          </div>
-          {stage.chips.length > 0 && (
-            <div className="home-v2__stage-chips">
-              {stage.chips.map((chip, i) => (
-                <span key={i} className="home-v2__stage-chip">{chip}</span>
-              ))}
-            </div>
-          )}
         </div>
-      )}
+        {stage ? (
+          <>
+            <div className="home-v2__stage-result">
+              <span className="home-v2__stage-pattern">{stage.name}</span>
+              {stage.pct > 0 && (
+                <span className="home-v2__stage-confidence">{stage.pct}%</span>
+              )}
+            </div>
+            {stage.chips.length > 0 && (
+              <div className="home-v2__stage-chips">
+                {stage.chips.map((chip, i) => (
+                  <span key={i} className="home-v2__stage-chip">{chip}</span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="home-v2__stage-result">
+            <span className="home-v2__stage-pattern home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
+          </div>
+        )}
+      </div>
 
       <div className="home-v2__cta-wrap">
         <button
@@ -164,32 +171,39 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
         </div>
       )}
 
-      {stage && (
-        <div className="home-v2__stage">
-          <div className="home-v2__stage-photo">
-            <div className="home-v2__stage-photo-icon">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-                <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
-                <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-            </div>
+      {/* Stage area — always visible */}
+      <div className="home-v2__stage">
+        <div className="home-v2__stage-photo">
+          <div className="home-v2__stage-photo-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+              <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div className="home-v2__stage-result">
-            <span className="home-v2__stage-pattern">{stage.name}</span>
-            {stage.pct > 0 && (
-              <span className="home-v2__stage-confidence">{stage.pct}%</span>
-            )}
-          </div>
-          {stage.chips.length > 0 && (
-            <div className="home-v2__stage-chips">
-              {stage.chips.map((chip, i) => (
-                <span key={i} className="home-v2__stage-chip">{chip}</span>
-              ))}
-            </div>
-          )}
         </div>
-      )}
+        {stage ? (
+          <>
+            <div className="home-v2__stage-result">
+              <span className="home-v2__stage-pattern">{stage.name}</span>
+              {stage.pct > 0 && (
+                <span className="home-v2__stage-confidence">{stage.pct}%</span>
+              )}
+            </div>
+            {stage.chips.length > 0 && (
+              <div className="home-v2__stage-chips">
+                {stage.chips.map((chip, i) => (
+                  <span key={i} className="home-v2__stage-chip">{chip}</span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="home-v2__stage-result">
+            <span className="home-v2__stage-pattern home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
+          </div>
+        )}
+      </div>
 
       <div className="home-v2__cta-wrap">
         <button

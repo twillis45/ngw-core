@@ -10676,6 +10676,13 @@ body {
   letter-spacing: -0.01em;
 }
 
+.home-v2__stage-pattern--empty {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
+  color: rgba(255,255,255,0.35);
+  letter-spacing: 0;
+}
+
 .home-v2__stage-confidence {
   font-size: 11px;
   font-weight: var(--weight-semibold);
