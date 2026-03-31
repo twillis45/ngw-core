@@ -282,8 +282,6 @@ export default function HomeScreenV2() {
 
   const [setups,     setSetups]     = useState(() => loadSetups());
   const [isDragging, setIsDragging] = useState(false);
-  const [toast,      setToast]      = useState(null); // { message, source }
-  const toastTimer = useRef(null);
 
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
@@ -295,27 +293,16 @@ export default function HomeScreenV2() {
         .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
         .map(it => it.getAsFile())
         .filter(Boolean);
-      if (imageFiles.length > 0) processFiles(imageFiles, 'pasted');
+      if (imageFiles.length > 0) processFiles(imageFiles);
     }
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Show toast ────────────────────────────────────────────────────────
-  function showToast(message, source) {
-    clearTimeout(toastTimer.current);
-    setToast({ message, source });
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
-  }
-
   // ── Process image files (shared by picker, drop, paste) ───────────────
-  function processFiles(files, source = 'picked') {
+  function processFiles(files) {
     const imageFiles = files.filter(f => f.type.startsWith('image/'));
     if (imageFiles.length === 0) return;
-
-    const label = imageFiles.length === 1 ? 'Photo' : `${imageFiles.length} photos`;
-    const sourceLabel = source === 'dropped' ? 'dropped' : source === 'pasted' ? 'pasted' : 'selected';
-    showToast(`${label} ${sourceLabel} — analyzing…`, source);
 
     const reads = imageFiles.map(file => new Promise(resolve => {
       const reader = new FileReader();
@@ -331,7 +318,7 @@ export default function HomeScreenV2() {
 
   function handleFileChange(e) {
     const files = Array.from(e.target.files || []);
-    processFiles(files, 'selected');
+    processFiles(files);
     e.target.value = '';
   }
 
@@ -359,7 +346,7 @@ export default function HomeScreenV2() {
     dragCount.current = 0;
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files || []);
-    processFiles(files, 'dropped');
+    processFiles(files);
   }
 
   return (
@@ -390,18 +377,6 @@ export default function HomeScreenV2() {
             </svg>
             <span className="home-v2__drop-label">Drop to analyze</span>
           </div>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`home-v2__toast home-v2__toast--${toast.source}`} role="status" aria-live="polite">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="3" y="7" width="18" height="13" rx="2"/>
-            <circle cx="12" cy="13.5" r="3.5"/>
-            <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1"/>
-          </svg>
-          <span>{toast.message}</span>
         </div>
       )}
 
