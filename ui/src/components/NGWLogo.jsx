@@ -1,5 +1,22 @@
 import { useEffect } from 'react';
 
+// ─── Shared AudioContext — primed on any gesture app-wide ─────────────────────
+// This ensures the context is already in `running` state when HomeScreen mounts
+// after a nav tap, not just on refresh/direct load.
+let _sharedCtx = null;
+
+function _ensureCtx() {
+  if (_sharedCtx && _sharedCtx.state !== 'closed') return _sharedCtx;
+  try { _sharedCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; }
+  return _sharedCtx;
+}
+
+if (typeof window !== 'undefined') {
+  // Prime on ANY gesture so context is ready when HomeScreen mounts post-navigation
+  window.addEventListener('pointerdown', () => { _ensureCtx()?.resume(); }, { passive: true });
+  window.addEventListener('keydown',     () => { _ensureCtx()?.resume(); }, { passive: true });
+}
+
 /**
  * NGWLogo — inline SVG logo lockup.
  *
@@ -19,111 +36,93 @@ const SIZES = {
   lg: { sym: 40, main: 22, sub: 14, gap: 10 },
 };
 
-/* Profoto pack-head pop — three-layer synthesis */
+/* Profoto pack-head pop — deep two-layer synthesis (no hi-sync crack) */
 function fireProfotoHead(audioCtx, time) {
-  const sr = audioCtx.sampleRate;
-
-  // Layer 1: trigger crack
-  const crackBuf  = audioCtx.createBuffer(1, sr * 0.03, sr);
-  const crackData = crackBuf.getChannelData(0);
-  for (let i = 0; i < crackData.length; i++) {
-    crackData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.003));
-  }
-  const crackSrc  = audioCtx.createBufferSource();
-  crackSrc.buffer = crackBuf;
-  const crackGain = audioCtx.createGain();
-  crackGain.gain.value = 0.55;
-  crackSrc.connect(crackGain);
-  crackGain.connect(audioCtx.destination);
-  crackSrc.start(time);
-
-  // Layer 2: deep capacitor thump
+  // Layer 1: capacitor thump — sub-bass punch
   const thump     = audioCtx.createOscillator();
   const thumpGain = audioCtx.createGain();
   thump.type      = 'sine';
-  thump.frequency.setValueAtTime(75, time);
-  thump.frequency.exponentialRampToValueAtTime(30, time + 0.16);
+  thump.frequency.setValueAtTime(60, time);
+  thump.frequency.exponentialRampToValueAtTime(20, time + 0.18);
   thumpGain.gain.setValueAtTime(0, time);
-  thumpGain.gain.linearRampToValueAtTime(0.85, time + 0.004);
-  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+  thumpGain.gain.linearRampToValueAtTime(1.0, time + 0.004);
+  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.28);
   thump.connect(thumpGain);
   thumpGain.connect(audioCtx.destination);
   thump.start(time);
-  thump.stop(time + 0.25);
+  thump.stop(time + 0.30);
 
-  // Layer 3: tube resonance — deep body thud
+  // Layer 2: tube resonance — heavy body thud with long tail
   const tube     = audioCtx.createOscillator();
   const tubeGain = audioCtx.createGain();
   tube.type      = 'triangle';
-  tube.frequency.setValueAtTime(120, time);
-  tube.frequency.exponentialRampToValueAtTime(35, time + 0.26);
+  tube.frequency.setValueAtTime(90, time);
+  tube.frequency.exponentialRampToValueAtTime(22, time + 0.40);
   tubeGain.gain.setValueAtTime(0, time);
-  tubeGain.gain.linearRampToValueAtTime(0.75, time + 0.005);
-  tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.30);
+  tubeGain.gain.linearRampToValueAtTime(0.95, time + 0.006);
+  tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.50);
   tube.connect(tubeGain);
   tubeGain.connect(audioCtx.destination);
   tube.start(time);
-  tube.stop(time + 0.32);
+  tube.stop(time + 0.52);
 }
 
-/* Two full Profoto pack-head pops, ~700ms apart */
+/* 3 fast pops (~110ms apart) then 2 spaced pops (~650ms apart) */
 function fireSequence(audioCtx) {
   const t = audioCtx.currentTime + 0.05;
 
-  fireProfotoHead(audioCtx, t, 1.0, false);
-  fireProfotoHead(audioCtx, t + 0.7, 1.0, false);
+  // Three rapid pops
+  fireProfotoHead(audioCtx, t);
+  fireProfotoHead(audioCtx, t + 0.11);
+  fireProfotoHead(audioCtx, t + 0.22);
+
+  // Two slower, weighted pops
+  fireProfotoHead(audioCtx, t + 0.22 + 0.65);
+  fireProfotoHead(audioCtx, t + 0.22 + 0.65 + 0.75);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
   const s     = SIZES[size] ?? SIZES.sm;
 
-  /* Fire strobe sequence on home arrival — 10 rapid pops + 2 main pops (~3.5s total).
+  /* Fire strobe sequence on home arrival — 3 rapid pops + 2 spaced pops (~1.7s).
    *
-   * Autoplay policy: browsers block AudioContext until user gesture.
-   * On first load / refresh: context starts suspended → we wait for first
-   * pointerdown/keydown. Once unlockTriggered, we NEVER close the context in
-   * cleanup — the resume().then(fire) chain must survive component unmount
-   * (e.g. user taps "Analyze a Photo" which both triggers audio AND navigates away).
-   * The context auto-closes 5s after fire() via setTimeout. */
+   * Uses a module-level _sharedCtx primed by any gesture app-wide (including
+   * the nav tap that brought us here). If it's already running → fire instantly.
+   * If still suspended (refresh / direct load) → wait for next gesture. */
   useEffect(() => {
     if (loading) return;
-    let ctx;
-    let fired          = false;
-    let unlockTriggered = false;
+    let fired      = false;
     let closeTimer;
 
-    function fire() {
-      if (fired || !ctx) return;
+    function fire(ctx) {
+      if (fired) return;
       fired = true;
       fireSequence(ctx);
-      closeTimer = setTimeout(() => { try { ctx?.close(); } catch (_) {} }, 5000);
+      // Reset shared ctx after sequence so next home visit gets a fresh one
+      closeTimer = setTimeout(() => {
+        try { _sharedCtx?.close(); } catch (_) {}
+        _sharedCtx = null;
+      }, 4000);
     }
 
-    function unlock() {
-      unlockTriggered = true; // prevent cleanup from closing ctx before fire() runs
-      ctx?.resume().then(fire);
+    const ctx = _ensureCtx();
+    if (!ctx) return;
+
+    if (ctx.state === 'running') {
+      // Navigation case: context already unlocked by the nav tap
+      fire(ctx);
+      return () => clearTimeout(closeTimer);
     }
 
-    try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      ctx.resume().then(() => {
-        if (ctx.state === 'running') {
-          fire();
-        } else {
-          window.addEventListener('pointerdown', unlock, { once: true });
-          window.addEventListener('keydown',     unlock, { once: true });
-        }
-      });
-    } catch (_) { /* AudioContext not available — silent fallback */ }
+    // Refresh / direct load: context suspended — wait for first gesture
+    function unlock() { ctx.resume().then(() => { if (ctx.state === 'running') fire(ctx); }); }
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown',     unlock, { once: true });
 
     return () => {
       clearTimeout(closeTimer);
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown',     unlock);
-      // Only close if unlock was never triggered — otherwise let the 5s timer handle it
-      if (!unlockTriggered && !fired) {
-        try { ctx?.close(); } catch (_) {}
-      }
     };
   }, [loading]);
   const r     = s.sym * 0.375;           // ring radius = 37.5% of symbol box
