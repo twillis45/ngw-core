@@ -16,6 +16,7 @@ import { trackEvent } from '../data/analytics';
 import { broadcastConversion } from '../data/experimentTracker';
 import { getActivePricing } from '../data/pricingStore';
 import { startStripeCheckout } from '../data/stripeCheckout';
+import { getToken } from '../data/authApi';
 
 const FREE_FEATURES_INCLUDED = [
   '3 analyses per session',
@@ -157,6 +158,12 @@ export default function PricingScreen({ onClose, onUnlock, trigger, source }) {
     const price = billingPeriod === 'yearly' ? pricing.price_yearly : pricing.price_monthly;
     trackEvent('UPGRADE_STARTED', { plan: 'pro', billing_period: billingPeriod, price, trigger });
     broadcastConversion('UPGRADE_CLICKED', { plan: 'pro', billing_period: billingPeriod, price, trigger });
+
+    // Auth guard — must be logged in before hitting the backend
+    if (!getToken()) {
+      setCheckoutError('Please log in to start your subscription.');
+      return;
+    }
 
     setCheckoutLoading(true);
     setCheckoutError(null);
