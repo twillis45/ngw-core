@@ -138,11 +138,12 @@ export default function App() {
   }
 
   /* Bottom nav visible only on hub / browse screens */
-  const HUB_SCREENS = new Set(['home', 'recipes', 'my_kit', 'saved_setups']);
+  // 'welcome' is the initialState key that falls back to HomeScreen — treat it as 'home'
+  const HUB_SCREENS = new Set(['home', 'welcome', 'recipes', 'my_kit', 'saved_setups']);
   const showBottomNav = HUB_SCREENS.has(screen);
 
   /* AppHeader only on screens that don't have their own standalone header chrome */
-  const HEADER_SCREENS = new Set(['home', 'results', 'shoot_mode', 'loading']);
+  const HEADER_SCREENS = new Set(['home', 'welcome', 'results', 'shoot_mode', 'loading']);
   const showAppHeader = HEADER_SCREENS.has(screen);
 
   return (
