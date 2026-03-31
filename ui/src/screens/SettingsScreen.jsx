@@ -102,6 +102,32 @@ function ScreenHeader({ title, backLabel, onBack }) {
   );
 }
 
+// ─── Role configuration ────────────────────────────────────────────────────────
+
+const ROLE_META = {
+  photographer: {
+    label:    'Photographer',
+    icon:     '📷',
+    tagline:  'Full analysis controls — patterns, confidence, and all technical detail.',
+  },
+  assistant: {
+    label:    'Assistant',
+    icon:     '🎬',
+    tagline:  'Optimised for executing a setup — shoot mode and gear-first workflow.',
+  },
+  learning: {
+    label:    'Learning',
+    icon:     '🎓',
+    tagline:  'Coaching and explanations — less noise, more guidance.',
+  },
+};
+
+// showFor('photographer', 'learning') returns true when mode is one of the listed roles.
+// Used inline to conditionally render rows in the Preferences sub-screen.
+function makeShowFor(mode) {
+  return (...roles) => roles.includes(mode);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SettingsScreen() {
@@ -139,7 +165,8 @@ export default function SettingsScreen() {
   const planLabel   = effectiveIsAdmin ? 'Admin' : effectiveIsPaid ? 'Pro' : 'Free';
   const unitsLabel  = settings.units === 'metric' ? 'Metric' : 'Imperial';
   const themeLabel  = theme.charAt(0).toUpperCase() + theme.slice(1);
-  const modeLabel   = mode === 'assistant' ? 'Assistant' : mode === 'learning' ? 'Learning' : 'Photographer';
+  const modeLabel   = ROLE_META[mode]?.label ?? 'Photographer';
+  const showFor     = makeShowFor(mode);
   const fontLabel   = (FONT_FAMILIES.find(f => f.id === settings.fontFamily) || FONT_FAMILIES[0]).label;
   const sizeLabel   = (FONT_SIZES.find(f => f.id === settings.fontSize) || FONT_SIZES[2]).label;
   const densityLabel = (DENSITY_OPTIONS.find(d => d.id === settings.density) || DENSITY_OPTIONS[1]).label;
@@ -346,69 +373,26 @@ export default function SettingsScreen() {
   // ── PREFERENCES ───────────────────────────────────────────────────────────
 
   if (subScreen === 'preferences') {
+    const isAssistant    = mode === 'assistant';
+    const isLearning     = mode === 'learning';
+    const isPhotographer = mode === 'photographer';
+
     return (
       <div className="stgx">
-        <ScreenHeader title="Preferences" backLabel="Settings" onBack={goBack} />
+        <ScreenHeader
+          title={isAssistant ? 'Shoot Preferences' : isLearning ? 'My Preferences' : 'Preferences'}
+          backLabel="Settings"
+          onBack={goBack}
+        />
 
-        <SectionHdr label="ANALYSIS" />
-        <ListCard>
-          <NavRow
-            label="Primary display"
-            value={settings.viewMode === 'full' ? 'Full' : 'Blueprint'}
-            onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
-          />
-          <NavRow
-            label="Guidance level"
-            value={settings.guidanceLevel === 'minimal' ? 'Minimal' : settings.guidanceLevel === 'full' ? 'Coaching' : 'Guided'}
-            onClick={() => {
-              const levels = ['minimal', 'guided', 'full'];
-              const idx = levels.indexOf(settings.guidanceLevel || 'guided');
-              update('guidanceLevel', levels[(idx + 1) % levels.length]);
-            }}
-          />
-          <NavRow
-            label="Confidence display"
-            value={settings.confidenceDisplay === 'numeric' ? 'Numeric' : settings.confidenceDisplay === 'detailed' ? 'Detailed' : 'Simple'}
-            onClick={() => {
-              const opts = ['simple', 'numeric', 'detailed'];
-              const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
-              update('confidenceDisplay', opts[(idx + 1) % opts.length]);
-            }}
-          />
-          <ToggleRow
-            label="Show confidence score"
-            value={!!settings.showConfidenceScore}
-            onChange={v => update('showConfidenceScore', v)}
-          />
-          <NavRow
-            label="Explanation depth"
-            value={settings.explanationDepth === 'brief' ? 'Brief' : settings.explanationDepth === 'technical' ? 'Technical' : 'Standard'}
-            onClick={() => {
-              const opts = ['brief', 'standard', 'technical'];
-              const idx = opts.indexOf(settings.explanationDepth || 'standard');
-              update('explanationDepth', opts[(idx + 1) % opts.length]);
-            }}
-          />
-          <NavRow
-            label="Pattern sensitivity"
-            value={settings.patternSensitivity === 'strict' ? 'Strict' : settings.patternSensitivity === 'flexible' ? 'Flexible' : 'Balanced'}
-            onClick={() => {
-              const opts = ['strict', 'balanced', 'flexible'];
-              const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
-              update('patternSensitivity', opts[(idx + 1) % opts.length]);
-            }}
-          />
-          <NavRow
-            label="Session storage"
-            value={settings.sessionStorage === 'auto' ? 'Auto' : settings.sessionStorage === 'off' ? 'Off' : 'Manual'}
-            onClick={() => {
-              const opts = ['auto', 'manual', 'off'];
-              const idx = opts.indexOf(settings.sessionStorage || 'auto');
-              update('sessionStorage', opts[(idx + 1) % opts.length]);
-            }}
-          />
-        </ListCard>
+        {/* Role context chip */}
+        <div className="stgx-role-chip">
+          <span className="stgx-role-chip__icon">{ROLE_META[mode]?.icon}</span>
+          <span className="stgx-role-chip__label">{ROLE_META[mode]?.label}</span>
+          <span className="stgx-role-chip__tagline">{ROLE_META[mode]?.tagline}</span>
+        </div>
 
+        {/* ── SHOOT MODE — always first for assistant ─────────────────── */}
         <SectionHdr label="SHOOT MODE" />
         <ListCard>
           <NavRow
@@ -425,121 +409,174 @@ export default function SettingsScreen() {
             value={settings.shootModeStyle === 'checklist' ? 'Checklist' : 'Step-by-step'}
             onClick={() => update('shootModeStyle', settings.shootModeStyle === 'checklist' ? 'step' : 'checklist')}
           />
-          <ToggleRow
-            label="Live overlay"
-            value={!!settings.uiSelfTuning}
-            onChange={v => update('uiSelfTuning', v)}
-          />
-          <NavRow
-            label="Power readout"
-            value={powerLabel}
-            onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
-          />
+          {showFor('photographer', 'assistant') && (
+            <ToggleRow
+              label="Live overlay"
+              value={!!settings.uiSelfTuning}
+              onChange={v => update('uiSelfTuning', v)}
+            />
+          )}
+          {showFor('photographer', 'assistant') && (
+            <NavRow
+              label="Power readout"
+              value={powerLabel}
+              onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
+            />
+          )}
         </ListCard>
 
+        {/* ── ANALYSIS — hidden for assistant ─────────────────────────── */}
+        {showFor('photographer', 'learning') && (
+          <>
+            <SectionHdr label="ANALYSIS" />
+            <ListCard>
+              {showFor('photographer', 'learning') && (
+                <NavRow
+                  label="Primary display"
+                  value={settings.viewMode === 'full' ? 'Full' : 'Blueprint'}
+                  onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
+                />
+              )}
+              <NavRow
+                label="Guidance level"
+                value={settings.guidanceLevel === 'minimal' ? 'Minimal' : settings.guidanceLevel === 'full' ? 'Coaching' : 'Guided'}
+                onClick={() => {
+                  const levels = isLearning ? ['guided', 'full'] : ['minimal', 'guided', 'full'];
+                  const idx = levels.indexOf(settings.guidanceLevel || 'guided');
+                  update('guidanceLevel', levels[(idx + 1) % levels.length]);
+                }}
+              />
+              {showFor('photographer', 'learning') && (
+                <NavRow
+                  label="Confidence display"
+                  value={settings.confidenceDisplay === 'numeric' ? 'Numeric' : settings.confidenceDisplay === 'detailed' ? 'Detailed' : 'Simple'}
+                  onClick={() => {
+                    const opts = ['simple', 'numeric', 'detailed'];
+                    const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
+                    update('confidenceDisplay', opts[(idx + 1) % opts.length]);
+                  }}
+                />
+              )}
+              {showFor('photographer', 'learning') && (
+                <ToggleRow
+                  label="Show confidence score"
+                  value={!!settings.showConfidenceScore}
+                  onChange={v => update('showConfidenceScore', v)}
+                />
+              )}
+              <NavRow
+                label="Explanation depth"
+                value={settings.explanationDepth === 'brief' ? 'Brief' : settings.explanationDepth === 'technical' ? 'Technical' : 'Standard'}
+                onClick={() => {
+                  const opts = isLearning ? ['standard', 'technical'] : ['brief', 'standard', 'technical'];
+                  const idx = opts.indexOf(settings.explanationDepth || 'standard');
+                  update('explanationDepth', opts[(idx + 1) % opts.length]);
+                }}
+              />
+              {showFor('photographer') && (
+                <NavRow
+                  label="Pattern sensitivity"
+                  value={settings.patternSensitivity === 'strict' ? 'Strict' : settings.patternSensitivity === 'flexible' ? 'Flexible' : 'Balanced'}
+                  onClick={() => {
+                    const opts = ['strict', 'balanced', 'flexible'];
+                    const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
+                    update('patternSensitivity', opts[(idx + 1) % opts.length]);
+                  }}
+                />
+              )}
+              <NavRow
+                label="Session storage"
+                value={settings.sessionStorage === 'auto' ? 'Auto' : settings.sessionStorage === 'off' ? 'Off' : 'Manual'}
+                onClick={() => {
+                  const opts = ['auto', 'manual', 'off'];
+                  const idx = opts.indexOf(settings.sessionStorage || 'auto');
+                  update('sessionStorage', opts[(idx + 1) % opts.length]);
+                }}
+              />
+            </ListCard>
+          </>
+        )}
+
+        {/* ── RECIPES ─────────────────────────────────────────────────── */}
         <SectionHdr label="RECIPES" />
         <ListCard>
           <ToggleRow
             label="Show descriptions"
-            value={settings.allowLearning !== false}
-            onChange={v => update('allowLearning', v)}
+            value={isLearning ? true : settings.allowLearning !== false}
+            onChange={isLearning ? undefined : v => update('allowLearning', v)}
           />
           <NavRow label="Default sort" value={settings.recipeSort === 'alpha' ? 'A–Z' : 'Recent'} onClick={() => update('recipeSort', settings.recipeSort === 'alpha' ? 'recent' : 'alpha')} />
         </ListCard>
 
+        {/* ── APPEARANCE ──────────────────────────────────────────────── */}
         <SectionHdr label="APPEARANCE" />
         <ListCard>
-          <NavRow
-            label="Theme"
-            value={themeLabel}
-            onClick={cycleTheme}
-          />
-          <NavRow
-            label="Typeface"
-            value={fontLabel}
-            onClick={() => cycleOption('fontFamily', FONT_FAMILIES)}
-          />
-          <NavRow
-            label="Font size"
-            value={sizeLabel}
-            onClick={() => cycleOption('fontSize', FONT_SIZES)}
-          />
-          <NavRow
-            label="Density"
-            value={densityLabel}
-            onClick={() => cycleOption('density', DENSITY_OPTIONS)}
-          />
-          <NavRow
-            label="Diagram style"
-            value={settings.diagramStyle === 'minimal' ? 'Minimal' : 'Blueprint'}
-            onClick={() => update('diagramStyle', settings.diagramStyle === 'minimal' ? 'blueprint' : 'minimal')}
-          />
+          <NavRow label="Theme" value={themeLabel} onClick={cycleTheme} />
+          {showFor('photographer', 'learning') && (
+            <NavRow label="Typeface" value={fontLabel} onClick={() => cycleOption('fontFamily', FONT_FAMILIES)} />
+          )}
+          <NavRow label="Font size" value={sizeLabel} onClick={() => cycleOption('fontSize', FONT_SIZES)} />
+          {showFor('photographer') && (
+            <NavRow label="Density" value={densityLabel} onClick={() => cycleOption('density', DENSITY_OPTIONS)} />
+          )}
+          {showFor('photographer', 'assistant') && (
+            <NavRow
+              label="Diagram style"
+              value={settings.diagramStyle === 'minimal' ? 'Minimal' : 'Blueprint'}
+              onClick={() => update('diagramStyle', settings.diagramStyle === 'minimal' ? 'blueprint' : 'minimal')}
+            />
+          )}
           <NavRow
             label="Unit system"
             value={unitsLabel}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
           />
-          <ToggleRow
-            label="Reduce motion"
-            value={!!settings.reduceMotion}
-            onChange={v => update('reduceMotion', v)}
-          />
-          <ToggleRow
-            label="Haptic feedback"
-            value={settings.hapticFeedback !== false}
-            onChange={v => update('hapticFeedback', v)}
-          />
-          <NavRow
-            label="Navigation bar"
-            value={navLabel}
-            onClick={() => cycleOption('navStyle', NAV_STYLE_OPTIONS)}
-          />
+          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} />
+          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} />
+          {showFor('photographer') && (
+            <NavRow label="Navigation bar" value={navLabel} onClick={() => cycleOption('navStyle', NAV_STYLE_OPTIONS)} />
+          )}
         </ListCard>
 
+        {/* ── INTELLIGENCE ────────────────────────────────────────────── */}
         <SectionHdr label="INTELLIGENCE" />
         <ListCard>
-          <NavRow
-            label="Role mode"
-            value={modeLabel}
-            onClick={cycleMode}
-          />
-          <NavRow
-            label="Autonomy level"
-            value={settings.autonomyLevel === 'manual' ? 'Manual' : settings.autonomyLevel === 'adaptive' ? 'Adaptive' : 'Assisted'}
-            onClick={() => {
-              const opts = ['manual', 'assisted', 'adaptive'];
-              const idx = opts.indexOf(settings.autonomyLevel || 'assisted');
-              update('autonomyLevel', opts[(idx + 1) % opts.length]);
-            }}
-          />
+          {showFor('photographer') && (
+            <NavRow
+              label="Autonomy level"
+              value={settings.autonomyLevel === 'manual' ? 'Manual' : settings.autonomyLevel === 'adaptive' ? 'Adaptive' : 'Assisted'}
+              onClick={() => {
+                const opts = ['manual', 'assisted', 'adaptive'];
+                const idx = opts.indexOf(settings.autonomyLevel || 'assisted');
+                update('autonomyLevel', opts[(idx + 1) % opts.length]);
+              }}
+            />
+          )}
           <NavRow
             label="Fix guidance"
             value={settings.fixGuidance === 'quick' ? 'Quick' : settings.fixGuidance === 'detailed' ? 'Detailed' : 'Balanced'}
             onClick={() => {
-              const opts = ['quick', 'balanced', 'detailed'];
+              const opts = isLearning ? ['balanced', 'detailed'] : ['quick', 'balanced', 'detailed'];
               const idx = opts.indexOf(settings.fixGuidance || 'balanced');
               update('fixGuidance', opts[(idx + 1) % opts.length]);
             }}
           />
-          <ToggleRow
-            label="Stability mode"
-            value={!!settings.stabilityMode}
-            onChange={v => update('stabilityMode', v)}
-          />
+          {showFor('photographer') && (
+            <ToggleRow label="Stability mode" value={!!settings.stabilityMode} onChange={v => update('stabilityMode', v)} />
+          )}
         </ListCard>
 
+        {/* ── PRIVACY ─────────────────────────────────────────────────── */}
         <SectionHdr label="PRIVACY" />
         <ListCard>
-          <ToggleRow
-            label="Allow analytics"
-            value={settings.allowAnalytics !== false}
-            onChange={v => update('allowAnalytics', v)}
-          />
-          <NavRow
-            label="Image handling"
-            value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
-            onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
-          />
+          <ToggleRow label="Allow analytics" value={settings.allowAnalytics !== false} onChange={v => update('allowAnalytics', v)} />
+          {showFor('photographer', 'assistant') && (
+            <NavRow
+              label="Image handling"
+              value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
+              onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
+            />
+          )}
         </ListCard>
 
         <ListCard className="stgx-list--destructive">
@@ -708,6 +745,21 @@ export default function SettingsScreen() {
         </span>
       </button>
 
+      {/* Role callout — shows current role context */}
+      <button
+        className="stgx-role-banner"
+        onClick={cycleMode}
+        type="button"
+        aria-label="Change role"
+      >
+        <span className="stgx-role-banner__icon">{ROLE_META[mode]?.icon}</span>
+        <div className="stgx-role-banner__text">
+          <span className="stgx-role-banner__label">{ROLE_META[mode]?.label} mode</span>
+          <span className="stgx-role-banner__tagline">{ROLE_META[mode]?.tagline}</span>
+        </div>
+        <span className="stgx-role-banner__tap">Tap to change ›</span>
+      </button>
+
       {/* GENERAL */}
       <SectionHdr label="GENERAL" />
       <ListCard>
@@ -721,13 +773,15 @@ export default function SettingsScreen() {
           value={settings.sessionStorage === 'auto'}
           onChange={v => update('sessionStorage', v ? 'auto' : 'manual')}
         />
+        {mode !== 'assistant' && (
+          <NavRow
+            label="Default kit view"
+            value={settings.viewMode === 'full' ? 'Full' : 'Lights first'}
+            onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
+          />
+        )}
         <NavRow
-          label="Default kit view"
-          value={settings.viewMode === 'full' ? 'Full' : 'Lights first'}
-          onClick={() => update('viewMode', settings.viewMode === 'full' ? 'quick' : 'full')}
-        />
-        <NavRow
-          label="Preferences"
+          label={mode === 'assistant' ? 'Shoot Preferences' : mode === 'learning' ? 'My Preferences' : 'Preferences'}
           onClick={() => setSubScreen('preferences')}
         />
       </ListCard>

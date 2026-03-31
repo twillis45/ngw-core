@@ -80,9 +80,7 @@ function formatPower(details) {
 /** Count recipes that actively use a specific light type. */
 function recipesUsingLight(lightType) {
   if (!lightType) return 0;
-  // Count recipes whose gear profile / modifier family would match this light
-  return RECIPES.filter(r => r.gearProfile === lightType || r.lightType === lightType).length
-    || Math.floor(Math.random() * 6 + 2); // Fallback heuristic
+  return RECIPES.filter(r => r.gearProfile === lightType || r.lightType === lightType).length;
 }
 
 /** Derive a human-readable category for a light. */

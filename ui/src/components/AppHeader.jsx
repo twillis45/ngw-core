@@ -7,6 +7,7 @@ import { isEnabled } from '../modes/featureFlags';
 import { pullKitFromServer } from '../data/kitStore';
 import { pullSetupsFromServer } from '../data/setupStore';
 import MasterModeSelector, { MASTER_MODE_MAP } from './MasterModeSelector';
+import NGWLogo from './NGWLogo';
 import { _pendingVerifyToken } from '../main';
 
 function resolvedTheme() {
@@ -14,13 +15,17 @@ function resolvedTheme() {
 }
 
 export default function AppHeader() {
-  const { screen, history, wizardStep, user, masterMode } = useAppState();
+  const { screen, history, wizardStep, user, masterMode, loading } = useAppState();
   const isCockpit = screen === 'shoot_mode';
   const dispatch = useDispatch();
-  const canGoBack = screen !== 'home' && screen !== 'loading';
+  // Back arrow: suppress on screens where there's nowhere meaningful to go back to
+  const NO_BACK_SCREENS = new Set(['home', 'loading', 'auth', 'welcome', 'onboarding_welcome']);
+  const canGoBack = !NO_BACK_SCREENS.has(screen);
   const [theme, setTheme] = useState(resolvedTheme);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const masterEnabled = isEnabled('enable_master_mode');
+  const HIDE_CHROME_SCREENS = new Set(['home', 'loading', 'welcome', 'onboarding_welcome']);
+  const showTheme = !HIDE_CHROME_SCREENS.has(screen);
   const activeMaster = masterMode && MASTER_MODE_MAP[masterMode];
 
   // Hydrate user from localStorage on mount, auto-probe Lab access.
@@ -93,9 +98,9 @@ export default function AppHeader() {
         className="app-header__title"
         onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
         type="button"
+        aria-label="No Guesswork Lighting — home"
       >
-        <span className="app-header__title-main">NO GUESSWORK </span>
-        <span className="app-header__title-sub">LIGHTING</span>
+        <NGWLogo size="md" loading={loading || screen === 'loading'} />
       </button>
       {masterEnabled && activeMaster && (
         <button
@@ -107,7 +112,7 @@ export default function AppHeader() {
           {activeMaster.icon} {activeMaster.label}
         </button>
       )}
-      <button
+      {showTheme && <button
         className="app-header__theme-toggle"
         onClick={toggleTheme}
         aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -125,7 +130,7 @@ export default function AppHeader() {
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
           </svg>
         )}
-      </button>
+      </button>}
       {isEnabled('enable_lab') && (
         <button
           className="app-header__lab-btn"
@@ -165,15 +170,16 @@ export default function AppHeader() {
         </button>
       ) : (
         <button
-          className="app-header__user-btn"
+          className="app-header__user-btn app-header__user-btn--guest"
           onClick={() => dispatch({ type: 'NAVIGATE', screen: 'auth' })}
           aria-label="Sign in"
           type="button"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
             <circle cx="12" cy="7" r="4"/>
           </svg>
+          <span className="app-header__signin-label">Sign in</span>
         </button>
       )}
       {masterEnabled && (

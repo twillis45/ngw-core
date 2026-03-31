@@ -4,28 +4,36 @@ import { loadSetups, onSetupsChanged } from '../data/setupStore';
 import usePlan from '../hooks/usePlan';
 
 /* ─── Derive stage card data from last result / saved setup ─────────── */
-const STAGE_BARE = new Set(['none', 'bare', 'direct', 'ambient']);
+// Words that should never appear as a pattern name or chip on the home screen
+const STAGE_BARE = new Set(['none', 'bare', 'direct', 'ambient', 'split', 'build']);
+const FILTERED_WORDS = ['split', 'build'];
+
+function isFiltered(str) {
+  if (!str) return true;
+  const lower = str.toLowerCase().trim();
+  return FILTERED_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.endsWith(' ' + w));
+}
 
 function stageCardData(result, lastSetup) {
   const bm = result?.bestMatch || lastSetup?.result?.bestMatch;
   if (!bm) return null;
-  const name = bm.lightingPattern || bm.name || null;
-  // reliabilityScore: 0–1 from transform, or legacy 0–100; confidence: 0–1
-  const raw = bm.reliabilityScore ?? bm.confidence ?? null;
-  const pct = raw != null ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw)) : null;
-  // Derive signal chips from real analysis data — never hardcoded
-  const li = result?.lightingIntelligence || lastSetup?.result?.lightingIntelligence || {};
+  const rawName = bm.lightingPattern || bm.name || null;
+  // Show the card but omit the name text if it's a filtered term
+  const name = rawName && !isFiltered(rawName) ? rawName : null;
+  const raw  = bm.reliabilityScore ?? bm.confidence ?? null;
+  const pct  = raw != null ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw)) : null;
+  const li   = result?.lightingIntelligence || lastSetup?.result?.lightingIntelligence || {};
   const chips = [];
-  if (li.keyPosition) chips.push(li.keyPosition);
-  if (bm.lightingGeometry) chips.push(bm.lightingGeometry);
+  if (li.keyPosition && !isFiltered(li.keyPosition)) chips.push(li.keyPosition);
+  if (bm.lightingGeometry && !isFiltered(bm.lightingGeometry)) chips.push(bm.lightingGeometry);
   if (li.catchlightDetected) chips.push('Catchlight');
   const mod = li.detectedModifier;
-  if (mod && !STAGE_BARE.has(mod.toLowerCase().trim())) chips.push(mod);
+  if (mod && !STAGE_BARE.has(mod.toLowerCase().trim()) && !isFiltered(mod)) chips.push(mod);
   return { name, pct, chips: chips.slice(0, 4) };
 }
 
 /* ─── Free home ─────────────────────────────────────────────────────── */
-function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch }) {
+function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, user }) {
   const stage = stageCardData(null, lastSetup);
   return (
     <>
@@ -46,10 +54,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch }) {
             </div>
           </div>
           <div className="home-v2__stage-result">
-            <div className="home-v2__stage-result-left">
-              <span className="home-v2__stage-label">LIGHTING PATTERN</span>
-              <span className="home-v2__stage-pattern">{stage.name}</span>
-            </div>
+            <span className="home-v2__stage-pattern">{stage.name}</span>
             {stage.pct > 0 && (
               <span className="home-v2__stage-confidence">{stage.pct}%</span>
             )}
@@ -91,19 +96,6 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch }) {
           </div>
         </button>
 
-        <button
-          type="button"
-          className="home-v2__secondary-btn"
-          onClick={handleWizard}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
-          <div className="home-v2__secondary-text">
-            <span className="home-v2__secondary-label">Build from Scratch</span>
-            <span className="home-v2__secondary-hint">Describe your subject and space</span>
-          </div>
-        </button>
       </div>
 
       {lastSetup && (
@@ -119,6 +111,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch }) {
           <span className="home-v2__continue-name">{lastSetup.name || 'Last setup'}</span>
         </button>
       )}
+
     </>
   );
 }
@@ -183,10 +176,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
             </div>
           </div>
           <div className="home-v2__stage-result">
-            <div className="home-v2__stage-result-left">
-              <span className="home-v2__stage-label">LIGHTING PATTERN</span>
-              <span className="home-v2__stage-pattern">{stage.name}</span>
-            </div>
+            <span className="home-v2__stage-pattern">{stage.name}</span>
             {stage.pct > 0 && (
               <span className="home-v2__stage-confidence">{stage.pct}%</span>
             )}
@@ -228,19 +218,6 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
           </div>
         </button>
 
-        <button
-          type="button"
-          className="home-v2__secondary-btn"
-          onClick={handleWizard}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-          </svg>
-          <div className="home-v2__secondary-text">
-            <span className="home-v2__secondary-label">Build from Scratch</span>
-            <span className="home-v2__secondary-hint">Describe your subject and space</span>
-          </div>
-        </button>
       </div>
 
       {/* ── Recent setups ── */}
@@ -337,6 +314,7 @@ export default function HomeScreenV2() {
           handleWizard={handleWizard}
           lastSetup={lastSetup}
           dispatch={dispatch}
+          user={user}
         />
       )}
     </div>

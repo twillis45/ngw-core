@@ -70,7 +70,10 @@ function PricingTierCard({ tier, pricing, billingPeriod, onSelect, isCurrent, lo
 
   const monthlyPrice = isPro ? pricing.price_monthly : null;
   const yearlyPrice  = isPro ? pricing.price_yearly  : null;
-  const displayPrice = billingPeriod === 'yearly' && yearlyPrice ? yearlyPrice : monthlyPrice;
+  // yearlyPrice is the annual total — show per-month equivalent when on yearly tab
+  const displayPrice = billingPeriod === 'yearly' && yearlyPrice
+    ? Math.round(yearlyPrice / 12)
+    : monthlyPrice;
 
   return (
     <div className={`pricing-tier${isPro ? ' pricing-tier--featured' : ''}${isStudio ? ' pricing-tier--muted' : ''}`}>
@@ -101,7 +104,7 @@ function PricingTierCard({ tier, pricing, billingPeriod, onSelect, isCurrent, lo
 
       {isPro && billingPeriod === 'yearly' && yearlyPrice && (
         <p className="pricing-tier__billing-note">
-          Billed ${yearlyPrice * 12}/yr · ${pricing.price_monthly}/mo monthly
+          Billed ${yearlyPrice}/yr · ${pricing.price_monthly}/mo monthly
         </p>
       )}
 
