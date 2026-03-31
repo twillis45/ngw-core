@@ -285,6 +285,12 @@ export default function HomeScreenV2() {
 
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
+  const savedSetups  = setups;
+  const lastSetup    = savedSetups.length > 0 ? savedSetups[savedSetups.length - 1] : null;
+  const recentSetups = savedSetups.length > 1
+    ? savedSetups.slice(0, -1).slice(-3).reverse()
+    : [];
+
   // ── Paste from clipboard ──────────────────────────────────────────────
   useEffect(() => {
     function onPaste(e) {
