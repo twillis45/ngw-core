@@ -63,7 +63,9 @@ try {
 
   // Direct login deep-link — ?login=1 navigates to auth screen on mount.
   // Share this URL to give users a reliable "sign in" link:
-  //   https://app.noguessworksystems.com/static/ui/?login=1
+  //   https://app.noguessworksystems.com/?login=1
+  // Note: /static/ui/ does NOT work (StaticFiles won't serve index.html
+  // for directory requests). Use / or /ui instead.
   if (params.get('login') === '1') {
     try { sessionStorage.setItem('ngw_goto_auth', '1'); } catch { /* ignore */ }
     params.delete('login');
