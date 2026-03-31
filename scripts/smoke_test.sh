@@ -3,7 +3,12 @@
 # NGW Smoke Test — repeatable auth / email / OpenAI / API check
 #
 # Usage:
-#   ./scripts/smoke_test.sh                          # local (default)
+#   ./scripts/smoke_test.sh                          # local, no admin checks
+#   ./scripts/smoke_test.sh https://app.noguessworksystems.com
+#
+# Full coverage (VLM + SMTP):
+#   NGW_ADMIN_EMAIL=todd@toddwillisphoto.com \
+#   NGW_ADMIN_PASS=yourpassword \
 #   ./scripts/smoke_test.sh https://app.noguessworksystems.com
 #
 # Exit code: 0 = all passed, 1 = one or more failed
@@ -12,6 +17,8 @@
 set -euo pipefail
 
 BASE="${1:-http://localhost:8000}"
+ADMIN_EMAIL="${NGW_ADMIN_EMAIL:-}"
+ADMIN_PASS="${NGW_ADMIN_PASS:-}"
 PASS=0
 FAIL=0
 RESULTS=()
@@ -114,30 +121,7 @@ if [ -n "$TOKEN" ]; then
   fi
 fi
 
-# ── 7. VLM / API key status (admin-only endpoint) ────────────
-# GET /api/health/api-keys requires admin JWT.
-# We use the smoke test token — this will succeed if TEST_EMAIL is admin,
-# otherwise we get a 403 and warn (not fail) since it's access-controlled.
-if [ -n "$TOKEN" ]; then
-  KEY_RESP=$(curl -s "$BASE/api/health/api-keys" -H "Authorization: Bearer $TOKEN")
-  if echo "$KEY_RESP" | grep -q '"vlm_available"'; then
-    VLM_OK=$(echo "$KEY_RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('vlm_available','?'))" 2>/dev/null || echo "?")
-    if [ "$VLM_OK" = "True" ] || [ "$VLM_OK" = "true" ]; then
-      green "VLM available (API key valid)"
-      RESULTS+=("PASS: VLM available")
-      (( PASS++ )) || true
-    else
-      red "VLM not available — check OPENAI_API_KEY / VLM_PROVIDER in Render env vars"
-      RESULTS+=("FAIL: VLM not available — image analysis will fail")
-      (( FAIL++ )) || true
-    fi
-  else
-    yellow "VLM status unknown — /api/health/api-keys requires admin JWT (expected for smoke test user)"
-    RESULTS+=("WARN: VLM check skipped — smoke test user is not admin")
-  fi
-fi
-
-# ── 8. Magic link request (email delivery test) ───────────────
+# ── 7. Magic link request (email delivery test) ───────────────
 ML_RESP=$(curl -s -X POST "$BASE/api/auth/magic-link/request" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\"}")
@@ -152,7 +136,7 @@ else
   (( FAIL++ )) || true
 fi
 
-# ── 9. Password reset request ─────────────────────────────────
+# ── 8. Password reset request ─────────────────────────────────
 PWR_RESP=$(curl -s -X POST "$BASE/api/auth/password-reset/request" \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$TEST_EMAIL\"}")
@@ -167,26 +151,94 @@ else
   (( FAIL++ )) || true
 fi
 
-# ── 10. SMTP / email — indirect check via magic link ──────────
-# We can't check SMTP config directly without an admin endpoint.
-# Instead we check if the magic link endpoint returned successfully
-# (if SMTP were broken, the endpoint still returns 200 — it's non-fatal).
-# Manual check: Render dashboard → SMTP_HOST, SMTP_USER, SMTP_PASS env vars.
-yellow "SMTP — manual verification required: check Render env vars"
-yellow "  SMTP_HOST=smtp.resend.com  SMTP_USER=resend  SMTP_PASS=re_..."
-RESULTS+=("WARN: SMTP requires manual Render env var check")
+# ── 9. Admin checks (VLM + SMTP) ──────────────────────────────
+# These require admin credentials.  Pass via env vars:
+#   NGW_ADMIN_EMAIL=todd@toddwillisphoto.com NGW_ADMIN_PASS=... ./smoke_test.sh
+ADMIN_TOKEN=""
+if [ -n "$ADMIN_EMAIL" ] && [ -n "$ADMIN_PASS" ]; then
+  ADMIN_LOGIN=$(curl -s -X POST "$BASE/api/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"$ADMIN_EMAIL\",\"password\":\"$ADMIN_PASS\"}")
+  if echo "$ADMIN_LOGIN" | grep -q '"token"'; then
+    ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null || echo "")
+    green "Admin login ($ADMIN_EMAIL)"
+    RESULTS+=("PASS: Admin login")
+    (( PASS++ )) || true
+  else
+    red "Admin login failed — check NGW_ADMIN_EMAIL / NGW_ADMIN_PASS"
+    RESULTS+=("FAIL: Admin login")
+    (( FAIL++ )) || true
+  fi
+fi
 
-# ── 11. Stripe config ─────────────────────────────────────────
-# /api/config returns moods/patterns — Stripe config is not exposed publicly.
-# Manual check: verify STRIPE_SECRET_KEY, STRIPE_PRICE_ID_MONTHLY in Render.
-STRIPE_KEY_SET=$([ -n "${STRIPE_SECRET_KEY:-}" ] && echo "yes" || echo "no")
-if [ "$STRIPE_KEY_SET" = "yes" ]; then
-  green "Stripe secret key present (local env)"
-  RESULTS+=("PASS: Stripe key in local env")
-  (( PASS++ )) || true
+if [ -n "$ADMIN_TOKEN" ]; then
+  KEY_RESP=$(curl -s "$BASE/api/health/api-keys" -H "Authorization: Bearer $ADMIN_TOKEN")
+
+  # ── 9a. VLM / OpenAI ──────────────────────────────────────
+  VLM_OK=$(echo "$KEY_RESP" | python3 -c "
+import sys, json
+try:
+  d = json.load(sys.stdin)
+  print('true' if d.get('vlm_available') else 'false')
+except:
+  print('error')
+" 2>/dev/null || echo "error")
+
+  if [ "$VLM_OK" = "true" ]; then
+    PROVIDER=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('provider','?'))" 2>/dev/null || echo "?")
+    MODEL=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('model','?'))" 2>/dev/null || echo "?")
+    HAS_ERR=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('has_errors',False))" 2>/dev/null || echo "False")
+    green "VLM available — $PROVIDER / $MODEL"
+    RESULTS+=("PASS: VLM available ($PROVIDER / $MODEL)")
+    (( PASS++ )) || true
+    if [ "$HAS_ERR" = "True" ]; then
+      yellow "  ⚠ Recent API errors detected — check /api/health/api-keys for details"
+    fi
+  else
+    red "VLM not available — image analysis will fail"
+    echo "    Response: $KEY_RESP" >&2
+    RESULTS+=("FAIL: VLM not available — check OPENAI_API_KEY / VLM_PROVIDER in Render")
+    (( FAIL++ )) || true
+  fi
+
+  # ── 9b. SMTP ──────────────────────────────────────────────
+  SMTP_OK=$(echo "$KEY_RESP" | python3 -c "
+import sys, json
+try:
+  d = json.load(sys.stdin)
+  print('true' if d.get('smtp_configured') else 'false')
+  if d.get('smtp_host'): print('host=' + d['smtp_host'], file=__import__('sys').stderr)
+except:
+  print('error')
+" 2>/dev/null || echo "error")
+
+  if [ "$SMTP_OK" = "true" ]; then
+    SMTP_HOST=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('smtp_host','?'))" 2>/dev/null || echo "?")
+    FROM_EMAIL=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('from_email','?'))" 2>/dev/null || echo "?")
+    green "SMTP configured — $SMTP_HOST / from: $FROM_EMAIL"
+    RESULTS+=("PASS: SMTP configured ($SMTP_HOST)")
+    (( PASS++ )) || true
+  else
+    red "SMTP not configured — magic links and password reset emails will not send"
+    RESULTS+=("FAIL: SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in Render")
+    (( FAIL++ )) || true
+  fi
+
+  # ── 9c. APP_URL ───────────────────────────────────────────
+  APP_URL=$(echo "$KEY_RESP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('app_url',''))" 2>/dev/null || echo "")
+  if [ -n "$APP_URL" ]; then
+    green "APP_URL set — $APP_URL"
+    RESULTS+=("PASS: APP_URL set ($APP_URL)")
+    (( PASS++ )) || true
+  else
+    yellow "APP_URL not set — email links will use wrong base URL"
+    RESULTS+=("WARN: APP_URL not set in Render env vars")
+  fi
+
 else
-  yellow "Stripe not verified — set STRIPE_SECRET_KEY in Render env vars"
-  RESULTS+=("WARN: Stripe not verified by smoke test")
+  yellow "Admin checks skipped — set NGW_ADMIN_EMAIL and NGW_ADMIN_PASS for full coverage"
+  yellow "  VLM (OpenAI), SMTP, and APP_URL checks require admin JWT"
+  RESULTS+=("WARN: Admin checks skipped (no credentials provided)")
 fi
 
 # ── Summary ───────────────────────────────────────────────────

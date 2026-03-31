@@ -45,6 +45,14 @@ async def api_key_status(user=Depends(get_current_user)):
     latest = get_latest_api_health(_VLM_PROVIDER) if _VLM_PROVIDER != "none" else None
     recent_events = get_api_health_events(limit=20)
 
+    smtp_configured = all([
+        os.getenv("SMTP_HOST", "").strip(),
+        os.getenv("SMTP_USER", "").strip(),
+        os.getenv("SMTP_PASS", "").strip(),
+    ])
+    from_email = os.getenv("FROM_EMAIL", "")
+    app_url    = os.getenv("APP_URL", "")
+
     return {
         "provider":        _VLM_PROVIDER,
         "model":           _VLM_MODEL,
@@ -52,6 +60,10 @@ async def api_key_status(user=Depends(get_current_user)):
         "latest_event":    latest,
         "recent_events":   recent_events,
         "has_errors":      any(e["event_type"] in ("401_error", "probe_fail") for e in recent_events[:5]),
+        "smtp_configured": smtp_configured,
+        "smtp_host":       os.getenv("SMTP_HOST", ""),
+        "from_email":      from_email,
+        "app_url":         app_url,
     }
 
 
