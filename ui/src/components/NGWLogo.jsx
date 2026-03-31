@@ -129,22 +129,32 @@ function fireReadyWhine(audioCtx, time) {
   osc.stop(time + 1.1);
 }
 
-/* One complete strobe sequence: 5 rapid Profoto+shutter pops → beat → 1 full Profoto+shutter pop → ready whine
- * Called twice (at 0s and 5s) = 10 short pops + 2 main pops total, matching CSS 2-iteration animation */
-function fireSequence(audioCtx, base) {
-  const t = audioCtx.currentTime + base;
-  // 5 rapid short Profoto pops + Canon shutter — matching CSS F1–F5 (0/65/130/195/260ms)
-  const rapidTimes = [0.005, 0.070, 0.135, 0.200, 0.265];
-  const intensities = [1.0, 0.9, 0.85, 0.80, 0.75];
-  rapidTimes.forEach((offset, i) => {
+/* Full strobe sequence: 10 rapid Profoto+shutter pops → beat → 2 full Profoto+shutter pops → ready whines
+ * All fires in one continuous run (~3.5s total) */
+function fireSequence(audioCtx) {
+  const t = audioCtx.currentTime + 0.05;
+  const interval = 0.065; // 65ms between rapid pops
+
+  // 10 rapid short pops — Profoto short + Canon shutter each
+  for (let i = 0; i < 10; i++) {
+    const offset = i * interval;
+    const intensity = 1.0 - i * 0.025; // slight taper 1.0 → 0.775
     fireCanonShutter(audioCtx, t + offset);
-    fireProfotoHead(audioCtx, t + offset + 0.005, intensities[i], true);
-  });
-  // Main flash — full Profoto pack-head + Canon shutter
-  fireCanonShutter(audioCtx, t + 0.695);
-  fireProfotoHead(audioCtx, t + 0.700, 1.0, false);
-  // Capacitor ready whine immediately after main pop
-  fireReadyWhine(audioCtx, t + 0.740);
+    fireProfotoHead(audioCtx, t + offset + 0.005, intensity, true);
+  }
+
+  // Beat gap after rapid pops
+  const mainBase = t + 10 * interval + 0.22; // ~0.87s from start
+
+  // Main pop 1 — full Profoto + Canon shutter + ready whine
+  fireCanonShutter(audioCtx, mainBase);
+  fireProfotoHead(audioCtx, mainBase + 0.005, 1.0, false);
+  fireReadyWhine(audioCtx, mainBase + 0.045);
+
+  // Main pop 2 — same, ~700ms after first
+  fireCanonShutter(audioCtx, mainBase + 0.7);
+  fireProfotoHead(audioCtx, mainBase + 0.705, 1.0, false);
+  fireReadyWhine(audioCtx, mainBase + 0.745);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
@@ -166,10 +176,9 @@ export default function NGWLogo({ size = 'sm', className = '', loading = false }
     function fire() {
       if (fired || !ctx) return;
       fired = true;
-      fireSequence(ctx, 0);
-      fireSequence(ctx, 5.0);
-      // Keep context alive long enough for both sequences to finish (~11s)
-      closeTimer = setTimeout(() => { try { ctx?.close(); } catch (_) {} }, 12000);
+      fireSequence(ctx);
+      // Keep context alive long enough for sequence to finish (~5s)
+      closeTimer = setTimeout(() => { try { ctx?.close(); } catch (_) {} }, 5000);
     }
 
     try {
