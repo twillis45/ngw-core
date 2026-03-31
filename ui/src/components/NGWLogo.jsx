@@ -98,35 +98,20 @@ function fireProfotoHead(audioCtx, time, intensity = 1.0, short = false) {
   thump.stop(time + (short ? 0.08 : 0.2));
 
   if (!short) {
-    // Layer 3: tube resonance — mid plunk, full pops only
+    // Layer 3: tube resonance — deep body thud, full pops only
     const tube     = audioCtx.createOscillator();
     const tubeGain = audioCtx.createGain();
     tube.type      = 'triangle';
-    tube.frequency.setValueAtTime(350, time);
-    tube.frequency.exponentialRampToValueAtTime(200, time + 0.08);
+    tube.frequency.setValueAtTime(180, time);
+    tube.frequency.exponentialRampToValueAtTime(60, time + 0.18);
     tubeGain.gain.setValueAtTime(0, time);
-    tubeGain.gain.linearRampToValueAtTime(0.22 * intensity, time + 0.003);
-    tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.10);
+    tubeGain.gain.linearRampToValueAtTime(0.55 * intensity, time + 0.004);
+    tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
     tube.connect(tubeGain);
     tubeGain.connect(audioCtx.destination);
     tube.start(time);
-    tube.stop(time + 0.12);
+    tube.stop(time + 0.25);
   }
-}
-
-/* Capacitor recycling whine — "ready" signal after main pop */
-function fireReadyWhine(audioCtx, time) {
-  const osc   = audioCtx.createOscillator();
-  const ogain = audioCtx.createGain();
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(3800, time);
-  osc.frequency.exponentialRampToValueAtTime(1200, time + 1.1);
-  ogain.gain.setValueAtTime(0.055, time);
-  ogain.gain.exponentialRampToValueAtTime(0.001, time + 1.1);
-  osc.connect(ogain);
-  ogain.connect(audioCtx.destination);
-  osc.start(time);
-  osc.stop(time + 1.1);
 }
 
 /* Full strobe sequence: 10 rapid Profoto+shutter pops → beat → 2 full Profoto+shutter pops → ready whines
@@ -146,15 +131,13 @@ function fireSequence(audioCtx) {
   // Beat gap after rapid pops
   const mainBase = t + 10 * interval + 0.22; // ~0.87s from start
 
-  // Main pop 1 — full Profoto + Canon shutter + ready whine
+  // Main pop 1 — full Profoto + Canon shutter
   fireCanonShutter(audioCtx, mainBase);
   fireProfotoHead(audioCtx, mainBase + 0.005, 1.0, false);
-  fireReadyWhine(audioCtx, mainBase + 0.045);
 
   // Main pop 2 — same, ~700ms after first
   fireCanonShutter(audioCtx, mainBase + 0.7);
   fireProfotoHead(audioCtx, mainBase + 0.705, 1.0, false);
-  fireReadyWhine(audioCtx, mainBase + 0.745);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
