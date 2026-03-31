@@ -485,6 +485,73 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
     addBox(lx, ly, 30, 30);
   });
 
+  // ── per-light distance badges + leader lines + elevation warnings ──
+  const leaderColor = tc.isDark ? 'rgba(148,163,184,0.4)' : 'rgba(100,116,139,0.35)';
+  const leaderArrow = Math.round(4 * fs);
+  function drawLineArrow(x, y, toX, toY) {
+    // Small arrowhead pointing from (x,y) toward (toX,toY)
+    const ang = Math.atan2(toY - y, toX - x);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - Math.cos(ang - 0.4) * leaderArrow * 1.5, y - Math.sin(ang - 0.4) * leaderArrow * 1.5);
+    ctx.lineTo(x - Math.cos(ang + 0.4) * leaderArrow * 1.5, y - Math.sin(ang + 0.4) * leaderArrow * 1.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  lights.forEach(({ role, lx, ly, distance_m, height_m }) => {
+    const midX = (lx + subjectX) / 2;
+    const midY = (ly + subjectY) / 2;
+    const distLabel = fmtDist(distance_m, units);
+    ctx.font = badgeFont;
+    const badgeW = ctx.measureText(distLabel).width + Math.round(16 * fs);
+    const badgeH = Math.round(22 * fs);
+    // Direction vector along beam
+    const dx = subjectX - lx;
+    const dy = subjectY - ly;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = dx / len;
+    const ny = dy / len;
+    // Gap around badge center
+    const halfBadge = Math.sqrt((badgeW / 2) ** 2 + (badgeH / 2) ** 2) * 0.55;
+
+    // Dashed leader line: light → badge
+    ctx.strokeStyle = leaderColor;
+    ctx.fillStyle = leaderColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(lx + nx * 13, ly + ny * 13);          // start just outside light dot
+    ctx.lineTo(midX - nx * halfBadge, midY - ny * halfBadge); // stop before badge
+    ctx.stroke();
+    // Dashed leader line: badge → subject
+    ctx.beginPath();
+    ctx.moveTo(midX + nx * halfBadge, midY + ny * halfBadge); // resume after badge
+    ctx.lineTo(subjectX - nx * 13, subjectY - ny * 13);       // stop just before subject dot
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Arrowheads
+    drawLineArrow(lx + nx * 14, ly + ny * 14, lx, ly);               // points toward light
+    drawLineArrow(subjectX - nx * 14, subjectY - ny * 14, subjectX, subjectY); // points toward subject
+
+    // Distance badge
+    drawDistBadge(midX, midY, distLabel);
+    addBox(midX, midY, badgeW + 8, badgeH + 4);
+
+    // ⚠ elevation warning near dot for key/fill lights
+    const baseRole = role.toLowerCase().replace(/_.*/,'');
+    if (baseRole === 'key' || baseRole === 'fill') {
+      const elev = elevationAngle(height_m || 1.7, distance_m);
+      if (elev < 20 || elev > 60) {
+        ctx.font = `bold ${Math.round(13 * fs)}px ${FONT_STACK}`;
+        ctx.fillStyle = '#f59e0b';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠', lx, ly - 16);
+        addBox(lx, ly - 20, 20, 16);
+      }
+    }
+  });
+
   const sortedLights = [...lights].sort((a, b) => {
     const minGapA = lights.reduce((min, o) => o === a ? min : Math.min(min, Math.abs(a.angle_deg - o.angle_deg)), 360);
     const minGapB = lights.reduce((min, o) => o === b ? min : Math.min(min, Math.abs(b.angle_deg - o.angle_deg)), 360);
