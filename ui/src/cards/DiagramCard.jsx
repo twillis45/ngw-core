@@ -111,7 +111,7 @@ function distLabelWidth(ctx, m, units) {
 
 /* ── Top-down view (existing) ────────────────────── */
 
-function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
+function drawTopView(canvas, spec, units, highlightRole, twoHostSetup, activeRole) {
   if (!canvas || !spec) return;
 
   const tc = getThemeColors();
@@ -375,6 +375,8 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
   lights.forEach(({ role, lx, ly, side }) => {
     const color = lightColor(role, tc.lightColors);
     const isBackground = role === 'background';
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
+    const dimAlpha = isActive ? 1.0 : 0.28;
     let targetX, targetY;
     if (isBackground) {
       targetX = subjectX; targetY = bgY;
@@ -387,7 +389,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
     }
 
     ctx.save();
-    ctx.globalAlpha = tc.isDark ? 0.12 : 0.10;
+    ctx.globalAlpha = (tc.isDark ? 0.12 : 0.10) * dimAlpha;
     ctx.fillStyle = color;
     const dx = targetX - lx;
     const dy = targetY - ly;
@@ -403,7 +405,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.4;
+    ctx.globalAlpha = 0.4 * dimAlpha;
     ctx.beginPath();
     ctx.moveTo(lx, ly);
     ctx.lineTo(targetX, targetY);
@@ -417,26 +419,30 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
     const isHighlighted = highlightRole && (
       role === highlightRole || role.startsWith(highlightRole) || highlightRole.startsWith(role)
     );
-    if (isHighlighted) {
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
+    if (isHighlighted || (activeRole && isActive)) {
       ctx.save();
       ctx.shadowColor = color;
-      ctx.shadowBlur = 18;
+      ctx.shadowBlur = activeRole && isActive ? 22 : 18;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = activeRole && isActive ? 3 : 2.5;
+      ctx.globalAlpha = 0.88;
       ctx.beginPath();
-      ctx.arc(lx, ly, 16, 0, Math.PI * 2);
+      ctx.arc(lx, ly, 17, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(lx, ly, 11, 0, Math.PI * 2);
+    ctx.arc(lx, ly, activeRole && isActive ? 13 : 11, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = tc.markerDot;
     ctx.beginPath();
     ctx.arc(lx, ly, 4, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   });
 
   // ── labels (collision-aware) ──────────────────────
@@ -500,6 +506,9 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
   }
 
   lights.forEach(({ role, lx, ly, distance_m, height_m }) => {
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     const midX = (lx + subjectX) / 2;
     const midY = (ly + subjectY) / 2;
     const distLabel = fmtDist(distance_m, units);
@@ -550,6 +559,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
         addBox(lx, ly - 20, 20, 16);
       }
     }
+    ctx.restore();
   });
 
   const sortedLights = [...lights].sort((a, b) => {
@@ -561,6 +571,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
   // ── Compact on-canvas labels: role name only ──────
   sortedLights.forEach(({ label, role, lx, ly }) => {
     const color = lightColor(role, tc.lightColors);
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
     const roleName = label || (role.charAt(0).toUpperCase() + role.slice(1));
 
     ctx.font = `bold ${Math.round(12 * fs)}px ${FONT_STACK}`;
@@ -607,10 +618,13 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
       }
     }
 
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.round(12 * fs)}px ${FONT_STACK}`;
     ctx.textAlign = 'center';
     ctx.fillText(roleName, labelX, labelY);
+    ctx.restore();
 
     addBox(labelX, labelY, boxW, boxH);
   });
@@ -618,7 +632,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup) {
 
 /* ── Floor Plan view (bird's-eye room layout) ───── */
 
-function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highlightRole) {
+function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highlightRole, activeRole) {
   if (!canvas || !spec) return;
 
   const tc = getThemeColors();
@@ -772,11 +786,13 @@ function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highligh
   lights.forEach(({ role, lx, ly }) => {
     const color = lightColor(role, tc.lightColors);
     const isBackground = role === 'background';
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
+    const dimAlpha = isActive ? 1.0 : 0.28;
     const targetX = isBackground ? bgWallX + bgWallW / 2 : sx;
     const targetY = isBackground ? bgWallY : sy;
 
     ctx.save();
-    ctx.globalAlpha = tc.isDark ? 0.10 : 0.08;
+    ctx.globalAlpha = (tc.isDark ? 0.10 : 0.08) * dimAlpha;
     ctx.fillStyle = color;
     const dx = targetX - lx;
     const dy = targetY - ly;
@@ -792,7 +808,7 @@ function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highligh
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = 0.35 * dimAlpha;
     ctx.beginPath();
     ctx.moveTo(lx, ly);
     ctx.lineTo(targetX, targetY);
@@ -806,36 +822,44 @@ function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highligh
     const isHighlighted = highlightRole && (
       role === highlightRole || role.startsWith(highlightRole) || highlightRole.startsWith(role)
     );
-    if (isHighlighted) {
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
+    if (isHighlighted || (activeRole && isActive)) {
       ctx.save();
       ctx.shadowColor = color;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = activeRole && isActive ? 20 : 16;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = activeRole && isActive ? 2.5 : 2;
+      ctx.globalAlpha = 0.88;
       ctx.beginPath();
-      ctx.arc(lx, ly, 14, 0, Math.PI * 2);
+      ctx.arc(lx, ly, 15, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(lx, ly, 9, 0, Math.PI * 2);
+    ctx.arc(lx, ly, activeRole && isActive ? 11 : 9, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = tc.markerDot;
     ctx.beginPath();
     ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   });
 
   // Light labels
   lights.forEach(({ role, label, lx, ly }) => {
     const color = lightColor(role, tc.lightColors);
+    const isActive = !activeRole || role === activeRole || role.startsWith(activeRole) || activeRole.startsWith(role);
     const roleName = label || role.replace(/_/g, ' ');
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.round(11 * fs)}px ${FONT_STACK}`;
     ctx.textAlign = 'center';
     ctx.fillText(roleName, lx, ly - 14);
+    ctx.restore();
   });
 
   // ── Min. requirement outline (dashed) if user room is bigger ──
@@ -869,7 +893,7 @@ function drawFloorPlan(canvas, spec, units, spaceCheck, roomDimensions, highligh
  *   positive = toward camera, negative = behind subject
  */
 
-function drawSideView(canvas, spec, units, highlightRole) {
+function drawSideView(canvas, spec, units, highlightRole, activeRole) {
   if (!canvas || !spec) return;
 
   const tc = getThemeColors();
@@ -1169,14 +1193,19 @@ function drawSideView(canvas, spec, units, highlightRole) {
   lightPos.forEach(l => {
     const color = lightColor(l.role, tc.lightColors);
     const { lx, ly } = l;
+    const isActive = !activeRole || l.role === activeRole || l.role.startsWith(activeRole) || activeRole.startsWith(l.role);
+    const dimAlpha = isActive ? 1.0 : 0.28;
 
     // Stand
+    ctx.save();
+    ctx.globalAlpha = dimAlpha;
     ctx.strokeStyle = tc.connector;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(lx, floorY);
     ctx.lineTo(lx, ly);
     ctx.stroke();
+    ctx.restore();
 
     // Beam toward subject (or background)
     const isBg = l.role === 'background';
@@ -1184,7 +1213,7 @@ function drawSideView(canvas, spec, units, highlightRole) {
     const beamTargetY = isBg ? bgRectTop + bgRectH / 2 : subjectHeadY;
 
     ctx.save();
-    ctx.globalAlpha = tc.isDark ? 0.10 : 0.08;
+    ctx.globalAlpha = (tc.isDark ? 0.10 : 0.08) * dimAlpha;
     ctx.fillStyle = color;
     const dx = beamTargetX - lx;
     const dy = beamTargetY - ly;
@@ -1200,7 +1229,7 @@ function drawSideView(canvas, spec, units, highlightRole) {
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1;
-    ctx.globalAlpha = 0.3;
+    ctx.globalAlpha = 0.3 * dimAlpha;
     ctx.beginPath();
     ctx.moveTo(lx, ly);
     ctx.lineTo(beamTargetX, beamTargetY);
@@ -1211,26 +1240,29 @@ function drawSideView(canvas, spec, units, highlightRole) {
     const isHighlighted = highlightRole && (
       l.role === highlightRole || l.role.startsWith(highlightRole) || highlightRole.startsWith(l.role)
     );
-    if (isHighlighted) {
+    if (isHighlighted || (activeRole && isActive)) {
       ctx.save();
       ctx.shadowColor = color;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = activeRole && isActive ? 20 : 16;
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = activeRole && isActive ? 2.5 : 2;
+      ctx.globalAlpha = 0.88;
       ctx.beginPath();
-      ctx.arc(lx, ly, 12, 0, Math.PI * 2);
+      ctx.arc(lx, ly, 13, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(lx, ly, 7, 0, Math.PI * 2);
+    ctx.arc(lx, ly, activeRole && isActive ? 9 : 7, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = tc.markerDot;
     ctx.beginPath();
     ctx.arc(lx, ly, 2.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   });
 
   // Reserve light marker circles
@@ -1242,6 +1274,7 @@ function drawSideView(canvas, spec, units, highlightRole) {
   lightPos.forEach(l => {
     const color = lightColor(l.role, tc.lightColors);
     const { lx, ly } = l;
+    const isActive = !activeRole || l.role === activeRole || l.role.startsWith(activeRole) || activeRole.startsWith(l.role);
     const roleName = l.label || (l.role.charAt(0).toUpperCase() + l.role.slice(1));
 
     ctx.font = `bold ${Math.round(13 * fs)}px ${FONT_STACK}`;
@@ -1277,10 +1310,13 @@ function drawSideView(canvas, spec, units, highlightRole) {
       }
     }
 
+    ctx.save();
+    ctx.globalAlpha = isActive ? 1.0 : 0.28;
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.round(13 * fs)}px ${FONT_STACK}`;
     ctx.textAlign = 'center';
     ctx.fillText(roleName, labelX, labelY);
+    ctx.restore();
 
     addBox(labelX, labelY, boxW, boxH);
   });
@@ -1447,14 +1483,14 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
 
   useEffect(() => {
     const draw = view === 'space'
-      ? (c) => drawFloorPlan(c, effectiveSpec, units, spaceCheck, roomDimensions, highlightRole)
-      : view === 'side' ? (c) => drawSideView(c, effectiveSpec, units, highlightRole) : (c) => drawTopView(c, effectiveSpec, units, highlightRole, twoHostSetup);
+      ? (c) => drawFloorPlan(c, effectiveSpec, units, spaceCheck, roomDimensions, highlightRole, activeLight)
+      : view === 'side' ? (c) => drawSideView(c, effectiveSpec, units, highlightRole, activeLight) : (c) => drawTopView(c, effectiveSpec, units, highlightRole, twoHostSetup, activeLight);
     draw(canvasRef.current);
 
     function onResize() { draw(canvasRef.current); }
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [effectiveSpec, view, units, spaceCheck, roomDimensions, highlightRole]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [effectiveSpec, view, units, spaceCheck, roomDimensions, highlightRole, activeLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!spec) return null;
 
