@@ -10589,69 +10589,103 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Stage / screen card — styled like a camera LCD panel ── */
+/* ── Stage / screen card — styled as a monitor / camera LCD ── */
+
+/* Outer housing — thick bezel, like a monitor casing */
 .home-v2__stage {
   width: 100%;
-  background: #0a0a0c;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: var(--radius-lg);
+  background: #111115;
+  border: 2px solid #1e1e24;
+  border-radius: 14px;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  position: relative;
   box-shadow:
-    0 0 0 1px rgba(0,0,0,0.6),
-    0 4px 20px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.05);
+    0 0 0 1px rgba(0,0,0,0.8),
+    0 8px 32px rgba(0,0,0,0.6),
+    0 2px 8px rgba(0,0,0,0.4),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
 }
 
-/* Camera screen viewport — the "image" area */
+/* Screen viewport — the "glass" */
 .home-v2__stage-photo {
   width: 100%;
-  height: 140px;
-  background: #050507;
+  height: 200px;
+  background:
+    /* Scanlines */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.18) 2px,
+      rgba(0,0,0,0.18) 4px
+    ),
+    /* Screen glow gradient */
+    radial-gradient(ellipse 80% 60% at 50% 40%, #0d1018 0%, #060608 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid #1a1a20;
 }
 
-/* Corner brackets — camera viewfinder feel */
-.home-v2__stage-photo::before,
+/* Subtle vignette on screen */
 .home-v2__stage-photo::after {
   content: '';
   position: absolute;
-  width: 16px;
-  height: 16px;
-  border-color: rgba(255,255,255,0.18);
-  border-style: solid;
+  inset: 0;
+  background: radial-gradient(ellipse 90% 80% at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%);
+  pointer-events: none;
 }
+
+/* Corner brackets — viewfinder */
 .home-v2__stage-photo::before {
-  top: 10px; left: 10px;
-  border-width: 1px 0 0 1px;
-}
-.home-v2__stage-photo::after {
-  bottom: 10px; right: 10px;
-  border-width: 0 1px 1px 0;
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 .home-v2__stage-photo-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  background: rgba(255,255,255,0.04);
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.15);
+  position: relative;
+  z-index: 1;
 }
 
-/* Data row — like a camera info strip */
+/* Status bar at top of screen — like camera mode indicator */
+.home-v2__stage-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 90% 80% at 50% 50%, transparent 50%, rgba(0,0,0,0.45) 100%);
+  pointer-events: none;
+}
+
+/* LCD data panel */
+.home-v2__stage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: #0c0c10;
+  border-top: 1px solid #1e1e26;
+}
+
+/* Pattern name header row */
 .home-v2__stage-result {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px 8px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 100%);
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 
 .home-v2__stage-result-left {
@@ -10663,96 +10697,84 @@ body {
 .home-v2__stage-label {
   font-size: 9px;
   font-weight: var(--weight-medium);
-  color: rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.25);
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
 
 .home-v2__stage-pattern {
-  font-size: var(--text-lg);
+  font-size: var(--text-base);
   font-weight: var(--weight-bold);
-  color: rgba(255,255,255,0.92);
+  color: rgba(255,255,255,0.90);
   line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-
-.home-v2__stage-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+  letter-spacing: 0.01em;
 }
 
 .home-v2__stage-pattern--empty {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: var(--weight-normal);
-  color: rgba(255,255,255,0.35);
-  letter-spacing: 0;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.02em;
+  font-family: var(--font-mono);
 }
 
-/* Discrete data rows */
+.home-v2__stage-confidence {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent) 22%, transparent);
+  border-radius: 3px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* Discrete data rows — LCD readout style */
 .home-v2__stage-rows {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0;
   margin: 0;
-  padding: 0;
+  padding: 6px 0 4px;
+  list-style: none;
 }
 
 .home-v2__stage-row {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 0;
+  padding: 4px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
 }
+.home-v2__stage-row:last-child { border-bottom: none; }
 
 .home-v2__stage-row-label {
-  font-size: 10px;
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.08em;
+  font-size: 9px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.35);
+  color: rgba(160,200,255,0.35);
   flex-shrink: 0;
-  width: 64px;
+  width: 72px;
+  font-family: var(--font-mono);
 }
 
 .home-v2__stage-row-value {
-  font-size: var(--text-sm);
+  font-size: 12px;
   font-weight: var(--weight-medium);
-  color: rgba(255,255,255,0.82);
-  line-height: 1.3;
+  color: rgba(220,235,255,0.82);
+  line-height: 1.4;
   margin: 0;
+  font-family: var(--font-mono);
+  letter-spacing: 0.01em;
 }
 
-.home-v2__stage-confidence {
-  font-size: 11px;
-  font-weight: var(--weight-semibold);
-  color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-accent) 25%, transparent);
-  border-radius: 9999px;
-  padding: 3px 9px;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-v2__stage-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 0 14px 12px;
-}
-
-.home-v2__stage-chip {
-  font-size: 10px;
-  font-weight: var(--weight-medium);
-  color: rgba(255,255,255,0.45);
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 3px;
-  padding: 3px 8px;
-  letter-spacing: 0.03em;
-}
+/* Deprecated chip styles — kept for backward compat, hidden */
+.home-v2__stage-chips { display: none; }
+.home-v2__stage-chip  { display: none; }
 
 /* ── Continue card (paid home, resume target) ── */
 .home-v2__continue-card {
@@ -15911,7 +15933,7 @@ body {
   }
   /* Stage card photo taller at tablet */
   .home-v2__stage-photo {
-    height: 200px;
+    height: 260px;
   }
 }
 
@@ -16008,7 +16030,7 @@ body {
   }
   /* Stage card photo tallest at desktop */
   .home-v2__stage-photo {
-    height: 240px;
+    height: 300px;
   }
 }
 

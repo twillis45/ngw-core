@@ -96,8 +96,9 @@ function StageArea({ stage }) {
           )}
         </div>
       ) : (
-        <div className="home-v2__stage-body">
-          <span className="home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
+        <div className="home-v2__stage-body" style={{ padding: '10px 16px 12px' }}>
+          <span className="home-v2__stage-pattern--empty">_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _</span>
+          <span className="home-v2__stage-pattern--empty" style={{ marginTop: 4 }}>analyze a photo to see your lighting</span>
         </div>
       )}
     </div>
