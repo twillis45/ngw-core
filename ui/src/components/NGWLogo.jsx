@@ -160,25 +160,31 @@ function fireSequence(audioCtx) {
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
   const s     = SIZES[size] ?? SIZES.sm;
 
-  /* Fire strobe sounds when not in loading mode — one sequence per CSS animation iteration.
-   * Two sequences at 0s + 5s = 10 short pops + 2 main pops total.
+  /* Fire strobe sequence on home arrival — 10 rapid pops + 2 main pops (~3.5s total).
    *
-   * Browsers block AudioContext until a user gesture. We attempt resume() immediately;
-   * if still suspended, we wait for the first pointer/key interaction.
-   * Cleanup defers context close by 12s so queued audio can finish even if the
-   * user navigates away immediately (e.g. tapping "Analyze a Photo"). */
+   * Autoplay policy: browsers block AudioContext until user gesture.
+   * On first load / refresh: context starts suspended → we wait for first
+   * pointerdown/keydown. Once unlockTriggered, we NEVER close the context in
+   * cleanup — the resume().then(fire) chain must survive component unmount
+   * (e.g. user taps "Analyze a Photo" which both triggers audio AND navigates away).
+   * The context auto-closes 5s after fire() via setTimeout. */
   useEffect(() => {
     if (loading) return;
     let ctx;
-    let fired = false;
+    let fired          = false;
+    let unlockTriggered = false;
     let closeTimer;
 
     function fire() {
       if (fired || !ctx) return;
       fired = true;
       fireSequence(ctx);
-      // Keep context alive long enough for sequence to finish (~5s)
       closeTimer = setTimeout(() => { try { ctx?.close(); } catch (_) {} }, 5000);
+    }
+
+    function unlock() {
+      unlockTriggered = true; // prevent cleanup from closing ctx before fire() runs
+      ctx?.resume().then(fire);
     }
 
     try {
@@ -187,9 +193,6 @@ export default function NGWLogo({ size = 'sm', className = '', loading = false }
         if (ctx.state === 'running') {
           fire();
         } else {
-          const unlock = () => {
-            ctx.resume().then(fire);
-          };
           window.addEventListener('pointerdown', unlock, { once: true });
           window.addEventListener('keydown',     unlock, { once: true });
         }
@@ -198,8 +201,12 @@ export default function NGWLogo({ size = 'sm', className = '', loading = false }
 
     return () => {
       clearTimeout(closeTimer);
-      // Only close immediately if audio never started; otherwise let it finish
-      if (!fired) { try { ctx?.close(); } catch (_) {} }
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown',     unlock);
+      // Only close if unlock was never triggered — otherwise let the 5s timer handle it
+      if (!unlockTriggered && !fired) {
+        try { ctx?.close(); } catch (_) {}
+      }
     };
   }, [loading]);
   const r     = s.sym * 0.375;           // ring radius = 37.5% of symbol box
