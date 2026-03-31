@@ -22,8 +22,8 @@ function angleWarning(light) {
   return null;
 }
 
-const LIGHT_COLORS_DARK  = { key: '#f59e0b', fill: '#3b82f6', rim: '#a855f7', background: '#10b981', hair: '#ec4899' };
-const LIGHT_COLORS_LIGHT = { key: '#b45309', fill: '#1d4ed8', rim: '#7c3aed', background: '#059669', hair: '#be185d' };
+const LIGHT_COLORS_DARK  = { key: '#c89b45', fill: '#5585b8', rim: '#8c6bbb', background: '#3a9e7e', hair: '#c46880' };
+const LIGHT_COLORS_LIGHT = { key: '#9e7220', fill: '#245d8c', rim: '#5c2d8a', background: '#1e7a5a', hair: '#8a2450' };
 
 /** Theme-aware palette for canvas drawing. */
 function getThemeColors() {

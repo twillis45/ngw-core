@@ -1109,6 +1109,7 @@ export default function ResultsScreenV2({ onShare } = {}) {
           Signal rule: every session must produce a signal.
           ──────────────────────────────────────────────────────────────── */}
       <OutcomeCapture
+        key={result?.imageHash || result?.bestMatch?.systemId || result?.bestMatch?.lightingPattern || 'default'}
         onOutcome={(outcome) => {
           sendSignal(outcome);
           if (outcome === 'nailed_it') {
