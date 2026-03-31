@@ -12,7 +12,7 @@
  */
 import { trackEvent } from '../../data/analytics';
 
-export default function ResultCTAGroup({ patternId, onAnalyze, onBuild, analyzeLabel = 'Analyze Another Photo', buildLabel = 'Build This Setup' }) {
+export default function ResultCTAGroup({ patternId, onAnalyze, onBuild, onShare, analyzeLabel = 'Analyze Another Photo', buildLabel = 'Build This Setup' }) {
   function handleAnalyze() {
     trackEvent('analyze_similar_clicked', { pattern: patternId });
     if (onAnalyze) onAnalyze();
@@ -21,6 +21,11 @@ export default function ResultCTAGroup({ patternId, onAnalyze, onBuild, analyzeL
   function handleBuild() {
     trackEvent('build_setup_clicked', { pattern: patternId });
     if (onBuild) onBuild();
+  }
+
+  function handleShare() {
+    trackEvent('share_result_clicked', { pattern: patternId });
+    if (onShare) onShare();
   }
 
   return (
@@ -42,6 +47,18 @@ export default function ResultCTAGroup({ patternId, onAnalyze, onBuild, analyzeL
         </svg>
         <span className="rcg__btn-label">{buildLabel}</span>
       </button>
+
+      {onShare && (
+        <button className="rcg__btn" onClick={handleShare} type="button">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+          <span className="rcg__btn-label">Share</span>
+        </button>
+      )}
     </div>
   );
 }

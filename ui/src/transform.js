@@ -864,14 +864,20 @@ export function transformShootMatch(apiResponse, ctx = {}) {
     if (!d?.lights?.length) return d;
     const lights = d.lights.map((dl, i) => {
       const sl = setupLights[i];
-      if (!sl) return dl;
-      const rawMod = (dl.modifier || '').toLowerCase().trim();
+      // Normalize angle → angle_deg (shoot-match returns 'angle', analysis returns 'angle_deg')
+      let patched = dl.angle != null && dl.angle_deg == null
+        ? { ...dl, angle_deg: dl.angle }
+        : dl;
+      if (!sl) return patched;
+      const rawMod = (patched.modifier || '').toLowerCase().trim();
       if (BARE_MOD_TOKENS.includes(rawMod) && sl.role === 'key') {
-        return { ...dl, modifier: sl.modifier };
+        return { ...patched, modifier: sl.modifier };
       }
-      return dl;
+      return patched;
     });
-    return { ...d, lights };
+    // Ensure camera object exists (shoot-match may omit it)
+    const camera = d.camera || { distance_m: 2, height_m: 1.2 };
+    return { ...d, lights, camera };
   })();
 
   return {

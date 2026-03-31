@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import ZoomOverlay from '../cards/ZoomOverlay';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 
 /**
  * Shot Match — compare a reference image vs user's attempt.
@@ -15,7 +15,7 @@ import usePaywall from '../hooks/usePaywall';
 export default function ShotMatchScreen() {
   const { referenceImage, referenceImages, result, user } = useAppState();
   const dispatch = useDispatch();
-  const { isStudio, isAdmin } = usePaywall(user?.email || user?.username || null);
+  const { isStudio, isAdmin } = usePaywall(resolveUserEmail(user));
   const attemptRef = useRef(null);
   const refUploadRef = useRef(null);
 

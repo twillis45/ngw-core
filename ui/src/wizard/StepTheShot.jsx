@@ -1,181 +1,94 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
-import MoodTile from '../components/MoodTile';
-import ChipSelect from '../components/ChipSelect';
-import { MOOD_LIST } from '../coaching';
 import { SUBJECT_TYPES } from '../data/subjectTypes';
-import { MOOD_SUBJECTS } from '../coaching';
 
-import { MOOD_ICONS } from '../components/MoodIcons';
-
-/* ── Skin tone options ── */
+const PEOPLE_SUBJECTS = ['headshot', 'half_body', 'full_body', 'couple', 'small_group'];
+const MULTI_SUBJECTS = ['couple', 'small_group'];
 const SKIN_TONES = [
   { value: 'light',  label: 'Light',  swatch: '#FDDBB4' },
   { value: 'medium', label: 'Medium', swatch: '#C68642' },
   { value: 'dark',   label: 'Dark',   swatch: '#8D5524' },
-  { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
+  { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)', multiOnly: true },
 ];
 
-// Subject types that represent multiple people
-const MULTI_PERSON_SUBJECTS = ['couple', 'small_group'];
-const SINGLE_PERSON_SUBJECTS = ['headshot', 'half_body', 'full_body'];
-
-/* ── SVG icons for master modes — consistent with app icon style ── */
-const ModeIcons = {
-  default:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>,
-  hurley:     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>,
-  adler:      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L16 8H22L17 12.5L19 19L12 15L5 19L7 12.5L2 8H8L12 2Z"/></svg>,
-  heisler:    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M3 12h12"/></svg>,
-  bryce:      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22C17.5 22 20 17.5 20 12S17.5 2 12 2 4 6.5 4 12s2.5 10 8 10z"/><path d="M12 6c0 3.31-2.69 6-6 6"/><path d="M12 6c0 3.31 2.69 6 6 6"/></svg>,
-  caravaggio: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>,
-  penn:       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>,
-  karsh:      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>,
-  leibovitz:  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>,
+/* ── Subject type cards (Figma: 2x2 grid, using real data) ── */
+const CARD_ICONS = {
+  headshot:    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="13" r="6"/><path d="M6 32c0-6.627 5.373-12 12-12s12 5.373 12 12"/></svg>,
+  half_body:   <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="10" r="5"/><path d="M10 32V24a8 8 0 0116 0v8"/></svg>,
+  full_body:   <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="8" r="4"/><path d="M18 14v10M14 34l4-10 4 10M10 20h16"/></svg>,
+  couple:      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13" cy="12" r="5"/><circle cx="23" cy="12" r="5"/><path d="M4 32c0-5 4-9 9-9s9 4 9 9M23 23c5 0 9 4 9 9"/></svg>,
+  small_group: <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="10" r="4"/><circle cx="10" cy="14" r="3"/><circle cx="26" cy="14" r="3"/><path d="M6 32c0-4 3-7 7-7h10c4 0 7 3 7 7"/></svg>,
+  product:     <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="10" width="24" height="18" rx="2"/><path d="M14 10V8a4 4 0 018 0v2"/></svg>,
+  food:        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="18" r="10"/><ellipse cx="18" cy="18" rx="6" ry="4"/></svg>,
+  interior:    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="6" width="28" height="24" rx="2"/><path d="M4 18h28M18 6v24"/></svg>,
 };
 
-/* ── Master mode options ── */
-const MODES = [
-  { id: null,          icon: ModeIcons.default,    label: 'Default',    tagline: 'Standard NGW recommendation' },
-  { id: 'hurley',      icon: ModeIcons.hurley,     label: 'Hurley',     tagline: 'Clean commercial headshot' },
-  { id: 'adler',       icon: ModeIcons.adler,      label: 'Adler',      tagline: 'Fashion/beauty sculpting' },
-  { id: 'heisler',     icon: ModeIcons.heisler,    label: 'Heisler',    tagline: 'Narrative portrait' },
-  { id: 'bryce',       icon: ModeIcons.bryce,      label: 'Bryce',      tagline: 'Soft feminine portrait' },
-  { id: 'caravaggio',  icon: ModeIcons.caravaggio, label: 'Caravaggio', tagline: 'Dramatic chiaroscuro' },
-  { id: 'penn',        icon: ModeIcons.penn,       label: 'Penn',       tagline: 'Hard light minimalism' },
-  { id: 'karsh',       icon: ModeIcons.karsh,      label: 'Karsh',      tagline: 'Heroic portraiture' },
-  { id: 'leibovitz',   icon: ModeIcons.leibovitz,  label: 'Leibovitz',  tagline: 'Complex editorial narrative' },
-];
-
-/**
- * Consolidated Step 1: "What are we shooting?"
- * Combines: Mood + Subject + Skin Tone + Master Mode (collapsed)
- */
 export default function StepTheShot() {
-  const { mood, subjectType, skinTone, masterMode } = useAppState();
+  const { subjectType, skinTone } = useAppState();
   const dispatch = useDispatch();
-  const [styleOpen, setStyleOpen] = useState(!!masterMode);
 
-  /* Subject options filtered by mood */
-  const filteredSubjects = useMemo(() => {
-    const allowed = mood && MOOD_SUBJECTS[mood];
-    if (!allowed) return SUBJECT_TYPES;
-    return SUBJECT_TYPES.filter(s => allowed.includes(s.value));
-  }, [mood]);
-
-  /* Clear subject if no longer valid for this mood */
   useEffect(() => {
-    if (subjectType && filteredSubjects.length > 0) {
-      const still = filteredSubjects.some(s => s.value === subjectType);
-      if (!still) dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: '' });
+    if (!subjectType) dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: 'headshot' });
+  }, [subjectType, dispatch]);
+
+  // Clear "mixed" skin tone if user switches to a single-person subject
+  useEffect(() => {
+    if (skinTone === 'mixed' && subjectType && !MULTI_SUBJECTS.includes(subjectType)) {
+      dispatch({ type: 'SET_SKIN_TONE', skinTone: null });
     }
-  }, [filteredSubjects, subjectType, dispatch]);
+  }, [subjectType, skinTone, dispatch]);
 
   return (
-    <div className="consolidated-step">
-      <h2 className="screen-heading">What's the look?</h2>
+    <div className="step-shot">
+      <span className="step-shot__section-label">THE SHOT</span>
+      <h2 className="step-shot__heading">What are you{'\n'}shooting?</h2>
 
-      {/* ── Look (mood) ── */}
-      <div className="consolidated-step__section">
-        <div className="consolidated-step__label">Look</div>
-        <div className="mood-grid mood-grid--compact">
-          {MOOD_LIST.map(m => (
-            <MoodTile
-              key={m.value}
-              icon={MOOD_ICONS[m.value]}
-              label={m.label}
-              desc={m.desc}
-              selected={mood === m.value}
-              onClick={() => dispatch({ type: 'SET_MOOD', mood: m.value })}
-            />
-          ))}
-        </div>
+      {/* ── Subject type grid (from subjectTypes.js) ── */}
+      <div className="step-shot__grid">
+        {SUBJECT_TYPES.map(card => {
+          const sel = subjectType === card.value;
+          return (
+            <button
+              key={card.value}
+              type="button"
+              className={`step-shot__card${sel ? ' step-shot__card--selected' : ''}`}
+              onClick={() => dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: card.value })}
+            >
+              {sel && <div className="step-shot__card-bar" />}
+              <div className="step-shot__card-icon">{CARD_ICONS[card.value]}</div>
+              <div className="step-shot__card-text">
+                <span className="step-shot__card-label">{card.label}</span>
+                <span className="step-shot__card-sub">{card.hint}</span>
+                {sel && <span className="step-shot__card-badge">Set</span>}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* ── Subject ── */}
-      <div className="consolidated-step__section">
-        <div className="consolidated-step__label">Subject</div>
-        <div className="subject-chip-grid">
-          {filteredSubjects.map(s => (
-            <button
-              key={s.value}
-              type="button"
-              className={`subject-chip${subjectType === s.value ? ' subject-chip--selected' : ''}`}
-              onClick={() => {
-                dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: s.value });
-                // Mixed skin tone only applies to multi-person — clear it for single-person subjects
-                if (SINGLE_PERSON_SUBJECTS.includes(s.value) && skinTone === 'mixed') {
-                  dispatch({ type: 'SET_SKIN_TONE', skinTone: null });
-                }
-              }}
-            >
-              <span className="subject-chip__label">{s.label}</span>
-              {s.hint && <span className="subject-chip__hint">{s.hint}</span>}
-            </button>
-          ))}
-        </div>
-
-        {/* Skin tone inline */}
-        <div className="skin-tone-inline">
-          <span className="skin-tone-inline__label">Skin tone</span>
-          <span className="skin-tone-inline__optional">optional</span>
-          <div className="tone-row tone-row--compact">
-            {SKIN_TONES.map(t => (
+      {/* ── Skin tone (people subjects only) ── */}
+      {PEOPLE_SUBJECTS.includes(subjectType) && (
+        <>
+          <span className="step-shot__section-label">SKIN TONE</span>
+          <div className="step-shot__pills">
+            {SKIN_TONES.filter(t => !t.multiOnly || MULTI_SUBJECTS.includes(subjectType)).map(t => (
               <button
                 key={t.value}
-                className={`tone-chip tone-chip--small${skinTone === t.value ? ' tone-chip--selected' : ''}`}
-                onClick={() => {
-                  const next = skinTone === t.value ? null : t.value;
-                  dispatch({ type: 'SET_SKIN_TONE', skinTone: next });
-                  // Mixed always means multiple people — auto-promote to a multi-person subject if needed
-                  if (next === 'mixed' && (!subjectType || SINGLE_PERSON_SUBJECTS.includes(subjectType))) {
-                    const best = filteredSubjects.find(s => s.value === 'couple')
-                      || filteredSubjects.find(s => s.value === 'small_group');
-                    if (best) dispatch({ type: 'SET_SUBJECT_TYPE', subjectType: best.value });
-                  }
-                }}
+                className={`step-shot__pill step-shot__pill--tone${skinTone === t.value ? ' step-shot__pill--selected' : ''}`}
+                onClick={() => dispatch({
+                  type: 'SET_SKIN_TONE',
+                  skinTone: skinTone === t.value ? null : t.value,
+                })}
                 type="button"
               >
-                <span className="tone-chip__swatch" style={{ background: t.swatch }} />
-                <span>{t.label}</span>
+                <span className="step-shot__pill-swatch" style={{ background: t.swatch }} />
+                {t.label}
               </button>
             ))}
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* ── Style bias (master mode, collapsed — advanced option) ── */}
-      <div className="consolidated-step__section">
-        <button
-          type="button"
-          className="consolidated-step__toggle"
-          onClick={() => setStyleOpen(o => !o)}
-        >
-          <span>Style reference</span>
-          <span className="consolidated-step__toggle-hint">
-            {masterMode ? MODES.find(m => m.id === masterMode)?.label || 'Custom' : 'optional'}
-          </span>
-          <span className={`gear-category__arrow${styleOpen ? ' gear-category__arrow--open' : ''}`}>
-            {'\u25BC'}
-          </span>
-        </button>
-        {styleOpen && (
-          <div className="master-mode-compact">
-            {MODES.map(mode => (
-              <button
-                key={mode.id || 'default'}
-                className={`master-mode-chip${masterMode === mode.id ? ' master-mode-chip--selected' : ''}`}
-                onClick={() => dispatch({ type: 'SET_MASTER_MODE', masterMode: mode.id })}
-              >
-                <span className="master-mode-chip__icon">{mode.icon}</span>
-                <span className="master-mode-chip__text">
-                  <strong>{mode.label}</strong>
-                  <small>{mode.tagline}</small>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

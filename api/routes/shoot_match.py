@@ -265,6 +265,133 @@ async def upload_reference(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Multi-image merge — consensus analysis from individually-uploaded images
+# ═══════════════════════════════════════════════════════════════════════════
+
+class MergeAnalysesRequest(BaseModel):
+    """Input for /merge-analyses."""
+    imagePaths: List[str] = Field(
+        ..., min_length=2,
+        description="Server-side paths from /upload-reference responses.",
+    )
+
+
+@router.post("/merge-analyses")
+async def merge_analyses(
+    req: MergeAnalysesRequest,
+    request: Request,
+    user=Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Merge per-image analyses into a consensus view.
+
+    Runs analyze_image on each path (fast — results are cached in-process),
+    then extracts signals and builds a consensus: dominant pattern, average
+    contrast, modifier/light-count consensus, and per-image breakdown.
+
+    Frontend calls this after all individual uploads complete.
+    """
+    from engine.services.style_dna_service import _extract_image_signals
+
+    check_rate_limit("merge_analyses", request, limit=10, window=60)
+
+    if len(req.imagePaths) > 10:
+        raise HTTPException(status_code=422, detail="Maximum 10 images per merge.")
+
+    analysis_results = []
+    per_image = []
+    for path in req.imagePaths:
+        # Normalize web-relative paths
+        norm_path = path
+        if path.startswith('/') and not Path(path).exists():
+            norm_path = path.lstrip('/')
+        try:
+            ar = analyze_image(norm_path, run_extended=True, run_solver=False)
+            if ar.ok:
+                analysis_results.append(ar)
+                signals = _extract_image_signals(ar)
+                per_image.append({
+                    "path": path,
+                    "pattern": signals["pattern"] if signals else "unknown",
+                    "mood": signals["mood"] if signals else None,
+                    "modifier": signals["modifier"] if signals else None,
+                    "lightCount": signals["light_count"] if signals else 0,
+                    "keySide": signals["key_side"] if signals else "unknown",
+                    "confidence": signals["pattern_confidence"] if signals else 0,
+                })
+            else:
+                per_image.append({"path": path, "pattern": "failed", "error": "analysis_failed"})
+        except Exception:
+            logger.exception("Merge analyses — image failed: %s", path)
+            per_image.append({"path": path, "pattern": "failed", "error": "exception"})
+
+    if not analysis_results:
+        raise HTTPException(status_code=422, detail="All image analyses failed.")
+
+    # Build consensus from extracted signals
+    from collections import Counter
+
+    all_signals = [
+        sig for ar in analysis_results
+        if (sig := _extract_image_signals(ar)) is not None
+    ]
+    total = len(all_signals)
+
+    # Dominant pattern — confidence-weighted vote
+    pattern_votes: Counter = Counter()
+    for s in all_signals:
+        weight = s.get("pattern_confidence", 0.5)
+        pattern_votes[s["pattern"]] += weight
+    dominant_pattern = pattern_votes.most_common(1)[0][0] if pattern_votes else "unknown"
+
+    # Agreement score — what fraction voted for the dominant pattern
+    agreement = (
+        sum(1 for s in all_signals if s["pattern"] == dominant_pattern) / total
+        if total else 0
+    )
+
+    # Consensus mood — simple majority
+    mood_votes: Counter = Counter(s["mood"] for s in all_signals if s["mood"])
+    consensus_mood = mood_votes.most_common(1)[0][0] if mood_votes else None
+
+    # Average light count
+    light_counts = [s["light_count"] for s in all_signals if s["light_count"] > 0]
+    avg_lights = round(sum(light_counts) / len(light_counts), 1) if light_counts else 0
+
+    # Consensus modifier
+    mod_votes: Counter = Counter(s["modifier"] for s in all_signals if s["modifier"])
+    consensus_modifier = mod_votes.most_common(1)[0][0] if mod_votes else None
+
+    # Key side preference
+    side_votes: Counter = Counter(s["key_side"] for s in all_signals if s["key_side"] != "unknown")
+    key_side = side_votes.most_common(1)[0][0] if side_votes else "unknown"
+
+    # Average contrast
+    ratios = [s["contrast_ratio"] for s in all_signals if s.get("contrast_ratio")]
+    avg_contrast = round(sum(ratios) / len(ratios), 2) if ratios else None
+
+    return {
+        "status": "success",
+        "imageCount": total,
+        "consensus": {
+            "pattern": dominant_pattern,
+            "patternLabel": {
+                "rembrandt": "Rembrandt", "loop": "Loop", "butterfly": "Butterfly",
+                "split": "Split", "broad": "Broad", "short": "Short",
+                "flat": "Flat", "rim_only": "Rim Only", "high_key": "High Key",
+                "low_key": "Low Key", "natural_window": "Window Light",
+            }.get(dominant_pattern, dominant_pattern.replace("_", " ").title()),
+            "agreement": round(agreement, 2),
+            "mood": consensus_mood,
+            "modifier": consensus_modifier,
+            "lightCount": avg_lights,
+            "keySide": key_side,
+            "contrastRatio": avg_contrast,
+        },
+        "perImage": per_image,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Main shoot-match endpoint — thin HTTP layer
 # ═══════════════════════════════════════════════════════════════════════════
 

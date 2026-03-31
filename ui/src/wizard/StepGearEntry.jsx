@@ -4,7 +4,6 @@ import { LIGHT_CATALOG } from '../data/lightCatalog';
 import { MODIFIER_CATEGORIES } from '../data/modifierCatalog';
 import { getSupportByCategory } from '../data/supportCatalog';
 import { saveKit } from '../data/kitStore';
-import VendorLogo from '../components/VendorLogo';
 
 /* ── Quick Kit Presets (Good / Better / Best) ──────── */
 const QUICK_KITS = [
@@ -121,11 +120,15 @@ const QUICK_KITS = [
   },
 ];
 
+const TIER_COLORS = {
+  good:    'var(--color-text-secondary)',
+  better:  'var(--color-accent)',
+  best:    '#22c55e',
+  natural: '#eab308',
+};
+
 const TIER_LABELS = {
-  good: { label: 'Good', color: 'var(--color-text-secondary)' },
-  better: { label: 'Better ★', color: 'var(--color-accent)' },
-  best: { label: 'Best', color: '#22c55e' },
-  natural: { label: 'Natural', color: '#eab308' },
+  good: 'GOOD', better: 'BETTER', best: 'BEST', natural: 'NATURAL',
 };
 
 /* ── Gear profile recommendations by mood ──────────── */
@@ -149,40 +152,16 @@ const ENV_SUPPORT_AFFINITY = {
   on_location: ['c_stand_20', 'light_stand_10', 'sandbag_15', 'collapsible_bg', 'gaffer_tape', 'extension_25ft'],
 };
 
-/* ── Vendor recommendation reasons ──────────────────── */
-/** Short reason why this light works for the given mood / environment */
-const LIGHT_REASONS = {
-  // Speedlights
-  godox_v860iii: { beauty: 'reliable TTL, pairs well with octabox', corporate: 'portable, consistent output', cinematic: 'quick recycle for dramatic setups' },
-  godox_v1:      { beauty: 'round head for natural catchlights' },
-  profoto_a10:   { beauty: 'Profoto quality in a speedlight, precise control', editorial: 'reliable for on-location', corporate: 'professional color accuracy' },
-  profoto_a2:    { beauty: 'compact with Profoto color consistency' },
-  // Portable strobes
-  godox_ad300:   { beauty: 'consistent power for close-up work', corporate: 'portable studio quality', cinematic: 'enough output for dramatic ratios', editorial: 'reliable on location' },
-  godox_ad600:   { beauty: 'high output for large modifiers', editorial: 'overpowers ambient outdoors', cinematic: 'powers large modifiers for drama', high_key: 'enough power for white blowout' },
-  godox_ad400:   { beauty: 'flexible power range for fine-tuning', cinematic: 'versatile for key/fill ratios' },
-  profoto_b10x:  { beauty: 'industry standard for beauty, precise', editorial: 'portable pro quality', corporate: 'consistent skin tones', cinematic: 'reliable control for moody ratios' },
-  profoto_b10:   { beauty: 'compact precision, ideal for beauty', corporate: 'consistent output shoot to shoot' },
-  profoto_b1x:   { editorial: 'powerful on location', cinematic: 'reliable power for dramatic setups', high_key: 'high output for full white' },
-  elinchrom_five: { beauty: 'FIVE captures fast movement, great for beauty', cinematic: 'freeze motion without blur', editorial: 'crisp for action portraits' },
-  elinchrom_three: { beauty: 'compact with precise color temperature', corporate: 'consistent color across shots' },
-  westcott_fj400: { beauty: 'budget-friendly Bowens mount', corporate: 'reliable wireless TTL' },
-  // Studio strobes
-  profoto_d2:    { beauty: 'fastest flash duration for freeze skin', editorial: 'precise power for any ratio', cinematic: 'pro studio control' },
-  profoto_d3:    { beauty: 'best color accuracy, freeze motion', editorial: 'precise control at any power' },
-  // LED
-  godox_sl200ii: { natural: 'bicolor for window-matching, continuous', cinematic: 'adjustable CCT for mood' },
-  godox_sl150ii: { natural: 'daylight LED matches window light', corporate: 'no flicker for video-hybrid' },
-  aputure_600d:  { cinematic: 'cinema-quality output, precise', natural: 'daylight accurate for window looks' },
-  aputure_300d:  { cinematic: 'cinematic output, clean shadow control', natural: 'matches natural daylight' },
+/* ── Kit mood match mapping ─────────────────────────── */
+const MOOD_KIT_MAP = {
+  beauty:    ['better_beauty', 'best_three_light', 'video_better_aputure', 'video_good_single'],
+  cinematic: ['best_cinematic', 'better_portrait', 'video_best_600', 'video_better_3pt'],
+  corporate: ['better_portrait', 'best_three_light', 'video_better_aputure', 'video_better_3pt'],
+  editorial: ['best_cinematic', 'best_three_light'],
+  natural:   ['natural_window'],
+  high_key:  ['best_three_light', 'better_portrait'],
+  low_key:   ['best_cinematic', 'better_portrait'],
 };
-
-/** Get a reason string for why this item suits the current mood */
-function getLightReason(item, mood) {
-  const reasons = LIGHT_REASONS[item.value];
-  if (!reasons || !mood) return null;
-  return reasons[mood] || reasons['corporate'] || null; // fallback to corporate as generic
-}
 
 /** Group items within a category by vendor */
 function groupByVendor(items) {
@@ -198,20 +177,62 @@ function groupByVendor(items) {
   return groups;
 }
 
+/** Count lights + modifiers in a kit */
+function kitCounts(kit) {
+  const lights = kit.lights.reduce((s, l) => s + l.qty, 0);
+  const mods = kit.modifiers.reduce((s, m) => s + m.qty, 0);
+  return { lights, mods };
+}
+
+/** Get primary light name from catalog */
+function getPrimaryLightName(lights) {
+  if (!lights?.length) return null;
+  const first = lights[0];
+  for (const cat of LIGHT_CATALOG) {
+    const item = cat.items.find(i => i.value === first.type);
+    if (item) return `${item.vendor} ${item.model}`;
+  }
+  return first.type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || null;
+}
+
+// ─────────────────────────────────────────────────────────
+
 export default function StepGearEntry() {
   const { gear, mood, environment } = useAppState();
   const dispatch = useDispatch();
-  const [openCats, setOpenCats] = useState({});
-  const [openVendors, setOpenVendors] = useState({});
-  const [openModCats, setOpenModCats] = useState({});
-  const [kitSaved, setKitSaved] = useState(false);
-  const [kitsExpanded, setKitsExpanded] = useState(true);
+
+  const [activeTab, setActiveTab] = useState('photo');
   const [selectedKitId, setSelectedKitId] = useState(null);
-  const [videoKitsExpanded, setVideoKitsExpanded] = useState(true);
+  const [showGearBrowser, setShowGearBrowser] = useState(false);
+  const [kitSaved, setKitSaved] = useState(false);
+  const [gearFilter, setGearFilter] = useState('strobes');
+  const [gearSearch, setGearSearch] = useState('');
+  const [openVendors, setOpenVendors] = useState({});
 
-  /* ── Context-aware highlighting ────────────────────── */
+  /* ── Recommended kit: best match for mood ─────────── */
+  const recommendedKit = useMemo(() => {
+    const moodMatches = mood ? (MOOD_KIT_MAP[mood] || []) : [];
+    // Filter kits by current tab workflow
+    const tabKits = QUICK_KITS.filter(k => k.workflow === activeTab);
+    // First: mood-matched kit from current tab
+    const moodKit = tabKits.find(k => moodMatches.includes(k.id));
+    if (moodKit) return moodKit;
+    // Fallback: first "better" tier kit from current tab
+    return tabKits.find(k => k.tier === 'better') || tabKits[0] || null;
+  }, [mood, activeTab]);
 
-  /** Is this light a good match for the current mood? */
+  /* ── Other kits: everything except recommended ────── */
+  const otherKits = useMemo(() => {
+    const tabKits = QUICK_KITS.filter(k => k.workflow === activeTab);
+    if (!recommendedKit) return tabKits;
+    // Tier sort order: better > best > good > natural
+    const tierOrder = { better: 0, best: 1, good: 2, natural: 3 };
+    return tabKits
+      .filter(k => k.id !== recommendedKit.id)
+      .sort((a, b) => (tierOrder[a.tier] ?? 9) - (tierOrder[b.tier] ?? 9));
+  }, [activeTab, recommendedKit]);
+
+  /* ── Context-aware highlighting for gear browser ──── */
   const isLightRecommended = useMemo(() => {
     if (!mood) return () => false;
     const aff = MOOD_GEAR_AFFINITY[mood];
@@ -219,7 +240,6 @@ export default function StepGearEntry() {
     return (item) => aff.profiles.includes(item.gearProfile) && item.qualityTier >= aff.minTier;
   }, [mood]);
 
-  /** Is this modifier a good match for the current mood? */
   const isModRecommended = useMemo(() => {
     if (!mood) return () => false;
     return (item) => {
@@ -228,109 +248,133 @@ export default function StepGearEntry() {
     };
   }, [mood]);
 
-  /** Is this support item recommended for the environment? */
   const isSupportRecommended = useMemo(() => {
     if (!environment) return () => false;
     const recommended = ENV_SUPPORT_AFFINITY[environment] || [];
     return (item) => recommended.includes(item.value);
   }, [environment]);
 
-  /* ── Kit match: derive tier from owned lights ──────── */
-  const gearMatchSummary = useMemo(() => {
-    if (gear.lights.length === 0) return null;
-    // Build a flat lookup map of all catalogued lights by value
-    const lightMap = {};
-    LIGHT_CATALOG.forEach(cat => {
-      cat.items.forEach(item => { lightMap[item.value] = item; });
-    });
-    let bestTier = 0;
-    let moodMatched = false;
-    const aff = mood ? MOOD_GEAR_AFFINITY[mood] : null;
-    gear.lights.forEach(l => {
-      const info = lightMap[l.type];
-      if (!info) return;
-      if ((info.qualityTier || 0) > bestTier) bestTier = info.qualityTier || 0;
-      if (aff && aff.profiles.includes(info.gearProfile) && (info.qualityTier || 0) >= aff.minTier) {
-        moodMatched = true;
+  /* ── Gear browser: pill filter → flat vendor-grouped list ── */
+  const GEAR_PILLS = [
+    { key: 'strobes',      label: 'Strobes',      cats: ['portable_strobes', 'studio_strobes'] },
+    { key: 'led',          label: 'LED',           cats: ['led_continuous', 'led_panels'] },
+    { key: 'speedlights',  label: 'Speedlights',   cats: ['speedlights'] },
+    { key: 'modifiers',    label: 'Modifiers',      cats: [] },
+    { key: 'support',      label: 'Support',        cats: [] },
+    { key: 'accessories',  label: 'Accessories',    cats: ['specialty', 'triggers', 'light_meters'] },
+  ];
+
+  /** Items for the currently active gear pill, grouped by vendor */
+  const filteredGearGroups = useMemo(() => {
+    const q = gearSearch.toLowerCase().trim();
+    const pill = GEAR_PILLS.find(p => p.key === gearFilter);
+    if (!pill) return [];
+
+    let items = [];
+    let itemType = 'light'; // 'light' | 'modifier' | 'support'
+
+    if (pill.key === 'modifiers') {
+      itemType = 'modifier';
+      MODIFIER_CATEGORIES.forEach(cat => {
+        cat.items.forEach(m => {
+          items.push({ value: m.value, vendor: m.vendor || cat.label, model: m.label, subtitle: m.size || null, rec: isModRecommended(m), _type: 'modifier' });
+        });
+      });
+    } else if (pill.key === 'support') {
+      itemType = 'support';
+      getSupportByCategory().forEach(cat => {
+        cat.items.forEach(s => {
+          items.push({ value: s.value, vendor: s.vendor || 'Generic', model: s.label, subtitle: null, rec: isSupportRecommended(s), _type: 'support' });
+        });
+      });
+    } else {
+      LIGHT_CATALOG.filter(c => pill.cats.includes(c.category)).forEach(cat => {
+        cat.items.forEach(item => {
+          const wattage = item.wattseconds ? `${item.wattseconds}Ws` : item.wattage ? `${item.wattage}W` : null;
+          const catLabel = cat.label;
+          const subtitle = [wattage, catLabel].filter(Boolean).join(' \u00B7 ');
+          items.push({ value: item.value, vendor: item.vendor, model: item.model, subtitle, rec: isLightRecommended(item), _type: 'light' });
+        });
+      });
+    }
+
+    // Search filter
+    if (q) {
+      items = items.filter(i =>
+        i.model.toLowerCase().includes(q) ||
+        i.vendor.toLowerCase().includes(q) ||
+        (i.subtitle && i.subtitle.toLowerCase().includes(q))
+      );
+    }
+
+    // Group by vendor
+    const groups = [];
+    const seen = {};
+    for (const item of items) {
+      if (!seen[item.vendor]) {
+        seen[item.vendor] = { vendor: item.vendor, items: [] };
+        groups.push(seen[item.vendor]);
       }
+      seen[item.vendor].items.push(item);
+    }
+    return groups;
+  }, [gearFilter, gearSearch, mood, environment, isLightRecommended, isModRecommended, isSupportRecommended]);
+
+  /** Counts for collapsed categories in the gear browser */
+  const gearPillCounts = useMemo(() => {
+    const counts = {};
+    // Lights
+    LIGHT_CATALOG.forEach(cat => {
+      cat.items.forEach(item => {
+        const qty = gear.lights.find(l => l.type === item.value)?.qty || 0;
+        if (qty > 0) {
+          const pill = GEAR_PILLS.find(p => p.cats.includes(cat.category));
+          if (pill) counts[pill.key] = (counts[pill.key] || 0) + qty;
+        }
+      });
     });
-    let tier, label, color;
-    if (bestTier >= 4) { tier = 'best';   label = 'Best';    color = '#22c55e'; }
-    else if (bestTier >= 2) { tier = 'better'; label = 'Better'; color = 'var(--color-accent)'; }
-    else              { tier = 'good';   label = 'Good';    color = 'var(--color-text-secondary)'; }
-    const n = gear.lights.reduce((sum, l) => sum + l.qty, 0);
-    const moodLabel = mood ? mood.replace(/_/g, ' ') : null;
-    const sublabel = moodMatched && moodLabel
-      ? `${n} light${n > 1 ? 's' : ''} — ideal for ${moodLabel}`
-      : moodLabel
-        ? `${n} light${n > 1 ? 's' : ''} — try a matching kit for ${moodLabel}`
-        : `${n} light${n > 1 ? 's' : ''} owned`;
-    return { tier, label, color, sublabel };
-  }, [gear.lights, mood]);
+    // Modifiers
+    MODIFIER_CATEGORIES.forEach(cat => {
+      cat.items.forEach(m => {
+        const qty = gear.modifiers.find(gm => gm.type === m.value)?.qty || 0;
+        if (qty > 0) counts.modifiers = (counts.modifiers || 0) + qty;
+      });
+    });
+    // Support
+    getSupportByCategory().forEach(cat => {
+      cat.items.forEach(s => {
+        const qty = gear.support.find(gs => gs.type === s.value)?.qty || 0;
+        if (qty > 0) counts.support = (counts.support || 0) + qty;
+      });
+    });
+    return counts;
+  }, [gear]);
 
-  /* ── Quick kit relevance: highlight kits matching mood ── */
-  const kitMoodMatch = useMemo(() => {
-    if (!mood) return {};
-    const map = {
-      beauty:    ['better_beauty', 'best_three_light', 'video_better_aputure', 'video_good_single'],
-      cinematic: ['best_cinematic', 'better_portrait', 'video_best_600', 'video_better_3pt'],
-      corporate: ['better_portrait', 'best_three_light', 'video_better_aputure', 'video_better_3pt'],
-      editorial: ['best_cinematic', 'best_three_light'],
-      natural:   ['natural_window'],
-      high_key:  ['best_three_light', 'better_portrait'],
-      low_key:   ['best_cinematic', 'better_portrait'],
-    };
-    const matches = map[mood] || [];
-    const out = {};
-    matches.forEach(id => { out[id] = true; });
-    return out;
-  }, [mood]);
+  /* ── Helpers ──────────────────────────────────────── */
+  function lightQty(type) { return gear.lights.find(l => l.type === type)?.qty || 0; }
+  function modQty(type) { return gear.modifiers.find(m => m.type === type)?.qty || 0; }
+  function supportQty(type) { return gear.support.find(s => s.type === type)?.qty || 0; }
 
-  /* ── Standard helpers ──────────────────────────────── */
-
-  function toggleCat(cat) {
-    setOpenCats(prev => ({ ...prev, [cat]: !prev[cat] }));
+  function getItemQty(item) {
+    if (item._type === 'modifier') return modQty(item.value);
+    if (item._type === 'support') return supportQty(item.value);
+    return lightQty(item.value);
   }
 
-  function toggleVendor(key) {
-    setOpenVendors(prev => ({ ...prev, [key]: !prev[key] }));
+  function handleAddItem(item) {
+    if (item._type === 'modifier') dispatch({ type: 'ADD_MODIFIER', modifier: item.value });
+    else if (item._type === 'support') dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value });
+    else dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value });
   }
 
-  function toggleModCat(key) {
-    setOpenModCats(prev => ({ ...prev, [key]: !prev[key] }));
+  function handleItemDelta(item, delta) {
+    if (item._type === 'modifier') dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta });
+    else if (item._type === 'support') dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta });
+    else dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta });
   }
 
-  function lightQty(type) {
-    const item = gear.lights.find(l => l.type === type);
-    return item ? item.qty : 0;
-  }
-
-  function catCount(category) {
-    return category.items.reduce((sum, item) => sum + lightQty(item.value), 0);
-  }
-
-  function vendorCount(items) {
-    return items.reduce((sum, item) => sum + lightQty(item.value), 0);
-  }
-
-  function supportQty(type) {
-    const item = gear.support.find(s => s.type === type);
-    return item ? item.qty : 0;
-  }
-
-  function modQty(type) {
-    const item = gear.modifiers.find(m => m.type === type);
-    return item ? item.qty : 0;
-  }
-
-  function modCatCount(catItems) {
-    return catItems.reduce((sum, m) => sum + modQty(m.value), 0);
-  }
-
-  function handleSaveKit() {
-    saveKit(gear);
-    setKitSaved(true);
-    setTimeout(() => setKitSaved(false), 2000);
+  function toggleVendor(vendor) {
+    setOpenVendors(prev => ({ ...prev, [vendor]: !prev[vendor] }));
   }
 
   function loadQuickKit(kit) {
@@ -341,498 +385,261 @@ export default function StepGearEntry() {
     });
   }
 
+  function handleSaveKit() {
+    saveKit(gear);
+    setKitSaved(true);
+    setTimeout(() => setKitSaved(false), 2000);
+  }
+
   const totalLights = gear.lights.reduce((s, l) => s + l.qty, 0);
   const totalMods = gear.modifiers.reduce((s, m) => s + m.qty, 0);
   const totalSupport = gear.support.reduce((s, s2) => s + s2.qty, 0);
-
-  const lightCats = LIGHT_CATALOG.filter(c => c.section !== 'accessories');
-  const accessoryCats = LIGHT_CATALOG.filter(c => c.section === 'accessories');
-
-  // Photo kits: better first (preferred tier), then best, good, natural
-  // Video kits rendered separately below
-  const photoKitTiers = ['better', 'best', 'good', 'natural'];
+  const primaryLight = getPrimaryLightName(gear.lights);
 
   return (
     <>
-      <h2 className="screen-heading">With your gear, this becomes:</h2>
+      {/* ── Heading ── */}
+      <div className="qk-heading">
+        <span className="qk-heading__label">YOUR GEAR</span>
+        <h2 className="qk-heading__title">With your gear,{'\n'}this becomes:</h2>
+      </div>
 
-      {/* ── Kit Match indicator ──────────────────── */}
-      {gearMatchSummary && (
-        <div className="kit-match-bar" style={{ borderLeftColor: gearMatchSummary.color }}>
-          <span className="kit-match-bar__tier" style={{ color: gearMatchSummary.color }}>
-            {gearMatchSummary.label}
-          </span>
-          <span className="kit-match-bar__label">{gearMatchSummary.sublabel}</span>
-        </div>
-      )}
-
-      {/* ── Quick Kits — Photo ────────────────────── */}
-      <div className="gear-section">
+      {/* ── Photo | Video tab bar ── */}
+      <div className="qk-tabs">
         <button
           type="button"
-          className="gear-section__label gear-section__label--toggle"
-          onClick={() => setKitsExpanded(!kitsExpanded)}
+          className={`qk-tab${activeTab === 'photo' ? ' qk-tab--active' : ''}`}
+          onClick={() => setActiveTab('photo')}
         >
-          Photo Kits
-          <span className="gear-section__hint">Strobe &amp; speedlight setups</span>
-          <span className={`gear-category__arrow${kitsExpanded ? ' gear-category__arrow--open' : ''}`}>
-            {'\u25BC'}
-          </span>
+          Photo
         </button>
-        {kitsExpanded && (
-          <div className="quick-kits-tiers">
-            {photoKitTiers.map(tier => {
-              const tierKits = QUICK_KITS.filter(k => k.tier === tier && k.workflow === 'photo');
-              if (!tierKits.length) return null;
-              const t = TIER_LABELS[tier];
-              return (
-                <div className="quick-kits-tier" key={tier}>
-                  <div className="quick-kits-tier__label" style={{ color: t.color }}>{t.label}</div>
-                  <div className="quick-kits">
-                    {tierKits.map(kit => {
-                      const matched = kitMoodMatch[kit.id];
-                      const active = selectedKitId === kit.id;
-                      const lCount = kit.lights.reduce((s, l) => s + l.qty, 0);
-                      const mCount = kit.modifiers.reduce((s, m) => s + m.qty, 0);
-                      const kitParts = [];
-                      if (lCount) kitParts.push(`${lCount} light${lCount > 1 ? 's' : ''}`);
-                      if (mCount) kitParts.push(`${mCount} mod${mCount > 1 ? 's' : ''}`);
-                      return (
-                        <button
-                          key={kit.id}
-                          type="button"
-                          className={`quick-kit quick-kit--${kit.tier}${matched ? ' quick-kit--recommended' : ''}${active ? ' quick-kit--active' : ''}`}
-                          onClick={() => loadQuickKit(kit)}
-                        >
-                          <span className="quick-kit__name">
-                            {kit.label}
-                            {matched && <span className="quick-kit__match-dot" title="Matches your setup">{'\u2605'}</span>}
-                          </span>
-                          <span className="quick-kit__desc">{kit.desc}</span>
-                          {kitParts.length > 0 && <span className="quick-kit__counts">{kitParts.join(' · ')}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Quick Kits — Video / Continuous ──────── */}
-      <div className="gear-section">
         <button
           type="button"
-          className="gear-section__label gear-section__label--toggle"
-          onClick={() => setVideoKitsExpanded(!videoKitsExpanded)}
+          className={`qk-tab${activeTab === 'video' ? ' qk-tab--active' : ''}`}
+          onClick={() => setActiveTab('video')}
         >
-          Video Kits
-          <span className="gear-section__hint">Continuous LED setups</span>
-          <span className={`gear-category__arrow${videoKitsExpanded ? ' gear-category__arrow--open' : ''}`}>
-            {'\u25BC'}
-          </span>
+          Video
         </button>
-        {videoKitsExpanded && (
-          <div className="quick-kits-tiers">
-            {['better', 'best', 'good'].map(tier => {
-              const tierKits = QUICK_KITS.filter(k => k.tier === tier && k.workflow === 'video');
-              if (!tierKits.length) return null;
-              const t = TIER_LABELS[tier];
+      </div>
+
+      {/* ── RECOMMENDED featured card ── */}
+      {recommendedKit && (() => {
+        const c = kitCounts(recommendedKit);
+        const isActive = selectedKitId === recommendedKit.id;
+        return (
+          <>
+            <span className="qk-section-label qk-section-label--rec">RECOMMENDED</span>
+            <button
+              type="button"
+              className={`qk-featured${isActive ? ' qk-featured--active' : ''}`}
+              onClick={() => loadQuickKit(recommendedKit)}
+            >
+              <div className="qk-featured__top">
+                <span className="qk-featured__star">{'\u2605'}</span>
+                <span className="qk-featured__name">{recommendedKit.label}</span>
+              </div>
+              <span className="qk-featured__desc">{recommendedKit.desc}</span>
+              <div className="qk-featured__chips">
+                {c.lights > 0 && <span className="qk-chip">{c.lights} light{c.lights > 1 ? 's' : ''}</span>}
+                {c.mods > 0 && <span className="qk-chip">{c.mods} mod{c.mods > 1 ? 's' : ''}</span>}
+              </div>
+              <div className="qk-featured__bottom">
+                <span className="qk-featured__tier" style={{ color: TIER_COLORS[recommendedKit.tier] }}>
+                  {TIER_LABELS[recommendedKit.tier]}
+                </span>
+                <span className="qk-featured__match">Best match for your kit</span>
+              </div>
+            </button>
+          </>
+        );
+      })()}
+
+      {/* ── OTHER KITS compact rows ── */}
+      {otherKits.length > 0 && (
+        <>
+          <span className="qk-section-label">OTHER KITS</span>
+          <div className="qk-rows">
+            {otherKits.map(kit => {
+              const c = kitCounts(kit);
+              const isActive = selectedKitId === kit.id;
+              const parts = [];
+              if (c.lights) parts.push(`${c.lights} light${c.lights > 1 ? 's' : ''}`);
+              if (c.mods) parts.push(`${c.mods} mod${c.mods > 1 ? 's' : ''}`);
               return (
-                <div className="quick-kits-tier" key={tier}>
-                  <div className="quick-kits-tier__label" style={{ color: t.color }}>{t.label}</div>
-                  <div className="quick-kits">
-                    {tierKits.map(kit => {
-                      const matched = kitMoodMatch[kit.id];
-                      const active = selectedKitId === kit.id;
-                      const lCount = kit.lights.reduce((s, l) => s + l.qty, 0);
-                      const mCount = kit.modifiers.reduce((s, m) => s + m.qty, 0);
-                      const kitParts = [];
-                      if (lCount) kitParts.push(`${lCount} light${lCount > 1 ? 's' : ''}`);
-                      if (mCount) kitParts.push(`${mCount} mod${mCount > 1 ? 's' : ''}`);
-                      return (
-                        <button
-                          key={kit.id}
-                          type="button"
-                          className={`quick-kit quick-kit--${kit.tier}${matched ? ' quick-kit--recommended' : ''}${active ? ' quick-kit--active' : ''}`}
-                          onClick={() => loadQuickKit(kit)}
-                        >
-                          <span className="quick-kit__name">
-                            {kit.label}
-                            {matched && <span className="quick-kit__match-dot" title="Matches your setup">{'\u2605'}</span>}
-                          </span>
-                          <span className="quick-kit__desc">{kit.desc}</span>
-                          {kitParts.length > 0 && <span className="quick-kit__counts">{kitParts.join(' · ')}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Summary bar ─────────────────────────────── */}
-      {(totalLights > 0 || totalMods > 0 || totalSupport > 0) && (
-        <div className="gear-summary-bar">
-          {totalLights > 0 && <span className="gear-summary-bar__item">{totalLights} light{totalLights !== 1 ? 's' : ''}</span>}
-          {totalMods > 0 && <span className="gear-summary-bar__item">{totalMods} modifier{totalMods !== 1 ? 's' : ''}</span>}
-          {totalSupport > 0 && <span className="gear-summary-bar__item">{totalSupport} support</span>}
-        </div>
-      )}
-
-      {/* ── Lights ──────────────────────────────────── */}
-      <div className="gear-section">
-        <div className="gear-section__label">
-          Lights
-          {mood && <span className="gear-section__context">for {mood.replace(/_/g, ' ')}</span>}
-        </div>
-        {lightCats.map(cat => {
-          const isOpen = !!openCats[cat.category];
-          const count = catCount(cat);
-          const vendorGroups = groupByVendor(cat.items);
-          return (
-            <div className="gear-category" key={cat.category}>
-              <button
-                type="button"
-                className="gear-category__header"
-                onClick={() => toggleCat(cat.category)}
-              >
-                <span className="gear-category__icon">{cat.icon}</span>
-                <span className="gear-category__label">{cat.label}</span>
-                {count > 0 && <span className="gear-category__count">{count}</span>}
-                <span className={`gear-category__arrow${isOpen ? ' gear-category__arrow--open' : ''}`}>
-                  {'\u25BC'}
-                </span>
-              </button>
-              {isOpen && (
-                <div className="gear-category__items">
-                  {vendorGroups.map(group => {
-                    const vKey = `${cat.category}:${group.vendor}`;
-                    const vOpen = !!openVendors[vKey];
-                    const vCount = vendorCount(group.items);
-                    return (
-                      <div className="vendor-group" key={group.vendor}>
-                        <button
-                          type="button"
-                          className="vendor-group__header"
-                          onClick={() => toggleVendor(vKey)}
-                        >
-                          <VendorLogo name={group.vendor} />
-                          <span className="vendor-group__name">{group.vendor}</span>
-                          {vCount > 0 && <span className="vendor-group__count">{vCount}</span>}
-                          <span className={`vendor-group__arrow${vOpen ? ' vendor-group__arrow--open' : ''}`}>
-                            {'\u203A'}
-                          </span>
-                        </button>
-                        {vOpen && (
-                          <div className="mod-list">
-                            {group.items.map(item => {
-                              const qty = lightQty(item.value);
-                              const rec = isLightRecommended(item);
-                              return (
-                                <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
-                                  {rec && <span className="mod-list__dot" />}
-                                  <span className="mod-list__name">{item.model}</span>
-                                  {qty === 0 ? (
-                                    <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })} aria-label={`Add ${item.model}`}>+</button>
-                                  ) : (
-                                    <div className="mod-list__stepper">
-                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
-                                      <span>{qty}</span>
-                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })} aria-label="Add one">+</button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Modifiers (shapes the light) ────────────── */}
-      <div className="gear-section">
-        <div className="gear-section__label">
-          Modifiers
-          {mood && <span className="gear-section__context">for {mood.replace(/_/g, ' ')}</span>}
-        </div>
-        {MODIFIER_CATEGORIES.map(cat => {
-          const isOpen = !!openModCats[cat.key];
-          const count = modCatCount(cat.items);
-          return (
-            <div className="gear-category" key={cat.key}>
-              <button
-                type="button"
-                className="gear-category__header"
-                onClick={() => toggleModCat(cat.key)}
-              >
-                <span className="gear-category__label">{cat.label}</span>
-                {count > 0 && <span className="gear-category__count">{count}</span>}
-                <span className={`gear-category__arrow${isOpen ? ' gear-category__arrow--open' : ''}`}>
-                  {'\u25BC'}
-                </span>
-              </button>
-              {isOpen && (() => {
-                // Group by vendor if applicable
-                const hasVendors = cat.items.some(item => item.vendor);
-                const groups = hasVendors
-                  ? (() => {
-                      const seen = {};
-                      for (const item of cat.items) {
-                        const v = item.vendor || 'Generic';
-                        if (!seen[v]) seen[v] = [];
-                        seen[v].push(item);
-                      }
-                      return Object.entries(seen);
-                    })()
-                  : [['', cat.items]];
-
-                return (
-                  <div className="gear-category__items">
-                    {groups.map(([vendor, items]) => (
-                      <div key={vendor}>
-                        {vendor && <div className="gear-vendor-label">{vendor}</div>}
-                        <div className="mod-list">
-                          {items.map(item => {
-                            const qty = modQty(item.value);
-                            const rec = isModRecommended(item);
-                            return (
-                              <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
-                                {rec && <span className="mod-list__dot" />}
-                                <span className="mod-list__name">{item.label}</span>
-                                {qty === 0 ? (
-                                  <button
-                                    className="mod-list__add"
-                                    onClick={() => dispatch({ type: 'ADD_MODIFIER', modifier: item.value })}
-                                    type="button"
-                                    aria-label={`Add ${item.label}`}
-                                  >+</button>
-                                ) : (
-                                  <div className="mod-list__stepper">
-                                    <button type="button" onClick={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
-                                    <span>{qty}</span>
-                                    <button type="button" onClick={() => dispatch({ type: 'UPDATE_MODIFIER_QTY', modifier: item.value, delta: 1 })} aria-label="Add one">+</button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Support & Grip ──────────────────────────── */}
-      <div className="gear-section">
-        <div className="gear-section__label">
-          Support & Grip
-          {environment && <span className="gear-section__context">for {environment.replace(/_/g, ' ')}</span>}
-        </div>
-        {getSupportByCategory().map(cat => {
-          const isOpen = !!openCats[`support_${cat.key}`];
-          const count = cat.items.reduce((sum, item) => sum + supportQty(item.value), 0);
-          // Only use vendor sub-groups for categories with 3+ distinct branded vendors
-          const uniqueVendors = new Set(cat.items.map(i => i.vendor));
-          const brandedVendors = [...uniqueVendors].filter(v => v !== 'Generic');
-          const useVendorGroups = brandedVendors.length >= 3;
-
-          return (
-            <div className="gear-category" key={cat.key}>
-              <button
-                type="button"
-                className="gear-category__header"
-                onClick={() => toggleCat(`support_${cat.key}`)}
-              >
-                <span className="gear-category__label">{cat.label}</span>
-                {count > 0 && <span className="gear-category__count">{count}</span>}
-                <span className={`gear-category__arrow${isOpen ? ' gear-category__arrow--open' : ''}`}>
-                  {'\u25BC'}
-                </span>
-              </button>
-              {isOpen && !useVendorGroups && (
-                <div className="gear-category__items" style={{ padding: '4px 0 8px' }}>
-                  <div className="mod-list">
-                    {cat.items.map(item => {
-                      const qty = supportQty(item.value);
-                      const rec = isSupportRecommended(item);
-                      return (
-                        <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
-                          {rec && <span className="mod-list__dot" />}
-                          <span className="mod-list__name">{item.label}</span>
-                          {qty === 0 ? (
-                            <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })} aria-label={`Add ${item.label}`}>+</button>
-                          ) : (
-                            <div className="mod-list__stepper">
-                              <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
-                              <span>{qty}</span>
-                              <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })} aria-label="Add one">+</button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {isOpen && useVendorGroups && (() => {
-                const vendorGroups = [];
-                const vendorSeen = {};
-                for (const item of cat.items) {
-                  if (!vendorSeen[item.vendor]) {
-                    vendorSeen[item.vendor] = { vendor: item.vendor, items: [] };
-                    vendorGroups.push(vendorSeen[item.vendor]);
-                  }
-                  vendorSeen[item.vendor].items.push(item);
-                }
-                return (
-                <div className="gear-category__items">
-                  {vendorGroups.map(group => {
-                    const vKey = `support_${cat.key}:${group.vendor}`;
-                    const vOpen = vendorGroups.length === 1 || !!openVendors[vKey];
-                    const vCount = group.items.reduce((sum, item) => sum + supportQty(item.value), 0);
-                    return (
-                      <div className="vendor-group" key={group.vendor}>
-                        {vendorGroups.length > 1 && (
-                          <button
-                            type="button"
-                            className="vendor-group__header"
-                            onClick={() => toggleVendor(vKey)}
-                          >
-                            <VendorLogo name={group.vendor} />
-                          <span className="vendor-group__name">{group.vendor}</span>
-                            {vCount > 0 && <span className="vendor-group__count">{vCount}</span>}
-                            <span className={`vendor-group__arrow${vOpen ? ' vendor-group__arrow--open' : ''}`}>
-                              {'\u203A'}
-                            </span>
-                          </button>
-                        )}
-                        {vOpen && (
-                          <div className="mod-list">
-                            {group.items.map(item => {
-                              const qty = supportQty(item.value);
-                              const rec = isSupportRecommended(item);
-                              return (
-                                <div key={item.value} className={`mod-list__row${rec ? ' mod-list__row--rec' : ''}`}>
-                                  {rec && <span className="mod-list__dot" />}
-                                  <span className="mod-list__name">{item.label}</span>
-                                  {qty === 0 ? (
-                                    <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_SUPPORT_GEAR', supportType: item.value })} aria-label={`Add ${item.label}`}>+</button>
-                                  ) : (
-                                    <div className="mod-list__stepper">
-                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
-                                      <span>{qty}</span>
-                                      <button type="button" onClick={() => dispatch({ type: 'UPDATE_SUPPORT_QTY', supportType: item.value, delta: 1 })} aria-label="Add one">+</button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-              })()}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ── Accessories ─────────────────────────────── */}
-      {accessoryCats.length > 0 && (
-        <div className="gear-section">
-          <div className="gear-section__label">Accessories</div>
-          {accessoryCats.map(cat => {
-            const isOpen = !!openCats[cat.category];
-            const count = catCount(cat);
-            const vendorGroups = groupByVendor(cat.items);
-            return (
-              <div className="gear-category" key={cat.category}>
                 <button
+                  key={kit.id}
                   type="button"
-                  className="gear-category__header"
-                  onClick={() => toggleCat(cat.category)}
+                  className={`qk-row${isActive ? ' qk-row--active' : ''}`}
+                  onClick={() => loadQuickKit(kit)}
                 >
-                  <span className="gear-category__icon">{cat.icon}</span>
-                  <span className="gear-category__label">{cat.label}</span>
-                  {count > 0 && <span className="gear-category__count">{count}</span>}
-                  <span className={`gear-category__arrow${isOpen ? ' gear-category__arrow--open' : ''}`}>
-                    {'\u25BC'}
+                  <div className="qk-row__info">
+                    <span className="qk-row__name">{kit.label}</span>
+                    <span className="qk-row__counts">{parts.join(' \u00B7 ')}</span>
+                  </div>
+                  <span
+                    className="qk-row__tier"
+                    style={{
+                      color: TIER_COLORS[kit.tier],
+                      borderColor: TIER_COLORS[kit.tier],
+                    }}
+                  >
+                    {TIER_LABELS[kit.tier]}
                   </span>
                 </button>
-                {isOpen && (
-                  <div className="gear-category__items">
-                    {vendorGroups.map(group => {
-                      const vKey = `${cat.category}:${group.vendor}`;
-                      const vOpen = !!openVendors[vKey];
-                      const vCount = vendorCount(group.items);
-                      return (
-                        <div className="vendor-group" key={group.vendor}>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ── Add individual gear ── */}
+      <button
+        type="button"
+        className={`qk-browse-btn${showGearBrowser ? ' qk-browse-btn--open' : ''}`}
+        onClick={() => setShowGearBrowser(!showGearBrowser)}
+      >
+        <span className="qk-browse-btn__icon">{showGearBrowser ? '\u2212' : '+'}</span>
+        <div className="qk-browse-btn__text">
+          <span className="qk-browse-btn__title">Add individual gear</span>
+          <span className="qk-browse-btn__sub">Browse lights, modifiers, stands & more</span>
+        </div>
+      </button>
+
+      {/* ── Gear Browser (redesigned: search + pills + flat list) ── */}
+      {showGearBrowser && (
+        <div className="gb">
+          {/* Search */}
+          <div className="gb-search">
+            <svg className="gb-search__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              className="gb-search__input"
+              type="text"
+              placeholder="Search gear..."
+              value={gearSearch}
+              onChange={e => setGearSearch(e.target.value)}
+            />
+            {gearSearch && (
+              <button type="button" className="gb-search__clear" onClick={() => setGearSearch('')}>&times;</button>
+            )}
+          </div>
+
+          {/* Category pills */}
+          <div className="gb-pills">
+            {GEAR_PILLS.map(p => (
+              <button
+                key={p.key}
+                type="button"
+                className={`gb-pill${gearFilter === p.key ? ' gb-pill--active' : ''}`}
+                onClick={() => setGearFilter(p.key)}
+              >
+                {p.label}
+                {gearPillCounts[p.key] > 0 && gearFilter !== p.key && (
+                  <span className="gb-pill__badge">{gearPillCounts[p.key]}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Vendor-grouped items */}
+          <div className="gb-list">
+            {filteredGearGroups.map(group => {
+              const inKit = group.items.reduce((n, item) => n + getItemQty(item), 0);
+              const isOpen = openVendors[group.vendor] !== false; // default open
+              return (
+                <div key={group.vendor} className={`gb-vendor${isOpen ? '' : ' gb-vendor--collapsed'}`}>
+                  <button
+                    type="button"
+                    className="gb-vendor__header"
+                    onClick={() => toggleVendor(group.vendor)}
+                  >
+                    <span className={`gb-vendor__chevron${isOpen ? ' gb-vendor__chevron--open' : ''}`}>{'\u25B8'}</span>
+                    <span className="gb-vendor__name">{group.vendor}</span>
+                    {inKit > 0 && <span className="gb-vendor__count">{inKit} in kit</span>}
+                    <span className="gb-vendor__qty">{group.items.length}</span>
+                  </button>
+                  {isOpen && group.items.map(item => {
+                    const qty = getItemQty(item);
+                    return (
+                      <div
+                        key={item.value}
+                        className={`gb-item${qty > 0 ? ' gb-item--inkit' : ''}${item.rec && qty > 0 ? ' gb-item--rec' : ''}`}
+                      >
+                        {item.rec && <span className="gb-item__dot" />}
+                        <div className="gb-item__info">
+                          <span className={`gb-item__name${qty > 0 ? ' gb-item__name--active' : ''}`}>{item.model}</span>
+                          {item.subtitle && <span className="gb-item__sub">{item.subtitle}</span>}
+                        </div>
+                        {qty === 0 ? (
                           <button
                             type="button"
-                            className="vendor-group__header"
-                            onClick={() => toggleVendor(vKey)}
-                          >
-                            <VendorLogo name={group.vendor} />
-                          <span className="vendor-group__name">{group.vendor}</span>
-                            {vCount > 0 && <span className="vendor-group__count">{vCount}</span>}
-                            <span className={`vendor-group__arrow${vOpen ? ' vendor-group__arrow--open' : ''}`}>
-                              {'\u203A'}
-                            </span>
-                          </button>
-                          {vOpen && (
-                            <div className="mod-list">
-                              {group.items.map(item => {
-                                const qty = lightQty(item.value);
-                                return (
-                                  <div key={item.value} className="mod-list__row">
-                                    <span className="mod-list__name">{item.model}</span>
-                                    {qty === 0 ? (
-                                      <button className="mod-list__add" type="button" onClick={() => dispatch({ type: 'ADD_GEAR_LIGHT', lightType: item.value })} aria-label={`Add ${item.model}`}>+</button>
-                                    ) : (
-                                      <div className="mod-list__stepper">
-                                        <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: -1 })} aria-label="Remove one">&minus;</button>
-                                        <span>{qty}</span>
-                                        <button type="button" onClick={() => dispatch({ type: 'UPDATE_GEAR_QTY', lightType: item.value, delta: 1 })} aria-label="Add one">+</button>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                            className="gb-item__add"
+                            onClick={() => handleAddItem(item)}
+                            aria-label={`Add ${item.model}`}
+                          >+</button>
+                        ) : (
+                          <div className="gb-item__stepper">
+                            <button type="button" onClick={() => handleItemDelta(item, -1)} aria-label="Remove one">&minus;</button>
+                            <span>{qty}</span>
+                            <button type="button" onClick={() => handleItemDelta(item, 1)} aria-label="Add one">+</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+            {filteredGearGroups.length === 0 && gearSearch && (
+              <div className="gb-empty">No gear matching &ldquo;{gearSearch}&rdquo;</div>
+            )}
+          </div>
+
+          {/* Collapsed other categories */}
+          <div className="gb-others">
+            {GEAR_PILLS.filter(p => p.key !== gearFilter).map(p => (
+              <button
+                key={p.key}
+                type="button"
+                className="gb-other"
+                onClick={() => { setGearFilter(p.key); setGearSearch(''); }}
+              >
+                <span className="gb-other__name">{p.label}</span>
+                {gearPillCounts[p.key] > 0 && (
+                  <span className="gb-other__badge">{gearPillCounts[p.key]}</span>
                 )}
-              </div>
-            );
-          })}
+                <span className="gb-other__arrow">{'\u25B8'}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Save My Kit button consolidated into the sticky bottom bar "Save Kit →" */}
+      {/* ── YOUR SELECTION stats row ── */}
+      {(totalLights > 0 || totalMods > 0 || totalSupport > 0) && (
+        <div className="qk-selection">
+          <span className="qk-section-label" style={{ marginBottom: 0 }}>YOUR SELECTION</span>
+          <div className="qk-selection__row">
+            <div className="qk-selection__stat">
+              <span className="qk-selection__num">{totalLights}</span>
+              <span className="qk-selection__unit">lights</span>
+            </div>
+            <div className="qk-selection__stat">
+              <span className="qk-selection__num">{totalMods}</span>
+              <span className="qk-selection__unit">mods</span>
+            </div>
+            <div className="qk-selection__stat">
+              <span className="qk-selection__num">{totalSupport}</span>
+              <span className="qk-selection__unit">stands</span>
+            </div>
+            {primaryLight && (
+              <div className="qk-selection__primary">
+                <span className="qk-selection__primary-name">{primaryLight}</span>
+                <span className="qk-selection__primary-label">primary light</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

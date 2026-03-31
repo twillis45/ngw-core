@@ -141,6 +141,17 @@ def subscription_status(
         "stripe_subscription_id": None, "status": "none",
     }
 
+    # ── Admin bypass: internal emails are always paid ──
+    from db.provenance import get_internal_emails
+    jwt_email_early = user.get("email") if user else None
+    check_email = email or jwt_email_early
+    if check_email and check_email.strip().lower() in get_internal_emails():
+        return {
+            "is_paid": True, "plan": "studio", "billing_period": None,
+            "stripe_session_id": None, "stripe_customer_id": None,
+            "stripe_subscription_id": None, "status": "admin",
+        }
+
     def _paid_response(sub: dict) -> dict:
         return {
             "is_paid":               True,

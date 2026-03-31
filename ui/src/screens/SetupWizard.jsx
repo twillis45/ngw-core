@@ -2,8 +2,10 @@ import { useAppState, useDispatch } from '../context/AppContext';
 import { fetchShootMatch, uploadReferenceImage } from '../api';
 import { transformShootMatch } from '../transform';
 import WizardProgress from '../wizard/WizardProgress';
+import StepMood from '../wizard/StepMood';
 import StepTheShot from '../wizard/StepTheShot';
 import StepTheSpace from '../wizard/StepTheSpace';
+import StepTheGear from '../wizard/StepTheGear';
 import StepGearEntry from '../wizard/StepGearEntry';
 import StickyBottomBar from '../components/StickyBottomBar';
 import { criteriaForGear } from '../gearPresets';
@@ -12,8 +14,10 @@ import { saveKit } from '../data/kitStore';
 import useSettings from '../hooks/useSettings';
 
 const STEP_COMPONENTS = {
+  mood: StepMood,
   the_shot: StepTheShot,
   the_space: StepTheSpace,
+  the_gear: StepTheGear,
   gear_entry: StepGearEntry,
 };
 
@@ -40,13 +44,18 @@ function friendlyLightName(lightType) {
 
 function canAdvance(stepName, state) {
   switch (stepName) {
-    case 'the_shot': return !!state.mood && !!state.subjectType;
-    case 'the_space':
-      // If gear question is shown (no gearMode), cards auto-advance — no Next button
-      if (!state.gearMode) return false;
-      // Kit flow: need environment + ceiling
+    case 'mood': return !!state.mood;
+    case 'the_shot': return !!state.subjectType;
+    case 'the_space': {
       if (!state.environment) return false;
-      return OUTDOOR_ENVIRONMENTS.includes(state.environment) || !!state.ceilingHeight;
+      const envOk = OUTDOOR_ENVIRONMENTS.includes(state.environment) || !!state.ceilingHeight;
+      // When the_gear is a separate step, space just needs env + ceiling
+      if (state.wizardSteps?.includes('the_gear')) return envOk;
+      // Legacy: gear question embedded — need gearMode to advance
+      if (!state.gearMode) return false;
+      return envOk;
+    }
+    case 'the_gear': return !!state.gearMode;
     case 'gear_entry': {
       // Natural-light kits have 0 lights — allow proceeding with any gear (mods, support)
       const { lights, modifiers, support } = state.gear;
@@ -133,11 +142,15 @@ export default function SetupWizard() {
   const currentStepName = wizardSteps[wizardStep] || 'mood';
   const StepComponent = STEP_COMPONENTS[currentStepName];
   const isLastStep = wizardStep === wizardSteps.length - 1;
-  // Hide Next when gear cards handle navigation (the_space without gearMode set)
-  const showNextButton = !(currentStepName === 'the_space' && !state.gearMode);
+  // Hide Next when gear cards handle navigation
+  const showNextButton = !(currentStepName === 'the_space' && !state.gearMode && !state.wizardSteps?.includes('the_gear'))
+    && !(currentStepName === 'the_gear' && !state.gearMode);
 
   async function handleNext() {
-    if (isLastStep) {
+    // best_setup from gear step: always treat as final (skip gear_entry)
+    const effectiveLastStep = isLastStep
+      || (currentStepName === 'the_gear' && state.gearMode === 'best_setup');
+    if (effectiveLastStep) {
       // edit_kit intent: save gear and go back to my_kit
       if (state.intent === 'edit_kit') {
         saveKit(state.gear);
@@ -146,7 +159,7 @@ export default function SetupWizard() {
       }
 
       // Submit
-      dispatch({ type: 'SET_LOADING' });
+      dispatch({ type: 'SET_LOADING', mode: 'match' });
       try {
         // Build payload for /api/shoot-match
         const effectiveMood = state.mood || 'corporate';
@@ -210,22 +223,47 @@ export default function SetupWizard() {
 
   if (!StepComponent) return null;
 
-  const wizardTitle = state.intent === 'edit_kit' ? 'Edit Your Kit' : 'Build from Scratch';
+  const STEP_LABELS = ['The Vibe', 'The Shot', 'The Space', 'Your Gear'];
+  const stepLabel = STEP_LABELS[wizardStep] || '';
+  const nextLabel = (() => {
+    if (state.intent === 'edit_kit') return 'Save Kit';
+    if (isLastStep) {
+      // gear_entry is about confirming your kit — not the analyze action
+      if (currentStepName === 'gear_entry') return 'Confirm Gear';
+      return 'Analyze Now';
+    }
+    return `Next  \u2014  ${STEP_LABELS[wizardStep + 1] || ''}`;
+  })();
 
   return (
-    <div className="screen">
-      <h2 className="screen-heading">{wizardTitle}</h2>
+    <div className={`screen${showNextButton ? ' screen--has-footer' : ''}`}>
+      {/* ── Figma: Cancel + STEP x OF y header ── */}
+      <div className="wizard-header">
+        <button
+          type="button"
+          className="wizard-header__back"
+          onClick={wizardStep === 0
+            ? () => dispatch({ type: 'NAVIGATE', screen: 'home' })
+            : handleBack}
+        >
+          {wizardStep === 0 ? 'Cancel' : '< Back'}
+        </button>
+        <span className="wizard-header__step">
+          STEP {wizardStep + 1} OF {wizardSteps.length}
+        </span>
+        <span className="wizard-header__spacer" />
+      </div>
       <WizardProgress steps={wizardSteps} currentStep={wizardStep} />
       <StepComponent onNext={handleNext} />
 
       {showNextButton && (
         <StickyBottomBar>
           <button
-            className="btn btn--primary"
+            className="wizard-cta"
             disabled={!canAdvance(currentStepName, state)}
             onClick={handleNext}
           >
-            {isLastStep ? (state.intent === 'edit_kit' ? 'Save Kit \u2192' : 'Run this setup \u2192') : 'Next \u2192'}
+            {nextLabel}
           </button>
         </StickyBottomBar>
       )}

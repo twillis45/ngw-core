@@ -62,9 +62,11 @@ def classify_lighting_pattern(
     if gear in ("basic_2_light", "speedlight_2_light") and "dramatic" in m:
         return "rembrandt"
 
-    # Mood-based defaults when position/fill data isn't available
+    # Mood-based defaults when position/fill data isn't available.
+    # Never default to split — it requires hard 90° side evidence.
+    # Rembrandt is the safest dramatic default (45° key, triangle shadow).
     if m in ("cinematic", "low_key", "lowkey"):
-        return "split"
+        return "rembrandt"
     if m in ("corporate",):
         return "loop"
     if m in ("editorial",):

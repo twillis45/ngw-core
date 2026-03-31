@@ -2,7 +2,7 @@
  * Shoot Mode feedback-display mode store.
  *
  * Tracks HOW instructions are phrased — independently of the on-set role
- * (photographer / assistant / second_shooter).
+ * (photographer / assistant / learning).
  *
  * mode = "photographer" | "assistant" | "learning"
  *   photographer — conversational, includes brief reasoning  (default)

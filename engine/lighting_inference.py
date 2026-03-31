@@ -654,17 +654,43 @@ def infer_lighting_from_vision(
             ]
 
     # Split asymmetry gate: a genuine 90° side key produces strong left-right
-    # facial shadow asymmetry.  When a catchlight lands at 3/9 o'clock but
-    # the face is nearly evenly lit (left_right_asymmetry < 0.12), the
-    # catchlight is from a reflective surface (jewellery, glasses, specular
-    # clothing) — not the key light itself.  Demote to loop at the detected
-    # side so downstream pattern resolution can refine with nose-shadow data.
-    if pattern_result.get("pattern") == "split" and cue_report is not None:
-        _ls = getattr(cue_report, "light_structure", None)
-        _lra = getattr(_ls, "left_right_asymmetry", None)
-        if _lra is not None and _lra < 0.12:
-            # Identify which side the spurious catchlight was on so we keep
-            # the correct key direction.
+    # facial shadow asymmetry (typically 0.35+).  When a catchlight lands at
+    # 3/9 o'clock but the face is nearly evenly lit, the catchlight is from
+    # a reflective surface (jewellery, glasses, specular clothing, white
+    # garments) — not the key light itself.
+    #
+    # Threshold raised from 0.12→0.25: false splits kept leaking through
+    # with gold earrings / white blazers producing catchlights at 3/9
+    # o'clock on evenly-lit faces (e.g. paramount setups with symmetric
+    # illumination).  A real 90° side key produces asymmetry > 0.35.
+    if pattern_result.get("pattern") == "split":
+        _split_vetoed = False
+        _veto_reason = ""
+        _lra_val = None
+
+        if cue_report is not None:
+            _ls = getattr(cue_report, "light_structure", None)
+            _lra_val = getattr(_ls, "left_right_asymmetry", None)
+            if _lra_val is not None and _lra_val < 0.25:
+                _split_vetoed = True
+                _veto_reason = (
+                    f"Split rejected: catchlight at 3/9 o'clock but "
+                    f"left_right_asymmetry={_lra_val:.3f} (<0.25) contradicts "
+                    "90° side key. Catchlight likely from jewellery or "
+                    "reflective surface."
+                )
+        else:
+            # No cue_report — cannot verify shadow asymmetry.  Split is a
+            # high-bar classification; demote to unknown so downstream
+            # nose-shadow analysis can determine the real pattern.
+            _split_vetoed = True
+            _veto_reason = (
+                "Split rejected: no cue_report available to verify shadow "
+                "asymmetry. Catchlight at 3/9 o'clock may be from reflective "
+                "surface. Downgraded so nose-shadow can refine."
+            )
+
+        if _split_vetoed:
             _spurious_notes = pattern_result.get("notes", [])
             _side = "left" if any("9 o'clock" in n for n in _spurious_notes) else "right"
             _kpt = "30-45 off-axis left" if _side == "right" else "30-45 off-axis right"
@@ -673,9 +699,7 @@ def infer_lighting_from_vision(
             pattern_result["pattern_confidence"] = 0.30
             pattern_result["key_position_text"] = _kpt
             pattern_result["notes"] = [
-                f"Split rejected: catchlight at 3/9 o'clock but left_right_asymmetry={_lra:.3f} "
-                "(<0.12) contradicts 90° side key. Catchlight likely from jewellery or "
-                "reflective surface. Downgraded to loop; nose-shadow will refine."
+                f"{_veto_reason} Downgraded to loop; nose-shadow will refine."
             ]
 
     all_notes.extend(pattern_result.get("notes", []))
@@ -735,11 +759,38 @@ def infer_lighting_from_vision(
                     f"'{cue_pattern}' (confidence {setup_family.primary_confidence:.2f})."
                 )
             elif cue_pattern != "unknown" and cue_pattern != pattern_result["pattern"]:
-                # Disagreement — keep catchlight result, record alternative
-                all_notes.append(
-                    f"Cue-based analysis suggests '{cue_pattern}' but catchlights "
-                    f"indicate '{pattern_result['pattern']}' — using catchlight result."
-                )
+                # Disagreement — normally keep catchlight result, but when
+                # catchlights say "split" and shadow direction does NOT
+                # support a hard 90° side key (i.e. shadow is upper_left,
+                # upper_right, below, etc. instead of pure "left"/"right"),
+                # the catchlight at 3/9 o'clock is likely jewellery or a
+                # specular reflection.  Defer to the cue inference.
+                _sd = getattr(cue_report, "primary_shadow_direction", None)
+                _sd_dir = getattr(_sd, "direction", "unknown") if _sd else "unknown"
+                _hard_lateral = _sd_dir in ("left", "right")
+
+                if (
+                    pattern_result["pattern"] == "split"
+                    and not _hard_lateral
+                    and setup_family.primary_confidence >= 0.4
+                ):
+                    # Cue inference wins — catchlight-only split without
+                    # hard lateral shadow evidence is unreliable.
+                    pattern_result = dict(pattern_result)
+                    pattern_result["pattern"] = cue_pattern
+                    pattern_result["pattern_confidence"] = min(
+                        0.70, setup_family.primary_confidence * 0.8
+                    )
+                    all_notes.append(
+                        f"Catchlights suggest 'split' but shadow direction "
+                        f"is '{_sd_dir}' (not hard lateral) and cue analysis "
+                        f"suggests '{cue_pattern}' — overriding to '{cue_pattern}'."
+                    )
+                else:
+                    all_notes.append(
+                        f"Cue-based analysis suggests '{cue_pattern}' but catchlights "
+                        f"indicate '{pattern_result['pattern']}' — using catchlight result."
+                    )
                 for alt in setup_family.alternate_hypotheses:
                     all_notes.append(
                         f"Alternate hypothesis: {alt['hypothesis']} "

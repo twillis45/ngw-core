@@ -1,4 +1,6 @@
-import { createContext, useContext, useReducer } from 'react';
+import { createContext, useContext, useReducer, useCallback } from 'react';
+import { navHaptic, tapHaptic, successHaptic, warnHaptic } from '../utils/haptics';
+import { getUser } from '../data/authApi';
 
 /* -- default light factory (kept for backward compat) -- */
 
@@ -14,7 +16,7 @@ export function defaultLight() {
 
 /* -- wizard step sequences ----------------------------- */
 
-const MOOD_STEPS      = ['the_shot', 'the_space'];
+const MOOD_STEPS      = ['mood', 'the_shot', 'the_space', 'the_gear'];
 const KIT_STEPS       = ['gear_entry', 'the_shot', 'the_space'];
 const REF_MATCH_STEPS = ['the_shot', 'the_space'];
 const EDIT_KIT_STEPS  = ['gear_entry'];
@@ -45,10 +47,10 @@ function _ceilingFtToCategory(ft) {
 }
 
 const initialState = {
-  screen: 'welcome',       // 'welcome' | 'wizard' | 'loading' | 'results' | 'symptom' | 'auth' | ...
+  screen: 'home',           // 'home' | 'wizard' | 'loading' | 'results' | 'symptom' | 'auth' | ...
   history: [],
   symptomSlug: null,       // active symptom slug when screen === 'symptom'
-  user: null,               // { id, email, username } when logged in
+  user: getUser(),            // hydrate from localStorage so plan/admin checks work on first render
   appMode: null,            // 'build' | 'match' | 'shot_match' | 'shoot' | 'lab'
   intent: null,             // 'mood' | 'kit'
   wizardStep: 0,
@@ -74,7 +76,7 @@ const initialState = {
   refAnalysis: null,           // analysis from reference image upload
   labPendingImage: null,       // { file, preview, serverPath } — set by "Open in Lab" to pre-load WorkbenchTab
   pendingFix: null,            // { symptomSlug, fix, patternId, confidence, startedAt } — active fix flow
-  shootRole: null,             // 'photographer' | 'assistant' | 'second_shooter'
+  shootRole: null,             // 'photographer' | 'assistant' | 'learning'
   loading: false,
   apiResponse: null,
   result: null,
@@ -130,7 +132,7 @@ function reducer(state, action) {
       if (state.wizardStep <= 0) {
         // go back to welcome
         const hist = [...state.history];
-        const prev = hist.pop() || 'welcome';
+        const prev = hist.pop() || 'home';
         return {
           ...state,
           screen: prev,
@@ -185,6 +187,8 @@ function reducer(state, action) {
       } else {
         steps = steps.filter(s => s !== 'gear_entry');
       }
+      // For mood flow: when best_setup is picked on the_gear step, mark the_gear as last
+      // so the wizard knows to submit
       return { ...state, gearMode: action.mode, wizardSteps: steps };
     }
 
@@ -406,6 +410,7 @@ function reducer(state, action) {
       return {
         ...state,
         loading: true,
+        loadingMode: action.mode || null,   // 'analysis' | 'match' | null (auto-detect)
         error: null,
         screen: 'loading',
         history: [...state.history, state.screen],
@@ -419,6 +424,15 @@ function reducer(state, action) {
         apiResponse: action.apiResponse,
         error: null,
         screen: 'results',
+      };
+
+    // Inject result data without navigating away — for testing floor plan with lights
+    case 'SET_RESULT_SILENT':
+      return {
+        ...state,
+        result: action.result,
+        apiResponse: action.apiResponse || state.apiResponse,
+        error: null,
       };
 
     case 'SET_ERROR':
@@ -443,7 +457,7 @@ function reducer(state, action) {
 
     case 'GO_BACK': {
       const hist = [...state.history];
-      const prev = hist.pop() || 'welcome';
+      const prev = hist.pop() || 'home';
       return { ...state, screen: prev, history: hist };
     }
 
@@ -691,12 +705,21 @@ function _buildDemoInit(devModeUser) {
       const adminUser = params.get('admin') === '0'
         ? (devModeUser || null)
         : { id: 'dev-admin', email: 'todd@toddwillisphoto.com', username: 'Todd Willis' };
+      const galleryDemo = params.get('_gallery') === '1';
+      const demoImages = galleryDemo
+        ? [
+            DEMO_REF_IMAGE,
+            { preview: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&q=80', file: null, serverPath: 'static/demo/ref_sample2.jpg' },
+            { preview: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600&q=80', file: null, serverPath: 'static/demo/ref_sample3.jpg' },
+            { preview: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80', file: null, serverPath: 'static/demo/ref_sample4.jpg' },
+          ]
+        : [DEMO_REF_IMAGE];
       return {
         ...base,
         user: adminUser,
         screen: 'ref_eval',
-        referenceImage: DEMO_REF_IMAGE,
-        referenceImages: [DEMO_REF_IMAGE],
+        referenceImage: demoImages[0],
+        referenceImages: demoImages,
         refAnalysis: DEMO_ANALYSIS,
       };
     }
@@ -716,10 +739,39 @@ function _buildDemoInit(devModeUser) {
   return null;
 }
 
+/** Map action types to haptic patterns. */
+const HAPTIC_MAP = {
+  NAVIGATE:           navHaptic,
+  NAVIGATE_SYMPTOM:   navHaptic,
+  GO_BACK:            navHaptic,
+  SET_RESULT:         successHaptic,
+  SET_ERROR:          warnHaptic,
+  SET_APP_MODE:       tapHaptic,
+  SET_INTENT:         tapHaptic,
+  NEXT_STEP:          tapHaptic,
+  PREV_STEP:          tapHaptic,
+  SET_MOOD:           tapHaptic,
+  SET_SUBJECT:        tapHaptic,
+  SET_ENVIRONMENT:    tapHaptic,
+  SET_GEAR_MODE:      tapHaptic,
+  SET_SKIN_TONE:      tapHaptic,
+  TOGGLE_MODIFIER:    tapHaptic,
+  SET_REFERENCE_IMAGES: tapHaptic,
+};
+
 export function AppProvider({ children, devModeUser }) {
   const demoInit = _buildDemoInit(devModeUser);
   const init = demoInit || (devModeUser ? { ...initialState, user: devModeUser } : initialState);
-  const [state, dispatch] = useReducer(reducer, init);
+  const [state, rawDispatch] = useReducer(reducer, init);
+
+  const dispatch = useCallback((action) => {
+    const hapticFn = HAPTIC_MAP[action.type];
+    if (hapticFn) hapticFn();
+    rawDispatch(action);
+  }, []);
+
+  // DEV: expose dispatch for preview testing
+  if (typeof window !== 'undefined') { window.__ngw_dispatch = dispatch; window.__ngw_state = state; }
   return (
     <StateCtx.Provider value={state}>
       <DispatchCtx.Provider value={dispatch}>

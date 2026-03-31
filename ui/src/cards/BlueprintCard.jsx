@@ -8,6 +8,7 @@
  * Full version shown to paid users. Free users see the PaywallGate preview.
  */
 
+import { useState } from 'react';
 import CardIcon from '../components/CardIcon';
 import { getRoleColor } from '../lib/lightRoleColors';
 import useSettings from '../hooks/useSettings';
@@ -184,7 +185,34 @@ function LightRow({ light, index, isAssistant }) {
   );
 }
 
+/** Compact light summary for collapsed blueprint view. */
+function LightSummary({ light }) {
+  const { units, powerDisplay } = useSettings();
+  const role = (light.role || 'key').toLowerCase();
+  const label = ROLE_LABELS[role] || light.label || light.role;
+  const roleColor = getRoleColor(role);
+  const modifier = light.modifier || '';
+  const BARE_TOKENS_SET = new Set(['bare', 'bare_bulb', 'bare bulb', 'direct', 'none', 'unknown', 'modifier not detected', '']);
+  const isBare = BARE_TOKENS_SET.has(modifier.toLowerCase().trim());
+  const modSize = light.modifierSize ? ` (${light.modifierSize})` : '';
+  const displayMod = isBare ? '' : (modifier + modSize);
+  const dist = units === 'metric' ? light.distanceM : light.distanceFt;
+  const specs = [dist, light.positionText].filter(Boolean).join(' · ');
+
+  return (
+    <div className="blueprint-summary">
+      <div className="blueprint-summary__role-row">
+        <span className="blueprint-summary__dot" style={{ background: roleColor }} />
+        <span className="blueprint-summary__role" style={{ color: roleColor }}>{label.toUpperCase()}</span>
+      </div>
+      <p className="blueprint-summary__name">{displayMod || light.type || 'Light'}</p>
+      {specs && <p className="blueprint-summary__specs">{specs}</p>}
+    </div>
+  );
+}
+
 export default function BlueprintCard({ lights, lightingIntelligence, cameraSettings, lightType, lightTypeNote, mode, twoHostSetup }) {
+  const [expanded, setExpanded] = useState(false);
   if (!lights || lights.length === 0) return null;
 
   const cam = cameraSettings;
@@ -199,93 +227,124 @@ export default function BlueprintCard({ lights, lightingIntelligence, cameraSett
         <span className="blueprint-card__badge">Paid</span>
       </div>
 
-      {!isAssistant && twoHostSetup && (
-        <div className="blueprint-two-host-note">
-          <strong>2-Host Crossed Key</strong> — each light is the other host's fill. Match outputs exactly or one host reads overlit.
-        </div>
-      )}
-      {!isAssistant && !twoHostSetup && (
-        <p className="blueprint-card__intro">
-          Positions, modifiers, and power ratios — designed for repeatable results.
-        </p>
-      )}
-
-      {/* Light stack */}
-      <div className="blueprint-lights">
-        {lights.map((light, i) => (
-          <LightRow key={i} light={light} index={i} isAssistant={isAssistant} />
-        ))}
-      </div>
-
-      {/* Camera settings inline */}
-      {cam && (
-        <div className="blueprint-camera">
-          <div className="blueprint-camera__header">Camera Settings</div>
-          <div className="blueprint-camera__grid">
-            {cam.aperture && (
-              <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">
-                  Aperture
-                  <HelpTip text={CAMERA_FIELD_TIPS.Aperture} side="below" />
-                </span>
-                <span className="blueprint-camera__val">{cam.aperture}</span>
-              </div>
-            )}
-            {cam.iso && (
-              <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">
-                  ISO
-                  <HelpTip text={CAMERA_FIELD_TIPS.ISO} side="below" />
-                </span>
-                <span className="blueprint-camera__val">{cam.iso}</span>
-              </div>
-            )}
-            {cam.shutter && (
-              <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">
-                  Shutter
-                  <HelpTip text={CAMERA_FIELD_TIPS.Shutter} side="below" />
-                </span>
-                <span className="blueprint-camera__val">{cam.shutter}</span>
-              </div>
-            )}
-            {cam.wb && (
-              <div className="blueprint-camera__item">
-                <span className="blueprint-camera__key">
-                  WB
-                  <HelpTip text={CAMERA_FIELD_TIPS.WB} side="below" />
-                </span>
-                <span className={`blueprint-camera__val ${wbTempClass(cam.wb)}`}>{cam.wb}</span>
-                <WBSpectrum wb={cam.wb} />
-              </div>
-            )}
+      {/* Collapsed view — compact light summaries */}
+      {!expanded && (
+        <>
+          <div className="blueprint-summaries">
+            {lights.map((light, i) => (
+              <LightSummary key={i} light={light} />
+            ))}
           </div>
-          {li?.detectedCCT && (
-            <div className={`blueprint-camera__cct ${wbTempClass(String(li.detectedCCT))}`}>
-              Detected colour temp: <strong>{li.detectedCCT} K</strong>
+          <button
+            className="blueprint-expand-btn"
+            onClick={() => setExpanded(true)}
+            type="button"
+          >
+            Setup Details ›
+          </button>
+        </>
+      )}
+
+      {/* Expanded view — full blueprint */}
+      {expanded && (
+        <>
+          {!isAssistant && twoHostSetup && (
+            <div className="blueprint-two-host-note">
+              <strong>2-Host Crossed Key</strong> — each light is the other host's fill. Match outputs exactly or one host reads overlit.
             </div>
           )}
-        </div>
-      )}
+          {!isAssistant && !twoHostSetup && (
+            <p className="blueprint-card__intro">
+              Positions, modifiers, and power ratios — designed for repeatable results.
+            </p>
+          )}
 
-      {/* Background / subject notes — suppressed in assistant mode (data only) */}
-      {!isAssistant && li?.fillMethod && (
-        <div className="blueprint-note">
-          <span className="blueprint-note__label">Fill method:</span> {li.fillMethod}
-        </div>
-      )}
+          {/* Light stack */}
+          <div className="blueprint-lights">
+            {lights.map((light, i) => (
+              <LightRow key={i} light={light} index={i} isAssistant={isAssistant} />
+            ))}
+          </div>
 
-      {/* Light type note — shown when recipe has a strong strobe or continuous preference */}
-      {!isAssistant && lightTypeNote && (
-        <div className={`blueprint-light-type-note blueprint-light-type-note--${lightType || 'both'}`}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-            {lightType === 'continuous'
-              ? <><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></>
-              : <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>
-            }
-          </svg>
-          <span>{lightTypeNote}</span>
-        </div>
+          {/* Camera settings inline */}
+          {cam && (
+            <div className="blueprint-camera">
+              <div className="blueprint-camera__header">Camera Settings</div>
+              <div className="blueprint-camera__grid">
+                {cam.aperture && (
+                  <div className="blueprint-camera__item">
+                    <span className="blueprint-camera__key">
+                      Aperture
+                      <HelpTip text={CAMERA_FIELD_TIPS.Aperture} side="below" />
+                    </span>
+                    <span className="blueprint-camera__val">{cam.aperture}</span>
+                  </div>
+                )}
+                {cam.iso && (
+                  <div className="blueprint-camera__item">
+                    <span className="blueprint-camera__key">
+                      ISO
+                      <HelpTip text={CAMERA_FIELD_TIPS.ISO} side="below" />
+                    </span>
+                    <span className="blueprint-camera__val">{cam.iso}</span>
+                  </div>
+                )}
+                {cam.shutter && (
+                  <div className="blueprint-camera__item">
+                    <span className="blueprint-camera__key">
+                      Shutter
+                      <HelpTip text={CAMERA_FIELD_TIPS.Shutter} side="below" />
+                    </span>
+                    <span className="blueprint-camera__val">{cam.shutter}</span>
+                  </div>
+                )}
+                {cam.wb && (
+                  <div className="blueprint-camera__item">
+                    <span className="blueprint-camera__key">
+                      WB
+                      <HelpTip text={CAMERA_FIELD_TIPS.WB} side="below" />
+                    </span>
+                    <span className={`blueprint-camera__val ${wbTempClass(cam.wb)}`}>{cam.wb}</span>
+                    <WBSpectrum wb={cam.wb} />
+                  </div>
+                )}
+              </div>
+              {li?.detectedCCT && (
+                <div className={`blueprint-camera__cct ${wbTempClass(String(li.detectedCCT))}`}>
+                  Detected colour temp: <strong>{li.detectedCCT} K</strong>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Background / subject notes — suppressed in assistant mode (data only) */}
+          {!isAssistant && li?.fillMethod && (
+            <div className="blueprint-note">
+              <span className="blueprint-note__label">Fill method:</span> {li.fillMethod}
+            </div>
+          )}
+
+          {/* Light type note — shown when recipe has a strong strobe or continuous preference */}
+          {!isAssistant && lightTypeNote && (
+            <div className={`blueprint-light-type-note blueprint-light-type-note--${lightType || 'both'}`}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                {lightType === 'continuous'
+                  ? <><rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/></>
+                  : <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>
+                }
+              </svg>
+              <span>{lightTypeNote}</span>
+            </div>
+          )}
+
+          <button
+            className="blueprint-expand-btn"
+            onClick={() => setExpanded(false)}
+            type="button"
+          >
+            Collapse ‹
+          </button>
+        </>
       )}
     </div>
   );

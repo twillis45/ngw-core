@@ -13,7 +13,7 @@ const BASE = '/api';
  *
  * @param {object} result  - Full result from shoot-match (from AppContext)
  * @param {string} [ceilingHeight] - Ceiling key: "low"/"normal"/"high"/"very_high"
- * @param {string} [role]  - "photographer" | "assistant" | "second_shooter"
+ * @param {string} [role]  - "photographer" | "assistant" | "learning"
  * @param {{ lengthFt: number, widthFt: number, ceilingFt: number }} [roomDimensions]
  * @returns {Promise<object>} { status, sessionId, metadata, steps[] }
  */

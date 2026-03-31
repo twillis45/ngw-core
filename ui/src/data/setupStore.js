@@ -32,8 +32,38 @@ export function loadSetups() {
   }
 }
 
+/**
+ * Fingerprint a setup result for duplicate detection.
+ * Two setups are "the same" when they share the same lighting pattern,
+ * system id, and the same set of light roles + modifiers.
+ */
+function _setupFingerprint(result) {
+  if (!result) return '';
+  const pattern = result.bestMatch?.lightingPattern || '';
+  const sysId   = result.bestMatch?.systemId || '';
+  const lights  = (result.setup?.lights || [])
+    .map(l => `${l._role || l.role}:${l._modifierType || l.modifier || ''}`)
+    .sort()
+    .join('|');
+  return `${pattern}::${sysId}::${lights}`;
+}
+
 export function saveSetup(entry) {
   const all = loadSetups();
+
+  // ── Duplicate check ──
+  const fp = _setupFingerprint(entry.result);
+  if (fp) {
+    const existing = all.find(s => _setupFingerprint(s.result) === fp);
+    if (existing) {
+      // Exact duplicate — just bump the timestamp, don't create a new entry
+      existing.timestamp = Date.now();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+      _broadcast();
+      return all;
+    }
+  }
+
   const newEntry = {
     id: `setup-${Date.now()}`,
     name: entry.name,

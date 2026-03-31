@@ -13,8 +13,16 @@ import { trackEvent } from '../data/analytics';
 export default function QuickFixesCard({ fixes, isPaid, onUnlock }) {
   if (!fixes || fixes.length === 0) return null;
 
-  const priorityFixes = fixes.filter(f => f.priority);
-  const otherFixes    = fixes.filter(f => !f.priority);
+  // Normalize: some sources send plain strings instead of {problem, fix} objects.
+  // Convert strings and filter out blanks.
+  const normalized = fixes
+    .map(f => typeof f === 'string' ? { problem: f, fix: '' } : f)
+    .filter(f => f && (f.problem || f.fix || f.text));
+
+  if (normalized.length === 0) return null;
+
+  const priorityFixes = normalized.filter(f => f.priority);
+  const otherFixes    = normalized.filter(f => !f.priority);
   const [expanded, setExpanded] = useState(false);
 
   /* Priority first, then others */

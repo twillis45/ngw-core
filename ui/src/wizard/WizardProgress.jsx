@@ -1,15 +1,8 @@
 export default function WizardProgress({ steps, currentStep }) {
+  const pct = ((currentStep + 1) / steps.length) * 100;
   return (
-    <div className="wizard-dots">
-      {steps.map((_, i) => (
-        <div
-          key={i}
-          className={`wizard-dots__dot${
-            i === currentStep ? ' wizard-dots__dot--active' :
-            i < currentStep ? ' wizard-dots__dot--done' : ''
-          }`}
-        />
-      ))}
+    <div className="wizard-bar">
+      <div className="wizard-bar__fill" style={{ width: `${pct}%` }} />
     </div>
   );
 }

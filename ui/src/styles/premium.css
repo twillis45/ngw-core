@@ -1,0 +1,694 @@
+/* ── NGW Premium Components ─────────────────────────────────────────────────
+   Styles for the Result Screen + Paywall redesign.
+   All class names use ngw- prefix to avoid collision with existing styles.
+   Uses tokens from theme/tokens.css.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* ── Score Badge ─────────────────────────────────────────────────────────── */
+.ngw-score-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.ngw-score-badge--sm .ngw-score-badge__value { font-size: 2rem; }
+.ngw-score-badge--lg .ngw-score-badge__value {
+  font-size: clamp(2.75rem, 2.4rem + 1.2vw, 3.5rem);
+  font-weight: var(--weight-bold, 700);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-family: var(--font-mono, monospace);
+}
+.ngw-score-badge__status {
+  font-size: var(--text-sm, 0.875rem);
+  color: rgba(240, 240, 240, 0.55);
+  font-weight: var(--weight-normal, 400);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+/* ── Section Label ───────────────────────────────────────────────────────── */
+.ngw-section-label {
+  display: block;
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-medium, 500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 240, 0.3);
+  margin-bottom: var(--space-sm, 8px);
+}
+
+/* ── Primary Button ──────────────────────────────────────────────────────── */
+.ngw-primary-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 52px;
+  background: var(--color-premium-cta, #C8A96E);
+  color: #0C0C0C;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: var(--weight-semibold, 600);
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 0 var(--space-lg, 16px);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.ngw-primary-btn:hover { opacity: 0.92; }
+.ngw-primary-btn:active { opacity: 0.88; }
+.ngw-primary-btn:focus-visible {
+  outline: 2px solid var(--color-premium-cta, #C8A96E);
+  outline-offset: 3px;
+}
+.ngw-primary-btn--loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+.ngw-primary-btn--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: default;
+}
+.ngw-primary-btn--full { width: 100%; }
+
+/* ── Bottom Sheet ────────────────────────────────────────────────────────── */
+.ngw-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  transition: opacity 240ms ease;
+  z-index: 299;
+  pointer-events: none;
+}
+.ngw-sheet-backdrop--open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ngw-bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 92dvh;
+  background: var(--color-surface-elevated); /* always dark — premium surfaces never invert */
+  color-scheme: dark;
+  border-radius: 24px 24px 0 0;
+  transform: translateY(100%);
+  transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  overflow-y: auto;
+  overflow-x: hidden;
+  z-index: 300;
+  padding-bottom: calc(var(--space-xl, 20px) + env(safe-area-inset-bottom, 0px));
+  will-change: transform;
+}
+.ngw-bottom-sheet--open {
+  transform: translateY(0);
+}
+.ngw-bottom-sheet__handle-bar {
+  width: 36px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  margin: 12px auto 0;
+}
+.ngw-bottom-sheet__close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 50%;
+  color: rgba(240, 240, 240, 0.6);
+  cursor: pointer;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.ngw-bottom-sheet__close:active { opacity: 0.7; }
+.ngw-bottom-sheet__inner {
+  padding: var(--space-2xl, 24px) var(--space-lg, 16px) 0;
+}
+
+/* ── Result Hero Strip ───────────────────────────────────────────────────── */
+.ngw-hero {
+  position: relative;
+  width: 100%;
+  height: 46dvh;
+  min-height: 260px;
+  max-height: 420px;
+  overflow: hidden;
+  background: var(--color-surface); /* always dark — premium surfaces never invert */
+  border-radius: 0 0 24px 24px;
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-hero--no-image {
+  height: auto;
+  min-height: unset;
+  max-height: unset;
+  padding: var(--space-xl, 20px) var(--space-lg, 16px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: var(--color-surface); /* always dark — premium surfaces never invert */
+}
+/* Technical dot texture — adds depth to no-image hero without photos */
+.ngw-hero--no-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.04) 1px, transparent 0);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Warm gold accent glow — bottom right — premium signature */
+.ngw-hero--no-image::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 100%;
+  background: radial-gradient(ellipse at 70% 100%, rgba(200, 169, 110, 0.08) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+.ngw-hero--no-image .ngw-hero__overlay {
+  position: relative;
+  z-index: 1;
+}
+.ngw-hero__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+}
+.ngw-hero__gradient {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72%;
+  background: linear-gradient(to top, rgba(12,12,12,0.96) 0%, rgba(12,12,12,0.4) 55%, rgba(12,12,12,0) 100%);
+  pointer-events: none;
+}
+.ngw-hero__overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--space-lg, 16px) var(--space-lg, 16px) var(--space-xl, 20px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md, 12px);
+}
+.ngw-hero--no-image .ngw-hero__overlay {
+  position: static;
+  padding: 0;
+}
+.ngw-hero__text {
+  flex: 1;
+  min-width: 0;
+}
+.ngw-hero__pattern-name {
+  font-size: clamp(1.5rem, 5.5vw, 2.5rem);
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 8px;
+}
+.ngw-hero__status {
+  font-size: var(--text-base, 1rem);
+  color: rgba(240, 240, 240, 0.75);
+  line-height: 1.4;
+  font-weight: var(--weight-medium, 500);
+}
+.ngw-hero__score-side {
+  flex-shrink: 0;
+  text-align: right;
+}
+.ngw-hero__score-bar-row {
+  margin-top: var(--space-sm, 8px);
+  padding: 0 var(--space-lg, 16px) var(--space-md, 12px);
+}
+.ngw-hero__score-bar {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.ngw-hero__score-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Look Summary Inline Grid ────────────────────────────────────────────── */
+.ngw-look-summary {
+  padding: 0 var(--space-lg, 16px);
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-look-summary__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm, 8px) var(--space-md, 12px);
+}
+.ngw-look-summary__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ngw-look-summary__label {
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.3);
+  font-weight: var(--weight-medium, 500);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.ngw-look-summary__value {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text);
+  font-weight: var(--weight-normal, 400);
+  line-height: 1.3;
+}
+
+/* ── Blueprint Card (Premium) ────────────────────────────────────────────── */
+.ngw-blueprint-card {
+  margin: 0 var(--space-lg, 16px) var(--space-xl, 20px);
+  background: var(--color-surface); /* always dark — premium surfaces never invert */
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.ngw-blueprint-card--free {
+  cursor: pointer;
+  position: relative;
+}
+.ngw-blueprint-card--free:active { opacity: 0.9; }
+.ngw-blueprint-card--free:focus-visible {
+  outline: 2px solid var(--color-premium-cta, #C8A96E);
+  outline-offset: 2px;
+}
+.ngw-blueprint-card--loading {
+  min-height: 200px;
+}
+.ngw-blueprint-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xl, 20px) var(--space-xl, 20px) var(--space-md, 12px);
+}
+.ngw-blueprint-card__pro-chip {
+  font-size: 11px;
+  font-weight: var(--weight-medium, 500);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-score-success, #4CAF7D);
+  background: rgba(76, 175, 125, 0.12);
+  border-radius: 8px;
+  padding: 3px 8px;
+}
+.ngw-blueprint-card__lights {
+  padding: 0 var(--space-xl, 20px) var(--space-md, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+}
+.ngw-blueprint-card__no-data {
+  color: rgba(240, 240, 240, 0.35);
+  font-size: var(--text-sm, 0.875rem);
+}
+.ngw-blueprint-card__light {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: var(--space-sm, 8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.ngw-blueprint-card__light:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.ngw-blueprint-card__light-role {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: var(--weight-medium, 500);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(240, 240, 240, 0.4);
+}
+.ngw-blueprint-card__light-visible {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--space-sm, 8px);
+}
+.ngw-blueprint-card__light-field {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--color-text);
+  line-height: 1.4;
+}
+.ngw-blueprint-card__light-locked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--space-sm, 8px);
+  margin-top: 2px;
+}
+.ngw-blueprint-card__field-blurred {
+  font-size: var(--text-sm, 0.875rem);
+  color: rgba(200, 169, 110, 0.6);
+  filter: blur(5px);
+  user-select: none;
+  pointer-events: none;
+  background: rgba(200, 169, 110, 0.06);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.4;
+}
+.ngw-blueprint-card__lock-banner {
+  margin: 0 var(--space-xl, 20px);
+  padding: var(--space-md, 12px) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm, 8px);
+}
+.ngw-blueprint-card__lock-text {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-premium-accent, #C8A96E);
+  line-height: 1.4;
+  flex: 1;
+}
+.ngw-blueprint-card__cta-wrap {
+  padding: var(--space-sm, 8px) var(--space-xl, 20px) var(--space-xl, 20px);
+}
+/* Skeleton shimmer */
+.ngw-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: ngw-shimmer 1.4s ease-in-out infinite;
+  border-radius: 8px;
+}
+@keyframes ngw-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Quick Fixes List ────────────────────────────────────────────────────── */
+.ngw-quick-fixes {
+  padding: 0 var(--space-lg, 16px);
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-quick-fixes__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+}
+.ngw-quick-fixes__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm, 8px);
+  font-size: var(--text-sm, 0.875rem);
+  color: rgba(240, 240, 240, 0.85);
+  line-height: 1.5;
+}
+.ngw-quick-fixes__bullet {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--color-premium-accent, #C8A96E);
+  border-radius: 50%;
+  margin-top: 0.45em;
+}
+
+/* ── Signal Quality Strip ────────────────────────────────────────────────── */
+.ngw-signal-strip {
+  margin: 0 var(--space-lg, 16px) var(--space-xl, 20px);
+}
+.ngw-signal-strip__items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md, 12px);
+}
+.ngw-signal-strip__item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ngw-signal-strip__item-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.4);
+  letter-spacing: 0.03em;
+}
+.ngw-signal-strip__bar-track {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ngw-signal-strip__bar-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+.ngw-signal-strip__confidence {
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.35);
+  font-family: var(--font-mono, monospace);
+}
+
+/* ── Blueprint Preview Blurred (Paywall) ─────────────────────────────────── */
+.ngw-blueprint-preview {
+  margin-bottom: var(--space-2xl, 24px);
+  background: var(--color-surface); /* always dark — premium surfaces never invert */
+  border: 1px solid rgba(200, 169, 110, 0.25);
+  border-radius: 20px;
+  padding: var(--space-xl, 20px);
+  height: 28dvh;
+  min-height: 160px;
+  max-height: 240px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 0 0 1px rgba(200, 169, 110, 0.1);
+}
+.ngw-blueprint-preview__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 8px);
+  filter: blur(8px);
+  user-select: none;
+  pointer-events: none;
+}
+.ngw-blueprint-preview__row {
+  height: 14px;
+  border-radius: 4px;
+  background: rgba(200, 169, 110, 0.15);
+}
+.ngw-blueprint-preview__row--wide  { width: 80%; }
+.ngw-blueprint-preview__row--med   { width: 55%; }
+.ngw-blueprint-preview__row--short { width: 35%; }
+
+/* ── Billing Toggle ──────────────────────────────────────────────────────── */
+.ngw-billing-toggle {
+  display: flex;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 3px;
+  margin-bottom: var(--space-xl, 20px);
+  gap: 3px;
+}
+.ngw-billing-toggle__option {
+  flex: 1;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs, 4px);
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: var(--weight-medium, 500);
+  color: rgba(240, 240, 240, 0.5);
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.ngw-billing-toggle__option--active {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text);
+}
+.ngw-billing-toggle__option--yearly {
+  border: 1px solid rgba(200, 169, 110, 0.22);
+}
+.ngw-billing-toggle__option--yearly.ngw-billing-toggle__option--active {
+  border-color: rgba(200, 169, 110, 0.4);
+}
+.ngw-billing-toggle__badge {
+  font-size: 10px;
+  font-weight: var(--weight-medium, 500);
+  letter-spacing: 0.03em;
+  background: rgba(200, 169, 110, 0.2);
+  color: var(--color-premium-accent, #C8A96E);
+  border-radius: 6px;
+  padding: 2px 5px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ── Price Block ─────────────────────────────────────────────────────────── */
+.ngw-price-block {
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-price-block__main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.ngw-price-block__amount {
+  font-size: clamp(2.5rem, 2.2rem + 1vw, 3rem);
+  font-weight: var(--weight-bold, 700);
+  letter-spacing: -0.04em;
+  color: var(--color-text);
+  line-height: 1;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+}
+.ngw-price-block__period {
+  font-size: var(--text-sm, 0.875rem);
+  color: rgba(240, 240, 240, 0.55);
+  font-weight: var(--weight-normal, 400);
+}
+.ngw-price-block__caption {
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.5);
+  line-height: 1.4;
+}
+
+/* ── Paywall Sheet Contents ──────────────────────────────────────────────── */
+.ngw-paywall__headline {
+  font-size: var(--text-2xl, 1.875rem);
+  font-weight: var(--weight-bold, 700);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--color-text);
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-paywall__cta-wrap {
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-paywall__error {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--color-score-alert, #E85C38);
+  margin-top: var(--space-sm, 8px);
+  line-height: 1.4;
+}
+.ngw-paywall__proof {
+  display: flex;
+  gap: var(--space-md, 12px);
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-paywall__proof-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+.ngw-paywall__proof-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--color-premium-accent, #C8A96E);
+  flex-shrink: 0;
+}
+.ngw-paywall__proof-label {
+  font-size: 11px;
+  color: rgba(240, 240, 240, 0.45);
+  line-height: 1.3;
+}
+.ngw-paywall__testimonial {
+  padding: var(--space-md, 12px) var(--space-lg, 16px);
+  border-left: 2px solid rgba(200, 169, 110, 0.3);
+  margin-bottom: var(--space-xl, 20px);
+}
+.ngw-paywall__testimonial-text {
+  font-size: var(--text-sm, 0.875rem);
+  color: rgba(240, 240, 240, 0.6);
+  line-height: 1.55;
+  font-style: italic;
+  margin: 0 0 4px;
+}
+.ngw-paywall__testimonial-attr {
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.35);
+}
+.ngw-paywall__monthly-alt {
+  text-align: center;
+  font-size: var(--text-xs, 0.75rem);
+  color: rgba(240, 240, 240, 0.35);
+  padding-top: var(--space-md, 12px);
+}
+.ngw-paywall__monthly-alt-btn {
+  background: none;
+  border: none;
+  color: rgba(240, 240, 240, 0.5);
+  font-size: var(--text-xs, 0.75rem);
+  cursor: pointer;
+  padding: var(--space-sm, 8px) var(--space-md, 12px);
+  -webkit-tap-highlight-color: transparent;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .ngw-bottom-sheet {
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) translateY(100%);
+    width: 440px;
+    border-radius: 24px 24px 0 0;
+  }
+  .ngw-bottom-sheet--open {
+    transform: translateX(-50%) translateY(0);
+  }
+  .ngw-hero {
+    max-height: 440px;
+  }
+}
+
+@media (min-width: 1080px) {
+  .ngw-blueprint-card,
+  .ngw-quick-fixes,
+  .ngw-signal-strip,
+  .ngw-look-summary {
+    margin-left: 0;
+    margin-right: 0;
+  }
+}

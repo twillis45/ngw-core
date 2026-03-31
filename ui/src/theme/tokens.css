@@ -1,3 +1,20 @@
+/* ── Geist font — self-hosted via npm package ──────── */
+@font-face {
+  font-family: 'Geist';
+  src: url('../../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../../node_modules/geist/dist/fonts/geist-mono/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── Design Tokens ──────────────────────────────────── */
 
 :root {
@@ -22,9 +39,9 @@
   --radius-full: 999px;
 
   /* ── Typography ─────────────────────────── */
-  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+  --font-family: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display",
                  "Segoe UI", Roboto, sans-serif;
-  --font-mono:   "SF Mono", "Fira Code", monospace;
+  --font-mono:   "Geist Mono", "SF Mono", "Fira Code", monospace;
 
   /* Type scale — fluid, mobile-first.
      Gaps are intentionally large enough to create clear visual hierarchy:
@@ -77,27 +94,27 @@
 
 /* ── Dark Theme (default) ──────────────────────────── */
 :root, [data-theme="dark"] {
-  --color-bg:              #0E0F12;
-  --color-surface:         #17191F;
-  --color-surface-elevated:#1E2129;
-  --color-text:            #F4F6F8;
-  --color-text-secondary:  #8C94A6;
-  --color-text-dim:        #6E7789;
-  --color-border:          #2A2E38;
-  --border-subtle:         rgba(42, 46, 56, 0.6);
-  --border-faint:          rgba(42, 46, 56, 0.38);
+  --color-bg:              #0f1117;
+  --color-surface:         #1a1c24;
+  --color-surface-elevated:#1e2028;
+  --color-text:            #f2f0eb;
+  --color-text-secondary:  #8a8785;
+  --color-text-dim:        #6e6a65;
+  --color-border:          #2a2c36;
+  --border-subtle:         rgba(42, 44, 54, 0.6);
+  --border-faint:          rgba(42, 44, 54, 0.38);
 
-  --color-accent:          #4DA3FF;
-  --color-accent-hover:    #3B8EE6;
-  --color-accent-subtle:   rgba(77, 163, 255, 0.12);
-  --color-accent-subtle-border: rgba(77, 163, 255, 0.22);
+  --color-accent:          #C8A96E;  /* aligned to Figma accent/gold */
+  --color-accent-hover:    #B89558;
+  --color-accent-subtle:   rgba(200, 169, 110, 0.10);  /* Figma #C8A96E1A */
+  --color-accent-subtle-border: rgba(200, 169, 110, 0.25);  /* Figma #C8A96E40 */
 
-  --color-success:         #39D98A;
-  --color-success-subtle:  rgba(57, 217, 138, 0.12);
-  --color-warning:         #F5B041;
-  --color-warning-subtle:  rgba(245, 176, 65, 0.10);
-  --color-error:           #FF5D5D;
-  --color-error-subtle:    rgba(255, 93, 93, 0.10);
+  --color-success:         #48ba88;
+  --color-success-subtle:  rgba(72, 186, 136, 0.12);
+  --color-warning:         #f59e34;
+  --color-warning-subtle:  rgba(245, 158, 52, 0.10);
+  --color-error:           #f87171;
+  --color-error-subtle:    rgba(248, 113, 113, 0.10);
   --color-creative:        #9B7CFF;
   --color-creative-subtle: rgba(155, 124, 255, 0.10);
 
@@ -109,12 +126,18 @@
 
   --color-icon:            #A89060;  /* warm brass — instrument panel, not SaaS blue */
 
-  /* CTA buttons — bright enough to read on near-black background */
-  --color-cta:             #3D82E6;
-  --color-cta-hover:       #4D92F4;
+  /* CTA buttons — gold/amber, no blue CTAs in NGW */
+  --color-cta:             #C8A96E;
+  --color-cta-hover:       #B89558;
   /* Paid / commerce badge — always a recognisable gold-amber */
   --color-paid:            #f59e0b;
   --color-paid-subtle:     rgba(245, 158, 11, 0.12);
+
+  /* Premium accent — warm gold, used for analysis results and paid surfaces */
+  --color-premium-accent:        #C8A96E;
+  --color-premium-accent-subtle: rgba(200, 169, 110, 0.12);
+  --color-premium-accent-border: rgba(200, 169, 110, 0.28);
+  --color-premium-cta:           #C8A96E;  /* gold CTA fill — same in both themes */
 
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
@@ -123,21 +146,22 @@
 }
 
 /* ── Light Theme ───────────────────────────────────── */
+/* Warm cream palette matched to Figma source of truth  */
 [data-theme="light"] {
-  --color-bg:              #F8F9FB;
-  --color-surface:         #FFFFFF;
-  --color-surface-elevated:#F0F2F5;
-  --color-text:            #1A1D24;
-  --color-text-secondary:  #5A6070;
-  --color-text-dim:        #9CA3AF;
-  --color-border:          #D8DCE3;
-  --border-subtle:         rgba(216, 220, 227, 0.65);
-  --border-faint:          rgba(216, 220, 227, 0.40);
+  --color-bg:              #F0EDE8;
+  --color-surface:         #FAFAF8;
+  --color-surface-elevated:#E8E4DE;
+  --color-text:            #1A1814;
+  --color-text-secondary:  #6B6864;
+  --color-text-dim:        #8C8780;
+  --color-border:          #D4CFC8;
+  --border-subtle:         rgba(212, 207, 200, 0.65);
+  --border-faint:          rgba(212, 207, 200, 0.40);
 
-  --color-accent:          #2B7DE9;
-  --color-accent-hover:    #1A6DD4;
-  --color-accent-subtle:   rgba(43, 125, 233, 0.08);
-  --color-accent-subtle-border: rgba(43, 125, 233, 0.22);
+  --color-accent:          #9E8455;  /* aligned to Figma accent/gold — light */
+  --color-accent-hover:    #8B7348;
+  --color-accent-subtle:   rgba(158, 132, 85, 0.10);  /* Figma #9E84551A */
+  --color-accent-subtle-border: rgba(158, 132, 85, 0.25);  /* Figma #9E845540 */
 
   --color-success:         #1FAA5C;
   --color-success-subtle:  rgba(31, 170, 92, 0.08);
@@ -154,12 +178,18 @@
   --color-bg-light:#059669;
   --color-hair:    #be185d;
 
-  --color-icon:            #8B6E3A;  /* warm brass on light bg */
+  --color-icon:            #9E8455;  /* warm brass — matched to Figma gold */
 
-  --color-cta:             #1D68CC;
-  --color-cta-hover:       #1558B0;
+  --color-cta:             #9E8455;
+  --color-cta-hover:       #8B7348;
   --color-paid:            #b45309;
   --color-paid-subtle:     rgba(180, 83, 9, 0.10);
+
+  /* Premium accent — warm brass gold matched to Figma #9E8455 */
+  --color-premium-accent:        #9E8455;
+  --color-premium-accent-subtle: rgba(158, 132, 85, 0.10);
+  --color-premium-accent-border: rgba(158, 132, 85, 0.25);
+  --color-premium-cta:           #C8A96E;  /* gold CTA fill — bright enough for button bg on cream */
 
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.1);
@@ -167,111 +197,7 @@
   --shadow-card: 0 1px 3px rgba(0,0,0,0.07);
 }
 
-/* ── Photoshop Theme ─────────────────────────────────── */
-/* Inspired by Adobe Photoshop's flat charcoal UI:       */
-/* neutral grays, tight borders, muted teal-blue accent. */
-[data-theme="photoshop"] {
-  --color-bg:               #1E1E1E;
-  --color-surface:          #2D2D2D;
-  --color-surface-elevated: #383838;
-  --color-text:             #E0E0E0;
-  --color-text-secondary:   #999999;
-  --color-border:           #3E3E3E;
-  --border-subtle:          rgba(62, 62, 62, 0.6);
-  --border-faint:           rgba(62, 62, 62, 0.38);
-
-  --color-accent:           #2D9CDB;
-  --color-accent-hover:     #2489C2;
-  --color-accent-subtle:    rgba(45, 156, 219, 0.15);
-  --color-accent-subtle-border: rgba(45, 156, 219, 0.28);
-
-  --color-success:          #4CAF50;
-  --color-success-subtle:   rgba(76, 175, 80, 0.12);
-  --color-warning:          #E6A817;
-  --color-warning-subtle:   rgba(230, 168, 23, 0.10);
-  --color-error:            #F44336;
-  --color-error-subtle:     rgba(244, 67, 54, 0.10);
-  --color-creative:         #AB7AFF;
-  --color-creative-subtle:  rgba(171, 122, 255, 0.10);
-
-  --color-key:              #E6A817;
-  --color-fill:             #2D9CDB;
-  --color-rim:              #AB7AFF;
-  --color-bg-light:         #4CAF50;
-  --color-hair:             #f472b6;
-
-  --color-icon:            var(--color-accent);
-
-  --color-cta:             #2D9CDB;
-  --color-cta-hover:       #2489C2;
-  --color-paid:            #E6A817;
-  --color-paid-subtle:     rgba(230, 168, 23, 0.12);
-
-  --shadow-sm:   0 1px 2px rgba(0,0,0,0.4);
-  --shadow-md:   0 2px 8px rgba(0,0,0,0.5);
-  --shadow-lg:   0 4px 16px rgba(0,0,0,0.6);
-  --shadow-card: 0 1px 4px rgba(0,0,0,0.42);
-}
-
-
-/* ── DailyNote Theme ────────────────────────────────────── */
-/* Inspired by DailyNote's Clean Light theme: pure whites,  */
-/* airy minimal feel, barely-there shadows, calm sky blue.   */
-[data-theme="daynote"] {
-  /* DailyNote system font stack — clean, no "SF Pro Display" override */
-  --font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
-                 "Apple Color Emoji", "Segoe UI Emoji";
-
-  --color-bg:               #FAFAFA;
-  --color-surface:          #FFFFFF;
-  --color-surface-elevated: #F2F2F2;
-  --color-text:             #2C2C2C;
-  --color-text-secondary:   #8A8A8A;
-  --color-text-dim:         #AEAEAE;   /* tertiary / placeholder text */
-  --color-border:           #E5E5E5;
-  --border-subtle:          rgba(229, 229, 229, 0.65);
-  --border-faint:           rgba(229, 229, 229, 0.40);
-
-  /* Grayscale accent — pure minimalism for UI chrome */
-  --color-accent:           #6B7280;
-  --color-accent-hover:     #4B5563;
-  --color-accent-subtle:    rgba(107, 114, 128, 0.08);
-  --color-accent-subtle-border: rgba(107, 114, 128, 0.22);
-
-  /* Semantic data colors — readable hues on light background.
-     Charts, tables, signal indicators, and status badges need real colors
-     so information is visually distinguishable, even in the minimal theme. */
-  --color-success:          #1FAA5C;
-  --color-success-subtle:   rgba(31, 170, 92, 0.08);
-  --color-warning:          #D4930A;
-  --color-warning-subtle:   rgba(212, 147, 10, 0.06);
-  --color-error:            #DC3545;
-  --color-error-subtle:     rgba(220, 53, 69, 0.06);
-  --color-creative:         #7C5CDB;
-  --color-creative-subtle:  rgba(124, 92, 219, 0.06);
-
-  /* Light-role colors — desaturated for the minimal palette */
-  --color-key:              #b45309;
-  --color-fill:             #2B7DE9;
-  --color-rim:              #7C5CDB;
-  --color-bg-light:         #1FAA5C;
-  --color-hair:             #be185d;
-
-  /* Softer gray icons — matches DailyNote's muted aesthetic */
-  --color-icon:             #9CA3AF;
-
-  /* CTAs always blue — they're calls to action */
-  --color-cta:              #2B7DE9;
-  --color-cta-hover:        #1A6DD4;
-  /* Paid badge — warm amber works on light bg */
-  --color-paid:             #b45309;
-  --color-paid-subtle:      rgba(180, 83, 9, 0.10);
-
-  --shadow-sm:   0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md:   0 2px 8px rgba(0,0,0,0.06);
-  --shadow-lg:   0 4px 16px rgba(0,0,0,0.08);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.05);
-}
+/* photoshop and daynote themes removed — dark/light only */
 
 /* ── Font Size Scale ─────────────────────────────────── */
 /* Controlled by data-font-size attribute on <html>.     */
@@ -371,6 +297,13 @@
 /* ── Font Family Scale ───────────────────────────────── */
 /* Controlled by data-font-family attribute on <html>.   */
 /* "system" is the default (uses :root --font-family).   */
+
+/* Geist — Vercel's geometric sans (default) */
+[data-font-family="geist"] {
+  --font-family: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display",
+                 "Segoe UI", Roboto, sans-serif;
+  --font-mono:   "Geist Mono", "SF Mono", "Fira Code", monospace;
+}
 
 /* Inter — clean geometric sans, great for UI dashboards */
 [data-font-family="inter"] {

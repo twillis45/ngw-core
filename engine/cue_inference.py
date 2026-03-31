@@ -467,10 +467,19 @@ def _infer_shadow_pattern(
     # loop/rembrandt decision.  If CV directly measures the nose shadow
     # connecting to the cheek shadow, treat it as triangle_detected=True
     # regardless of what light_structure_pass found.
+    #
+    # GUARD: when light_structure reports "split" (high left-right asymmetry),
+    # the nose-to-cheek shadow connectivity is likely from pose artifacts
+    # (hand on chin, head tilt, accessories) rather than genuine Rembrandt
+    # triangle lighting.  A real Rembrandt triangle sits within a moderately
+    # asymmetric face — not a "split"-level asymmetry.  Don't promote
+    # _ls_triangle in that case.
     sc = cue_report.shadow_continuity
     if sc and sc.confidence > 0.4:
         if sc.triangle_connected and sc.connectivity_score > 0.6:
-            _ls_triangle = True  # CV confirmed the connection
+            if _ls_pattern != "split":
+                _ls_triangle = True  # CV confirmed the connection
+            # else: shadow connectivity from pose, not Rembrandt lighting
         elif not sc.triangle_connected and sc.gap_width_ratio > 0.05:
             # CV confirmed there IS a gap → suppress any light_structure triangle claim
             _ls_triangle = False
@@ -582,23 +591,39 @@ def _infer_shadow_pattern(
             if not _is_hcg:
                 return "rembrandt"
 
-        if _ls_conf >= 0.6 and _ls_pattern in ("butterfly", "split", "broad"):
+        if _ls_conf >= 0.6 and _ls_pattern in ("butterfly", "broad"):
             return _ls_pattern
+        # NOTE: "split" is NOT included above — a key at upper_left/upper_right
+        # is ~45° off-axis, which is loop/rembrandt territory.  Split requires
+        # a hard 90° side key (handled in the "left"/"right" branch below).
+        # light_structure reporting "split" under an upper_* key direction is
+        # likely facial asymmetry from pose (hand on chin, head tilt) or
+        # reflective accessories (earrings, glasses) — not true split lighting.
 
         # Default: loop for soft/ambiguous off-axis patterns.
         # Rembrandt is a *specific* diagnostic that requires the triangle;
-        # loop is the general category.  Under HCG this is especially true.
-        _default = "loop" if _is_hcg else "rembrandt"
-        # P6: qualify the default "loop" → "short"/"broad" when face is turned;
-        # but don't downgrade "rembrandt" to "short" — keep rembrandt as is.
-        if _default == "loop":
-            return _p6_qualify_loop(key_direction)
-        return _default  # "rembrandt" stays rembrandt
+        # loop is the general category.  Without triangle evidence, loop
+        # is always the safer default — not just under HCG.
+        #
+        # Only default to rembrandt when the triangle has been explicitly
+        # detected above (line 566).  If we reach here, it hasn't been.
+        _default = "loop"
+        # P6: qualify "loop" → "short"/"broad" when face is turned.
+        return _p6_qualify_loop(key_direction)
 
     if key_direction in ("left", "right"):
         # Hard side light: split unless light_structure disagrees
         if _ls_conf >= 0.5 and _ls_pattern in ("rembrandt", "loop"):
             return _ls_pattern  # Not truly 90° — closer to 45°
+        # Symmetric highlights contradict split — the face is evenly lit,
+        # so the shadow direction is noise (or from a reflective surface
+        # like earrings, white garment buttons, etc.).  Demote to loop
+        # so downstream can refine.
+        if high_symmetry:
+            return _p6_qualify_loop(key_direction)
+        # Light structure says butterfly/clamshell → can't be split either.
+        if _ls_conf >= 0.5 and _ls_pattern in ("butterfly", "clamshell"):
+            return _ls_pattern
         return "split"
 
     # ── Light-structure fallback for unknown key direction ──

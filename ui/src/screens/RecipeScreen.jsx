@@ -313,7 +313,25 @@ export default function RecipeScreen() {
     } catch { /* ignore */ }
     if (next) {
       setTimeout(() => {
-        cardRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+        const card = cardRefs.current[next];
+        if (!card) return;
+        const detailCol = card.closest('.recipe-screen__body')
+          ?.querySelector('.recipe-screen__detail-col');
+        const atTablet = detailCol && detailCol.offsetWidth > 0;
+        if (atTablet) {
+          // Scroll the .screen container directly so the card top aligns with
+          // the sticky detail panel (top: 8px). scrollIntoView can misfire on
+          // inner scroll containers — direct scrollTo is reliable.
+          const screen = card.closest('.screen');
+          if (screen) {
+            const screenRect = screen.getBoundingClientRect();
+            const cardRect   = card.getBoundingClientRect();
+            const offset     = cardRect.top - screenRect.top + screen.scrollTop - 8;
+            screen.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+          }
+        } else {
+          card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
       }, 60);
     }
   }

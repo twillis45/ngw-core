@@ -68,7 +68,7 @@ export default function GearInputScreen() {
   const isBest = gearMode === 'best_setup';
 
   async function submit() {
-    dispatch({ type: 'SET_LOADING' });
+    dispatch({ type: 'SET_LOADING', mode: 'match' });
 
     try {
       // Use Shoot Match API when mood is set (wizard flow)

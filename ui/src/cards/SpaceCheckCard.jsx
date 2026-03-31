@@ -68,32 +68,34 @@ export default function SpaceCheckCard({ data, defaultOpen = false }) {
     <div className="result-card">
       <button
         type="button"
-        className="result-card__header result-card__header--toggle"
+        className="result-card__header result-card__header--toggle space-check__header"
         onClick={() => setOpen(!open)}
       >
-        <CardIcon name="ruler" />
-        <span>Space Check</span>
+        <span className="space-check__header-row">
+          <CardIcon name="ruler" />
+          <span>Space Check</span>
 
-        {/* Overall fit badge — only when room dims are known */}
-        {overall && (
-          <span
-            className="space-check__fit-badge"
-            style={{ color: FIT_COLOR[overall] }}
-          >
-            {FIT_LABEL[overall]}
-          </span>
-        )}
+          {/* Overall fit badge — only when room dims are known */}
+          {overall && (
+            <span
+              className="space-check__fit-badge"
+              style={{ color: FIT_COLOR[overall] }}
+            >
+              {FIT_LABEL[overall]}
+            </span>
+          )}
+          {hasWarnings && !open && (
+            <span className="space-check__warn-badge">{'\u26A0\uFE0F'}</span>
+          )}
+          <span className="result-card__chevron">{open ? '\u25BE' : '\u25B8'}</span>
+        </span>
 
-        {/* Room dimensions summary */}
+        {/* Room dimensions summary — second row */}
         {roomDimensions && (
           <span className="space-check__room-badge">
             {fmt(roomDimensions.widthFt)}w × {fmt(roomDimensions.lengthFt)}d × {fmt(roomDimensions.ceilingFt)} ceil
           </span>
         )}
-        {hasWarnings && !open && (
-          <span className="space-check__warn-badge">{'\u26A0\uFE0F'}</span>
-        )}
-        <span className="result-card__chevron">{open ? '\u25BE' : '\u25B8'}</span>
       </button>
 
       {!open ? null : (

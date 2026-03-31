@@ -46,7 +46,7 @@ export function clearShootProgress(sessionId) {
 
 /**
  * Save the user's preferred shoot mode role.
- * @param {string} role - "photographer" | "assistant" | "second_shooter"
+ * @param {string} role - "photographer" | "assistant" | "learning"
  */
 export function saveShootRole(role) {
   try {

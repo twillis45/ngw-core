@@ -4,7 +4,7 @@ import { saveSetup, getImprovementSignal } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
 import { buildRefTestSteps, buildRefQuickFixes } from '../transform';
 import useSettings from '../hooks/useSettings';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 import usePreviewMode from '../hooks/usePreviewMode';
 import useMode from '../hooks/useMode';
 import { getPattern } from '../knowledge';
@@ -320,7 +320,7 @@ function SaveBar({ result }) {
 export default function ResultsScreen() {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const userEmail = resolveUserEmail(user);
   const { isPaid, unlock, isAdmin: isAdminEmail, incrementCount } = usePaywall(userEmail);
   const { access: previewAccess } = usePreviewMode();
   const { viewMode } = useSettings();

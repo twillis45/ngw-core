@@ -557,6 +557,18 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     if ls is not None:
         lsp = getattr(ls, "pattern_name", None)
         if lsp and lsp != "unknown":
+            # Split guard: light_structure "split" requires corroboration
+            # from hard lateral shadow direction ("left"/"right").  When the
+            # shadow direction is upper_left/upper_right (45° key) or unknown,
+            # the "split" classification is from pose asymmetry (hand on chin,
+            # head tilt, earrings) rather than true 90° side lighting.
+            # Demote to "loop" — the safer default for ambiguous off-axis patterns.
+            if lsp == "split":
+                _sd_obj = getattr(cr, "primary_shadow_direction", None)
+                _sd_dir = getattr(_sd_obj, "direction", "unknown") if _sd_obj else "unknown"
+                if _sd_dir not in ("left", "right"):
+                    lsp = "loop"
+
             ls_pattern = lsp
             # Confidence derived from shadow density + centroid distance:
             # stronger signals → higher confidence.

@@ -4,11 +4,12 @@ import ChipSelect from '../components/ChipSelect';
 import { SUBJECT_TYPES } from '../data/subjectTypes';
 import { MOOD_SUBJECTS } from '../coaching';
 
+const MULTI_SUBJECTS = ['couple', 'small_group'];
 const SKIN_TONES = [
   { value: 'light',  label: 'Light',  swatch: '#FDDBB4' },
   { value: 'medium', label: 'Medium', swatch: '#C68642' },
   { value: 'dark',   label: 'Dark',   swatch: '#8D5524' },
-  { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)' },
+  { value: 'mixed',  label: 'Mixed',  swatch: 'linear-gradient(135deg, #FDDBB4 33%, #C68642 66%, #8D5524 100%)', multiOnly: true },
 ];
 
 export default function StepSubject() {
@@ -29,6 +30,13 @@ export default function StepSubject() {
     }
   }, [filteredSubjects, subjectType, dispatch]);
 
+  // Clear "mixed" skin tone if user switches to a single-person subject
+  useEffect(() => {
+    if (skinTone === 'mixed' && subjectType && !MULTI_SUBJECTS.includes(subjectType)) {
+      dispatch({ type: 'SET_SKIN_TONE', skinTone: null });
+    }
+  }, [subjectType, skinTone, dispatch]);
+
   return (
     <>
       <h2 className="screen-heading">Who's the subject?</h2>
@@ -47,7 +55,7 @@ export default function StepSubject() {
           Helps dial in exposure and modifier choice.
         </p>
         <div className="tone-row">
-          {SKIN_TONES.map(t => (
+          {SKIN_TONES.filter(t => !t.multiOnly || MULTI_SUBJECTS.includes(subjectType)).map(t => (
             <button
               key={t.value}
               className={`tone-chip${skinTone === t.value ? ' tone-chip--selected' : ''}`}
