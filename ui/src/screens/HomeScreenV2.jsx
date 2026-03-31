@@ -60,7 +60,45 @@ function stageCardData(result, lastSetup) {
   return { name, pct, rows };
 }
 
-const SOURCE_LABEL = { selected: 'selected', dropped: 'dropped', pasted: 'pasted from clipboard' };
+/* ─── File evaluation — limitations and recommendations ──────────────── */
+function evaluateFile(file) {
+  const rows = [];
+
+  // File type
+  const ext  = (file.name || '').split('.').pop()?.toUpperCase() || '';
+  const mime = file.type || '';
+  const typeLabel = ext || (mime.split('/')[1] || 'Unknown').toUpperCase();
+  rows.push({ label: 'Format', value: typeLabel, kind: 'info' });
+
+  // File size
+  const mb = file.size / (1024 * 1024);
+  const sizeStr = mb >= 1 ? `${mb.toFixed(1)} MB` : `${(file.size / 1024).toFixed(0)} KB`;
+  rows.push({ label: 'Size', value: sizeStr, kind: 'info' });
+
+  // Limitations based on size
+  if (mb < 0.08) {
+    rows.push({ label: 'Limit', value: 'Very small — pattern confidence may be low', kind: 'warn' });
+  } else if (mb < 0.3) {
+    rows.push({ label: 'Limit', value: 'Low res — catchlight detection may be reduced', kind: 'warn' });
+  }
+
+  // Format-specific notes
+  if (mime === 'image/heic' || ext === 'HEIC') {
+    rows.push({ label: 'Note', value: 'HEIC converted automatically', kind: 'info' });
+  }
+  if (mime === 'image/webp' || ext === 'WEBP') {
+    rows.push({ label: 'Note', value: 'WebP supported', kind: 'info' });
+  }
+  if (mb > 12) {
+    rows.push({ label: 'Note', value: 'Large file — processing may take a moment', kind: 'info' });
+  }
+
+  // Always-on recommendations
+  rows.push({ label: 'Best for', value: 'Unedited originals, single subject, face visible', kind: 'tip' });
+  rows.push({ label: 'Accuracy', value: 'Catchlights and shadow edges must be visible', kind: 'tip' });
+
+  return rows;
+}
 
 /* ─── Stage area — shared between Free and Paid ──────────────────────── */
 function StageArea({ stage, photoStatus }) {
@@ -77,20 +115,21 @@ function StageArea({ stage, photoStatus }) {
       </div>
 
       {photoStatus ? (
-        /* ── Photo just received — show discrete status ── */
-        <div className="home-v2__stage-body" style={{ padding: '10px 16px 12px' }}>
+        /* ── Photo received — show file evaluation ── */
+        <div className="home-v2__stage-body">
           <div className="home-v2__stage-result">
-            <span className="home-v2__stage-pattern">{photoStatus.label}</span>
+            <span className="home-v2__stage-pattern home-v2__stage-row-value--active">Analyzing…</span>
           </div>
           <dl className="home-v2__stage-rows">
-            <div className="home-v2__stage-row">
-              <dt className="home-v2__stage-row-label">Source</dt>
-              <dd className="home-v2__stage-row-value">{SOURCE_LABEL[photoStatus.source] || photoStatus.source}</dd>
-            </div>
-            <div className="home-v2__stage-row">
-              <dt className="home-v2__stage-row-label">Status</dt>
-              <dd className="home-v2__stage-row-value home-v2__stage-row-value--active">Reading…</dd>
-            </div>
+            {(photoStatus.count > 1
+              ? [{ label: 'Photos', value: `${photoStatus.count} — analyzing first`, kind: 'info' }]
+              : []
+            ).concat(evaluateFile(photoStatus.file)).map(({ label, value, kind }) => (
+              <div key={label} className="home-v2__stage-row">
+                <dt className="home-v2__stage-row-label">{label}</dt>
+                <dd className={`home-v2__stage-row-value home-v2__stage-row-value--${kind}`}>{value}</dd>
+              </div>
+            ))}
           </dl>
         </div>
       ) : stage ? (
@@ -314,10 +353,8 @@ export default function HomeScreenV2() {
   // ── Dispatch images to ref_eval ───────────────────────────────────────
   function dispatchImages(files, source) {
     if (files.length === 0) return;
-    const label = files.length === 1
-      ? (files[0].name || 'Photo')
-      : `${files.length} photos`;
-    setPhotoStatus({ label, source });
+    // Pass first file for evaluation; multi-photo shows count note
+    setPhotoStatus({ file: files[0], count: files.length, source });
     const reads = files.map(file => new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = () => resolve({ file, preview: reader.result, serverPath: null });
