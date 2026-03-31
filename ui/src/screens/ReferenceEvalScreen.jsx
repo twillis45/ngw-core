@@ -964,8 +964,9 @@ export default function ReferenceEvalScreen() {
         setSelectedMood(primary.result.analysis?.classification?.mood || null);
         dispatch({ type: 'SET_REF_ANALYSIS', analysis: primary.result.analysis });
       } else {
-        // All uploads failed
-        setError(makeError('Could not analyze image'));
+        // All uploads failed — surface the real error (e.g. 401, network) not a generic string
+        const firstErr = outcomes.find(o => o.error)?.error;
+        setError(makeError(firstErr || 'Could not analyze image'));
       }
 
       // Multi-image: request consensus merge from backend
@@ -1051,7 +1052,8 @@ export default function ReferenceEvalScreen() {
         setAnalysis(firstSuccess.result.analysis);
         setSelectedMood(firstSuccess.result.analysis?.classification?.mood || null);
       } else if (outcomes.every(o => o.error)) {
-        setError(makeError('Could not analyze image'));
+        const firstErr = outcomes.find(o => o.error)?.error;
+        setError(makeError(firstErr || 'Could not analyze image'));
       }
 
       // Re-run multi-image merge with all images
