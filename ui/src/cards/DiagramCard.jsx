@@ -1264,7 +1264,7 @@ function handlePrint(canvasEl, spec, title, view) {
   win.document.close();
 }
 
-export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole, twoHostSetup }) {
+export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole, twoHostSetup, onItemSelect }) {
   const canvasRef = useRef(null);
   const [view, setView] = useState('top');
   const [zoomSrc, setZoomSrc] = useState(null);
@@ -1361,9 +1361,14 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
   const handleCanvasClick = useCallback((e) => {
     if (view !== 'top') { handleCanvasZoom(); return; }
     const role = hitTestLight(e);
-    if (role) { setActiveLight(r => r === role ? null : role); selectHaptic(); }
-    else handleCanvasZoom();
-  }, [view, hitTestLight]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (role) {
+      setActiveLight(r => r === role ? null : role);
+      onItemSelect?.(role);
+      selectHaptic();
+    } else {
+      handleCanvasZoom();
+    }
+  }, [view, hitTestLight, onItemSelect]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merge drag overrides into spec for live re-render
   const effectiveSpec = Object.keys(lightOverrides).length === 0 ? spec : {
