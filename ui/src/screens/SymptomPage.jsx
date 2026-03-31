@@ -11,7 +11,7 @@ import { useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import { getSymptomBySlug, SYMPTOMS } from '../data/symptoms';
 import { trackEvent } from '../data/analytics';
-import usePaywall from '../hooks/usePaywall';
+import usePaywall, { resolveUserEmail } from '../hooks/usePaywall';
 
 function BackButton() {
   const dispatch = useDispatch();
@@ -140,7 +140,7 @@ function OtherSymptomsRow({ currentSlug, onSymptom }) {
 export default function SymptomPage() {
   const { symptomSlug, result, user } = useAppState();
   const dispatch = useDispatch();
-  const userEmail = user?.email || user?.username || null;
+  const userEmail = resolveUserEmail(user);
   const { isPaid, unlock } = usePaywall(userEmail);
 
   const slug      = symptomSlug || '';
@@ -201,11 +201,23 @@ export default function SymptomPage() {
 
   if (!symptom) {
     return (
-      <div className="screen">
+      <div className="screen symptom-screen">
         <BackButton />
-        <p style={{ color: 'var(--color-text-dim)', textAlign: 'center', marginTop: 40 }}>
-          Symptom not found.
-        </p>
+        <div className="symptom-not-found">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            className="symptom-not-found__icon"
+          >
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <p className="symptom-not-found__title">Symptom not found</p>
+          <p className="symptom-not-found__sub">
+            This symptom couldn't be located. Browse other symptoms below or go back to your results.
+          </p>
+        </div>
+        <OtherSymptomsRow currentSlug={slug} onSymptom={handleNavigateSymptom} />
       </div>
     );
   }

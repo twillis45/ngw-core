@@ -44,7 +44,7 @@ export default function WelcomeScreenV2() {
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
   /* ── Track landing view once per session ── */
-  useEffect(() => { trackEvent('LANDING_VIEW', { screen: 'welcome' }); }, []);
+  useEffect(() => { trackEvent('LANDING_VIEW', { screen: 'home' }); }, []);
 
   /* ── Scroll-reveal + stagger with IntersectionObserver ── */
   useEffect(() => {
@@ -365,9 +365,9 @@ export default function WelcomeScreenV2() {
             <div className="v2-founders__badge">Limited seats</div>
             <div className="v2-founders__price">
               <span className="v2-founders__amount">$39</span>
-              <span className="v2-founders__period">one-time</span>
+              <span className="v2-founders__period">/mo</span>
             </div>
-            <p className="v2-founders__note">Full access. No subscription. Price increases as seats fill.</p>
+            <p className="v2-founders__note">Full access. Cancel anytime. Price increases as seats fill.</p>
             <ul className="v2-founders__features">
               <li>Unlimited analysis — any photo, any setup</li>
               <li>Full lighting diagrams with exact positions</li>
@@ -377,7 +377,7 @@ export default function WelcomeScreenV2() {
               <li>Save and reuse setups across shoots</li>
             </ul>
             <button type="button" className="v2-founders__cta" onClick={triggerUpload}>
-              Get Founders Access — $39
+              Start Pro — $39/mo
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="9 18 15 12 9 6"/>
               </svg>
@@ -469,7 +469,7 @@ export default function WelcomeScreenV2() {
 
           <button
             className="v2-tile v2-tile--muted"
-            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'welcome' })}
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
             type="button"
           >
             <span className="v2-tile__icon">

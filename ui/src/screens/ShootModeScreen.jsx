@@ -761,90 +761,103 @@ export default function ShootModeScreen() {
           </div>
         </div>
 
-        {/* Feedback mode toggle */}
-        <ModeToggle mode={mode} onChange={handleModeChange} />
+        {/* ── Tablet split layout ──────────────────────────────────────
+            sm-split__diagram (left): diagram + light specs
+            sm-split__panel  (right): mode toggle, progress, checklists
+            On mobile both divs are flex-ordered: panel first, diagram second
+            so the current mobile hierarchy is preserved.
+            ──────────────────────────────────────────────────────────── */}
+        <div className="sm-split">
 
-        {/* Progress Bar */}
-        <div className="shoot-mode__progress">
-          <div className="shoot-mode__progress-text">
-            Step {currentStep + 1} of {totalCount} &middot; {progressPct}% complete
-          </div>
-          <div className="shoot-mode__progress-track">
-            <div
-              className="shoot-mode__progress-fill"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          {metadata?.estimatedMinutes && (
-            <div className="shoot-mode__progress-time">
-              ~{metadata.estimatedMinutes} min estimated
-            </div>
-          )}
-          {!matchLocked && progressPct >= 75 && progressPct < 100 && (
-            <div className="shoot-mode__progress-signal">Final adjustments — setup nearly complete.</div>
-          )}
-          {matchLocked && (
-            <div className="shoot-mode__progress-signal shoot-mode__progress-signal--done">Lighting locked — this will hold across shots.</div>
-          )}
-        </div>
-
-        {/* Phase 4: Diagram with active light highlighting */}
-        {(detectedDiagramSpec || diagram) && (
-          <div className="shoot-mode__section">
-            <DiagramCard
-              spec={detectedDiagramSpec || diagram}
-              title="Lighting"
-              highlightRole={activeHighlightRole}
-              cameraSettings={result.cameraSettings}
-              spaceCheck={result.spaceCheck}
-              roomDimensions={roomDimensions}
-            />
-          </div>
-        )}
-
-        {/* Per-light props grid — compact at-a-glance reference */}
-        {steps.filter(s => s.type === 'light_placement').length > 0 && (() => {
-          const lightSteps = steps.filter(s => s.type === 'light_placement');
-          return (
-            <div className="shoot-mode__light-specs">
-              <span className="shoot-mode__section-title">Light Specs</span>
-              <div className="shoot-mode__light-specs-grid">
-                {lightSteps.map((step, i) => {
-                  const l = step.data;
-                  const rows = [
-                    l.height      && { label: 'Height',    value: l.height },
-                    l.distance    && { label: 'Distance',  value: l.distance },
-                    l.angle       && { label: 'Angle',     value: l.angle },
-                    l.direction   && { label: 'Direction', value: l.direction },
-                    l.powerHint   && { label: 'Power',     value: l.powerHint },
-                    l.featherHint && { label: 'Feather',   value: l.featherHint },
-                  ].filter(Boolean);
-                  return (
-                    <div key={i} className="shoot-mode__light-spec-card">
-                      <div
-                        className="shoot-mode__light-spec-role"
-                        style={{ color: l.roleColor || 'var(--color-accent)' }}
-                      >
-                        {l.roleKey?.toUpperCase() || `LIGHT ${i + 1}`}
-                      </div>
-                      {l.modifier && (
-                        <div className="shoot-mode__light-spec-modifier">{l.modifier}</div>
-                      )}
-                      <div className="shoot-mode__light-spec-rows">
-                        {rows.map(row => (
-                          <div key={row.label} className="shoot-mode__light-spec-row">
-                            <span className="shoot-mode__light-spec-label">{row.label}</span>
-                            <span className="shoot-mode__light-spec-value">{row.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* LEFT: diagram + per-light specs (order: 2 on mobile, col 1 on tablet) */}
+          <div className="sm-split__diagram">
+            {/* Phase 4: Diagram with active light highlighting */}
+            {(detectedDiagramSpec || diagram) && (
+              <div className="shoot-mode__section">
+                <DiagramCard
+                  spec={detectedDiagramSpec || diagram}
+                  title="Lighting"
+                  highlightRole={activeHighlightRole}
+                  cameraSettings={result.cameraSettings}
+                  spaceCheck={result.spaceCheck}
+                  roomDimensions={roomDimensions}
+                />
               </div>
+            )}
+
+            {/* Per-light props grid — compact at-a-glance reference */}
+            {steps.filter(s => s.type === 'light_placement').length > 0 && (() => {
+              const lightSteps = steps.filter(s => s.type === 'light_placement');
+              return (
+                <div className="shoot-mode__light-specs">
+                  <span className="shoot-mode__section-title">Light Specs</span>
+                  <div className="shoot-mode__light-specs-grid">
+                    {lightSteps.map((step, i) => {
+                      const l = step.data;
+                      const rows = [
+                        l.height      && { label: 'Height',    value: l.height },
+                        l.distance    && { label: 'Distance',  value: l.distance },
+                        l.angle       && { label: 'Angle',     value: l.angle },
+                        l.direction   && { label: 'Direction', value: l.direction },
+                        l.powerHint   && { label: 'Power',     value: l.powerHint },
+                        l.featherHint && { label: 'Feather',   value: l.featherHint },
+                      ].filter(Boolean);
+                      return (
+                        <div key={i} className="shoot-mode__light-spec-card">
+                          <div
+                            className="shoot-mode__light-spec-role"
+                            style={{ color: l.roleColor || 'var(--color-accent)' }}
+                          >
+                            {l.roleKey?.toUpperCase() || `LIGHT ${i + 1}`}
+                          </div>
+                          {l.modifier && (
+                            <div className="shoot-mode__light-spec-modifier">{l.modifier}</div>
+                          )}
+                          <div className="shoot-mode__light-spec-rows">
+                            {rows.map(row => (
+                              <div key={row.label} className="shoot-mode__light-spec-row">
+                                <span className="shoot-mode__light-spec-label">{row.label}</span>
+                                <span className="shoot-mode__light-spec-value">{row.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>{/* end sm-split__diagram */}
+
+          {/* RIGHT: mode toggle, progress bar, checklists, steps (order: 1 on mobile) */}
+          <div className="sm-split__panel">
+            {/* Feedback mode toggle */}
+            <ModeToggle mode={mode} onChange={handleModeChange} />
+
+            {/* Progress Bar */}
+            <div className="shoot-mode__progress">
+              <div className="shoot-mode__progress-text">
+                Step {currentStep + 1} of {totalCount} &middot; {progressPct}% complete
+              </div>
+              <div className="shoot-mode__progress-track">
+                <div
+                  className="shoot-mode__progress-fill"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              {metadata?.estimatedMinutes && (
+                <div className="shoot-mode__progress-time">
+                  ~{metadata.estimatedMinutes} min estimated
+                </div>
+              )}
+              {!matchLocked && progressPct >= 75 && progressPct < 100 && (
+                <div className="shoot-mode__progress-signal">Final adjustments — setup nearly complete.</div>
+              )}
+              {matchLocked && (
+                <div className="shoot-mode__progress-signal shoot-mode__progress-signal--done">Lighting locked — this will hold across shots.</div>
+              )}
             </div>
-          );
-        })()}
 
         {/* Before You Start checklist */}
         <ChecklistBlock
@@ -917,6 +930,8 @@ export default function ShootModeScreen() {
             storageKey="post_shoot"
           />
         )}
+          </div>{/* end sm-split__panel */}
+        </div>{/* end sm-split */}
 
         {/* Cockpit Bottom Bar — matches Figma */}
         <div className="sm-bottom-bar">

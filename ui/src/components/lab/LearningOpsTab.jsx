@@ -69,6 +69,7 @@ function Badge({ label, color }) {
       background: color + '22', color,
       borderRadius: 'var(--radius-full)', fontSize: 'var(--text-xs)',
       fontWeight: 'var(--weight-semibold)', border: `1px solid ${color}44`,
+      whiteSpace: 'nowrap',
     }}>
       {label}
     </span>
@@ -79,10 +80,10 @@ const Card = forwardRef(function Card({ children, style }, ref) {
   return (
     <div ref={ref} style={{
       background: 'var(--color-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-lg)',
-      padding: 'var(--space-md)',
-      marginBottom: 'var(--space-md)',
+      border: '0.5px solid var(--color-border)',
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 10,
       ...style,
     }}>
       {children}
@@ -93,9 +94,9 @@ const Card = forwardRef(function Card({ children, style }, ref) {
 function SectionTitle({ children }) {
   return (
     <div style={{
-      fontSize: 'var(--text-xs)', textTransform: 'uppercase',
-      letterSpacing: '0.06em', color: 'var(--color-text-dim)',
-      fontWeight: 'var(--weight-semibold)', marginBottom: 'var(--space-sm)',
+      fontSize: 9, textTransform: 'uppercase',
+      letterSpacing: '0.08em', color: 'var(--color-text-secondary)',
+      fontWeight: 700, marginBottom: 8,
     }}>
       {children}
     </div>
@@ -345,15 +346,14 @@ function SchedulerControl({ status, onStatusChange }) {
 function PanelDesc({ text }) {
   return (
     <p style={{
-      fontSize: 'var(--text-xs)',
+      fontSize: 12,
       color: 'var(--color-text-secondary)',
       background: 'var(--color-surface)',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-md)',
-      padding: 'var(--space-xs) var(--space-sm)',
-      marginBottom: 'var(--space-md)',
+      border: '0.5px solid var(--color-border)',
+      borderRadius: 10,
+      padding: '8px 12px',
       lineHeight: 1.5,
-      margin: '0 0 var(--space-md)',
+      margin: '0 0 12px',
     }}>
       {text}
     </p>
@@ -427,9 +427,9 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
 
   return (
     <div>
-      {/* ── Stat tiles ── */}
-      <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
-        {statItems.map(s => (
+      {/* ── Stat tiles — first 4 in a row, alerts full-width below ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+        {statItems.slice(0, 4).map(s => (
           <div
             key={s.label}
             role={s.nav ? 'button' : undefined}
@@ -437,40 +437,59 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
             onClick={s.nav ? () => onGoToClusters(s.nav) : undefined}
             onKeyDown={s.nav ? e => e.key === 'Enter' && onGoToClusters(s.nav) : undefined}
             style={{
-              flex: 1, minWidth: 80, textAlign: 'center',
+              textAlign: 'center',
               background: s.urgent
-                ? 'color-mix(in srgb, #F87171 8%, var(--color-surface-elevated))'
+                ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))'
                 : 'var(--color-surface-elevated)',
-              border: s.urgent ? '1px solid #F8717166' : '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-md)',
-              padding: 'var(--space-sm)',
+              border: s.urgent ? '0.5px solid #F8717166' : '0.5px solid var(--color-border)',
+              borderRadius: 10,
+              padding: '10px 6px',
               cursor: s.nav ? 'pointer' : 'default',
               transition: 'border-color 0.15s, background 0.15s',
             }}
             onMouseEnter={s.nav ? e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.background = `color-mix(in srgb, ${s.color} 10%, var(--color-surface-elevated))`; } : undefined}
-            onMouseLeave={s.nav ? e => { e.currentTarget.style.borderColor = s.urgent ? C.redBorder : 'var(--color-border)'; e.currentTarget.style.background = s.urgent ? 'color-mix(in srgb, #F87171 8%, var(--color-surface-elevated))' : 'var(--color-surface-elevated)'; } : undefined}
+            onMouseLeave={s.nav ? e => { e.currentTarget.style.borderColor = s.urgent ? C.redBorder : 'var(--color-border)'; e.currentTarget.style.background = s.urgent ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))' : 'var(--color-surface-elevated)'; } : undefined}
           >
-            <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--weight-black)', color: s.color }}>{s.value}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>{s.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontFamily: 'var(--font-mono, monospace)' }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2, whiteSpace: 'nowrap' }}>{s.label}</div>
             {s.hint && (
-              <div style={{ fontSize: 9, color: s.nav ? s.color : 'var(--color-text-dim)', marginTop: 3, opacity: 0.8 }}>
+              <div style={{ fontSize: 9, color: s.nav ? s.color : 'var(--color-text-secondary)', marginTop: 3, opacity: 0.8, whiteSpace: 'nowrap' }}>
                 {s.hint}
               </div>
             )}
           </div>
         ))}
       </div>
+      {/* Active Alerts — full-width card */}
+      {statItems[4] && (() => {
+        const s = statItems[4];
+        return (
+          <div
+            key={s.label}
+            style={{
+              textAlign: 'center',
+              background: s.urgent ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))' : 'var(--color-surface-elevated)',
+              border: s.urgent ? '0.5px solid #F8717166' : '0.5px solid var(--color-border)',
+              borderRadius: 10, padding: '10px 6px', marginBottom: 12,
+            }}
+          >
+            <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontFamily: 'var(--font-mono, monospace)' }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 2 }}>{s.label}</div>
+            {s.hint && <div style={{ fontSize: 9, color: 'var(--color-text-secondary)', marginTop: 3, opacity: 0.8 }}>{s.hint}</div>}
+          </div>
+        );
+      })()}
 
-      <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap' }}>
         <button
           className="btn btn--primary btn--sm"
           onClick={onIngest}
           disabled={ingesting}
-          style={{ flex: 1 }}
+          style={{ flex: '1 0 auto' }}
         >
           {ingesting ? 'Ingesting…' : '↻ Run Ingestion'}
         </button>
-        <button className="btn btn--ghost btn--sm" onClick={onRefresh} style={{ flex: 1 }}>
+        <button className="btn btn--ghost btn--sm" onClick={onRefresh} style={{ flex: '1 0 auto' }}>
           Refresh
         </button>
         {/* Dev mode toggle — bypasses production filter to include internal sessions */}
@@ -710,12 +729,12 @@ function EvidStat({ label, value, sub, color }) {
       display: 'flex', flexDirection: 'column', gap: 2,
       padding: '7px 12px',
       background: color ? `color-mix(in srgb, ${color} 8%, var(--color-surface))` : 'var(--color-surface)',
-      border: `1px solid ${color ? color + '33' : 'var(--color-border)'}`,
-      borderRadius: 'var(--radius-md)', minWidth: 70, flex: 1,
+      border: `0.5px solid ${color ? color + '33' : 'var(--color-border)'}`,
+      borderRadius: 10, minWidth: 0, flex: '1 0 auto',
     }}>
-      <span style={{ fontSize: 'var(--text-lg)', fontWeight: 800, color: color ?? 'var(--color-text)', lineHeight: 1 }}>{value ?? '—'}</span>
-      <span style={{ fontSize: 9, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-      {sub != null && <span style={{ fontSize: 10, color: color ?? 'var(--color-text-secondary)' }}>{sub}</span>}
+      <span style={{ fontSize: 18, fontWeight: 800, color: color ?? 'var(--color-text)', lineHeight: 1, fontFamily: 'var(--font-mono, monospace)' }}>{value ?? '—'}</span>
+      <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{label}</span>
+      {sub != null && <span style={{ fontSize: 10, color: color ?? 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>{sub}</span>}
     </div>
   );
 }
@@ -745,7 +764,7 @@ function EvidenceBreakdown({ evidence, failureMode }) {
       {/* ── CVR breakdown ── */}
       {hasCvr && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, overflowX: 'auto' }}>
             <EvidStat label="Analyses" value={analysis_count} />
             <EvidStat label="Upgrades" value={upgrade_count ?? 0} />
             <EvidStat
@@ -792,7 +811,7 @@ function EvidenceBreakdown({ evidence, failureMode }) {
       {/* ── Confidence mismatch breakdown ── */}
       {hasConf && (
         <div style={{ marginBottom: 10 }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 6, overflowX: 'auto' }}>
             {confidence_error   != null && <EvidStat label="Conf error"   value={Number(confidence_error).toFixed(3)}   color={C.red} />}
             {avg_predicted      != null && <EvidStat label="Avg predicted" value={Number(avg_predicted).toFixed(2)} />}
             {avg_expected       != null && <EvidStat label="Avg expected"  value={Number(avg_expected).toFixed(2)} />}
@@ -1162,31 +1181,35 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
       <PanelDesc text="Failure clusters grouped by pattern and error type. Each cluster summarizes repeated analysis failures from real user signals. Click any cluster to see symptoms and generate a targeted Candidate rule change." />
 
       {/* Status filters */}
-      <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-xs)', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 6, overflowX: 'auto', alignItems: 'center' }}>
         {filters.map(f => (
           <button
             key={f || 'all'}
             className={`adb__range-btn${filter === f ? ' adb__range-btn--on' : ''}`}
+            style={{ whiteSpace: 'nowrap' }}
             onClick={() => setFilter(f)}
             type="button"
           >
             {filterLabels[f]}
           </button>
         ))}
-        <button className="adb__refresh" onClick={load} type="button" title="Refresh">↻</button>
+        <button className="adb__refresh" onClick={load} type="button" title="Refresh" style={{ flexShrink: 0 }}>↻</button>
       </div>
 
       {/* Severity filters */}
-      <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', alignItems: 'center' }}>
         {severities.map(s => (
           <button
             key={s ?? 'all'}
             className={`adb__range-btn${severityFilter === s ? ' adb__range-btn--on' : ''}`}
-            style={s === 'critical' && severityFilter === 'critical' ? { background: C.red, borderColor: C.red, color: '#fff' }
+            style={{
+              whiteSpace: 'nowrap',
+              ...(s === 'critical' && severityFilter === 'critical' ? { background: C.red, borderColor: C.red, color: '#fff' }
                  : s === 'high'     && severityFilter === 'high'     ? { background: '#FB923C', borderColor: '#FB923C', color: '#fff' }
                  : s === 'critical' ? { borderColor: C.redBorder, color: C.red }
                  : s === 'high'     ? { borderColor: '#FB923C66', color: '#FB923C' }
-                 : {}}
+                 : {}),
+            }}
             onClick={() => setSeverityFilter(s)}
             type="button"
           >
@@ -1197,8 +1220,8 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
           title="When enabled, candidates that evaluate as 'safe' are automatically accepted — no manual review step"
           style={{
             display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', marginLeft: 'auto',
-            fontSize: 'var(--text-xs)',
-            color: autoRelease ? C.green : 'var(--color-text-dim)',
+            fontSize: 11, flexShrink: 0,
+            color: autoRelease ? C.green : 'var(--color-text-secondary)',
             userSelect: 'none', whiteSpace: 'nowrap',
           }}
         >
@@ -1308,19 +1331,19 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
             ...(c.id === initialClusterId ? { outline: '2px solid #4DA3FF88', outlineOffset: 2 } : {}),
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, overflowX: 'auto' }}>
             {/* Row checkbox */}
             <input
               type="checkbox"
               checked={selectedIds.has(c.id)}
               onChange={() => toggleSelect(c.id)}
               onClick={e => e.stopPropagation()}
-              style={{ marginTop: 2, flexShrink: 0, accentColor: 'var(--color-accent)', cursor: 'pointer' }}
+              style={{ marginTop: 0, flexShrink: 0, accentColor: '#c8a96e', cursor: 'pointer' }}
             />
-            <Badge label={c.severity} color={SEVERITY_COLOR[c.severity] || 'var(--color-text-dim)'} />
-            <Badge label={c.failure_mode?.replace(/_/g, ' ')} color="var(--color-text-dim)" />
-            {c.pattern_id && <Badge label={c.pattern_id} color="var(--color-accent)" />}
-            <div style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
+            <Badge label={c.severity} color={SEVERITY_COLOR[c.severity] || 'var(--color-text-secondary)'} />
+            <Badge label={c.failure_mode?.replace(/_/g, ' ')} color="var(--color-text-secondary)" />
+            {c.pattern_id && <Badge label={c.pattern_id} color="#c8a96e" />}
+            <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
               {c.frequency} sessions
             </div>
           </div>
@@ -1337,8 +1360,8 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
           )}
 
           {c.candidate_id && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', marginBottom: 'var(--space-xs)', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: C.green }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, overflowX: 'auto' }}>
+              <div style={{ fontSize: 11, color: C.green, whiteSpace: 'nowrap' }}>
                 ✓ Candidate: {c.candidate_id.slice(0, 8)}…
               </div>
               {verdicts[c.candidate_id] ? (
@@ -1592,7 +1615,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
               <button className="btn btn--ghost btn--sm" onClick={() => setDismissConfirm(null)}>Cancel</button>
             </div>
           ) : (
-            <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', whiteSpace: 'nowrap' }}>
               <button
                 className="btn btn--ghost btn--sm"
                 onClick={() => setExpanded(expanded === c.id ? null : c.id)}

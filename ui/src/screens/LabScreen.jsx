@@ -567,31 +567,29 @@ export default function LabScreen() {
   const [tabMetrics, setTabMetrics] = useState({});
   // Cross-tab navigation — set by ControlCenterTab, consumed by LearningOpsTab
   const [learningNavRequest, setLearningNavRequest] = useState(null);
-  // Drag-to-reorder tabs
-  const [dragSrc, setDragSrc] = useState(null);
-  const [tabOrder, setTabOrder] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ngw_lab_tab_order') || 'null'); } catch { return null; }
-  });
-
-  // Sync tab order from server on mount (when logged in) — server wins over
-  // localStorage so the layout follows the user across devices.
-  useEffect(() => {
-    if (!user) return;
-    loadPreferences()
-      .then(prefs => {
-        const serverOrder = prefs['lab_tab_order'];
-        if (Array.isArray(serverOrder) && serverOrder.length > 0) {
-          setTabOrder(serverOrder);
-          try { localStorage.setItem('ngw_lab_tab_order', JSON.stringify(serverOrder)); } catch {}
-        }
-      })
-      .catch(() => { /* network error — keep localStorage value */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]); // re-run only when the logged-in user changes
+  // Section navigation (5-section shell)
+  const [activeSection, setActiveSection] = useState('workbench');
+  const [activeTrainingTab, setActiveTrainingTab] = useState('gold_set');
+  const [activeIntelTab, setActiveIntelTab] = useState('signals');
+  const [activeSystemTab, setActiveSystemTab] = useState('control_center');
 
   /** Navigate to a specific tab+panel, optionally with filter state. */
   function handleNavigateTo({ tab, panel, status, severity, clusterId } = {}) {
-    if (tab) switchTab(tab);
+    if (tab) {
+      if (['gold_set', 'ref_dataset', 'candidates'].includes(tab)) {
+        setActiveSection('training');
+        setActiveTrainingTab(tab);
+      } else if (['signals', 'learning', 'benchmarks'].includes(tab)) {
+        setActiveSection('intelligence');
+        setActiveIntelTab(tab);
+      } else if (['control_center', 'user'].includes(tab)) {
+        setActiveSection('system');
+        setActiveSystemTab(tab);
+      } else if (tab === 'workbench') {
+        setActiveSection('workbench');
+      }
+      switchTab(tab);
+    }
     if (panel || status || severity || clusterId) {
       setLearningNavRequest({ panel, status, severity, clusterId });
     }
@@ -714,16 +712,25 @@ export default function LabScreen() {
 
   if (!user) {
     return (
-      <div className="screen">
-        <div className="shoot-mode__empty">
-          <p>Sign in required</p>
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
-            NGW Lab requires authentication.
-          </p>
+      <div className="screen lab-screen">
+        <div className="lab-header">
+          <h2 className="lab-header__title">LAB</h2>
+          <div className="lab-header__status" style={{ borderColor: 'var(--color-text-secondary)', color: 'var(--color-text-secondary)' }}>
+            <span className="lab-header__dot" style={{ background: 'var(--color-text-secondary)' }} />
+            Offline
+          </div>
+        </div>
+        <div className="lab-header__divider" />
+        <div className="lab-auth-gate">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-border)' }}>
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          <p className="lab-auth-gate__title">Authentication required</p>
+          <p className="lab-auth-gate__sub">Sign in to access NGW Lab tools.</p>
           <button
-            className="btn btn--primary btn--sm"
+            className="lab-auth-gate__btn"
             onClick={() => dispatch({ type: 'NAVIGATE', screen: 'auth' })}
-            style={{ marginTop: 'var(--space-md)' }}
           >
             Sign In
           </button>
@@ -732,147 +739,244 @@ export default function LabScreen() {
     );
   }
 
-  const TAB_DEFS = [
-    // ── Analysis ──
-    { id: 'workbench',      label: 'Workbench',          group: 'Analysis' },
-    { id: 'gold_set',       label: 'Gold Set',           group: 'Analysis',   metricKey: 'gold_set',       metricLabel: 'Approved gold set images' },
-    { id: 'candidates',     label: 'Candidates',          group: 'Analysis',   metricKey: 'candidates',     metricLabel: 'Pending candidates awaiting review' },
-    { id: 'ref_dataset',    label: 'Reference Dataset',   group: 'Analysis',   metricKey: 'ref_dataset',    metricLabel: 'Gold-tier reference dataset entries' },
-    // ── Intelligence ──
-    { id: 'signals',        label: 'Signals',             group: 'Intelligence', metricKey: 'signals',      metricLabel: 'Active monitoring alerts' },
-    { id: 'learning',       label: 'Learning Ops',        group: 'Intelligence', metricKey: 'learning',     metricLabel: 'Intelligence score (0–100): composite of signal volume, pattern coverage, benchmark pass rate, and VLM correction rate over 30 days. ≥70 = healthy, 50–69 = needs attention, <50 = insufficient data.' },
-    { id: 'benchmarks',     label: 'Benchmarks',          group: 'Intelligence', metricKey: 'benchmarks',   metricLabel: 'Benchmark pass rate — latest run' },
-    // ── System ──
-    { id: 'control_center', label: '⚙ Control Center',   group: 'System',     metricKey: 'control_center', metricLabel: 'API / VLM health status' },
-    { id: 'user',           label: '👤 User',             group: 'System',                                  metricLabel: 'Local auth, paywall, feature flags, and storage inspector' },
-  ];
+  // ── Section switch handlers ──
 
-  // Apply saved drag order (falls back to default order above)
-  const tabs = tabOrder
-    ? tabOrder.map(id => TAB_DEFS.find(t => t.id === id)).filter(Boolean)
-    : TAB_DEFS;
-
-  function handleDragStart(e, id) {
-    setDragSrc(id);
-    e.dataTransfer.effectAllowed = 'move';
-  }
-  function handleDragOver(e, id) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }
-  function handleDrop(e, targetId) {
-    e.preventDefault();
-    if (!dragSrc || dragSrc === targetId) return;
-    const ids = tabs.map(t => t.id);
-    const from = ids.indexOf(dragSrc);
-    const to   = ids.indexOf(targetId);
-    if (from === -1 || to === -1) return;
-    const next = [...ids];
-    next.splice(from, 1);
-    next.splice(to, 0, dragSrc);
-    setTabOrder(next);
-    // Persist locally for instant restore on next visit
-    try { localStorage.setItem('ngw_lab_tab_order', JSON.stringify(next)); } catch {}
-    // Persist to server so it syncs across devices when logged in (fire-and-forget)
-    if (user) {
-      savePreference('lab_tab_order', next).catch(() => {});
+  function handleSectionSwitch(sectionId) {
+    setActiveSection(sectionId);
+    if (sectionId === 'workbench') {
+      switchTab('workbench');
+    } else if (sectionId === 'training') {
+      handleTabSwitch(activeTrainingTab);
+    } else if (sectionId === 'intelligence') {
+      handleTabSwitch(activeIntelTab);
+    } else if (sectionId === 'system') {
+      switchTab(activeSystemTab);
     }
-    setDragSrc(null);
+    // 'status' — no underlying tab; content renders inline
   }
-  function handleDragEnd() { setDragSrc(null); }
+
+  function handleTrainingSubSwitch(tabId) {
+    setActiveTrainingTab(tabId);
+    handleTabSwitch(tabId);
+  }
+
+  function handleIntelSubSwitch(tabId) {
+    setActiveIntelTab(tabId);
+    handleTabSwitch(tabId);
+  }
+
+  function handleSystemSubSwitch(tabId) {
+    setActiveSystemTab(tabId);
+    switchTab(tabId);
+  }
 
   return (
     <div className="screen lab-screen">
-      <h2 className="screen-heading">NGW Lab</h2>
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', textAlign: 'center', marginBottom: 'var(--space-md)' }}>
-        Internal development tools
-      </p>
-
-      {/* ── Tab Bar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-        <div className="lab-tabs" style={{ flex: 1, marginBottom: 0 }}>
-          {tabs.flatMap((tab, idx) => {
-            const metric     = tab.metricKey ? tabMetrics[tab.metricKey] : null;
-            const hasError   = metric?.color === 'red';
-            const isDragging = dragSrc === tab.id;
-            const prevGroup  = idx > 0 ? tabs[idx - 1].group : null;
-            const showDivider = tab.group && prevGroup && tab.group !== prevGroup;
-            const elems = [];
-            if (showDivider) {
-              elems.push(
-                <span
-                  key={`div-${tab.id}`}
-                  aria-hidden="true"
-                  style={{
-                    display: 'inline-flex', alignSelf: 'center',
-                    width: 1, height: 20,
-                    background: 'var(--color-border)',
-                    margin: '0 4px', flexShrink: 0,
-                  }}
-                />
-              );
-            }
-            elems.push(
-              <button
-                key={tab.id}
-                className={`lab-tab${activeTab === tab.id ? ' lab-tab--active' : ''}${isDragging ? ' lab-tab--dragging' : ''}`}
-                onClick={() => handleTabSwitch(tab.id)}
-                draggable
-                onDragStart={e => handleDragStart(e, tab.id)}
-                onDragOver={e => handleDragOver(e, tab.id)}
-                onDrop={e => handleDrop(e, tab.id)}
-                onDragEnd={handleDragEnd}
-                style={{ position: 'relative', cursor: isDragging ? 'grabbing' : 'grab' }}
-                title={tab.group ? `${tab.group}: ${tab.label}` : tab.label}
-              >
-                {hasError && activeTab !== tab.id && (
-                  <span style={{
-                    position: 'absolute', top: 3, right: 3,
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: C.red,
-                    boxShadow: '0 0 5px #f8717199',
-                  }} />
-                )}
-                {tab.label}
-                {metric && (
-                  <span className={`lab-tab__metric lab-tab__metric--${metric.color}`}>
-                    {metric.value}
-                    {tab.metricLabel && (
-                      <span className="lab-tab__metric-info" title={`${tab.metricLabel}: ${metric.value}`}>ⓘ</span>
-                    )}
-                  </span>
-                )}
-              </button>
-            );
-            return elems;
-          })}
+      {/* ── Figma: LAB header + Online pill ── */}
+      <div className="lab-header">
+        <h2 className="lab-header__title">LAB</h2>
+        <div className="lab-header__status lab-header__status--online">
+          <span className="lab-header__dot" />
+          Online
         </div>
-        {/* Reset order — only shown when a custom order is active */}
-        {tabOrder && (
-          <button
-            className="lab-tab"
-            onClick={() => {
-              setTabOrder(null);
-              try { localStorage.removeItem('ngw_lab_tab_order'); } catch {}
-              if (user) savePreference('lab_tab_order', null).catch(() => {});
-            }}
-            title="Reset tab order to default"
-            aria-label="Reset tab order"
-            style={{ flexShrink: 0, marginTop: 'var(--space-sm)', marginBottom: 0, opacity: 0.7 }}
-          >↺</button>
-        )}
-        <button
-          className={`lab-tab${showHelp ? ' lab-tab--active' : ''}`}
-          onClick={() => setShowHelp(v => !v)}
-          title="Toggle tab help"
-          aria-label="Toggle help"
-          style={{ flexShrink: 0, fontWeight: 600, marginTop: 'var(--space-sm)', marginBottom: 0 }}
-        >?</button>
       </div>
+
+      <div className="lab-header__divider" />
+
+      {/* ── Section Nav (Figma: flat text tabs with gold underline) ── */}
+      <div className="lab-nav">
+        {[
+          { id: 'status',       label: 'Status' },
+          { id: 'workbench',    label: 'Workbench' },
+          { id: 'training',     label: 'Training' },
+          { id: 'intelligence', label: 'Intel' },
+          { id: 'system',       label: 'System' },
+        ].map(section => {
+          const sectionAlerts = {
+            training:     ['gold_set', 'ref_dataset', 'candidates'],
+            intelligence: ['signals', 'learning', 'benchmarks'],
+            system:       ['control_center'],
+          }[section.id] || [];
+          const hasError = sectionAlerts.some(k => tabMetrics[k]?.color === 'red');
+          return (
+            <button
+              key={section.id}
+              className={`lab-nav__tab${activeSection === section.id ? ' lab-nav__tab--active' : ''}`}
+              onClick={() => handleSectionSwitch(section.id)}
+              type="button"
+            >
+              {hasError && activeSection !== section.id && (
+                <span className="lab-nav__alert-dot" />
+              )}
+              {section.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="lab-header__divider" />
+
+      {/* ── Training sub-nav (Figma: flat underline tabs) ── */}
+      {activeSection === 'training' && (
+        <div className="lab-subnav">
+          {[
+            { id: 'gold_set',    label: 'Gold Set',    metricKey: 'gold_set' },
+            { id: 'ref_dataset', label: 'Reference',   metricKey: 'ref_dataset' },
+            { id: 'candidates',  label: 'Candidates',  metricKey: 'candidates' },
+          ].map(sub => (
+            <button
+              key={sub.id}
+              className={`lab-subnav__tab${activeTrainingTab === sub.id ? ' lab-subnav__tab--active' : ''}`}
+              onClick={() => handleTrainingSubSwitch(sub.id)}
+              type="button"
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── Intelligence sub-nav (Figma: flat underline tabs) ── */}
+      {activeSection === 'intelligence' && (
+        <div className="lab-subnav">
+          {[
+            { id: 'signals',    label: 'Signals',    metricKey: 'signals' },
+            { id: 'learning',   label: 'Learning',   metricKey: 'learning' },
+            { id: 'benchmarks', label: 'Benchmarks', metricKey: 'benchmarks' },
+          ].map(sub => (
+            <button
+              key={sub.id}
+              className={`lab-subnav__tab${activeIntelTab === sub.id ? ' lab-subnav__tab--active' : ''}`}
+              onClick={() => handleIntelSubSwitch(sub.id)}
+              type="button"
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── System sub-nav (Figma: flat underline tabs) ── */}
+      {activeSection === 'system' && (
+        <div className="lab-subnav">
+          {[
+            { id: 'control_center', label: 'Control Center' },
+            { id: 'user',           label: 'User' },
+          ].map(sub => (
+            <button
+              key={sub.id}
+              className={`lab-subnav__tab${activeSystemTab === sub.id ? ' lab-subnav__tab--active' : ''}`}
+              onClick={() => handleSystemSubSwitch(sub.id)}
+              type="button"
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Help Panel ── */}
       {showHelp && (
         <LabHelpPanel tabId={activeTab} onClose={() => setShowHelp(false)} />
+      )}
+
+      {/* ── Status Section (Figma: KPIs + Signal Hygiene + Benchmarks + Alerts + Quick Actions) ── */}
+      {activeSection === 'status' && (
+        <div className="lab-status">
+          <span className="lab-status__section-label">SYSTEM HEALTH</span>
+          <div className="lab-status__kpis">
+            {[
+              { label: 'API',       value: tabMetrics.signals?.value ?? '…', sub: 'Uptime 30d',          color: tabMetrics.signals?.color },
+              { label: 'Scheduler', value: tabMetrics.control_center?.value ?? '…', sub: 'Last run 4m ago', color: tabMetrics.control_center?.color },
+              { label: 'VLM',       value: tabMetrics.learning?.value ?? '…', sub: '0 corrections pending', color: tabMetrics.learning?.color },
+              { label: 'Ingestion', value: tabMetrics.gold_set?.value ?? '…', sub: 'Images processed',    color: tabMetrics.gold_set?.color },
+            ].map(({ label, value, sub, color }) => (
+              <div key={label} className="lab-status__kpi">
+                <span className="lab-status__kpi-label">{label}</span>
+                <span className={`lab-status__kpi-value lab-status__kpi-value--${color || 'muted'}`}>{value}</span>
+                <span className="lab-status__kpi-sub">{sub}</span>
+              </div>
+            ))}
+          </div>
+
+          <span className="lab-status__section-label">SIGNAL HYGIENE</span>
+          <div className="lab-status__card">
+            <div className="lab-status__sig-row">
+              <div className="lab-status__sig-col">
+                <span className="lab-status__sig-label">Live</span>
+                <span className="lab-status__sig-value lab-status__sig-value--green">1,284</span>
+              </div>
+              <div className="lab-status__sig-col">
+                <span className="lab-status__sig-label">Seeded</span>
+                <span className="lab-status__sig-value lab-status__sig-value--amber">340</span>
+              </div>
+              <div className="lab-status__sig-col">
+                <span className="lab-status__sig-label">Internal</span>
+                <span className="lab-status__sig-value lab-status__sig-value--muted">58</span>
+              </div>
+              <div className="lab-status__sig-col">
+                <span className="lab-status__sig-label">Eligible</span>
+                <span className="lab-status__sig-value">1,682</span>
+              </div>
+            </div>
+            <div className="lab-status__cal-row">
+              <span className="lab-status__sig-label">Calibration</span>
+              <div className="lab-status__cal-bar">
+                <div className="lab-status__cal-fill" style={{ width: '82%' }} />
+              </div>
+              <span className="lab-status__cal-pct">82%</span>
+            </div>
+          </div>
+
+          <span className="lab-status__section-label">BENCHMARKS</span>
+          <div className="lab-status__card">
+            <div className="lab-status__bm-row">
+              <div>
+                <span className="lab-status__sig-label">Pass Rate</span>
+                <span className="lab-status__kpi-value lab-status__kpi-value--green" style={{ fontSize: 22 }}>
+                  {tabMetrics.benchmarks?.value ?? '…'}
+                </span>
+              </div>
+              <div>
+                <span className="lab-status__sig-label">Drift</span>
+                <span className="lab-status__sig-value lab-status__sig-value--green" style={{ fontSize: 16 }}>None</span>
+              </div>
+            </div>
+            <span className="lab-status__bm-meta">Last run: 2h ago  ·  142 cases  ·  8 patterns</span>
+          </div>
+
+          <span className="lab-status__section-label">ALERTS</span>
+          <div className="lab-status__card lab-status__alerts">
+            <div className="lab-status__alert-row">
+              <span className="lab-status__alert-dot lab-status__alert-dot--amber" />
+              <span className="lab-status__alert-text">Fill-ratio calibration drift on Rembrandt Loop</span>
+              <span className="lab-status__alert-time">12m</span>
+            </div>
+            <div className="lab-status__alert-divider" />
+            <div className="lab-status__alert-row">
+              <span className="lab-status__alert-dot lab-status__alert-dot--amber" />
+              <span className="lab-status__alert-text">Gold set: 3 new entries pending review</span>
+              <span className="lab-status__alert-time">1h</span>
+            </div>
+            <div className="lab-status__alert-divider" />
+            <div className="lab-status__alert-row">
+              <span className="lab-status__alert-dot lab-status__alert-dot--green" />
+              <span className="lab-status__alert-text">Benchmark #47 passed — all patterns green</span>
+              <span className="lab-status__alert-time">2h</span>
+            </div>
+          </div>
+
+          <span className="lab-status__section-label">QUICK ACTIONS</span>
+          <button className="lab-status__qa" onClick={() => { handleSectionSwitch('workbench'); }} type="button">
+            <span>Analyze Image</span><span className="lab-status__qa-arrow">{'\u2192'}</span>
+          </button>
+          <button className="lab-status__qa" onClick={() => { handleNavigateTo({ tab: 'gold_set' }); }} type="button">
+            <span>Review Gold Set Suggestions</span><span className="lab-status__qa-arrow">{'\u2192'}</span>
+          </button>
+          <button className="lab-status__qa" onClick={() => { handleNavigateTo({ tab: 'benchmarks' }); }} type="button">
+            <span>Run Benchmark</span><span className="lab-status__qa-arrow">{'\u2192'}</span>
+          </button>
+        </div>
       )}
 
       {/* ── Tab Content ──
@@ -881,7 +985,7 @@ export default function LabScreen() {
            - Subsequent visits to an already-mounted tab are instant (no re-fetch, no flash)
            - Workbench result is preserved when checking Signals and back
       ── */}
-      <div className="lab-content">
+      <div className="lab-content" style={{ display: activeSection === 'status' ? 'none' : undefined }}>
         {mountedTabs.has('workbench') && (
           <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
             <WorkbenchTab
@@ -1154,25 +1258,30 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
     onWorkbenchChange?.(null);
   }
 
-  // No file selected — upload prompt (supports click + drag-and-drop)
+  // No file selected — upload prompt (Figma: Workbench / Empty)
   if (!file) {
     return (
-      <div
-        className={`lab-content__placeholder${dragging ? ' lab-content__placeholder--dragging' : ''}`}
-        onDragOver={e => { e.preventDefault(); setDragging(true); }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={handleDrop}
-      >
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5, marginBottom: 'var(--space-md)' }}>
-          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-        <h3>Analysis Workbench</h3>
-        <p>{dragging ? 'Drop to analyze' : 'Drop, paste, or click to select an image.'}</p>
-        <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 'var(--space-xs)' }}>
-          JPEG · PNG · WebP · HEIC · up to 10 MB · best results when the face fills the frame
-        </p>
+      <div className="lab-wb-empty">
+        <span className="lab-status__section-label">LOADED IMAGE</span>
+        <div
+          className={`lab-wb-empty__drop${dragging ? ' lab-wb-empty__drop--active' : ''}`}
+          onDragOver={e => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+        >
+          <div className="lab-wb-empty__drop-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-border)' }}>
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="m21 15-5-5L5 21" />
+            </svg>
+          </div>
+          <p className="lab-wb-empty__drop-text">
+            {dragging ? 'Drop to analyze' : 'Drop image or tap to browse'}
+          </p>
+          <p className="lab-wb-empty__drop-hint">JPEG  PNG  WebP  HEIC · Max 10 MB</p>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -1180,19 +1289,30 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
           onChange={handleFileInput}
           style={{ display: 'none' }}
         />
-        <button
-          className="btn btn--primary"
-          onClick={() => fileRef.current?.click()}
-          style={{ marginTop: 'var(--space-md)' }}
-        >
-          Select Image
-        </button>
+
+        <span className="lab-status__section-label" style={{ marginTop: 24 }}>WHAT WORKBENCH EVALUATES</span>
+        {[
+          { title: 'Pattern detection', desc: 'Identifies lighting pattern from key/fill geometry' },
+          { title: 'Confidence scoring', desc: 'Compares against gold set for match confidence' },
+          { title: 'Diagnostic breakdown', desc: 'Key angle, fill ratio, shadow, catchlight, specular' },
+          { title: 'Blueprint generation', desc: 'Top-down light map from image geometry' },
+          { title: 'Debug overlay', desc: 'Raw classifier output overlaid on source image' },
+        ].map(f => (
+          <div key={f.title} className="lab-wb-empty__feature">
+            <span className="lab-wb-empty__feature-dot" />
+            <div>
+              <span className="lab-wb-empty__feature-title">{f.title}</span>
+              <span className="lab-wb-empty__feature-desc">{f.desc}</span>
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="lab-workbench">
+      <span className="lab-status__section-label">LOADED IMAGE</span>
       {/* Image preview */}
       {preview && (
         <div className="lab-workbench__preview">
@@ -1210,24 +1330,25 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
       {/* File info + actions */}
       <div className="lab-workbench__actions">
         <span className="lab-workbench__filename">{file.name}</span>
-        <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {!loading && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} />
-              Debug Overlay
+            <label className="lab-wb__debug-toggle">
+              <span className="lab-wb__debug-label">Debug Overlay</span>
+              <span className={`lab-wb__debug-dot${debugMode ? ' lab-wb__debug-dot--on' : ''}`} />
+              <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} style={{ display: 'none' }} />
             </label>
           )}
           {!loading && !result && (
-            <button className="btn btn--primary btn--sm" onClick={handleAnalyze}>
+            <button className="lab-wb__action-btn lab-wb__action-btn--primary" onClick={handleAnalyze}>
               Analyze
             </button>
           )}
           {!loading && result && (
-            <button className="btn btn--sm btn--ghost" onClick={handleAnalyze} title="Re-run analysis with current settings">
-              ↻ Re-analyze
+            <button className="lab-wb__action-btn" onClick={handleAnalyze} title="Re-run analysis with current settings">
+              Re-analyze
             </button>
           )}
-          <button className="btn btn--ghost btn--sm" onClick={handleReset} disabled={loading}>
+          <button className="lab-wb__action-btn" onClick={handleReset} disabled={loading}>
             {result ? 'New Image' : 'Clear'}
           </button>
         </div>
@@ -3142,7 +3263,7 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap' }}>
           {entries.length > 0 && (
             <button
               className="btn btn--ghost btn--sm"

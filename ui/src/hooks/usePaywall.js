@@ -45,6 +45,20 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(email.trim().toLowerCase());
 }
 
+/**
+ * Resolve the best email from a user object.
+ * Falls back through email → username (if it looks like an email) → null.
+ * This prevents stale localStorage objects (missing `email` field) from
+ * bypassing admin checks by falling through to a display name.
+ */
+export function resolveUserEmail(user) {
+  if (!user) return null;
+  if (user.email) return user.email;
+  // Only use username if it looks like an email address
+  if (user.username && user.username.includes('@')) return user.username;
+  return null;
+}
+
 function readPaid() {
   try { return localStorage.getItem(STORAGE_KEY) === 'true'; } catch { return false; }
 }

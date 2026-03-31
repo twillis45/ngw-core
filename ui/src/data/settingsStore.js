@@ -54,6 +54,13 @@ export const POWER_DISPLAY_OPTIONS = [
   { id: 'percent',  label: 'Percent' },
 ];
 
+/** Bottom nav display style */
+export const NAV_STYLE_OPTIONS = [
+  { id: 'both',       label: 'Icons + Labels' },
+  { id: 'icons',      label: 'Icons Only' },
+  { id: 'labels',     label: 'Labels Only' },
+];
+
 /** Default settings */
 const DEFAULTS = {
   // ── Appearance (applied via data-attributes on <html> for CSS) ──────────
@@ -85,6 +92,10 @@ const DEFAULTS = {
   allowAnalytics: true,           // allow anonymous usage analytics
   sessionStorage: 'auto',         // 'auto' | 'manual' | 'off'
   imageHandling: 'store',         // 'store' | 'delete'
+
+  // ── Interaction ──────────────────────────────────────────────────────
+  hapticFeedback: true,           // vibrate on key interactions (mobile)
+  navStyle: 'both',               // 'both' | 'icons' | 'labels'
 
   // ── Advanced ─────────────────────────────────────────────────────────────
   uiSelfTuning: false,            // allow UI to adjust layout/flow automatically
