@@ -277,22 +277,47 @@ export default function HomeScreenV2() {
   const dispatch = useDispatch();
   const { user, result } = useAppState();
   const { isPaid } = usePlan(user?.email);
-  const fileRef = useRef(null);
+  const fileRef    = useRef(null);
+  const dragCount  = useRef(0);        // counter avoids flicker on child elements
 
-  const [setups, setSetups] = useState(() => loadSetups());
+  const [setups,     setSetups]     = useState(() => loadSetups());
+  const [isDragging, setIsDragging] = useState(false);
+  const [toast,      setToast]      = useState(null); // { message, source }
+  const toastTimer = useRef(null);
+
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
 
-  const savedSetups   = setups;
-  const lastSetup     = savedSetups.length > 0 ? savedSetups[savedSetups.length - 1] : null;
-  // Up to 3 most-recent setups excluding the very last (shown in continue card)
-  const recentSetups  = savedSetups.length > 1
-    ? savedSetups.slice(0, -1).slice(-3).reverse()
-    : [];
+  // ── Paste from clipboard ──────────────────────────────────────────────
+  useEffect(() => {
+    function onPaste(e) {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageFiles = items
+        .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
+        .map(it => it.getAsFile())
+        .filter(Boolean);
+      if (imageFiles.length > 0) processFiles(imageFiles, 'pasted');
+    }
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleFileChange(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    const reads = files.map(file => new Promise(resolve => {
+  // ── Show toast ────────────────────────────────────────────────────────
+  function showToast(message, source) {
+    clearTimeout(toastTimer.current);
+    setToast({ message, source });
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  }
+
+  // ── Process image files (shared by picker, drop, paste) ───────────────
+  function processFiles(files, source = 'picked') {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return;
+
+    const label = imageFiles.length === 1 ? 'Photo' : `${imageFiles.length} photos`;
+    const sourceLabel = source === 'dropped' ? 'dropped' : source === 'pasted' ? 'pasted' : 'selected';
+    showToast(`${label} ${sourceLabel} — analyzing…`, source);
+
+    const reads = imageFiles.map(file => new Promise(resolve => {
       const reader = new FileReader();
       reader.onload = () => resolve({ file, preview: reader.result, serverPath: null });
       reader.readAsDataURL(file);
@@ -304,6 +329,12 @@ export default function HomeScreenV2() {
     });
   }
 
+  function handleFileChange(e) {
+    const files = Array.from(e.target.files || []);
+    processFiles(files, 'selected');
+    e.target.value = '';
+  }
+
   function triggerUpload() { fileRef.current?.click(); }
 
   function handleWizard() {
@@ -311,15 +342,68 @@ export default function HomeScreenV2() {
     dispatch({ type: 'SET_INTENT', intent: 'mood' });
   }
 
+  // ── Drag handlers ─────────────────────────────────────────────────────
+  function onDragEnter(e) {
+    e.preventDefault();
+    dragCount.current += 1;
+    if (dragCount.current === 1) setIsDragging(true);
+  }
+  function onDragOver(e) { e.preventDefault(); }
+  function onDragLeave(e) {
+    e.preventDefault();
+    dragCount.current -= 1;
+    if (dragCount.current === 0) setIsDragging(false);
+  }
+  function onDrop(e) {
+    e.preventDefault();
+    dragCount.current = 0;
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    processFiles(files, 'dropped');
+  }
+
   return (
-    <div className="home-v2">
+    <div
+      className={`home-v2${isDragging ? ' home-v2--dragging' : ''}`}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <input
         ref={fileRef}
         type="file"
         accept="image/*"
+        multiple
         style={{ display: 'none' }}
         onChange={handleFileChange}
       />
+
+      {/* Drop overlay */}
+      {isDragging && (
+        <div className="home-v2__drop-overlay" aria-hidden="true">
+          <div className="home-v2__drop-target">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="7" width="18" height="13" rx="2"/>
+              <circle cx="12" cy="13.5" r="3.5"/>
+              <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1"/>
+            </svg>
+            <span className="home-v2__drop-label">Drop to analyze</span>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className={`home-v2__toast home-v2__toast--${toast.source}`} role="status" aria-live="polite">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="3" y="7" width="18" height="13" rx="2"/>
+            <circle cx="12" cy="13.5" r="3.5"/>
+            <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1"/>
+          </svg>
+          <span>{toast.message}</span>
+        </div>
+      )}
 
       {isPaid ? (
         <PaidHomeContent
