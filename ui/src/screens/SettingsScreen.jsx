@@ -29,6 +29,11 @@ import { logout as apiLogout } from '../data/authApi';
 import Toast from '../components/Toast';
 import ConfirmActionModal from '../components/settings/ConfirmActionModal';
 
+const SUPPORT_EMAIL  = 'hello@noguesswork.com';
+const HELP_URL       = 'https://noguessworksystems.com/help';
+const PRIVACY_URL    = 'https://noguessworksystems.com/privacy';
+const TERMS_URL      = 'https://noguessworksystems.com/terms';
+
 const DEV_TAP_COUNT  = 5;
 const DEV_TAP_WINDOW = 3000;
 const APP_VERSION    = 'v1.4.0';
@@ -202,6 +207,54 @@ export default function SettingsScreen() {
         } catch (_) {}
         setConfirm(null);
         showToast('System state cleared');
+      },
+    });
+  }
+
+  async function handlePasswordReset() {
+    if (!displayEmail) {
+      showToast('No email on account — cannot send reset link');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/password-reset/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: displayEmail }),
+      });
+      if (res.ok) {
+        showToast(`Reset link sent to ${displayEmail}`);
+      } else {
+        showToast('Could not send reset link — try again');
+      }
+    } catch {
+      showToast('Could not send reset link — check your connection');
+    }
+  }
+
+  function handleDeleteAccount() {
+    setConfirm({
+      title: 'Delete Account',
+      message: 'This will permanently delete your account and all your data — kits, setups, feedback, and subscription. This cannot be undone.',
+      confirmText: 'Delete Forever',
+      destructive: true,
+      onConfirm: async () => {
+        setConfirm(null);
+        try {
+          const token = localStorage.getItem('ngw_auth_token');
+          const res = await fetch('/api/auth/me', {
+            method: 'DELETE',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
+          if (res.ok) {
+            dispatch({ type: 'LOGOUT' });
+          } else {
+            const data = await res.json().catch(() => ({}));
+            showToast(data.detail || 'Delete failed — try again');
+          }
+        } catch {
+          showToast('Delete failed — check your connection');
+        }
       },
     });
   }
@@ -526,7 +579,7 @@ export default function SettingsScreen() {
         <SectionHdr label="ACCOUNT" />
         <ListCard>
           <InfoRow label="Email" value={displayEmail || '—'} />
-          <NavRow label="Password" onClick={() => {}} />
+          <NavRow label="Password" onClick={handlePasswordReset} />
           <NavRow
             label="Connected kit"
             onClick={() => dispatch({ type: 'NAVIGATE', screen: 'my_kit' })}
@@ -536,7 +589,7 @@ export default function SettingsScreen() {
         {/* Billing row */}
         <ListCard className="stgx-list--billing">
           {effectiveIsPaid ? (
-            <NavRow label="Manage billing & invoices" billing onClick={() => {}} />
+            <NavRow label="Manage billing & invoices" billing onClick={() => window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank')} />
           ) : (
             <NavRow label="Upgrade to Pro" billing onClick={unlock} />
           )}
@@ -573,7 +626,7 @@ export default function SettingsScreen() {
 
         {/* Destructive actions */}
         <ListCard className="stgx-list--destructive">
-          <NavRow label="Delete account" danger onClick={() => {}} />
+          <NavRow label="Delete account" danger onClick={handleDeleteAccount} />
           <NavRow label="Sign out" danger onClick={handleSignOut} />
         </ListCard>
 
@@ -682,16 +735,16 @@ export default function SettingsScreen() {
       {/* SUPPORT */}
       <SectionHdr label="SUPPORT" />
       <ListCard>
-        <NavRow label="Help & FAQ" onClick={() => {}} />
-        <NavRow label="Contact support" onClick={() => {}} />
-        <NavRow label="Rate NGW" onClick={() => {}} />
+        <NavRow label="Help & FAQ" onClick={() => window.open(HELP_URL, '_blank')} />
+        <NavRow label="Contact support" onClick={() => window.open(`mailto:${SUPPORT_EMAIL}?subject=NGW%20Support`, '_blank')} />
+        <NavRow label="Rate NGW" onClick={() => showToast('Rating coming soon — thanks for your support!')} />
       </ListCard>
 
       {/* LEGAL */}
       <SectionHdr label="LEGAL" />
       <ListCard>
-        <NavRow label="Privacy Policy" onClick={() => {}} />
-        <NavRow label="Terms of Service" onClick={() => {}} />
+        <NavRow label="Privacy Policy" onClick={() => window.open(PRIVACY_URL, '_blank')} />
+        <NavRow label="Terms of Service" onClick={() => window.open(TERMS_URL, '_blank')} />
       </ListCard>
 
       {/* Sign out */}

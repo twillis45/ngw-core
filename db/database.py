@@ -462,6 +462,28 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     return dict(row) if row else None
 
 
+def delete_user_account(user_id: str, email: str) -> None:
+    """Permanently delete a user and all their owned data.
+
+    Cascading ON DELETE in the schema handles child rows for tables that use
+    REFERENCES users(id) ON DELETE CASCADE.  Tables keyed by email (subscriptions,
+    password_reset_tokens) or without a FK constraint are cleaned up explicitly.
+    """
+    with get_db() as conn:
+        # Email-keyed tables
+        conn.execute("DELETE FROM subscriptions WHERE customer_email = ?", (email,))
+        conn.execute("DELETE FROM password_reset_tokens WHERE email = ?", (email,))
+        conn.execute("DELETE FROM session_analysis_counts WHERE email = ?", (email,))
+        conn.execute("DELETE FROM magic_link_tokens WHERE email = ?", (email,))
+        # user_id-keyed tables not covered by FK cascade
+        conn.execute("DELETE FROM user_kits WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_setups WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_feedback WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
+        # Finally remove the account itself (cascades email_verifications)
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
 # ── Subscription CRUD ──────────────────────────────────────
 
 def create_subscription(

@@ -21,6 +21,7 @@ from db.database import (
     mark_email_verified,
     create_magic_link_token, consume_magic_link_token,
     create_password_reset_token, consume_password_reset_token, update_user_password,
+    delete_user_account,
     get_active_subscription, get_subscription_by_stripe_session,
 )
 
@@ -298,6 +299,23 @@ def confirm_password_reset(body: PasswordResetConfirmBody, request: Request):
     update_user_password(user["id"], hashed)
     token = create_access_token(user["id"])
     return {"token": token, "user": _user_public(user)}
+
+
+@router.delete("/me", status_code=200)
+def delete_account(
+    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    user=Depends(get_current_user),
+):
+    """Permanently delete the authenticated user's account and all their data."""
+    # Revoke the JWT immediately so it can't be reused after deletion
+    if creds:
+        payload = decode_token_payload(creds.credentials)
+        if payload:
+            jti = payload.get("jti")
+            if jti:
+                revoke_token(jti)
+    delete_user_account(user["id"], user["email"])
+    return {"detail": "Account deleted"}
 
 
 @router.post("/resend-verification")
