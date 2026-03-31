@@ -36,38 +36,96 @@ const SIZES = {
   lg: { sym: 40, main: 22, sub: 14, gap: 10 },
 };
 
-/* Profoto pack-head pop — deep two-layer synthesis (no hi-sync crack) */
-function fireProfotoHead(audioCtx, time) {
-  // Layer 1: capacitor thump — sub-bass punch
-  const thump     = audioCtx.createOscillator();
-  const thumpGain = audioCtx.createGain();
-  thump.type      = 'sine';
-  thump.frequency.setValueAtTime(60, time);
-  thump.frequency.exponentialRampToValueAtTime(20, time + 0.18);
-  thumpGain.gain.setValueAtTime(0, time);
-  thumpGain.gain.linearRampToValueAtTime(1.0, time + 0.004);
-  thumpGain.gain.exponentialRampToValueAtTime(0.001, time + 0.28);
-  thump.connect(thumpGain);
-  thumpGain.connect(audioCtx.destination);
-  thump.start(time);
-  thump.stop(time + 0.30);
+/* ── Profoto pack-head — all five layers ─────────────────────────────── */
 
-  // Layer 2: tube resonance — heavy body thud with long tail
-  const tube     = audioCtx.createOscillator();
-  const tubeGain = audioCtx.createGain();
-  tube.type      = 'triangle';
-  tube.frequency.setValueAtTime(90, time);
-  tube.frequency.exponentialRampToValueAtTime(22, time + 0.40);
-  tubeGain.gain.setValueAtTime(0, time);
-  tubeGain.gain.linearRampToValueAtTime(0.95, time + 0.006);
-  tubeGain.gain.exponentialRampToValueAtTime(0.001, time + 0.50);
-  tube.connect(tubeGain);
-  tubeGain.connect(audioCtx.destination);
-  tube.start(time);
-  tube.stop(time + 0.52);
+// Layer 1: Sync trigger crack — the sharp transient at the moment of firing
+function fireTriggerCrack(ctx, t) {
+  const sr  = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.ceil(sr * 0.012), sr);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.0018));
+  const src  = ctx.createBufferSource();
+  src.buffer = buf;
+  const hp   = ctx.createBiquadFilter();
+  hp.type    = 'highpass';
+  hp.frequency.value = 2400;
+  const g    = ctx.createGain();
+  g.gain.value = 0.45;
+  src.connect(hp); hp.connect(g); g.connect(ctx.destination);
+  src.start(t);
 }
 
-/* 3 fast pops (~110ms apart) then 2 spaced pops (~650ms apart) */
+// Layer 2: Xenon tube pop — bright mid-range flash of the tube itself
+function fireXenonPop(ctx, t) {
+  const sr  = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.ceil(sr * 0.028), sr);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (sr * 0.006));
+  const src  = ctx.createBufferSource();
+  src.buffer = buf;
+  const bp   = ctx.createBiquadFilter();
+  bp.type    = 'bandpass';
+  bp.frequency.value = 3200;
+  bp.Q.value = 0.7;
+  const g    = ctx.createGain();
+  g.gain.value = 0.60;
+  src.connect(bp); bp.connect(g); g.connect(ctx.destination);
+  src.start(t);
+}
+
+// Layer 3: Capacitor thump — deep sub-bass capacitor discharge
+function fireCapThump(ctx, t) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type   = 'sine';
+  osc.frequency.setValueAtTime(62, t);
+  osc.frequency.exponentialRampToValueAtTime(20, t + 0.18);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(1.0, t + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.30);
+}
+
+// Layer 4: Tube resonance — the head housing resonating, long heavy tail
+function fireTubeResonance(ctx, t) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type   = 'triangle';
+  osc.frequency.setValueAtTime(88, t);
+  osc.frequency.exponentialRampToValueAtTime(22, t + 0.42);
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.95, t + 0.006);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.52);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t); osc.stop(t + 0.54);
+}
+
+// Layer 5: Recycle whine — capacitors charging back up after the pop
+function fireRecycleWhine(ctx, t) {
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type   = 'sine';
+  osc.frequency.setValueAtTime(550, t + 0.06);
+  osc.frequency.exponentialRampToValueAtTime(1600, t + 0.55);
+  osc.frequency.exponentialRampToValueAtTime(2100, t + 1.1);
+  gain.gain.setValueAtTime(0, t + 0.06);
+  gain.gain.linearRampToValueAtTime(0.10, t + 0.18);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t + 0.06); osc.stop(t + 1.25);
+}
+
+// All five layers together
+function fireProfotoHead(ctx, t) {
+  fireTriggerCrack(ctx, t);
+  fireXenonPop(ctx, t + 0.002);
+  fireCapThump(ctx, t);
+  fireTubeResonance(ctx, t + 0.001);
+  fireRecycleWhine(ctx, t);
+}
+
+/* 3 fast pops (~110ms apart) then 2 spaced pops */
 function fireSequence(audioCtx) {
   const t = audioCtx.currentTime + 0.05;
 
@@ -77,8 +135,8 @@ function fireSequence(audioCtx) {
   fireProfotoHead(audioCtx, t + 0.22);
 
   // Two slower, weighted pops
-  fireProfotoHead(audioCtx, t + 0.22 + 0.65);
-  fireProfotoHead(audioCtx, t + 0.22 + 0.65 + 0.75);
+  fireProfotoHead(audioCtx, t + 0.87);
+  fireProfotoHead(audioCtx, t + 1.62);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
@@ -102,7 +160,7 @@ export default function NGWLogo({ size = 'sm', className = '', loading = false }
       closeTimer = setTimeout(() => {
         try { _sharedCtx?.close(); } catch (_) {}
         _sharedCtx = null;
-      }, 4000);
+      }, 5500);
     }
 
     const ctx = _ensureCtx();
