@@ -4,32 +4,104 @@ import { loadSetups, onSetupsChanged } from '../data/setupStore';
 import usePlan from '../hooks/usePlan';
 
 /* ─── Derive stage card data from last result / saved setup ─────────── */
-// Words that should never appear as a pattern name or chip on the home screen
-const STAGE_BARE = new Set(['none', 'bare', 'direct', 'ambient', 'split', 'build']);
-const FILTERED_WORDS = ['split', 'build'];
+const STAGE_BARE = new Set(['none', 'bare', 'direct', 'ambient', 'split', 'build', 'n/a', 'unknown']);
 
-function isFiltered(str) {
-  if (!str) return true;
-  const lower = str.toLowerCase().trim();
-  return FILTERED_WORDS.some(w => lower === w || lower.startsWith(w + ' ') || lower.endsWith(' ' + w));
+function fmtTitle(str) {
+  if (!str) return null;
+  return str.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function fmtModifier(str) {
+  if (!str) return null;
+  const map = {
+    softbox_octa: 'Octa Softbox', softbox: 'Softbox', beauty_dish: 'Beauty Dish',
+    ring_flash: 'Ring Flash', umbrella: 'Umbrella', parabolic: 'Parabolic',
+    grid: 'Grid', reflector: 'Reflector', bare_bulb: 'Bare Bulb',
+    fresnel: 'Fresnel', snoot: 'Snoot', strip: 'Strip Box',
+  };
+  const key = str.toLowerCase().replace(/[\s-]/g, '_');
+  return map[key] || fmtTitle(str);
 }
 
 function stageCardData(result, lastSetup) {
   const bm = result?.bestMatch || lastSetup?.result?.bestMatch;
   if (!bm) return null;
   const rawName = bm.lightingPattern || bm.name || null;
-  // Show the card but omit the name text if it's a filtered term
-  const name = rawName && !isFiltered(rawName) ? rawName : null;
+  const name = rawName && !STAGE_BARE.has(rawName.toLowerCase().trim()) ? rawName : null;
   const raw  = bm.reliabilityScore ?? bm.confidence ?? null;
   const pct  = raw != null ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw)) : null;
   const li   = result?.lightingIntelligence || lastSetup?.result?.lightingIntelligence || {};
-  const chips = [];
-  if (li.keyPosition && !isFiltered(li.keyPosition)) chips.push(li.keyPosition);
-  if (bm.lightingGeometry && !isFiltered(bm.lightingGeometry)) chips.push(bm.lightingGeometry);
-  if (li.catchlightDetected) chips.push('Catchlight');
-  const mod = li.detectedModifier;
-  if (mod && !STAGE_BARE.has(mod.toLowerCase().trim()) && !isFiltered(mod)) chips.push(mod);
-  return { name, pct, chips: chips.slice(0, 4) };
+
+  // Build discrete rows: [label, value] — only include populated, non-trivial fields
+  const rows = [];
+  if (li.sourceQuality && li.sourceDirection) {
+    rows.push(['Source', `${fmtTitle(li.sourceQuality)} · ${fmtTitle(li.sourceDirection)}`]);
+  } else if (li.sourceQuality) {
+    rows.push(['Source', fmtTitle(li.sourceQuality)]);
+  } else if (li.sourceDirection) {
+    rows.push(['Direction', fmtTitle(li.sourceDirection)]);
+  }
+  if (li.shadowPattern && !STAGE_BARE.has(li.shadowPattern.toLowerCase())) {
+    rows.push(['Shadow', fmtTitle(li.shadowPattern)]);
+  }
+  if (li.fillPresence && !STAGE_BARE.has(li.fillPresence.toLowerCase())) {
+    rows.push(['Fill', fmtTitle(li.fillPresence)]);
+  }
+  if (li.detectedModifier && !STAGE_BARE.has(li.detectedModifier.toLowerCase())) {
+    rows.push(['Modifier', fmtModifier(li.detectedModifier)]);
+  }
+  if (li.catchlightShape && !STAGE_BARE.has(li.catchlightShape.toLowerCase())) {
+    rows.push(['Catchlight', fmtTitle(li.catchlightShape)]);
+  }
+  if (li.lightCount > 0) {
+    rows.push(['Lights', String(li.lightCount)]);
+  }
+
+  return { name, pct, rows };
+}
+
+/* ─── Stage area — shared between Free and Paid ──────────────────────── */
+function StageArea({ stage }) {
+  return (
+    <div className="home-v2__stage">
+      <div className="home-v2__stage-photo">
+        <div className="home-v2__stage-photo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+            <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
+            <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      {stage ? (
+        <div className="home-v2__stage-body">
+          {/* Pattern name + confidence */}
+          {(stage.name || stage.pct > 0) && (
+            <div className="home-v2__stage-result">
+              {stage.name && <span className="home-v2__stage-pattern">{stage.name}</span>}
+              {stage.pct > 0 && <span className="home-v2__stage-confidence">{stage.pct}%</span>}
+            </div>
+          )}
+          {/* Discrete data rows */}
+          {stage.rows.length > 0 && (
+            <dl className="home-v2__stage-rows">
+              {stage.rows.map(([label, value]) => (
+                <div key={label} className="home-v2__stage-row">
+                  <dt className="home-v2__stage-row-label">{label}</dt>
+                  <dd className="home-v2__stage-row-value">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </div>
+      ) : (
+        <div className="home-v2__stage-body">
+          <span className="home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── Free home ─────────────────────────────────────────────────────── */
@@ -42,39 +114,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
         <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
       </div>
 
-      {/* Stage area — always visible; shows camera icon placeholder until analysis exists */}
-      <div className="home-v2__stage">
-        <div className="home-v2__stage-photo">
-          <div className="home-v2__stage-photo-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-              <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </div>
-        </div>
-        {stage ? (
-          <>
-            <div className="home-v2__stage-result">
-              <span className="home-v2__stage-pattern">{stage.name}</span>
-              {stage.pct > 0 && (
-                <span className="home-v2__stage-confidence">{stage.pct}%</span>
-              )}
-            </div>
-            {stage.chips.length > 0 && (
-              <div className="home-v2__stage-chips">
-                {stage.chips.map((chip, i) => (
-                  <span key={i} className="home-v2__stage-chip">{chip}</span>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="home-v2__stage-result">
-            <span className="home-v2__stage-pattern home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
-          </div>
-        )}
-      </div>
+      <StageArea stage={stage} />
 
       <div className="home-v2__cta-wrap">
         <button
@@ -102,7 +142,6 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
             <span className="home-v2__secondary-hint">Pick a look — run it today</span>
           </div>
         </button>
-
       </div>
 
       {lastSetup && (
@@ -171,39 +210,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
         </div>
       )}
 
-      {/* Stage area — always visible */}
-      <div className="home-v2__stage">
-        <div className="home-v2__stage-photo">
-          <div className="home-v2__stage-photo-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
-              <circle cx="12" cy="13.5" r="3.5" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-          </div>
-        </div>
-        {stage ? (
-          <>
-            <div className="home-v2__stage-result">
-              <span className="home-v2__stage-pattern">{stage.name}</span>
-              {stage.pct > 0 && (
-                <span className="home-v2__stage-confidence">{stage.pct}%</span>
-              )}
-            </div>
-            {stage.chips.length > 0 && (
-              <div className="home-v2__stage-chips">
-                {stage.chips.map((chip, i) => (
-                  <span key={i} className="home-v2__stage-chip">{chip}</span>
-                ))}
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="home-v2__stage-result">
-            <span className="home-v2__stage-pattern home-v2__stage-pattern--empty">Analyze a photo to see your lighting</span>
-          </div>
-        )}
-      </div>
+      <StageArea stage={stage} />
 
       <div className="home-v2__cta-wrap">
         <button

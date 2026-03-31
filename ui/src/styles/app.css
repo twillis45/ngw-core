@@ -10676,11 +10676,52 @@ body {
   letter-spacing: -0.01em;
 }
 
+.home-v2__stage-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
 .home-v2__stage-pattern--empty {
   font-size: var(--text-sm);
   font-weight: var(--weight-normal);
   color: rgba(255,255,255,0.35);
   letter-spacing: 0;
+}
+
+/* Discrete data rows */
+.home-v2__stage-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+}
+
+.home-v2__stage-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.home-v2__stage-row-label {
+  font-size: 10px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+  width: 64px;
+}
+
+.home-v2__stage-row-value {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: rgba(255,255,255,0.82);
+  line-height: 1.3;
+  margin: 0;
 }
 
 .home-v2__stage-confidence {
