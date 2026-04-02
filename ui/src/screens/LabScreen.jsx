@@ -1736,12 +1736,7 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
                 <ZoomImg src={preview} alt="Selected for analysis" />
                 {loading && (
                   <div className="ref-scan-overlay">
-                    <span className="ref-scan-dot" />
-                    <span className="ref-scan-dot" />
-                    <span className="ref-scan-dot" />
-                    <span className="ref-scan-dot" />
-                    <span className="ref-scan-dot" />
-                    <span className="ref-scan-dot" />
+                    <div className="ref-scan-overlay__line" />
                   </div>
                 )}
               </div>
