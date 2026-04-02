@@ -1,0 +1,18 @@
+{
+  "benchmark_id": "rim_only",
+  "description": "Rim only — pure rim/edge light from behind, face in deep shadow, hat obscures features, dramatic silhouette",
+  "image_path": "benchmarks/images/rim_only.jpg",
+  "ground_truth": {
+    "expected_pattern": "rim_only",
+    "expected_light_count": 1,
+    "expected_key_direction": "unknown",
+    "acceptable_patterns": ["rim_only", "low_key", "split", "rembrandt", "unknown"],
+    "acceptable_light_count_range": [1, 2]
+  },
+  "metadata": {
+    "category": "dramatic",
+    "difficulty": "hard",
+    "known_challenges": ["face completely in shadow — no face mesh or catchlight signals", "hat occludes most of head", "rim_only is rare in pattern training data", "near-silhouette may return unknown"],
+    "added_date": "2026-03-17"
+  }
+}

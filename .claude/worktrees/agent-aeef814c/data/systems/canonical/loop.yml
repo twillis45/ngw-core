@@ -1,0 +1,91 @@
+id: loop
+name: Loop Lighting
+version: 1
+status: canonical
+
+pattern:
+  primary: loop
+  secondary: null
+
+category: classic
+difficulty: 1
+setup_time_minutes: 8
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 8
+  background: any
+  background_distance_ft: 5
+
+subject:
+  distance_from_camera_ft: 6
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-135mm
+  angle_to_subject_deg: 0
+
+capture_settings:
+  iso: 100
+  aperture: f/5.6-f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Versatile general-portrait settings; adjust aperture for desired background separation
+    - f/8 is safest for group consistency, f/5.6 for single-subject headshots
+
+lights:
+  - role: key
+    modifier: softbox_octa
+    angle_deg: 30
+    height: above_eye_level
+    height_offset_in: 10
+    distance_ft: 5
+    power_ratio: 1.0
+    notes:
+      - 25-40 degree off-axis produces clean loop shadow
+      - Height above eye line creates small nose shadow loop
+      - Feather toward subject for even coverage
+
+  - role: fill
+    modifier: reflector
+    angle_deg: -30
+    height: eye_level
+    height_offset_in: 0
+    distance_ft: 4
+    power_ratio: 0.3
+    notes:
+      - Optional reflector or second light at low power
+      - Controls shadow depth without killing dimension
+      - White reflector for softer fill, silver for punchier
+
+shadow_signature:
+  expected_pattern: loop
+  nose_shadow: small_loop
+  cheek_shadow: moderate
+  contrast: medium
+  softness: 0.5
+
+failure_modes:
+  - "Key too high: raccoon eyes from deep sockets"
+  - "Key too far off-axis: becomes Rembrandt"
+  - "No fill: may be too dark for some corporate work"
+
+substitutions:
+  - if_missing: softbox_octa
+    use: umbrella_white
+    tradeoff: "More spill, larger wrap"
+  - if_missing: reflector
+    use: white_foam_core
+    tradeoff: "Less efficient bounce at distance"
+
+use_cases:
+  - portrait
+  - headshot
+  - yearbook
+  - editorial
+
+example_photographers:
+  - Annie Leibovitz
+  - Gregory Heisler

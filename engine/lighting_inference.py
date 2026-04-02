@@ -460,6 +460,7 @@ class LightingInference:
     cue_report: Optional[Any] = None  # VisualCueReport when cue pipeline ran
     face_mesh_available: bool = True   # Phase 2: False when no face mesh detected
     data_quality: str = "full"         # full | face_limited | environmental_limited
+    earring_catchlight_contamination: bool = False  # lateral catchlight excluded by cross-eye consistency check
 
     def to_input_ctx_fields(self) -> Dict[str, Any]:
         """Dict suitable for merging into input_ctx for score_system()."""
@@ -612,6 +613,7 @@ def infer_lighting_from_vision(
     vision_data: Dict[str, Any],
     classification: Optional[Dict[str, Any]] = None,
     cue_report: Optional[Any] = None,
+    vlm_description: Optional[Any] = None,  # VLMDescription — typed as Any to avoid circular import
 ) -> LightingInference:
     """Translate vision pipeline output into lighting vocabulary.
 
@@ -622,11 +624,26 @@ def infer_lighting_from_vision(
                         (palette-based mood/brightness/etc.).
         cue_report: Optional ``VisualCueReport`` from the cue extraction pipeline.
                     When provided, enriches the inference with cue-based analysis.
+        vlm_description: Optional ``VLMDescription`` — when provided, the VLM's
+                    ``signals.catchlights.jewellery_catchlight_suspected`` flag
+                    is used to reinforce the cross-eye contamination check.
 
     Returns:
         A ``LightingInference`` with all detected fields populated.
     """
     all_notes: List[str] = []
+
+    # Extract VLM jewellery flag once — used later in the contamination check
+    _vlm_jewellery_flag: bool = False
+    if vlm_description is not None:
+        try:
+            _vlm_jewellery_flag = bool(
+                vlm_description.signals
+                and vlm_description.signals.catchlights
+                and vlm_description.signals.catchlights.jewellery_catchlight_suspected
+            )
+        except Exception:
+            pass
 
     # ── Catchlights → pattern + modifier ──
     catchlight_data = vision_data.get("catchlights", {})
@@ -741,9 +758,12 @@ def infer_lighting_from_vision(
                     f"indicate '{pattern_result['pattern']}' — using catchlight result."
                 )
                 for alt in setup_family.alternate_hypotheses:
+                    # alternate_hypotheses is List[FieldCandidate] — use attribute access
+                    _alt_val = getattr(alt, "value", None) or alt.get("hypothesis", "") if isinstance(alt, dict) else alt.value
+                    _alt_conf = getattr(alt, "confidence", 0.0) if not isinstance(alt, dict) else alt.get("confidence", 0.0)
                     all_notes.append(
-                        f"Alternate hypothesis: {alt['hypothesis']} "
-                        f"(confidence {alt['confidence']:.2f})"
+                        f"Alternate hypothesis: {_alt_val} "
+                        f"(confidence {_alt_conf:.2f})"
                     )
 
         # Enrich modifier when catchlights couldn't determine it
@@ -761,12 +781,113 @@ def infer_lighting_from_vision(
 
     # ── Determine key light side (left / right / center) ──
     key_side = "unknown"
+    earring_contamination_detected = False
+
     # From catchlight quadrants: the catchlight position tells us where the
     # light source is relative to the subject.
     if catchlight_list:
         left_eye = [c for c in catchlight_list if c.get("eye") == "left"]
         right_eye = [c for c in catchlight_list if c.get("eye") == "right"]
-        all_cls = left_eye or right_eye  # use whichever has data
+
+        # ── Cross-eye consistency check ──────────────────────────────────────
+        # Large hoop earrings and other jewellery reflect into the lateral edge
+        # of the near eye, creating a false "hard_right" or "hard_left"
+        # catchlight that has no counterpart in the other eye.  Real key
+        # catchlights appear at consistent clock positions in both eyes.
+        #
+        # Contamination heuristic: if both eyes have catchlights and one eye
+        # has a dominant lateral catchlight (3 or 9 o'clock) that:
+        #   (a) has no corresponding lateral catchlight in the other eye, AND
+        #   (b) is larger (higher size_ratio) than the non-lateral catchlights
+        #       in that same eye, OR is the only catchlight in that eye,
+        # then treat it as a jewellery / specular contamination and exclude it
+        # from the key-side vote, logging the flag.
+        def _is_lateral(hour: Optional[int]) -> bool:
+            return hour in (3, 9)
+
+        def _dominant_hour(eye_cls: List[Dict[str, Any]]) -> Optional[int]:
+            """Return the clock hour of the highest size_ratio catchlight."""
+            if not eye_cls:
+                return None
+            best = max(eye_cls, key=lambda c: c.get("size_ratio", 0.0))
+            return _clock_num(best.get("position", ""))
+
+        filtered_catchlight_list = list(catchlight_list)  # start with full set
+
+        if left_eye and right_eye:
+            left_dominant_hour = _dominant_hour(left_eye)
+            right_dominant_hour = _dominant_hour(right_eye)
+
+            for (suspect_eye, other_eye, suspect_dominant) in [
+                (left_eye, right_eye, left_dominant_hour),
+                (right_eye, left_eye, right_dominant_hour),
+            ]:
+                if not _is_lateral(suspect_dominant):
+                    continue
+                # Check if the other eye also has a lateral dominant
+                other_dominant = _dominant_hour(other_eye)
+                if _is_lateral(other_dominant):
+                    continue  # both eyes lateral → not an earring, likely hard side-light
+                # Confirm the suspect is the largest in its eye
+                suspect_sizes = [c.get("size_ratio", 0.0) for c in suspect_eye]
+                suspect_entry = max(suspect_eye, key=lambda c: c.get("size_ratio", 0.0))
+                non_lateral = [c for c in suspect_eye
+                               if not _is_lateral(_clock_num(c.get("position", "")))]
+                if non_lateral and not _vlm_jewellery_flag:
+                    # Size-dominance guard: only exclude the lateral catchlight
+                    # if it is the largest in its eye.  This avoids accidentally
+                    # stripping a real side-key catchlight that happens to be
+                    # slightly smaller than the key catchlight.
+                    # When the VLM has already flagged jewellery contamination,
+                    # skip this guard — the VLM's visual read of earrings
+                    # overrides the size ambiguity.
+                    max_non_lateral_size = max(c.get("size_ratio", 0.0) for c in non_lateral)
+                    if suspect_entry.get("size_ratio", 0.0) <= max_non_lateral_size:
+                        continue  # lateral catchlight is not dominant — keep it
+                # Flag and remove the contaminated catchlight(s) from the vote
+                contaminated = [
+                    c for c in suspect_eye
+                    if _is_lateral(_clock_num(c.get("position", "")))
+                ]
+                for c in contaminated:
+                    if c in filtered_catchlight_list:
+                        filtered_catchlight_list.remove(c)
+                earring_contamination_detected = True
+                vlm_confirm = " (VLM confirmed jewellery present)" if _vlm_jewellery_flag else ""
+                all_notes.append(
+                    f"Cross-eye consistency check: dominant lateral catchlight "
+                    f"at {suspect_dominant} o'clock in one eye has no counterpart "
+                    f"in the other eye — excluded from key-side vote "
+                    f"(likely jewellery/specular contamination){vlm_confirm}."
+                )
+
+        # ── Re-derive pattern from clean (filtered) catchlight list ──────────
+        # If contamination was detected, the original pattern_result was computed
+        # from the raw catchlight list which included the spurious lateral
+        # catchlight.  Re-run pattern inference on the filtered list so that
+        # LightingInference.pattern reflects the clean signal.
+        if earring_contamination_detected and filtered_catchlight_list != catchlight_list:
+            _orig_pattern = pattern_result.get("pattern", "unknown")
+            _clean_pattern = _infer_pattern_from_catchlights(filtered_catchlight_list)
+            if _clean_pattern.get("pattern") not in (None, "unknown") or _orig_pattern == "split":
+                # Only replace if we got a useful clean pattern OR
+                # if the original was split (which we know is contaminated)
+                pattern_result = dict(pattern_result)  # copy to avoid mutating original
+                pattern_result["pattern"] = _clean_pattern.get("pattern", "unknown")
+                pattern_result["pattern_confidence"] = _clean_pattern.get("pattern_confidence", 0.3)
+                pattern_result["key_position_text"] = _clean_pattern.get("key_position_text", pattern_result.get("key_position_text", ""))
+                all_notes.append(
+                    f"Pattern re-derived from clean catchlight list after earring removal: "
+                    f"'{pattern_result['pattern']}' (was '{_orig_pattern}')."
+                )
+
+        all_cls = (
+            [c for c in filtered_catchlight_list if c.get("eye") in ("left", "right")]
+            or filtered_catchlight_list
+        )
+        if not all_cls:
+            all_cls = left_eye or right_eye  # fallback: use raw list if filter removed everything
+
         if all_cls:
             hours = [_clock_num(c.get("position", "")) for c in all_cls]
             hours = [h for h in hours if h is not None]
@@ -882,6 +1003,7 @@ def infer_lighting_from_vision(
         cue_report=cue_report,
         face_mesh_available=_has_face_mesh,
         data_quality=_data_quality,
+        earring_catchlight_contamination=earring_contamination_detected,
     )
 
 

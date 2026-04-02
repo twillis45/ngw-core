@@ -1,0 +1,18 @@
+{
+  "reference_id": "6503",
+  "pattern_id": "clamshell",
+  "photographer": "Peter Hurley ",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.5,
+  "environment": "studio",
+  "approval_status": "draft",
+  "ingested_at": "2026-03-12T22:49:46.798096+00:00",
+  "has_signals": true,
+  "has_vlm_reconstruction": true,
+  "has_debug_overlay": true,
+  "image_dimensions": {
+    "width": 1999,
+    "height": 1333
+  },
+  "reprocessed_at": "2026-03-21T05:00:31.384172+00:00"
+}

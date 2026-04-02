@@ -1,0 +1,53 @@
+{
+  "reference_id": "iooss_athletic_001",
+  "pattern_id": "athletic_rim_sculpt",
+  "photographer": "Walter Iooss Jr",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "studio",
+  "notes": "Dual rim/edge lights with low-power key from front. Low camera angle for heroic perspective.",
+  "lights": [
+    {
+      "role": "rim",
+      "modifier": "stripbox",
+      "angle_deg": 150,
+      "height_deg": 25,
+      "distance_ft": 8
+    },
+    {
+      "role": "kicker",
+      "modifier": "stripbox",
+      "angle_deg": -150,
+      "height_deg": 25,
+      "distance_ft": 8
+    },
+    {
+      "role": "key",
+      "modifier": "softbox_rect",
+      "angle_deg": 20,
+      "height_deg": 15,
+      "distance_ft": 7
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "minimal",
+    "chin_shadow": "soft",
+    "cheek_shadow": "moderate"
+  },
+  "camera": {
+    "height_relative": "low",
+    "distance_ft": 8,
+    "focal_length": 200
+  },
+  "use_cases": [
+    "athletic_portrait",
+    "fitness",
+    "sports_marketing"
+  ],
+  "light_count": 3,
+  "key_direction_deg": 20,
+  "modifier_family": "softbox_rect",
+  "estimated_distance_ft": 7,
+  "shadow_pattern": "athletic_rim_sculpt",
+  "key_height_relative": "low"
+}

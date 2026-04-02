@@ -1,0 +1,20 @@
+{
+  "reference_id": "clamshell_hurley_01",
+  "pattern_id": "clamshell",
+  "photographer": "Peter Hurley",
+  "title": "Hurley Style Headshot Reference 01",
+  "source_type": "portfolio",
+  "source_url": "",
+  "environment": "studio",
+  "light_count": 2,
+  "key_direction_deg": 0,
+  "key_height_relative": "above_eye",
+  "shadow_pattern": "balanced_clamshell",
+  "modifier_family": "octa",
+  "estimated_distance_ft": 5,
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "matched_setup_ids": ["clamshell", "two_light_headshot"],
+  "notes": "Classic frontal headshot setup with top key and lower fill/reflector."
+}
+

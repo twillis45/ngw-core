@@ -81,9 +81,24 @@ Usage::
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from engine.enums import FieldStatus
+from engine.analysis_version import AnalysisVersionMetadata
+from engine.taxonomy import TAXONOMY_VERSION
+from engine.provenance_models import FieldProvenance, FieldCandidate as _FieldCandidate
+from engine.vlm_contract import (
+    VLMSemanticHint,
+    VLMDisagreementRecord,
+    build_vlm_semantic_hint,
+    build_vlm_disagreements,
+)
+
 logger = logging.getLogger(__name__)
+
+# Phase 1 — increment when stage logic, resolver order, or cue weights change.
+PIPELINE_VERSION = "1.0.0"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -128,6 +143,7 @@ class PatternCandidate:
     source: str          # classifier that produced it
     confidence: float    # 0-1 range
     rank: int = 0        # 1-based rank within candidate list
+    supporting_cues: List[str] = dc_field(default_factory=list)
 
 
 @dataclass
@@ -138,7 +154,7 @@ class PatternCandidates:
     Individual classifiers contribute evidence; this structure ranks them.
     """
     primary: PatternCandidate
-    alternates: list = dc_field(default_factory=list)
+    alternates: List[PatternCandidate] = dc_field(default_factory=list)
     needs_review: bool = False
     contradictions: list = dc_field(default_factory=list)
 
@@ -218,6 +234,7 @@ class EdgeCaseFlags:
     extreme_low_key: bool = False
     bw_processing: bool = False
     no_face: bool = False
+    earring_catchlight_contamination: bool = False
 
 
 def _apply_signal_confidence(
@@ -234,6 +251,22 @@ def _apply_signal_confidence(
     different patterns at similar confidence levels.  They do NOT create
     new pattern classifications — only nudge existing candidates.
     """
+    # ── Hard penalty: earring / jewellery catchlight contamination ──
+    # Applied first, before the early-return guard, so it fires regardless
+    # of whether cue_report / light_structure is available.
+    # When the cross-eye consistency check flagged a lateral catchlight as
+    # jewellery contamination, the split pattern candidate is based on a
+    # false signal.  Apply a large confidence penalty to split so it cannot
+    # win over loop/rembrandt/butterfly even when other signals are ambiguous.
+    _li = getattr(result, "lighting_intel", None)
+    _earring_flag = getattr(_li, "earring_catchlight_contamination", False)
+    if _earring_flag:
+        for c in candidates:
+            if c.pattern == "split":
+                c.confidence = round(max(0.0, c.confidence - 0.40), 3)
+                if "earring_catchlight_contamination" not in c.supporting_cues:
+                    c.supporting_cues.append("earring_catchlight_contamination")
+
     cr = getattr(result, "cue_report", None)
     ls = getattr(cr, "light_structure", None) if cr else None
     if ls is None:
@@ -249,79 +282,102 @@ def _apply_signal_confidence(
 
     for c in candidates:
         adj = 0.0
+        cues: List[str] = []
         p = c.pattern
 
         # ── Triangle isolation signal → rembrandt ────────────────
         if p == "rembrandt":
             if triangle_isolation > 0.12:
                 adj += 0.06  # well-isolated triangle: strong rembrandt
+                cues.append("triangle_isolation")
             elif triangle_isolation > 0.06:
                 adj += 0.02  # moderate isolation: mild boost
+                cues.append("triangle_isolation")
             elif triangle_isolation < 0.02 and centroid_dist > 0.05:
                 adj -= 0.05  # no triangle isolation: penalize rembrandt
+                cues.append("triangle_isolation")
+                cues.append("nose_shadow_centroid_distance")
         elif p == "loop":
             # If triangle_isolation is high, loop is less likely
             if triangle_isolation > 0.12:
                 adj -= 0.04
+                cues.append("triangle_isolation")
             # Moderate asymmetry with diagonal centroid supports loop
             if 0.10 < lr_asym < 0.25 and centroid_dist > 0.1:
                 adj += 0.03
+                cues.append("left_right_asymmetry")
+                cues.append("nose_shadow_centroid_distance")
 
         # ── Shadow density signal ────────────────────────────────
         if p == "butterfly":
             # Butterfly expects low shadow density (on-axis light)
             if shadow_density < 0.10:
                 adj += 0.04
+                cues.append("shadow_density")
             elif shadow_density > 0.30:
                 adj -= 0.05  # high shadow density contradicts butterfly
+                cues.append("shadow_density")
         elif p == "split":
             # Split expects strong shadow density and asymmetry
             if shadow_density > 0.30 and lr_asym > 0.35:
                 adj += 0.05
+                cues.append("shadow_density")
+                cues.append("left_right_asymmetry")
             elif lr_asym < 0.15:
                 adj -= 0.06  # low asymmetry contradicts split
+                cues.append("left_right_asymmetry")
 
         # ── Left/right asymmetry signal ──────────────────────────
         if p in ("butterfly", "clamshell"):
             # On-axis patterns expect symmetric shadows
             if lr_asym < 0.10:
                 adj += 0.03
+                cues.append("left_right_asymmetry")
             elif lr_asym > 0.25:
                 adj -= 0.04
+                cues.append("left_right_asymmetry")
 
         # ── Highlight width signal ───────────────────────────────
         if p == "broad":
             if highlight_width > 0.55:
                 adj += 0.04  # wide highlight supports broad
+                cues.append("highlight_width_ratio")
             elif highlight_width < 0.30:
                 adj -= 0.04
+                cues.append("highlight_width_ratio")
         elif p == "short":
             if highlight_width < 0.40:
                 adj += 0.03  # narrow highlight supports short
+                cues.append("highlight_width_ratio")
             elif highlight_width > 0.60:
                 adj -= 0.03
+                cues.append("highlight_width_ratio")
 
         # ── Bottom-heavy shadow → supports loop/butterfly over split ──
         if p in ("loop", "butterfly") and top_bottom > 1.5:
             adj += 0.02
+            cues.append("top_bottom_ratio")
         elif p == "split" and top_bottom > 2.0:
             adj -= 0.03  # bottom-heavy shadow unlikely for pure split
+            cues.append("top_bottom_ratio")
 
-        # Apply bounded adjustment
+        # Apply bounded adjustment; record which signals fired
         if adj != 0.0:
             c.confidence = round(max(0.0, min(1.0, c.confidence + adj)), 3)
+        for _cue in cues:
+            if _cue not in c.supporting_cues:
+                c.supporting_cues.append(_cue)
 
 
 def _signal_contradiction_score(
     pattern: str,
     result: "AnalysisResult",
-) -> float:
+) -> Tuple[float, List[str]]:
     """Compute how strongly vision signals contradict a candidate pattern.
 
-    Returns a score in [0, 1] where:
-        0.0 = no contradiction (signals support or are neutral)
-        0.3+ = moderate contradiction
-        0.6+ = strong contradiction (reference_read should be demoted)
+    Returns (score, cue_names) where:
+        score     — [0, 1]: 0.0 = no contradiction, 0.3+ = moderate, 0.6+ = strong
+        cue_names — names of LightStructureDetection signals that fired
 
     Contradiction rules are pattern-specific and use only the structured
     signals from LightStructureDetection — no new classification logic.
@@ -329,7 +385,7 @@ def _signal_contradiction_score(
     cr = getattr(result, "cue_report", None)
     ls = getattr(cr, "light_structure", None) if cr else None
     if ls is None:
-        return 0.0
+        return 0.0, []
 
     tri_iso = getattr(ls, "triangle_isolation", 0.0)
     lr_asym = getattr(ls, "left_right_asymmetry", 0.0)
@@ -338,14 +394,18 @@ def _signal_contradiction_score(
     tb_ratio = getattr(ls, "top_bottom_ratio", 0.0)
 
     score = 0.0
+    cues: List[str] = []
 
     if pattern == "rembrandt":
         # Rembrandt requires: asymmetry (shadow side) + triangle of light
         # on cheek.  Low asymmetry OR no triangle isolation = contradiction.
         if lr_asym < 0.10 and tri_iso < 0.03:
             score += 0.4  # symmetric face + no triangle → not rembrandt
+            cues.append("left_right_asymmetry")
+            cues.append("triangle_isolation")
         if shadow_den < 0.05:
             score += 0.3  # near-zero shadow → can't form rembrandt pattern
+            cues.append("shadow_density")
 
     elif pattern == "clamshell":
         # Clamshell requires two distinct sources creating visible
@@ -353,13 +413,17 @@ def _signal_contradiction_score(
         # → butterfly, not clamshell.
         if shadow_den < 0.01 and lr_asym < 0.02:
             score += 0.7  # no shadow at all → strong butterfly signal
+            cues.append("shadow_density")
+            cues.append("left_right_asymmetry")
 
     elif pattern == "butterfly":
         # Butterfly = on-axis, minimal shadow, symmetric.
         if shadow_den > 0.40:
             score += 0.4  # too much shadow for on-axis
+            cues.append("shadow_density")
         if lr_asym > 0.25:
             score += 0.3  # too asymmetric for centered source
+            cues.append("left_right_asymmetry")
         # Deep shadows (sd > 0.40) combined with a confirmed Rembrandt triangle
         # is a strong contradiction for butterfly: true butterfly images have
         # near-zero shadow density and no directional triangle.
@@ -374,39 +438,59 @@ def _signal_contradiction_score(
             and getattr(_sc_but, "confidence", 0.0) > 0.40
         ):
             score += 0.50  # deep shadows + confirmed triangle = directional, not butterfly
+            cues.append("shadow_density")
+            cues.append("triangle_isolation")
 
     elif pattern == "split":
         # Split = half-face shadow, high asymmetry.
         if lr_asym < 0.15:
             score += 0.5  # too symmetric for split
+            cues.append("left_right_asymmetry")
         if hl_width > 0.60 and lr_asym < 0.25:
             score += 0.2  # wide highlights inconsistent with split
+            cues.append("highlight_width_ratio")
+            cues.append("left_right_asymmetry")
 
     elif pattern == "loop":
         # Loop = diagonal nose shadow, moderate asymmetry.
         # Very high asymmetry (> 0.5) suggests split, not loop.
         if lr_asym > 0.50:
             score += 0.4
+            cues.append("left_right_asymmetry")
         # Shadow continuity directly confirms a Rembrandt cheek triangle →
         # pattern is rembrandt, not loop.  The P4 shadow_continuity signal
         # uses connected-component analysis to confirm the triangle geometry
         # that distinguishes rembrandt from loop; when it fires with high
         # connectivity the reference_read "loop" label is contradicted.
+        #
+        # Exception: when earring catchlight contamination is detected, the
+        # shadow analysis may also be affected by earring-related reflections
+        # or partial occlusion.  Suppress the shadow_continuity contradiction
+        # in that case — the clean catchlight signal (upper-left from filtered
+        # list) is more trustworthy than shadow geometry near the earring side.
+        _earring_fl = getattr(
+            getattr(result, "lighting_intel", None),
+            "earring_catchlight_contamination", False
+        )
         _sc_loop = getattr(cr, "shadow_continuity", None)
         if (
-            _sc_loop is not None
+            not _earring_fl
+            and _sc_loop is not None
             and getattr(_sc_loop, "triangle_connected", False)
             and getattr(_sc_loop, "connectivity_score", 0.0) > 0.70
             and getattr(_sc_loop, "confidence", 0.0) > 0.40
         ):
             score += 0.65  # direct cheek-triangle confirmation → not loop
+            cues.append("triangle_isolation")
 
     elif pattern == "broad":
         # Broad = camera-side highlight, wide lit area.
         if hl_width < 0.25:
             score += 0.4  # too narrow for broad
+            cues.append("highlight_width_ratio")
         if lr_asym > 0.50:
             score += 0.2  # extreme asymmetry → split
+            cues.append("left_right_asymmetry")
 
     elif pattern in ("triangle", "rembrandt"):
         # Rembrandt/triangle requires a visible cheek triangle and asymmetry.
@@ -418,10 +502,21 @@ def _signal_contradiction_score(
                 score += 0.65  # CV explicitly says no triangle — strong contradiction
             else:
                 score += 0.40  # very low isolation — likely not rembrandt
+            cues.append("triangle_isolation")
         elif tri_iso < 0.10 and lr_asym < 0.15:
             score += 0.30  # weak triangle signal + near-symmetric face
+            cues.append("triangle_isolation")
+            cues.append("left_right_asymmetry")
 
-    return min(1.0, score)
+    # Deduplicate cues while preserving order
+    seen: set = set()
+    unique_cues: List[str] = []
+    for _c in cues:
+        if _c not in seen:
+            seen.add(_c)
+            unique_cues.append(_c)
+
+    return min(1.0, score), unique_cues
 
 
 # Threshold above which reference_read primary is demoted (priority shifted
@@ -568,6 +663,18 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                 confidence=_ls_conf,
             ))
 
+    # Source 5: vlm_hint — VLM semantic teacher (not sovereign truth)
+    # Only appended when the mapped pattern is a named canonical pattern.
+    # Confidence is pre-capped at build_vlm_semantic_hint() time.
+    _vlm_hint = getattr(result, "vlm_semantic_hint", None)
+    if _vlm_hint is not None and _vlm_hint.pattern is not None:
+        _vlm_pat = _vlm_hint.pattern.value
+        if _vlm_pat and _vlm_pat != "unknown":
+            candidates.append(PatternCandidate(
+                pattern=_vlm_pat, source="vlm_hint",
+                confidence=float(_vlm_hint.pattern.confidence),
+            ))
+
     # Detect contradictions between top classifiers
     if ref_pattern and li_pattern and ref_pattern != li_pattern:
         contradictions.append(
@@ -589,11 +696,12 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     SOURCE_PRIORITY = {
         "reference_read": 0, "lighting_inference": 1,
         "cue_inference": 2, "light_structure": 3,
+        "vlm_hint": 4,
     }
     ref_candidates = [c for c in candidates if c.source == "reference_read"]
     if ref_candidates:
         ref_c = ref_candidates[0]
-        contradiction_score = _signal_contradiction_score(ref_c.pattern, result)
+        contradiction_score, _contra_cues = _signal_contradiction_score(ref_c.pattern, result)
         if contradiction_score >= _CONTRADICTION_DEMOTION_THRESHOLD:
             # Demote reference_read: shift priority to 2 (same as cue_inference)
             # and halve confidence.  This lets competing candidates that are
@@ -627,7 +735,7 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                     continue
                 if _casc_c.pattern != _demoted_pat:
                     continue
-                _casc_score = _signal_contradiction_score(_casc_c.pattern, result)
+                _casc_score, _ = _signal_contradiction_score(_casc_c.pattern, result)
                 if _casc_score >= _CONTRADICTION_DEMOTION_THRESHOLD:
                     _orig_src = _casc_c.source
                     _casc_c.source = f"{_casc_c.source}_demoted"
@@ -815,6 +923,9 @@ class AnalysisResult:
         "pattern_candidates", "pattern_confidence", "pattern_confidence_label",
         "face_validation", "signal_reliability",
         "perception_explanation", "edge_case_flags",
+        "pattern_status", "version_metadata", "pattern_provenance",
+        "vlm_semantic_hint", "vlm_disagreements",
+        "analysis_id",
     )
 
     def __init__(self) -> None:
@@ -842,6 +953,12 @@ class AnalysisResult:
         self.signal_reliability: Optional[SignalReliability] = None
         self.perception_explanation: Optional[PerceptionExplanation] = None
         self.edge_case_flags: Optional[EdgeCaseFlags] = None
+        self.pattern_status: FieldStatus = FieldStatus.UNKNOWN
+        self.version_metadata: Optional[AnalysisVersionMetadata] = None
+        self.pattern_provenance: Optional[FieldProvenance] = None
+        self.vlm_semantic_hint: Optional[VLMSemanticHint] = None
+        self.vlm_disagreements: List[VLMDisagreementRecord] = []
+        self.analysis_id: str = ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1370,6 +1487,11 @@ def _compute_edge_case_flags(
     if brightness == "low" and sd > 0.5:
         ecf.extreme_low_key = True
 
+    # Earring / jewellery catchlight contamination — surfaced from lighting_inference
+    li = getattr(result, "lighting_intel", None)
+    if li is not None and getattr(li, "earring_catchlight_contamination", False):
+        ecf.earring_catchlight_contamination = True
+
     return ecf
 
 
@@ -1564,6 +1686,7 @@ def analyze_image(
         Structured result with all pipeline outputs.
     """
     result = AnalysisResult()
+    result.analysis_id = str(uuid.uuid4())
 
     # ── Step 1: Image description (cue extraction) ──────────────────
     try:
@@ -1669,6 +1792,7 @@ def analyze_image(
             result.vision_data,
             classification=result.classification,
             cue_report=result.cue_report,
+            vlm_description=result.vlm_description,
         )
     except Exception as exc:
         logger.warning("Lighting inference failed: %s", exc)
@@ -1714,6 +1838,10 @@ def analyze_image(
     # ── Extract VLM reconstruction if available ─────────────────────
     if result.pipeline_results:
         result.vlm_reconstruction = result.pipeline_results.get("vlm_reconstruction")
+
+    # ── Phase 3: build VLM semantic hint (once, before resolver) ──────
+    # Built here so resolve_pattern_candidates() can use it as Source 5.
+    result.vlm_semantic_hint = build_vlm_semantic_hint(result.vlm_description)
 
     # ── Resolve authoritative pattern across all classifiers ──────
     # Candidate-first: preserve all classifier outputs, rank them.
@@ -1828,6 +1956,92 @@ def analyze_image(
     if result.pattern_candidates and result.pattern_candidates.primary:
         result.pattern_confidence = result.pattern_candidates.primary.confidence
         result.pattern_confidence_label = result.pattern_candidates.confidence_label
+
+    # ── Phase 1: conservative pattern_status assignment ──────────────
+    # Assigned here — after all upgrades — when the final authoritative
+    # pattern is settled.  Rules (in priority order):
+    #   FUSED_FINAL  — a real pattern was resolved from ranked candidates
+    #   CONTESTED    — resolver found material contradictions between classifiers
+    #   ASSUMED      — no signal; fell back to "unknown" explicitly
+    #   UNKNOWN      — none of the above; pre-resolution default
+    _src = result.authoritative_pattern_source or ""
+    _pat = result.authoritative_pattern or ""
+    if _pat and _pat not in ("unknown", ""):
+        result.pattern_status = FieldStatus.FUSED_FINAL
+    elif "contradiction" in _src or "contested" in _src:
+        result.pattern_status = FieldStatus.CONTESTED
+    elif _pat in ("unknown", "") and _src in ("none", "fallback", ""):
+        result.pattern_status = FieldStatus.ASSUMED
+    else:
+        result.pattern_status = FieldStatus.UNKNOWN
+
+    # ── Phase 1: attach version metadata snapshot ────────────────────
+    # Populated once, after all resolution is complete.  Do not mutate.
+    # system_version is a best-effort import; falls back to "unknown" if
+    # ENGINE_VERSION is not defined in the importing service.
+    try:
+        from recommend_service import ENGINE_VERSION as _ev  # type: ignore[import]
+    except Exception:
+        _ev = "unknown"
+    result.version_metadata = AnalysisVersionMetadata(
+        system_version=_ev,
+        taxonomy_version=TAXONOMY_VERSION,
+        pipeline_version=PIPELINE_VERSION,
+    )
+
+    # ── Phase 2: pattern_provenance — structure-first ────────────────
+    # FieldProvenance wraps the settled PatternCandidates into a single
+    # auditable record for the pattern field.
+    #
+    # supporting_cues is intentionally [] in Phase 2.
+    # Phase 3 will thread cue names from _signal_contradiction_score()
+    # into PatternCandidate, then propagate them into this record.
+    if result.pattern_candidates is not None:
+        _pc = result.pattern_candidates
+        _alts = [
+            _FieldCandidate(
+                value=a.pattern,
+                source=a.source,
+                confidence=a.confidence,
+                supporting_cues=[],  # Phase 3: thread from resolver
+                demotion_reason=("demoted" if "demoted" in (a.source or "") else ""),
+                status=(
+                    FieldStatus.INFERRED if a.pattern not in ("unknown", "") else
+                    FieldStatus.ASSUMED
+                ),
+            )
+            for a in _pc.alternates
+        ]
+        result.pattern_provenance = FieldProvenance(
+            field_name="pattern",
+            value=result.authoritative_pattern,
+            status=result.pattern_status,
+            confidence=result.pattern_confidence,
+            source=result.authoritative_pattern_source,
+            supporting_cues=list(_pc.primary.supporting_cues),
+            alternates=_alts,
+            demotion_applied="demoted" in (result.authoritative_pattern_source or ""),
+            pipeline_stage="fusion",
+        )
+
+    # ── Phase 3: VLM disagreements record ──────────────────────────────
+    # Additive alongside VLWDimensionResult — not a replacement.
+    # Uses canonical field names for cross-pipeline auditing.
+    if result.vlm_semantic_hint is not None and result.pattern_candidates is not None:
+        result.vlm_disagreements = build_vlm_disagreements(
+            vlm_hint=result.vlm_semantic_hint,
+            pattern_candidates=result.pattern_candidates,
+            resolved_pattern=result.authoritative_pattern,
+            resolved_source=result.authoritative_pattern_source,
+            pipeline_version=PIPELINE_VERSION,
+        )
+        # Phase 5a — persist best-effort; never break analysis on DB failure
+        if result.vlm_disagreements and result.analysis_id:
+            try:
+                from db.database import save_vlm_disagreements
+                save_vlm_disagreements(result.analysis_id, result.vlm_disagreements)
+            except Exception:
+                pass  # DB persistence is best-effort; analysis result is unaffected
 
     # ── Signal-based light_count correction ─────────────────────────
     # When vision signals strongly indicate a single light source but the

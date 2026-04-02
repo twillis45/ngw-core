@@ -1,0 +1,19 @@
+{
+  "reference_id": "rembrandt_karsh_01",
+  "pattern_id": "rembrandt",
+  "photographer": "Yousuf Karsh",
+  "title": "Karsh Style Rembrandt Reference 01",
+  "source_type": "archive",
+  "source_url": "https://karsh.org/photographs/albert-einstein/",
+  "environment": "studio",
+  "light_count": 1,
+  "key_direction_deg": 45,
+  "key_height_relative": "above_eye",
+  "shadow_pattern": "rembrandt_triangle",
+  "modifier_family": "hard_reflector",
+  "estimated_distance_ft": 5,
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "matched_setup_ids": ["rembrandt", "low_key_editorial"],
+  "notes": "Classic sculptural portrait with clear cheek triangle and deep shadow side."
+}

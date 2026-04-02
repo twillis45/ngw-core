@@ -631,6 +631,9 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
                 "position": clock_position(dx, dy),
                 "intensity": round(intensity, 2),
                 "shape": shape,
+                # size_ratio: catchlight enclosing-circle radius / iris radius (0–1+)
+                # <0.1 = point/hard source, 0.1–0.3 = medium, >0.3 = large diffuse source
+                "size_ratio": round(enc_r / radius, 3) if radius > 0 else None,
             })
 
         return results

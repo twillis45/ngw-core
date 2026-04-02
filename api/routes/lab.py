@@ -19,6 +19,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from api.utils.upload_naming import canonical_upload_name
+
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -134,9 +136,9 @@ async def lab_analyze(
     """
     check_rate_limit("lab_analyze", request, limit=10, window=60)
     content = await _validate_upload(image)
-    # Save uploaded file
-    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
-    fname = f"lab_{uuid.uuid4().hex[:12]}{ext}"
+    # Save uploaded file with canonical name — original filename preserved separately
+    original_filename = image.filename or "image.jpg"
+    fname = canonical_upload_name(original_filename, origin="lab")
     fpath = UPLOAD_DIR / fname
 
     with open(fpath, "wb") as f:
@@ -166,7 +168,8 @@ async def lab_analyze(
                 masks = ar.debug_data.get("masks", {})
                 person_mask = masks.get("person") if isinstance(masks, dict) else None
 
-                overlay_filename = f"overlay_{fpath.stem}_{uuid.uuid4().hex[:8]}.jpg"
+                overlay_stem = f"overlay_{fpath.stem}_{uuid.uuid4().hex[:8]}"
+                overlay_filename = f"{overlay_stem}.jpg"
                 overlay_path = Path("static/debug") / overlay_filename
 
                 saved_path = generate_analysis_overlay(
@@ -178,6 +181,58 @@ async def lab_analyze(
                 )
                 if saved_path:
                     debug_overlay_url = f"/static/debug/{overlay_filename}"
+
+                    # ── Sidecar JSON — enables per-layer overlay regeneration ──
+                    # Stores all data needed to regenerate the overlay with any
+                    # subset of layers, without re-running the full pipeline.
+                    try:
+                        import json as _json
+                        import numpy as _np
+
+                        def _json_safe(obj):
+                            """Recursively convert non-serializable values."""
+                            if isinstance(obj, _np.ndarray):
+                                return None  # arrays are too large; skip
+                            if isinstance(obj, dict):
+                                return {k: _json_safe(v) for k, v in obj.items()}
+                            if isinstance(obj, (list, tuple)):
+                                return [_json_safe(v) for v in obj]
+                            if isinstance(obj, _np.generic):
+                                return obj.item()
+                            return obj
+
+                        sidecar = {
+                            "pipeline_results": _json_safe(ar.pipeline_results),
+                            "face_box": face_box,
+                            # person_mask is a numpy array — too large; skip.
+                            # Highlight heatmap layer won't have person mask on regen,
+                            # but all other layers are unaffected.
+                        }
+                        sidecar_path = Path("static/debug") / f"{overlay_stem}.json"
+                        sidecar_path.write_text(_json.dumps(sidecar, default=str))
+
+                        # ── Source image snapshot — critical for layer regen ──
+                        # Save the original (un-annotated) image so the regenerate
+                        # endpoint always has a clean base to draw on.
+                        # Primary: re-encode from the numpy img_bgr in debug_data.
+                        # Fallback: copy the original upload file directly — this
+                        # is identical quality and works even if img_bgr is None.
+                        src_path = Path("static/debug") / f"{overlay_stem}_src.jpg"
+                        if img_bgr is not None:
+                            import cv2 as _cv2_src
+                            ok = _cv2_src.imwrite(str(src_path), img_bgr, [_cv2_src.IMWRITE_JPEG_QUALITY, 95])
+                            if not ok:
+                                # cv2 write failed — fall back to copying the upload
+                                import shutil as _shutil
+                                _shutil.copy2(str(fpath), str(src_path))
+                        else:
+                            # img_bgr not in debug_data — copy the original upload
+                            import shutil as _shutil
+                            _shutil.copy2(str(fpath), str(src_path))
+                    except Exception as _se:
+                        import logging as _log
+                        _log.getLogger(__name__).warning("Sidecar/src write failed (layer regen will not work): %s", _se)
+
             except Exception as exc:
                 import logging
                 logging.getLogger(__name__).warning("Debug overlay failed: %s", exc)
@@ -198,8 +253,51 @@ async def lab_analyze(
         # Serialize CV vision data (strip numpy arrays)
         cv_data = {k: v for k, v in ar.vision_data.items() if not k.startswith("_")}
 
-        # Lighting inference data
-        lighting_data = ar.lighting_intel.model_dump() if hasattr(ar.lighting_intel, "model_dump") else {}
+        # Lighting inference data — LightingInference is a plain @dataclass (not Pydantic).
+        # Read fields explicitly by attribute name — more reliable than vars() or model_dump().
+        import logging as _log
+        _li_log = _log.getLogger(__name__)
+        _li = ar.lighting_intel
+        if _li is not None:
+            lighting_data = {
+                "pattern":                       getattr(_li, "pattern", "unknown"),
+                "pattern_confidence":            getattr(_li, "pattern_confidence", 0.0),
+                "key_position_text":             getattr(_li, "key_position_text", ""),
+                "key_side":                      getattr(_li, "key_side", "unknown"),
+                "modifier_family":               getattr(_li, "modifier_family", None),
+                "modifier_confidence":           getattr(_li, "modifier_confidence", 0.0),
+                "light_count":                   getattr(_li, "light_count", 0),
+                "fill_method_text":              getattr(_li, "fill_method_text", ""),
+                "detected_mood":                 getattr(_li, "detected_mood", None),
+                "mood_confidence":               getattr(_li, "mood_confidence", 0.0),
+                "detected_skin_tone":            getattr(_li, "detected_skin_tone", None),
+                "skin_tone_confidence":          getattr(_li, "skin_tone_confidence", 0.0),
+                "background_light_detected":     getattr(_li, "background_light_detected", False),
+                "background_light_confidence":   getattr(_li, "background_light_confidence", 0.0),
+                "detected_cct_kelvin":           getattr(_li, "detected_cct_kelvin", None),
+                "detected_distance_class":       getattr(_li, "detected_distance_class", None),
+                "detected_environment":          getattr(_li, "detected_environment", None),
+                "notes":                         getattr(_li, "notes", []),
+            }
+            _li_log.info(
+                "lighting_intel: pattern=%s conf=%.2f key_pos=%r modifier=%s light_count=%s",
+                lighting_data["pattern"], lighting_data["pattern_confidence"],
+                lighting_data["key_position_text"], lighting_data["modifier_family"],
+                lighting_data["light_count"],
+            )
+        else:
+            # lighting_intel is None — infer_lighting_from_vision failed or was skipped.
+            # Fallback: use authoritative_pattern from the top-level result (always set).
+            _li_log.warning(
+                "ar.lighting_intel is None — lighting_inference skipped. notes=%s", ar.notes
+            )
+            lighting_data = {
+                "pattern":            ar.authoritative_pattern or "unknown",
+                "pattern_confidence": getattr(ar, "pattern_confidence", 0.0),
+                "key_position_text":  "",
+                "modifier_family":    None,
+                "light_count":        0,
+            }
 
         # Solver result (new — enrichment from solver chain)
         solver_data = None
@@ -254,7 +352,7 @@ async def lab_analyze(
                     "hour": _hour,
                     "quad": _quad,
                     "shape": _c.get("shape"),
-                    "size": _c.get("size"),
+                    "size_ratio": _c.get("size_ratio"),  # enclosing-circle radius / iris radius
                 })
             signal_diagnostics["catchlights"] = _cl_table
 
@@ -299,13 +397,17 @@ async def lab_analyze(
                 },
             ]
 
-            signal_diagnostics["final_pattern"] = _pattern
+            # Prefer lighting_data pattern; fall back to authoritative_pattern on ar
+            signal_diagnostics["final_pattern"] = _pattern or ar.authoritative_pattern or ""
         except Exception as _diag_exc:
             signal_diagnostics["error"] = str(_diag_exc)
 
         response = {
             "status": "ok",
+            "analysis_id": ar.analysis_id,
+            "system_version": ar.version_metadata.pipeline_version if ar.version_metadata else None,
             "image_path": str(fpath),
+            "original_filename": original_filename,
             "description": ar.description,
             "reference_analysis": ar.reference_analysis.model_dump() if ar.reference_analysis else {},
             "vlm": vlm_data,
@@ -319,6 +421,11 @@ async def lab_analyze(
             "reconstruction": pipeline_recon,
             "edge_case_flags": pipeline_edge_flags,
             "signal_diagnostics": signal_diagnostics,
+            # Top-level authoritative values — always present regardless of lighting_intel state
+            "authoritative_pattern":        ar.authoritative_pattern or "unknown",
+            "authoritative_pattern_source": getattr(ar, "authoritative_pattern_source", "none"),
+            "authoritative_confidence":     getattr(ar, "pattern_confidence", 0.0),
+            "authoritative_confidence_label": getattr(ar, "pattern_confidence_label", "weak"),
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
         }
@@ -397,12 +504,112 @@ def _generate_debug_overlay(raw: Dict[str, Any], image_path: Path) -> Optional[s
         return None
 
 
+# ── Debug overlay layer regeneration ─────────────────────
+
+class OverlayRegenerateBody(BaseModel):
+    overlay_url: str = Field(..., description="URL of the existing overlay, e.g. /static/debug/overlay_foo_abc12345.jpg")
+    layers: Optional[List[str]] = Field(default=None, description="Layer names to include. null/omitted = all layers. Empty list [] = no layers (clean image).")
+
+
+@router.post("/debug-overlay/regenerate")
+async def regenerate_debug_overlay(
+    body: OverlayRegenerateBody,
+    user: Dict = Depends(get_dev_user),
+):
+    """Regenerate a debug overlay with a filtered set of layers.
+
+    Uses the sidecar JSON saved alongside the original overlay to avoid
+    re-running the full analysis pipeline.
+
+    Returns: { "debug_overlay_url": "/static/debug/overlay_foo_abc12345_layers.jpg" }
+
+    Layer names: shadow, highlights, catchlights, background, pose,
+                 specular, surface, light_roles, summary
+    """
+    from engine.vision_debug import generate_analysis_overlay, ALL_LAYERS
+
+    # Extract stem from the overlay URL — e.g. "/static/debug/overlay_foo_abc12345.jpg"
+    overlay_url = body.overlay_url.lstrip("/")
+    overlay_path = Path(overlay_url)
+    overlay_stem = overlay_path.stem  # e.g. "overlay_foo_abc12345"
+
+    sidecar_path = Path("static/debug") / f"{overlay_stem}.json"
+    if not sidecar_path.exists():
+        raise HTTPException(status_code=404, detail="Overlay sidecar not found. Re-analyze with debug=true to regenerate.")
+
+    try:
+        import json as _json
+        import numpy as _np
+        import cv2 as _cv2
+
+        sidecar = _json.loads(sidecar_path.read_text())
+        pipeline_results = sidecar.get("pipeline_results", {})
+        face_box_raw = sidecar.get("face_box")
+        face_box = tuple(face_box_raw) if face_box_raw else None
+
+        # Determine active layers
+        # None → all layers; [] → no layers (clean source image); [...] → filtered subset
+        if body.layers is None:
+            active_layers = None  # all layers
+        elif body.layers:
+            active_layers = frozenset(body.layers) & ALL_LAYERS
+        else:
+            active_layers = frozenset()  # explicitly empty — clean source image
+
+        # Load the clean source image saved at analyze time.
+        # overlay_stem_src.jpg is written by the analyze endpoint alongside
+        # the sidecar JSON — it's the original un-annotated photo.
+        src_path = Path("static/debug") / f"{overlay_stem}_src.jpg"
+        if not src_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    "Source image snapshot not found. "
+                    "Layer toggling requires re-analyzing the photo with Debug Overlay enabled "
+                    "(this generates the _src.jpg snapshot alongside the sidecar)."
+                ),
+            )
+        source_img = _cv2.imread(str(src_path))
+        if source_img is None:
+            raise HTTPException(status_code=422, detail="Could not decode source image snapshot.")
+
+        # Generate with selected layers — None=all, frozenset()=none, frozenset({...})=filtered
+        if active_layers is None:
+            layer_tag = "all"
+        elif active_layers:
+            layer_tag = "_".join(sorted(active_layers))[:40]
+        else:
+            layer_tag = "none"
+        out_filename = f"{overlay_stem}_{layer_tag[:40]}.jpg"
+        out_path = Path("static/debug") / out_filename
+
+        saved = generate_analysis_overlay(
+            source_img,
+            pipeline_results,
+            face_box=face_box,
+            person_mask=None,   # mask not stored in sidecar (too large)
+            output_path=str(out_path),
+            layers=active_layers,
+        )
+        if not saved:
+            raise HTTPException(status_code=500, detail="Overlay generation failed.")
+
+        return {"debug_overlay_url": f"/static/debug/{out_filename}"}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).exception("Overlay regeneration failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 # ── Gold Set CRUD ─────────────────────────────────────────
 
 @router.get("/gold-set")
 async def list_gold_set(
     status: Optional[str] = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(50, ge=1, le=500),
     user: Dict = Depends(get_dev_user),
 ):
     """List gold set entries, optionally filtered by status."""
@@ -603,6 +810,33 @@ async def delete_candidate(candidate_id: str, user: Dict = Depends(get_dev_user)
     return {"status": "deleted", "id": candidate_id}
 
 
+@router.post("/candidates/upload-image")
+async def upload_candidate_image(
+    file: UploadFile = File(...),
+    user: Dict = Depends(get_dev_user),
+) -> Dict[str, Any]:
+    """Store an image attached to a rule candidate.
+
+    Saves the file under UPLOAD_DIR/candidates/ using the canonical naming
+    scheme and returns the server path.  No analysis is performed — this
+    is a lightweight store-only endpoint for evidence images.
+    """
+    content = await file.read()
+    if len(content) > _MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+        )
+    dest_dir = UPLOAD_DIR / "candidates"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    original_filename = file.filename or "photo.jpg"
+    filename = canonical_upload_name(original_filename, origin="candidate")
+    dest = dest_dir / filename
+    with open(dest, "wb") as fh:
+        fh.write(content)
+    return {"path": str(dest), "original_filename": original_filename}
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # REFERENCE IMAGE INGESTION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -667,9 +901,15 @@ async def ingest_reference_image(
     except (json.JSONDecodeError, Exception) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid metadata JSON: {exc}")
 
-    # Save uploaded image to temp location
-    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
-    fname = f"{metadata.get('reference_id', 'unknown')}{ext}"
+    # Preserve original filename in metadata before ingestion
+    original_filename = image.filename or "image.jpg"
+    if "original_filename" not in metadata:
+        metadata["original_filename"] = original_filename
+
+    # Save uploaded image to temp location (temp name — cleaned up after ingest)
+    ext = Path(original_filename).suffix.lower() or ".jpg"
+    fname = canonical_upload_name(original_filename, origin="ref_tmp",
+                                  pattern=metadata.get("pattern_id", "unknown"))
     tmp_path = REFERENCE_UPLOAD_DIR / fname
 
     with open(tmp_path, "wb") as f:
@@ -1086,9 +1326,15 @@ async def ingest_dataset_reference(
     except (json.JSONDecodeError, Exception) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid metadata JSON: {exc}")
 
-    # Save uploaded image to temp location
-    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
-    fname = f"{metadata.get('reference_id', 'unknown')}{ext}"
+    # Preserve original filename in metadata (persisted to metadata.json by _ingest)
+    original_filename = image.filename or "image.jpg"
+    if "original_filename" not in metadata:
+        metadata["original_filename"] = original_filename
+
+    # Save uploaded image to temp location (temp name — cleaned up after ingest)
+    ext = Path(original_filename).suffix.lower() or ".jpg"
+    fname = canonical_upload_name(original_filename, origin="ds_tmp",
+                                  pattern=metadata.get("pattern_id", "unknown"))
     tmp_path = DATASET_UPLOAD_DIR / fname
 
     with open(tmp_path, "wb") as f:

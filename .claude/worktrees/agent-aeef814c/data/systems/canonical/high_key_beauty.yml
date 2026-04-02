@@ -1,0 +1,112 @@
+id: high_key_beauty
+name: High Key Beauty
+version: 1
+status: canonical
+
+pattern:
+  primary: high_key
+  secondary: clamshell
+
+category: beauty
+difficulty: 3
+setup_time_minutes: 15
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 9
+  background: white_seamless
+  background_distance_ft: 8
+
+subject:
+  distance_from_camera_ft: 7
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-135mm
+  angle_to_subject_deg: 0
+
+capture_settings:
+  iso: 100
+  aperture: f/8-f/11
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Meter for highlights and expose slightly right to preserve the high-key feel
+    - Check histogram to ensure skin highlights stay below 240 RGB to retain detail
+
+lights:
+  - role: key
+    modifier: softbox_octa
+    size: large
+    angle_deg: 10
+    height: above_eye_level
+    height_offset_in: 12
+    distance_ft: 4
+    power_ratio: 1.0
+    notes:
+      - Large octa very close for maximum softness
+      - Nearly on-axis for flat, clean beauty light
+      - Feather slightly for even coverage
+
+  - role: fill
+    modifier: reflector
+    angle_deg: 0
+    height: below_chin
+    height_offset_in: -10
+    distance_ft: 3
+    power_ratio: 0.5
+    notes:
+      - Silver or white reflector below chin
+      - Opens under-eye and neck shadows
+      - Creates secondary catchlight
+
+  - role: background_left
+    modifier: bare_reflector
+    angle_deg: 160
+    height: mid_height
+    height_offset_in: 0
+    distance_ft: 4
+    power_ratio: 1.5
+    notes:
+      - Background must be 1.5-2 stops above key
+      - Pure white with no visible texture
+
+  - role: background_right
+    modifier: bare_reflector
+    angle_deg: -160
+    height: mid_height
+    height_offset_in: 0
+    distance_ft: 4
+    power_ratio: 1.5
+    notes:
+      - Matches left for even white coverage
+      - Flag to prevent flare toward camera
+
+shadow_signature:
+  expected_pattern: high_key
+  nose_shadow: minimal
+  cheek_shadow: minimal
+  contrast: very_low
+  softness: 0.85
+
+failure_modes:
+  - "Background wraps around subject: edge glow/halo"
+  - "Key too far: skin texture becomes visible"
+  - "Over-lit face: blown highlights, no detail"
+
+substitutions:
+  - if_missing: softbox_octa
+    use: large_umbrella
+    tradeoff: "Less control but still soft"
+
+use_cases:
+  - beauty
+  - cosmetics
+  - skincare
+  - magazine_cover
+  - high_key_portrait
+
+example_photographers:
+  - Mario Testino
+  - Patrick Demarchelier

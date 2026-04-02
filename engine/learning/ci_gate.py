@@ -229,7 +229,8 @@ def evaluate_candidate_gate(candidate_id: str) -> CIGateResult:
     Loads the candidate from the DB, fetches production signals from
     db.signals, runs the benchmark comparison, and returns a CIGateResult.
     """
-    from db.learning  import get_candidate, get_candidate_evaluation
+    from db.database  import get_rule_candidate as get_candidate
+    from db.learning  import get_candidate_evaluation
     from db.signals   import get_pattern_breakdown
     from db.benchmark_baseline import compare_to_baseline
     from engine.benchmark_v2.runner import run_benchmark

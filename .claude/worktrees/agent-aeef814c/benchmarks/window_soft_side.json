@@ -1,0 +1,18 @@
+{
+  "benchmark_id": "window_soft_side",
+  "description": "Window soft side light — soft diffused window light from left, B&W portrait, intimate mood, brick/window setting",
+  "image_path": "benchmarks/images/window_soft_side.jpg",
+  "ground_truth": {
+    "expected_pattern": "window_portrait",
+    "expected_light_count": 1,
+    "expected_key_direction": "upper_right",
+    "acceptable_patterns": ["window_portrait", "loop", "rembrandt", "window_negative_fill", "short", "broad"],
+    "acceptable_light_count_range": [1, 2]
+  },
+  "metadata": {
+    "category": "natural",
+    "difficulty": "standard",
+    "known_challenges": ["B&W removes color temperature cues for environment detection", "window visible in frame — may help or confuse environment classification", "soft falloff similar to large studio softbox"],
+    "added_date": "2026-03-17"
+  }
+}

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How NGW Works — No Guesswork Docs</title>
+  <meta name="description" content="How No Guesswork reverse-engineers a portrait photo — VLM analysis pipeline, pattern matching, confidence scoring, and blueprint generation.">
+  <meta property="og:title" content="How No Guesswork Works — Analysis Pipeline">
+  <meta property="og:description" content="How NGW reverse-engineers a portrait photo into a step-by-step lighting blueprint.">
+  <link rel="canonical" href="https://noguesswork.com/docs/how-it-works.html">
+  <link rel="stylesheet" href="/www/css/marketing.css">
+  <link rel="stylesheet" href="/static/www/docs/docs.css">
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav__logo">NGW</a>
+    <div class="nav__links">
+      <a href="/features">Features</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/docs/" class="nav__link--active">Docs</a>
+      <a href="/login" class="btn btn--ghost btn--sm">Sign in</a>
+    </div>
+  </nav>
+
+  <div class="docs-layout">
+    <aside class="docs-sidebar">
+      <div class="docs-sidebar__section">
+        <div class="docs-sidebar__heading">On this page</div>
+        <a href="#overview">Overview</a>
+        <a href="#pipeline">7-Stage Pipeline</a>
+        <a href="#confidence">Confidence Scoring</a>
+        <a href="#patterns">Pattern Matching</a>
+        <a href="#blueprint">Blueprint Generation</a>
+        <a href="#shoot-mode">Shoot Mode</a>
+        <a href="#limitations">Known Limitations</a>
+      </div>
+      <div class="docs-sidebar__section">
+        <div class="docs-sidebar__heading">Related</div>
+        <a href="patterns.html">Pattern Library</a>
+        <a href="glossary.html">Glossary</a>
+      </div>
+    </aside>
+
+    <main class="docs-main">
+      <div class="docs-main__header">
+        <a href="index.html" class="docs-breadcrumb">← Docs</a>
+        <h1>How NGW Works</h1>
+        <p class="docs-intro">No Guesswork uses a multi-stage vision pipeline to reverse-engineer a portrait photo into a reproducible lighting setup. Here's what happens from the moment you upload a photo to the moment you get a blueprint.</p>
+      </div>
+
+      <section id="overview">
+        <h2>Overview</h2>
+        <p>Most photographers look at a great portrait and wonder: <em>"How did they light that?"</em> The answer is usually buried in shadow shapes, catchlight positions, and tonal characteristics that take years of experience to read. NGW automates that read — extracting every visual cue systematically, then matching it to a known lighting pattern and generating the exact setup to recreate it.</p>
+        <p>The process takes 2–5 seconds and produces: a pattern identification with confidence score, a per-light blueprint with positions and power ratios, camera settings, and an on-set step-by-step guide.</p>
+      </section>
+
+      <section id="pipeline">
+        <h2>The 7-Stage Pipeline</h2>
+        <div class="hiw-steps">
+          <div class="hiw-step">
+            <div class="hiw-step__number">1</div>
+            <div>
+              <h3>Image Ingestion & Validation</h3>
+              <p>The image is checked for suitability — face detection, resolution, and quality thresholds. Images with no detectable face, severe blur, or extreme exposure are flagged. The system also detects whether the image is colour or black-and-white (which affects shadow threshold calibration).</p>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">2</div>
+            <div>
+              <h3>Cue Extraction</h3>
+              <p>Visual lighting cues are extracted from the image:</p>
+              <ul>
+                <li><strong>Shadow analysis</strong> — nose shadow position, direction, and length; cheek shadow shape</li>
+                <li><strong>Catchlight detection</strong> — position in the iris (reveals key light height and angle), shape (reveals modifier type), and count (reveals number of sources)</li>
+                <li><strong>Tonal mapping</strong> — key-side vs. shadow-side luminance ratio (fill ratio)</li>
+                <li><strong>Background analysis</strong> — whether background is lit separately, tone relative to subject</li>
+                <li><strong>Colour temperature</strong> — dominant CCT from skin tone and highlight colour</li>
+              </ul>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">3</div>
+            <div>
+              <h3>Reference Image Read</h3>
+              <p>A high-level descriptive read of the image is generated — scene, subject, mood, framing, and the photographer's apparent intent. This feeds the narrative cards in the results screen and provides context for the blueprint recommendations.</p>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">4</div>
+            <div>
+              <h3>Pattern Resolution</h3>
+              <p>Three independent classifiers evaluate the extracted cues:</p>
+              <ul>
+                <li><strong>Shadow classifier</strong> — identifies the lighting pattern from shadow shape alone</li>
+                <li><strong>Catchlight classifier</strong> — infers key position and modifier from catchlight analysis</li>
+                <li><strong>Tonal classifier</strong> — identifies contrast range and fill approach</li>
+              </ul>
+              <p>The three classifiers vote on a pattern. Agreement across classifiers raises confidence; disagreement triggers ambiguity warnings.</p>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">5</div>
+            <div>
+              <h3>Lighting Intelligence Synthesis</h3>
+              <p>The raw pattern match is enriched with quantitative estimates: light count, key position (angle and height), fill ratio, modifier family, detected environment, and colour temperature. These feed the blueprint directly.</p>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">6</div>
+            <div>
+              <h3>Blueprint Generation</h3>
+              <p>A per-light blueprint is assembled from the pattern + intelligence data. For each light: role (key/fill/rim/hair/background), position, modifier recommendation, distance, and power hint relative to the key. Camera settings (aperture, ISO, shutter, white balance) are computed from the detected environment and modifier family.</p>
+            </div>
+          </div>
+          <div class="hiw-step">
+            <div class="hiw-step__number">7</div>
+            <div>
+              <h3>On-Set Step Generation</h3>
+              <p>The blueprint is translated into a sequenced step-by-step guide for use on set: position key first, add fill and set ratio, position rim, dial in camera settings, test exposure checklist. In Shoot Mode, these steps are served one at a time in a large, readable format designed to be used at arm's length.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="confidence">
+        <h2>Confidence Scoring</h2>
+        <p>Each analysis produces a confidence score between 0 and 1:</p>
+        <ul>
+          <li><strong>High (≥0.75)</strong> — Multiple independent cues agree. The pattern is clearly identifiable from the image.</li>
+          <li><strong>Moderate (0.50–0.74)</strong> — Cues present but some ambiguity. The pattern is likely correct but small placement changes may produce inconsistent results.</li>
+          <li><strong>Low (&lt;0.50)</strong> — Insufficient or conflicting cues. The image may lack a clear shadow pattern (flat light, soft fill obscuring shadows, face turned away from camera).</li>
+        </ul>
+        <p>Low confidence doesn't mean NGW is wrong — it means the source image itself doesn't contain enough information to be certain. A heavily retouched beauty image with all shadows removed will always produce low confidence.</p>
+      </section>
+
+      <section id="patterns">
+        <h2>Pattern Library</h2>
+        <p>NGW matches against 28 distinct lighting patterns across several risk tiers:</p>
+        <ul>
+          <li><strong>High-volume portrait patterns</strong> (loop, rembrandt, clamshell) — the most commonly confused; require the most signal for confident classification</li>
+          <li><strong>Standard portrait patterns</strong> (split, butterfly, broad, short, rim-only, three-point, etc.)</li>
+          <li><strong>Modifier-defined patterns</strong> (beauty dish, ring flash, parabolic)</li>
+          <li><strong>Environment-defined patterns</strong> (window light, outdoor fill-flash, golden hour)</li>
+          <li><strong>Tonal styles</strong> (high key, low key)</li>
+        </ul>
+        <p>See the full <a href="patterns.html">Pattern Library</a> for descriptions, identification tips, and setup instructions for each.</p>
+      </section>
+
+      <section id="blueprint">
+        <h2>Blueprint Generation</h2>
+        <p>The blueprint adapts to your gear. If you enter your equipment in the wizard, NGW substitutes equivalent modifiers from your kit. If you select "Best Setup," it recommends the ideal rig regardless of what you own.</p>
+        <p>Power values are expressed as relative ratios (key = reference, fill = 1–2 stops below) rather than absolute watt-seconds, since the ratio is what determines the look — not the absolute output level.</p>
+      </section>
+
+      <section id="shoot-mode">
+        <h2>Shoot Mode</h2>
+        <p>Shoot Mode serves the blueprint as an on-set assistant. Three depth levels:</p>
+        <ul>
+          <li><strong>Photographer</strong> — Conversational, context-aware instructions. Assumes working photographer knowledge.</li>
+          <li><strong>Assistant</strong> — Direct commands. Designed to be handed to a lighting assistant.</li>
+          <li><strong>Learning</strong> — Each step includes "why this matters" explanations. Role context, spec hints, and effect descriptions. Designed for photographers who want to understand, not just follow steps.</li>
+        </ul>
+      </section>
+
+      <section id="limitations">
+        <h2>Known Limitations</h2>
+        <ul>
+          <li><strong>Heavy post-processing</strong> — Images with significant retouching, skin smoothing, or shadow removal reduce cue signal. Confidence will be lower.</li>
+          <li><strong>No-face images</strong> — NGW is optimised for portrait photography. Product, landscape, and images without faces will not produce useful pattern matches.</li>
+          <li><strong>Very dark images</strong> — Low-key images with minimal highlight detail make catchlight detection unreliable.</li>
+          <li><strong>Mixed ambient + flash</strong> — Complex mixed-source setups may be partially misread. The dominant source will be identified correctly; secondary sources may be missed.</li>
+          <li><strong>Non-standard lighting</strong> — Projected patterns (gobo, venetian blind, stencil), coloured gels, and LED panels with unusual spectral profiles are outside the core classifier training.</li>
+        </ul>
+      </section>
+
+      <div class="docs-cta">
+        <h2>See it in action</h2>
+        <p>Upload any portrait reference and watch the pipeline run in real time — pattern identification, confidence score, and full blueprint in under 5 seconds.</p>
+        <a href="/login" class="btn btn--primary">Try it free →</a>
+      </div>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <div class="footer__inner">
+      <span>© 2026 No Guesswork</span>
+      <div class="footer__links">
+        <a href="/docs/">Docs</a>
+        <a href="patterns.html">Patterns</a>
+        <a href="glossary.html">Glossary</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

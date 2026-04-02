@@ -1,0 +1,42 @@
+id: headshot-gray-seamless
+name: Headshot (Gray Seamless Two-Light)
+pack: pro
+rank: 8
+
+taxonomy-refs:
+  mood: corporate
+  environment: studio
+  gear-profile: strobe-mono
+  modifier-family: softbox
+
+shadow:
+  expected:
+    pattern: loop
+    notes:
+      - Clean loop shadow; background stays controlled.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: eye-level
+    lens: short-tele
+
+lights:
+  - role: key
+    name: Key
+    angle-deg: 35.0
+    distance-ft: "4–7"
+    height: slightly above eye line
+    modifier: medium softbox
+    notes:
+      - Standard headshot key.
+
+  - role: background
+    name: Background
+    angle-deg: 180.0
+    distance-ft: "3–6"
+    height: mid-height
+    modifier: bare / wide
+    notes:
+      - Dial for mid-gray or light gray.

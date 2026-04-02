@@ -3,17 +3,17 @@
     "dominant_source_direction_deg": -98.7,
     "dominant_source_height_class": "eye_level",
     "dominant_source_height_deg_estimate": 2.3,
-    "dominant_source_distance_class": "near",
+    "dominant_source_distance_class": "close",
     "dominant_source_distance_ft": 2.0,
     "source_size_class": "small",
     "modifier_family_candidates": [
       {
         "type": "reflector_hard",
-        "confidence": 0.5
+        "confidence": 0.55
       },
       {
         "type": "bare_bulb",
-        "confidence": 0.3
+        "confidence": 0.25
       },
       {
         "type": "unknown",
@@ -54,14 +54,15 @@
     },
     "reconstruction_confidence": 0.62,
     "ambiguity_notes": [
-      "No catchlights detected; catchlight geometry unavailable.",
-      "Pose and self-shadow interference reduce highlight/shadow certainty.",
-      "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
-      "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
+      "No catchlights detected; eye-level and direction inferred from shadow and LDF.",
+      "Pose and self-shadow interference reduce highlight/shadow clarity.",
+      "Modifier shape evidence is weak; hard source inferred from penumbra and highlight.",
+      "Environment class signal is weak and ambiguous between window and studio.",
+      "Bounce fill is strong but not a direct fill light."
     ],
     "contradiction_notes": [
-      "Environment_pass suggests window_light (low confidence), but other signals (background, bounce, CCT) favor studio.",
-      "Occlusion_pass detects foliage pattern, but with low confidence (0.5) and no supporting reflection evidence."
+      "Environment_pass suggests window_light (low confidence), but background and lighting control suggest studio.",
+      "No direct evidence for window or sun; modifier unknown."
     ]
   },
   "candidates": [
@@ -70,17 +71,17 @@
       "key_light_angle_deg": -98.7,
       "key_light_height_class": "eye_level",
       "key_light_height_deg_estimate": 2.3,
-      "key_light_distance_class": "near",
+      "key_light_distance_class": "close",
       "key_light_distance_ft_estimate": 2.0,
       "source_size_class": "small",
       "modifier_family_candidates": [
         {
           "type": "reflector_hard",
-          "confidence": 0.5
+          "confidence": 0.55
         },
         {
           "type": "bare_bulb",
-          "confidence": 0.3
+          "confidence": 0.25
         },
         {
           "type": "unknown",
@@ -121,18 +122,19 @@
       },
       "confidence_score": 0.62,
       "ambiguity_notes": [
-        "No catchlights detected; catchlight geometry unavailable.",
-        "Pose and self-shadow interference reduce highlight/shadow certainty.",
-        "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
-        "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
+        "No catchlights detected; eye-level and direction inferred from shadow and LDF.",
+        "Pose and self-shadow interference reduce highlight/shadow clarity.",
+        "Modifier shape evidence is weak; hard source inferred from penumbra and highlight.",
+        "Environment class signal is weak and ambiguous between window and studio.",
+        "Bounce fill is strong but not a direct fill light."
       ]
     },
     {
       "candidate_id": "candidate_2",
-      "key_light_angle_deg": 92.3,
-      "key_light_height_class": "eye_level",
-      "key_light_height_deg_estimate": 2.3,
-      "key_light_distance_class": "near",
+      "key_light_angle_deg": -98.7,
+      "key_light_height_class": "slightly_above_eye",
+      "key_light_height_deg_estimate": 10.0,
+      "key_light_distance_class": "close",
       "key_light_distance_ft_estimate": 2.0,
       "source_size_class": "small",
       "modifier_family_candidates": [
@@ -183,9 +185,9 @@
       },
       "confidence_score": 0.48,
       "ambiguity_notes": [
-        "Environment_pass weakly suggests window light (conf=0.15), but supporting evidence is limited.",
-        "Shadow and LDF direction differ by ~6\u00b0, possibly due to pose interference.",
-        "No catchlights; modifier shape unknown."
+        "Environment_pass suggests window_light (low confidence), but no direct window evidence.",
+        "Modifier shape and catchlight evidence are weak.",
+        "Shadow and highlight signals consistent with small, hard source."
       ]
     }
   ],

@@ -1,0 +1,238 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Archetype Lighting Signatures
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Defines the expected signal ranges for each photographer archetype.
+# Used by engine/archetype_classifier.py to match extracted pipeline
+# signals against known master-specific lighting patterns.
+#
+# Each signal entry has:
+#   expected: exact categorical match (OR list of acceptable values)
+#   min / max: numeric range bounds
+#   weight: importance of this signal for the archetype (higher = more
+#           discriminative).  Weights are normalised at runtime.
+#
+# min_match_score: fraction of weighted signal matches required to
+#                  classify as this archetype (0.0–1.0).
+# ═══════════════════════════════════════════════════════════════════════════
+
+hurley:
+  label: "Peter Hurley"
+  description: "Multi-light beauty/headshot with triangular catchlight cluster, continuous LEDs, broad wrap"
+  signals:
+    catchlight_cluster_geometry:
+      expected: "triangular"
+      weight: 3.0
+    catchlight_count:
+      min: 3
+      weight: 2.0
+    off_axis_angle_deg:
+      min: 10
+      max: 30
+      weight: 1.5
+    light_technology:
+      expected: ["continuous_led", "continuous_panel"]
+      weight: 1.0
+    wrap_ratio:
+      min: 0.6
+      weight: 1.0
+    light_structure_pattern:
+      expected: ["loop", "paramount", "butterfly"]
+      weight: 0.8
+    symmetry_score:
+      min: 0.5
+      weight: 0.6
+    fill_detected:
+      expected: true
+      weight: 0.5
+  min_match_score: 0.45
+
+penn:
+  label: "Irving Penn"
+  description: "Hard, minimal lighting with strip/linear catchlights, dramatic shadows, sparse fill"
+  signals:
+    catchlight_cluster_geometry:
+      expected: ["strip", "linear"]
+      weight: 2.5
+    specular_edge_sharpness:
+      min: 0.6
+      weight: 2.0
+    symmetry_score:
+      max: 0.4
+      weight: 1.5
+    fill_detected:
+      expected: false
+      weight: 1.5
+    light_structure_pattern:
+      expected: ["rembrandt", "split"]
+      weight: 1.5
+    underfill_ev:
+      min: 1.5
+      weight: 1.0
+    light_technology:
+      expected: ["strobe", "flash"]
+      weight: 0.8
+    bounce_contribution:
+      max: 0.2
+      weight: 0.8
+  min_match_score: 0.45
+
+karsh:
+  label: "Yousuf Karsh"
+  description: "Single powerful key with Rembrandt triangle, deep shadows, intentional separation light"
+  signals:
+    light_structure_pattern:
+      expected: "rembrandt"
+      weight: 3.0
+    triangle_detected:
+      expected: true
+      weight: 2.5
+    underfill_ev:
+      min: 2.0
+      weight: 2.0
+    has_hair_light:
+      expected: true
+      weight: 1.5
+    spill_vs_intentional_confidence:
+      min: 0.6
+      weight: 1.0
+    catchlight_count:
+      max: 2
+      weight: 1.0
+    off_axis_angle_deg:
+      min: 30
+      max: 50
+      weight: 1.0
+    symmetry_score:
+      max: 0.35
+      weight: 0.8
+    fill_detected:
+      expected: false
+      weight: 0.8
+  min_match_score: 0.45
+
+leibovitz:
+  label: "Annie Leibovitz"
+  description: "Complex multi-light with environmental integration, variable patterns, mixed technology"
+  signals:
+    catchlight_count:
+      min: 3
+      weight: 2.0
+    axis_count:
+      min: 2
+      weight: 2.0
+    fill_detected:
+      expected: true
+      weight: 1.5
+    light_structure_pattern:
+      expected: ["loop", "rembrandt"]
+      weight: 1.0
+    underfill_ev:
+      min: 0.5
+      max: 2.5
+      weight: 1.0
+    has_rim_light:
+      expected: true
+      weight: 0.8
+    wrap_ratio:
+      min: 0.3
+      max: 0.7
+      weight: 0.8
+  min_match_score: 0.40
+
+adler:
+  label: "Lindsay Adler"
+  description: "Beauty dish centric, editorial beauty, controlled specular highlights"
+  signals:
+    catchlight_cluster_geometry:
+      expected: ["single", "dual"]
+      weight: 1.5
+    light_structure_pattern:
+      expected: ["paramount", "butterfly", "loop"]
+      weight: 2.0
+    symmetry_score:
+      min: 0.5
+      weight: 1.5
+    specular_edge_sharpness:
+      min: 0.4
+      max: 0.7
+      weight: 1.0
+    fill_detected:
+      expected: true
+      weight: 0.8
+  min_match_score: 0.45
+
+heisler:
+  label: "Gregory Heisler"
+  description: "Dramatic editorial with controlled environments, mixed lighting, strong narrative"
+  signals:
+    light_structure_pattern:
+      expected: ["rembrandt", "loop", "split"]
+      weight: 1.5
+    axis_count:
+      min: 1
+      max: 3
+      weight: 1.0
+    underfill_ev:
+      min: 1.0
+      max: 3.0
+      weight: 1.0
+    has_rim_light:
+      expected: true
+      weight: 1.0
+    specular_edge_sharpness:
+      min: 0.3
+      max: 0.8
+      weight: 0.8
+  min_match_score: 0.40
+
+caravaggio:
+  label: "Caravaggio (chiaroscuro)"
+  description: "Single hard key, extreme contrast, deep shadows, dramatic tenebrism"
+  signals:
+    symmetry_score:
+      max: 0.25
+      weight: 2.5
+    underfill_ev:
+      min: 3.0
+      weight: 2.5
+    specular_edge_sharpness:
+      min: 0.7
+      weight: 2.0
+    catchlight_count:
+      max: 1
+      weight: 1.5
+    fill_detected:
+      expected: false
+      weight: 1.5
+    light_structure_pattern:
+      expected: ["rembrandt", "split"]
+      weight: 1.0
+    bounce_contribution:
+      max: 0.1
+      weight: 1.0
+  min_match_score: 0.50
+
+bryce:
+  label: "David Bryce"
+  description: "Natural/beauty blend, soft wrapping light, moderate fill, approachable warmth"
+  signals:
+    wrap_ratio:
+      min: 0.5
+      weight: 2.0
+    symmetry_score:
+      min: 0.4
+      weight: 1.5
+    light_structure_pattern:
+      expected: ["loop", "paramount"]
+      weight: 1.5
+    fill_detected:
+      expected: true
+      weight: 1.0
+    underfill_ev:
+      max: 1.5
+      weight: 1.0
+    specular_edge_sharpness:
+      max: 0.5
+      weight: 0.8
+  min_match_score: 0.45

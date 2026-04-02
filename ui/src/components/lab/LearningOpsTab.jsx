@@ -37,6 +37,10 @@ import {
   getSimulationHistory,
   getLatestSimulation,
   getIntelligenceScore,
+  listReferenceDataset,
+  getReferenceThumbnailUrl,
+  getMonitoringStats,
+  getApiMetrics,
 } from '../../data/labApi';
 import { C, pctColor, okColor } from '../../lib/statusColors';
 
@@ -183,7 +187,7 @@ function SchedulerControl({ status, onStatusChange }) {
   return (
     <div style={{
       background: 'var(--color-surface-elevated)',
-      border: `1px solid ${enabled ? '#34D39933' : 'var(--color-border)'}`,
+      border: `1px solid ${enabled ? C.greenBorder : 'var(--color-border)'}`,
       borderRadius: 'var(--radius-md)',
       marginBottom: 'var(--space-md)',
       overflow: 'hidden',
@@ -362,7 +366,7 @@ function PanelDesc({ text }) {
 
 // ── Overview Panel ──────────────────────────────────────────────────────────
 
-function OverviewPanel({ ops, scheduler, onRefresh, onIngest, ingesting, devMode, onDevModeChange, onSchedulerChange, ingestResult, onGoToClusters }) {
+function OverviewPanel({ ops, scheduler, onRefresh, onIngest, ingesting, devMode, onDevModeChange, onSchedulerChange, ingestResult, onGoToClusters, onGoToMonitoring }) {
   if (!ops) return <div style={{ color: 'var(--color-text-dim)', padding: 'var(--space-lg)' }}>Loading…</div>;
 
   return (
@@ -378,12 +382,13 @@ function OverviewPanel({ ops, scheduler, onRefresh, onIngest, ingesting, devMode
         onDevModeChange={onDevModeChange}
         ingestResult={ingestResult}
         onGoToClusters={onGoToClusters}
+        onGoToMonitoring={onGoToMonitoring}
       />
     </div>
   );
 }
 
-function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeChange, ingestResult, onGoToClusters }) {
+function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeChange, ingestResult, onGoToClusters, onGoToMonitoring }) {
   // Stat tiles — each can navigate to clusters with a specific filter
   const statItems = [
     {
@@ -412,14 +417,14 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
       label: 'Need Eval',
       value: ops.candidates_needing_eval,
       color: ops.candidates_needing_eval > 0 ? C.blue : C.green,
-      nav: null, // navigates to Clusters panel but shows unevaluated candidates context
-      hint: ops.candidates_needing_eval > 0 ? 'Awaiting eval' : '✓ All evaled',
+      nav: ops.candidates_needing_eval > 0 ? { status: 'open' } : null,
+      hint: ops.candidates_needing_eval > 0 ? 'Click to review →' : '✓ All evaled',
     },
     {
       label: 'Active Alerts',
       value: ops.active_alerts,
       color: ops.active_alerts > 0 ? C.red : C.green,
-      nav: null,
+      nav: 'monitoring',
       hint: ops.active_alerts > 0 ? '→ Monitoring' : '✓ Clear',
       urgent: ops.active_alerts > 0,
     },
@@ -434,14 +439,14 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
             key={s.label}
             role={s.nav ? 'button' : undefined}
             tabIndex={s.nav ? 0 : undefined}
-            onClick={s.nav ? () => onGoToClusters(s.nav) : undefined}
-            onKeyDown={s.nav ? e => e.key === 'Enter' && onGoToClusters(s.nav) : undefined}
+            onClick={s.nav ? () => s.nav === 'monitoring' ? onGoToMonitoring?.() : onGoToClusters(s.nav) : undefined}
+            onKeyDown={s.nav ? e => e.key === 'Enter' && (s.nav === 'monitoring' ? onGoToMonitoring?.() : onGoToClusters(s.nav)) : undefined}
             style={{
               textAlign: 'center',
               background: s.urgent
                 ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))'
                 : 'var(--color-surface-elevated)',
-              border: s.urgent ? '0.5px solid #F8717166' : '0.5px solid var(--color-border)',
+              border: s.urgent ? `0.5px solid ${C.redBorder}` : '0.5px solid var(--color-border)',
               borderRadius: 10,
               padding: '10px 6px',
               cursor: s.nav ? 'pointer' : 'default',
@@ -466,10 +471,14 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
         return (
           <div
             key={s.label}
+            role="button"
+            tabIndex={0}
+            onClick={() => onGoToMonitoring?.()}
+            onKeyDown={e => e.key === 'Enter' && onGoToMonitoring?.()}
             style={{
-              textAlign: 'center',
+              textAlign: 'center', cursor: 'pointer',
               background: s.urgent ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))' : 'var(--color-surface-elevated)',
-              border: s.urgent ? '0.5px solid #F8717166' : '0.5px solid var(--color-border)',
+              border: s.urgent ? `0.5px solid ${C.redBorder}` : '0.5px solid var(--color-border)',
               borderRadius: 10, padding: '10px 6px', marginBottom: 12,
             }}
           >
@@ -525,10 +534,8 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
       {ingestResult && (
         <div style={{
           borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)',
-          border: `1px solid ${ingestResult.error ? '#F8717144' : '#34D39944'}`,
-          background: ingestResult.error
-            ? 'color-mix(in srgb, #F87171 8%, transparent)'
-            : 'color-mix(in srgb, #34D399 8%, transparent)',
+          border: `1px solid ${ingestResult.error ? C.redBorder : C.greenBorder}`,
+          background: ingestResult.error ? C.redBg : C.greenBg,
           overflow: 'hidden',
         }}>
           {/* Result header */}
@@ -544,7 +551,7 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
                 {ingestResult.total_clusters > 0 && (
                   <button
                     className="btn btn--primary btn--sm"
-                    onClick={onGoToClusters}
+                    onClick={() => onGoToClusters({ status: 'open' })}
                     style={{ fontSize: 'var(--text-xs)', padding: '2px 8px', marginLeft: 'auto' }}
                   >
                     → Clusters
@@ -695,8 +702,8 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
               display: 'flex', alignItems: 'center', gap: 'var(--space-sm)',
               padding: 'var(--space-xs) var(--space-sm)',
               borderRadius: 'var(--radius-sm)',
-              background: 'color-mix(in srgb, #F87171 6%, var(--color-surface-elevated))',
-              border: '1px solid #F8717133',
+              background: C.redBg,
+              border: `1px solid ${C.redBorder}`,
               marginBottom: 'var(--space-xs)',
             }}>
               <Badge label={a.alert_type?.replace(/_/g, ' ')} color={ALERT_COLOR[a.alert_type] || C.amber} />
@@ -709,7 +716,7 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
           ))}
           <button
             className="btn btn--ghost btn--sm"
-            style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: '#FBBF2444', marginTop: 4 }}
+            style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: C.amberBorder, marginTop: 4 }}
             onClick={() => onGoToClusters({ status: 'open' })}
           >
             Review in Monitoring tab →
@@ -865,6 +872,84 @@ function EvidenceBreakdown({ evidence, failureMode }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── PatternThumb — reference image thumbnail keyed by patternId ──────────────
+
+const _patternThumbCache = {}; // patternId → referenceId | null | 'loading'
+
+function PatternThumb({ patternId, size = 44 }) {
+  const [refId, setRefId] = useState(_patternThumbCache[patternId] ?? null);
+  const [tried, setTried] = useState(patternId in _patternThumbCache);
+
+  useEffect(() => {
+    if (!patternId || patternId in _patternThumbCache) {
+      if (patternId in _patternThumbCache) setRefId(_patternThumbCache[patternId]);
+      setTried(true);
+      return;
+    }
+    _patternThumbCache[patternId] = 'loading';
+    listReferenceDataset({ patternId })
+      .then(data => {
+        const entries = Array.isArray(data) ? data : (data.entries || []);
+        const first = entries.find(e => e.has_thumbnail);
+        const id = first?.reference_id ?? null;
+        _patternThumbCache[patternId] = id;
+        setRefId(id);
+      })
+      .catch(() => {
+        _patternThumbCache[patternId] = null;
+        setRefId(null);
+      })
+      .finally(() => setTried(true));
+  }, [patternId]);
+
+  if (!patternId || (tried && !refId)) return null;
+  if (!tried || refId === 'loading') {
+    // skeleton placeholder
+    return (
+      <div style={{
+        width: size, height: size, flexShrink: 0,
+        borderRadius: 4, background: 'var(--color-surface-elevated)',
+        border: '1px solid var(--color-border)',
+      }} />
+    );
+  }
+
+  const src = getReferenceThumbnailUrl(patternId, refId);
+  return <PatternThumbZoom src={src} alt={patternId} size={size} />;
+}
+
+function PatternThumbZoom({ src, alt, size }) {
+  const [zoomed, setZoomed] = useState(false);
+  return (
+    <>
+      <img
+        src={src}
+        alt={alt}
+        style={{
+          width: size, height: size, flexShrink: 0,
+          borderRadius: 4, objectFit: 'cover',
+          border: '1px solid var(--color-border)',
+          cursor: 'zoom-in',
+        }}
+        onClick={() => setZoomed(true)}
+        onError={e => { e.currentTarget.style.display = 'none'; }}
+      />
+      {zoomed && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setZoomed(false)}
+        >
+          <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <button
+            onClick={e => { e.stopPropagation(); setZoomed(false); }}
+            style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
+          >✕</button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1180,42 +1265,88 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
     <div>
       <PanelDesc text="Failure clusters grouped by pattern and error type. Each cluster summarizes repeated analysis failures from real user signals. Click any cluster to see symptoms and generate a targeted Candidate rule change." />
 
+      {/* Workflow callout */}
+      <div style={{
+        marginBottom: 'var(--space-sm)', padding: 'var(--space-xs) var(--space-sm)',
+        background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
+        color: 'var(--color-text-dim)', lineHeight: 1.6,
+        display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap',
+      }}>
+        <span title="Clusters detected from real signal failures. Generate a Candidate to propose a fix.">
+          <span style={{ fontWeight: 600, color: 'var(--color-text-secondary)' }}>Open</span>
+          {' '}— newly detected, needs action
+        </span>
+        <span title="You're actively working a fix for this cluster.">
+          <span style={{ fontWeight: 600, color: C.amber }}>Investigating</span>
+          {' '}— in progress, Candidate pending
+        </span>
+        <span title="A Candidate fix was evaluated, applied, and released.">
+          <span style={{ fontWeight: 600, color: C.green }}>Resolved</span>
+          {' '}— Candidate released, monitoring started
+        </span>
+        <span title="Not worth fixing — too rare, seeded data, or known non-issue.">
+          <span style={{ fontWeight: 600, color: 'var(--color-text-dim)' }}>Dismissed</span>
+          {' '}— skipped intentionally
+        </span>
+      </div>
+
       {/* Status filters */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6, overflowX: 'auto', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 5, marginBottom: 6, overflowX: 'auto', alignItems: 'center' }}>
         {filters.map(f => (
           <button
             key={f || 'all'}
-            className={`adb__range-btn${filter === f ? ' adb__range-btn--on' : ''}`}
-            style={{ whiteSpace: 'nowrap' }}
-            onClick={() => setFilter(f)}
             type="button"
+            onClick={() => setFilter(f)}
+            style={{
+              fontSize: 'var(--text-xs)', padding: '4px 10px', whiteSpace: 'nowrap',
+              borderRadius: 'var(--radius-full)', cursor: 'pointer',
+              border: `1px solid ${filter === f ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              background: filter === f ? 'var(--color-accent)' : 'transparent',
+              color: filter === f ? '#fff' : 'var(--color-text-secondary)',
+              fontWeight: filter === f ? 600 : 400,
+              transition: 'all 0.12s',
+            }}
           >
             {filterLabels[f]}
           </button>
         ))}
-        <button className="adb__refresh" onClick={load} type="button" title="Refresh" style={{ flexShrink: 0 }}>↻</button>
+        <button
+          type="button"
+          onClick={load}
+          title="Refresh"
+          style={{
+            fontSize: 'var(--text-xs)', padding: '4px 8px', marginLeft: 2, flexShrink: 0,
+            borderRadius: 'var(--radius-full)', cursor: 'pointer',
+            border: '1px solid var(--color-border)', background: 'transparent',
+            color: 'var(--color-text-dim)', lineHeight: 1,
+          }}
+        >↻</button>
       </div>
 
       {/* Severity filters */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', alignItems: 'center' }}>
-        {severities.map(s => (
-          <button
-            key={s ?? 'all'}
-            className={`adb__range-btn${severityFilter === s ? ' adb__range-btn--on' : ''}`}
-            style={{
-              whiteSpace: 'nowrap',
-              ...(s === 'critical' && severityFilter === 'critical' ? { background: C.red, borderColor: C.red, color: '#fff' }
-                 : s === 'high'     && severityFilter === 'high'     ? { background: '#FB923C', borderColor: '#FB923C', color: '#fff' }
-                 : s === 'critical' ? { borderColor: C.redBorder, color: C.red }
-                 : s === 'high'     ? { borderColor: '#FB923C66', color: '#FB923C' }
-                 : {}),
-            }}
-            onClick={() => setSeverityFilter(s)}
-            type="button"
-          >
-            {severityLabels[s]}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 5, marginBottom: 12, overflowX: 'auto', alignItems: 'center' }}>
+        {severities.map(s => {
+          const isActive = severityFilter === s;
+          const accentColor = s === 'critical' ? C.red : s === 'high' ? '#FB923C' : s === 'medium' ? C.blue : null;
+          return (
+            <button
+              key={s ?? 'all'}
+              type="button"
+              onClick={() => setSeverityFilter(s)}
+              style={{
+                fontSize: 'var(--text-xs)', padding: '4px 10px', whiteSpace: 'nowrap',
+                borderRadius: 'var(--radius-full)', cursor: 'pointer', transition: 'all 0.12s',
+                border: `1px solid ${isActive && accentColor ? accentColor : isActive ? 'var(--color-accent)' : accentColor ? accentColor + '66' : 'var(--color-border)'}`,
+                background: isActive && accentColor ? accentColor : isActive ? 'var(--color-accent)' : 'transparent',
+                color: isActive ? '#fff' : accentColor ?? 'var(--color-text-secondary)',
+                fontWeight: isActive ? 600 : 400,
+              }}
+            >
+              {severityLabels[s]}
+            </button>
+          );
+        })}
         <label
           title="When enabled, candidates that evaluate as 'safe' are automatically accepted — no manual review step"
           style={{
@@ -1242,10 +1373,8 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
           marginBottom: 'var(--space-sm)',
           borderRadius: 'var(--radius-md)',
           fontSize: 'var(--text-xs)',
-          background: notice.type === 'success'
-            ? 'color-mix(in srgb, #34D399 12%, transparent)'
-            : 'color-mix(in srgb, #F87171 12%, transparent)',
-          border: `1px solid ${notice.type === 'success' ? '#34D39944' : '#F8717144'}`,
+          background: notice.type === 'success' ? C.greenBg : C.redBg,
+          border: `1px solid ${notice.type === 'success' ? C.greenBorder : C.redBorder}`,
           color: notice.type === 'success' ? C.green : C.red,
         }}>
           {notice.type === 'success' ? '✓ ' : '⚠ '}{notice.msg}
@@ -1263,17 +1392,17 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
               </button>
             )}
             {bulkCanInvestigate && (
-              <button className="btn btn--ghost btn--sm" style={{ color: C.amber, borderColor: '#FBBF2444' }} onClick={handleBulkMarkInvestigating} disabled={bulkWorking}>
-                🔍 Mark Investigating
+              <button className="btn btn--ghost btn--sm" style={{ color: C.amber, borderColor: C.amberBorder }} onClick={handleBulkMarkInvestigating} disabled={bulkWorking}>
+                Mark Investigating
               </button>
             )}
             {bulkCanEval && (
-              <button className="btn btn--ghost btn--sm" style={{ color: C.blue, borderColor: '#4DA3FF44' }} onClick={handleBulkEvalCandidates} disabled={bulkWorking}>
+              <button className="btn btn--ghost btn--sm" style={{ color: C.blue, borderColor: C.blueBorder }} onClick={handleBulkEvalCandidates} disabled={bulkWorking}>
                 {bulkWorking ? 'Evaluating…' : '▶ Eval Candidates'}
               </button>
             )}
             {bulkCanDismiss && (
-              <button className="btn btn--ghost btn--sm" style={{ color: C.red, borderColor: '#F8717144' }} onClick={handleBulkDismiss} disabled={bulkWorking}>
+              <button className="btn btn--ghost btn--sm" style={{ color: C.red, borderColor: C.redBorder }} onClick={handleBulkDismiss} disabled={bulkWorking}>
                 Dismiss
               </button>
             )}
@@ -1301,7 +1430,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 'var(--space-sm)', flexWrap: 'wrap' }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px',
-            background: '#4DA3FF22', border: '1px solid #4DA3FF55',
+            background: C.blueBg, border: `1px solid ${C.blueBorder}`,
             borderRadius: 999, fontSize: 'var(--text-xs)', color: C.blue,
           }}>
             Pattern: <strong>{patternFilter}</strong>
@@ -1338,8 +1467,9 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
               checked={selectedIds.has(c.id)}
               onChange={() => toggleSelect(c.id)}
               onClick={e => e.stopPropagation()}
-              style={{ marginTop: 0, flexShrink: 0, accentColor: '#c8a96e', cursor: 'pointer' }}
+              style={{ marginTop: 0, flexShrink: 0, accentColor: 'var(--color-accent)', cursor: 'pointer' }}
             />
+            {c.pattern_id && <PatternThumb patternId={c.pattern_id} size={40} />}
             <Badge label={c.severity} color={SEVERITY_COLOR[c.severity] || 'var(--color-text-secondary)'} />
             <Badge label={c.failure_mode?.replace(/_/g, ' ')} color="var(--color-text-secondary)" />
             {c.pattern_id && <Badge label={c.pattern_id} color="#c8a96e" />}
@@ -1384,7 +1514,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
               )}
               <button
                 className="btn btn--ghost btn--sm"
-                style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: '#4DA3FF44' }}
+                style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: C.blueBorder }}
                 onClick={() => handleEvalCandidate(c.candidate_id)}
                 disabled={!!working[c.candidate_id]}
                 title={autoRelease
@@ -1398,7 +1528,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
               {c.failure_mode === 'confidence_mismatch' && (
                 <button
                   className="btn btn--ghost btn--sm"
-                  style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: '#FBBF2444' }}
+                  style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: C.amberBorder }}
                   onClick={() => handleApplyCandidate(c.candidate_id)}
                   disabled={!!working[c.candidate_id]}
                   title="Apply confidence recalibration to engine (writes confidence_overrides.json)"
@@ -1485,7 +1615,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
                           type="button"
                           className="btn btn--ghost btn--sm"
                           onClick={handleToggleRawMode}
-                          style={{ fontSize: 10, padding: '1px 7px', color: rawMode ? C.amber : 'var(--color-text-dim)', borderColor: rawMode ? '#FBBF2444' : 'transparent' }}
+                          style={{ fontSize: 10, padding: '1px 7px', color: rawMode ? C.amber : 'var(--color-text-dim)', borderColor: rawMode ? C.amberBorder : 'transparent' }}
                           title={rawMode ? 'Switch to structured field editor' : 'Switch to raw JSON editor'}
                         >
                           {rawMode ? '⊞ Structured' : '{ } Raw'}
@@ -1564,7 +1694,7 @@ function ClustersPanel({ initialStatus = 'open', initialSeverity = null, initial
                               type="button"
                               className="btn btn--ghost btn--sm"
                               onClick={() => setKvPairs(p => [...p, { key: '', val: '' }])}
-                              style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: '#4DA3FF44', alignSelf: 'flex-start', marginTop: 2 }}
+                              style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: C.blueBorder, alignSelf: 'flex-start', marginTop: 2 }}
                             >+ Add field</button>
                           </div>
 
@@ -1897,20 +2027,25 @@ function MonitoringDetail({ attributionId }) {
   );
 }
 
-function MonitoringPanel() {
-  const [data, setData] = useState(null);
+// ── Live Health sub-panel ─────────────────────────────────────────────────────
+
+function MonitoringLiveHealth({ onNavigate }) {
+  const [stats,   setStats]   = useState(null);
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [sweeping, setSweeping] = useState(null); // null | 7 | 14 | 30 | 'all'
-  const [sweepResult, setSweepResult] = useState(null);
-  const [expandedId, setExpandedId] = useState(null);
+  const [err,     setErr]     = useState(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setErr(null);
     try {
-      const result = await getMonitoringSummary();
-      setData(result);
-    } catch {
-      setData(null);
+      const [s, m] = await Promise.all([
+        getMonitoringStats(24).catch(() => null),
+        getApiMetrics(24).catch(() => null),
+      ]);
+      setStats(s);
+      setMetrics(m);
+    } catch (e) {
+      setErr(e.message);
     } finally {
       setLoading(false);
     }
@@ -1918,62 +2053,282 @@ function MonitoringPanel() {
 
   useEffect(() => { load(); }, [load]);
 
+  if (loading) return <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', padding: 'var(--space-sm) 0' }}>Loading live health…</div>;
+  if (err)     return <div style={{ color: C.red, fontSize: 'var(--text-xs)', padding: 'var(--space-sm) 0' }}>⚠ {err}</div>;
+  if (!stats && !metrics) return <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)' }}>No live data.</div>;
+
+  const funnel   = stats?.funnel   ?? {};
+  const stripe   = stats?.stripe   ?? {};
+  const sparkline = stats?.sparkline ?? [];
+
+  // VLM call stats from api-metrics endpoint
+  const vlmCalls    = metrics?.call_count ?? funnel.vlm_calls_total ?? 0;
+  const vlmErrors   = metrics?.error_count ?? funnel.vlm_calls_error ?? 0;
+  const vlmErrRate  = vlmCalls > 0 ? (vlmErrors / vlmCalls * 100).toFixed(1) : '0.0';
+  const vlmLatAvg   = metrics?.avg_latency_ms != null ? `${metrics.avg_latency_ms.toFixed(0)}ms` : '—';
+  const vlmLatP95   = metrics?.p95_latency_ms != null ? `${metrics.p95_latency_ms.toFixed(0)}ms` : '—';
+
+  const sessionsWithAnalysis = funnel.sessions_with_analysis ?? 0;
+  const successRate = funnel.success_rate != null ? `${(funnel.success_rate * 100).toFixed(1)}%` : '—';
+
+  // Compute sparkline width per bucket
+  const sparkMax = Math.max(...sparkline.map(b => b.ok + b.err), 1);
+
+  const errRateNum = parseFloat(vlmErrRate);
+  const errColor   = errRateNum > 20 ? C.red : errRateNum > 5 ? C.amber : C.green;
+  const latColor   = metrics?.p95_latency_ms > 8000 ? C.red : metrics?.p95_latency_ms > 4000 ? C.amber : C.green;
+
+  return (
+    <div>
+      {/* ── Explain strip ── */}
+      <div style={{
+        fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)',
+        marginBottom: 'var(--space-sm)', lineHeight: 1.5,
+      }}>
+        Live system health for the last 24 hours. Click any tile to navigate to the related detail view.
+      </div>
+
+      {/* ── KPI grid ── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 'var(--space-xs)', marginBottom: 'var(--space-md)',
+      }}>
+        {/* Sessions with analysis — drills to Workbench */}
+        <MonKpiTile
+          label="Sessions w/ Analysis"
+          value={sessionsWithAnalysis}
+          sub="last 24h"
+          color="var(--color-text)"
+          title="Sessions where at least one VLM analysis was run. Click to open Workbench."
+          onClick={() => onNavigate?.('workbench')}
+          drillable
+        />
+        {/* VLM calls */}
+        <MonKpiTile
+          label="VLM Calls"
+          value={vlmCalls}
+          sub={`${vlmErrors} errors`}
+          color={vlmErrors > 0 ? C.amber : C.green}
+          title="Total VLM calls in the last 24h. Errors indicate provider or key issues."
+          onClick={() => onNavigate?.('system')}
+          drillable
+        />
+        {/* Error rate */}
+        <MonKpiTile
+          label="VLM Error Rate"
+          value={`${vlmErrRate}%`}
+          sub={errRateNum > 20 ? '⚠ above 20% threshold' : errRateNum > 5 ? 'elevated' : 'healthy'}
+          color={errColor}
+          title="VLM call error rate. Alert threshold is 20%. Above 5% warrants investigation."
+          onClick={() => onNavigate?.('system')}
+          drillable
+        />
+        {/* Avg latency */}
+        <MonKpiTile
+          label="Avg Latency"
+          value={vlmLatAvg}
+          sub={`p95: ${vlmLatP95}`}
+          color={latColor}
+          title="Average VLM call latency. P95 > 8s triggers an alert. Click to open System."
+          onClick={() => onNavigate?.('system')}
+          drillable
+        />
+        {/* VLM success rate */}
+        <MonKpiTile
+          label="Analysis Success"
+          value={successRate}
+          sub="matched sessions"
+          color={funnel.success_rate > 0.7 ? C.green : funnel.success_rate > 0.5 ? C.amber : C.red}
+          title="Rate of sessions where analysis produced a successful pattern match."
+        />
+        {/* Active subs */}
+        {stripe.total_active_subs != null && (
+          <MonKpiTile
+            label="Active Subscribers"
+            value={stripe.total_active_subs}
+            sub={stripe.last_webhook_at ? `webhook: ${new Date(stripe.last_webhook_at).toLocaleDateString(undefined, { timeZone: _TZ })}` : 'no webhook yet'}
+            color={stripe.webhook_secret_configured ? C.green : C.amber}
+            title={stripe.webhook_secret_configured
+              ? 'Stripe webhook is configured. Click to view Paywall details.'
+              : 'Stripe webhook secret is missing — subscription events will not be processed.'}
+            onClick={() => onNavigate?.('paywall')}
+            drillable={stripe.total_active_subs > 0}
+          />
+        )}
+      </div>
+
+      {/* ── Hourly sparkline ── */}
+      {sparkline.length > 0 && (
+        <div style={{ marginBottom: 'var(--space-md)' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 6 }}>
+            VLM Call Volume — last 24h
+          </div>
+          <div style={{
+            display: 'flex', alignItems: 'flex-end', gap: 2,
+            height: 48, padding: '0 2px',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            overflow: 'hidden',
+          }}>
+            {[...sparkline].reverse().map((bucket, i) => {
+              const total  = bucket.ok + bucket.err;
+              const height = sparkMax > 0 ? Math.max((total / sparkMax) * 44, 2) : 2;
+              const errFrac = total > 0 ? bucket.err / total : 0;
+              const barColor = errFrac > 0.2 ? C.red : errFrac > 0 ? C.amber : C.green;
+              return (
+                <div
+                  key={i}
+                  title={`${bucket.hours_ago}h ago — ${total} calls (${bucket.ok} ok, ${bucket.err} err)`}
+                  style={{
+                    flex: 1, height, background: barColor,
+                    borderRadius: '2px 2px 0 0', minWidth: 3,
+                    opacity: 0.75 + (i / sparkline.length) * 0.25,
+                  }}
+                />
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+            <span style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>24h ago</span>
+            <span style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>now</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Alert thresholds reference ── */}
+      <div style={{
+        padding: 'var(--space-xs) var(--space-sm)',
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-sm)',
+        fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)',
+        lineHeight: 1.6,
+      }}>
+        <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Alert thresholds: </span>
+        VLM error rate &gt; 20% · Call volume = 0 (dead integration) · P95 latency &gt; 8s · Stripe webhook missing
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-xs)' }}>
+        <button className="btn btn--ghost btn--sm" onClick={load} style={{ fontSize: 'var(--text-xs)' }}>↻ Refresh</button>
+      </div>
+    </div>
+  );
+}
+
+/** Small clickable KPI tile used in MonitoringLiveHealth */
+function MonKpiTile({ label, value, sub, color, title, onClick, drillable }) {
+  return (
+    <div
+      onClick={drillable && onClick ? onClick : undefined}
+      title={title}
+      style={{
+        padding: 'var(--space-sm)',
+        background: 'var(--color-surface)',
+        border: `1px solid var(--color-border)`,
+        borderRadius: 'var(--radius-md)',
+        display: 'flex', flexDirection: 'column', gap: 2,
+        cursor: drillable && onClick ? 'pointer' : 'default',
+        transition: 'border-color 0.15s',
+        userSelect: 'none',
+      }}
+      onMouseEnter={e => { if (drillable && onClick) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; }}
+    >
+      <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color, fontFamily: 'var(--font-mono)', lineHeight: 1 }}>
+        {value}
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', fontWeight: 600 }}>{label}</div>
+      {sub && <div style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>{sub}</div>}
+      {drillable && onClick && (
+        <div style={{ fontSize: 9, color: 'var(--color-accent)', marginTop: 2 }}>→ view detail</div>
+      )}
+    </div>
+  );
+}
+
+// ── Post-Release sub-panel ────────────────────────────────────────────────────
+
+function MonitoringPostRelease() {
+  const [data,        setData]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [sweeping,    setSweeping]    = useState(null);
+  const [sweepResult, setSweepResult] = useState(null);
+  const [expandedId,  setExpandedId]  = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setData(await getMonitoringSummary()); }
+    catch { setData(null); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
   async function handleSweep(windowDays) {
-    setSweeping(windowDays);
-    setSweepResult(null);
+    setSweeping(windowDays); setSweepResult(null);
     try {
-      const result = await triggerMonitoringSweep(windowDays);
-      setSweepResult({ ok: true, msg: `${windowDays}d sweep: ${result.snapshots_created ?? 0} snapshot(s), ${result.alerts?.length ?? 0} alert(s)` });
+      const r = await triggerMonitoringSweep(windowDays);
+      setSweepResult({ ok: true, msg: `${windowDays}d sweep: ${r.snapshots_created ?? 0} snapshot(s), ${r.alerts?.length ?? 0} alert(s)` });
       await load();
-    } catch (e) {
-      setSweepResult({ ok: false, msg: e.message });
-    } finally {
-      setSweeping(null);
-    }
+    } catch (e) { setSweepResult({ ok: false, msg: e.message }); }
+    finally { setSweeping(null); }
   }
 
   async function handleSweepAll() {
-    setSweeping('all');
-    setSweepResult(null);
+    setSweeping('all'); setSweepResult(null);
     try {
-      const result = await triggerSweepAll();
-      setSweepResult({ ok: true, msg: `All windows swept: ${result.total_snapshots ?? 0} snapshot(s), ${result.total_alerts ?? 0} alert(s)` });
+      const r = await triggerSweepAll();
+      setSweepResult({ ok: true, msg: `All windows swept: ${r.total_snapshots ?? 0} snapshot(s), ${r.total_alerts ?? 0} alert(s)` });
       await load();
-    } catch (e) {
-      setSweepResult({ ok: false, msg: e.message });
-    } finally {
-      setSweeping(null);
-    }
+    } catch (e) { setSweepResult({ ok: false, msg: e.message }); }
+    finally { setSweeping(null); }
   }
 
   if (loading) return <div style={{ color: 'var(--color-text-dim)' }}>Loading…</div>;
-  if (!data) return <div style={{ color: 'var(--color-text-dim)' }}>No monitoring data.</div>;
+  if (!data)   return <div style={{ color: 'var(--color-text-dim)' }}>No monitoring data.</div>;
 
-  const totalReleases = data.attributions?.length ?? 0;
-  const activeAlerts = data.active_alerts ?? 0;
-  const withSnapshots = data.attributions?.filter(a => a.windows_measured?.length > 0).length ?? 0;
+  const totalReleases  = data.attributions?.length ?? 0;
+  const activeAlerts   = data.active_alerts ?? 0;
+  const withSnapshots  = data.attributions?.filter(a => a.windows_measured?.length > 0).length ?? 0;
   const pendingWindows = data.attributions?.reduce((acc, a) => acc + (3 - (a.windows_measured?.length ?? 0)), 0) ?? 0;
 
   return (
     <div>
-      {/* Summary row */}
+      {/* Workflow callout */}
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-sm)',
+        marginBottom: 'var(--space-md)', padding: 'var(--space-sm) var(--space-md)',
+        background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+        borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)',
+        lineHeight: 1.6,
+      }}>
+        <div style={{ fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 4 }}>How post-release monitoring works</div>
+        After a Candidate is promoted and released, its attribution is tracked over <strong>7-, 14-, and 30-day windows</strong>.
+        At each window, a <em>sweep</em> captures a snapshot comparing live metrics to the pre-release baseline.{' '}
+        <strong style={{ color: C.amber }}>Regression alert</strong> fires at −5pp match rate.{' '}
+        <strong style={{ color: C.red }}>Rollback review</strong> fires at −10pp match rate, −3pp CVR, or −0.15 lift.
+        Run sweeps manually or schedule the ingestion loop to sweep automatically.
+      </div>
+
+      {/* Summary tiles */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-xs)',
         marginBottom: 'var(--space-md)',
-        padding: 'var(--space-sm) var(--space-md)',
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius-md)',
       }}>
         {[
-          { val: totalReleases,  label: 'releases tracked',   color: 'var(--color-text)' },
-          { val: activeAlerts,   label: 'active alerts',      color: activeAlerts > 0 ? C.red : C.green },
-          { val: withSnapshots,  label: 'with snapshots',     color: 'var(--color-text)' },
-          { val: pendingWindows, label: 'windows pending',    color: pendingWindows > 0 ? C.amber : C.green },
-        ].map(({ val, label, color }) => (
-          <div key={label} style={{ display: 'flex', flexDirection: 'column' }}>
+          { val: totalReleases,  label: 'releases tracked',  title: 'Total candidate releases being monitored', color: 'var(--color-text)' },
+          { val: activeAlerts,   label: 'active alerts',     title: activeAlerts > 0 ? 'Releases with regression or rollback alerts' : 'All releases within healthy thresholds', color: activeAlerts > 0 ? C.red : C.green },
+          { val: withSnapshots,  label: 'with snapshots',    title: 'Releases where at least one window has been measured', color: 'var(--color-text)' },
+          { val: pendingWindows, label: 'windows pending',   title: 'Windows that are eligible but have not yet been swept', color: pendingWindows > 0 ? C.amber : C.green },
+        ].map(({ val, label, title, color }) => (
+          <div key={label} title={title} style={{
+            padding: 'var(--space-sm)',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex', flexDirection: 'column', gap: 2,
+          }}>
             <span style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color, fontFamily: 'var(--font-mono)' }}>{val}</span>
-            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{label}</span>
+            <span style={{ fontSize: 10, color: 'var(--color-text-secondary)' }}>{label}</span>
           </div>
         ))}
       </div>
@@ -1994,13 +2349,10 @@ function MonitoringPanel() {
                 const meta = alertMeta(a.alert_type || a.status || 'nominal');
                 return (
                   <div key={i} style={{ fontSize: 'var(--text-xs)', display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
-                    <span style={{
-                      padding: '1px 6px', borderRadius: 'var(--radius-sm)',
-                      background: meta.bg, color: meta.color, fontWeight: 600,
-                    }}>
+                    <span style={{ padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: meta.bg, color: meta.color, fontWeight: 600 }}>
                       {(a.alert_type || a.status || 'alert').replace(/_/g,' ')}
                     </span>
-                    <span style={{ color: '#FCA5A5' }}>
+                    <span style={{ color: C.red }}>
                       {a.release_version || a.attribution_id?.slice(0,8) || 'Release'}
                       {a.window_days ? ` · ${a.window_days}d window` : ''}
                     </span>
@@ -2016,50 +2368,41 @@ function MonitoringPanel() {
       <div style={{ marginBottom: 'var(--space-md)' }}>
         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-xs)', fontWeight: 600 }}>
           Run Sweep Window
+          <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--color-text-dim)' }}>
+            — measures metrics for all releases that have reached a window milestone
+          </span>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap' }}>
           {[7, 14, 30].map(w => (
-            <button
-              key={w}
-              className="btn btn--ghost btn--sm"
-              onClick={() => handleSweep(w)}
-              disabled={sweeping !== null}
-            >
+            <button key={w} className="btn btn--ghost btn--sm" onClick={() => handleSweep(w)} disabled={sweeping !== null}>
               {sweeping === w ? 'Sweeping…' : `${w}d Sweep`}
             </button>
           ))}
-          <button
-            className="btn btn--primary btn--sm"
-            onClick={handleSweepAll}
-            disabled={sweeping !== null}
-          >
-            {sweeping === 'all' ? 'Sweeping…' : 'Sweep All'}
+          <button className="btn btn--primary btn--sm" onClick={handleSweepAll} disabled={sweeping !== null}>
+            {sweeping === 'all' ? 'Sweeping…' : '↻ Sweep All Windows'}
           </button>
-          <button className="btn btn--ghost btn--sm" onClick={load} disabled={loading}>
-            Refresh
-          </button>
+          <button className="btn btn--ghost btn--sm" onClick={load} disabled={loading}>Refresh</button>
         </div>
+        {sweepResult && (
+          <div style={{
+            marginTop: 'var(--space-xs)', padding: 'var(--space-xs) var(--space-sm)',
+            borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)',
+            background: sweepResult.ok ? C.greenBg : C.redBg,
+            border: `1px solid ${sweepResult.ok ? C.greenBorder : C.redBorder}`,
+            color: sweepResult.ok ? C.green : C.red,
+          }}>
+            {sweepResult.ok ? '✓' : '⚠'} {sweepResult.msg}
+          </div>
+        )}
       </div>
-
-      {/* Sweep result chip */}
-      {sweepResult && (
-        <div style={{
-          padding: 'var(--space-xs) var(--space-sm)', marginBottom: 'var(--space-sm)',
-          borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
-          background: sweepResult.ok ? C.greenBg : C.redBg,
-          border: `1px solid ${sweepResult.ok ? C.greenBorder : C.redBorder}`,
-          color: sweepResult.ok ? C.green : C.red,
-        }}>
-          {sweepResult.ok ? '✓' : '⚠'} {sweepResult.msg}
-        </div>
-      )}
 
       {/* No releases yet */}
       {totalReleases === 0 && (
         <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-sm)', padding: 'var(--space-lg) 0', textAlign: 'center' }}>
           <div style={{ marginBottom: 'var(--space-xs)' }}>No releases tracked yet.</div>
-          <div style={{ fontSize: 'var(--text-xs)', maxWidth: 320, margin: '0 auto', lineHeight: 1.5 }}>
-            Promote a Candidate from the Clusters panel and record a release to start monitoring accuracy and conversion drift over 7, 14, and 30-day windows.
+          <div style={{ fontSize: 'var(--text-xs)', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
+            Promote a Candidate from the Clusters panel and record a release. Once recorded, a pre-release
+            baseline is captured and the 7-, 14-, and 30-day measurement windows begin.
           </div>
         </div>
       )}
@@ -2073,50 +2416,32 @@ function MonitoringPanel() {
 
         return (
           <Card key={attr.attribution_id} style={{ marginBottom: 'var(--space-sm)' }}>
-            {/* Card header — click to expand */}
-            <div
-              onClick={() => setExpandedId(isExpanded ? null : attr.attribution_id)}
-              style={{ cursor: 'pointer', userSelect: 'none' }}
-            >
+            <div onClick={() => setExpandedId(isExpanded ? null : attr.attribution_id)} style={{ cursor: 'pointer', userSelect: 'none' }}>
+
+              {/* Card header row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
-                {/* Alert badge */}
                 <span style={{
-                  fontSize: 'var(--text-xs)', padding: '2px 8px',
-                  borderRadius: 'var(--radius-sm)',
-                  background: meta.bg, color: meta.color,
-                  fontWeight: 600, flexShrink: 0,
+                  fontSize: 'var(--text-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
+                  background: meta.bg, color: meta.color, fontWeight: 600, flexShrink: 0,
                 }}>
                   {meta.label}
                 </span>
-
-                {/* Version */}
                 <div style={{ flex: 1, fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>
                   {attr.release_version || 'Unversioned release'}
                 </div>
-
-                {/* Days live chip */}
                 {live != null && (
                   <span style={{
-                    fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)',
-                    padding: '1px 6px', borderRadius: 'var(--radius-sm)',
-                    background: 'var(--color-surface-elevated)',
-                    border: '1px solid var(--color-border)',
-                    color: 'var(--color-text-secondary)',
-                    flexShrink: 0,
-                  }}>
+                    fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', padding: '1px 6px',
+                    borderRadius: 'var(--radius-sm)', background: 'var(--color-surface-elevated)',
+                    border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)', flexShrink: 0,
+                  }} title="Days since this candidate was released">
                     {live}d live
                   </span>
                 )}
-
-                {/* Release date */}
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', flexShrink: 0 }}>
                   {attr.release_date ? new Date(attr.release_date * 1000).toLocaleDateString(undefined, { timeZone: _TZ }) : '—'}
                 </div>
-
-                {/* Expand chevron */}
-                <span style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', flexShrink: 0 }}>
-                  {isExpanded ? '▲' : '▼'}
-                </span>
+                <span style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
               </div>
 
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
@@ -2128,50 +2453,48 @@ function MonitoringPanel() {
                 {[7, 14, 30].map(w => {
                   const measured = attr.windows_measured?.includes(w);
                   const daysLeft = measured ? 0 : daysUntilWindow(attr.release_date, w);
+                  const eligible = !measured && daysLeft === 0;
                   return (
-                    <span key={w} style={{
-                      fontSize: 'var(--text-xs)', padding: '2px 8px',
-                      borderRadius: 'var(--radius-sm)',
-                      background: measured ? C.greenBg : 'var(--color-surface-elevated)',
-                      color: measured ? C.green : 'var(--color-text-dim)',
-                      border: `1px solid ${measured ? C.greenBorder : 'var(--color-border)'}`,
+                    <span key={w} title={measured ? `${w}d window measured` : eligible ? `${w}d window ready — run sweep` : `${w}d window — ${daysLeft}d remaining`} style={{
+                      fontSize: 'var(--text-xs)', padding: '2px 8px', borderRadius: 'var(--radius-sm)',
                       fontFamily: 'var(--font-mono)',
+                      background: measured ? C.greenBg : eligible ? C.amberBg : 'var(--color-surface-elevated)',
+                      color: measured ? C.green : eligible ? C.amber : 'var(--color-text-dim)',
+                      border: `1px solid ${measured ? C.greenBorder : eligible ? C.amberBorder : 'var(--color-border)'}`,
                     }}>
-                      {w}d {measured ? '✓' : daysLeft > 0 ? `⏳ ${daysLeft}d` : '⏳'}
+                      {w}d {measured ? '✓' : eligible ? '!' : daysLeft > 0 ? `${daysLeft}d` : '—'}
                     </span>
                   );
                 })}
               </div>
 
-              {/* Latest snapshot — compact delta row */}
+              {/* Latest snapshot delta row */}
               {latestSnap && (
                 <div style={{
                   display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap',
                   padding: 'var(--space-xs) var(--space-sm)',
-                  background: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-sm)',
-                  marginTop: 'var(--space-xs)',
-                  fontSize: 'var(--text-xs)',
+                  background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)',
+                  marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)',
                 }}>
-                  <div>
+                  <div title="Match rate change vs pre-release baseline. −5pp triggers regression alert, −10pp triggers rollback review.">
                     <span style={{ color: 'var(--color-text-secondary)' }}>Match Δ </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: deltaColor(latestSnap.success_rate_delta) }}>
                       {fmtDelta(latestSnap.success_rate_delta)}
                     </span>
                   </div>
-                  <div>
+                  <div title="Conversion rate change vs baseline. −3pp triggers rollback review.">
                     <span style={{ color: 'var(--color-text-secondary)' }}>CVR Δ </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: deltaColor(latestSnap.conversion_delta) }}>
                       {fmtDelta(latestSnap.conversion_delta)}
                     </span>
                   </div>
-                  <div>
+                  <div title="Conversion lift change vs baseline. −0.15 triggers rollback review.">
                     <span style={{ color: 'var(--color-text-secondary)' }}>Lift Δ </span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: deltaColor(latestSnap.trust_delta) }}>
                       {fmtDelta(latestSnap.trust_delta)}
                     </span>
                   </div>
-                  <div style={{ marginLeft: 'auto', color: 'var(--color-text-dim)' }}>
+                  <div style={{ marginLeft: 'auto', color: 'var(--color-text-dim)' }} title="Which measurement window this snapshot is from">
                     {latestSnap.window_days}d window
                   </div>
                 </div>
@@ -2191,109 +2514,194 @@ function MonitoringPanel() {
   );
 }
 
+// ── Monitoring Panel — top-level with sub-nav ─────────────────────────────────
+
+function MonitoringPanel({ onNavigateTo }) {
+  const [view, setView] = useState('live'); // 'live' | 'post-release'
+
+  // Allow parent to pass a Lab-level nav function down via onNavigateTo
+  function handleNavigate(dest) {
+    // dest: 'workbench' | 'system' | 'paywall' — map to Lab top-level tabs
+    onNavigateTo?.(dest);
+  }
+
+  const viewTabs = [
+    { id: 'live',         label: 'Live Health' },
+    { id: 'post-release', label: 'Post-Release' },
+  ];
+
+  return (
+    <div>
+      <PanelDesc text="Two layers of monitoring: Live Health tracks VLM call volume, error rate, and latency in real time. Post-Release tracks how each ruleset deployment performs over 7-, 14-, and 30-day windows relative to its pre-release baseline." />
+
+      {/* Sub-nav */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 'var(--space-md)' }}>
+        {viewTabs.map(t => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setView(t.id)}
+            style={{
+              fontSize: 'var(--text-xs)', padding: '4px 12px',
+              borderRadius: 'var(--radius-full)',
+              border: `1px solid ${view === t.id ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              background: view === t.id ? 'var(--color-accent)' : 'transparent',
+              color: view === t.id ? '#fff' : 'var(--color-text-secondary)',
+              fontWeight: view === t.id ? 600 : 400,
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {view === 'live'         && <MonitoringLiveHealth onNavigate={handleNavigate} />}
+      {view === 'post-release' && <MonitoringPostRelease />}
+    </div>
+  );
+}
+
 // ── Gold Set Suggestions Panel ──────────────────────────────────────────────
 
-// ── Intelligence Score Card ──────────────────────────────────────────────────
+// ── Learning Readiness Card ──────────────────────────────────────────────────
 
-const SCORE_COMPONENTS = [
-  { key: 'signal_volume',      label: 'Signal Volume',       desc: 'Volume of analysis sessions recorded in the window. More signals = more reliable pattern detection.' },
-  { key: 'pattern_coverage',   label: 'Pattern Coverage',    desc: 'Fraction of known patterns with sufficient signal data. Low coverage means some patterns are flying blind.' },
-  { key: 'benchmark_pass_rate',label: 'Benchmark Pass Rate', desc: 'Accuracy of the VLM pipeline measured against gold-standard test cases. Target ≥90%.' },
-  { key: 'vlm_correction_rate',label: 'VLM Correction Rate', desc: 'How often the VLM overrides CV outputs. High rate = CV is under-contributing; low rate = healthy CV/VLM balance.' },
-];
-
-function IntelligenceScoreCard() {
-  const [data, setData]     = useState(null);
+/**
+ * LearningReadinessCard — composite pipeline health measure.
+ *
+ * Score formula (0–100):
+ *   Start: 100
+ *   −10 per critical cluster    (max −40)
+ *   − 5 per open cluster >5     (max −20)
+ *   − 8 per candidate needing eval (max −24)
+ *   −10 per active alert        (max −20)
+ *   + bonus 5 if patterns tracked ≥ 3
+ */
+function LearningReadinessCard() {
+  const [ops,  setOps]  = useState(null);
+  const [kb,   setKb]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [err, setErr]   = useState(null);
 
   useEffect(() => {
-    getIntelligenceScore(30, false)
-      .then(setData)
-      .catch(() => {})
+    Promise.all([getLearningOps(), getKnowledgeBase()])
+      .then(([o, k]) => { setOps(o); setKb(k); })
+      .catch(e => setErr(e?.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, []);
 
-  const score = data?.score ?? null;
-  const components = data?.components ?? {};
-  const interp = data?.interpretation ?? null;
+  if (loading) return <div className="lo-panel" style={{ marginBottom: 'var(--space-md)' }}><p className="lo-empty">Loading…</p></div>;
+  if (err) return <div className="lo-panel" style={{ marginBottom: 'var(--space-md)' }}><p className="lo-empty" style={{ color: C.red }}>⚠ {err}</p></div>;
+  if (!ops) return null;
 
-  const scoreColor = score == null ? 'var(--color-text-dim)'
-    : score >= 70 ? C.green : score >= 50 ? C.amber : C.red;
-  const statusLabel = score == null ? '—'
-    : score >= 70 ? 'Healthy' : score >= 50 ? 'Needs Attention' : 'Critical';
+  // ── compute score ────────────────────────────────────────────────────────
+  const critical   = ops.critical_clusters      ?? 0;
+  const open       = ops.open_clusters          ?? 0;
+  const needEval   = ops.candidates_needing_eval ?? 0;
+  const alerts     = ops.active_alerts          ?? 0;
+  const patterns   = kb?.total_patterns         ?? 0;
+  const lowRisk    = (kb?.by_risk?.low    ?? []).length;
+  const medRisk    = (kb?.by_risk?.medium ?? []).length;
+  const highRisk   = (kb?.by_risk?.high   ?? []).length;
+
+  let score = 100;
+  score -= Math.min(critical * 10, 40);
+  score -= Math.min(Math.max(open - 5, 0) * 5, 20);
+  score -= Math.min(needEval * 8, 24);
+  score -= Math.min(alerts * 10, 20);
+  if (patterns >= 3) score += 5;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  const scoreColor  = score >= 80 ? C.green : score >= 55 ? C.amber : C.red;
+  const statusLabel = score >= 80 ? 'Ready' : score >= 55 ? 'Needs Attention' : 'Action Required';
+
+  // ── metric rows ──────────────────────────────────────────────────────────
+  const rows = [
+    {
+      label: 'Pattern Coverage',
+      value: patterns,
+      unit: 'patterns',
+      bar: Math.min(patterns / 10, 1),
+      color: patterns >= 5 ? C.green : patterns >= 2 ? C.amber : C.red,
+      desc: `${patterns} pattern${patterns !== 1 ? 's' : ''} in the knowledge base — ${lowRisk} low · ${medRisk} medium · ${highRisk} high risk`,
+    },
+    {
+      label: 'Cluster Health',
+      value: open,
+      unit: 'open',
+      bar: open === 0 ? 1 : Math.max(0, 1 - open / 10),
+      color: open === 0 ? C.green : critical > 0 ? C.red : C.amber,
+      desc: `${open} open cluster${open !== 1 ? 's' : ''} — ${critical} critical, ${ops.investigating_clusters ?? 0} investigating`,
+      invert: true,
+    },
+    {
+      label: 'Candidate Pipeline',
+      value: needEval,
+      unit: 'need eval',
+      bar: needEval === 0 ? 1 : Math.max(0, 1 - needEval / 5),
+      color: needEval === 0 ? C.green : needEval <= 2 ? C.amber : C.red,
+      desc: `${needEval} candidate${needEval !== 1 ? 's' : ''} pending evaluation`,
+      invert: true,
+    },
+    {
+      label: 'Monitoring Health',
+      value: alerts,
+      unit: 'alert' + (alerts !== 1 ? 's' : ''),
+      bar: alerts === 0 ? 1 : Math.max(0, 1 - alerts / 5),
+      color: alerts === 0 ? C.green : alerts <= 1 ? C.amber : C.red,
+      desc: `${alerts} active monitoring alert${alerts !== 1 ? 's' : ''}`,
+      invert: true,
+    },
+  ];
 
   return (
     <div className="lo-panel" style={{ marginBottom: 'var(--space-md)' }}>
       <div className="lo-panel__header">
-        <span className="lo-panel__title">Intelligence Score</span>
-        {!loading && score != null && (
-          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>30-day window · cached</span>
-        )}
+        <span className="lo-panel__title">Learning Readiness</span>
+        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>live pipeline health</span>
       </div>
 
-      {loading && <p className="lo-empty">Loading score…</p>}
+      {/* Score hero */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', marginBottom: 'var(--space-md)' }}>
+        <div style={{ textAlign: 'center', minWidth: 72 }}>
+          <div style={{ fontSize: 48, fontWeight: 800, fontFamily: 'var(--font-mono)', color: scoreColor, lineHeight: 1 }}>
+            {score}
+          </div>
+          <div style={{ fontSize: 'var(--text-xs)', color: scoreColor, fontWeight: 600, marginTop: 4 }}>{statusLabel}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 'var(--space-xs)' }}>
+            Composite health of the learning pipeline — pattern coverage, open cluster count, candidate evaluation backlog, and active monitoring alerts.
+          </div>
+          <div style={{ display: 'flex', gap: 8, fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
+            <span style={{ color: C.green }}>≥80 Ready</span>
+            <span style={{ color: 'var(--color-text-dim)' }}>·</span>
+            <span style={{ color: C.amber }}>55–79 Needs attention</span>
+            <span style={{ color: 'var(--color-text-dim)' }}>·</span>
+            <span style={{ color: C.red }}>&lt;55 Action required</span>
+          </div>
+        </div>
+      </div>
 
-      {!loading && score != null && (
-        <>
-          {/* Score hero */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)', marginBottom: 'var(--space-md)' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 48, fontWeight: 800, fontFamily: 'var(--font-mono)', color: scoreColor, lineHeight: 1 }}>
-                {Math.round(score)}
+      {/* Metric rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {rows.map(r => (
+          <div key={r.label}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 600, width: 160, flexShrink: 0 }}>{r.label}</span>
+              <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.round(r.bar * 100)}%`, height: '100%', background: r.color, borderRadius: 3, transition: 'width 0.4s' }} />
               </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: scoreColor, fontWeight: 600, marginTop: 4 }}>{statusLabel}</div>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: r.color, minWidth: 60, textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+                {r.value} {r.unit}
+              </span>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 'var(--space-xs)' }}>
-                Composite signal health score (0–100). Combines signal volume, pattern coverage, benchmark accuracy, and VLM/CV correction balance over the last 30 days.
-              </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
-                <span style={{ color: C.green }}>≥70 Healthy</span>
-                <span style={{ color: 'var(--color-text-dim)' }}>·</span>
-                <span style={{ color: C.amber }}>50–69 Needs attention</span>
-                <span style={{ color: 'var(--color-text-dim)' }}>·</span>
-                <span style={{ color: C.red }}>&lt;50 Critical</span>
-              </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginLeft: 168, lineHeight: 1.4 }}>
+              {r.desc}
             </div>
           </div>
-
-          {/* Component breakdown */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {SCORE_COMPONENTS.map(({ key, label, desc }) => {
-              const val = components[key] ?? null;
-              const pct = val != null ? Math.round(val * 100) : null;
-              const color = pct == null ? 'var(--color-border)'
-                : pct >= 70 ? C.green : pct >= 50 ? C.amber : C.red;
-              return (
-                <div key={key}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 600, width: 150, flexShrink: 0 }}>{label}</span>
-                    <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${pct ?? 0}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.4s' }} />
-                    </div>
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color, minWidth: 34, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
-                      {pct != null ? `${pct}%` : '—'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginLeft: 158, lineHeight: 1.4, marginBottom: 2 }}>
-                    {desc}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {interp && (
-            <div style={{ marginTop: 'var(--space-sm)', padding: '6px 10px', background: `${scoreColor}11`, borderRadius: 'var(--radius-sm)', border: `1px solid ${scoreColor}33` }}>
-              <span style={{ fontSize: 'var(--text-xs)', color: scoreColor, fontWeight: 600 }}>{interp}</span>
-            </div>
-          )}
-        </>
-      )}
-
-      {!loading && score == null && (
-        <p className="lo-empty">No intelligence score computed yet. Run Ingestion first to populate signals.</p>
-      )}
+        ))}
+      </div>
     </div>
   );
 }
@@ -2429,8 +2837,8 @@ function VlmCorrectionsPanel() {
 
 // ── Knowledge Base Panel ─────────────────────────────────────────────────────
 
-const RISK_COLOR = { low: '#4ade80', medium: C.amber, high: C.red };
-const RISK_BG    = { low: 'rgba(74,222,128,0.10)', medium: 'rgba(251,191,36,0.10)', high: 'rgba(248,113,113,0.08)' };
+const RISK_COLOR = { low: C.green, medium: C.amber, high: C.red };
+const RISK_BG    = { low: C.greenBg, medium: C.amberBg, high: C.redBg };
 
 function SignalGauge({ value, max, color = C.blue }) {
   const pct = max > 0 ? Math.min(value / max, 1) : 0;
@@ -2471,7 +2879,7 @@ function SignalReadinessBar({ sig, minSig }) {
   const meetsHigh   = sig.meets_high_threshold;
   const meetsMed    = sig.meets_medium_threshold;
   const meetsLow    = sig.meets_low_threshold;
-  const readyColor  = meetsHigh ? C.green : meetsMed ? '#a3e635' : meetsLow ? C.amber : C.red;
+  const readyColor  = meetsHigh ? C.green : meetsMed ? C.green : meetsLow ? C.amber : C.red;
   const readyLabel  = meetsHigh ? '✓ Ready (HIGH)' : meetsMed ? '✓ Ready (MED)' : meetsLow ? '~ Marginal (LOW)' : '✗ Insufficient';
 
   return (
@@ -2529,11 +2937,13 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
   const [signals,     setSignals]     = useState({});      // patternId → AggregatedInsight
   const [fullEntries, setFullEntries] = useState({});      // patternId → full PatternEntry
   const [ciResults,   setCiResults]   = useState({});      // patternId → CI gate result
+  const [refImages,   setRefImages]   = useState({});      // patternId → [{reference_id, has_thumbnail}]
   const [loading,     setLoading]     = useState(true);
   const [err,         setErr]         = useState(null);
   const [filter,      setFilter]      = useState('all');   // all | low | medium | high | family:X
   const [expanded,    setExpanded]    = useState(null);
   const [fetching,    setFetching]    = useState({});      // patternId → 'detail'|'ci'|null
+  const [lightboxImg, setLightboxImg] = useState(null);    // full-size URL for lightbox
   const patternRefs = useRef({});
 
   const load = useCallback(async () => {
@@ -2581,10 +2991,7 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
     if (fetching[patternId]) return;
     setFetching(f => ({ ...f, [patternId]: 'ci' }));
     try {
-      // CI gate needs a candidate dict — use the full entry's pattern rules as a proxy
-      const entry = fullEntries[patternId] ?? (await getKnowledgeEntry(patternId));
-      setFullEntries(e => ({ ...e, [patternId]: entry }));
-      const result = await runCIGate(patternId, entry?.rules ?? {});
+      const result = await runCIGate(patternId);
       setCiResults(r => ({ ...r, [patternId]: result }));
     } catch (e) {
       setCiResults(r => ({ ...r, [patternId]: { error: e.message } }));
@@ -2593,10 +3000,22 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
     }
   }
 
+  async function fetchRefImages(patternId) {
+    if (refImages[patternId]) return; // already loaded
+    try {
+      const data = await listReferenceDataset({ patternId });
+      const entries = Array.isArray(data) ? data : (data?.entries ?? []);
+      setRefImages(r => ({ ...r, [patternId]: entries }));
+    } catch { /* non-fatal */ }
+  }
+
   function handleExpand(id) {
     const next = expanded === id ? null : id;
     setExpanded(next);
-    if (next) fetchDetail(next);
+    if (next) {
+      fetchDetail(next);
+      fetchRefImages(next);
+    }
   }
 
   // ── Filter + group ──────────────────────────────────────────────────────────
@@ -2687,7 +3106,7 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
             const isOpen     = expanded === p.pattern_id;
 
             return (
-              <div key={p.pattern_id} ref={el => { patternRefs.current[p.pattern_id] = el; }} style={{ marginBottom: 'var(--space-xs)', borderRadius: 'var(--radius-md)', border: `1px solid ${isOpen ? (riskColor + '55') : (p.pattern_id === initialPatternId ? '#4DA3FF88' : 'var(--color-border)')}`, overflow: 'hidden', background: isOpen ? RISK_BG[p.risk_level] : 'var(--color-surface-elevated)', transition: 'border-color 0.15s, background 0.15s' }}>
+              <div key={p.pattern_id} ref={el => { patternRefs.current[p.pattern_id] = el; }} style={{ marginBottom: 'var(--space-xs)', borderRadius: 'var(--radius-md)', border: `1px solid ${isOpen ? (riskColor + '55') : (p.pattern_id === initialPatternId ? C.blueBorder : 'var(--color-border)')}`, overflow: 'hidden', background: isOpen ? RISK_BG[p.risk_level] : 'var(--color-surface-elevated)', transition: 'border-color 0.15s, background 0.15s' }}>
 
                 {/* ── Pattern row (click to expand) ── */}
                 <div
@@ -2747,21 +3166,56 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
                       {onGoToClusters && (
                         <button
                           className="btn btn--ghost btn--sm"
-                          style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: '#4DA3FF44' }}
-                          onClick={() => onGoToClusters({ status: 'open' })}
+                          style={{ fontSize: 'var(--text-xs)', color: C.blue, borderColor: C.blueBorder }}
+                          onClick={() => onGoToClusters({ status: 'open', patternId: p.pattern_id })}
                         >
                           View Clusters →
                         </button>
                       )}
                       <button
                         className="btn btn--ghost btn--sm"
-                        style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: '#fbbf2444' }}
+                        style={{ fontSize: 'var(--text-xs)', color: C.amber, borderColor: C.amberBorder }}
                         onClick={() => fetchCiGate(p.pattern_id)}
                         disabled={!!fetching[p.pattern_id]}
                       >
                         {fetching[p.pattern_id] === 'ci' ? 'Running CI…' : '▶ Run CI Gate'}
                       </button>
                     </div>
+
+                    {/* Reference thumbnails */}
+                    {(() => {
+                      const imgs = refImages[p.pattern_id];
+                      if (!imgs) return null;
+                      const withThumbs = imgs.filter(e => e.has_thumbnail);
+                      if (withThumbs.length === 0) return null;
+                      return (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--color-text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                            Reference Images ({withThumbs.length})
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {withThumbs.map(e => (
+                              <button
+                                key={e.reference_id}
+                                type="button"
+                                onClick={() => setLightboxImg(getReferenceThumbnailUrl(p.pattern_id, e.reference_id))}
+                                style={{ padding: 0, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--color-surface)', cursor: 'zoom-in', flexShrink: 0, transition: 'border-color 0.12s' }}
+                                title={e.reference_id}
+                              >
+                                <img
+                                  src={getReferenceThumbnailUrl(p.pattern_id, e.reference_id)}
+                                  alt={e.reference_id}
+                                  width={56}
+                                  height={56}
+                                  style={{ display: 'block', objectFit: 'cover', width: 56, height: 56 }}
+                                  onError={ev => { ev.target.closest('button').style.display = 'none'; }}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Description */}
                     {(entry?.description || p.description) && (
@@ -2818,7 +3272,7 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
 
                     {/* CI gate result */}
                     {ci && (
-                      <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${ci.error ? '#f8717144' : ci.overall_verdict === 'pass' ? '#34D39944' : '#fbbf2444'}`, background: ci.error ? 'rgba(248,113,113,0.06)' : ci.overall_verdict === 'pass' ? 'rgba(52,211,153,0.06)' : 'rgba(251,191,36,0.06)', marginBottom: 8 }}>
+                      <div style={{ padding: '8px 10px', borderRadius: 'var(--radius-sm)', border: `1px solid ${ci.error ? C.redBorder : ci.overall_verdict === 'pass' ? C.greenBorder : C.amberBorder}`, background: ci.error ? C.redBg : ci.overall_verdict === 'pass' ? C.greenBg : C.amberBg, marginBottom: 8 }}>
                         {ci.error ? (
                           <span style={{ color: C.red, fontSize: 'var(--text-xs)' }}>CI Gate error: {ci.error}</span>
                         ) : (
@@ -2834,7 +3288,7 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
                             {ci.gates?.length > 0 && (
                               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                                 {ci.gates.map((g, gi) => (
-                                  <span key={gi} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: g.passed ? C.greenBg : C.redBg, color: g.passed ? C.green : C.red, border: `1px solid ${g.passed ? '#34D39933' : '#f8717133'}` }}>
+                                  <span key={gi} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 'var(--radius-sm)', background: g.passed ? C.greenBg : C.redBg, color: g.passed ? C.green : C.red, border: `1px solid ${g.passed ? C.greenBorder : C.redBorder}` }}>
                                     {g.name ?? g.gate}: {g.passed ? '✓' : '✗'}
                                   </span>
                                 ))}
@@ -2859,6 +3313,27 @@ function KnowledgePanel({ onGoToClusters, initialPatternId = null, onInitialCons
           })}
         </div>
       ))}
+
+      {/* Thumbnail lightbox */}
+      {lightboxImg && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setLightboxImg(null)}
+        >
+          <img
+            src={lightboxImg}
+            alt="Reference"
+            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-lg)' }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxImg(null)}
+            style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(0,0,0,0.6)', border: '1px solid var(--color-border)', color: 'var(--color-text)', borderRadius: 'var(--radius-full)', width: 36, height: 36, fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -3128,7 +3603,7 @@ function RevenuePanel() {
                         <div key={snap.day} style={{
                           minWidth: 52, padding: '6px 8px',
                           background: isDeployed ? 'rgba(52,211,153,0.08)' : 'var(--color-surface)',
-                          border: `1px solid ${isDeployed ? '#34D39944' : 'var(--color-border)'}`,
+                          border: `1px solid ${isDeployed ? C.greenBorder : 'var(--color-border)'}`,
                           borderRadius: 'var(--radius-sm)',
                           textAlign: 'center',
                         }}>
@@ -3158,7 +3633,7 @@ function RevenuePanel() {
 
 // ── Main Tab ────────────────────────────────────────────────────────────────
 
-export default function LearningOpsTab({ navRequest = null, onNavConsumed = null }) {
+export default function LearningOpsTab({ navRequest = null, onNavConsumed = null, onNavigateTo = null }) {
   const [panel, setPanel]           = useState('overview');
   const [clusterNavStatus,   setClusterNavStatus]   = useState('open');
   const [clusterNavSeverity, setClusterNavSeverity] = useState(null);
@@ -3274,6 +3749,7 @@ export default function LearningOpsTab({ navRequest = null, onNavConsumed = null
             setClusterNavId(clusterId);
             setPanel('clusters');
           }}
+          onGoToMonitoring={() => setPanel('monitoring')}
         />
       )}
       {panel === 'clusters' && (
@@ -3285,9 +3761,10 @@ export default function LearningOpsTab({ navRequest = null, onNavConsumed = null
           onPatternFilterConsumed={() => setClusterNavPattern(null)}
         />
       )}
-      {panel === 'monitoring' && <MonitoringPanel />}
+      {panel === 'monitoring' && <MonitoringPanel onNavigateTo={onNavigateTo} />}
       {panel === 'intel'      && (
         <>
+          <LearningReadinessCard />
           <GoldSetSuggestionsPanel />
           <VlmCorrectionsPanel />
         </>
@@ -3296,10 +3773,11 @@ export default function LearningOpsTab({ navRequest = null, onNavConsumed = null
         <KnowledgePanel
           initialPatternId={knowledgeNavId}
           onInitialConsumed={() => setKnowledgeNavId(null)}
-          onGoToClusters={({ status = 'open', severity = null, clusterId = null } = {}) => {
+          onGoToClusters={({ status = 'open', severity = null, clusterId = null, patternId = null } = {}) => {
             setClusterNavStatus(status);
             setClusterNavSeverity(severity);
             setClusterNavId(clusterId);
+            setClusterNavPattern(patternId);
             setPanel('clusters');
           }}
         />

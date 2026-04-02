@@ -8,7 +8,7 @@
  *   Support      — recalibration hints, VLM corrections, gold-set suggestions
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppState } from '../../context/AppContext';
 import { getUser, getToken } from '../../data/authApi';
 import { getSessionId, fetchFlags } from '../../data/flagsStore';
@@ -40,6 +40,8 @@ import {
   getApiMetrics,
   getMonitoringStats,
   createGoldSetEntry,
+  listDistillationReviews,
+  patchDistillationReview,
 } from '../../data/labApi';
 import { C, EVENT_COLORS, okColor, pctColor } from '../../lib/statusColors';
 
@@ -82,6 +84,12 @@ const Icons = {
   support: (
     <Icon size={14}>
       <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+    </Icon>
+  ),
+  monitoring: (
+    <Icon size={14}>
+      <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 01-3.46 0" />
     </Icon>
   ),
   // Actions
@@ -403,7 +411,7 @@ function ApiKeyHealthCard() {
               display: 'inline-flex', alignItems: 'center', gap: 4,
               padding: '2px 8px', borderRadius: 999,
               fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)',
-              background: hasErrors ? '#F8717122' : vlmOk ? '#34D39922' : '#6B728022',
+              background: hasErrors ? C.redBg : vlmOk ? C.greenBg : 'var(--color-surface-elevated)',
               color: hasErrors ? C.red : vlmOk ? C.green : 'var(--color-text-dim)',
             }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
@@ -449,7 +457,7 @@ function ApiKeyHealthCard() {
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 12px', marginBottom: 'var(--space-md)',
-              background: '#F8717115', border: '1px solid #F8717133',
+              background: C.redBg, border: `1px solid ${C.redBorder}`,
               borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
               color: C.red,
             }}>
@@ -504,10 +512,11 @@ function SystemSection({ onNavigateTo }) {
   const [loading, setLoading]       = useState(true);
   const [notice, setNotice]         = useState(null);
   const [busy, setBusy]             = useState(null);
-  const [intervalHours, setInterval] = useState(24);
+  const [intervalHours, setIntervalHours] = useState(24);
   const [windowDays, setWindowDays]  = useState(30);
   const [configOpen, setConfigOpen] = useState(false);
   const [ingesting, setIngesting]   = useState(false);
+  const [ingestResult, setIngestResult] = useState(null);
 
   function showNotice(type, msg) {
     setNotice({ type, msg });
@@ -519,7 +528,7 @@ function SystemSection({ onNavigateTo }) {
       const [s, ops] = await Promise.all([getSchedulerStatus(), getLearningOps()]);
       setScheduler(s);
       setOpsData(ops);
-      setInterval(s.interval_hours || 24);
+      setIntervalHours(s.interval_hours || 24);
       setWindowDays(s.window_days || 30);
     } catch (e) {
       showNotice('err', e.message);
@@ -545,11 +554,20 @@ function SystemSection({ onNavigateTo }) {
 
   async function handleIngest() {
     setIngesting(true);
+    setIngestResult(null);
     try {
-      await triggerIngestion(windowDays, 'production');
-      showNotice('ok', 'Ingestion triggered — check Learning Ops tab for results.');
+      const r = await triggerIngestion(windowDays, 'production');
+      setIngestResult(r);
+      if (r?.errors?.length) {
+        showNotice('err', `Ingestion finished with ${r.errors.length} error${r.errors.length !== 1 ? 's' : ''}`);
+      } else {
+        showNotice('ok', `Ingestion complete — ${r?.total_clusters ?? 0} clusters updated`);
+      }
+      // Reload ops so cluster counts refresh
+      load();
     } catch (e) {
       showNotice('err', e.message);
+      setIngestResult({ error: e.message });
     } finally {
       setIngesting(false);
     }
@@ -684,7 +702,7 @@ function SystemSection({ onNavigateTo }) {
             <label style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
               Interval (h):
               <input type="number" min={1} max={168} value={intervalHours}
-                onChange={e => setInterval(Number(e.target.value))}
+                onChange={e => setIntervalHours(Number(e.target.value))}
                 style={{ width: 60, padding: '3px 6px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)', background: 'var(--color-bg)', color: 'var(--color-text)', fontSize: 'var(--text-xs)' }}
               />
             </label>
@@ -719,6 +737,23 @@ function SystemSection({ onNavigateTo }) {
             Runs ingestion → autonomy loop in sequence
           </span>
         </div>
+        {ingestResult && !ingestResult.error && (
+          <div style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)' }}>
+            <span style={{ color: 'var(--color-success)' }}>✓ {ingestResult.total_clusters ?? 0} clusters updated</span>
+            {ingestResult.elapsed_secs != null && <span>{ingestResult.elapsed_secs}s</span>}
+            {Object.entries(ingestResult.by_failure_mode ?? {}).filter(([, n]) => n > 0).map(([k, n]) => (
+              <span key={k} style={{ color: 'var(--color-text-dim)' }}>{k.replace(/_/g, ' ')}: {n}</span>
+            ))}
+            {ingestResult.errors?.length > 0 && (
+              <span style={{ color: 'var(--color-warning)' }}>⚠ {ingestResult.errors.join(', ')}</span>
+            )}
+          </div>
+        )}
+        {ingestResult?.error && (
+          <div style={{ marginTop: 'var(--space-sm)', fontSize: 'var(--text-xs)', color: 'var(--color-error)' }}>
+            ✗ {ingestResult.error}
+          </div>
+        )}
       </Card>
 
       {/* VLM API Key Health */}
@@ -905,7 +940,7 @@ function VlmMetricsCard() {
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 8,
           padding: '8px 12px', marginBottom: 'var(--space-sm)',
-          background: '#6B728015', border: '1px solid var(--color-border)',
+          background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)',
           borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
           color: 'var(--color-text-secondary)',
         }}>
@@ -974,9 +1009,8 @@ function VlmMetricsCard() {
                   {data.recent.map(c => {
                     const isExpanded = expandedCall === c.id;
                     return (
-                      <>
+                      <React.Fragment key={c.id}>
                         <tr
-                          key={c.id}
                           onClick={() => setExpandedCall(isExpanded ? null : c.id)}
                           style={{
                             borderBottom: isExpanded ? 'none' : '1px solid var(--color-border)',
@@ -1003,7 +1037,7 @@ function VlmMetricsCard() {
                           </td>
                         </tr>
                         {isExpanded && (
-                          <tr key={`${c.id}-detail`} style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-elevated)' }}>
+                          <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-elevated)' }}>
                             <td colSpan={4} style={{ padding: '4px 12px 8px', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
                               <span><strong>Time:</strong> {new Date(c.called_at * 1000).toLocaleString(undefined, { timeZone: _DEVICE_TZ })}</span>
                               {c.caller && <span style={{ marginLeft: 12 }}><strong>Caller:</strong> {c.caller}</span>}
@@ -1015,7 +1049,7 @@ function VlmMetricsCard() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -1269,26 +1303,36 @@ function IntelligenceSection({ user, onNavigateTo }) {
                 const scores = scoreHistory.map(h => h.score ?? 50);
                 const mn = Math.min(...scores, 0), mx = Math.max(...scores, 100);
                 const range = mx - mn || 1;
-                const pts = scores.map((s, i) => {
-                  const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2);
-                  const y = PAD + (1 - (s - mn) / range) * (H - PAD * 2);
-                  return `${x.toFixed(1)},${y.toFixed(1)}`;
-                }).join(' ');
+                const coords = scores.map((s, i) => ({
+                  x: PAD + (i / (scores.length - 1)) * (W - PAD * 2),
+                  y: PAD + (1 - (s - mn) / range) * (H - PAD * 2),
+                  s,
+                  date: scoreHistory[i]?.computed_at
+                    ? new Date(scoreHistory[i].computed_at * 1000).toLocaleDateString(undefined, { timeZone: _DEVICE_TZ, month: 'short', day: 'numeric' })
+                    : `Run ${i + 1}`,
+                }));
+                const pts = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
                 const latest = scores[scores.length - 1];
                 const lineColor = pctColor(latest);
                 return (
                   <div style={{ overflowX: 'auto' }}>
-                    <svg width={W} height={H} style={{ display: 'block' }}>
+                    <svg width={W} height={H} style={{ display: 'block', overflow: 'visible' }}>
                       {/* 70-target line */}
                       {(() => { const ty = PAD + (1 - (70 - mn) / range) * (H - PAD * 2); return (
                         <line x1={PAD} y1={ty} x2={W - PAD} y2={ty}
                           stroke={C.green} strokeWidth={0.5} strokeDasharray="3,3" opacity={0.4} />
                       ); })()}
                       <polyline points={pts} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" />
-                      {/* Latest dot */}
+                      {/* Invisible hover targets for each data point */}
+                      {coords.map((c, i) => (
+                        <circle key={i} cx={c.x.toFixed(1)} cy={c.y.toFixed(1)} r={6} fill="transparent" style={{ cursor: 'default' }}>
+                          <title>{`${c.date}: ${c.s.toFixed(1)}`}</title>
+                        </circle>
+                      ))}
+                      {/* Visible latest dot */}
                       {(() => {
-                        const [lx, ly] = pts.split(' ').at(-1).split(',').map(Number);
-                        return <circle cx={lx} cy={ly} r={3} fill={lineColor} />;
+                        const last = coords[coords.length - 1];
+                        return <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r={3} fill={lineColor}><title>{`Latest: ${last.s.toFixed(1)}`}</title></circle>;
                       })()}
                     </svg>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-dim)', padding: `0 ${PAD}px` }}>
@@ -2120,9 +2164,8 @@ function SupportSection({ onNavigateTo }) {
                 const gapColor = gap > 0.3 ? C.red : gap > 0.15 ? C.amber : C.green;
                 const isExpanded = expandedHint === i;
                 return (
-                  <>
+                  <React.Fragment key={i}>
                     <tr
-                      key={i}
                       style={{ borderBottom: '1px solid var(--color-border)', cursor: 'pointer' }}
                       onClick={() => setExpandedHint(e => e === i ? null : i)}
                     >
@@ -2197,7 +2240,7 @@ function SupportSection({ onNavigateTo }) {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -3304,30 +3347,401 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DISTILLATION REVIEW SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+const REVIEW_STATUSES = [
+  'pending_review',
+  'approved_candidate',
+  'rejected',
+  'gold_set_issue',
+  'specialty_watch',
+];
+
+const STATUS_COLORS = {
+  pending_review:    'var(--color-text-dim)',
+  approved_candidate: C.green,
+  rejected:           C.red,
+  gold_set_issue:     C.amber,
+  specialty_watch:    C.blue,
+};
+
+/** Zoomable image cell for distillation review detail panel */
+function DistillationImageCell({ selected }) {
+  const [zoomed, setZoomed] = React.useState(false);
+  const src = `/api/admin/distillation-reviews/${selected.id}/image`;
+  return (
+    <div style={{ flexShrink: 0, width: 160 }}>
+      <div
+        className="ngw-lcd-wrap"
+        style={{ width: 160, height: 160, cursor: 'zoom-in' }}
+        onClick={() => setZoomed(true)}
+        title="Click to zoom"
+      >
+        <img
+          src={src}
+          alt={selected.expected_pattern}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', background: 'var(--color-bg)' }}
+          onError={e => { e.currentTarget.style.display = 'none'; }}
+        />
+      </div>
+      <div style={{ fontSize: '10px', color: 'var(--color-text-dim)', marginTop: 4, wordBreak: 'break-all' }}>
+        {selected.image_path}
+      </div>
+      {zoomed && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setZoomed(false)}
+        >
+          <img src={src} alt={selected.expected_pattern} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <button
+            onClick={e => { e.stopPropagation(); setZoomed(false); }}
+            style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
+          >✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewStatusBadge({ status }) {
+  return (
+    <span style={{
+      fontSize: 'var(--text-xs)',
+      color: STATUS_COLORS[status] || 'var(--color-text-dim)',
+      fontWeight: 600,
+      fontFamily: 'var(--font-mono)',
+      whiteSpace: 'nowrap',
+    }}>
+      {status}
+    </span>
+  );
+}
+
+function DistillationReviewSection() {
+  // ── List state ──────────────────────────────────────────────────────────────
+  const [rows,          setRows]          = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [notice,        setNotice]        = useState(null);
+
+  // ── Filters ─────────────────────────────────────────────────────────────────
+  const [statusFilter,    setStatusFilter]    = useState('');
+  const [pathFilter,      setPathFilter]      = useState('');
+  const [entryFilter,     setEntryFilter]     = useState('');
+
+  // ── Selected row + detail edit state ────────────────────────────────────────
+  const [selected,      setSelected]      = useState(null);
+  const [editStatus,    setEditStatus]    = useState('');
+  const [editRationale, setEditRationale] = useState('');
+  const [editNotes,     setEditNotes]     = useState('');
+  const [saving,        setSaving]        = useState(false);
+  const detailRef = useRef(null);
+
+  function showNotice(type, msg) {
+    setNotice({ type, msg });
+    setTimeout(() => setNotice(null), 4000);
+  }
+
+  // ── Load list ────────────────────────────────────────────────────────────────
+  async function loadRows() {
+    setLoading(true);
+    try {
+      const data = await listDistillationReviews({
+        review_status: statusFilter || null,
+        path_type:     pathFilter   || null,
+        entry_type:    entryFilter  || null,
+        limit:         200,
+      });
+      setRows(data.reviews || []);
+    } catch (e) {
+      showNotice('err', e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { loadRows(); }, [statusFilter, pathFilter, entryFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Select a row ─────────────────────────────────────────────────────────────
+  function selectRow(row) {
+    setSelected(row);
+    setEditStatus(row.review_status);
+    setEditRationale(row.rationale || '');
+    setEditNotes(row.notes || '');
+    // Scroll the detail panel into view after it renders
+    setTimeout(() => {
+      detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  }
+
+  function clearSelected() {
+    setSelected(null);
+  }
+
+  // ── Save review decision ─────────────────────────────────────────────────────
+  async function handleSave() {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      const updated = await patchDistillationReview(selected.id, {
+        review_status: editStatus,
+        rationale:     editRationale,
+        notes:         editNotes,
+      });
+      showNotice('ok', `Saved: ${updated.review_status}`);
+      // Update the row in the list and in selected
+      setRows(prev => prev.map(r => r.id === updated.id ? updated : r));
+      setSelected(updated);
+      setEditStatus(updated.review_status);
+      setEditRationale(updated.rationale || '');
+      setEditNotes(updated.notes || '');
+    } catch (e) {
+      showNotice('err', e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+  const tdSt = { padding: '5px 8px', verticalAlign: 'top', fontSize: 'var(--text-xs)' };
+  const thSt = { ...tdSt, color: 'var(--color-text-dim)', textAlign: 'left', fontWeight: 600, borderBottom: '1px solid var(--color-border)', whiteSpace: 'nowrap' };
+
+  return (
+    <div>
+      {notice && <Notice message={notice.msg} type={notice.type} />}
+
+      {/* ── Detail panel (shown when a row is selected) ── */}
+      {selected && (
+        <div ref={detailRef}>
+        <Card
+          title={`Review: ${selected.expected_pattern}`}
+          description={`Entry type: ${selected.entry_type} · ${selected.image_path}`}
+          action={
+            <InlineBtn onClick={clearSelected}>✕ Close</InlineBtn>
+          }
+        >
+          {/* Image + facts row */}
+          <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-sm)', alignItems: 'flex-start' }}>
+            <DistillationImageCell selected={selected} />
+
+            {/* Source facts — frozen, never editable */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 'var(--space-xs)' }}>
+              {[
+                ['Expected',    selected.expected_pattern],
+                ['Predicted',   selected.predicted_pattern || '—'],
+                ['Confidence',  selected.confidence != null ? selected.confidence.toFixed(3) : '—'],
+                ['Correctness', selected.correctness],
+                ['Path type',   selected.path_type],
+                ['Trust score', selected.trust_score],
+                ['Auth. source', selected.authoritative_pattern_source || '—'],
+                ['Reason',      selected.candidate_reason],
+                ['Source file', selected.source_report_file || '—'],
+                ['Reviewer',    selected.reviewer || '—'],
+                ['Reviewed at', selected.reviewed_at ? new Date(parseFloat(selected.reviewed_at) * 1000).toLocaleString() : '—'],
+              ].map(([label, val]) => (
+                <div key={label} style={{ background: 'var(--color-surface-elevated)', borderRadius: 4, padding: '6px 10px' }}>
+                  <div style={{ fontSize: 'var(--text-xxs, 10px)', color: 'var(--color-text-dim)', marginBottom: 2 }}>{label}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', fontFamily: typeof val === 'number' || /^\d/.test(String(val)) ? 'var(--font-mono)' : undefined, wordBreak: 'break-all' }}>{String(val)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Review decision — editable */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+            <div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginBottom: 4 }}>Status</div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {REVIEW_STATUSES.map(s => (
+                  <button
+                    key={s}
+                    className={`adb__range-btn${editStatus === s ? ' adb__range-btn--on' : ''}`}
+                    onClick={() => setEditStatus(s)}
+                    type="button"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginBottom: 4 }}>Rationale</div>
+              <textarea
+                value={editRationale}
+                onChange={e => setEditRationale(e.target.value)}
+                rows={2}
+                placeholder="Why this status? Required for rejected / gold_set_issue."
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 4, padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginBottom: 4 }}>Notes</div>
+              <textarea
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                rows={2}
+                placeholder="Optional follow-up notes."
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 4, padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn btn--primary btn--sm"
+                onClick={handleSave}
+                disabled={saving}
+                type="button"
+              >
+                {saving ? 'Saving…' : 'Save Decision'}
+              </button>
+              <button className="btn btn--ghost btn--sm" onClick={clearSelected} type="button">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Card>
+        </div>
+      )}
+
+      {/* ── Filters + list ── */}
+      <Card
+        title="Distillation Candidate Reviews"
+        description="Human-review decisions for Phase 5b distillation candidates and review-queue entries. Source facts are frozen on seed. Only review_status, rationale, and notes can be changed."
+        action={
+          <InlineBtn onClick={loadRows} loading={loading}>
+            {Icons.refresh} Refresh
+          </InlineBtn>
+        }
+      >
+        {/* Filter row */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>Status:</span>
+          {['', ...REVIEW_STATUSES].map(s => (
+            <button
+              key={s || 'all'}
+              className={`adb__range-btn${statusFilter === s ? ' adb__range-btn--on' : ''}`}
+              onClick={() => setStatusFilter(s)}
+              type="button"
+            >
+              {s || 'all'}
+            </button>
+          ))}
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginLeft: 8 }}>Path:</span>
+          {['', 'primary', 'specialty'].map(p => (
+            <button
+              key={p || 'all'}
+              className={`adb__range-btn${pathFilter === p ? ' adb__range-btn--on' : ''}`}
+              onClick={() => setPathFilter(p)}
+              type="button"
+            >
+              {p || 'all'}
+            </button>
+          ))}
+          <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginLeft: 8 }}>Type:</span>
+          {['', 'candidate', 'review_queue'].map(t => (
+            <button
+              key={t || 'all'}
+              className={`adb__range-btn${entryFilter === t ? ' adb__range-btn--on' : ''}`}
+              onClick={() => setEntryFilter(t)}
+              type="button"
+            >
+              {t || 'all'}
+            </button>
+          ))}
+        </div>
+
+        {loading && <EmptyState message="Loading…" />}
+
+        {!loading && rows && rows.length === 0 && (
+          <EmptyState message="No rows match the current filters." />
+        )}
+
+        {!loading && rows && rows.length > 0 && (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-xs)', minWidth: 600 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  <th style={thSt}>Expected</th>
+                  <th style={thSt}>Predicted</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Conf</th>
+                  <th style={thSt}>Path</th>
+                  <th style={thSt}>Reason</th>
+                  <th style={{ ...thSt, textAlign: 'right' }}>Trust</th>
+                  <th style={thSt}>Status</th>
+                  <th style={thSt}>Type</th>
+                  <th style={thSt}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <tr
+                    key={row.id}
+                    style={{
+                      borderBottom: '1px solid var(--color-border)',
+                      background: selected?.id === row.id ? 'var(--color-surface-elevated)' : undefined,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => selectRow(row)}
+                  >
+                    <td style={{ ...tdSt, fontFamily: 'var(--font-mono)' }}>{row.expected_pattern}</td>
+                    <td style={{ ...tdSt, fontFamily: 'var(--font-mono)', color: row.predicted_pattern ? undefined : 'var(--color-text-dim)' }}>
+                      {row.predicted_pattern || '—'}
+                    </td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                      {row.confidence > 0 ? row.confidence.toFixed(2) : '—'}
+                    </td>
+                    <td style={tdSt}>{row.path_type}</td>
+                    <td style={{ ...tdSt, color: 'var(--color-text-dim)' }}>{row.candidate_reason}</td>
+                    <td style={{ ...tdSt, textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{row.trust_score}</td>
+                    <td style={tdSt}><ReviewStatusBadge status={row.review_status} /></td>
+                    <td style={{ ...tdSt, color: 'var(--color-text-dim)' }}>{row.entry_type}</td>
+                    <td style={tdSt}>
+                      <button
+                        className="btn btn--ghost btn--sm"
+                        onClick={e => { e.stopPropagation(); selectRow(row); }}
+                        type="button"
+                      >
+                        Review
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {rows && (
+          <div style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
+            {rows.length} row{rows.length !== 1 ? 's' : ''} shown
+            {statusFilter || pathFilter || entryFilter ? ' (filtered)' : ''}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-  { id: 'system',       label: 'System',       icon: Icons.system },
-  { id: 'intelligence', label: 'Intelligence',  icon: Icons.intelligence },
-  { id: 'paywall',      label: 'Paywall',       icon: Icons.paywall },
-  { id: 'support',      label: 'Support',       icon: Icons.support },
-  { id: 'monitoring',   label: '🔔 Monitoring', icon: null },
-  { id: 'user',         label: 'User',          icon: (
-    <Icon size={14}>
-      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </Icon>
-  )},
+  { id: 'system',       label: 'Runtime Health',  icon: Icons.system },
+  { id: 'intelligence', label: 'Learning Health', icon: Icons.intelligence },
+  { id: 'paywall',      label: 'Paywall',         icon: Icons.paywall },
+  { id: 'support',      label: 'Support',         icon: Icons.support },
+  { id: 'monitoring',   label: 'Monitoring',      icon: Icons.monitoring },
 ];
 
 const SECTION_DESC = {
-  system:       'Scheduler control, system health, and manual ingestion triggers.',
-  intelligence: 'Global intelligence score, per-pattern breakdown, autonomy queue, and cluster review.',
+  system:       'Scheduler control, runtime health, and manual ingestion triggers.',
+  intelligence: 'Global learning health score, per-pattern breakdown, autonomy queue, and cluster review.',
   paywall:      'Adaptive pricing value state map, paywall type reference, and live pricing test.',
   support:      'Recalibration hints, VLM correction audit, and gold-set promotion suggestions.',
   monitoring:   'Frontend error console, VLM alert rules, and live metric watchpoints.',
-  user:         'Account identity, subscription status, session diagnostics, feature flags, and local data — for prod support and debugging.',
 };
 
 const CC_HELP = {
@@ -3348,14 +3762,14 @@ const CC_HELP = {
   },
   intelligence: {
     features: [
-      { label: 'Intelligence Score', desc: 'Composite 0–100 score across all patterns. Target ≥ 80 for production confidence.' },
+      { label: 'Learning Health Score', desc: 'Composite 0–100 score across all patterns reflecting classifier confidence and signal coverage. Target ≥ 80 for production confidence.' },
       { label: 'Per-Pattern Scores', desc: 'Individual pattern breakdown — confidence, success rate, sample count, trend direction.' },
       { label: 'Autonomy Queue', desc: 'Pending system-proposed changes awaiting human approval or rejection.' },
       { label: 'Cluster Review', desc: 'Failure clusters grouped by pattern — surface systematic mis-classifications.' },
-      { label: 'Revenue Simulation', desc: 'Model the conversion impact of intelligence score improvements on ARR.' },
+      { label: 'Revenue Simulation', desc: 'Model the conversion impact of learning health improvements on ARR.' },
     ],
     tips: [
-      'Force-compute refreshes the score from scratch using current signals.',
+      'Force-compute refreshes the learning health score from scratch using current signals.',
       'Approve autonomy actions in batches — review the proposed change before accepting.',
       'Clusters with severity "critical" block the CI gate and need immediate attention.',
     ],
@@ -3398,6 +3812,20 @@ const CC_HELP = {
       '"Sessions w/ Analysis" navigates to Workbench; "VLM Errors" navigates to System.',
       '"Active Subscriptions" navigates to Paywall → Funnel for conversion context.',
       'The console viewer persists errors across component re-renders — check it before reloading.',
+    ],
+  },
+  distillation: {
+    features: [
+      { label: 'Review Queue', desc: 'All Phase 5b distillation candidates awaiting human review — sorted by status (pending first) then creation date.' },
+      { label: 'Status Controls', desc: 'Set each entry to approved, rejected, or needs_improvement. Approved entries become eligible for gold set promotion.' },
+      { label: 'Rationale Field', desc: 'Free-text explanation of the review decision — required for rejected/needs_improvement entries to guide re-distillation.' },
+      { label: 'Notes Field', desc: 'Supplementary comments visible to reviewers and engineers — useful for borderline cases or follow-up flags.' },
+      { label: 'Image Preview', desc: 'Zoomable thumbnail of the candidate image — click to expand for close inspection before approving.' },
+    ],
+    tips: [
+      'Approval is always human-gated — no automatic approvals happen in this queue.',
+      'Rejected entries with clear rationale help the distillation pipeline avoid generating similar candidates.',
+      'After approving, use the Gold Set tab to promote the entry into the benchmark suite.',
     ],
   },
   user: {
@@ -3578,7 +4006,6 @@ export default function ControlCenterTab({ user, onNavigateTo }) {
       {section === 'paywall'      && <PaywallSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
       {section === 'support'      && <SupportSection onNavigateTo={onNavigateTo} />}
       {section === 'monitoring'   && <MonitoringSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
-      {section === 'user'         && <UserSection onCCSection={setSection} />}
     </div>
   );
 }

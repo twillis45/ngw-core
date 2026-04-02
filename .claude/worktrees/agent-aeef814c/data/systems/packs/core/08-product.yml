@@ -1,0 +1,16 @@
+id: profile_product
+name: Product Lighting Profile
+
+intent:
+  look: controlled
+  contrast: moderate
+  texture: clean
+  shadow_style: tabletop
+
+preferred_modifiers:
+  - scrim
+  - softbox
+  - bounce_card
+
+recommended_systems:
+  - product_tabletop_led_panel

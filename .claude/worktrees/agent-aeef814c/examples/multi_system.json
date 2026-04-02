@@ -1,0 +1,46 @@
+{
+  "systems": [
+    {
+      "id": "weak-led",
+      "name": "Weak LED",
+      "criteria": {
+        "brightness": 2000,
+        "color_accuracy": 70,
+        "portability": 60,
+        "battery_life": 40,
+        "energy_efficiency": 60
+      },
+      "features": {},
+      "taxonomy_refs": {
+        "mood": "corporate",
+        "environment": "studio",
+        "gear_profile": "led_panel"
+      }
+    },
+    {
+      "id": "strong-led",
+      "name": "Strong LED",
+      "criteria": {
+        "brightness": 9000,
+        "color_accuracy": 95,
+        "portability": 60,
+        "battery_life": 40,
+        "energy_efficiency": 80
+      },
+      "features": {
+        "dimmable": true
+      },
+      "taxonomy_refs": {
+        "mood": "corporate",
+        "environment": "studio",
+        "gear_profile": "led_panel"
+      }
+    }
+  ],
+  "input": {
+    "mood": "corporate",
+    "environment": "studio",
+    "gear_profile": "led_panel",
+    "modifiers_available": ["softbox_rect", "umbrella_white"]
+  }
+}

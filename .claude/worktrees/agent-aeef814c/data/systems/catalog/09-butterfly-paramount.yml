@@ -1,0 +1,43 @@
+id: butterfly-paramount
+name: Butterfly / Paramount (Beauty Dish)
+pack: pro
+rank: 9
+
+taxonomy-refs:
+  mood: beauty
+  environment: studio
+  gear-profile: strobe-mono
+  modifier-family: beauty-dish
+
+shadow:
+  expected:
+    pattern: butterfly
+    notes:
+      - Small “butterfly” shadow under nose.
+      - Strong symmetry; flattering for beauty.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: eye-level
+    lens: short-tele
+
+lights:
+  - role: key
+    name: Key
+    angle-deg: 0.0
+    distance-ft: "3–6"
+    height: above forehead level
+    modifier: beauty dish
+    notes:
+      - Centered above lens axis; watch nose shadow size.
+
+  - role: fill
+    name: Fill
+    angle-deg: 0.0
+    distance-ft: "2–4"
+    height: below face level
+    modifier: reflector
+    notes:
+      - Optional but usually helpful.

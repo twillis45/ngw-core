@@ -133,6 +133,21 @@ def init_db():
                 updated_at       REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS image_correction_log (
+                id             TEXT PRIMARY KEY,
+                image_path     TEXT NOT NULL,
+                analysis_id    TEXT,
+                corrected_by   TEXT NOT NULL,
+                corrected_at   TEXT NOT NULL,
+                field_name     TEXT NOT NULL,
+                old_value      TEXT,
+                new_value      TEXT NOT NULL,
+                system_version TEXT,
+                source         TEXT DEFAULT 'admin'
+            );
+            CREATE INDEX IF NOT EXISTS idx_correction_log_path ON image_correction_log (image_path);
+            CREATE INDEX IF NOT EXISTS idx_correction_log_analysis ON image_correction_log (analysis_id);
+
             CREATE TABLE IF NOT EXISTS feedback_aggregates (
                 id          TEXT PRIMARY KEY,
                 system_id   TEXT NOT NULL,
@@ -237,6 +252,26 @@ def init_db():
                 updated_at  REAL NOT NULL
             );
 
+            -- ── VLM disagreement records ─────────────────────────────────
+            -- Append-only per-analysis record of VLM hint vs resolved value.
+            -- Phase 5a: persisted best-effort after each analyze_image() call.
+            CREATE TABLE IF NOT EXISTS vlm_disagreements (
+                id                     TEXT PRIMARY KEY,
+                analysis_id            TEXT NOT NULL,
+                field_name             TEXT NOT NULL,
+                vlm_value              TEXT NOT NULL,
+                vlm_confidence         REAL,
+                resolved_value         TEXT,
+                resolved_source        TEXT,
+                agreement              TEXT,
+                disagreement_magnitude REAL,
+                pipeline_version       TEXT,
+                created_at             REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_vlm_disagree_analysis ON vlm_disagreements (analysis_id);
+            CREATE INDEX IF NOT EXISTS idx_vlm_disagree_field    ON vlm_disagreements (field_name);
+            CREATE INDEX IF NOT EXISTS idx_vlm_disagree_version  ON vlm_disagreements (pipeline_version);
+
             -- ── Password reset tokens ─────────────────────────────────────
             -- One-time tokens for password reset. Expire after 1 hour.
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
@@ -262,12 +297,22 @@ def init_db():
         if "source_image_path" not in rc_cols:
             conn.execute("ALTER TABLE rule_candidates ADD COLUMN source_image_path TEXT")
 
+    # Phase 4a — add analysis traceability to user_feedback
+    with get_db() as conn:
+        fb_cols = [r[1] for r in conn.execute("PRAGMA table_info(user_feedback)").fetchall()]
+        if "analysis_id" not in fb_cols:
+            conn.execute("ALTER TABLE user_feedback ADD COLUMN analysis_id TEXT")
+        if "system_version" not in fb_cols:
+            conn.execute("ALTER TABLE user_feedback ADD COLUMN system_version TEXT")
+
     from db.analytics import init_analytics_table
     init_analytics_table()
     from db.learning import init_learning_tables
     init_learning_tables()
     from db.provenance import init_provenance_table
     init_provenance_table()
+    from db.distillation_reviews import init_distillation_reviews_table
+    init_distillation_reviews_table()
 
 
 # ── User CRUD ──────────────────────────────────────────────
@@ -673,13 +718,15 @@ def delete_user_setup(user_id: str, setup_id: str) -> bool:
 # ── Feedback CRUD ──────────────────────────────────────────
 
 def save_user_feedback(user_id: str, setup_id: str, mood: str, pattern: str,
-                       rating: int, comment: str) -> Dict[str, Any]:
+                       rating: int, comment: str,
+                       analysis_id: Optional[str] = None,
+                       system_version: Optional[str] = None) -> Dict[str, Any]:
     fid = uuid.uuid4().hex
     now = time.time()
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO user_feedback (id, user_id, setup_id, mood, pattern, rating, comment, created_at) VALUES (?,?,?,?,?,?,?,?)",
-            (fid, user_id, setup_id, mood, pattern, rating, comment, now),
+            "INSERT INTO user_feedback (id, user_id, setup_id, mood, pattern, rating, comment, created_at, analysis_id, system_version) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            (fid, user_id, setup_id, mood, pattern, rating, comment, now, analysis_id, system_version),
         )
     return {"id": fid, "setup_id": setup_id, "rating": rating, "created_at": now}
 
@@ -774,6 +821,78 @@ def save_image_ground_truth(
             (gid, image_path, expected_mood, expected_pattern, actual_mood, actual_pattern,
              json.dumps(corrections) if corrections else None, now, now),
         )
+    return {"id": gid, "image_path": image_path, "created_at": now}
+
+
+def log_image_correction(
+    image_path: str,
+    corrected_by: str,
+    field_name: str,
+    new_value: str,
+    old_value: Optional[str] = None,
+    analysis_id: Optional[str] = None,
+    system_version: Optional[str] = None,
+    source: str = "admin",
+    corrected_at: Optional[str] = None,
+) -> str:
+    """Append one row to image_correction_log. Returns the new log entry id."""
+    log_id = uuid.uuid4().hex
+    ts = corrected_at or str(time.time())
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO image_correction_log
+               (id, image_path, analysis_id, corrected_by, corrected_at,
+                field_name, old_value, new_value, system_version, source)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (log_id, image_path, analysis_id, corrected_by, ts,
+             field_name, old_value, new_value, system_version, source),
+        )
+    return log_id
+
+
+def save_truth_and_log_corrections(
+    image_path: str,
+    expected_mood: Optional[str],
+    expected_pattern: Optional[str],
+    actual_mood: Optional[str],
+    actual_pattern: Optional[str],
+    corrections: Optional[Dict[str, Any]],
+    correction_log_entries: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Insert image ground truth and append correction-log rows in a single transaction.
+
+    correction_log_entries is a list of dicts with keys:
+        corrected_by (str), corrected_at (str), field_name (str),
+        new_value (str), old_value (str|None), analysis_id (str|None),
+        system_version (str|None), source (str, default 'admin')
+    """
+    gid = uuid.uuid4().hex
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO image_ground_truth
+               (id, image_path, expected_mood, expected_pattern, actual_mood, actual_pattern, corrections, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (gid, image_path, expected_mood, expected_pattern, actual_mood, actual_pattern,
+             json.dumps(corrections) if corrections else None, now, now),
+        )
+        for entry in correction_log_entries:
+            log_id = uuid.uuid4().hex
+            conn.execute(
+                """INSERT INTO image_correction_log
+                   (id, image_path, analysis_id, corrected_by, corrected_at,
+                    field_name, old_value, new_value, system_version, source)
+                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                (log_id, image_path,
+                 entry.get("analysis_id"),
+                 entry["corrected_by"],
+                 entry["corrected_at"],
+                 entry["field_name"],
+                 entry.get("old_value"),
+                 entry["new_value"],
+                 entry.get("system_version"),
+                 entry.get("source", "admin")),
+            )
     return {"id": gid, "image_path": image_path, "created_at": now}
 
 
@@ -1182,3 +1301,146 @@ def get_vlm_call_stats(hours: int = 24) -> Dict[str, Any]:
         "hourly":         hourly,
         "recent":         calls[:10],
     }
+
+
+# ── VLM Disagreement Records ──────────────────────────────────────────────────
+
+def save_vlm_disagreements(analysis_id: str, records: list) -> None:
+    """Persist a list of VLMDisagreementRecord instances for one analysis run.
+
+    Best-effort only — callers must wrap in try/except.  Accepts either
+    VLMDisagreementRecord dataclass instances or plain dicts.
+    """
+    if not records:
+        return
+    now = time.time()
+    with get_db() as conn:
+        for rec in records:
+            if hasattr(rec, "__dict__"):
+                r = rec.__dict__
+            else:
+                r = dict(rec)
+            conn.execute(
+                """INSERT OR IGNORE INTO vlm_disagreements
+                   (id, analysis_id, field_name, vlm_value, vlm_confidence,
+                    resolved_value, resolved_source, agreement,
+                    disagreement_magnitude, pipeline_version, created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    uuid.uuid4().hex,
+                    analysis_id,
+                    r.get("field_name", ""),
+                    r.get("vlm_value", ""),
+                    r.get("vlm_confidence"),
+                    r.get("resolved_value"),
+                    r.get("resolved_source"),
+                    r.get("agreement"),
+                    r.get("disagreement_magnitude"),
+                    r.get("pipeline_version"),
+                    now,
+                ),
+            )
+
+
+def get_vlm_disagreements(
+    *,
+    analysis_id: Optional[str] = None,
+    pipeline_version: Optional[str] = None,
+    field_name: Optional[str] = None,
+    agreement: Optional[str] = None,
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """Read VLM disagreement records with optional filters."""
+    clauses: list = []
+    params: list = []
+    if analysis_id:
+        clauses.append("analysis_id = ?")
+        params.append(analysis_id)
+    if pipeline_version:
+        clauses.append("pipeline_version = ?")
+        params.append(pipeline_version)
+    if field_name:
+        clauses.append("field_name = ?")
+        params.append(field_name)
+    if agreement:
+        clauses.append("agreement = ?")
+        params.append(agreement)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    params.append(limit)
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM vlm_disagreements {where} ORDER BY created_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Image Correction Log (read) ───────────────────────────────────────────────
+
+def get_image_correction_log(
+    *,
+    image_path: Optional[str] = None,
+    field_name: Optional[str] = None,
+    analysis_id: Optional[str] = None,
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """Read image correction log entries with optional filters."""
+    clauses: list = []
+    params: list = []
+    if image_path:
+        clauses.append("image_path = ?")
+        params.append(image_path)
+    if field_name:
+        clauses.append("field_name = ?")
+        params.append(field_name)
+    if analysis_id:
+        clauses.append("analysis_id = ?")
+        params.append(analysis_id)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    params.append(limit)
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM image_correction_log {where} ORDER BY corrected_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── Feedback Calibration ──────────────────────────────────────────────────────
+
+def get_feedback_calibration(
+    *,
+    system_version: Optional[str] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """Per-pattern feedback aggregates for calibration diagnostics.
+
+    Filters to rows with analysis_id IS NOT NULL (traceable feedback only).
+    Optionally filters by system_version.
+    Returns diagnostic aggregates only — not used for automatic tuning.
+    """
+    clauses = ["analysis_id IS NOT NULL", "pattern IS NOT NULL"]
+    params: list = []
+    if system_version:
+        clauses.append("system_version = ?")
+        params.append(system_version)
+    where = "WHERE " + " AND ".join(clauses)
+    params.append(limit)
+    with get_db() as conn:
+        rows = conn.execute(
+            f"""SELECT
+                    pattern,
+                    COUNT(*)                            AS feedback_count,
+                    ROUND(AVG(rating), 3)               AS avg_rating,
+                    SUM(CASE WHEN rating >= 4 THEN 1 ELSE 0 END) AS high_rating_count,
+                    SUM(CASE WHEN rating <= 2 THEN 1 ELSE 0 END) AS low_rating_count,
+                    COUNT(DISTINCT analysis_id)         AS distinct_analyses,
+                    COUNT(DISTINCT system_version)      AS distinct_versions
+               FROM user_feedback
+               {where}
+               GROUP BY pattern
+               ORDER BY feedback_count DESC
+               LIMIT ?""",
+            params,
+        ).fetchall()
+    return [dict(r) for r in rows]

@@ -45,8 +45,10 @@
 
   /* Type scale — fluid, mobile-first.
      Gaps are intentionally large enough to create clear visual hierarchy:
-     xs=caption, sm=label, base=body, md=body-lead, lg=card-heading,
-     xl=section-heading, 2xl=screen-title, 3xl=display */
+     micro=data-readout, 2xs=section-label, xs=caption, sm=label, base=body,
+     md=body-lead, lg=card-heading, xl=section-heading, 2xl=screen-title, 3xl=display */
+  --text-micro: 0.5625rem;                                        /*  9px  — LAB section headers, KPI sub-labels */
+  --text-2xs:   clamp(0.625rem,  0.6rem   + 0.1vw,  0.6875rem);  /* 10–11px — LAB data labels, mono readouts  */
   --text-xs:   clamp(0.75rem,   0.72rem  + 0.12vw, 0.8125rem); /* 12–13px — captions, metadata  */
   --text-sm:   clamp(0.875rem,  0.85rem  + 0.1vw,  0.9375rem); /* 14–15px — labels, tags        */
   --text-base: clamp(1rem,      0.96rem  + 0.2vw,  1.0625rem); /* 16–17px — body copy           */
@@ -90,6 +92,10 @@
 
   /* ── Tap target ─────────────────────── */
   --min-tap: 44px;
+
+  /* ── LCD stage screen ───────────────── */
+  /* Shared height for all camera/image staging viewports (home stage, workbench preview, drop zones) */
+  --stage-screen-h: 200px;
 }
 
 /* ── Dark Theme (default) ──────────────────────────── */
@@ -126,9 +132,9 @@
 
   --color-icon:            #A89060;  /* warm brass — instrument panel, not SaaS blue */
 
-  /* CTA buttons — gold/amber, no blue CTAs in NGW */
-  --color-cta:             #C8A96E;
-  --color-cta-hover:       #B89558;
+  /* CTA — slightly darker than --color-accent (#C8A96E) so glass reads on top */
+  --color-cta:             #A8884A;
+  --color-cta-hover:       #987840;
   /* Paid / commerce badge — always a recognisable gold-amber */
   --color-paid:            #f59e0b;
   --color-paid-subtle:     rgba(245, 158, 11, 0.12);
@@ -138,6 +144,60 @@
   --color-premium-accent-subtle: rgba(200, 169, 110, 0.12);
   --color-premium-accent-border: rgba(200, 169, 110, 0.28);
   --color-premium-cta:           #C8A96E;  /* gold CTA fill — same in both themes */
+
+  /* ── LCD / camera-screen aesthetic ─── */
+  /* All image-intake staging areas: home stage, workbench preview, drop zones */
+  --lcd-bg:          #111115;
+  --lcd-border:      #1e1e24;
+  --lcd-screen-a:    #0d1018;
+  --lcd-screen-b:    #060608;
+  --lcd-panel-bg:    #0c0c10;
+  --lcd-panel-sep:   #1e1e26;
+  --lcd-row-sep:     rgba(255,255,255,0.03);
+  --lcd-result-sep:  rgba(255,255,255,0.05);
+  --lcd-scanline:    rgba(0,0,0,0.18);
+  /* Full scanline texture pattern — 4px pitch on dark (coarser film grain) */
+  --lcd-texture:     repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px);
+  --lcd-vignette:    rgba(0,0,0,0.45);
+  --lcd-reflection:  linear-gradient(135deg, rgba(255,255,255,0.07) 0%, transparent 45%);
+  --lcd-bracket:     rgba(255,255,255,0.07);
+  --lcd-icon-c:      rgba(255,255,255,0.15);
+  --lcd-label-c:     rgba(255,255,255,0.25);
+  --lcd-pattern-c:   rgba(255,255,255,0.90);
+  --lcd-empty-c:     rgba(255,255,255,0.25);
+  --lcd-hint-c:      rgba(0,0,0,0.18);          /* dark theme: near-invisible on dark screen */
+  --lcd-hint-shadow: 0 1px 0 rgba(255,255,255,0.06); /* subtle rim light below = deboss on dark */
+  --lcd-row-lbl-c:   rgba(160,200,255,0.35);
+  --lcd-row-val-c:   rgba(220,235,255,0.82);
+  --lcd-row-tip-c:   rgba(160,200,255,0.55);
+  --lcd-row-warn-c:  #f59e0b;
+  --lcd-shadow:
+    0 0 0 1px rgba(0,0,0,0.8),
+    0 8px 32px rgba(0,0,0,0.6),
+    0 2px 8px rgba(0,0,0,0.4),
+    inset 0 1px 2px rgba(0,0,0,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset 0 -1px 0 rgba(0,0,0,0.4);
+
+  /* LAB status colours — vivid on dark bg, used for inline styles in Lab components */
+  --color-status-green: #34D399;
+  --color-status-amber: #FBBF24;
+  --color-status-red:   #F87171;
+  --color-status-blue:  #4DA3FF;
+  --color-status-muted: #6B7280;
+
+  --color-status-green-bg:  rgba(52, 211, 153, 0.12);
+  --color-status-amber-bg:  rgba(251, 191, 36,  0.12);
+  --color-status-red-bg:    rgba(248, 113, 113, 0.12);
+  --color-status-blue-bg:   rgba(77,  163, 255, 0.12);
+  --color-status-green-bg2: rgba(52, 211, 153, 0.15);
+  --color-status-amber-bg2: rgba(251, 191, 36,  0.15);
+  --color-status-red-bg2:   rgba(248, 113, 113, 0.15);
+  --color-status-blue-bg2:  rgba(77,  163, 255, 0.15);
+  --color-status-red-border:   rgba(248, 113, 113, 0.40);
+  --color-status-green-border: rgba(52,  211, 153, 0.40);
+  --color-status-amber-border: rgba(251, 191, 36,  0.40);
+  --color-status-blue-border:  rgba(77,  163, 255, 0.40);
 
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
@@ -180,8 +240,8 @@
 
   --color-icon:            #9E8455;  /* warm brass — matched to Figma gold */
 
-  --color-cta:             #9E8455;
-  --color-cta-hover:       #8B7348;
+  --color-cta:             #C8A96E;  /* canonical NGW gold — matches logos, fonts, icons */
+  --color-cta-hover:       #B89558;
   --color-paid:            #b45309;
   --color-paid-subtle:     rgba(180, 83, 9, 0.10);
 
@@ -190,6 +250,58 @@
   --color-premium-accent-subtle: rgba(158, 132, 85, 0.10);
   --color-premium-accent-border: rgba(158, 132, 85, 0.25);
   --color-premium-cta:           #C8A96E;  /* gold CTA fill — bright enough for button bg on cream */
+
+  /* ── LCD / camera-screen aesthetic (light) ─── */
+  --lcd-bg:          #D5CFC8;   /* warm taupe bezel — solid, defined */
+  --lcd-border:      #A8A099;   /* solid warm dark-grey border — visible bezel edge */
+  --lcd-screen-a:    #CAC5BC;   /* warm grey screen glass */
+  --lcd-screen-b:    #B8B2A8;   /* darker warm grey — screen depth */
+  --lcd-panel-bg:    #CEC8C0;   /* warm panel below screen */
+  --lcd-panel-sep:   #A8A099;   /* solid separator */
+  --lcd-row-sep:     rgba(0,0,0,0.08);
+  --lcd-result-sep:  rgba(0,0,0,0.08);
+  --lcd-scanline:    rgba(0,0,0,0.06);
+  /* Fine 2px-pitch texture for light LCD — tighter line pattern, more screen-like */
+  --lcd-texture:     repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.08) 1px, rgba(0,0,0,0.08) 2px);
+  --lcd-vignette:    rgba(0,0,0,0.14);
+  --lcd-reflection:  linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, transparent 55%);
+  --lcd-bracket:     rgba(0,0,0,0.12);
+  --lcd-icon-c:      rgba(0,0,0,0.25);
+  --lcd-label-c:     rgba(0,0,0,0.40);
+  --lcd-pattern-c:   rgba(0,0,0,0.82);
+  --lcd-empty-c:     rgba(0,0,0,0.28);
+  --lcd-hint-c:      rgba(30,18,6,0.45);           /* light theme: more contrast for readable deboss */
+  --lcd-hint-shadow: 0 1px 2px rgba(255,255,255,0.90), 0 -1px 1px rgba(0,0,0,0.28); /* stronger deboss on warm grey */
+  --lcd-row-lbl-c:   rgba(60,45,30,0.55);
+  --lcd-row-val-c:   rgba(30,20,10,0.78);
+  --lcd-row-tip-c:   rgba(60,45,30,0.50);
+  --lcd-row-warn-c:  #B45309;
+  --lcd-shadow:
+    0 0 0 2px #8C857D,
+    0 6px 24px rgba(0,0,0,0.16),
+    0 2px 6px rgba(0,0,0,0.10),
+    inset 0 1px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 0 rgba(0,0,0,0.10);
+
+  /* LAB status colours — high-contrast on cream bg, mirrors dark theme tokens */
+  --color-status-green: #16A34A;
+  --color-status-amber: #D97706;
+  --color-status-red:   #DC2626;
+  --color-status-blue:  #2563EB;
+  --color-status-muted: #6B7280;
+
+  --color-status-green-bg:  rgba(22,  163, 74,  0.10);
+  --color-status-amber-bg:  rgba(217, 119, 6,   0.10);
+  --color-status-red-bg:    rgba(220, 38,  38,  0.10);
+  --color-status-blue-bg:   rgba(37,  99,  235, 0.10);
+  --color-status-green-bg2: rgba(22,  163, 74,  0.13);
+  --color-status-amber-bg2: rgba(217, 119, 6,   0.13);
+  --color-status-red-bg2:   rgba(220, 38,  38,  0.13);
+  --color-status-blue-bg2:  rgba(37,  99,  235, 0.13);
+  --color-status-red-border:   rgba(220, 38,  38,  0.35);
+  --color-status-green-border: rgba(22,  163, 74,  0.35);
+  --color-status-amber-border: rgba(217, 119, 6,   0.35);
+  --color-status-blue-border:  rgba(37,  99,  235, 0.35);
 
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.1);

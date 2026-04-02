@@ -18,6 +18,7 @@ import { useState } from 'react';
 import useSettings from '../hooks/useSettings';
 import HelpTip from '../components/HelpTip';
 import { getPattern } from '../knowledge';
+import { fmtPattern } from '../lib/formatters';
 import {
   confidenceLevel, CONFIDENCE_LABELS, CONFIDENCE_CSS,
   CONFIDENCE_THRESHOLDS, patternSourceLabel,
@@ -244,7 +245,7 @@ export default function LookSummaryCard({ bestMatch, lightingIntelligence, setup
       {headline && <p className="look-summary__headline">{headline}</p>}
       <div className="look-summary__top">
         <div className="look-summary__pattern">
-          {pattern && <span className="look-summary__pattern-name">{pattern}</span>}
+          {pattern && <span className="look-summary__pattern-name">{fmtPattern(pattern)}</span>}
           <ConfidenceBadge score={score} showNumeric={showNumeric} />
           {!isMinimal && <RiskBadge riskLevel={patternRiskLevel} />}
         </div>

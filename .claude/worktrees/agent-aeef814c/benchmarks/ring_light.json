@@ -1,0 +1,18 @@
+{
+  "benchmark_id": "ring_light",
+  "description": "Ring light portrait — circular catchlights, even frontal illumination, slight shadow halo behind subject",
+  "image_path": "benchmarks/images/ring_light.jpg",
+  "ground_truth": {
+    "expected_pattern": "ring_light",
+    "expected_light_count": 1,
+    "expected_key_direction": "unknown",
+    "acceptable_patterns": ["ring_light", "butterfly", "flat_fashion", "broad", "clamshell", "rembrandt", "loop", "unknown"],
+    "acceptable_light_count_range": [1, 4]
+  },
+  "metadata": {
+    "category": "beauty",
+    "difficulty": "hard",
+    "known_challenges": ["ring light is identified by catchlight shape not shadow geometry", "B&W image removes color cues", "engine may classify as butterfly due to similar frontal/centered key"],
+    "added_date": "2026-03-17"
+  }
+}

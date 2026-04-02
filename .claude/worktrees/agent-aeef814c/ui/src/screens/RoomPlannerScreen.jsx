@@ -1,0 +1,335 @@
+import { useState, useEffect, useMemo } from 'react';
+import { useAppState, useDispatch } from '../context/AppContext';
+import FloorPlanCanvas from '../components/FloorPlanCanvas';
+import CameraMeasure from '../components/CameraMeasure';
+import { ROOM_PRESETS } from '../data/roomPresets';
+import { checkRoomFit } from '../spatial/spatialEngine';
+import useSettings from '../hooks/useSettings';
+import { formatRoomDim } from '../utils/units';
+
+/**
+ * RoomPlannerScreen — three-tab spatial calibration screen.
+ *
+ * Tab 1: Dimensions (manual entry + presets)
+ * Tab 2: Camera Measure
+ * Tab 3: Floor Plan (interactive canvas)
+ */
+export default function RoomPlannerScreen() {
+  const { roomDimensions, result } = useAppState();
+  const dispatch = useDispatch();
+  const { units } = useSettings();
+  const isMetric = units === 'metric';
+
+  // Conversion helpers — internal state is always in feet
+  const toDisplay = (ft) => isMetric ? String((parseFloat(ft) * 0.3048).toFixed(1)) : String(ft || '');
+  const fromDisplay = (v) => isMetric ? String(parseFloat(v) / 0.3048) : v;
+  const stepUnit = isMetric ? 'm' : 'ft';
+  const dimStep = isMetric ? 0.5 : 1;
+  const dimMin  = isMetric ? 2   : 6;
+  const dimMax  = isMetric ? 24  : 80;
+  const ceilMax = isMetric ? 9   : 30;
+  const fmt = (ft) => formatRoomDim(ft, units);
+
+  const [tab, setTab] = useState('dims');  // 'dims' | 'camera' | 'plan'
+  const [lengthFt, setLengthFt] = useState(roomDimensions?.lengthFt || '');
+  const [widthFt, setWidthFt] = useState(roomDimensions?.widthFt || '');
+  const [ceilingFt, setCeilingFt] = useState(roomDimensions?.ceilingFt || '');
+  const [warnings, setWarnings] = useState([]);
+  const [subjectPos, setSubjectPos] = useState(null);
+  const [cameraPos, setCameraPos] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+
+  const parsedLength = parseFloat(lengthFt) || 0;
+  const parsedWidth = parseFloat(widthFt) || 0;
+  const parsedCeiling = parseFloat(ceilingFt) || 0;
+  const dims = useMemo(
+    () => ({ lengthFt: parsedLength, widthFt: parsedWidth, ceilingFt: parsedCeiling }),
+    [parsedLength, parsedWidth, parsedCeiling]
+  );
+  const dimsValid = dims.lengthFt >= 6 && dims.widthFt >= 6 && dims.ceilingFt >= 6;
+
+  // Space needs from current result
+  const spaceNeeds = result?.spaceCheck;
+
+  // Room fit comparison
+  const roomFit = dimsValid && spaceNeeds
+    ? checkRoomFit(dims, spaceNeeds)
+    : null;
+
+  // Diagram spec from result (result.diagram has { lights, subject, camera })
+  const diagramSpec = result?.diagram || null;
+
+  /* ── Save dimensions to AppContext ──────────────────── */
+
+  function saveDimensions() {
+    if (!dimsValid) return;
+    dispatch({
+      type: 'SET_ROOM_DIMENSIONS',
+      dimensions: { ...dims, source: 'manual' },
+    });
+  }
+
+  // Auto-save when dimensions change and are valid
+  useEffect(() => {
+    if (dimsValid) saveDimensions();
+  }, [lengthFt, widthFt, ceilingFt]);
+
+  /* ── Camera estimate callback ───────────────────────── */
+
+  function handleCameraEstimate(est) {
+    setLengthFt(String(est.lengthFt));
+    setWidthFt(String(est.widthFt));
+    setCeilingFt(String(est.ceilingFt));
+    dispatch({
+      type: 'SET_ROOM_DIMENSIONS',
+      dimensions: {
+        lengthFt: est.lengthFt,
+        widthFt: est.widthFt,
+        ceilingFt: est.ceilingFt,
+        source: 'camera',
+      },
+    });
+    setShowCamera(false);
+    setTab('dims');
+  }
+
+  /* ── Apply and navigate back ────────────────────────── */
+
+  function handleApply() {
+    if (dimsValid) {
+      saveDimensions();
+      if (subjectPos) {
+        dispatch({ type: 'SET_FLOOR_PLAN', plan: { subjectPos, cameraPos } });
+      }
+    }
+    dispatch({ type: 'GO_BACK' });
+  }
+
+  function handleBack() {
+    dispatch({ type: 'GO_BACK' });
+  }
+
+  /* ── Stepper input helper ───────────────────────────── */
+
+  function StepperInput({ label, value, onChange, min = 6, max = 80, step = 1, unit = 'ft' }) {
+    const numVal = parseFloat(value) || 0;
+    return (
+      <div className="room-dims__field">
+        <label className="room-dims__label">{label}</label>
+        <div className="room-dims__stepper">
+          <button
+            className="room-dims__step-btn"
+            onClick={() => onChange(String(Math.max(min, numVal - step)))}
+            disabled={numVal <= min}
+          >
+            {'\u2212'}
+          </button>
+          <input
+            type="number"
+            className="room-dims__input"
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            min={min}
+            max={max}
+            step={step}
+            inputMode="decimal"
+          />
+          <span className="room-dims__unit">{unit}</span>
+          <button
+            className="room-dims__step-btn"
+            onClick={() => onChange(String(Math.min(max, numVal + step)))}
+            disabled={numVal >= max}
+          >
+            +
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Render ─────────────────────────────────────────── */
+
+  return (
+    <div className="screen room-planner">
+      {/* Header */}
+      <div className="room-planner__header">
+        <button className="room-planner__back" onClick={handleBack}>{'\u25C0'} Back</button>
+        <h2 className="room-planner__title">Room Planner</h2>
+      </div>
+
+      {/* Tabs */}
+      <div className="room-planner__tabs">
+        <button
+          className={`room-planner__tab ${tab === 'dims' ? 'room-planner__tab--active' : ''}`}
+          onClick={() => { setTab('dims'); setShowCamera(false); }}
+        >
+          Dimensions
+        </button>
+        <button
+          className={`room-planner__tab ${tab === 'camera' ? 'room-planner__tab--active' : ''}`}
+          onClick={() => setTab('camera')}
+        >
+          Camera
+        </button>
+        <button
+          className={`room-planner__tab ${tab === 'plan' ? 'room-planner__tab--active' : ''}`}
+          onClick={() => setTab('plan')}
+          disabled={!dimsValid}
+        >
+          Floor Plan
+        </button>
+      </div>
+
+      {/* ── Tab: Dimensions ── */}
+      {tab === 'dims' && !showCamera && (
+        <div className="room-planner__content">
+          {/* Presets */}
+          <div className="room-dims__presets">
+            {ROOM_PRESETS.map((p, i) => (
+              <button
+                key={i}
+                className="chip"
+                onClick={() => {
+                  setLengthFt(String(p.lengthFt));
+                  setWidthFt(String(p.widthFt));
+                  setCeilingFt(String(p.ceilingFt));
+                }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Inputs */}
+          <div className="room-dims">
+            <StepperInput
+              label="Room Length (depth)"
+              value={toDisplay(lengthFt)}
+              onChange={v => setLengthFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={dimMax}
+            />
+            <StepperInput
+              label="Room Width"
+              value={toDisplay(widthFt)}
+              onChange={v => setWidthFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={dimMax}
+            />
+            <StepperInput
+              label="Ceiling Height"
+              value={toDisplay(ceilingFt)}
+              onChange={v => setCeilingFt(fromDisplay(v))}
+              unit={stepUnit} step={dimStep} min={dimMin} max={ceilMax}
+            />
+          </div>
+
+          {/* Camera measure button */}
+          <button
+            className="btn btn--secondary room-planner__camera-btn"
+            onClick={() => setShowCamera(true)}
+          >
+            Use Camera to Estimate
+          </button>
+
+          {/* Room fit comparison */}
+          {roomFit && (
+            <div className="room-fit">
+              <div className="room-fit__header">Your Room vs. Setup Needs</div>
+              <div className={`room-fit__row ${roomFit.ceilingFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
+                <span>{roomFit.ceilingFits ? '\u2713' : '\u2715'}</span>
+                <span>Ceiling: {fmt(dims.ceilingFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minCeilingFt)}</span>
+              </div>
+              <div className={`room-fit__row ${roomFit.widthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
+                <span>{roomFit.widthFits ? '\u2713' : '\u2715'}</span>
+                <span>Width: {fmt(dims.widthFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minWidthFt)}</span>
+              </div>
+              <div className={`room-fit__row ${roomFit.depthFits ? 'room-fit__row--pass' : 'room-fit__row--fail'}`}>
+                <span>{roomFit.depthFits ? '\u2713' : '\u2715'}</span>
+                <span>Depth: {fmt(dims.lengthFt)}</span>
+                <span className="room-fit__need">needs {fmt(spaceNeeds.minDepthFt)}</span>
+              </div>
+              {roomFit.issues.length > 0 && (
+                <div className="room-fit__issues">
+                  {roomFit.issues.map((issue, i) => (
+                    <div key={i} className="room-fit__issue">! {issue}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* View floor plan button */}
+          {dimsValid && diagramSpec && (
+            <button
+              className="btn btn--primary room-planner__plan-btn"
+              onClick={() => setTab('plan')}
+            >
+              View Floor Plan {'\u2192'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Camera measure overlay */}
+      {(tab === 'dims' && showCamera) && (
+        <CameraMeasure
+          onEstimate={handleCameraEstimate}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
+      {/* ── Tab: Camera ── */}
+      {tab === 'camera' && (
+        <div className="room-planner__content">
+          <CameraMeasure
+            onEstimate={handleCameraEstimate}
+            onClose={() => setTab('dims')}
+          />
+        </div>
+      )}
+
+      {/* ── Tab: Floor Plan ── */}
+      {tab === 'plan' && dimsValid && (
+        <div className="room-planner__content">
+          {diagramSpec ? (
+            <FloorPlanCanvas
+              roomDims={dims}
+              diagramSpec={diagramSpec}
+              subjectPos={subjectPos}
+              cameraPos={cameraPos}
+              onSubjectMove={setSubjectPos}
+              onCameraMove={setCameraPos}
+              onWarnings={setWarnings}
+            />
+          ) : (
+            <div className="room-planner__no-setup">
+              <p>Run a lighting recommendation first to see your setup on the floor plan.</p>
+              <button className="btn btn--secondary" onClick={handleBack}>Go Back</button>
+            </div>
+          )}
+
+          {/* Warnings */}
+          {warnings.length > 0 && (
+            <div className="floor-plan__warnings">
+              {warnings.map((w, i) => (
+                <div key={i} className="floor-plan__warning">
+                  ! {w}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sticky apply bar */}
+      {dimsValid && (
+        <div className="room-planner__action-bar">
+          <button className="btn btn--primary" onClick={handleApply}>
+            {'\u2713'} Apply & Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

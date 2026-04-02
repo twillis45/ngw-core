@@ -1,0 +1,39 @@
+{
+  "reference_id": "bryce_window_001",
+  "pattern_id": "window_portrait",
+  "photographer": "Sue Bryce",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "window_light",
+  "notes": "Natural window light from side with gentle directional quality and soft falloff",
+  "lights": [
+    {
+      "role": "key",
+      "modifier": "window",
+      "angle_deg": 60,
+      "height_deg": 5,
+      "distance_ft": 3
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "opposite_key",
+    "chin_shadow": "soft",
+    "cheek_shadow": "moderate"
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 6,
+    "focal_length": 85
+  },
+  "use_cases": [
+    "portrait",
+    "lifestyle",
+    "boudoir"
+  ],
+  "light_count": 1,
+  "key_direction_deg": 60,
+  "modifier_family": "window",
+  "estimated_distance_ft": 3,
+  "shadow_pattern": "window_portrait",
+  "key_height_relative": "eye_level"
+}

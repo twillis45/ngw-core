@@ -1,0 +1,102 @@
+id: bottle_backlight
+name: Bottle Backlight
+version: 1
+status: canonical
+
+pattern:
+  primary: bottle_backlight
+  secondary: null
+
+category: product
+difficulty: 3
+setup_time_minutes: 20
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 7
+  background: black_or_gradient
+  background_distance_ft: 3
+  surface: shooting_table
+
+subject:
+  distance_from_camera_ft: 3
+  position: center_on_table
+
+camera:
+  height: product_level
+  lens: 100mm_macro
+  angle_to_subject_deg: 0
+
+capture_settings:
+  iso: 100
+  aperture: f/11-f/16
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Small aperture keeps the entire bottle and label in sharp focus
+    - Meter the backlight through the liquid separately to control glow intensity
+
+lights:
+  - role: backlight
+    modifier: stripbox
+    angle_deg: 180
+    height: product_level
+    height_offset_in: 0
+    distance_ft: 2
+    power_ratio: 1.0
+    notes:
+      - Directly behind bottle shooting through liquid
+      - Creates glowing translucent effect
+      - Strip shape controls edge highlights
+      - Use barn doors to limit spill on background
+
+  - role: rim_left
+    modifier: stripbox
+    angle_deg: 120
+    height: product_level
+    height_offset_in: 0
+    distance_ft: 2
+    power_ratio: 0.7
+    notes:
+      - Defines left edge of bottle
+      - Creates bright edge highlight
+      - Grid or flag to control spill
+
+  - role: rim_right
+    modifier: stripbox
+    angle_deg: -120
+    height: product_level
+    height_offset_in: 0
+    distance_ft: 2
+    power_ratio: 0.7
+    notes:
+      - Defines right edge of bottle
+      - Symmetrical to left rim
+      - Adjust power to match
+
+shadow_signature:
+  expected_pattern: backlit
+  nose_shadow: null
+  cheek_shadow: null
+  contrast: high
+  softness: 0.3
+
+failure_modes:
+  - "Backlight too bright: label washed out"
+  - "No edge lights: bottle merges with background"
+  - "Spill on lens: flare destroys contrast"
+
+substitutions:
+  - if_missing: stripbox
+    use: snooted_strobe
+    tradeoff: "Harder light, less even coverage"
+
+use_cases:
+  - beverage_photography
+  - wine_bottle
+  - perfume
+  - spirits
+
+example_photographers:
+  - Karl Taylor
+  - Rob Grimm

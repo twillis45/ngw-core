@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from engine.enums import FieldStatus
+from engine.provenance_models import FieldCandidate
 from engine.image_analysis_models import (
     EnvironmentInference,
     GeometryInference,
@@ -236,6 +238,16 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
     confidences = [c for c in [direction_confidence, vl.confidence if vl else 0] if c > 0]
     confidence = sum(confidences) / len(confidences) if confidences else 0.2
 
+    # Conservative field_status for shadow_pattern:
+    # INFERRED — a non-unknown pattern was derived from cue signals
+    # ASSUMED  — _infer_shadow_pattern() returned "unknown" (real no-signal fallback)
+    # UNKNOWN  — pattern not evaluated (shouldn't reach here, but safe default)
+    _shadow_status = (
+        FieldStatus.INFERRED if shadow_pattern not in ("unknown", "") else
+        FieldStatus.ASSUMED  if shadow_pattern == "unknown" else
+        FieldStatus.UNKNOWN
+    )
+
     return GeometryInference(
         key_light_direction=key_direction,
         key_light_height=key_height,
@@ -245,6 +257,7 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
         shadow_pattern=shadow_pattern,
         confidence=round(confidence, 2),
         notes=notes,
+        field_status=_shadow_status,
     )
 
 
@@ -796,11 +809,22 @@ def infer_source_quality(cue_report: VisualCueReport) -> SourceQualityInference:
     modifier = _vote_modifier(modifier_hints)
     confidence = min(0.75, 0.3 + len(modifier_hints) * 0.1)
 
+    # Conservative field_status for key_modifier_family:
+    # INFERRED — a non-unknown modifier was derived from transition/specular hints
+    # ASSUMED  — _vote_modifier() returned "unknown" (modifier_hints was empty)
+    # UNKNOWN  — not reached in normal flow
+    _modifier_status = (
+        FieldStatus.INFERRED if modifier not in ("unknown", "") else
+        FieldStatus.ASSUMED  if modifier == "unknown" else
+        FieldStatus.UNKNOWN
+    )
+
     return SourceQualityInference(
         key_modifier_family=modifier,
         transition_character=transition,
         confidence=round(confidence, 2),
         notes=notes,
+        field_status=_modifier_status,
     )
 
 
@@ -969,6 +993,16 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
     valid_factors = [f for f in factors if f > 0]
     confidence = sum(valid_factors) / len(valid_factors) if valid_factors else 0.2
 
+    # Conservative field_status for environment_type:
+    # INFERRED — a non-unknown environment was derived from bg/shadow cues
+    # ASSUMED  — env_type remained "unknown" (initial value, no cue conditions fired)
+    # UNKNOWN  — not reached in normal flow
+    _env_status = (
+        FieldStatus.INFERRED if env_type not in ("unknown", "") else
+        FieldStatus.ASSUMED  if env_type == "unknown" else
+        FieldStatus.UNKNOWN
+    )
+
     return EnvironmentInference(
         is_natural_light=is_natural,
         environment_type=env_type,
@@ -976,6 +1010,7 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
         confidence=round(confidence, 2),
         special_cases=special_cases,
         notes=notes,
+        field_status=_env_status,
     )
 
 
@@ -1219,7 +1254,21 @@ def infer_setup_family(
     candidates.sort(key=lambda c: c["confidence"], reverse=True)
 
     primary = candidates[0]
-    alternates = candidates[1:4]  # top 3 alternates
+    # Convert alternates from List[Dict] to List[FieldCandidate] — typed provenance records.
+    # Shape: {"hypothesis": str, "confidence": float, "reason": str} → FieldCandidate
+    alternates = [
+        FieldCandidate(
+            value=c["hypothesis"],
+            source="cue_inference",
+            confidence=c.get("confidence", 0.0),
+            demotion_reason=c.get("reason", ""),
+            status=(
+                FieldStatus.INFERRED if c["hypothesis"] not in ("unknown", "") else
+                FieldStatus.ASSUMED
+            ),
+        )
+        for c in candidates[1:4]  # top 3 alternates
+    ]
 
     # -- Generate recommendation hints --
     if primary["confidence"] < 0.4:
@@ -1234,6 +1283,16 @@ def infer_setup_family(
             f"— this may be a reflector/scrim being used outdoors."
         )
 
+    # Conservative field_status for primary_hypothesis:
+    # INFERRED — a non-unknown hypothesis was scored from prior stage outputs
+    # ASSUMED  — only candidate was "unknown" (real no-signal fallback at line ~1181)
+    # UNKNOWN  — not reached in normal flow
+    _setup_status = (
+        FieldStatus.INFERRED if primary["hypothesis"] not in ("unknown", "") else
+        FieldStatus.ASSUMED  if primary["hypothesis"] == "unknown" else
+        FieldStatus.UNKNOWN
+    )
+
     return SetupFamilyInference(
         primary_hypothesis=primary["hypothesis"],
         primary_confidence=round(primary["confidence"], 2),
@@ -1241,6 +1300,7 @@ def infer_setup_family(
         ambiguity_notes=ambiguity,
         recommendation_hints=hints,
         notes=notes,
+        field_status=_setup_status,
     )
 
 

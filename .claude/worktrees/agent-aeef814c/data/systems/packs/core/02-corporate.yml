@@ -1,0 +1,16 @@
+id: profile_corporate
+name: Corporate Headshot Profile
+
+intent:
+  look: clean
+  contrast: moderate
+  texture: neutral
+  shadow_style: loop
+
+preferred_modifiers:
+  - softbox
+  - umbrella
+
+recommended_systems:
+  - pro_02_corporate_soft_key_fill
+  - pro_08_headshot_gray_seamless

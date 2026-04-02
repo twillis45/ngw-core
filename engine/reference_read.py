@@ -3657,11 +3657,18 @@ def build_recreation_setup(
     alternates: List[Dict[str, Any]] = []
     if setup_family_inf:
         for alt in getattr(setup_family_inf, "alternate_hypotheses", []):
-            hyp = alt.get("hypothesis", "")
+            # alternate_hypotheses is List[FieldCandidate] — use attribute access
+            hyp = alt.value if not isinstance(alt, dict) else alt.get("hypothesis", "")
             expected_lc = _SETUP_LIGHT_COUNTS.get(hyp)
             if expected_lc is not None and light_count < expected_lc:
                 continue  # Skip — contradicts resolved light count
-            alternates.append(alt)
+            # RecreationSetup.alternate_hypotheses remains List[Dict] — convert back
+            alt_dict = (
+                {"hypothesis": alt.value, "confidence": alt.confidence,
+                 "reason": alt.demotion_reason}
+                if not isinstance(alt, dict) else alt
+            )
+            alternates.append(alt_dict)
 
     # Confidence — apply same floor logic as lighting_read.
     # When we've identified a specific setup family, modifier, fill, and bg

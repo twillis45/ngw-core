@@ -26,6 +26,9 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from engine.enums import FieldStatus
+from engine.provenance_models import FieldCandidate
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 15 Visual Cue Models
@@ -644,6 +647,7 @@ class GeometryInference:
     shadow_pattern: str = "unknown"  # rembrandt | loop | split | butterfly | flat | unknown
     confidence: float = 0.0
     notes: List[str] = field(default_factory=list)
+    field_status: FieldStatus = FieldStatus.UNKNOWN
 
 
 @dataclass
@@ -654,6 +658,7 @@ class SourceQualityInference:
     transition_character: str = "unknown"  # gradual | sharp | mixed | unknown
     confidence: float = 0.0
     notes: List[str] = field(default_factory=list)
+    field_status: FieldStatus = FieldStatus.UNKNOWN
 
 
 @dataclass
@@ -675,6 +680,7 @@ class EnvironmentInference:
     confidence: float = 0.0
     special_cases: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    field_status: FieldStatus = FieldStatus.UNKNOWN
 
 
 @dataclass
@@ -687,11 +693,13 @@ class SetupFamilyInference:
 
     primary_hypothesis: str = "unknown"
     primary_confidence: float = 0.0
-    alternate_hypotheses: List[Dict[str, Any]] = field(default_factory=list)
-    # Each alternate: {"hypothesis": str, "confidence": float, "reason": str}
+    alternate_hypotheses: List[FieldCandidate] = field(default_factory=list)
+    # Each alternate: FieldCandidate(value=hypothesis, source="cue_inference",
+    #                                confidence=..., demotion_reason=reason)
     ambiguity_notes: List[str] = field(default_factory=list)
     recommendation_hints: List[str] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)
+    field_status: FieldStatus = FieldStatus.UNKNOWN
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -811,6 +819,7 @@ class VLMCatchlightSignals(BaseModel):
     catchlight_shape: Optional[str] = None                  # "round" | "rectangular" | "octagonal" | "strip" | "mixed" | "none_visible"
     catchlight_position: Optional[str] = None               # clock position of primary, e.g. "10_oclock"
     catchlight_relative_intensity: Optional[str] = None     # "bright" | "dim" | "mixed"
+    jewellery_catchlight_suspected: bool = False             # True when VLM sees a lateral catchlight likely caused by earrings/jewellery
     confidence: float = 0.0
     notes: List[str] = Field(default_factory=list)
 

@@ -1,0 +1,16 @@
+id: profile_lifestyle
+name: Lifestyle Natural Light Profile
+
+intent:
+  look: natural
+  contrast: moderate
+  texture: organic
+  shadow_style: window
+
+preferred_modifiers:
+  - window
+  - reflector
+  - negative_fill
+
+recommended_systems:
+  - pro_07_lifestyle_window_neg_fill

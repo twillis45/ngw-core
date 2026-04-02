@@ -10,8 +10,8 @@
     "chin_yaw_deg": 4.8,
     "subject_lean": "camera_left",
     "arm_occlusion_regions": [
-      "waist_right",
-      "torso_left"
+      "torso_left",
+      "waist_right"
     ],
     "leg_occlusion_regions": [
       "leg_crossing"
@@ -24,16 +24,48 @@
     "pose_shadow_interference": true,
     "pose_highlight_interference": true,
     "occluded_regions": [
-      "waist_right",
       "leg_crossing",
-      "torso_left"
+      "torso_left",
+      "waist_right"
     ],
     "self_shadow_regions": [
-      "waist_right",
-      "torso_left"
+      "torso_left",
+      "waist_right"
     ],
     "pose_complexity_score": 0.618,
     "pose_confidence_adjustment": "reduce_lighting_confidence"
+  },
+  "catchlight": {
+    "ok": true,
+    "catchlight_count": 0,
+    "catchlight_shape": "unknown",
+    "catchlight_position": "unknown",
+    "catchlight_size_ratio": 0.493,
+    "catchlight_intensity": 0.988,
+    "catchlight_circularity": 0.2
+  },
+  "specular_surface": {
+    "ok": true,
+    "specular_highlight_count": 16,
+    "specular_highlight_size": 0.042,
+    "specular_highlight_spread": 0.356,
+    "specular_axis_deg": 147.5
+  },
+  "highlight": {
+    "ok": true,
+    "highlight_width_ratio": 0.05,
+    "highlight_rolloff_rate": 0.913,
+    "highlight_edge_gradient": 0.149,
+    "highlight_axis_deg": 4.0,
+    "highlight_specularity": 0.347
+  },
+  "shadow": {
+    "ok": true,
+    "shadow_vector_deg": 92.3,
+    "shadow_vertical_angle_deg": 2.3,
+    "shadow_softness": 0.627,
+    "shadow_length_ratio": 0.149,
+    "shadow_edge_gradient": 1.0
   },
   "surface_class": {
     "ok": true,
@@ -69,30 +101,13 @@
     "surface_confidence_adjustment": "moderate_caution",
     "reflection_dominant_regions": []
   },
-  "shadow": {
+  "background": {
     "ok": true,
-    "shadow_vector_deg": 92.3,
-    "shadow_vertical_angle_deg": 2.3,
-    "shadow_softness": 0.627,
-    "shadow_length_ratio": 0.149,
-    "shadow_edge_gradient": 1.0
-  },
-  "highlight": {
-    "ok": true,
-    "highlight_width_ratio": 0.05,
-    "highlight_rolloff_rate": 0.913,
-    "highlight_edge_gradient": 0.149,
-    "highlight_axis_deg": 4.0,
-    "highlight_specularity": 0.347
-  },
-  "catchlight": {
-    "ok": true,
-    "catchlight_count": 0,
-    "catchlight_shape": "unknown",
-    "catchlight_position": "unknown",
-    "catchlight_size_ratio": 0.493,
-    "catchlight_intensity": 0.988,
-    "catchlight_circularity": 0.2
+    "background_gradient_center_x": 0.5,
+    "background_gradient_center_y": 0.5,
+    "background_gradient_spread": 0.032,
+    "background_intensity_ratio": 1.0,
+    "background_direction": "center"
   },
   "catchlight_topology": {
     "ok": true,
@@ -299,21 +314,6 @@
     "shadow_density": 0.0,
     "triangle_isolation": 0.0,
     "highlight_width_ratio": 0.493
-  },
-  "background": {
-    "ok": true,
-    "background_gradient_center_x": 0.5,
-    "background_gradient_center_y": 0.5,
-    "background_gradient_spread": 0.032,
-    "background_intensity_ratio": 1.0,
-    "background_direction": "center"
-  },
-  "specular_surface": {
-    "ok": true,
-    "specular_highlight_count": 16,
-    "specular_highlight_size": 0.042,
-    "specular_highlight_spread": 0.356,
-    "specular_axis_deg": 147.5
   },
   "light_direction_field": {
     "ok": true,
@@ -841,7 +841,7 @@
     "physics_score": 0.656,
     "physics_violations": [],
     "notes": [
-      "shadow weight halved: pose_shadow_interference in ['waist_right', 'torso_left']",
+      "shadow weight halved: pose_shadow_interference in ['torso_left', 'waist_right']",
       "key_angle from shadow_vector: 92.3\u00b0",
       "pose correction: +11.4\u00b0 (head=+10.9, torso=+0.0, chin=+0.5)",
       "highlight_interference: upweighting catchlights + rolloff",
@@ -859,17 +859,17 @@
       "dominant_source_direction_deg": -98.7,
       "dominant_source_height_class": "eye_level",
       "dominant_source_height_deg_estimate": 2.3,
-      "dominant_source_distance_class": "near",
+      "dominant_source_distance_class": "close",
       "dominant_source_distance_ft": 2.0,
       "source_size_class": "small",
       "modifier_family_candidates": [
         {
           "type": "reflector_hard",
-          "confidence": 0.5
+          "confidence": 0.55
         },
         {
           "type": "bare_bulb",
-          "confidence": 0.3
+          "confidence": 0.25
         },
         {
           "type": "unknown",
@@ -910,14 +910,15 @@
       },
       "reconstruction_confidence": 0.62,
       "ambiguity_notes": [
-        "No catchlights detected; catchlight geometry unavailable.",
-        "Pose and self-shadow interference reduce highlight/shadow certainty.",
-        "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
-        "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
+        "No catchlights detected; eye-level and direction inferred from shadow and LDF.",
+        "Pose and self-shadow interference reduce highlight/shadow clarity.",
+        "Modifier shape evidence is weak; hard source inferred from penumbra and highlight.",
+        "Environment class signal is weak and ambiguous between window and studio.",
+        "Bounce fill is strong but not a direct fill light."
       ],
       "contradiction_notes": [
-        "Environment_pass suggests window_light (low confidence), but other signals (background, bounce, CCT) favor studio.",
-        "Occlusion_pass detects foliage pattern, but with low confidence (0.5) and no supporting reflection evidence."
+        "Environment_pass suggests window_light (low confidence), but background and lighting control suggest studio.",
+        "No direct evidence for window or sun; modifier unknown."
       ]
     },
     "candidates": [
@@ -926,17 +927,17 @@
         "key_light_angle_deg": -98.7,
         "key_light_height_class": "eye_level",
         "key_light_height_deg_estimate": 2.3,
-        "key_light_distance_class": "near",
+        "key_light_distance_class": "close",
         "key_light_distance_ft_estimate": 2.0,
         "source_size_class": "small",
         "modifier_family_candidates": [
           {
             "type": "reflector_hard",
-            "confidence": 0.5
+            "confidence": 0.55
           },
           {
             "type": "bare_bulb",
-            "confidence": 0.3
+            "confidence": 0.25
           },
           {
             "type": "unknown",
@@ -977,18 +978,19 @@
         },
         "confidence_score": 0.62,
         "ambiguity_notes": [
-          "No catchlights detected; catchlight geometry unavailable.",
-          "Pose and self-shadow interference reduce highlight/shadow certainty.",
-          "Modifier shape evidence is weak; only source size and penumbra support hard modifier.",
-          "Environment class signal is weak (window_light conf=0.15), but background and bounce suggest controlled studio."
+          "No catchlights detected; eye-level and direction inferred from shadow and LDF.",
+          "Pose and self-shadow interference reduce highlight/shadow clarity.",
+          "Modifier shape evidence is weak; hard source inferred from penumbra and highlight.",
+          "Environment class signal is weak and ambiguous between window and studio.",
+          "Bounce fill is strong but not a direct fill light."
         ]
       },
       {
         "candidate_id": "candidate_2",
-        "key_light_angle_deg": 92.3,
-        "key_light_height_class": "eye_level",
-        "key_light_height_deg_estimate": 2.3,
-        "key_light_distance_class": "near",
+        "key_light_angle_deg": -98.7,
+        "key_light_height_class": "slightly_above_eye",
+        "key_light_height_deg_estimate": 10.0,
+        "key_light_distance_class": "close",
         "key_light_distance_ft_estimate": 2.0,
         "source_size_class": "small",
         "modifier_family_candidates": [
@@ -1039,9 +1041,9 @@
         },
         "confidence_score": 0.48,
         "ambiguity_notes": [
-          "Environment_pass weakly suggests window light (conf=0.15), but supporting evidence is limited.",
-          "Shadow and LDF direction differ by ~6\u00b0, possibly due to pose interference.",
-          "No catchlights; modifier shape unknown."
+          "Environment_pass suggests window_light (low confidence), but no direct window evidence.",
+          "Modifier shape and catchlight evidence are weak.",
+          "Shadow and highlight signals consistent with small, hard source."
         ]
       }
     ],

@@ -80,6 +80,8 @@ class FeedbackBody(BaseModel):
     pattern: Optional[str] = None
     rating: int = Field(..., ge=1, le=5)
     comment: str = Field(default="")
+    analysis_id: Optional[str] = None
+    system_version: Optional[str] = None
 
 
 @router.get("/feedback")
@@ -90,7 +92,9 @@ def feedback_list(user=Depends(get_current_user)):
 @router.post("/feedback", status_code=201)
 def feedback_save(body: FeedbackBody, user=Depends(get_current_user)):
     entry = save_user_feedback(
-        user["id"], body.setup_id, body.mood, body.pattern, body.rating, body.comment
+        user["id"], body.setup_id, body.mood, body.pattern, body.rating, body.comment,
+        analysis_id=body.analysis_id,
+        system_version=body.system_version,
     )
     return entry
 

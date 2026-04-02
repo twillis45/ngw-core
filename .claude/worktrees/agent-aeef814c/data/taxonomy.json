@@ -1,0 +1,731 @@
+{
+  "$schema": "https://ngw-core.dev/taxonomy/v1.schema.json",
+  "taxonomy_version": "1.0.0",
+  "engine_compatibility": "ngw-core-v1.0",
+  "description": "Strict taxonomy for portrait-photography lighting systems. Every enum, allowed value, and constraint is designed to map directly into LightingSystemEntry fields (id, name, criteria, features, modifier) accepted by the NGW Core v1 rule engine.",
+
+  "_field_mapping_guide": {
+    "system.id":       "Constructed as '{gear_profile.id}__{modifier_family.id}__{environment.id}' — guarantees uniqueness per combination.",
+    "system.name":     "Human label: '{gear_profile.label} + {modifier_family.label} ({environment.label})'.",
+    "system.criteria": "Populated from gear_profile.criteria merged with modifier_family.criteria_adjustments and environment.criteria_adjustments.",
+    "system.features": "Union of gear_profile.features and modifier_family.features.",
+    "system.modifier": "Looked up from mood_definitions[mood].scoring_modifier × skin_tone_handling[tone_range].modifier_bias."
+  },
+
+
+
+  "gear_profiles": {
+    "_description": "Physical light sources. Each profile maps to a full set of NGW criteria and feature flags. These are the 'base system' before any modifier family or environment adjustment is applied.",
+    "_maps_to": "system.criteria + system.features",
+
+    "enums": [
+      {
+        "id": "strobe_mono",
+        "label": "Monolight Strobe",
+        "description": "Self-contained AC/DC studio strobe with modeling lamp. Workhorse for controlled portrait sessions. Typical power 100–1000 Ws.",
+        "criteria": {
+          "brightness": 9000,
+          "energy_efficiency": 65,
+          "color_accuracy": 96,
+          "lifespan_hours": 50000,
+          "cost_effectiveness": 70
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["mono", "monolight", "studio strobe", "plug-in strobe", "AC strobe"]
+      },
+      {
+        "id": "strobe_pack",
+        "label": "Pack-and-Head Strobe",
+        "description": "Separate power pack driving one or more flash heads. Higher power ceiling (up to 4800 Ws) for large-group or editorial portraiture.",
+        "criteria": {
+          "brightness": 10000,
+          "energy_efficiency": 55,
+          "color_accuracy": 95,
+          "lifespan_hours": 60000,
+          "cost_effectiveness": 45
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["pack system", "power pack", "asymmetric pack", "generator head"]
+      },
+      {
+        "id": "speedlight",
+        "label": "Speedlight / Hot-Shoe Flash",
+        "description": "Battery-powered portable flash. Low guide number but highly mobile. On-camera or off-camera via trigger.",
+        "criteria": {
+          "brightness": 3500,
+          "energy_efficiency": 120,
+          "color_accuracy": 88,
+          "lifespan_hours": 30000,
+          "cost_effectiveness": 85
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": true,
+          "waterproof": false
+        },
+        "synonyms": ["shoe flash", "cobra flash", "hot-shoe flash", "on-camera flash", "portable flash"]
+      },
+      {
+        "id": "led_panel",
+        "label": "LED Panel (Continuous)",
+        "description": "Flat continuous LED panel, bi-color or RGB. WYSIWYG preview for subjects uncomfortable with flash pops. CRI 95+ panels recommended for skin.",
+        "criteria": {
+          "brightness": 6000,
+          "energy_efficiency": 160,
+          "color_accuracy": 95,
+          "lifespan_hours": 50000,
+          "cost_effectiveness": 75
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": true,
+          "waterproof": false
+        },
+        "synonyms": ["LED flat panel", "video light", "bi-color panel", "RGB panel", "continuous LED"]
+      },
+      {
+        "id": "led_cob",
+        "label": "LED COB (Chip-on-Board)",
+        "description": "High-output single-point LED source approximating a strobe's beam quality. Accepts Bowens-mount modifiers. Great for continuous portrait work requiring punch.",
+        "criteria": {
+          "brightness": 8500,
+          "energy_efficiency": 145,
+          "color_accuracy": 96,
+          "lifespan_hours": 50000,
+          "cost_effectiveness": 65
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": true,
+          "waterproof": false
+        },
+        "synonyms": ["COB light", "point-source LED", "Bowens LED", "studio LED"]
+      },
+      {
+        "id": "led_tube",
+        "label": "LED Tube / Wand",
+        "description": "Cylindrical handheld LED with RGB or bi-color. Used for creative rim/accent lighting, practical effects, and on-location edge light.",
+        "criteria": {
+          "brightness": 2500,
+          "energy_efficiency": 130,
+          "color_accuracy": 92,
+          "lifespan_hours": 40000,
+          "cost_effectiveness": 70
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": true,
+          "waterproof": true
+        },
+        "synonyms": ["light wand", "tube light", "pixel tube", "ice light", "light stick"]
+      },
+      {
+        "id": "fresnel",
+        "label": "Fresnel Spot",
+        "description": "Hard-light source with focusing lens. Produces a defined beam with controllable spread (spot ↔ flood). Cinematic portrait look.",
+        "criteria": {
+          "brightness": 7500,
+          "energy_efficiency": 70,
+          "color_accuracy": 93,
+          "lifespan_hours": 25000,
+          "cost_effectiveness": 50
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["Fresnel lens light", "spot", "focusable spot", "cinema fresnel"]
+      },
+      {
+        "id": "ellipsoidal",
+        "label": "Ellipsoidal / ETC Source Four",
+        "description": "Ellipsoidal reflector spotlight (ERS) with built-in gobo gate, shutters, and sharp focus. The standard fixture for projected patterns, gobo work, and theatrical-style portrait lighting. ETC Source Four is the industry-standard model.",
+        "criteria": {
+          "brightness": 8000,
+          "energy_efficiency": 55,
+          "color_accuracy": 92,
+          "lifespan_hours": 20000,
+          "cost_effectiveness": 40
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["ETC Source Four", "Source Four", "Source 4", "S4", "leko", "ellipsoidal reflector spotlight", "ERS", "profile spot", "theatrical spot"]
+      },
+      {
+        "id": "ring_light",
+        "label": "Ring Light",
+        "description": "Circular light that wraps evenly around the lens axis. Signature catchlight. Popular for beauty/fashion/social-media portraiture.",
+        "criteria": {
+          "brightness": 4000,
+          "energy_efficiency": 140,
+          "color_accuracy": 90,
+          "lifespan_hours": 35000,
+          "cost_effectiveness": 80
+        },
+        "features": {
+          "dimmable": true,
+          "smart_ready": true,
+          "waterproof": false
+        },
+        "synonyms": ["ring flash", "beauty ring", "halo light", "diva ring"]
+      },
+      {
+        "id": "natural_window",
+        "label": "Natural Window Light",
+        "description": "Ambient daylight through a window. Zero cost, high CRI, but uncontrollable intensity and color shift throughout the day. Modifier is the window treatment itself.",
+        "criteria": {
+          "brightness": 5000,
+          "energy_efficiency": 200,
+          "color_accuracy": 100,
+          "lifespan_hours": 100000,
+          "cost_effectiveness": 100
+        },
+        "features": {
+          "dimmable": false,
+          "smart_ready": false,
+          "waterproof": false
+        },
+        "synonyms": ["window light", "available light", "ambient daylight", "north light"]
+      },
+      {
+        "id": "reflector_only",
+        "label": "Reflector (Passive Fill)",
+        "description": "Not a light source — a passive bounce surface. Always paired with another source. Included because some setups use reflector-only fill. Criteria represent reflected output only.",
+        "criteria": {
+          "brightness": 2000,
+          "energy_efficiency": 200,
+          "color_accuracy": 98,
+          "lifespan_hours": 100000,
+          "cost_effectiveness": 95
+        },
+        "features": {
+          "dimmable": false,
+          "smart_ready": false,
+          "waterproof": true
+        },
+        "synonyms": ["bounce", "bounce board", "v-flat", "fill card", "reflector disc", "5-in-1"]
+      }
+    ]
+  },
+
+
+
+  "modifier_families": {
+    "_description": "Light-shaping tools attached to or placed in front of the gear profile. Each modifier adjusts scoring criteria and may add feature flags. Applied as deltas to the gear profile's base criteria.",
+    "_maps_to": "system.criteria (additive adjustments) + system.features (union)",
+
+    "enums": [
+      {
+        "id": "softbox_rect",
+        "label": "Rectangular Softbox",
+        "description": "Fabric box diffuser producing broad, even, soft light. Rectangular catch-lights. Size ranges from 60 cm (headshot) to 180 cm (full-length). Inner baffle + outer diffusion panel.",
+        "criteria_adjustments": {
+          "brightness": -1500,
+          "color_accuracy": 1
+        },
+        "features": {},
+        "skin_tone_notes": "Excellent across all skin tones. Broad source minimizes pore texture on dark skin; even falloff prevents hot spots on light skin.",
+        "synonyms": ["softbox", "recta box", "strip box (if narrow)", "soft box"]
+      },
+      {
+        "id": "softbox_octa",
+        "label": "Octagonal Softbox (Octa)",
+        "description": "Octagonal diffuser producing round catchlights that mimic natural eye reflections. Preferred for beauty and headshot work.",
+        "criteria_adjustments": {
+          "brightness": -1500,
+          "color_accuracy": 1
+        },
+        "features": {},
+        "skin_tone_notes": "Round catchlight reads naturally in all eye colors. Even wrap suits medium-to-dark tones especially well.",
+        "synonyms": ["octabox", "octa", "octobank"]
+      },
+      {
+        "id": "umbrella_shoot_through",
+        "label": "Shoot-Through Umbrella",
+        "description": "Translucent white umbrella placed between source and subject. Broadest, cheapest diffusion. Some light spills backward (less efficient).",
+        "criteria_adjustments": {
+          "brightness": -2000,
+          "energy_efficiency": -20,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Very forgiving. Spill creates ambient fill that opens shadows — helpful when photographing a range of skin tones in one group.",
+        "synonyms": ["shoot-through", "white umbrella", "translucent umbrella"]
+      },
+      {
+        "id": "umbrella_reflective",
+        "label": "Reflective Umbrella",
+        "description": "Opaque umbrella (silver, white, or gold interior) bouncing light back toward subject. More directional than shoot-through but still broad.",
+        "criteria_adjustments": {
+          "brightness": -1000,
+          "energy_efficiency": -10,
+          "color_accuracy": -1
+        },
+        "features": {},
+        "skin_tone_notes": "Silver interior adds specular contrast — use cautiously on oily or very dark skin. White interior is universally safe. Gold interior warms all tones but can push orange on fair skin.",
+        "synonyms": ["bounce umbrella", "silver umbrella", "gold umbrella", "white umbrella (reflective)"]
+      },
+      {
+        "id": "beauty_dish",
+        "label": "Beauty Dish",
+        "description": "Parabolic dish with central deflector plate. Produces a light quality between soft and hard — contrasty but with smooth falloff. Signature beauty/fashion look.",
+        "criteria_adjustments": {
+          "brightness": -500,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Reveals skin texture intentionally. On dark skin, adds a sculpted dimensional look. On light skin, may over-emphasize redness or blemishes — consider adding a diffusion sock.",
+        "synonyms": ["dish", "bbeauty dish with sock", "white dish", "silver dish"]
+      },
+      {
+        "id": "mola_reflector",
+        "label": "Mola Deep Parabolic Reflector",
+        "description": "Deep parabolic reflector with focused center and soft wrap edge. Produces a unique quality between beauty dish and softbox — specular center with rapid falloff. Mola Setti (28\"), Demi (22\"), Euro (33.5\"), Mantti (40\") are the standard sizes.",
+        "criteria_adjustments": {
+          "brightness": -800,
+          "color_accuracy": 1
+        },
+        "features": {},
+        "skin_tone_notes": "Specular center sculpts cheekbones beautifully on all skin tones. The focused beam with soft edge is especially flattering for dark skin — reveals dimension without the harshness of a standard reflector. The rapid falloff naturally controls spill.",
+        "synonyms": ["mola", "deep parabolic", "parabolic reflector", "Mola Setti", "Mola Demi", "Mola Euro", "Mola Mantti"]
+      },
+      {
+        "id": "bare_bulb",
+        "label": "Bare Bulb / No Modifier",
+        "description": "Raw light source with no diffusion or shaping. Hardest light quality. Maximum output. Used for dramatic high-contrast or editorial work.",
+        "criteria_adjustments": {
+          "brightness": 0,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Hard shadows accentuate every texture — careful metering is critical. Deep skin tones require precise exposure to avoid crushed shadows. Light skin tones may blow highlights easily.",
+        "synonyms": ["bare head", "open face", "no modifier", "direct"]
+      },
+      {
+        "id": "grid_spot",
+        "label": "Grid / Honeycomb",
+        "description": "Metal or fabric grid that narrows beam angle (typically 10°–40°). Controls spill without changing light quality. Often stacked onto other modifiers.",
+        "criteria_adjustments": {
+          "brightness": -800,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Tightened beam requires very deliberate placement. Excellent for hair lights and rim lights on all skin tones. Avoid as key on dark skin unless intentionally dramatic.",
+        "synonyms": ["honeycomb", "egg crate", "grid spot", "louver"]
+      },
+      {
+        "id": "snoot",
+        "label": "Snoot",
+        "description": "Conical tube producing a tight spot of light. Used for accent, hair, or background lighting. Very narrow coverage.",
+        "criteria_adjustments": {
+          "brightness": -1200,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Accent use only. Produces hot spots — never use as key on any skin tone without intentional creative purpose.",
+        "synonyms": ["conical snoot", "spot snoot", "tube"]
+      },
+      {
+        "id": "gobo",
+        "label": "Gobo / Projection Pattern",
+        "description": "Metal or glass template inserted into an ellipsoidal or optical snoot to project shaped shadows or light patterns. Cross, slit, window, foliage, and custom patterns available. Defines the composition through shaped light.",
+        "criteria_adjustments": {
+          "brightness": -1500,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Projected patterns create high-contrast areas — meter carefully for the illuminated portions. On dark skin, ensure the lit areas are properly exposed; the shadow areas will fall to black regardless of skin tone.",
+        "synonyms": ["gobo pattern", "projection mask", "cookie", "cucoloris", "gobo template"]
+      },
+      {
+        "id": "optical_snoot",
+        "label": "Optical Snoot / Projection Attachment",
+        "description": "Lens-based strobe attachment that focuses the beam into a sharp spot, accepts gobos and masks. Converts any Bowens-mount strobe into a projection light — the strobe-user's alternative to an ETC Source Four.",
+        "criteria_adjustments": {
+          "brightness": -1800,
+          "color_accuracy": 0
+        },
+        "features": {},
+        "skin_tone_notes": "Creates an extremely focused beam — same metering considerations as gobo work. The tight spot requires precise aiming; even a small shift changes which facial features are illuminated.",
+        "synonyms": ["optical spot", "spotlight attachment", "projection snoot", "gobos snoot", "OT1"]
+      },
+      {
+        "id": "diffusion_panel",
+        "label": "Diffusion Panel / Scrim",
+        "description": "Large fabric frame placed between source and subject. Converts any hard source into a large, soft source. Size determines softness.",
+        "criteria_adjustments": {
+          "brightness": -2500,
+          "energy_efficiency": -15,
+          "color_accuracy": 1
+        },
+        "features": {},
+        "skin_tone_notes": "The larger the panel relative to the subject, the more forgiving for all skin tones. Best single modifier for mixed-group portraits with varied skin tones.",
+        "synonyms": ["scrim", "silk", "diffusion frame", "butterfly frame", "overhead silk"]
+      },
+      {
+        "id": "gel_cto",
+        "label": "CTO Gel (Color Temperature Orange)",
+        "description": "Warming gel filter. Shifts color temperature down (toward tungsten). Available in 1/8, 1/4, 1/2, and full CTO.",
+        "criteria_adjustments": {
+          "brightness": -300,
+          "color_accuracy": -3
+        },
+        "features": {},
+        "skin_tone_notes": "Adds warmth that is universally flattering in small doses (1/4 CTO). Full CTO can push golden tones — be cautious with already-warm skin tones to avoid oversaturation.",
+        "synonyms": ["warming gel", "orange gel", "CTO", "color correction gel (warm)"]
+      },
+      {
+        "id": "gel_ctb",
+        "label": "CTB Gel (Color Temperature Blue)",
+        "description": "Cooling gel filter. Shifts color temperature up (toward daylight/blue). Available in 1/8, 1/4, 1/2, and full CTB.",
+        "criteria_adjustments": {
+          "brightness": -300,
+          "color_accuracy": -3
+        },
+        "features": {},
+        "skin_tone_notes": "Use sparingly as key — cool light can make all skin tones look ashen if overdone. Works well as accent/rim. Effective for editorial mood.",
+        "synonyms": ["cooling gel", "blue gel", "CTB", "color correction gel (cool)"]
+      }
+    ]
+  },
+
+
+
+  "mood_definitions": {
+    "_description": "Lighting moods that describe the intended emotional quality of the portrait. Each mood maps to a scoring_modifier that is multiplied into the system's final score via the modifier field, expressing how well-suited a system is for that mood.",
+    "_maps_to": "system.modifier (partial — combined with skin_tone_handling.modifier_bias)",
+
+    "enums": [
+      {
+        "id": "high_key",
+        "label": "High Key",
+        "description": "Bright, even, low-contrast lighting. White or light-gray backgrounds. Minimal shadows. Conveys optimism, cleanliness, youth, commercial appeal.",
+        "scoring_modifier": 1.15,
+        "ideal_gear": ["led_panel", "strobe_mono", "ring_light"],
+        "ideal_modifiers": ["softbox_rect", "softbox_octa", "diffusion_panel"],
+        "avoid": ["snoot", "grid_spot", "bare_bulb"],
+        "synonyms": ["bright", "airy", "clean", "commercial", "beauty flat"]
+      },
+      {
+        "id": "low_key",
+        "label": "Low Key",
+        "description": "Dark, moody, high-contrast lighting. Black or very dark backgrounds. Deep shadows with selective illumination. Conveys drama, mystery, intensity.",
+        "scoring_modifier": 1.10,
+        "ideal_gear": ["strobe_mono", "fresnel", "led_cob"],
+        "ideal_modifiers": ["grid_spot", "snoot", "beauty_dish", "bare_bulb"],
+        "avoid": ["diffusion_panel", "umbrella_shoot_through"],
+        "synonyms": ["moody", "dramatic", "chiaroscuro", "rembrandt", "dark"]
+      },
+      {
+        "id": "natural",
+        "label": "Natural / Available Light",
+        "description": "Emulates or uses daylight. Soft directional light with gentle shadows. Conveys authenticity, warmth, editorial realism.",
+        "scoring_modifier": 1.05,
+        "ideal_gear": ["natural_window", "led_panel", "reflector_only"],
+        "ideal_modifiers": ["diffusion_panel", "umbrella_shoot_through"],
+        "avoid": ["bare_bulb", "snoot"],
+        "synonyms": ["available light", "daylight", "editorial natural", "soft natural"]
+      },
+      {
+        "id": "cinematic",
+        "label": "Cinematic",
+        "description": "Film-inspired lighting with motivated sources, color contrast (often warm/cool split), and intentional falloff. Conveys narrative depth, sophistication.",
+        "scoring_modifier": 1.10,
+        "ideal_gear": ["fresnel", "led_cob", "led_tube"],
+        "ideal_modifiers": ["grid_spot", "gel_cto", "gel_ctb"],
+        "avoid": ["ring_light", "umbrella_shoot_through"],
+        "synonyms": ["filmic", "movie look", "motivated light", "Hollywood"]
+      },
+      {
+        "id": "beauty",
+        "label": "Beauty / Glamour",
+        "description": "Close-range, even lighting optimized for skin. Minimal shadows under nose and chin. Often frontal or slightly above axis. Conveys polish, allure, perfection.",
+        "scoring_modifier": 1.15,
+        "ideal_gear": ["strobe_mono", "ring_light", "led_panel"],
+        "ideal_modifiers": ["beauty_dish", "softbox_octa", "ring_light"],
+        "avoid": ["bare_bulb", "snoot"],
+        "synonyms": ["glamour", "fashion beauty", "clamshell", "butterfly lighting"]
+      },
+      {
+        "id": "editorial",
+        "label": "Editorial / Conceptual",
+        "description": "Rule-breaking, story-driven lighting where mood and concept override technical perfection. May mix color temperatures, use hard light creatively, or employ unconventional angles.",
+        "scoring_modifier": 1.00,
+        "ideal_gear": ["led_tube", "fresnel", "strobe_mono"],
+        "ideal_modifiers": ["gel_cto", "gel_ctb", "bare_bulb", "grid_spot"],
+        "avoid": [],
+        "synonyms": ["conceptual", "artistic", "avant-garde", "experimental"]
+      },
+      {
+        "id": "corporate",
+        "label": "Corporate / Headshot",
+        "description": "Clean, professional, repeatable lighting for business headshots. Consistency across subjects is the priority. Medium-soft with controlled background.",
+        "scoring_modifier": 1.05,
+        "ideal_gear": ["strobe_mono", "led_cob", "led_panel"],
+        "ideal_modifiers": ["softbox_rect", "softbox_octa"],
+        "avoid": ["gel_cto", "gel_ctb", "bare_bulb", "snoot"],
+        "synonyms": ["headshot", "business portrait", "professional", "LinkedIn"]
+      }
+    ]
+  },
+
+
+
+  "environment_constraints": {
+    "_description": "Physical shooting environments that impose constraints on which gear and modifiers are practical. Each environment applies criteria adjustments (penalties or bonuses) reflecting real-world limitations.",
+    "_maps_to": "system.criteria (additive adjustments via criteria_adjustments)",
+
+    "enums": [
+      {
+        "id": "studio_large",
+        "label": "Large Studio (>40 m²)",
+        "description": "Dedicated photography studio with high ceilings, power outlets, blackout capability, and ample space for multiple lights and large modifiers.",
+        "criteria_adjustments": {
+          "brightness": 0,
+          "energy_efficiency": 0,
+          "cost_effectiveness": 0
+        },
+        "gear_allowed": ["ALL"],
+        "modifier_allowed": ["ALL"],
+        "synonyms": ["big studio", "commercial studio", "photo studio", "shooting stage"]
+      },
+      {
+        "id": "studio_small",
+        "label": "Small Studio / Home Studio (<40 m²)",
+        "description": "Compact space with limited ceiling height and fewer outlets. Large modifiers (>120 cm) become impractical. Heat buildup is a factor with continuous lights.",
+        "criteria_adjustments": {
+          "brightness": -500,
+          "energy_efficiency": 5,
+          "cost_effectiveness": 10
+        },
+        "gear_allowed": ["strobe_mono", "speedlight", "led_panel", "led_cob", "led_tube", "ring_light", "reflector_only"],
+        "modifier_allowed": ["softbox_rect", "softbox_octa", "umbrella_shoot_through", "umbrella_reflective", "beauty_dish", "bare_bulb", "grid_spot", "snoot", "gel_cto", "gel_ctb"],
+        "synonyms": ["home studio", "apartment studio", "garage studio", "compact studio"]
+      },
+      {
+        "id": "on_location_indoor",
+        "label": "On-Location Indoor",
+        "description": "Client office, hotel room, event venue, or similar non-studio indoor space. Limited power, unknown ceiling color, ambient light contamination.",
+        "criteria_adjustments": {
+          "brightness": -1000,
+          "energy_efficiency": 10,
+          "color_accuracy": -3,
+          "cost_effectiveness": 5
+        },
+        "gear_allowed": ["speedlight", "led_panel", "led_cob", "led_tube", "ring_light", "reflector_only", "natural_window"],
+        "modifier_allowed": ["softbox_rect", "softbox_octa", "umbrella_shoot_through", "umbrella_reflective", "bare_bulb", "grid_spot", "gel_cto", "gel_ctb", "diffusion_panel"],
+        "synonyms": ["office shoot", "hotel shoot", "venue shoot", "indoor location"]
+      },
+      {
+        "id": "on_location_outdoor",
+        "label": "On-Location Outdoor",
+        "description": "Exterior shoot — park, street, rooftop. No power access (battery only), wind affects modifiers, sun is the dominant source that must be balanced or overpowered.",
+        "criteria_adjustments": {
+          "brightness": -2000,
+          "energy_efficiency": 15,
+          "color_accuracy": -2,
+          "cost_effectiveness": 0
+        },
+        "gear_allowed": ["speedlight", "led_panel", "led_tube", "reflector_only", "natural_window"],
+        "modifier_allowed": ["umbrella_shoot_through", "umbrella_reflective", "bare_bulb", "diffusion_panel", "gel_cto", "gel_ctb"],
+        "gear_notes": "Strobe monolights with battery packs (e.g., Godox AD600) can be used but must be flagged as battery-powered variant.",
+        "synonyms": ["outdoor shoot", "exterior", "street portrait", "natural light outdoor"]
+      },
+      {
+        "id": "event",
+        "label": "Live Event",
+        "description": "Wedding, conference, gala. Must be mobile, quiet, non-disruptive. No time for elaborate setups. On-camera or single off-camera light maximum.",
+        "criteria_adjustments": {
+          "brightness": -2500,
+          "energy_efficiency": 20,
+          "color_accuracy": -5,
+          "cost_effectiveness": 15
+        },
+        "gear_allowed": ["speedlight", "led_panel", "led_tube", "ring_light"],
+        "modifier_allowed": ["bare_bulb", "gel_cto", "umbrella_shoot_through"],
+        "synonyms": ["wedding", "conference", "gala", "reception", "ceremony"]
+      }
+    ]
+  },
+
+
+
+  "skin_tone_handling": {
+    "_description": "Guidelines for how lighting choices interact with different skin tones. Uses the Fitzpatrick scale as a clinical reference but maps to photographer-practical ranges. Each range provides a modifier_bias that adjusts the scoring modifier to favor systems better suited to that range.",
+    "_maps_to": "system.modifier (partial — multiplied with mood_definitions.scoring_modifier)",
+    "_important_notes": [
+      "Skin tone is ONE input to the recommendation, never the sole determinant.",
+      "These biases are subtle (0.95–1.05) and reflect physics — not aesthetic preference.",
+      "Darker skin reflects less light and requires higher-CRI sources to render undertones accurately. The bias gently favors high-CRI, softer light for those tones.",
+      "Lighter skin is more susceptible to specular blow-outs. The bias gently favors diffused, lower-contrast setups.",
+      "Mixed groups default to 'varied' which favors the most forgiving, universally flattering setups.",
+      "Photographers should ALWAYS meter for the subject's skin, regardless of system recommendation."
+    ],
+
+    "enums": [
+      {
+        "id": "light",
+        "label": "Light (Fitzpatrick I–II)",
+        "description": "Very fair to fair skin. Burns easily. High reflectance. Susceptible to specular highlights and color cast pickup from environment.",
+        "modifier_bias": 1.00,
+        "preference_notes": {
+          "favor_high_diffusion": true,
+          "cri_minimum": 90,
+          "caution": "Watch for blown highlights on forehead/nose bridge. Avoid unmodified key without negative fill."
+        },
+        "synonyms": ["fair", "pale", "Type I", "Type II"]
+      },
+      {
+        "id": "medium",
+        "label": "Medium (Fitzpatrick III–IV)",
+        "description": "Light-brown to olive skin. Moderate reflectance. Most lighting setups work well with minimal adjustment.",
+        "modifier_bias": 1.00,
+        "preference_notes": {
+          "favor_high_diffusion": false,
+          "cri_minimum": 88,
+          "caution": "Olive undertones can shift green under low-CRI LED. Verify CRI if using budget panels."
+        },
+        "synonyms": ["olive", "tan", "medium-brown", "Type III", "Type IV"]
+      },
+      {
+        "id": "dark",
+        "label": "Dark (Fitzpatrick V–VI)",
+        "description": "Dark-brown to deep-black skin. Lower reflectance. Requires higher-CRI sources (≥95) to reveal undertone richness. Shadow detail is critical.",
+        "modifier_bias": 1.05,
+        "preference_notes": {
+          "favor_high_diffusion": true,
+          "cri_minimum": 95,
+          "caution": "Low-CRI sources flatten melanin-rich skin into a single muddy tone. Always prioritize CRI ≥ 95. Use large, soft modifiers. Expose for skin highlights, not incident meter."
+        },
+        "synonyms": ["deep", "dark brown", "ebony", "Type V", "Type VI"]
+      },
+      {
+        "id": "varied",
+        "label": "Varied / Mixed Group",
+        "description": "Multiple skin tones in the same frame. System must handle wide dynamic range of reflectance without blowing light skin or losing detail on dark skin.",
+        "modifier_bias": 1.03,
+        "preference_notes": {
+          "favor_high_diffusion": true,
+          "cri_minimum": 95,
+          "caution": "Use the largest, softest modifier available. Position dark-skinned subjects slightly closer to the light. Always shoot test frames and check histogram per subject."
+        },
+        "synonyms": ["mixed group", "diverse group", "multi-tone"]
+      }
+    ]
+  },
+
+
+
+  "common_synonyms_index": {
+    "_description": "Flattened reverse-lookup from common photographer slang or brand names to canonical taxonomy IDs. Use this to normalize free-text input before querying the engine.",
+
+    "gear": {
+      "profoto": "strobe_mono",
+      "godox": "strobe_mono",
+      "broncolor": "strobe_pack",
+      "elinchrom": "strobe_mono",
+      "nanlite": "led_cob",
+      "aputure": "led_cob",
+      "amaran": "led_panel",
+      "neewer": "led_panel",
+      "yongnuo": "speedlight",
+      "sb-900": "speedlight",
+      "sb-5000": "speedlight",
+      "600ex": "speedlight",
+      "v1": "speedlight",
+      "ad200": "speedlight",
+      "ad600": "strobe_mono",
+      "a1x": "speedlight",
+      "b10": "strobe_mono",
+      "quasar tube": "led_tube",
+      "astera tube": "led_tube",
+      "pavotube": "led_tube",
+      "diva ring": "ring_light",
+      "ice light": "led_tube"
+    },
+    "modifiers": {
+      "para": "softbox_octa",
+      "deep para": "softbox_octa",
+      "strip box": "softbox_rect",
+      "lantern": "umbrella_shoot_through",
+      "china ball": "umbrella_shoot_through",
+      "space light": "umbrella_shoot_through",
+      "book light": "diffusion_panel",
+      "clamshell": "beauty_dish",
+      "plus green": "gel_cto",
+      "minus green": "gel_ctb",
+      "rosco": "gel_cto",
+      "lee filter": "gel_cto"
+    },
+    "moods": {
+      "rembrandt": "low_key",
+      "butterfly": "beauty",
+      "paramount": "beauty",
+      "split lighting": "low_key",
+      "loop lighting": "natural",
+      "broad lighting": "corporate",
+      "short lighting": "cinematic",
+      "flat light": "high_key",
+      "clamshell lighting": "beauty"
+    }
+  },
+
+
+
+  "modifier_calculation_formula": {
+    "_description": "How to compute the system.modifier field from mood + skin_tone before sending to the engine.",
+    "formula": "system.modifier = mood.scoring_modifier × skin_tone.modifier_bias",
+    "example": {
+      "mood": "low_key (1.10)",
+      "skin_tone": "dark (1.05)",
+      "result": "1.10 × 1.05 = 1.155",
+      "note": "This value is passed directly as the 'modifier' field in LightingSystemEntry."
+    },
+    "bounds": {
+      "minimum": 0.0,
+      "maximum": 2.0,
+      "note": "Engine rejects negative / NaN / Inf modifiers and falls back to 1.0. Values above 2.0 are allowed but unusual."
+    }
+  },
+
+
+
+  "criteria_composition_formula": {
+    "_description": "How to compute the final system.criteria dict from gear + modifier_family + environment before sending to the engine.",
+    "formula": "For each criterion key: final_value = gear_profile.criteria[key] + modifier_family.criteria_adjustments.get(key, 0) + environment.criteria_adjustments.get(key, 0)",
+    "floor": "Values are NOT clamped here — the scoring engine handles clamping internally and annotates it in the breakdown.",
+    "example": {
+      "gear": "strobe_mono → brightness: 9000",
+      "modifier_family": "softbox_rect → brightness: -1500",
+      "environment": "on_location_indoor → brightness: -1000",
+      "result": "brightness = 9000 + (-1500) + (-1000) = 6500"
+    }
+  },
+
+
+
+  "id_construction_rule": {
+    "_description": "How to build the system.id field for uniqueness and traceability.",
+    "pattern": "{gear_profile.id}__{modifier_family.id}__{environment.id}",
+    "example": "strobe_mono__softbox_octa__studio_large",
+    "note": "Double-underscore separator chosen because single underscores appear within individual IDs."
+  },
+
+  "name_construction_rule": {
+    "_description": "How to build the system.name field for human readability.",
+    "pattern": "{gear_profile.label} + {modifier_family.label} ({environment.label})",
+    "example": "Monolight Strobe + Octagonal Softbox (Large Studio)"
+  }
+}

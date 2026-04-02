@@ -1,5 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAppState, useDispatch } from '../context/AppContext';
+import NGWLogo from '../components/NGWLogo';
 import { savePreference, loadPreferences } from '../data/authApi';
 import LearningOpsTab from '../components/lab/LearningOpsTab';
 import BenchmarkTab from '../components/lab/BenchmarkTab';
@@ -7,6 +9,7 @@ import SignalsTab from '../components/lab/SignalsTab';
 import ControlCenterTab from '../components/lab/ControlCenterTab';
 import UserTab from '../components/lab/UserTab';
 import { C } from '../lib/statusColors';
+import { fmtPattern } from '../lib/formatters';
 import {
   analyzeImage,
   listGoldSet,
@@ -19,6 +22,7 @@ import {
   createCandidate,
   updateCandidate,
   deleteCandidate,
+  uploadCandidateImage,
   ingestReferenceImage,
   listReferenceDataset,
   getReferenceEntry,
@@ -35,9 +39,15 @@ import {
   applyCandidate,
   seedGoldSetFromReference,
   getMonitoringSummary,
+  getSignalHygiene,
   getBenchmarkSummary,
   getIntelligenceScore,
   getApiKeyHealth,
+  submitTeachLabel,
+  listDistillationReviews,
+  patchDistillationReview,
+  getDistillationReviewImageUrl,
+  regenerateDebugOverlay,
 } from '../data/labApi';
 
 /** Device timezone — explicit in all date formatting calls. */
@@ -93,7 +103,7 @@ function AuthImage({ path, alt, className, style }) {
  * Full-screen lightbox with scroll-to-zoom and drag-to-pan.
  * Pass the image/content as children; handles all pointer events.
  */
-function ZoomableLightbox({ onClose, children }) {
+function ZoomableLightbox({ onClose, children, src, alt = '' }) {
   const [scale, setScale] = useState(1);
   const [pan, setPan]     = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -155,7 +165,11 @@ function ZoomableLightbox({ onClose, children }) {
 
   const cursor = dragging ? 'grabbing' : (scale > 1.05 ? 'grab' : 'zoom-in');
 
-  return (
+  // Render into document.body via portal — escapes all stacking contexts,
+  // overflow:hidden ancestors, and compositor layers (will-change, transforms).
+  // This ensures the lightbox is always full-viewport regardless of where in
+  // the React tree it is mounted.
+  return createPortal(
     // Outer backdrop — click anywhere outside the controls to close
     <div className="lab-overlay-lightbox" onClick={onClose}>
       {/* Inner container — stopPropagation only on the drag area, not buttons */}
@@ -188,7 +202,12 @@ function ZoomableLightbox({ onClose, children }) {
           }}
           onClick={e => e.stopPropagation()}
         >
-          {children}
+          {/* Prefer direct src prop (from ZoomImg) for reliable rendering in portal.
+              Fall back to children for backwards-compat (debug overlay lightbox). */}
+          {src
+            ? <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block', userSelect: 'none' }} draggable={false} />
+            : children
+          }
         </div>
 
         {/* Zoom controls strip — stopPropagation so clicking them doesn't close */}
@@ -203,7 +222,8 @@ function ZoomableLightbox({ onClose, children }) {
         </div>
         <p className="lab-overlay-lightbox__hint">Scroll to zoom · drag to pan · double-click to fit · Esc to close</p>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -324,20 +344,18 @@ const LAB_HELP = {
   },
   control_center: {
     title: 'Control Center',
-    what: 'Central maintenance and operations dashboard. Six sub-sections cover the scheduler, intelligence score, paywall, support signals, live monitoring, and account inspection.',
+    what: 'Central maintenance and operations dashboard. Five sub-sections cover runtime health, learning health, paywall, support signals, and live monitoring.',
     features: [
-      { label: 'System', desc: 'Scheduler on/off, interval config, manual ingestion trigger, health overview (clusters, alerts, pending evals).' },
-      { label: 'Intelligence', desc: 'Global intelligence score (target ≥70), per-pattern breakdown, autonomy queue review, failure cluster map.' },
+      { label: 'Runtime Health', desc: 'Scheduler on/off, interval config, manual ingestion trigger, health overview (clusters, alerts, pending evals).' },
+      { label: 'Learning Health', desc: 'Global learning health score (target ≥70), per-pattern breakdown, autonomy queue review, failure cluster map.' },
       { label: 'Paywall', desc: 'Value state map, paywall type reference, live pricing test with real signal simulation.' },
       { label: 'Support', desc: 'Recalibration hints (mis-calibrated patterns), gold set coverage gaps, and VLM correction log.' },
       { label: 'Monitoring', desc: 'Alert engine (VLM error rate, volume, latency rules), VLM call sparkline, analysis funnel, Stripe webhook health, and frontend error console.' },
-      { label: 'User', desc: 'Account identity, subscription status, session diagnostics, feature flags, and local storage inspector for prod support.' },
     ],
     tips: [
-      'Intelligence score of 50 means insufficient data — seed signals or run a benchmark pass first.',
+      'Learning health score of 50 means insufficient data — seed signals or run a benchmark pass first.',
       'Live Paywall Test lets you verify each value state detects correctly before pushing to production.',
       'Monitoring auto-refreshes every 60s. Alert Engine turns red when VLM error rate exceeds 20% or call volume drops to zero.',
-      'Sub-sections are draggable — reorder them to match your workflow. ↺ resets to default.',
     ],
   },
   user: {
@@ -393,13 +411,7 @@ function ZoomImg({ src, alt = '', className, style, onError }) {
         onClick={() => setZoomed(true)}
       />
       {zoomed && (
-        <ZoomableLightbox onClose={() => setZoomed(false)}>
-          <img
-            src={src}
-            alt={alt}
-            style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }}
-          />
-        </ZoomableLightbox>
+        <ZoomableLightbox src={src} alt={alt} onClose={() => setZoomed(false)} />
       )}
     </>
   );
@@ -569,26 +581,34 @@ export default function LabScreen() {
   const [learningNavRequest, setLearningNavRequest] = useState(null);
   // Section navigation (5-section shell)
   const [activeSection, setActiveSection] = useState('workbench');
-  const [activeTrainingTab, setActiveTrainingTab] = useState('gold_set');
+  const [activeTrainingTab, setActiveTrainingTab] = useState('goldset');
   const [activeIntelTab, setActiveIntelTab] = useState('signals');
   const [activeSystemTab, setActiveSystemTab] = useState('control_center');
 
   /** Navigate to a specific tab+panel, optionally with filter state. */
   function handleNavigateTo({ tab, panel, status, severity, clusterId } = {}) {
     if (tab) {
-      if (['gold_set', 'ref_dataset', 'candidates'].includes(tab)) {
+      let legacyTab = tab;
+      if (['gold_set', 'goldset', 'queue', 'reviews', 'ref_dataset', 'candidates'].includes(tab)) {
         setActiveSection('training');
-        setActiveTrainingTab(tab);
-      } else if (['signals', 'learning', 'benchmarks'].includes(tab)) {
+        const trainingTab = tab === 'gold_set' ? 'goldset' : tab;
+        setActiveTrainingTab(trainingTab);
+        legacyTab = ['queue', 'goldset', 'reviews'].includes(trainingTab) ? 'gold_set' : trainingTab;
+      } else if (['signals', 'learning', 'benchmarks', 'monitoring_intel'].includes(tab)) {
         setActiveSection('intelligence');
         setActiveIntelTab(tab);
+        if (tab === 'monitoring_intel') {
+          switchTab('learning');
+          setLearningNavRequest({ panel: 'monitoring' });
+          return; // skip default switchTab call at the bottom
+        }
       } else if (['control_center', 'user'].includes(tab)) {
         setActiveSection('system');
         setActiveSystemTab(tab);
       } else if (tab === 'workbench') {
         setActiveSection('workbench');
       }
-      switchTab(tab);
+      switchTab(legacyTab);
     }
     if (panel || status || severity || clusterId) {
       setLearningNavRequest({ panel, status, severity, clusterId });
@@ -598,7 +618,12 @@ export default function LabScreen() {
   useEffect(() => {
     let cancelled = false;
     async function loadTabMetrics() {
-      const next = {};
+      // Pre-seed defaults so failed fetches leave graceful fallbacks, not undefined
+      const next = {
+        alertsList: [],          // empty → "All clear" (not "Loading…")
+        hygiene:    null,        // null → hygiene card hidden until data arrives
+        benchmarks: null,        // null → "No benchmark runs yet"
+      };
       await Promise.allSettled([
         // Gold Set: approved count
         listGoldSet('approved', 500)
@@ -612,36 +637,94 @@ export default function LabScreen() {
         listReferenceDataset({ tier: 'gold' })
           .then(r => { next.ref_dataset = { value: fmtN(r.length), color: 'muted' }; })
           .catch(() => {}),
-        // Signals: active monitoring alerts
+        // Signals: active monitoring alerts + real alert list for status tab
         getMonitoringSummary()
           .then(r => {
             const n = r?.active_alerts ?? 0;
             next.signals = { value: n > 0 ? `${n} alert${n !== 1 ? 's' : ''}` : '✓ clear', color: n > 0 ? 'red' : 'green' };
+            // Store real alert_summary for status tab alerts section
+            next.alertsList = (r?.alert_summary ?? r?.alerts ?? []).map(a => ({
+              dot: a.alert_type === 'rollback_review' ? 'red' : 'amber',
+              text: a.alert_type === 'rollback_review'
+                ? `Rollback review needed${a.candidate_id ? ` — candidate ${a.candidate_id}` : ''}`
+                : `Candidate regression detected${a.candidate_id ? ` — candidate ${a.candidate_id}` : ''}`,
+              time: a.window_days ? `${a.window_days}d window` : null,
+              nav: { section: 'intelligence', tab: 'monitoring_intel' },
+            }));
+            // Also surface critical clusters as alerts
+            (r?.top_clusters ?? []).filter(c => c.severity === 'critical').forEach(c => {
+              next.alertsList.push({
+                dot: 'red',
+                text: `Critical cluster: ${c.failure_mode}${c.pattern_id ? ` on ${fmtPattern(c.pattern_id)}` : ''}`,
+                time: `${c.frequency} cases`,
+                nav: { section: 'intelligence', tab: 'signals' },
+              });
+            });
           })
-          .catch(() => {}),
+          .catch(() => { next.signals = { value: '?', color: 'muted' }; }),
         // Learning Ops: intelligence score (0–100 scale, cached, fast)
         getIntelligenceScore(30, false)
           .then(r => {
-            if (r?.score != null) {
-              const pct = Math.round(r.score); // score is already 0–100
-              next.learning = { value: `${pct}%`, color: pct >= 70 ? 'green' : pct >= 50 ? 'amber' : 'red' };
+            if (r?.score == null) return;
+            if (r.insufficient_data) {
+              const n = r.components?.total_outcomes ?? 0;
+              next.learning = {
+                value: '—',
+                sub: n > 0 ? `${n} outcome${n !== 1 ? 's' : ''}, need ${10 - n} more` : 'No outcomes yet (need 10)',
+                color: 'muted',
+              };
+            } else {
+              const pct = Math.round(r.score);
+              const n   = r.components?.total_outcomes ?? 0;
+              next.learning = {
+                value: `${pct}%`,
+                sub: `${n} outcome${n !== 1 ? 's' : ''} · ${r.interpretation ?? ''}`,
+                color: pct >= 70 ? 'green' : pct >= 50 ? 'amber' : 'red',
+              };
             }
           })
-          .catch(() => {}),
-        // Benchmarks: pass rate from latest run
+          .catch(() => { next.learning = { value: '?', sub: 'unavailable', color: 'muted' }; }),
+        // Benchmarks: pass rate + meta from latest run
         getBenchmarkSummary()
           .then(r => {
             if (r?.has_runs) {
+              let pct = null;
               if (r.passed_cases != null && r.total_cases > 0) {
-                const pct = Math.round((r.passed_cases / r.total_cases) * 100);
-                next.benchmarks = { value: `${pct}% pass`, color: pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red' };
+                pct = Math.round((r.passed_cases / r.total_cases) * 100);
               } else if (r.overall_score != null) {
-                const pct = Math.round(r.overall_score * 100);
-                next.benchmarks = { value: `${pct}%`, color: pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red' };
+                pct = Math.round(r.overall_score * 100);
+              }
+              if (pct != null) {
+                next.benchmarks = {
+                  value: `${pct}% pass`,
+                  color: pct >= 90 ? 'green' : pct >= 70 ? 'amber' : 'red',
+                  meta: [
+                    r.completed_at ? `Last run: ${fmtDT(r.completed_at)}` : null,
+                    r.total_cases  ? `${fmtN(r.total_cases)} cases` : null,
+                    r.pattern_count ? `${r.pattern_count} patterns` : null,
+                  ].filter(Boolean).join('  ·  '),
+                  regressions: r.regression_count ?? 0,
+                  drift: r.regression_count > 0 ? `${r.regression_count} regression${r.regression_count !== 1 ? 's' : ''}` : 'None',
+                  driftColor: r.regression_count > 0 ? 'red' : 'green',
+                };
               }
             }
           })
           .catch(() => {}),
+        // Signal Hygiene: live counts from DB
+        getSignalHygiene()
+          .then(r => {
+            if (!r) return;
+            const calibPct = r.total > 0 ? Math.round((r.learning_eligible / r.total) * 100) : 0;
+            next.hygiene = {
+              live:     r.live     ?? 0,
+              seeded:   r.seeded   ?? 0,
+              internal: r.internal ?? 0,
+              eligible: r.learning_eligible ?? 0,
+              calibPct,
+            };
+          })
+          .catch(() => {}), // benchmarks silently absent = "No benchmark runs yet" fallback
         // Control Center: API key health
         getApiKeyHealth()
           .then(r => {
@@ -652,12 +735,25 @@ export default function LabScreen() {
               color: (!available || hasErr) ? 'red' : 'green',
             };
           })
-          .catch(() => {}),
+          .catch(() => { next.control_center = { value: '?', color: 'muted' }; }),
       ]);
       if (!cancelled) setTabMetrics(next);
     }
     loadTabMetrics();
     return () => { cancelled = true; };
+  }, []);
+
+  // Track sticky top-bar height so the right column max-height stays correct
+  useEffect(() => {
+    const bar = document.querySelector('.lab-top-bar');
+    if (!bar) return;
+    const ro = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty(
+        '--lab-top-bar-h', `${Math.round(entry.contentRect.height)}px`
+      );
+    });
+    ro.observe(bar);
+    return () => ro.disconnect();
   }, []);
 
   // Intercept all tab switches so we can auto-populate Gold Set from workbench
@@ -714,7 +810,11 @@ export default function LabScreen() {
     return (
       <div className="screen lab-screen">
         <div className="lab-header">
-          <h2 className="lab-header__title">LAB</h2>
+          <div className="lab-header__brand">
+            <NGWLogo size="sm" loading={false} />
+            <span className="lab-header__brand-sep" />
+            <h2 className="lab-header__title">LAB</h2>
+          </div>
           <div className="lab-header__status" style={{ borderColor: 'var(--color-text-secondary)', color: 'var(--color-text-secondary)' }}>
             <span className="lab-header__dot" style={{ background: 'var(--color-text-secondary)' }} />
             Offline
@@ -746,9 +846,15 @@ export default function LabScreen() {
     if (sectionId === 'workbench') {
       switchTab('workbench');
     } else if (sectionId === 'training') {
-      handleTabSwitch(activeTrainingTab);
+      const legacyId = ['queue', 'goldset', 'reviews'].includes(activeTrainingTab) ? 'gold_set' : activeTrainingTab;
+      handleTabSwitch(legacyId);
     } else if (sectionId === 'intelligence') {
-      handleTabSwitch(activeIntelTab);
+      if (activeIntelTab === 'monitoring_intel') {
+        switchTab('learning');
+        setLearningNavRequest({ panel: 'monitoring' });
+      } else {
+        handleTabSwitch(activeIntelTab);
+      }
     } else if (sectionId === 'system') {
       switchTab(activeSystemTab);
     }
@@ -757,12 +863,18 @@ export default function LabScreen() {
 
   function handleTrainingSubSwitch(tabId) {
     setActiveTrainingTab(tabId);
-    handleTabSwitch(tabId);
+    const legacyId = ['queue', 'goldset', 'reviews'].includes(tabId) ? 'gold_set' : tabId;
+    handleTabSwitch(legacyId);
   }
 
   function handleIntelSubSwitch(tabId) {
     setActiveIntelTab(tabId);
-    handleTabSwitch(tabId);
+    if (tabId === 'monitoring_intel') {
+      switchTab('learning');
+      setLearningNavRequest({ panel: 'monitoring' });
+    } else {
+      handleTabSwitch(tabId);
+    }
   }
 
   function handleSystemSubSwitch(tabId) {
@@ -772,9 +884,15 @@ export default function LabScreen() {
 
   return (
     <div className="screen lab-screen">
+      {/* ── Sticky top bar: header + nav (desktop) ── */}
+      <div className="lab-top-bar">
       {/* ── Figma: LAB header + Online pill ── */}
       <div className="lab-header">
-        <h2 className="lab-header__title">LAB</h2>
+        <div className="lab-header__brand">
+          <NGWLogo size="sm" loading={false} />
+          <span className="lab-header__brand-sep" />
+          <h2 className="lab-header__title">LAB</h2>
+        </div>
         <div className="lab-header__status lab-header__status--online">
           <span className="lab-header__dot" />
           Online
@@ -784,45 +902,70 @@ export default function LabScreen() {
       <div className="lab-header__divider" />
 
       {/* ── Section Nav (Figma: flat text tabs with gold underline) ── */}
-      <div className="lab-nav">
-        {[
-          { id: 'status',       label: 'Status' },
-          { id: 'workbench',    label: 'Workbench' },
-          { id: 'training',     label: 'Training' },
-          { id: 'intelligence', label: 'Intel' },
-          { id: 'system',       label: 'System' },
-        ].map(section => {
-          const sectionAlerts = {
-            training:     ['gold_set', 'ref_dataset', 'candidates'],
-            intelligence: ['signals', 'learning', 'benchmarks'],
-            system:       ['control_center'],
-          }[section.id] || [];
-          const hasError = sectionAlerts.some(k => tabMetrics[k]?.color === 'red');
-          return (
-            <button
-              key={section.id}
-              className={`lab-nav__tab${activeSection === section.id ? ' lab-nav__tab--active' : ''}`}
-              onClick={() => handleSectionSwitch(section.id)}
-              type="button"
-            >
-              {hasError && activeSection !== section.id && (
-                <span className="lab-nav__alert-dot" />
-              )}
-              {section.label}
-            </button>
-          );
-        })}
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div className="lab-nav" style={{ flex: 1 }}>
+          {[
+            { id: 'status',       label: 'Status' },
+            { id: 'workbench',    label: 'Workbench' },
+            { id: 'training',     label: 'Training' },
+            { id: 'intelligence', label: 'Intel' },
+            { id: 'system',       label: 'System' },
+          ].map(section => {
+            const sectionAlerts = {
+              training:     ['gold_set', 'ref_dataset', 'candidates'],
+              intelligence: ['signals', 'learning', 'benchmarks'],
+              system:       ['control_center'],
+            }[section.id] || [];
+            const hasError = sectionAlerts.some(k => tabMetrics[k]?.color === 'red');
+            return (
+              <button
+                key={section.id}
+                className={`lab-nav__tab${activeSection === section.id ? ' lab-nav__tab--active' : ''}`}
+                onClick={() => handleSectionSwitch(section.id)}
+                type="button"
+              >
+                {hasError && activeSection !== section.id && (
+                  <span className="lab-nav__alert-dot" />
+                )}
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+        <button
+          onClick={() => setShowHelp(o => !o)}
+          aria-label={showHelp ? 'Close help' : 'Open help'}
+          title={showHelp ? 'Close help' : 'About this section'}
+          style={{
+            flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '4px 10px',
+            background: showHelp ? 'var(--color-accent)' : 'var(--color-surface)',
+            border: '1px solid',
+            borderColor: showHelp ? 'var(--color-accent)' : 'var(--color-border)',
+            borderRadius: 'var(--radius-sm)',
+            color: showHelp ? '#fff' : 'var(--color-text-secondary)',
+            fontSize: 'var(--text-xs)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'background 0.15s, color 0.15s',
+          }}
+        >
+          ?
+        </button>
       </div>
 
       <div className="lab-header__divider" />
 
-      {/* ── Training sub-nav (Figma: flat underline tabs) ── */}
+      {/* ── Training sub-nav: flat strip covering all training views ── */}
       {activeSection === 'training' && (
         <div className="lab-subnav">
           {[
-            { id: 'gold_set',    label: 'Gold Set',    metricKey: 'gold_set' },
-            { id: 'ref_dataset', label: 'Reference',   metricKey: 'ref_dataset' },
-            { id: 'candidates',  label: 'Candidates',  metricKey: 'candidates' },
+            { id: 'queue',       label: 'Intake Queue' },
+            { id: 'goldset',     label: '★ Gold Set'   },
+            { id: 'reviews',     label: 'Review Queue' },
+            { id: 'ref_dataset', label: 'Ref Library'  },
+            { id: 'candidates',  label: 'Candidates'   },
           ].map(sub => (
             <button
               key={sub.id}
@@ -840,9 +983,10 @@ export default function LabScreen() {
       {activeSection === 'intelligence' && (
         <div className="lab-subnav">
           {[
-            { id: 'signals',    label: 'Signals',    metricKey: 'signals' },
-            { id: 'learning',   label: 'Learning',   metricKey: 'learning' },
-            { id: 'benchmarks', label: 'Benchmarks', metricKey: 'benchmarks' },
+            { id: 'signals',          label: 'Signals',      metricKey: 'signals'   },
+            { id: 'learning',         label: 'Learning Ops', metricKey: 'learning'  },
+            { id: 'benchmarks',       label: 'Benchmarks',   metricKey: 'benchmarks'},
+            { id: 'monitoring_intel', label: 'Monitoring',   metricKey: 'learning'  },
           ].map(sub => (
             <button
               key={sub.id}
@@ -861,7 +1005,7 @@ export default function LabScreen() {
         <div className="lab-subnav">
           {[
             { id: 'control_center', label: 'Control Center' },
-            { id: 'user',           label: 'User' },
+            { id: 'user',           label: 'User Inspector' },
           ].map(sub => (
             <button
               key={sub.id}
@@ -879,6 +1023,7 @@ export default function LabScreen() {
       {showHelp && (
         <LabHelpPanel tabId={activeTab} onClose={() => setShowHelp(false)} />
       )}
+      </div>{/* end .lab-top-bar */}
 
       {/* ── Status Section (Figma: KPIs + Signal Hygiene + Benchmarks + Alerts + Quick Actions) ── */}
       {activeSection === 'status' && (
@@ -886,12 +1031,11 @@ export default function LabScreen() {
           <span className="lab-status__section-label">SYSTEM HEALTH</span>
           <div className="lab-status__kpis">
             {[
-              { label: 'API',       value: tabMetrics.signals?.value ?? '…', sub: 'Uptime 30d',          color: tabMetrics.signals?.color },
-              { label: 'Scheduler', value: tabMetrics.control_center?.value ?? '…', sub: 'Last run 4m ago', color: tabMetrics.control_center?.color },
-              { label: 'VLM',       value: tabMetrics.learning?.value ?? '…', sub: '0 corrections pending', color: tabMetrics.learning?.color },
-              { label: 'Ingestion', value: tabMetrics.gold_set?.value ?? '…', sub: 'Images processed',    color: tabMetrics.gold_set?.color },
-            ].map(({ label, value, sub, color }) => (
-              <div key={label} className="lab-status__kpi">
+              { label: 'API',        value: tabMetrics.signals?.value ?? '…',       sub: 'Active alerts',         color: tabMetrics.signals?.color },
+              { label: 'VLM Health', value: tabMetrics.control_center?.value ?? '…', sub: 'Key + availability',    color: tabMetrics.control_center?.color },
+              { label: 'Intel Score',value: tabMetrics.learning?.value ?? '…',       sub: tabMetrics.learning?.sub ?? 'Learning ops quality', color: tabMetrics.learning?.color, wide: true },
+            ].map(({ label, value, sub, color, wide }) => (
+              <div key={label} className="lab-status__kpi" style={wide ? { gridColumn: 'span 2' } : undefined}>
                 <span className="lab-status__kpi-label">{label}</span>
                 <span className={`lab-status__kpi-value lab-status__kpi-value--${color || 'muted'}`}>{value}</span>
                 <span className="lab-status__kpi-sub">{sub}</span>
@@ -901,31 +1045,39 @@ export default function LabScreen() {
 
           <span className="lab-status__section-label">SIGNAL HYGIENE</span>
           <div className="lab-status__card">
-            <div className="lab-status__sig-row">
-              <div className="lab-status__sig-col">
-                <span className="lab-status__sig-label">Live</span>
-                <span className="lab-status__sig-value lab-status__sig-value--green">1,284</span>
-              </div>
-              <div className="lab-status__sig-col">
-                <span className="lab-status__sig-label">Seeded</span>
-                <span className="lab-status__sig-value lab-status__sig-value--amber">340</span>
-              </div>
-              <div className="lab-status__sig-col">
-                <span className="lab-status__sig-label">Internal</span>
-                <span className="lab-status__sig-value lab-status__sig-value--muted">58</span>
-              </div>
-              <div className="lab-status__sig-col">
-                <span className="lab-status__sig-label">Eligible</span>
-                <span className="lab-status__sig-value">1,682</span>
-              </div>
-            </div>
-            <div className="lab-status__cal-row">
-              <span className="lab-status__sig-label">Calibration</span>
-              <div className="lab-status__cal-bar">
-                <div className="lab-status__cal-fill" style={{ width: '82%' }} />
-              </div>
-              <span className="lab-status__cal-pct">82%</span>
-            </div>
+            {tabMetrics.hygiene ? (
+              <>
+                <div className="lab-status__sig-row">
+                  <div className="lab-status__sig-col">
+                    <span className="lab-status__sig-label">Live</span>
+                    <span className="lab-status__sig-value lab-status__sig-value--green">{fmtN(tabMetrics.hygiene.live)}</span>
+                  </div>
+                  <div className="lab-status__sig-col">
+                    <span className="lab-status__sig-label">Seeded</span>
+                    <span className="lab-status__sig-value lab-status__sig-value--amber">{fmtN(tabMetrics.hygiene.seeded)}</span>
+                  </div>
+                  <div className="lab-status__sig-col">
+                    <span className="lab-status__sig-label">Internal</span>
+                    <span className="lab-status__sig-value lab-status__sig-value--muted">{fmtN(tabMetrics.hygiene.internal)}</span>
+                  </div>
+                  <div className="lab-status__sig-col">
+                    <span className="lab-status__sig-label">Eligible</span>
+                    <span className="lab-status__sig-value">{fmtN(tabMetrics.hygiene.eligible)}</span>
+                  </div>
+                </div>
+                <div className="lab-status__cal-row">
+                  <span className="lab-status__sig-label">Learning eligible</span>
+                  <div className="lab-status__cal-bar">
+                    <div className="lab-status__cal-fill" style={{ width: `${tabMetrics.hygiene.calibPct}%` }} />
+                  </div>
+                  <span className="lab-status__cal-pct">{tabMetrics.hygiene.calibPct}%</span>
+                </div>
+              </>
+            ) : (
+              <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
+                Signal hygiene unavailable — check server connection
+              </span>
+            )}
           </div>
 
           <span className="lab-status__section-label">BENCHMARKS</span>
@@ -933,37 +1085,46 @@ export default function LabScreen() {
             <div className="lab-status__bm-row">
               <div>
                 <span className="lab-status__sig-label">Pass Rate</span>
-                <span className="lab-status__kpi-value lab-status__kpi-value--green" style={{ fontSize: 22 }}>
-                  {tabMetrics.benchmarks?.value ?? '…'}
+                <span className={`lab-status__kpi-value lab-status__kpi-value--${tabMetrics.benchmarks?.color || 'muted'}`} style={{ fontSize: 22 }}>
+                  {tabMetrics.benchmarks?.value ?? '—'}
                 </span>
               </div>
               <div>
-                <span className="lab-status__sig-label">Drift</span>
-                <span className="lab-status__sig-value lab-status__sig-value--green" style={{ fontSize: 16 }}>None</span>
+                <span className="lab-status__sig-label">Regressions</span>
+                <span className={`lab-status__sig-value lab-status__sig-value--${tabMetrics.benchmarks?.driftColor || 'muted'}`} style={{ fontSize: 16 }}>
+                  {tabMetrics.benchmarks?.drift ?? '—'}
+                </span>
               </div>
             </div>
-            <span className="lab-status__bm-meta">Last run: 2h ago  ·  142 cases  ·  8 patterns</span>
+            <span className="lab-status__bm-meta">{tabMetrics.benchmarks?.meta ?? 'No benchmark runs yet'}</span>
           </div>
 
           <span className="lab-status__section-label">ALERTS</span>
           <div className="lab-status__card lab-status__alerts">
-            <div className="lab-status__alert-row">
-              <span className="lab-status__alert-dot lab-status__alert-dot--amber" />
-              <span className="lab-status__alert-text">Fill-ratio calibration drift on Rembrandt Loop</span>
-              <span className="lab-status__alert-time">12m</span>
-            </div>
-            <div className="lab-status__alert-divider" />
-            <div className="lab-status__alert-row">
-              <span className="lab-status__alert-dot lab-status__alert-dot--amber" />
-              <span className="lab-status__alert-text">Gold set: 3 new entries pending review</span>
-              <span className="lab-status__alert-time">1h</span>
-            </div>
-            <div className="lab-status__alert-divider" />
-            <div className="lab-status__alert-row">
-              <span className="lab-status__alert-dot lab-status__alert-dot--green" />
-              <span className="lab-status__alert-text">Benchmark #47 passed — all patterns green</span>
-              <span className="lab-status__alert-time">2h</span>
-            </div>
+            {(tabMetrics.alertsList?.length > 0) ? (
+              tabMetrics.alertsList.map(({ dot, text, time, nav }, i, arr) => (
+                <div key={i}>
+                  <button
+                    className="lab-status__alert-row lab-status__alert-row--btn"
+                    type="button"
+                    onClick={() => { handleSectionSwitch(nav.section); if (nav.tab) handleNavigateTo({ tab: nav.tab }); }}
+                  >
+                    <span className={`lab-status__alert-dot lab-status__alert-dot--${dot}`} />
+                    <span className="lab-status__alert-text">{text}</span>
+                    {time && <span className="lab-status__alert-time">{time}</span>}
+                    <span className="lab-status__alert-arrow">{'\u2192'}</span>
+                  </button>
+                  {i < arr.length - 1 && <div className="lab-status__alert-divider" />}
+                </div>
+              ))
+            ) : (
+              <div className="lab-status__alert-row">
+                <span className="lab-status__alert-dot lab-status__alert-dot--green" />
+                <span className="lab-status__alert-text">
+                  {tabMetrics.alertsList ? 'All clear — no active alerts' : 'Loading…'}
+                </span>
+              </div>
+            )}
           </div>
 
           <span className="lab-status__section-label">QUICK ACTIONS</span>
@@ -1003,6 +1164,8 @@ export default function LabScreen() {
             <GoldSetTab
               prefill={goldSetPrefill}
               onPrefillConsumed={() => setGoldSetPrefill(null)}
+              activeGoldTab={['queue', 'goldset', 'reviews'].includes(activeTrainingTab) ? activeTrainingTab : 'goldset'}
+              onGoldTabChange={(tab) => setActiveTrainingTab(tab)}
             />
           </div>
         )}
@@ -1026,7 +1189,7 @@ export default function LabScreen() {
         )}
         {mountedTabs.has('learning') && (
           <div style={{ display: activeTab === 'learning' ? 'block' : 'none' }}>
-            <LearningOpsTab navRequest={learningNavRequest} onNavConsumed={() => setLearningNavRequest(null)} />
+            <LearningOpsTab navRequest={learningNavRequest} onNavConsumed={() => setLearningNavRequest(null)} onNavigateTo={handleNavigateTo} />
           </div>
         )}
         {mountedTabs.has('benchmarks') && (
@@ -1047,7 +1210,7 @@ export default function LabScreen() {
       </div>
 
       {/* Back */}
-      <div style={{ padding: 'var(--space-md) 0', paddingBottom: 'calc(var(--space-xl) + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="lab-back" style={{ padding: 'var(--space-md) 0', paddingBottom: 'calc(var(--space-xl) + env(safe-area-inset-bottom, 0px))' }}>
         <button
           className="btn btn--ghost"
           style={{ width: '100%' }}
@@ -1067,19 +1230,43 @@ export default function LabScreen() {
 
 const JsonTree_INDENT = 16; // px per level
 
+// Known acronyms/abbreviations that should stay uppercase in key labels
+const _KEY_ACRONYMS = new Set(['vlm','cv','ok','url','id','vlw','api','llm','ms','rgb','hex','pct','cct','icc','ui','ux','iso','dpi','hdr']);
+
+/** Convert a snake_case or camelCase key to a readable label.
+ *  Numbers (array indices) are returned as-is.
+ */
+function _fmtKey(k) {
+  if (typeof k === 'number') return k;
+  return String(k)
+    // camelCase → spaces before uppercase runs
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    // underscores / hyphens → spaces
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .split(' ')
+    .map(w => {
+      const lo = w.toLowerCase();
+      if (_KEY_ACRONYMS.has(lo)) return lo.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
 function JsonNode({ k, value, depth, defaultOpen }) {
   const isObj = value !== null && typeof value === 'object';
   const isArr = Array.isArray(value);
   const childCount = isObj ? Object.keys(value).length : 0;
   const [open, setOpen] = useState(defaultOpen ?? depth < 2);
 
-  const keyStyle = { color: 'var(--color-text-secondary)', userSelect: 'text' };
+  const label = k !== null ? _fmtKey(k) : null;
+  const keyStyle = { color: 'var(--color-text-secondary)', userSelect: 'text', fontWeight: 600 };
   const bracket = isArr ? ['[', `] (${childCount})`] : ['{', `} (${childCount})`];
 
   if (isObj && childCount === 0) {
     return (
       <div style={{ paddingLeft: depth * JsonTree_INDENT }}>
-        {k !== null && <span style={keyStyle}>{k}: </span>}
+        {label !== null && <span style={keyStyle}>{label}: </span>}
         <span style={{ color: 'var(--color-text-secondary)' }}>{isArr ? '[]' : '{}'}</span>
       </div>
     );
@@ -1093,7 +1280,7 @@ function JsonNode({ k, value, depth, defaultOpen }) {
           style={{ background: 'none', border: 'none', padding: '1px 0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit', fontSize: 'inherit', color: 'inherit', width: '100%', textAlign: 'left' }}
         >
           <span style={{ fontSize: 10, color: 'var(--color-text-secondary)', width: 10, flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
-          {k !== null && <span style={keyStyle}>{k}:&nbsp;</span>}
+          {label !== null && <span style={keyStyle}>{label}:&nbsp;</span>}
           <span style={{ color: 'var(--color-text-secondary)' }}>
             {open ? bracket[0] : `${bracket[0]}…${bracket[1]}`}
           </span>
@@ -1114,7 +1301,7 @@ function JsonNode({ k, value, depth, defaultOpen }) {
   // Primitive
   let valStyle;
   if (value === null || value === undefined)   valStyle = { color: 'var(--color-text-secondary)' };
-  else if (typeof value === 'boolean')          valStyle = { color: C.amber };
+  else if (typeof value === 'boolean')          valStyle = { color: '#FBBF24' };
   else if (typeof value === 'number')           valStyle = { color: '#60A5FA' };
   else                                          valStyle = { color: '#4ADE80' };
 
@@ -1123,8 +1310,8 @@ function JsonNode({ k, value, depth, defaultOpen }) {
     : String(value);
 
   return (
-    <div style={{ paddingLeft: depth * JsonTree_INDENT, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-      {k !== null && <span style={keyStyle}>{k}:&nbsp;</span>}
+    <div style={{ paddingLeft: depth * JsonTree_INDENT, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'baseline' }}>
+      {label !== null && <span style={keyStyle}>{label}:&nbsp;</span>}
       <span style={{ ...valStyle, wordBreak: 'break-all', userSelect: 'text' }}>{display}</span>
     </div>
   );
@@ -1149,6 +1336,168 @@ function JsonTree({ data, defaultOpen }) {
 
 
 /* ═══════════════════════════════════════════════════════════
+   TeachPanel — inline "teach the engine" after a workbench analysis
+   ════════════════════════════════════════════════════════════════ */
+
+function TeachPanel({ result, preview }) {
+  const [mode,       setMode]       = useState(null);   // null | 'correct' | 'wrong'
+  const [correction, setCorrection] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted,  setSubmitted]  = useState(null);   // { correctness, label }
+  const [error,      setError]      = useState(null);
+
+  const predicted = result?.authoritative_pattern
+    || result?.lighting_inference?.pattern
+    || result?.reference_analysis?.lighting_read?.lighting_family
+    || result?.cv?.lighting_read?.lighting_family
+    || '';
+
+  const confidence = result?.lighting_inference?.confidence ?? 0;
+  const pathType   = result?.lighting_inference?.authoritative_pattern_source || 'primary';
+  const imagePath  = result?.image_path || '';
+
+  if (!imagePath || !predicted || predicted === 'unknown') return null;
+
+  async function handleSubmit(correctness) {
+    const expectedPattern = correctness === 'correct' ? predicted : correction;
+    if (!expectedPattern) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await submitTeachLabel({
+        image_path: imagePath,
+        predicted_pattern: predicted,
+        expected_pattern: expectedPattern,
+        confidence,
+        path_type: pathType,
+        correctness,
+      });
+      setSubmitted({ correctness, label: expectedPattern });
+    } catch (err) {
+      setError(err.message || 'Submit failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const panelBase = {
+    marginTop: 'var(--space-sm)',
+    padding: '10px 12px',
+    background: 'var(--color-surface)',
+    border: '0.5px solid var(--color-border)',
+    borderRadius: 'var(--radius-md)',
+    fontSize: 'var(--text-xs)',
+  };
+
+  if (submitted) {
+    const icon  = submitted.correctness === 'correct' ? '✓' : '→';
+    const color = submitted.correctness === 'correct' ? C.green : C.amber;
+    return (
+      <div style={{ ...panelBase, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ color, fontWeight: 700 }}>{icon}</span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>
+          {submitted.correctness === 'correct'
+            ? `Labeled correct — "${submitted.label}" added to training queue`
+            : `Correction queued — "${submitted.label}" pending review`}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={panelBase}>
+      {/* Thumbnail strip — shows the image being labeled */}
+      {preview && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-start' }}>
+          <img
+            src={preview}
+            alt="image being labeled"
+            style={{
+              display: 'block',
+              width: 72, height: 72,
+              minWidth: 72, minHeight: 72,
+              objectFit: 'cover',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--color-border)',
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingTop: 2 }}>
+            <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600, letterSpacing: '0.06em', fontSize: 9, textTransform: 'uppercase' }}>
+              Teach the Engine
+            </span>
+            <span style={{ color: 'var(--color-text-secondary)' }}>
+              Predicted: <strong style={{ color: 'var(--color-text)' }}>{predicted.replace(/_/g, '\u00a0')}</strong>
+            </span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: 9 }}>
+              Is this classification correct?
+            </span>
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: mode ? 8 : 0 }}>
+        {!preview && (
+          <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600, letterSpacing: '0.06em', fontSize: 9, textTransform: 'uppercase' }}>
+            Teach the Engine
+          </span>
+        )}
+        {!mode && !preview && (
+          <span style={{ color: 'var(--color-text-secondary)' }}>
+            Predicted: <strong style={{ color: 'var(--color-text)' }}>{predicted.replace(/_/g, '\u00a0')}</strong>
+          </span>
+        )}
+      </div>
+
+      {!mode && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          <button
+            className="btn btn--sm"
+            style={{ background: 'color-mix(in srgb, var(--color-status-green) 14%, transparent)', color: C.green, border: `1px solid color-mix(in srgb, ${C.green} 28%, transparent)`, flex: 1 }}
+            onClick={() => handleSubmit('correct')}
+            disabled={submitting}
+          >
+            ✓ Correct
+          </button>
+          <button
+            className="btn btn--sm btn--ghost"
+            style={{ flex: 1 }}
+            onClick={() => setMode('wrong')}
+            disabled={submitting}
+          >
+            ✗ Wrong — correct it
+          </button>
+        </div>
+      )}
+
+      {mode === 'wrong' && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+          <select
+            value={correction}
+            onChange={e => setCorrection(e.target.value)}
+            style={{ flex: 1, background: 'var(--color-bg)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)', color: 'var(--color-text)', padding: '4px 8px', fontSize: 'var(--text-xs)' }}
+          >
+            <option value="">— actual pattern —</option>
+            {KNOWN_PATTERNS.map(p => (
+              <option key={p} value={p}>{fmtPattern(p)}</option>
+            ))}
+          </select>
+          <button
+            className="btn btn--sm btn--primary"
+            onClick={() => handleSubmit('incorrect')}
+            disabled={!correction || submitting}
+          >
+            {submitting ? '…' : 'Submit'}
+          </button>
+          <button className="btn btn--sm btn--ghost" onClick={() => setMode(null)}>Cancel</button>
+        </div>
+      )}
+
+      {error && <div style={{ marginTop: 6, color: C.red, fontSize: 'var(--text-xs)' }}>{error}</div>}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
    Workbench Tab — image upload + full pipeline analysis
    ═══════════════════════════════════════════════════════════ */
 
@@ -1164,6 +1513,10 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
   const [debugMode,      setDebugMode]      = useState(false);        // generate debug overlay
   const [dragging,       setDragging]       = useState(false);
   const [overlayZoomed,  setOverlayZoomed]  = useState(false);        // fullscreen overlay lightbox
+  const [overlayLayers,     setOverlayLayers]     = useState(null);   // null = all; Set<string> = filtered
+  const [overlayRegen,      setOverlayRegen]      = useState(false);  // regen in progress
+  const [overlayUrl,        setOverlayUrl]        = useState(null);   // current (possibly re-generated) overlay URL
+  const [overlayRegenError, setOverlayRegenError] = useState(null);   // regen error message string
 
   // Revoke object URL when preview changes or component unmounts
   useEffect(() => {
@@ -1240,11 +1593,62 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
     try {
       const data = await analyzeImage(file, { debug: debugMode });
       setResult(data);
+      // Reset overlay state for the new result
+      setOverlayUrl(data.debug_overlay_url || null);
+      setOverlayLayers(null);
+      setOverlayRegenError(null);
       onWorkbenchChange?.({ file, preview, imagePath: data.image_path || null, result: data });
     } catch (err) {
       setError(err.message || 'Analysis failed');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleOverlayLayerToggle(layerName) {
+    if (!result?.debug_overlay_url) return;
+    const baseUrl = result.debug_overlay_url; // always regenerate from original
+
+    // Capture current state before mutation so we can revert on failure
+    const prevLayers = overlayLayers;
+
+    // Compute the new active set
+    const ALL = ['shadow', 'highlights', 'catchlights', 'background', 'pose', 'specular', 'surface', 'light_roles', 'summary'];
+    let newLayers;
+    if (overlayLayers === null) {
+      // Currently showing all — start an exclusion set (all minus this one)
+      newLayers = new Set(ALL.filter(l => l !== layerName));
+    } else {
+      newLayers = new Set(overlayLayers);
+      if (newLayers.has(layerName)) {
+        newLayers.delete(layerName);
+      } else {
+        newLayers.add(layerName);
+      }
+      // If all layers are active, go back to null (server renders all)
+      if (newLayers.size >= ALL.length) newLayers = null;
+    }
+
+    // Optimistically update the toggle visual; revert if the API call fails
+    setOverlayLayers(newLayers);
+    setOverlayRegen(true);
+    setOverlayRegenError(null);
+    try {
+      // null = all layers; [] = no layers; [...set] = filtered subset
+      const layersArg = newLayers !== null ? [...newLayers] : null;
+      const data = await regenerateDebugOverlay(baseUrl, layersArg);
+      setOverlayUrl(data.debug_overlay_url);
+    } catch (err) {
+      // Revert the layer toggle — API failed, overlay hasn't changed
+      setOverlayLayers(prevLayers);
+      const msg = err?.message || '';
+      if (msg.includes('404') || msg.includes('sidecar') || msg.includes('Source image') || msg.includes('snapshot')) {
+        setOverlayRegenError('Re-analyze with Debug Overlay enabled to unlock layer filtering.');
+      } else {
+        setOverlayRegenError(`Layer regen failed: ${msg}`);
+      }
+    } finally {
+      setOverlayRegen(false);
     }
   }
 
@@ -1254,6 +1658,10 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
     setResult(null);
     setError(null);
     setVlmDirty(false);
+    setOverlayUrl(null);
+    setOverlayLayers(null);
+    setOverlayRegen(false);
+    setOverlayRegenError(null);
     if (fileRef.current) fileRef.current.value = '';
     onWorkbenchChange?.(null);
   }
@@ -1312,60 +1720,78 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
 
   return (
     <div className="lab-workbench">
-      <span className="lab-status__section-label">LOADED IMAGE</span>
-      {/* Image preview */}
-      {preview && (
-        <div className="lab-workbench__preview">
-          <div className={`lab-workbench__img-shell${loading ? ' lab-workbench__img-shell--analyzing' : ''}`}>
-            <ZoomImg src={preview} alt="Selected for analysis" />
-            {loading && (
-              <div className="ref-scan-overlay">
-                <div className="ref-scan-overlay__line" />
+      <div className={`lab-wb-layout${viewMode === 'overlay' && result ? ' lab-wb-layout--wide-overlay' : ''}`}>
+
+        {/* ── LEFT: image + controls (sticky on desktop) ── */}
+        <div className="lab-wb-layout__left">
+          <span className="lab-status__section-label">LOADED IMAGE</span>
+          {/* Image preview */}
+          {preview && (
+            <div className="lab-workbench__preview">
+              <div className={`lab-workbench__img-shell${loading ? ' lab-workbench__img-shell--analyzing' : ''}`}>
+                <ZoomImg src={preview} alt="Selected for analysis" />
+                {loading && (
+                  <div className="ref-scan-overlay">
+                    <div className="ref-scan-overlay__line" />
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
+
+          {/* File info + actions */}
+          <div className="lab-workbench__actions">
+            <span className="lab-workbench__filename">{file.name}</span>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              {!loading && (
+                <label className="lab-wb__debug-toggle">
+                  <span className="lab-wb__debug-label">Debug Overlay</span>
+                  <span className={`lab-wb__debug-dot${debugMode ? ' lab-wb__debug-dot--on' : ''}`} />
+                  <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} style={{ display: 'none' }} />
+                </label>
+              )}
+              {!loading && !result && (
+                <button className="lab-wb__action-btn lab-wb__action-btn--primary" onClick={handleAnalyze}>
+                  Analyze
+                </button>
+              )}
+              {!loading && result && (
+                <button className="lab-wb__action-btn" onClick={handleAnalyze} title="Re-run analysis with current settings">
+                  Re-analyze
+                </button>
+              )}
+              <button className="lab-wb__action-btn" onClick={handleReset} disabled={loading}>
+                {result ? 'New Image' : 'Clear'}
+              </button>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* File info + actions */}
-      <div className="lab-workbench__actions">
-        <span className="lab-workbench__filename">{file.name}</span>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {!loading && (
-            <label className="lab-wb__debug-toggle">
-              <span className="lab-wb__debug-label">Debug Overlay</span>
-              <span className={`lab-wb__debug-dot${debugMode ? ' lab-wb__debug-dot--on' : ''}`} />
-              <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} style={{ display: 'none' }} />
-            </label>
+        {/* ── RIGHT: loading / error / results ── */}
+        <div className="lab-wb-layout__right">
+          {/* Loading */}
+          {loading && <WorkbenchScanStatus />}
+
+          {/* Error */}
+          {error && (
+            <div className="lab-workbench__error">
+              <p>{error}</p>
+            </div>
           )}
-          {!loading && !result && (
-            <button className="lab-wb__action-btn lab-wb__action-btn--primary" onClick={handleAnalyze}>
-              Analyze
-            </button>
+
+          {/* Empty right-panel placeholder — file loaded, not yet analyzed */}
+          {!loading && !error && !result && (
+            <div className="lab-wb-layout__right-empty">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-border)' }}>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </svg>
+              <p>Click <strong>Analyze</strong> to run the pipeline</p>
+            </div>
           )}
-          {!loading && result && (
-            <button className="lab-wb__action-btn" onClick={handleAnalyze} title="Re-run analysis with current settings">
-              Re-analyze
-            </button>
-          )}
-          <button className="lab-wb__action-btn" onClick={handleReset} disabled={loading}>
-            {result ? 'New Image' : 'Clear'}
-          </button>
-        </div>
-      </div>
 
-      {/* Loading */}
-      {loading && <WorkbenchScanStatus />}
-
-      {/* Error */}
-      {error && (
-        <div className="lab-workbench__error">
-          <p>{error}</p>
-        </div>
-      )}
-
-      {/* Results */}
-      {result && !loading && (
+          {/* Results */}
+          {result && !loading && (
         <div className="lab-workbench__results">
           {/* View toggle */}
           <div className="lab-view-toggle">
@@ -1441,59 +1867,118 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             </div>
           )}
 
-          {/* Color legend — only on the overlay tab */}
-          {viewMode === 'overlay' && result.debug_overlay_url && (
-            <div className="lab-overlay-legend">
-              {[
-                { color: '#0064ff', label: 'Shadow direction' },
-                { color: '#00ff00', label: 'Catchlights' },
-                { color: '#ffff00', label: 'Highlights' },
-                { color: '#ffa500', label: 'Shoulder / pose axis' },
-                { color: '#800080', label: 'Hip axis' },
-                { color: '#80ff00', label: 'Corrected key light' },
-                { color: '#ff0000', label: 'Self-shadow (tint)' },
-                { color: '#3296c8', label: 'Surface classes' },
-                { color: '#96c832', label: 'Light roles' },
-              ].map(({ color, label }) => (
-                <span key={label} className="lab-overlay-legend__item">
-                  <span className="lab-overlay-legend__swatch" style={{ background: color }} />
-                  {label}
-                </span>
-              ))}
-            </div>
-          )}
-
           {viewMode === 'overlay' && result.debug_overlay_url ? (
             <div className="lab-workbench__overlay">
+              {/* ── Left/top panel: layer controls + image (sticky on desktop) ── */}
+              <div className="lab-overlay-image-section">
+              {/* ── Layer-toggle legend — grouped with the image ── */}
+              <div className="lab-overlay-legend">
+                {[
+                  { layer: 'shadow',      color: '#0064ff', label: 'Shadow' },
+                  { layer: 'catchlights', color: '#00ff00', label: 'Catchlights' },
+                  { layer: 'highlights',  color: '#ffff00', label: 'Highlights' },
+                  { layer: 'pose',        color: '#ffa500', label: 'Pose / axes' },
+                  { layer: 'specular',    color: '#00ffff', label: 'Specular' },
+                  { layer: 'background',  color: '#ff00ff', label: 'Background' },
+                  { layer: 'surface',     color: '#3296c8', label: 'Surface' },
+                  { layer: 'light_roles', color: '#96c832', label: 'Light roles' },
+                  { layer: 'summary',     color: '#ffffff', label: 'Summary text' },
+                ].map(({ layer, color, label }) => {
+                  const isOn = overlayLayers === null || overlayLayers.has(layer);
+                  return (
+                    <button
+                      key={layer}
+                      className={`lab-overlay-legend__item${isOn ? '' : ' lab-overlay-legend__item--off'}`}
+                      onClick={() => handleOverlayLayerToggle(layer)}
+                      disabled={overlayRegen}
+                      title={isOn ? `Hide ${layer}` : `Show ${layer}`}
+                      type="button"
+                    >
+                      <span className="lab-overlay-legend__swatch" style={{ background: isOn ? color : 'var(--color-border)' }} />
+                      {label}
+                    </button>
+                  );
+                })}
+                {/* Separator */}
+                <span className="lab-overlay-legend__sep" />
+                {/* Show all reset — only visible when some (not all) layers are filtered */}
+                {overlayLayers !== null && overlayLayers.size > 0 && (
+                  <button
+                    className="lab-overlay-legend__reset"
+                    onClick={() => { setOverlayLayers(null); setOverlayUrl(result.debug_overlay_url); }}
+                    disabled={overlayRegen}
+                    type="button"
+                  >
+                    Show all
+                  </button>
+                )}
+                <button
+                  className="lab-overlay-legend__reset lab-overlay-legend__reset--remove"
+                  onClick={async () => {
+                    if (!result?.debug_overlay_url) return;
+                    if (overlayLayers !== null && overlayLayers.size === 0) {
+                      setOverlayLayers(null);
+                      setOverlayUrl(result.debug_overlay_url);
+                    } else {
+                      const prevLayers = overlayLayers;
+                      setOverlayLayers(new Set());
+                      setOverlayRegen(true);
+                      setOverlayRegenError(null);
+                      try {
+                        const data = await regenerateDebugOverlay(result.debug_overlay_url, []);
+                        setOverlayUrl(data.debug_overlay_url);
+                      } catch (err) {
+                        setOverlayLayers(prevLayers);
+                        const msg = err?.message || '';
+                        if (msg.includes('404') || msg.includes('sidecar') || msg.includes('Source image') || msg.includes('snapshot')) {
+                          setOverlayRegenError('Re-analyze with Debug Overlay enabled to unlock layer filtering.');
+                        } else {
+                          setOverlayRegenError(`Layer regen failed: ${msg}`);
+                        }
+                      } finally {
+                        setOverlayRegen(false);
+                      }
+                    }
+                  }}
+                  disabled={overlayRegen}
+                  type="button"
+                >
+                  {overlayLayers !== null && overlayLayers.size === 0 ? 'Show all' : 'Hide all'}
+                </button>
+                {overlayRegen && <span className="lab-overlay-legend__regen">Regenerating…</span>}
+                {overlayRegenError && !overlayRegen && (
+                  <span className="lab-overlay-legend__error">{overlayRegenError}</span>
+                )}
+              </div>
+
+              {/* ── Overlay image ── */}
               <div className="lab-overlay-hint">
-                Original above · <span className="lab-overlay-zoom-hint">click overlay to zoom</span>
+                Original above · <span className="lab-overlay-zoom-hint">click to zoom</span>
               </div>
               <img
-                src={result.debug_overlay_url}
+                src={overlayUrl || result.debug_overlay_url}
                 alt="Debug overlay"
-                className="lab-overlay-img lab-overlay-img--clickable"
+                className={`lab-overlay-img lab-overlay-img--clickable${overlayRegen ? ' lab-overlay-img--loading' : ''}`}
                 onClick={() => setOverlayZoomed(true)}
               />
-              {/* Zoomable lightbox */}
               {overlayZoomed && (
-                <ZoomableLightbox onClose={() => setOverlayZoomed(false)}>
-                  <img
-                    src={result.debug_overlay_url}
-                    alt="Debug overlay (fullscreen)"
-                    style={{ maxWidth: '95vw', maxHeight: '90dvh', width: 'auto', height: 'auto', display: 'block', objectFit: 'contain', userSelect: 'none' }}
-                    draggable={false}
-                  />
-                </ZoomableLightbox>
+                <ZoomableLightbox
+                  src={overlayUrl || result.debug_overlay_url}
+                  alt="Debug overlay (fullscreen)"
+                  onClose={() => setOverlayZoomed(false)}
+                />
               )}
 
-              {/* ── Solver values legend ── */}
-              <OverlaySolverLegend result={result} />
+              </div>{/* end lab-overlay-image-section */}
 
-              {/* ── Warnings / edge-case flags ── */}
-              <OverlayWarnings result={result} />
+              {/* ── Right/bottom panel: solver values + warnings (scrollable on desktop) ── */}
+              <div className="lab-overlay-solver-scroll">
+                <OverlaySolverLegend result={result} />
+                <OverlayWarnings result={result} />
+              </div>
             </div>
           ) : viewMode === 'json' ? (
-            <JsonTree data={result} defaultOpen={1} />
+            <JsonRawToggle data={result} />
           ) : viewMode === 'compare' ? (
             <VlmCvCompare data={result} onAccept={(updated) => { setResult(updated); setVlmDirty(true); }} />
           ) : viewMode === 'signals' ? (
@@ -1504,6 +1989,9 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
           ) : (
             <WorkbenchFormatted data={result} />
           )}
+
+          {/* Teach the engine — inline label panel */}
+          <TeachPanel result={result} preview={preview} />
 
           {/* Post-analysis actions */}
           <div className="lab-workbench__post-actions">
@@ -1535,82 +2023,248 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             })()}
           </div>
         </div>
-      )}
+          )}
+        </div>{/* end .lab-wb-layout__right */}
+      </div>{/* end .lab-wb-layout */}
     </div>
   );
 }
 
 // ── Solver values legend (shown under overlay image) ─────────────────────
 
+// Threshold-based quality colors — mirrors SignalDiagnosticsPanel's C palette
+const _SV_GREEN = '#4ade80';
+const _SV_AMBER = '#FBBF24';
+const _SV_RED   = '#f87171';
+const _SV_BLUE  = '#60a5fa';
+
+// layerColor matches the overlay legend swatch color for each signal's layer
+// so the value badge correlates visually with the overlay channel.
 const SOLVER_VALUE_GLOSSARY = [
   {
     key: 'key_light_angle_deg_pose_corrected',
     label: 'Key light angle (corrected)',
-    explain: 'Compass direction the main light comes FROM, after adjusting for how the subject is turned. 0° = directly above, 90° = from camera-right, 180° = from below.',
+    layerColor: '#0064ff',  // shadow layer
+    explain: 'Compass direction the main light comes FROM, after pose correction. 0° = directly above, 90° = camera-right, 180° = below.',
+    getDynamicReason: (v, recon) => {
+      const deg = parseFloat(v); if (isNaN(deg)) return null;
+      let clock;
+      if (deg <= 22 || deg >= 338) clock = 'directly overhead (12 o\'clock)';
+      else if (deg <= 67)  clock = 'high camera-right (1–2 o\'clock)';
+      else if (deg <= 112) clock = 'camera-right (3 o\'clock)';
+      else if (deg <= 157) clock = 'low camera-right (4–5 o\'clock)';
+      else if (deg <= 202) clock = 'directly below (6 o\'clock)';
+      else if (deg <= 247) clock = 'low camera-left (7–8 o\'clock)';
+      else if (deg <= 292) clock = 'camera-left (9 o\'clock)';
+      else                 clock = 'high camera-left (10–11 o\'clock)';
+      const raw = parseFloat(recon?.key_light_angle_deg_raw);
+      const delta = !isNaN(raw) ? Math.abs(deg - raw) : null;
+      const corrNote = delta != null && delta > 8
+        ? ` Pose correction shifted raw reading by ${Math.round(delta)}°.`
+        : '';
+      return `Key enters from ${clock} at ${Math.round(deg)}°.${corrNote}`;
+    },
+    getValueColor: () => _SV_BLUE,
   },
   {
     key: 'key_light_angle_deg_raw',
     label: 'Key light angle (raw)',
-    explain: 'Same angle without pose correction. Compare with corrected to see how much the subject\'s pose skewed the apparent shadow direction.',
+    layerColor: '#0064ff',  // shadow layer
+    explain: 'Uncorrected shadow angle before pose adjustment. Large difference from corrected = subject was turned significantly.',
+    getDynamicReason: (v, recon) => {
+      const raw = parseFloat(v); if (isNaN(raw)) return null;
+      const corrected = parseFloat(recon?.key_light_angle_deg_pose_corrected);
+      if (!isNaN(corrected)) {
+        const delta = Math.abs(raw - corrected);
+        if (delta < 5)  return `Raw and corrected agree within ${Math.round(delta)}° — pose had minimal effect on the reading`;
+        if (delta < 20) return `Pose correction shifted the reading by ~${Math.round(delta)}° — moderate pose angle`;
+        return `Pose correction shifted the reading by ~${Math.round(delta)}° — significant subject rotation`;
+      }
+      return `Raw shadow direction at ${Math.round(raw)}° before pose correction`;
+    },
+    getValueColor: () => _SV_BLUE,
   },
   {
     key: 'key_light_height',
     label: 'Key light height',
-    explain: '"raised" = light above eye level creating downward shadows (most common). "neutral" = at eye level. "low" = below eye level (horror look).',
+    layerColor: '#0064ff',  // shadow layer
+    explain: '"raised" = above eye level — downward shadows. "neutral" = at eye level. "low" = below eye level.',
+    getDynamicReason: (v) => {
+      if (v === 'raised')  return 'Shadows on nose and chin angle downward — confirms the key is elevated above eye level';
+      if (v === 'neutral') return 'Shadow direction is roughly horizontal — key light is near eye level';
+      if (v === 'low')     return 'Upward-angled shadows detected — key is positioned below eye level (unusual/creative)';
+      return null;
+    },
+    getValueColor: (v) => v === 'raised' ? _SV_GREEN : v === 'neutral' ? _SV_AMBER : _SV_RED,
   },
   {
     key: 'modifier_size_class',
     label: 'Modifier size (corrected)',
-    explain: 'Estimated softbox/modifier size after pose adjustment: "small" = hard/specular (bare bulb, small reflector), "medium" = beauty dish / mid-size softbox, "large" = large softbox / natural window.',
+    layerColor: '#3296c8',  // surface layer
+    explain: '"small" = hard/specular (bare bulb, small reflector). "medium" = beauty dish / mid softbox. "large" = large softbox / window.',
+    getDynamicReason: (v, recon) => {
+      const cert = recon?.modifier_certainty;
+      const certNote = cert === 'low' ? ' (low certainty — treat as estimate)' : cert === 'medium' ? ' (moderate certainty)' : '';
+      if (v === 'small')  return `Hard, fast-transitioning shadow edges indicate a compact or bare source${certNote}`;
+      if (v === 'medium') return `Moderate shadow-edge transition — consistent with a beauty dish or standard softbox${certNote}`;
+      if (v === 'large')  return `Gradual, wide shadow transition — characteristic of a large diffuser, umbrella, or window${certNote}`;
+      return null;
+    },
+    getValueColor: () => _SV_BLUE,
   },
   {
     key: 'modifier_certainty',
     label: 'Modifier certainty',
-    explain: '"high" = clear shadow-edge falloff, strong signal. "medium" = some ambiguity. "low" = inconclusive (often due to pose angle, reflective surfaces, or blown highlights).',
+    layerColor: '#3296c8',  // surface layer
+    explain: '"high" = clear shadow-edge falloff, strong signal. "medium" = some ambiguity. "low" = inconclusive.',
+    getDynamicReason: (v) => {
+      if (v === 'high')   return 'Shadow edge gradient was clearly defined — modifier size estimate is reliable';
+      if (v === 'medium') return 'Some shadow-edge ambiguity — pose angle or reflective surfaces may be affecting the reading';
+      if (v === 'low')    return 'Insufficient shadow detail — blown highlights, near-flat lighting, or extreme pose limits this signal';
+      return null;
+    },
+    getValueColor: (v) => v === 'high' ? _SV_GREEN : v === 'medium' ? _SV_AMBER : _SV_RED,
   },
   {
     key: 'pose_complexity_score',
     label: 'Pose complexity',
-    explain: '0–1 scale. Low (<0.2) = subject facing camera, shoulders level, minimal correction needed. High (>0.6) = strong rotation, tilts, or occlusions — angle estimates are less reliable.',
+    layerColor: '#ffa500',  // pose layer
+    explain: '0–1 scale. <0.2 = facing camera — estimates reliable. >0.6 = strong rotation/tilt — estimates less reliable.',
+    // dynamicReason for this key is handled via _poseComplexityReason below
+    getDynamicReason: null,
+    getValueColor: (v) => {
+      const n = parseFloat(v);
+      return isNaN(n) ? _SV_BLUE : n < 0.2 ? _SV_GREEN : n > 0.6 ? _SV_RED : _SV_AMBER;
+    },
   },
   {
     key: 'likely_light_count',
     label: 'Likely light count',
-    explain: 'Estimated number of distinct light sources in the scene. 1 = single key only. 2 = key + fill or rim. 3+ = multi-light setup. May under-count when lights are similar in quality/direction.',
+    layerColor: '#96c832',  // light_roles layer
+    explain: '1 = single key. 2 = key + fill/rim. 3+ = multi-light setup. May under-count when sources are similar.',
+    getDynamicReason: (v) => {
+      const n = parseInt(v, 10); if (isNaN(n)) return null;
+      if (n === 1) return 'No significant secondary source detected — likely a single key-light setup';
+      if (n === 2) return 'Two-source contribution detected — key + fill or key + rim arrangement';
+      if (n >= 3)  return `${n} distinct light contributions — complex multi-light setup`;
+      return null;
+    },
+    getValueColor: (v) => {
+      const n = parseInt(v, 10);
+      return isNaN(n) ? _SV_BLUE : n <= 2 ? _SV_GREEN : _SV_AMBER;
+    },
   },
 ];
 
+/**
+ * Convert nose_shadow_angle_deg to a key-light clock label.
+ * Centroid convention: 0=shadow-below-nose, 90=shadow-right, 180=shadow-above, 270=shadow-left.
+ * Key light is opposite to shadow direction: shadow below (0°) → key at 12 o'clock.
+ * Formula: key_clock_bearing = (360 - centroid_deg) % 360, then map to 1–12.
+ */
+function _angleToClockLabel(deg) {
+  const centroid = ((parseFloat(deg) % 360) + 360) % 360;
+  const keyBearing = (360 - centroid) % 360;   // 0=top, 90=right, 180=bottom, 270=left
+  const hour = Math.round(keyBearing / 30) % 12 || 12;
+  return `${hour} o'clock`;
+}
+
+/** Convert a decimal to a simple fraction string (e.g. 0.333 → "1/3"). */
+function _toSimpleFraction(dec, maxDenom = 12) {
+  if (dec == null || isNaN(dec)) return '—';
+  let bestNum = 1, bestDen = Math.max(1, Math.round(1 / dec));
+  let bestErr = Math.abs(dec - bestNum / bestDen);
+  for (let den = 2; den <= maxDenom; den++) {
+    const num = Math.round(dec * den);
+    if (num <= 0) continue;
+    const err = Math.abs(dec - num / den);
+    if (err < bestErr) { bestErr = err; bestNum = num; bestDen = den; }
+  }
+  if (bestErr > 0.025) return dec.toFixed(2);
+  if (bestNum === bestDen) return '1';
+  return `${bestNum}/${bestDen}`;
+}
+
+/** Build a human-readable reason for a given pose_complexity_score from solver data. */
+function _poseComplexityReason(recon, poseSolver) {
+  const score = recon?.pose_complexity_score;
+  if (score == null) return null;
+  const reasons = [];
+
+  // Shoulder tilt
+  const shoulderTilt = poseSolver?.shoulder_tilt_deg ?? poseSolver?.shoulder_angle_deg;
+  if (shoulderTilt != null && Math.abs(shoulderTilt) > 10) {
+    reasons.push(`shoulders tilted ${Math.abs(shoulderTilt).toFixed(0)}°`);
+  }
+
+  // Head / pose rotation
+  const headYaw = poseSolver?.head_yaw_deg ?? poseSolver?.face_yaw ?? recon?.head_yaw_deg;
+  if (headYaw != null && Math.abs(headYaw) > 15) {
+    const dir = headYaw > 0 ? 'right' : 'left';
+    reasons.push(`head turned ${Math.abs(headYaw).toFixed(0)}° ${dir}`);
+  }
+
+  // Occlusion
+  const occluded = poseSolver?.self_occluded ?? poseSolver?.occlusion;
+  if (occluded) reasons.push('self-occlusion detected');
+
+  // Lean / camera angle
+  const camAngle = poseSolver?.camera_elevation_deg ?? poseSolver?.camera_angle_deg;
+  if (camAngle != null && Math.abs(camAngle) > 15) {
+    reasons.push(`${Math.abs(camAngle).toFixed(0)}° camera elevation`);
+  }
+
+  if (score < 0.2) {
+    return reasons.length ? `Low — ${reasons.join(', ')}.` : 'Low — subject is roughly facing camera; minimal pose correction needed.';
+  }
+  if (score > 0.55) {
+    return reasons.length
+      ? `High — ${reasons.join(', ')}. Key-light angle estimates are less reliable.`
+      : 'High — significant pose variation detected; angle estimates are less reliable.';
+  }
+  return reasons.length ? `Moderate — ${reasons.join(', ')}.` : 'Moderate — some pose variation; estimates have added uncertainty.';
+}
+
 function OverlaySolverLegend({ result }) {
-  const [open, setOpen] = useState(false);
   const recon = result?.reconstruction || result?.cv?.reconstruction || {};
+  const poseSolver = result?.cv?.pose_solver || result?.pose_solver || {};
   const entries = SOLVER_VALUE_GLOSSARY.filter(g => recon[g.key] != null);
   if (entries.length === 0) return null;
 
   return (
     <div className="lab-overlay-glossary">
-      <button
-        className="lab-overlay-glossary__toggle"
-        onClick={() => setOpen(o => !o)}
-        type="button"
-      >
-        <span>{open ? '▼' : '▶'}</span>
-        <span>Solver values explained</span>
-      </button>
-      {open && (
-        <div className="lab-overlay-glossary__body">
-          {entries.map(g => (
+      <div className="lab-overlay-glossary__title">Solver values</div>
+      <div className="lab-overlay-glossary__body">
+        {entries.map(g => {
+          const rawVal = recon[g.key];
+          const valStr = String(rawVal);
+          // layerColor: correlates this value badge with the overlay legend swatch
+          const layerColor = g.layerColor ?? 'var(--color-accent)';
+          // valColor: threshold-based quality signal (green/amber/red)
+          const valColor = g.getValueColor?.(valStr) ?? layerColor;
+          // dynamicReason: image-specific explanation of WHY this value was computed
+          const dynamicReason = g.key === 'pose_complexity_score'
+            ? _poseComplexityReason(recon, poseSolver)
+            : g.getDynamicReason?.(valStr, recon) ?? null;
+          return (
             <div key={g.key} className="lab-overlay-glossary__row">
               <div className="lab-overlay-glossary__head">
-                <code className="lab-overlay-glossary__key">{g.key}</code>
-                <span className="lab-overlay-glossary__val">
-                  {String(recon[g.key])}
-                </span>
+                <span className="lab-overlay-glossary__label">{g.label}</span>
+                {/* Value badge: uses layerColor so it visually maps to the overlay channel */}
+                <span className="lab-overlay-glossary__val" style={{ color: layerColor }}>{valStr}</span>
               </div>
+              {/* Dynamic reason: image-specific, colored by quality threshold */}
+              {dynamicReason && (
+                <p className="lab-overlay-glossary__reason" style={{ color: valColor }}>
+                  → {dynamicReason}
+                </p>
+              )}
+              {/* Static explain: definition, always muted */}
               <p className="lab-overlay-glossary__desc">{g.explain}</p>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1643,6 +2297,36 @@ function OverlayWarnings({ result }) {
           <span className="lab-overlay-warnings__text">{explain}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── JSON raw/formatted toggle ─────────────────────────────────────────────
+function JsonRawToggle({ data }) {
+  const [raw, setRaw] = React.useState(false);
+  return (
+    <div className="lab-json-toggle">
+      <div className="lab-json-toggle__bar">
+        <button
+          className={`lab-json-toggle__btn${!raw ? ' lab-json-toggle__btn--active' : ''}`}
+          onClick={() => setRaw(false)}
+          type="button"
+        >
+          Formatted
+        </button>
+        <button
+          className={`lab-json-toggle__btn${raw ? ' lab-json-toggle__btn--active' : ''}`}
+          onClick={() => setRaw(true)}
+          type="button"
+        >
+          Raw JSON
+        </button>
+      </div>
+      {raw ? (
+        <pre className="lab-json-toggle__raw">{JSON.stringify(data, null, 2)}</pre>
+      ) : (
+        <JsonTree data={data} defaultOpen={1} />
+      )}
     </div>
   );
 }
@@ -1813,8 +2497,14 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
   const catchlights = diag.catchlights || [];
   const signals = diag.signals || {};
   const gates = diag.gates || [];
-  const finalPattern = diag.final_pattern || data?.lighting_inference?.pattern || '—';
+  // authoritative_pattern is always set on the response (top-level fallback)
+  const finalPattern = diag.final_pattern
+    || data?.lighting_inference?.pattern
+    || data?.authoritative_pattern
+    || '—';
   const lightInf = data?.lighting_inference || {};
+  // Confidence falls back to the guaranteed top-level field
+  const authConfidence = data?.authoritative_confidence ?? null;
 
   // Correction state — tracks which parameter the user has flagged as wrong
   const [correction, setCorrection] = useState({ param: null, correctValue: '', note: '' });
@@ -1870,12 +2560,18 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
           { id: 'pattern',      label: 'Final Pattern',  val: finalPattern,
             inputType: 'pattern' },
           { id: 'key_position', label: 'Key Position',   val: lightInf.key_position_text || '—',
+            display: (() => {
+              const v = lightInf.key_position_text;
+              if (!v || v === '—') return '—';
+              return /^[\d.]+$/.test(String(v).trim()) ? `${v}°` : v;
+            })(),
             inputType: 'text' },
           { id: 'confidence',   label: 'Confidence',
-            val: lightInf.pattern_confidence != null
-              ? lightInf.pattern_confidence : null,
-            display: lightInf.pattern_confidence != null
-              ? `${(lightInf.pattern_confidence * 100).toFixed(0)}%` : '—',
+            val: lightInf.pattern_confidence ?? authConfidence,
+            display: (() => {
+              const c = lightInf.pattern_confidence ?? authConfidence;
+              return c != null ? `${(c * 100).toFixed(0)}%` : '—';
+            })(),
             inputType: 'number' },
           { id: 'modifier',     label: 'Modifier',       val: lightInf.modifier_family || '—',
             inputType: 'text' },
@@ -1949,7 +2645,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                           }}
                         >
                           <option value="">— select correct pattern —</option>
-                          {_PC_PATTERNS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {_PC_PATTERNS.map(p => <option key={p} value={p}>{fmtPattern(p)}</option>)}
                         </select>
                       ) : (
                         <input
@@ -1969,6 +2665,23 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                         />
                       )}
                     </label>
+                    <button
+                      type="button"
+                      onClick={() => setCorrection(p => ({
+                        ...p,
+                        correctValue: String(correction.detectedValue),
+                        note: p.note || 'Engine output is correct.',
+                      }))}
+                      style={{
+                        marginTop: -2, padding: '3px 10px', fontSize: 11,
+                        background: 'transparent',
+                        color: correction.correctValue === String(correction.detectedValue) ? C.green : C.textSec,
+                        border: `1px solid ${correction.correctValue === String(correction.detectedValue) ? C.green : C.border}`,
+                        borderRadius: 4, cursor: 'pointer', alignSelf: 'flex-start',
+                      }}
+                    >
+                      ✓ Keep engine suggestion ({fmtPattern(String(correction.detectedValue))})
+                    </button>
                     <label style={{ fontSize: 11, color: C.textSec }}>
                       Why is this wrong? (optional)
                       <input
@@ -2051,7 +2764,9 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                         )}
                       </td>
                       <td style={_td}>{cl.shape || '—'}</td>
-                      <td style={_td}>{cl.size || '—'}</td>
+                      <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>
+                        {cl.size_ratio != null ? _toSimpleFraction(cl.size_ratio) : '—'}
+                      </td>
                     </tr>
                   );
                 })}
@@ -2073,34 +2788,104 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
           </thead>
           <tbody>
             {[
-              ['left_right_asymmetry', signals.left_right_asymmetry,
-                'Face shadow imbalance L vs R — <0.12 = near-flat lighting; >0.25 = clear side key',
-                0.12, 0.8],
-              ['shadow_density', signals.shadow_density,
-                'Shadow pixel ratio in nose region — higher = harder/deeper shadows',
-                0.05, 0.7],
-              ['triangle_isolation', signals.triangle_isolation,
-                'Rembrandt triangle contrast vs surround — >0.15 = genuine triangle',
-                0.15, null],
-              ['highlight_width_ratio', signals.highlight_width_ratio,
-                'Fraction of face width in highlight — >0.5 = broad; <0.3 = short/narrow',
-                0.1, null],
-              ['nose_shadow_angle_deg', signals.nose_shadow_angle_deg,
-                'Nose shadow direction 0–360° — indicates key light angle',
-                null, null],
-              ['nose_shadow_distance', signals.nose_shadow_distance,
-                'Normalised nose shadow throw — 0=under nose, 1=far cheek',
-                null, null],
-            ].map(([key, val, desc, tLow, tHigh]) => (
-              <tr key={key}>
-                <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{key}</td>
-                <td style={{ ..._td, fontFamily: 'var(--font-mono)',
-                  color: tLow != null ? sigColor(val, tLow, tHigh) : C.text, fontWeight: 700 }}>
-                  {val != null ? val : '—'}
-                </td>
-                <td style={{ ..._td, color: C.textSec, fontSize: 11 }}>{desc}</td>
-              </tr>
-            ))}
+              {
+                key: 'left_right_asymmetry', val: signals.left_right_asymmetry,
+                desc: 'Face shadow imbalance L vs R — <0.12 = near-flat lighting; >0.25 = clear side key',
+                tLow: 0.12, tHigh: 0.8,
+                interpret: v => {
+                  if (v == null) return null;
+                  if (v < 0.05)  return `${v} — near-flat, both sides equally lit`;
+                  if (v < 0.12)  return `${v} — low asymmetry, subtle lighting direction`;
+                  if (v < 0.25)  return `${v} — moderate side lighting`;
+                  if (v < 0.45)  return `${v} — clear side key confirmed`;
+                  return `${v} — very strong asymmetry, dominant single-side key`;
+                },
+              },
+              {
+                key: 'shadow_density', val: signals.shadow_density,
+                desc: 'Shadow pixel ratio in nose region — higher = harder/deeper shadows',
+                tLow: 0.05, tHigh: 0.7,
+                interpret: v => {
+                  if (v == null) return null;
+                  if (v < 0.05)  return `${v} — minimal shadow, very soft or flat light`;
+                  if (v < 0.20)  return `${v} — soft shadows, diffuse source`;
+                  if (v < 0.50)  return `${v} — defined shadow, mid-sized modifier`;
+                  return `${v} — deep shadow, hard or small modifier`;
+                },
+              },
+              {
+                key: 'triangle_isolation', val: signals.triangle_isolation,
+                desc: 'Rembrandt triangle contrast vs surround — >0.15 = genuine triangle',
+                tLow: 0.15, tHigh: null,
+                interpret: v => {
+                  if (v == null) return null;
+                  if (v < 0.05)  return `${v} — no triangle detected`;
+                  if (v < 0.15)  return `${v} — weak triangle, below confirmation threshold`;
+                  return `${v} — genuine Rembrandt triangle confirmed`;
+                },
+              },
+              {
+                key: 'highlight_width_ratio', val: signals.highlight_width_ratio,
+                desc: 'Fraction of face width in highlight — >0.5 = broad; <0.3 = short/narrow',
+                tLow: 0.1, tHigh: null,
+                interpret: v => {
+                  if (v == null) return null;
+                  if (v < 0.3)  return `${v} — narrow highlight, tight or side key`;
+                  if (v < 0.5)  return `${v} — medium highlight coverage`;
+                  return `${v} — broad highlight, frontal or large source`;
+                },
+              },
+              {
+                key: 'nose_shadow_angle_deg', val: signals.nose_shadow_angle_deg,
+                desc: 'Nose shadow direction 0–360° — indicates key light angle',
+                tLow: null, tHigh: null,
+                interpret: v => {
+                  if (v == null) return null;
+                  const d = parseFloat(v);
+                  if (isNaN(d)) return null;
+                  const clock = _angleToClockLabel(d);
+                  // Centroid: 0=shadow-below, 90=shadow-right, 180=shadow-above, 270=shadow-left
+                  // Key light is opposite: shadow-below→key-overhead, shadow-right→key-from-left, etc.
+                  if (d <= 30 || d >= 330)  return `${clock} (${v}°) — key near overhead`;
+                  if (d <= 90)              return `${clock} (${v}°) — key from upper-left`;
+                  if (d <= 150)             return `${clock} (${v}°) — key from left / lower-left`;
+                  if (d <= 210)             return `${clock} (${v}°) — key below eye level`;
+                  if (d <= 270)             return `${clock} (${v}°) — key from right / lower-right`;
+                  return `${clock} (${v}°) — key from upper-right`;
+                },
+              },
+              {
+                key: 'nose_shadow_distance', val: signals.nose_shadow_distance,
+                desc: 'Normalised nose shadow throw — 0=under nose, 1=far cheek',
+                tLow: null, tHigh: null,
+                interpret: v => {
+                  if (v == null) return null;
+                  if (v < 0.1)  return `${v} — very short throw, near-overhead key`;
+                  if (v < 0.3)  return `${v} — short throw, high key`;
+                  if (v < 0.6)  return `${v} — medium throw`;
+                  return `${v} — long shadow throw, low or strong side key`;
+                },
+              },
+            ].map(({ key, val, desc, tLow, tHigh, interpret }) => {
+              const interp = interpret(val);
+              return (
+                <tr key={key}>
+                  <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{key}</td>
+                  <td style={{ ..._td, fontFamily: 'var(--font-mono)',
+                    color: tLow != null ? sigColor(val, tLow, tHigh) : C.text, fontWeight: 700 }}>
+                    {val != null ? val : '—'}
+                  </td>
+                  <td style={{ ..._td, fontSize: 11 }}>
+                    <span style={{ color: C.textSec }}>{desc}</span>
+                    {interp && (
+                      <div style={{ color: C.text, fontWeight: 600, marginTop: 3 }}>
+                        → {interp}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ))}
@@ -3048,8 +3833,7 @@ function ReferenceQueuePanel({ onSeeded }) {
 
 const GOLD_STATUSES = ['all', 'draft', 'approved', 'archived'];
 
-function GoldSetTab({ prefill, onPrefillConsumed }) {
-  const [activeTab, setActiveTab]       = useState('goldset'); // 'queue' | 'goldset'
+function GoldSetTab({ prefill, onPrefillConsumed, activeGoldTab = 'goldset', onGoldTabChange }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -3227,29 +4011,18 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
   // ── List view ──
   return (
     <div className="lab-list">
-      {/* Top-level tab switcher: Queue / Gold Set */}
-      <div className="lab-list__tab-switcher">
-        <button
-          className={`lab-tab${activeTab === 'queue' ? ' lab-tab--active' : ''}`}
-          onClick={() => setActiveTab('queue')}
-        >
-          ⏳ Queue
-        </button>
-        <button
-          className={`lab-tab${activeTab === 'goldset' ? ' lab-tab--active' : ''}`}
-          onClick={() => setActiveTab('goldset')}
-        >
-          ★ Gold Set
-        </button>
-      </div>
-
       {/* Queue view — reference images pending seeding */}
-      {activeTab === 'queue' && (
-        <ReferenceQueuePanel onSeeded={() => { fetchEntries(); setActiveTab('goldset'); }} />
+      {activeGoldTab === 'queue' && (
+        <ReferenceQueuePanel onSeeded={() => { fetchEntries(); onGoldTabChange?.('goldset'); }} />
+      )}
+
+      {/* Reviews — distillation candidate review queue */}
+      {activeGoldTab === 'reviews' && (
+        <DistillationReviewsPanel />
       )}
 
       {/* Gold Set view */}
-      {activeTab === 'goldset' && <>
+      {activeGoldTab === 'goldset' && <>
       {/* Toolbar */}
       <div className="lab-list__toolbar">
         <div className="lab-list__filters">
@@ -3266,18 +4039,18 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
         <div style={{ display: 'flex', gap: 'var(--space-xs)', alignItems: 'center', overflowX: 'auto', whiteSpace: 'nowrap' }}>
           {entries.length > 0 && (
             <button
-              className="btn btn--ghost btn--sm"
+              className="lab-tab"
               onClick={toggleSelectAll}
               title={selectedIds.size === entries.length ? 'Deselect all' : 'Select all'}
             >
               {selectedIds.size === entries.length && entries.length > 0 ? '☑ All' : '☐ All'}
             </button>
           )}
-          <button className="btn btn--primary btn--sm" onClick={() => setView('create')}>
+          <button className="lab-tab lab-tab--active" onClick={() => setView('create')}>
             + New
           </button>
           <button
-            className="btn btn--ghost btn--sm"
+            className="lab-tab"
             onClick={handleSeedFromReference}
             disabled={seedRunning}
             title={selectedIds.size > 0
@@ -3291,7 +4064,7 @@ function GoldSetTab({ prefill, onPrefillConsumed }) {
                 : '\u2B06 Seed from Reference'}
           </button>
           <button
-            className="btn btn--ghost btn--sm"
+            className="lab-tab"
             onClick={handleRunEval}
             disabled={evalRunning}
           >
@@ -3632,32 +4405,35 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
 /** Gold Set create form */
 function GoldSetForm({ onSave, onCancel, prefill }) {
   const fileRef = useRef(null);
-  const [imagePath, setImagePath] = useState(prefill?.image_path || '');
-  const [imagePreview, setImagePreview] = useState(prefill?.imagePreview || null);
-  const [notes, setNotes] = useState(prefill?.notes || '');
-  const [expectedJson, setExpectedJson] = useState(
-    prefill?.expected_analysis ? JSON.stringify(prefill.expected_analysis, null, 2) : '{}'
+  const [imagePath,       setImagePath]       = useState(prefill?.image_path || '');
+  const [imagePreview,    setImagePreview]     = useState(prefill?.imagePreview || null);
+  const [notes,           setNotes]           = useState(prefill?.notes || '');
+  const [expectedPattern, setExpectedPattern] = useState(
+    prefill?.expected_analysis?.lighting_read?.lighting_family || ''
   );
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState(null);
+  const [acceptableRaw,   setAcceptableRaw]   = useState('');  // comma-separated pattern names
+  const [difficulty,      setDifficulty]      = useState('standard');
+  const [analyzeResult,   setAnalyzeResult]   = useState(null);  // full analysis for JSON preview
+  const [saving,          setSaving]          = useState(false);
+  const [uploading,       setUploading]       = useState(false);
+  const [error,           setError]           = useState(null);
 
   async function handleFileSelect(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    // Show local preview immediately
     const url = URL.createObjectURL(f);
     setImagePreview(url);
-    // Upload via analyze endpoint to get server-side path
     setUploading(true);
     setError(null);
     try {
       const result = await analyzeImage(f, { debug: false });
       setImagePath(result.image_path || '');
-      // Pre-fill expected analysis if not already set from prefill
-      if (result.reference_analysis && expectedJson === '{}') {
-        setExpectedJson(JSON.stringify(result.reference_analysis, null, 2));
-      }
+      setAnalyzeResult(result);
+      // Auto-fill pattern from analysis if not already set
+      const detectedPattern = result?.lighting_inference?.pattern
+        || result?.reference_analysis?.lighting_read?.lighting_family
+        || '';
+      if (detectedPattern && !expectedPattern) setExpectedPattern(detectedPattern);
     } catch (err) {
       setError(`Upload failed: ${err.message}`);
     } finally {
@@ -3667,22 +4443,43 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!expectedPattern) { setError('Expected pattern is required'); return; }
     setSaving(true);
     setError(null);
     try {
-      let expected = {};
-      try { expected = JSON.parse(expectedJson); } catch { throw new Error('Expected analysis must be valid JSON'); }
+      // Build expected_analysis from structured fields + existing analysis data
+      const acceptable = acceptableRaw
+        .split(',').map(s => s.trim()).filter(Boolean);
+      const baseAnalysis = analyzeResult?.reference_analysis || prefill?.expected_analysis || {};
+      const expectedAnalysis = {
+        ...baseAnalysis,
+        lighting_read: {
+          ...(baseAnalysis.lighting_read || {}),
+          lighting_family: expectedPattern,
+        },
+        _gold_meta: {
+          expected_pattern:     expectedPattern,
+          acceptable_patterns:  acceptable.length ? acceptable : [expectedPattern],
+          difficulty,
+        },
+      };
       await onSave({
-        image_path: imagePath,
-        expected_analysis: expected,
-        notes: notes || undefined,
-        status: 'draft',
+        image_path:       imagePath,
+        expected_analysis: expectedAnalysis,
+        notes:             notes || undefined,
+        status:            'draft',
       });
     } catch (err) {
       setError(err.message);
       setSaving(false);
     }
   }
+
+  const selectStyle = {
+    background: 'var(--color-bg)', border: '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-sm)', color: 'var(--color-text)',
+    padding: '6px 10px', fontSize: 'var(--text-sm)', width: '100%', marginTop: 4,
+  };
 
   return (
     <form className="lab-form" onSubmit={handleSubmit}>
@@ -3693,6 +4490,7 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
 
       {error && <div className="lab-form__error">{error}</div>}
 
+      {/* Image upload */}
       <div className="lab-form__label">
         Image
         <input
@@ -3711,7 +4509,12 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
             />
             {uploading && (
               <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-sm)' }}>
-                <span style={{ color: '#fff', fontSize: 'var(--text-sm)' }}>Uploading…</span>
+                <span style={{ color: '#fff', fontSize: 'var(--text-sm)' }}>Analyzing…</span>
+              </div>
+            )}
+            {!uploading && analyzeResult && (
+              <div style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: C.green }}>
+                ✓ Analyzed — pattern detected: <strong>{fmtPattern(analyzeResult?.lighting_inference?.pattern, '?')}</strong>
               </div>
             )}
             <button
@@ -3733,10 +4536,9 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
               <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
             </svg>
-            Browse image file
+            Browse image — auto-analyzes on select
           </button>
         )}
-        {/* Editable path for manual override or confirmation */}
         <input
           className="lab-form__input"
           value={imagePath}
@@ -3745,6 +4547,48 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
           required
           style={{ marginTop: 'var(--space-xs)', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}
         />
+      </div>
+
+      {/* Expected pattern — the ground truth label */}
+      <div className="lab-form__label">
+        Expected Pattern <span style={{ color: C.red }}>*</span>
+        <select
+          value={expectedPattern}
+          onChange={e => setExpectedPattern(e.target.value)}
+          style={selectStyle}
+          required
+        >
+          <option value="">— select ground truth pattern —</option>
+          {KNOWN_PATTERNS.map(p => (
+            <option key={p} value={p}>{fmtPattern(p)}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Acceptable patterns — boundary cases */}
+      <label className="lab-form__label">
+        Acceptable Patterns
+        <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
+          comma-separated, for boundary cases
+        </span>
+        <input
+          className="lab-form__input"
+          value={acceptableRaw}
+          onChange={e => setAcceptableRaw(e.target.value)}
+          placeholder="e.g. loop, rembrandt (leave blank = expected only)"
+          style={{ marginTop: 4 }}
+        />
+      </label>
+
+      {/* Difficulty */}
+      <div className="lab-form__label">
+        Difficulty
+        <select value={difficulty} onChange={e => setDifficulty(e.target.value)} style={selectStyle}>
+          <option value="easy">Easy</option>
+          <option value="standard">Standard</option>
+          <option value="hard">Hard</option>
+          <option value="boundary">Boundary case</option>
+        </select>
       </div>
 
       <label className="lab-form__label">
@@ -3757,23 +4601,314 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
         />
       </label>
 
-      <label className="lab-form__label">
-        Expected Analysis (JSON)
-        <textarea
-          className="lab-form__textarea"
-          value={expectedJson}
-          onChange={e => setExpectedJson(e.target.value)}
-          rows={6}
-        />
-      </label>
-
-      <button className="btn btn--primary" type="submit" disabled={saving || !imagePath}>
+      <button className="btn btn--primary" type="submit" disabled={saving || !imagePath || !expectedPattern}>
         {saving ? 'Saving\u2026' : 'Create Entry'}
       </button>
     </form>
   );
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   DistillationReviewsPanel — Phase 5c human review queue
+   ═══════════════════════════════════════════════════════════ */
+
+const DR_STATUS_OPTS = [
+  { value: 'all',                label: 'All' },
+  { value: 'pending_review',     label: 'Pending' },
+  { value: 'approved_candidate', label: 'Approved' },
+  { value: 'rejected',           label: 'Rejected' },
+  { value: 'specialty_watch',    label: 'Watch' },
+  { value: 'gold_set_issue',     label: 'GS Issue' },
+];
+
+const DR_STATUS_COLOR = {
+  pending_review:     C.amber,
+  approved_candidate: C.green,
+  rejected:           C.red,
+  specialty_watch:    C.blue,
+  gold_set_issue:     C.red,
+};
+
+function ReviewImage({ reviewId, size = 64, cover = true }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    if (!reviewId) return;
+    let url = null;
+    getDistillationReviewImageUrl(reviewId).then(u => { url = u; setSrc(u); }).catch(() => {});
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [reviewId]);
+  const dim = typeof size === 'number' ? size : undefined;
+  const placeholder = (
+    <div style={{
+      width: dim, height: dim,
+      minWidth: dim, minHeight: dim,
+      background: 'var(--color-surface)',
+      borderRadius: 'var(--radius-sm)',
+      flexShrink: 0,
+    }} />
+  );
+  if (!src) return placeholder;
+  if (cover) {
+    return (
+      <img
+        src={src}
+        alt="review"
+        style={{
+          width: dim, height: dim,
+          objectFit: 'cover',
+          borderRadius: 'var(--radius-sm)',
+          flexShrink: 0, display: 'block',
+        }}
+      />
+    );
+  }
+  // contain mode — show full image without cropping
+  return (
+    <img
+      src={src}
+      alt="review"
+      style={{
+        maxWidth: dim ? `${dim}px` : '100%',
+        maxHeight: dim ? `${dim}px` : '100%',
+        width: 'auto', height: 'auto',
+        objectFit: 'contain',
+        borderRadius: 'var(--radius-sm)',
+        display: 'block',
+      }}
+    />
+  );
+}
+
+function DistillationReviewsPanel() {
+  const [statusFilter, setStatusFilter] = useState('pending_review');
+  const [rows,         setRows]         = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState(null);
+  const [expanded,     setExpanded]     = useState(null);  // reviewId currently open
+  const [working,      setWorking]      = useState({});    // { [id]: true }
+  const [notice,       setNotice]       = useState(null);  // { type, msg }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listDistillationReviews({
+        review_status: statusFilter === 'all' ? null : statusFilter,
+        limit: 200,
+      });
+      setRows(data.reviews || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  function showNotice(type, msg) {
+    setNotice({ type, msg });
+    setTimeout(() => setNotice(null), 3500);
+  }
+
+  async function handleDecision(row, newStatus, rationale = '') {
+    setWorking(w => ({ ...w, [row.id]: true }));
+    try {
+      await patchDistillationReview(row.id, { review_status: newStatus, rationale });
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, review_status: newStatus } : r));
+      setExpanded(null);
+      showNotice('ok', `${row.expected_pattern} → ${newStatus.replace(/_/g, ' ')}`);
+    } catch (err) {
+      showNotice('err', err.message);
+    } finally {
+      setWorking(w => ({ ...w, [row.id]: false }));
+    }
+  }
+
+  const total     = rows.length;
+  const pending   = rows.filter(r => r.review_status === 'pending_review').length;
+  const approved  = rows.filter(r => r.review_status === 'approved_candidate').length;
+
+  return (
+    <div style={{ padding: '0 0 24px' }}>
+      {/* Status bar */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        <span><strong style={{ color: 'var(--color-text)' }}>{total}</strong> shown</span>
+        {pending   > 0 && <span><strong style={{ color: C.amber }}>{pending}</strong> pending</span>}
+        {approved  > 0 && <span><strong style={{ color: C.green }}>{approved}</strong> approved</span>}
+      </div>
+
+      {/* Status filter tabs */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 12 }}>
+        {DR_STATUS_OPTS.map(o => (
+          <button
+            key={o.value}
+            className={`lab-tab${statusFilter === o.value ? ' lab-tab--active' : ''}`}
+            onClick={() => setStatusFilter(o.value)}
+            style={{ fontSize: 11 }}
+          >
+            {o.label}
+          </button>
+        ))}
+        <button className="btn btn--ghost btn--sm" onClick={load} style={{ marginLeft: 'auto', fontSize: 11 }}>↻ Refresh</button>
+      </div>
+
+      {/* Notice */}
+      {notice && (
+        <div style={{ marginBottom: 8, padding: '6px 10px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)', background: notice.type === 'ok' ? `color-mix(in srgb, ${C.green} 14%, transparent)` : `color-mix(in srgb, ${C.red} 14%, transparent)`, color: notice.type === 'ok' ? C.green : C.red }}>
+          {notice.msg}
+        </div>
+      )}
+
+      {loading && <div style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-xs)', padding: 12 }}>Loading…</div>}
+      {error   && <div style={{ color: C.red, fontSize: 'var(--text-xs)', padding: 12 }}>{error}</div>}
+
+      {!loading && !error && rows.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+          {statusFilter === 'pending_review'
+            ? 'No items pending review. Use Teach (Workbench) or run a distillation scan.'
+            : statusFilter === 'approved_candidate'
+            ? 'No approved candidates yet. Approve pending reviews or mark correct labels from the Workbench.'
+            : 'No entries in this status.'}
+        </div>
+      )}
+
+      {!loading && rows.map(row => {
+        const isOpen    = expanded === row.id;
+        const isBusy    = !!working[row.id];
+        const statusClr = DR_STATUS_COLOR[row.review_status] || 'var(--color-text-secondary)';
+        const correct   = row.correctness === 'correct';
+
+        return (
+          <div
+            key={row.id}
+            style={{
+              background: 'var(--color-surface)',
+              border: `0.5px solid ${isOpen ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              borderRadius: 'var(--radius-md)',
+              marginBottom: 8,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Row header */}
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', cursor: 'pointer' }}
+              onClick={() => setExpanded(isOpen ? null : row.id)}
+            >
+              <ReviewImage reviewId={row.id} />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, fontSize: 'var(--text-sm)', color: 'var(--color-text)' }}>
+                    {row.expected_pattern.replace(/_/g, '\u00a0')}
+                  </span>
+                  {row.predicted_pattern && row.predicted_pattern !== row.expected_pattern && (
+                    <span style={{ fontSize: 11, color: C.amber }}>
+                      ← predicted: {row.predicted_pattern.replace(/_/g, '\u00a0')}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 999, background: statusClr + '22', color: statusClr, border: `1px solid ${statusClr}44` }}>
+                    {row.review_status.replace(/_/g, ' ')}
+                  </span>
+                  {row.entry_type === 'candidate' && (
+                    <span style={{ fontSize: 10, color: correct ? C.green : C.amber }}>
+                      {correct ? '✓ correct' : '✗ wrong'}
+                    </span>
+                  )}
+                </div>
+                <div style={{ marginTop: 3, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                  conf {(row.confidence * 100).toFixed(0)}%
+                  {' · '}{row.path_type.replace('specialty:', 'spec:')}
+                  {' · '}{row.candidate_reason.replace(/_/g, ' ')}
+                  {row.reviewer && ` · by ${row.reviewer}`}
+                </div>
+              </div>
+
+              <span style={{ fontSize: 12, color: 'var(--color-text-dim)', flexShrink: 0 }}>
+                {isOpen ? '▲' : '▼'}
+              </span>
+            </div>
+
+            {/* Expanded actions */}
+            {isOpen && (
+              <div style={{ borderTop: '0.5px solid var(--color-border)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {row.notes && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>
+                    {row.notes}
+                  </div>
+                )}
+                {row.rationale && (
+                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
+                    Rationale: {row.rationale}
+                  </div>
+                )}
+                {/* Expanded image — full view for review decision */}
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                  <div style={{
+                    background: 'var(--color-surface)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: 6,
+                    flexShrink: 0,
+                    lineHeight: 0,
+                  }}>
+                    <ReviewImage reviewId={row.id} size={200} cover={false} />
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-muted)', wordBreak: 'break-all', paddingTop: 2 }}>
+                    {row.image_path}
+                  </div>
+                </div>
+
+                {/* Decision buttons */}
+                {row.review_status !== 'approved_candidate' && (
+                  <button
+                    className="btn btn--sm"
+                    style={{ background: `color-mix(in srgb, ${C.green} 14%, transparent)`, color: C.green, border: `1px solid color-mix(in srgb, ${C.green} 28%, transparent)` }}
+                    onClick={() => handleDecision(row, 'approved_candidate', 'Manually approved')}
+                    disabled={isBusy}
+                  >
+                    ✓ Approve for distillation
+                  </button>
+                )}
+                {row.review_status !== 'rejected' && (
+                  <button
+                    className="btn btn--sm btn--ghost"
+                    onClick={() => handleDecision(row, 'rejected', 'Manually rejected')}
+                    disabled={isBusy}
+                    style={{ color: C.red }}
+                  >
+                    ✗ Reject
+                  </button>
+                )}
+                {row.review_status !== 'specialty_watch' && (
+                  <button
+                    className="btn btn--sm btn--ghost"
+                    onClick={() => handleDecision(row, 'specialty_watch', 'Flagged for specialty watch')}
+                    disabled={isBusy}
+                    style={{ fontSize: 11 }}
+                  >
+                    ⚑ Watch (specialty)
+                  </button>
+                )}
+                {row.review_status !== 'pending_review' && (
+                  <button
+                    className="btn btn--sm btn--ghost"
+                    onClick={() => handleDecision(row, 'pending_review', '')}
+                    disabled={isBusy}
+                    style={{ fontSize: 11 }}
+                  >
+                    ↺ Reset to pending
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════
    Candidates Tab — CRUD list + detail + status workflow
@@ -3951,7 +5086,7 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
 // ── Proposed Change Editor — schema-aware dropdown form ──────────────────
 
 const _PC_PATTERNS = [
-  'rembrandt','clamshell','loop','split','butterfly','broad','short',
+  'rembrandt','clamshell','loop','shallow_loop','split','butterfly','broad','short',
   'rim_only','high_key','low_key','flat_fashion','window_portrait',
   'golden_hour','overcast_natural','ring_light','bare_bulb_editorial',
   'strip_dramatic','short_fashion_key','soft_editorial_key',
@@ -4185,7 +5320,7 @@ function KvJsonEditor({ value = {}, onChange }) {
           <label style={_label}>{f.label}</label>
           <select value={v || ''} onChange={e => set(f.key, e.target.value)} style={_base}>
             <option value="">— select —</option>
-            {_PC_PATTERNS.map(p => <option key={p} value={p}>{p}</option>)}
+            {_PC_PATTERNS.map(p => <option key={p} value={p}>{fmtPattern(p)}</option>)}
           </select>
           {f.hint && <span style={_hint}>{f.hint}</span>}
         </div>
@@ -4285,7 +5420,7 @@ function KvJsonEditor({ value = {}, onChange }) {
   return (
     <div style={{ display: 'grid', gap: 4, marginTop: 4 }}>
       <datalist id="pc-patterns-list">
-        {_PC_PATTERNS.map(p => <option key={p} value={p} />)}
+        {_PC_PATTERNS.map(p => <option key={p} value={p}>{fmtPattern(p)}</option>)}
       </datalist>
 
       {/* header */}
@@ -4549,8 +5684,9 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
               src={imgUrl}
               alt="Source image for this rule candidate"
               style={{
-                width: '100%', maxHeight: 260, objectFit: 'cover',
-                borderRadius: 6, border: '1px solid var(--color-border)', display: 'block',
+                width: '100%', maxHeight: 320, objectFit: 'contain',
+                borderRadius: 6, border: '1px solid var(--color-border)',
+                background: 'var(--color-bg)', display: 'block',
               }}
               onError={e => { e.target.style.display = 'none'; }}
             />
@@ -4742,21 +5878,39 @@ function CandidateForm({ onSave, onCancel, prefill }) {
   const [proposedChange, setProposedChange] = useState(prefill?.proposed_change || {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [manualImagePreview, setManualImagePreview] = useState(null);
+  const [manualImageFile, setManualImageFile] = useState(null);
 
-  const imagePreview = prefill?.imagePreview || null;
+  // Image source: Workbench prefill takes priority; manual upload is the fallback
+  const imagePreview = prefill?.imagePreview || manualImagePreview || null;
   const sourceImagePath = prefill?.source_image_path || null;
+
+  function handleImagePick(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setManualImageFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setManualImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setSaving(true);
     setError(null);
     try {
+      // If the user attached a manual image, upload it first to get a server path
+      let resolvedImagePath = sourceImagePath || undefined;
+      if (manualImageFile && !sourceImagePath) {
+        const uploaded = await uploadCandidateImage(manualImageFile);
+        resolvedImagePath = uploaded.path;
+      }
       await onSave({
         title,
         description,
         rationale: rationale || undefined,
         source_gold_set_id: sourceGoldSetId || undefined,
-        source_image_path: sourceImagePath || undefined,
+        source_image_path: resolvedImagePath,
         proposed_change: proposedChange,
         status: 'proposed',
       });
@@ -4773,27 +5927,61 @@ function CandidateForm({ onSave, onCancel, prefill }) {
       </button>
       <h4 className="lab-form__title">New Rule Candidate</h4>
 
-      {/* Source image — shown when the candidate was generated from a workbench analysis */}
-      {imagePreview && (
-        <div style={{ marginBottom: 16 }}>
-          <div className="lab-form__label" style={{ marginBottom: 6 }}>Source Image</div>
-          <img
-            src={imagePreview}
-            alt="Source image for this rule candidate"
-            style={{
-              width: '100%', maxHeight: 240, objectFit: 'cover',
-              borderRadius: 6, border: '1px solid var(--color-border)',
-              display: 'block',
-            }}
-          />
-          {sourceImagePath && (
-            <div style={{ fontSize: 10, color: 'var(--color-text-dim)',
-              fontFamily: 'var(--font-mono)', marginTop: 4 }}>
-              {sourceImagePath}
-            </div>
-          )}
-        </div>
-      )}
+      {/* Source image — from Workbench prefill or manual upload */}
+      <div style={{ marginBottom: 16 }}>
+        <div className="lab-form__label" style={{ marginBottom: 6 }}>Source Image</div>
+        {imagePreview ? (
+          <>
+            <img
+              src={imagePreview}
+              alt="Source image for this rule candidate"
+              style={{
+                width: '100%', maxHeight: 320, objectFit: 'contain',
+                borderRadius: 6, border: '1px solid var(--color-border)',
+                background: 'var(--color-bg)', display: 'block',
+              }}
+            />
+            {sourceImagePath && (
+              <div style={{ fontSize: 10, color: 'var(--color-text-dim)',
+                fontFamily: 'var(--font-mono)', marginTop: 4 }}>
+                {sourceImagePath}
+              </div>
+            )}
+            {manualImagePreview && !prefill?.imagePreview && (
+              <button
+                type="button"
+                onClick={() => { setManualImagePreview(null); setManualImageFile(null); }}
+                style={{
+                  marginTop: 6, fontSize: 11, padding: '2px 8px',
+                  background: 'transparent', border: '1px solid var(--color-border)',
+                  borderRadius: 4, color: 'var(--color-text-secondary)', cursor: 'pointer',
+                }}
+              >
+                × Remove
+              </button>
+            )}
+          </>
+        ) : (
+          <label style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 8, padding: '20px 16px', cursor: 'pointer',
+            border: '1px dashed var(--color-border)', borderRadius: 6,
+            background: 'var(--color-surface)', color: 'var(--color-text-secondary)',
+            fontSize: 12,
+          }}>
+            <span>＋ Attach image (optional)</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/tiff"
+              onChange={handleImagePick}
+              style={{ display: 'none' }}
+            />
+          </label>
+        )}
+        <span className="lab-form__hint">
+          Optional — attach the photo that triggered this candidate so reviewers can see the evidence.
+        </span>
+      </div>
 
       {error && <div className="lab-form__error">{error}</div>}
 
@@ -4876,7 +6064,7 @@ const REF_TIER_FILTERS = ['all', 'gold', 'community', 'synthetic'];
 
 // Known pattern IDs for the import form dropdown
 const KNOWN_PATTERNS = [
-  'rembrandt', 'clamshell', 'loop', 'split', 'butterfly', 'broad', 'short',
+  'rembrandt', 'clamshell', 'loop', 'shallow_loop', 'split', 'butterfly', 'broad', 'short',
   'rim_only', 'high_key', 'low_key', 'flat_fashion', 'window_portrait',
   'golden_hour', 'overcast_natural', 'ring_light', 'bare_bulb_editorial',
   'strip_dramatic', 'short_fashion_key', 'soft_editorial_key',
@@ -5305,6 +6493,37 @@ function ReferenceDatasetTab() {
         </button>
       </div>
 
+      {/* Instructional callout */}
+      <div className="ref-instructions">
+        <div className="ref-instructions__row">
+          <span className="ref-instructions__col">
+            <span className="ref-instructions__label">Purpose</span>
+            Ground-truth images the engine benchmarks against. Each entry pairs a photo with a verified pattern label and optional signal data.
+          </span>
+          <span className="ref-instructions__col">
+            <span className="ref-instructions__label">Tiers</span>
+            <strong>Gold</strong> — curated, high-confidence, used in regression tests.{' '}
+            <strong>Community</strong> — contributed, pending review before promotion.
+          </span>
+          <span className="ref-instructions__col">
+            <span className="ref-instructions__label">Workflow</span>
+            Import → <em>Draft</em> → approve to <em>Approved</em> (or reject). Only approved gold entries count in benchmarks.
+          </span>
+          <span className="ref-instructions__col">
+            <span className="ref-instructions__label">Naming</span>
+            Reference ID: <code>photographer_pattern_nnn</code> (e.g. <code>karsh_rembrandt_001</code>).
+            Pattern slugs use underscores — the UI displays them with spaces automatically.
+          </span>
+          <span className="ref-instructions__col">
+            <span className="ref-instructions__label">Difficulty</span>
+            <strong>Easy</strong> — clean, unambiguous signal.{' '}
+            <strong>Medium</strong> — some ambiguity or mixed cues.{' '}
+            <strong>Hard</strong> — subtle or genuinely tricky setup the engine should still handle at scale.{' '}
+            <strong>Edge Case</strong> — unusual condition requiring special handling (contaminated catchlights, B&W, extreme exposure, multiple conflicting sources).
+          </span>
+        </div>
+      </div>
+
       {/* Loading / Error */}
       {loading && <p className="lab-list__status">Loading entries{'\u2026'}</p>}
       {error && <p className="lab-list__status lab-list__status--error">{error}</p>}
@@ -5377,6 +6596,7 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
   const [photographer, setPhotographer] = useState('');
   const [tier, setTier] = useState('community');
   const [environment, setEnvironment] = useState('');
+  const [difficulty, setDifficulty] = useState('');
   const [notes, setNotes] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [dropzoneActive, setDropzoneActive] = useState(false);
@@ -5434,6 +6654,7 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
         dataset_tier: tier,
       };
       if (environment) metadata.environment = environment;
+      if (difficulty) metadata.difficulty = difficulty;
       if (notes) metadata.notes = notes;
 
       setProgress('Running pipeline & VLM reconstruction\u2026');
@@ -5489,7 +6710,7 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
       <label className="lab-form__label">
         Pattern
         <select className="lab-form__input" value={patternId} onChange={e => setPatternId(e.target.value)} required>
-          {KNOWN_PATTERNS.map(p => <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>)}
+          {KNOWN_PATTERNS.map(p => <option key={p} value={p}>{fmtPattern(p)}</option>)}
         </select>
       </label>
 
@@ -5516,6 +6737,17 @@ function RefDatasetImportForm({ onComplete, onCancel }) {
           <option value="window_light">Window Light</option>
           <option value="outdoor">Outdoor</option>
           <option value="mixed">Mixed</option>
+        </select>
+      </label>
+
+      <label className="lab-form__label">
+        Difficulty
+        <select className="lab-form__input" value={difficulty} onChange={e => setDifficulty(e.target.value)}>
+          <option value="">Not specified</option>
+          <option value="easy">Easy — clean, unambiguous signal</option>
+          <option value="medium">Medium — some ambiguity or mixed cues</option>
+          <option value="hard">Hard — subtle or complex setup</option>
+          <option value="edge_case">Edge Case — intentionally tricky or unusual</option>
         </select>
       </label>
 

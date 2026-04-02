@@ -39,6 +39,25 @@ function score(v, decimals = 3) {
   return Number(v).toFixed(decimals);
 }
 
+// ── Panel description ─────────────────────────────────────────────────────────
+
+function BmPanelDesc({ text }) {
+  return (
+    <p style={{
+      fontSize: 12,
+      color: 'var(--color-text-secondary)',
+      background: 'var(--color-surface)',
+      border: '0.5px solid var(--color-border)',
+      borderRadius: 10,
+      padding: '8px 12px',
+      lineHeight: 1.5,
+      margin: '0 0 12px',
+    }}>
+      {text}
+    </p>
+  );
+}
+
 // ── Score badge ───────────────────────────────────────────────────────────────
 
 function ScoreBadge({ value, large }) {
@@ -81,17 +100,20 @@ function Sparkline({ values }) {
   const w = 80, h = 28, pad = 3;
   const min = Math.min(...values);
   const max = Math.max(...values);
-  const range = max - min || 1;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (w - pad * 2);
-    const y = h - pad - ((v - min) / range) * (h - pad * 2);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
+  const range = (max - min) > 1e-9 ? max - min : 1;
+  const coords = values.map((v, i) => ({
+    x: pad + (i / (values.length - 1)) * (w - pad * 2),
+    y: h - pad - ((v - min) / range) * (h - pad * 2),
+    v,
+  }));
+  const pts = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`);
   // Green if most recent (rightmost) >= oldest (leftmost), red if declining.
-  const color = values[values.length - 1] >= values[0] ? '#22c55e' : '#ef4444';
-  const [lastX, lastY] = pts[pts.length - 1].split(',');
+  const color = values[values.length - 1] >= values[0] ? C.green : C.red;
+  const last = coords[coords.length - 1];
+  const trend = values[values.length - 1] - values[0];
   return (
-    <svg width={w} height={h} className="bm-sparkline" aria-hidden="true">
+    <svg width={w} height={h} className="bm-sparkline" style={{ overflow: 'visible' }}>
+      <title>{`${pct(values[0])} → ${pct(values[values.length - 1])} (${trend >= 0 ? '+' : ''}${pct(trend)})`}</title>
       <polyline
         points={pts.join(' ')}
         fill="none"
@@ -100,8 +122,16 @@ function Sparkline({ values }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Dot on the most recent value (rightmost = newest) */}
-      <circle cx={lastX} cy={lastY} r="2.5" fill={color} />
+      {/* Invisible hover targets — each shows its value on hover */}
+      {coords.map((c, i) => (
+        <circle key={i} cx={c.x.toFixed(1)} cy={c.y.toFixed(1)} r="5" fill="transparent" style={{ cursor: 'default' }}>
+          <title>{`Run ${i + 1}: ${pct(c.v)}`}</title>
+        </circle>
+      ))}
+      {/* Visible dot on the most recent value (rightmost = newest) */}
+      <circle cx={last.x.toFixed(1)} cy={last.y.toFixed(1)} r="2.5" fill={color}>
+        <title>{`Latest: ${pct(last.v)}`}</title>
+      </circle>
     </svg>
   );
 }
@@ -134,7 +164,7 @@ function RegressionAlerts({ regressions }) {
       {sorted.map((r, i) => (
         <div key={i} className={`bm-alert bm-alert--${r.severity}`}>
           <span className="bm-alert__icon">
-            {r.severity === 'critical' ? '🚫' : r.severity === 'warning' ? '⚠️' : 'ℹ️'}
+            {r.severity === 'critical' ? '!' : r.severity === 'warning' ? '!' : '·'}
           </span>
           <div className="bm-alert__body">
             <span className="bm-alert__tag">
@@ -307,7 +337,7 @@ function PatternTable({ metrics, onNavigateTo }) {
       fmt: v => {
         if (v == null) return '—';
         const abs = Math.abs(Number(v));
-        const color = abs > 0.2 ? '#ef4444' : abs > 0.04 ? '#f59e0b' : '#22c55e';
+        const color = abs > 0.2 ? C.red : abs > 0.04 ? C.amber : C.green;
         return <span style={{ color, fontVariantNumeric: 'tabular-nums' }}>±{Number(v).toFixed(3)}</span>;
       },
     },
@@ -422,7 +452,7 @@ function VerdictChip({ verdict }) {
 
 // ── Benchmark case thumbnail (fetches image with auth — gold-set or case ID) ───
 
-function BmCaseThumb({ goldSetId, caseId }) {
+function BmCaseThumb({ goldSetId, caseId, size = 52 }) {
   const [src, setSrc] = useState(null);
   const [err, setErr] = useState(false);
 
@@ -439,7 +469,7 @@ function BmCaseThumb({ goldSetId, caseId }) {
   }, [goldSetId, caseId]);
 
   const style = {
-    width: 52, height: 52, flexShrink: 0,
+    width: size, height: size, flexShrink: 0,
     borderRadius: 4, objectFit: 'cover',
     background: 'var(--color-surface-elevated)',
     border: '1px solid var(--color-border)',
@@ -566,7 +596,7 @@ function CaseExplorer({ runId }) {
                       { label: 'Fix Eff.',   v: r.fix_score        },
                       { label: 'Confidence', v: r.confidence_score,
                         note: r.confidence_error != null
-                          ? `err ${r.confidence_error > 0 ? '+' : ''}${r.confidence_error?.toFixed(3)}${Math.abs(r.confidence_error) > 0.04 ? ' ⚠ >±0.04' : ' ✓'}`
+                          ? `err ${r.confidence_error > 0 ? '+' : ''}${r.confidence_error.toFixed(3)}${Math.abs(r.confidence_error) > 0.04 ? ' ⚠ >±0.04' : ' ✓'}`
                           : null },
                       { label: 'Final',      v: r.final_score, bold: true,
                         note: r.final_score != null && r.final_score < 0.8 ? 'below 0.8 target' : null },
@@ -749,6 +779,7 @@ function CaseCreator({ onCreated }) {
           <div className="bm-promote-list">
             {goldSet.map(e => (
               <div key={e.id} className="bm-promote-item">
+                <BmCaseThumb goldSetId={e.id} size={44} />
                 <span className="bm-promote-item__path">{e.image_path}</span>
                 <button
                   className="btn btn--primary btn--sm"
@@ -950,6 +981,8 @@ function CaseList({ cases, onRefresh }) {
                   <polyline points="6 9 12 15 18 9"/>
                 </svg>
               </button>
+
+              <BmCaseThumb caseId={c.id} size={44} />
 
               <div className="bm-case-item__meta">
                 <span className="bm-case-item__pattern">{c.pattern_id}</span>
@@ -1158,7 +1191,7 @@ function CaseList({ cases, onRefresh }) {
                                 <td className="bm-table__td">
                                   {h.confidence_error != null ? (
                                     <span style={{
-                                      color: Math.abs(h.confidence_error) > 0.04 ? '#f59e0b' : '#22c55e',
+                                      color: Math.abs(h.confidence_error) > 0.04 ? C.amber : C.green,
                                       fontVariantNumeric: 'tabular-nums',
                                     }}>
                                       {h.confidence_error > 0 ? '+' : ''}{h.confidence_error.toFixed(3)}
@@ -1317,6 +1350,8 @@ export default function BenchmarkTab({ onNavigateTo }) {
       {/* ───────────── OVERVIEW ───────────── */}
       {section === 'overview' && (
         <>
+          <BmPanelDesc text="Benchmark measures how accurately the analysis engine classifies a curated set of labeled images. Target ≥ 80% overall score. Quick mode samples up to 25 cases; Full mode runs all cases. Drift Check detects when live signal accuracy has diverged from benchmark results and auto-creates candidates for the gaps." />
+
           {/* Global metrics + run button */}
           <GlobalMetrics
             summary={summary}
@@ -1344,19 +1379,19 @@ export default function BenchmarkTab({ onNavigateTo }) {
           {summary?.has_runs && (
             <div className="bm-score-legend">
               <span>
-                <span className="bm-score-legend__dot" style={{ background: '#22c55e' }} />
+                <span className="bm-score-legend__dot" style={{ background: C.green }} />
                 ≥80% good
               </span>
               <span>
-                <span className="bm-score-legend__dot" style={{ background: '#f59e0b' }} />
+                <span className="bm-score-legend__dot" style={{ background: C.amber }} />
                 ≥60% warn
               </span>
               <span>
-                <span className="bm-score-legend__dot" style={{ background: '#ef4444' }} />
+                <span className="bm-score-legend__dot" style={{ background: C.red }} />
                 &lt;60% needs work
               </span>
               <span style={{ marginLeft: 8, borderLeft: '1px solid var(--color-border)', paddingLeft: 12 }}>
-                Conf. error: &lt;±0.04 target · &gt;±0.04 <span style={{ color: '#f59e0b' }}>warn</span> · &gt;±0.20 <span style={{ color: '#ef4444' }}>poor</span>
+                Conf. error: &lt;±0.04 target · &gt;±0.04 <span style={{ color: C.amber }}>warn</span> · &gt;±0.20 <span style={{ color: C.red }}>poor</span>
               </span>
             </div>
           )}

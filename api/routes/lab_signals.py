@@ -77,6 +77,10 @@ class RecordSignalRequest(BaseModel):
     # Signal hygiene
     signal_source: str = Field("live", description="live | seeded | internal | expert_review")
 
+    # Analysis traceability (Phase 4b)
+    analysis_id:    Optional[str] = None
+    system_version: Optional[str] = None
+
     @field_validator("outcome")
     @classmethod
     def validate_outcome(cls, v):
@@ -133,6 +137,8 @@ async def post_signal(body: RecordSignalRequest):
             upgraded           = body.upgraded,
             revenue_value      = body.revenue_value,
             signal_source      = body.signal_source,
+            analysis_id        = body.analysis_id,
+            system_version     = body.system_version,
         )
         return {
             "success":       True,

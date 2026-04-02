@@ -65,6 +65,14 @@ class CheckoutSessionRequest(BaseModel):
     plan: str = 'pro'
     success_url: str                   # must contain ?checkout_success=1
     cancel_url:  str
+    # Paywall attribution — passed through to Stripe session metadata
+    ngw_session_id:  Optional[str] = None
+    trigger_type:    Optional[str] = None   # e.g. nailed_it | exit_intent | shoot_mode
+    surface:         Optional[str] = None   # e.g. blueprint_card | gear_recommendation
+    paywall_type:    Optional[str] = None   # pricing | shoot
+    source_screen:   Optional[str] = None   # ResultsScreenV2 | RecipeScreen
+    copy_variant:    Optional[str] = None
+    pricing_variant: Optional[str] = None
 
 
 class CheckoutSessionResponse(BaseModel):
@@ -123,7 +131,16 @@ async def create_checkout_session(
             success_url=body.success_url + '&session_id={CHECKOUT_SESSION_ID}',
             cancel_url=body.cancel_url,
             allow_promotion_codes=True,
-            metadata={'billing_period': body.billing_period},
+            metadata={k: v for k, v in {
+                'billing_period':  body.billing_period,
+                'ngw_session_id':  body.ngw_session_id,
+                'trigger_type':    body.trigger_type,
+                'surface':         body.surface,
+                'paywall_type':    body.paywall_type,
+                'source_screen':   body.source_screen,
+                'copy_variant':    body.copy_variant,
+                'pricing_variant': body.pricing_variant,
+            }.items() if v is not None},
         )
         # Pre-fill email so the Stripe checkout form is ready to go
         if user and user.get('email'):

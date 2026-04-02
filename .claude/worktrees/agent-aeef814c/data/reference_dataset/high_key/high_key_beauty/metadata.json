@@ -1,0 +1,51 @@
+{
+  "reference_id": "high_key_beauty",
+  "pattern_id": "high_key",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 2,
+  "key_direction_deg": null,
+  "shadow_pattern": "high_key",
+  "notes": "High key beauty \u2014 bright white background, even multi-source lighting, minimal shadows, clean beauty closeup",
+  "ground_truth": {
+    "expected_pattern": "high_key",
+    "acceptable_patterns": [
+      "high_key",
+      "flat_fashion",
+      "butterfly",
+      "clamshell",
+      "rembrandt",
+      "loop",
+      "unknown"
+    ],
+    "expected_light_count": 2,
+    "acceptable_light_count_range": [
+      1,
+      6
+    ],
+    "expected_key_direction": "unknown"
+  },
+  "benchmark_metadata": {
+    "category": "beauty",
+    "difficulty": "standard",
+    "known_challenges": [
+      "blown white background reduces edge contrast",
+      "multiple sources cancel shadows \u2014 pattern geometry ambiguous"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.176678+00:00"
+  },
+  "image_dimensions": {
+    "width": 474,
+    "height": 711
+  },
+  "ingested_at": "2026-03-17T22:27:21.176737+00:00",
+  "has_signals": true,
+  "has_vlm_reconstruction": true,
+  "has_debug_overlay": true,
+  "reprocessed_at": "2026-03-19T03:27:33.102826+00:00"
+}

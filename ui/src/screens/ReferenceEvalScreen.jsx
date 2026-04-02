@@ -611,14 +611,18 @@ const SCAN_PHASES = [
 ];
 const SCAN_INTERVAL = 3200;
 
-/** Image overlay — scan line + "ANALYZING" label.  Absolutely positioned over the image. */
+/** Image overlay — thick scan line + animated slashes at bottom.  Absolutely positioned over the image. */
 function ScanImageOverlay() {
   return (
     <div className="ref-analyze-overlay">
       <div className="ref-analyze-overlay__scan-line" />
       <div className="ref-analyze-overlay__scan-accent" />
       <div className="ref-analyze-overlay__fade" />
-      <span className="ref-analyze-overlay__label">ANALYZING</span>
+      <div className="ref-analyze-overlay__slashes" aria-hidden="true">
+        {Array.from({ length: 10 }, (_, i) => (
+          <span key={i} className="ref-analyze-overlay__slash" style={{ '--slash-i': i }} />
+        ))}
+      </div>
     </div>
   );
 }

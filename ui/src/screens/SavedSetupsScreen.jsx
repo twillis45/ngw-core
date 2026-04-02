@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { loadSetups, deleteSetup, onSetupsChanged } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
+import { fmtPattern } from '../lib/formatters';
 
 /**
  * SavedSetupsScreen — library of saved lighting setups.
@@ -217,7 +218,7 @@ export default function SavedSetupsScreen() {
               <div className="ss-card__body">
                 <span className="ss-card__name">{setup.name}</span>
                 <div className="ss-card__tags">
-                  {pattern && <span className="ss-card__tag">{pattern}</span>}
+                  {pattern && <span className="ss-card__tag">{fmtPattern(pattern)}</span>}
                   {lightCount && <span className="ss-card__tag">{lightCount}</span>}
                 </div>
                 <span className="ss-card__date">

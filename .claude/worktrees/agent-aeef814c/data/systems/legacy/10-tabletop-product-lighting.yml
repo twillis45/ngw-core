@@ -1,0 +1,25 @@
+id: tabletop_product_lighting
+name: Tabletop Product Lighting
+criteria:
+  brightness: 5000
+  color_accuracy: 96
+  setup_speed: 6
+  control: 10
+features:
+  dimmable: true
+  battery_capable: true
+  smart_ready: true
+taxonomy_refs:
+  gear_profile: led_panel
+  modifier_family: scrim
+  mood: product
+  environment: studio_small
+  skin_tone: medium
+notes:
+- Controlled tabletop reflections
+diagram_hints:
+  key:
+    angle_deg: 0
+    height: overhead
+    distance_ft: "1\u20133"
+    modifier: scrim

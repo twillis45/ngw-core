@@ -74,6 +74,27 @@ export function fmtDate(value) {
   });
 }
 
+/**
+ * Format a backend pattern identifier for display.
+ *
+ * Policy: backend always stores patterns with underscores ("shallow_loop").
+ *         frontend always displays with spaces and title case ("Shallow Loop").
+ *
+ * This is the single source of truth — import this wherever a pattern name
+ * is rendered to a user.  Never use inline .replace(/_/g, ' ') in components.
+ *
+ * @param {string|null|undefined} pattern  - Backend pattern id, e.g. "shallow_loop"
+ * @param {string} [fallback='—']          - Returned when pattern is falsy
+ * @returns {string} Display string, e.g. "Shallow Loop"
+ */
+export function fmtPattern(pattern, fallback = '—') {
+  if (!pattern) return fallback;
+  return pattern
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 /** Format a Unix timestamp or ISO string as "2:30 PM" (device timezone). */
 export function fmtTime(value) {
   if (!value) return '—';

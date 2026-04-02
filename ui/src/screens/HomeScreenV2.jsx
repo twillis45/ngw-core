@@ -101,10 +101,18 @@ function evaluateFile(file) {
 }
 
 /* ─── Stage area — shared between Free and Paid ──────────────────────── */
-function StageArea({ stage, photoStatus }) {
+function StageArea({ stage, photoStatus, triggerUpload }) {
+  const idle = !photoStatus && !stage;
   return (
     <div className="home-v2__stage">
-      <div className="home-v2__stage-photo">
+      <div
+        className={`home-v2__stage-photo${idle ? ' home-v2__stage-photo--clickable' : ''}`}
+        onClick={idle ? triggerUpload : undefined}
+        role={idle ? 'button' : undefined}
+        tabIndex={idle ? 0 : undefined}
+        onKeyDown={idle ? (e) => { if (e.key === 'Enter' || e.key === ' ') triggerUpload?.(); } : undefined}
+        aria-label={idle ? 'Analyze a photo' : undefined}
+      >
         <div className="home-v2__stage-photo-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3" y="7" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.5"/>
@@ -112,6 +120,9 @@ function StageArea({ stage, photoStatus }) {
             <path d="M8 7V6a1 1 0 011-1h6a1 1 0 011 1v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
+        {idle && (
+          <span className="home-v2__stage-photo-hint">tap to analyze a photo</span>
+        )}
       </div>
 
       {photoStatus ? (
@@ -165,7 +176,7 @@ function StageArea({ stage, photoStatus }) {
 
 /* ─── Free home ─────────────────────────────────────────────────────── */
 function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, user, photoStatus }) {
-  const stage = stageCardData(null, lastSetup);
+  const stage = stageCardData(null, null);
   return (
     <>
       <div className="home-v2__hero">
@@ -173,12 +184,12 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
         <p className="home-v2__sub">Professional lighting analysis from any photo.</p>
       </div>
 
-      <StageArea stage={stage} photoStatus={photoStatus} />
+      <StageArea stage={stage} photoStatus={photoStatus} triggerUpload={triggerUpload} />
 
       <div className="home-v2__cta-wrap">
         <button
           type="button"
-          className="ngw-primary-btn home-v2__primary-cta"
+          className="ngw-primary-btn home-v2__primary-cta ngw-btn--raised"
           onClick={triggerUpload}
         >
           Analyze a Photo
@@ -228,7 +239,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
   const continueTarget = hasResult ? 'results' : hasSaved ? 'saved_setups' : null;
   const continueName   = hasResult ? (result.bestMatch?.name || 'View result') : (lastSetup?.name || 'Last setup');
   const continueLabel  = hasResult ? 'Resume last analysis' : 'Continue last setup';
-  const stage = stageCardData(result, lastSetup);
+  const stage = stageCardData(result, null);
 
   return (
     <>
@@ -269,12 +280,12 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
         </div>
       )}
 
-      <StageArea stage={stage} photoStatus={photoStatus} />
+      <StageArea stage={stage} photoStatus={photoStatus} triggerUpload={triggerUpload} />
 
       <div className="home-v2__cta-wrap">
         <button
           type="button"
-          className="ngw-primary-btn home-v2__primary-cta"
+          className="ngw-primary-btn home-v2__primary-cta ngw-btn--raised"
           onClick={triggerUpload}
         >
           Analyze a Photo

@@ -17,6 +17,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from api.utils.upload_naming import canonical_upload_name
+
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from auth.security import get_current_user
 from auth.rate_limit import check_rate_limit
@@ -106,8 +108,8 @@ async def upload_reference(
     check_rate_limit("upload_reference", request, limit=20, window=60)
     content = await _validate_upload(file)
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    ext = Path(file.filename or "photo.jpg").suffix.lower() or ".jpg"
-    filename = f"ref_{uuid.uuid4().hex[:8]}{ext}"
+    original_filename = file.filename or "photo.jpg"
+    filename = canonical_upload_name(original_filename, origin="ref")
     dest = UPLOAD_DIR / filename
     with open(dest, "wb") as f:
         f.write(content)
@@ -261,7 +263,7 @@ async def upload_reference(
     except Exception:
         logger.exception("Reference image analysis failed")
 
-    return {"path": str(dest), "analysis": analysis}
+    return {"path": str(dest), "original_filename": original_filename, "analysis": analysis}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

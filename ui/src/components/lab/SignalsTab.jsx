@@ -105,7 +105,10 @@ function HygieneCard({ hygiene, loading }) {
 
   return (
     <div className="sig-hygiene-card">
-      <div className="sig-hygiene-card__title">Signal Hygiene</div>
+      <div className="sig-hygiene-card__title"
+        title="Signal quality breakdown. Learning Eligible = live signals with a known outcome that can train the model. Metrics Eligible = signals that count toward success-rate analytics. Seeded and Internal signals are always excluded from both.">
+        Signal Hygiene
+      </div>
       <div className="sig-hygiene-card__row">
         {items.map(item => (
           <div key={item.label}
@@ -205,8 +208,17 @@ function PatternTable({ patterns, loading }) {
   }
 
   const sorted = [...patterns].sort((a, b) => {
-    const av = a[sortKey] ?? -Infinity;
-    const bv = b[sortKey] ?? -Infinity;
+    const av = a[sortKey];
+    const bv = b[sortKey];
+    // Null/undefined always sorted to end regardless of direction
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    // String columns: lexicographic compare
+    if (typeof av === 'string' || typeof bv === 'string') {
+      const cmp = String(av).localeCompare(String(bv));
+      return sortDir === 'asc' ? cmp : -cmp;
+    }
     return sortDir === 'asc' ? av - bv : bv - av;
   });
 
@@ -287,20 +299,20 @@ function PatternTable({ patterns, loading }) {
                             Outcome Breakdown
                           </div>
                           <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
-                            <div style={{ width: `${successVal * 100}%`, background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                            <div title={`Nailed It: ${pct(successVal)}`} style={{ width: `${successVal * 100}%`, background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600, cursor: 'default' }}>
                               {successVal > 0.1 && pct(successVal)}
                             </div>
-                            <div style={{ width: `${closeVal * 100}%`, background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                            <div title={`Close: ${pct(closeVal)}`} style={{ width: `${closeVal * 100}%`, background: C.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600, cursor: 'default' }}>
                               {closeVal > 0.1 && pct(closeVal)}
                             </div>
-                            <div style={{ width: `${failVal * 100}%`, background: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600 }}>
+                            <div title={`Failed: ${pct(failVal)}`} style={{ width: `${failVal * 100}%`, background: C.red, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600, cursor: 'default' }}>
                               {failVal > 0.1 && pct(failVal)}
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: 12, fontSize: 10, color: 'var(--color-text-dim)' }}>
-                            <span><span style={{ color: '#22c55e' }}>■</span> Nailed It {pct(successVal)}</span>
-                            <span><span style={{ color: '#f59e0b' }}>■</span> Close {pct(closeVal)}</span>
-                            <span><span style={{ color: '#ef4444' }}>■</span> Failed {pct(failVal)}</span>
+                            <span><span style={{ color: C.green }}>■</span> Nailed It {pct(successVal)}</span>
+                            <span><span style={{ color: C.amber }}>■</span> Close {pct(closeVal)}</span>
+                            <span><span style={{ color: C.red }}>■</span> Failed {pct(failVal)}</span>
                           </div>
                         </div>
 
@@ -770,7 +782,15 @@ export default function SignalsTab() {
 
       {/* Content */}
       {view === 'patterns' && (
-        <PatternTable patterns={patterns} loading={patLoading} />
+        <div className="sig-section">
+          <div className="sig-section__sub">
+            Per-pattern breakdown for the selected window. Sort any column by clicking the header.
+            Benchmark Score = how the analysis engine scores this pattern in CI.
+            Conf. Error = how far off the model's stated confidence is from actual success (target &lt; ±0.04).
+            Click a pattern row to navigate to its Knowledge Base entry.
+          </div>
+          <PatternTable patterns={patterns} loading={patLoading} />
+        </div>
       )}
       {view === 'calibration' && (
         <div className="sig-section">
@@ -783,7 +803,14 @@ export default function SignalsTab() {
         </div>
       )}
       {view === 'recent' && (
-        <RecentFeed recent={recent} />
+        <div className="sig-section">
+          <div className="sig-section__sub">
+            Most recent signals ingested. Each row shows the session's outcome, pattern matched,
+            confidence score, and signal source. Seeded and internal signals are labeled and
+            excluded from analytics — only live signals count toward learning metrics.
+          </div>
+          <RecentFeed recent={recent} />
+        </div>
       )}
 
       {/* Operation Manual */}

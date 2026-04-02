@@ -1,0 +1,48 @@
+{
+  "reference_id": "low_key",
+  "pattern_id": "low_key",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 1,
+  "key_direction_deg": 45.0,
+  "shadow_pattern": "low_key",
+  "notes": "Low key editorial \u2014 warm single key from upper right, dark background, dramatic falloff, fashion pose",
+  "ground_truth": {
+    "expected_pattern": "low_key",
+    "acceptable_patterns": [
+      "low_key",
+      "rembrandt",
+      "loop",
+      "butterfly",
+      "short"
+    ],
+    "expected_light_count": 1,
+    "acceptable_light_count_range": [
+      1,
+      2
+    ],
+    "expected_key_direction": "upper_right"
+  },
+  "benchmark_metadata": {
+    "category": "editorial",
+    "difficulty": "standard",
+    "known_challenges": [
+      "warm color cast may affect CCT detection",
+      "low_key is a mood/ratio not a geometric pattern \u2014 classifiers may return the geometric pattern instead"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.200678+00:00"
+  },
+  "image_dimensions": {
+    "width": 473,
+    "height": 844
+  },
+  "ingested_at": "2026-03-17T22:27:21.200766+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

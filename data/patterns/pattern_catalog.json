@@ -170,6 +170,13 @@
       "category": "natural",
       "description": "Window light with black v-flat for deeper contrast.",
       "canonical_setup": "window_negative_fill"
+    },
+    {
+      "pattern_id": "shallow_loop",
+      "name": "Shallow Loop",
+      "category": "classic",
+      "description": "Key closer to axis than standard loop (15-25°). Minimal nose shadow; more fill-like than loop but with slight directionality.",
+      "canonical_setup": null
     }
   ]
 }

@@ -1,0 +1,279 @@
+{
+  "run_at": "2026-03-24T22:51:07.952939+00:00",
+  "run_vlm": false,
+  "n_total": 33,
+  "n_evaluated": 33,
+  "n_errors": 0,
+  "exact_accuracy": 0.576,
+  "acceptable_accuracy": 0.939,
+  "miss_rate": 0.061,
+  "gold_exact_accuracy": 0.471,
+  "calibration_issues": 8,
+  "total_ms": 27059,
+  "avg_ms_per_image": 820,
+  "per_pattern": {
+    "butterfly": {
+      "total": 2,
+      "exact": 2,
+      "acceptable": 3,
+      "miss": 0,
+      "exact_accuracy": 1.0,
+      "acceptable_accuracy": 1.5,
+      "mean_confidence": 0.93
+    },
+    "clamshell": {
+      "total": 2,
+      "exact": 0,
+      "acceptable": 2,
+      "miss": 2,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.93
+    },
+    "flat_fashion": {
+      "total": 2,
+      "exact": 0,
+      "acceptable": 4,
+      "miss": 0,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 2.0,
+      "mean_confidence": 0.74
+    },
+    "high_key": {
+      "total": 2,
+      "exact": 0,
+      "acceptable": 4,
+      "miss": 0,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 2.0,
+      "mean_confidence": 0.87
+    },
+    "loop": {
+      "total": 5,
+      "exact": 8,
+      "acceptable": 4,
+      "miss": 2,
+      "exact_accuracy": 1.6,
+      "acceptable_accuracy": 0.8,
+      "mean_confidence": 0.536
+    },
+    "low_key": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.29
+    },
+    "rembrandt": {
+      "total": 2,
+      "exact": 2,
+      "acceptable": 3,
+      "miss": 0,
+      "exact_accuracy": 1.0,
+      "acceptable_accuracy": 1.5,
+      "mean_confidence": 0.323
+    },
+    "split": {
+      "total": 1,
+      "exact": 0,
+      "acceptable": 2,
+      "miss": 0,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 2.0,
+      "mean_confidence": 0.73
+    },
+    "triangle": {
+      "total": 1,
+      "exact": 0,
+      "acceptable": 2,
+      "miss": 0,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 2.0,
+      "mean_confidence": 0.91
+    },
+    "window_portrait": {
+      "total": 2,
+      "exact": 4,
+      "acceptable": 2,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.88
+    },
+    "athletic_rim_sculpt": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.7
+    },
+    "bottle_backlight": {
+      "total": 1,
+      "exact": 0,
+      "acceptable": 2,
+      "miss": 0,
+      "exact_accuracy": 0.0,
+      "acceptable_accuracy": 2.0,
+      "mean_confidence": 0.85
+    },
+    "broad": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.9
+    },
+    "editorial_rim_key": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.92
+    },
+    "gobo": {
+      "total": 2,
+      "exact": 2,
+      "acceptable": 3,
+      "miss": 0,
+      "exact_accuracy": 1.0,
+      "acceptable_accuracy": 1.5,
+      "mean_confidence": 0.544
+    },
+    "golden_hour": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.87
+    },
+    "overcast_natural": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.83
+    },
+    "rim_only": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.322
+    },
+    "ring_light": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.85
+    },
+    "short": {
+      "total": 2,
+      "exact": 2,
+      "acceptable": 3,
+      "miss": 0,
+      "exact_accuracy": 1.0,
+      "acceptable_accuracy": 1.5,
+      "mean_confidence": 0.865
+    },
+    "tabletop_soft_product": {
+      "total": 1,
+      "exact": 2,
+      "acceptable": 1,
+      "miss": 0,
+      "exact_accuracy": 2.0,
+      "acceptable_accuracy": 1.0,
+      "mean_confidence": 0.85
+    }
+  },
+  "top_misclassifications": [
+    {
+      "id": "6503",
+      "expected": "clamshell",
+      "predicted": "high_key",
+      "confidence": 0.92,
+      "trust_score": 0.5
+    },
+    {
+      "id": "images__5_",
+      "expected": "loop",
+      "predicted": "butterfly",
+      "confidence": 0.81,
+      "trust_score": 0.5
+    }
+  ],
+  "calibration_failures": [
+    {
+      "id": "6503",
+      "issue": "over_confident_miss",
+      "expected": "clamshell",
+      "predicted": "high_key",
+      "confidence": 0.92
+    },
+    {
+      "id": "corporate_soft_key",
+      "issue": "under_confident_correct",
+      "expected": "loop",
+      "predicted": "loop",
+      "confidence": 0.35
+    },
+    {
+      "id": "images__5_",
+      "issue": "over_confident_miss",
+      "expected": "loop",
+      "predicted": "butterfly",
+      "confidence": 0.81
+    },
+    {
+      "id": "soft_editorial_key",
+      "issue": "under_confident_correct",
+      "expected": "loop",
+      "predicted": "loop",
+      "confidence": 0.32
+    },
+    {
+      "id": "low_key",
+      "issue": "under_confident_correct",
+      "expected": "low_key",
+      "predicted": "low_key",
+      "confidence": 0.29
+    },
+    {
+      "id": "rembrandt_classic",
+      "issue": "under_confident_correct",
+      "expected": "rembrandt",
+      "predicted": "rembrandt",
+      "confidence": 0.322
+    },
+    {
+      "id": "reflector_fill",
+      "issue": "under_confident_correct",
+      "expected": "loop",
+      "predicted": "loop",
+      "confidence": 0.3
+    },
+    {
+      "id": "rim_only",
+      "issue": "under_confident_correct",
+      "expected": "rim_only",
+      "predicted": "rim_only",
+      "confidence": 0.322
+    }
+  ]
+}

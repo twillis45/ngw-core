@@ -17,7 +17,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
-    port: 5173,
+    port: parseInt(process.env.PORT || '5173'),
     host: true,
     proxy: {
       '/recommend':    proxyTarget,

@@ -1,0 +1,81 @@
+name: Benchmark CI
+
+on:
+  pull_request:
+    paths:
+      - "engine/**"
+      - "api/routes/lab*.py"
+      - "api/routes/shoot_match.py"
+      - "data/benchmarks/**"
+      - "db/benchmark*.py"
+      - "auth/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "engine/**"
+      - "api/routes/lab*.py"
+      - "api/routes/shoot_match.py"
+      - "data/benchmarks/**"
+      - "db/benchmark*.py"
+      - "auth/**"
+
+jobs:
+  benchmark:
+    name: Run Benchmark Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      CI_BENCHMARK_SECRET: ${{ secrets.CI_BENCHMARK_SECRET }}
+      NGW_BASE_URL: ${{ secrets.NGW_BASE_URL || 'http://localhost:8000' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run benchmark via CI endpoint
+        id: benchmark
+        run: |
+          bash scripts/ci_benchmark.sh
+        env:
+          CI_COMMIT_SHA: ${{ github.sha }}
+          CI_PR_NUMBER:  ${{ github.event.pull_request.number }}
+          CI_BRANCH:     ${{ github.head_ref || github.ref_name }}
+          CI_REPO:       ${{ github.repository }}
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request' && always()
+        run: python3 scripts/post_pr_comment.py
+        env:
+          GITHUB_TOKEN:  ${{ secrets.GITHUB_TOKEN }}
+          CI_PR_NUMBER:  ${{ github.event.pull_request.number }}
+          CI_REPO:       ${{ github.repository }}
+          BENCHMARK_RESULT_FILE: /tmp/benchmark_result.json
+
+      - name: Promote baseline on merge to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark.outcome == 'success'
+        run: |
+          curl -s -X POST "${NGW_BASE_URL}/api/lab/benchmarks/update-baseline" \
+            -H "X-CI-Secret: ${CI_BENCHMARK_SECRET}" \
+            -H "Content-Type: application/json" \
+            -d "{\"notes\": \"Auto-promoted after merge to main — ${CI_COMMIT_SHA}\"}"
+        env:
+          CI_COMMIT_SHA: ${{ github.sha }}
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: /tmp/benchmark_result.json
+          retention-days: 30

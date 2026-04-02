@@ -1,0 +1,327 @@
+{
+  "generated_at": "20260401T014928Z",
+  "vlm_enabled": false,
+  "gold_cases": 33,
+  "evaluated": 33,
+  "errors": 0,
+  "note": "Diagnostic only. No thresholds modified. No pipeline behavior changed. No gold-set mutations. Specialty threshold is provisional and not for production use.",
+  "summary": {
+    "total_candidates": 15,
+    "primary_path_candidates": 8,
+    "specialty_path_candidates": 7,
+    "review_queue_size": 10,
+    "provisional_specialty_floor": 0.28,
+    "provisional_specialty_floor_note": "PROVISIONAL DIAGNOSTIC ONLY \u2014 not a production threshold. Inferred from 2 data points. Re-evaluate at >= 5 specialty-path gold cases.",
+    "primary_conf_threshold": 0.5,
+    "primary_trust_threshold": 0.8,
+    "specialty_trust_threshold": 0.7
+  },
+  "candidates": [
+    {
+      "image_path": "data/reference_dataset/butterfly/beauty_dish_clean/image.jpg",
+      "expected": "butterfly",
+      "predicted": "butterfly",
+      "confidence": 0.92,
+      "correctness": "exact",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/butterfly/butterfly/image.jpg",
+      "expected": "butterfly",
+      "predicted": "clamshell",
+      "confidence": 0.94,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/clamshell/clamshell_clean/image.jpg",
+      "expected": "clamshell",
+      "predicted": "butterfly",
+      "confidence": 0.94,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/flat_fashion/white_seamless_catalog/image.jpg",
+      "expected": "flat_fashion",
+      "predicted": "high_key",
+      "confidence": 0.65,
+      "correctness": "acceptable",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:lighting_inference",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/high_key/high_key/image.jpg",
+      "expected": "high_key",
+      "predicted": "clamshell",
+      "confidence": 0.83,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/high_key/high_key_beauty/image.jpg",
+      "expected": "high_key",
+      "predicted": "clamshell",
+      "confidence": 0.91,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/loop/loop_standard/image.jpg",
+      "expected": "loop",
+      "predicted": "loop",
+      "confidence": 0.9,
+      "correctness": "exact",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/low_key/low_key/image.jpg",
+      "expected": "low_key",
+      "predicted": "low_key",
+      "confidence": 0.29,
+      "correctness": "exact",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:lighting_inference",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/split/split_strong/image.jpg",
+      "expected": "split",
+      "predicted": "rembrandt",
+      "confidence": 0.73,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "cue_inference",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/triangle/hurley_triangle/image.jpg",
+      "expected": "triangle",
+      "predicted": "clamshell",
+      "confidence": 0.91,
+      "correctness": "acceptable",
+      "path_type": "primary",
+      "authoritative_pattern_source": "reference_read",
+      "candidate_reason": "correct_primary_threshold",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/window_portrait/window_light_side/image.jpg",
+      "expected": "window_portrait",
+      "predicted": "window_portrait",
+      "confidence": 0.88,
+      "correctness": "exact",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:reference_read",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/window_portrait/window_soft_side/image.jpg",
+      "expected": "window_portrait",
+      "predicted": "window_portrait",
+      "confidence": 0.88,
+      "correctness": "exact",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:reference_read",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.9
+    },
+    {
+      "image_path": "data/reference_dataset/flat_fashion/overfill_flat/image.jpg",
+      "expected": "flat_fashion",
+      "predicted": "high_key",
+      "confidence": 0.83,
+      "correctness": "acceptable",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:reference_read",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.7
+    },
+    {
+      "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
+      "expected": "overcast_natural",
+      "predicted": "overcast_natural",
+      "confidence": 0.83,
+      "correctness": "exact",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:reference_read",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.7
+    },
+    {
+      "image_path": "data/reference_dataset/rim_only/rim_only/image.jpg",
+      "expected": "rim_only",
+      "predicted": "rim_only",
+      "confidence": 0.322,
+      "correctness": "exact",
+      "path_type": "specialty",
+      "authoritative_pattern_source": "specialty:lighting_inference",
+      "candidate_reason": "correct_specialty_adjusted",
+      "trust_score": 0.7
+    }
+  ],
+  "review_queue": [
+    {
+      "image_path": "data/reference_dataset/clamshell/6503/image.jpg",
+      "expected_pattern": "clamshell",
+      "trust_score": 0.5,
+      "acceptable_patterns": [
+        "clamshell",
+        "high_key",
+        "butterfly"
+      ],
+      "is_strict": false,
+      "review_reason": "review_low_trust"
+    },
+    {
+      "image_path": "data/reference_dataset/loop/images__5_/image.jpg",
+      "expected_pattern": "loop",
+      "trust_score": 0.5,
+      "acceptable_patterns": [
+        "loop"
+      ],
+      "is_strict": true,
+      "review_reason": "review_low_trust_strict_ambiguous"
+    },
+    {
+      "image_path": "data/reference_dataset/athletic_rim_sculpt/athletic_rim_sculpt/image.jpg",
+      "expected_pattern": "athletic_rim_sculpt",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "athletic_rim_sculpt",
+        "rim_only",
+        "split",
+        "short",
+        "low_key",
+        "rembrandt",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/bottle_backlight/bottle_backlight/image.jpg",
+      "expected_pattern": "bottle_backlight",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "bottle_backlight",
+        "rim_only",
+        "low_key",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/editorial_rim_key/editorial_rim_key/image.jpg",
+      "expected_pattern": "editorial_rim_key",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "editorial_rim_key",
+        "rim_only",
+        "split",
+        "short",
+        "low_key",
+        "gobo",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/gobo/gobo/image.jpg",
+      "expected_pattern": "gobo",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "gobo",
+        "split",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/gobo/window_negative_fill/image.jpg",
+      "expected_pattern": "gobo",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "gobo",
+        "window_portrait",
+        "window_negative_fill",
+        "split",
+        "rembrandt",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/golden_hour/golden_hour/image.jpg",
+      "expected_pattern": "golden_hour",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "golden_hour",
+        "loop",
+        "rembrandt",
+        "short",
+        "gobo",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/ring_light/ring_light/image.jpg",
+      "expected_pattern": "ring_light",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "ring_light",
+        "butterfly",
+        "flat_fashion",
+        "clamshell",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    },
+    {
+      "image_path": "data/reference_dataset/tabletop_soft_product/tabletop_soft_product/image.jpg",
+      "expected_pattern": "tabletop_soft_product",
+      "trust_score": 0.7,
+      "acceptable_patterns": [
+        "tabletop_soft_product",
+        "flat_fashion",
+        "high_key",
+        "unknown",
+        "rembrandt"
+      ],
+      "is_strict": false,
+      "review_reason": "review_specialty_manual_check"
+    }
+  ]
+}

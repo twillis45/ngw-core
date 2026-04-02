@@ -4,6 +4,7 @@ import CardIcon from '../components/CardIcon';
 import WBSpectrum from '../components/WBSpectrum';
 import { wbTempClass } from '../utils/units';
 import { dragStartHaptic, dropHaptic, selectHaptic } from '../utils/haptics';
+import { fmtPattern } from '../lib/formatters';
 
 /**
  * Compute elevation angle (degrees above horizontal) from height and distance.
@@ -1343,7 +1344,7 @@ function handlePrint(canvasEl, spec, title, view) {
     </div>`;
   }).join('');
 
-  const patternLabel = spec?.pattern ? spec.pattern.charAt(0).toUpperCase() + spec.pattern.slice(1).replace(/[-_]/g, ' ') : '';
+  const patternLabel = fmtPattern(spec?.pattern, '');
   const heading = title || 'Lighting Diagram';
 
   const win = window.open('', '_blank', 'width=800,height=700');
@@ -1682,9 +1683,7 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
 
   if (inline) return inner;
 
-  const patternLabel = spec.pattern
-    ? spec.pattern.charAt(0).toUpperCase() + spec.pattern.slice(1).replace(/[-_]/g, ' ')
-    : null;
+  const patternLabel = spec.pattern ? fmtPattern(spec.pattern) : null;
 
   return (
     <div className="result-card">

@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { getExecDashboard, getExecTrends, getAllFlags, updateFlagRollout } from '../data/execApi';
-import { pct, usd, relTime } from '../lib/formatters';
+import { pct, usd, relTime, fmtPattern } from '../lib/formatters';
 import ExperimentsPanel from '../components/analytics/ExperimentsPanel';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ function FailureInsights({ insights }) {
               </span>
               <span className="ed-insight__mode">{ins.mode || ins.failure_mode || '—'}</span>
               {ins.pattern && (
-                <span className="ed-insight__pattern">{ins.pattern}</span>
+                <span className="ed-insight__pattern">{fmtPattern(ins.pattern)}</span>
               )}
             </div>
             <div className="ed-insight__meta">

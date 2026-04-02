@@ -865,7 +865,7 @@ def aggregate_pattern_signals(
 
 
 class CIGateRequest(BaseModel):
-    candidate_id:    str
+    candidate_id:    Optional[str] = None      # if omitted, runs a pattern-level readiness check
     benchmark_delta: Optional[float] = None   # override for testing
 
 
@@ -876,7 +876,15 @@ def run_ci_gate(
     user=Depends(get_dev_user),
 ):
     """
-    Run the full CI gate evaluation for a candidate.
+    Run the CI gate evaluation for a pattern.
+
+    If candidate_id is provided, loads that candidate from the DB and runs
+    the full DB-backed evaluation (evaluate_candidate_gate).
+
+    If candidate_id is omitted, synthesises a minimal candidate dict for the
+    pattern and runs the pure-function evaluation (evaluate_candidate_dict)
+    against live production signals — useful for the Knowledge Base readiness
+    check where no pending candidate exists yet.
 
     Checks:
       1. Signal sufficiency (weighted signals ≥ MIN_SIGNALS[risk_level])
@@ -885,10 +893,26 @@ def run_ci_gate(
 
     Returns disposition: auto_deploy | human_review | human_gate | blocked | insufficient
     """
-    from engine.learning.ci_gate import evaluate_candidate_gate, summarise_gate_result
-    from dataclasses import asdict
+    from engine.learning.ci_gate import (
+        evaluate_candidate_gate,
+        evaluate_candidate_dict,
+        summarise_gate_result,
+        _load_production_signals,
+    )
+    from engine.learning.knowledge import aggregate_signals_for_pattern
 
-    result = evaluate_candidate_gate(body.candidate_id)
+    if body.candidate_id:
+        result = evaluate_candidate_gate(body.candidate_id)
+    else:
+        # Pattern-level readiness check — no candidate required
+        raw_signals = _load_production_signals(pattern_id)
+        insight = aggregate_signals_for_pattern(pattern_id, raw_signals) if raw_signals else None
+        candidate = {"id": f"pattern_check_{pattern_id}", "pattern_id": pattern_id}
+        result = evaluate_candidate_dict(
+            candidate       = candidate,
+            insight         = insight,
+            benchmark_delta = body.benchmark_delta,
+        )
 
     return {
         "candidate_id":    result.candidate_id,

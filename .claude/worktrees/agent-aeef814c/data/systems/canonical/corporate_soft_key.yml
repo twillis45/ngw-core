@@ -1,0 +1,91 @@
+id: corporate_soft_key
+name: Corporate Soft Key + Fill
+version: 1
+status: canonical
+
+pattern:
+  primary: loop
+  secondary: null
+
+category: corporate
+difficulty: 2
+setup_time_minutes: 10
+
+environment:
+  required: studio
+  ceiling_height_min_ft: 8
+  background: gray_seamless
+  background_distance_ft: 6
+
+subject:
+  distance_from_camera_ft: 7
+  position: center
+
+camera:
+  height: eye_level
+  lens: 85-135mm
+  angle_to_subject_deg: 0
+
+capture_settings:
+  iso: 100
+  aperture: f/8
+  shutter: 1/160
+  white_balance: flash
+  notes:
+    - Lock exposure and WB for consistent results across batch headshot sessions
+    - f/8 provides enough DOF for slight subject movement between frames
+
+lights:
+  - role: key
+    modifier: softbox_rect
+    angle_deg: 35
+    height: slightly_above_eye
+    height_offset_in: 8
+    distance_ft: 5
+    power_ratio: 1.0
+    notes:
+      - Large softbox feathered across face
+      - 30-45 degree off-axis for clean loop shadow
+      - Aim at nose tip not forehead
+
+  - role: fill
+    modifier: umbrella_white
+    angle_deg: -20
+    height: eye_level
+    height_offset_in: 0
+    distance_ft: 6
+    power_ratio: 0.25
+    notes:
+      - Low-power fill to lift shadows 1-2 stops
+      - Alternatively use reflector board
+      - Just enough to see detail in shadow side
+
+shadow_signature:
+  expected_pattern: loop
+  nose_shadow: small_loop
+  cheek_shadow: moderate
+  contrast: medium
+  softness: 0.6
+
+failure_modes:
+  - "Key too close to axis: flat, passport-photo look"
+  - "Fill too bright: no dimension, looks amateur"
+  - "Gray background lit unevenly: distracting gradient"
+
+substitutions:
+  - if_missing: softbox_rect
+    use: umbrella_white
+    tradeoff: "More spill, less control; pull further back"
+  - if_missing: umbrella_white
+    use: reflector
+    tradeoff: "Must be positioned closer; less even"
+
+use_cases:
+  - corporate_headshot
+  - linkedin
+  - team_page
+  - business_portrait
+
+example_photographers:
+  - Peter Hurley
+  - Zack Arias

@@ -1,0 +1,116 @@
+{
+  "_description": "Confusion set: boundary cases where two patterns are frequently confused. Used for edge-case evaluation and threshold tuning. Each entry specifies both candidate patterns and the expected winner.",
+  "_version": "1.0",
+  "pairs": [
+    {
+      "id": "loop_vs_rembrandt",
+      "pattern_a": "loop",
+      "pattern_b": "rembrandt",
+      "boundary": "nose shadow extent — loop shadow is small and loops down, rembrandt forms full triangle on shadow cheek",
+      "discriminating_signals": ["nose_shadow_length", "cheek_triangle_present", "shadow_boundary_sharpness"],
+      "known_failure_mode": "short nose or certain facial structures prevent triangle formation even with rembrandt positioning",
+      "expected_confusion_rate": 0.25,
+      "reference_ids": ["loop_standard", "rembrandt_classic", "corporate_soft_key"],
+      "confidence_threshold": 0.65
+    },
+    {
+      "id": "butterfly_vs_clamshell",
+      "pattern_a": "butterfly",
+      "pattern_b": "clamshell",
+      "boundary": "fill source — butterfly uses ambient/reflector fill, clamshell has dedicated fill below chin",
+      "discriminating_signals": ["underfill_ev", "fill_source_type", "chin_shadow_fill"],
+      "known_failure_mode": "strong reflector fill can mimic clamshell; very weak fill clamshell looks like butterfly",
+      "expected_confusion_rate": 0.30,
+      "reference_ids": ["butterfly", "beauty_dish_clean", "clamshell_clean"],
+      "confidence_threshold": 0.60
+    },
+    {
+      "id": "loop_vs_broad",
+      "pattern_a": "loop",
+      "pattern_b": "broad",
+      "boundary": "camera-side illumination — broad key illuminates same side as camera, loop is off-axis",
+      "discriminating_signals": ["key_camera_angle", "highlight_side_relative_to_pose", "wrap_ratio"],
+      "known_failure_mode": "subject facing camera head-on makes broad/loop indistinguishable",
+      "expected_confusion_rate": 0.20,
+      "reference_ids": ["loop_standard", "broad"],
+      "confidence_threshold": 0.60
+    },
+    {
+      "id": "short_vs_split",
+      "pattern_a": "short",
+      "pattern_b": "split",
+      "boundary": "key angle — split at 90 degrees illuminating exactly half, short is beyond axis but not full 90",
+      "discriminating_signals": ["shadow_ratio", "lit_face_fraction", "key_position_deg"],
+      "known_failure_mode": "tight short that approaches 90 degrees is functionally a split",
+      "expected_confusion_rate": 0.20,
+      "reference_ids": ["short", "split_strong"],
+      "confidence_threshold": 0.65
+    },
+    {
+      "id": "rim_vs_editorial_rim",
+      "pattern_a": "rim_only",
+      "pattern_b": "editorial_rim_key",
+      "boundary": "key fill presence — rim_only has completely dark face, editorial_rim_key has subtle key fill",
+      "discriminating_signals": ["face_exposure_ev", "shadow_fill_ratio", "key_contribution"],
+      "known_failure_mode": "low ambient in editorial can be classified as rim_only",
+      "expected_confusion_rate": 0.35,
+      "reference_ids": ["rim_only", "editorial_rim_key"],
+      "confidence_threshold": 0.55
+    },
+    {
+      "id": "flat_vs_ring",
+      "pattern_a": "flat_fashion",
+      "pattern_b": "ring_light",
+      "boundary": "catchlight shape — ring_light has circular annular catchlight, flat_fashion has rectangular or absent",
+      "discriminating_signals": ["catchlight_shape", "catchlight_count", "on_axis_modifier"],
+      "known_failure_mode": "ring light at distance or with diffusion loses circular shape",
+      "expected_confusion_rate": 0.25,
+      "reference_ids": ["ring_light", "white_seamless_catalog"],
+      "confidence_threshold": 0.70
+    },
+    {
+      "id": "window_vs_overcast",
+      "pattern_a": "window_portrait",
+      "pattern_b": "overcast_natural",
+      "boundary": "directionality — window portrait has falloff gradient, overcast is even omnidirectional",
+      "discriminating_signals": ["light_gradient_direction", "shadow_presence", "falloff_ev"],
+      "known_failure_mode": "large north-facing window at overcast day is nearly omnidirectional",
+      "expected_confusion_rate": 0.20,
+      "reference_ids": ["window_light_side", "overcast_natural"],
+      "confidence_threshold": 0.65
+    },
+    {
+      "id": "high_key_vs_flat",
+      "pattern_a": "high_key",
+      "pattern_b": "flat_fashion",
+      "boundary": "background brightness — high_key has bright white overexposed background, flat_fashion is background-neutral",
+      "discriminating_signals": ["background_exposure", "background_luminance", "background_ratio"],
+      "known_failure_mode": "catalog shots on white background without background lights can be either",
+      "expected_confusion_rate": 0.30,
+      "reference_ids": ["high_key", "white_seamless_catalog"],
+      "confidence_threshold": 0.60
+    },
+    {
+      "id": "gobo_vs_split",
+      "pattern_a": "gobo",
+      "pattern_b": "split",
+      "boundary": "shadow cause — gobo shadow from physical shaping tool, split from key position",
+      "discriminating_signals": ["shadow_edge_texture", "shadow_shape_regularity", "background_pattern"],
+      "known_failure_mode": "gobo with clean straight edge looks like split lighting on face",
+      "expected_confusion_rate": 0.35,
+      "reference_ids": ["gobo", "split_strong"],
+      "confidence_threshold": 0.55
+    },
+    {
+      "id": "rembrandt_vs_short",
+      "pattern_a": "rembrandt",
+      "pattern_b": "short",
+      "boundary": "illuminated side — rembrandt key on shadow side creating triangle, short key on far side without triangle",
+      "discriminating_signals": ["cheek_triangle_present", "lit_face_side_vs_pose", "nose_shadow"],
+      "known_failure_mode": "subject facing wrong direction for pose context collapses the distinction",
+      "expected_confusion_rate": 0.25,
+      "reference_ids": ["rembrandt_classic", "short"],
+      "confidence_threshold": 0.65
+    }
+  ]
+}

@@ -1,0 +1,1872 @@
+[
+  {
+    "id": "beauty_dish_clean",
+    "image_path": "data/reference_dataset/butterfly/beauty_dish_clean/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "butterfly",
+      "predicted_pattern": "butterfly",
+      "confidence": 0.92,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "butterfly",
+      "confidence": 0.92,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 2881
+    },
+    "entry": {
+      "id": "beauty_dish_clean",
+      "image_path": "data/reference_dataset/butterfly/beauty_dish_clean/image.jpg",
+      "expected_pattern": "butterfly",
+      "acceptable_patterns": [
+        "butterfly",
+        "clamshell",
+        "flat_fashion",
+        "high_key",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        6
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "very soft shadows may read as flat rather than butterfly",
+        "beauty dish produces butterfly but with softer transitions than hard sources"
+      ],
+      "notes": "Beauty dish clean \u2014 centered overhead beauty dish, soft even fill, minimal shadows, classic beauty portrait"
+    }
+  },
+  {
+    "id": "butterfly",
+    "image_path": "data/reference_dataset/butterfly/butterfly/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "butterfly",
+      "predicted_pattern": "clamshell",
+      "confidence": 0.94,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "clamshell",
+      "confidence": 0.94,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 536
+    },
+    "entry": {
+      "id": "butterfly",
+      "image_path": "data/reference_dataset/butterfly/butterfly/image.jpg",
+      "expected_pattern": "butterfly",
+      "acceptable_patterns": [
+        "butterfly",
+        "clamshell",
+        "flat_fashion",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "tight crop limits full shadow analysis",
+        "may read as clamshell if fill detected below"
+      ],
+      "notes": "Butterfly/Paramount lighting \u2014 key centered directly above, symmetrical shadow under nose, beauty close-up"
+    }
+  },
+  {
+    "id": "6503",
+    "image_path": "data/reference_dataset/clamshell/6503/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "miss",
+      "exact_match": false,
+      "acceptable_match": false,
+      "expected_pattern": "clamshell",
+      "predicted_pattern": "high_key",
+      "confidence": 0.92,
+      "calibration_issue": "over_confident_miss",
+      "dataset_tier": "gold",
+      "trust_score": 0.5,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "high_key",
+      "confidence": 0.92,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 1428
+    },
+    "entry": {
+      "id": "6503",
+      "image_path": "data/reference_dataset/clamshell/6503/image.jpg",
+      "expected_pattern": "clamshell",
+      "acceptable_patterns": [
+        "clamshell"
+      ],
+      "expected_light_count": null,
+      "acceptable_light_count_range": null,
+      "expected_key_direction": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.5,
+      "difficulty": "standard",
+      "known_challenges": [],
+      "notes": ""
+    }
+  },
+  {
+    "id": "clamshell_clean",
+    "image_path": "data/reference_dataset/clamshell/clamshell_clean/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "clamshell",
+      "predicted_pattern": "butterfly",
+      "confidence": 0.94,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "butterfly",
+      "confidence": 0.94,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 440
+    },
+    "entry": {
+      "id": "clamshell_clean",
+      "image_path": "data/reference_dataset/clamshell/clamshell_clean/image.jpg",
+      "expected_pattern": "clamshell",
+      "acceptable_patterns": [
+        "clamshell",
+        "butterfly"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        2,
+        3
+      ],
+      "expected_key_direction": "top_center",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "fill below may register as floor bounce",
+        "low-res image (171x256) limits catchlight position detection"
+      ],
+      "notes": "Clean clamshell beauty portrait \u2014 beauty dish above, fill below, both visible in catchlights"
+    }
+  },
+  {
+    "id": "white_seamless_catalog",
+    "image_path": "data/reference_dataset/flat_fashion/white_seamless_catalog/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "flat_fashion",
+      "predicted_pattern": "high_key",
+      "confidence": 0.65,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "high_key",
+      "confidence": 0.65,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 636
+    },
+    "entry": {
+      "id": "white_seamless_catalog",
+      "image_path": "data/reference_dataset/flat_fashion/white_seamless_catalog/image.jpg",
+      "expected_pattern": "flat_fashion",
+      "acceptable_patterns": [
+        "flat_fashion",
+        "high_key",
+        "butterfly",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "full body shot \u2014 face is small relative to frame",
+        "white seamless creates blown edges",
+        "catalog lighting is intentionally pattern-less \u2014 minimal shadows"
+      ],
+      "notes": "White seamless catalog \u2014 full body on white seamless, even studio lighting, e-commerce/catalog style"
+    }
+  },
+  {
+    "id": "high_key",
+    "image_path": "data/reference_dataset/high_key/high_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "miss",
+      "exact_match": false,
+      "acceptable_match": false,
+      "expected_pattern": "high_key",
+      "predicted_pattern": "triangle",
+      "confidence": 0.83,
+      "calibration_issue": "over_confident_miss",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "triangle",
+      "confidence": 0.83,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 566
+    },
+    "entry": {
+      "id": "high_key",
+      "image_path": "data/reference_dataset/high_key/high_key/image.jpg",
+      "expected_pattern": "high_key",
+      "acceptable_patterns": [
+        "high_key",
+        "flat_fashion",
+        "butterfly",
+        "clamshell",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "blown highlights reduce shadow signal",
+        "multiple sources cancel each other \u2014 light count hard to determine"
+      ],
+      "notes": "High key beauty \u2014 bright white background, minimal shadows, very even multi-source fill"
+    }
+  },
+  {
+    "id": "high_key_beauty",
+    "image_path": "data/reference_dataset/high_key/high_key_beauty/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "high_key",
+      "predicted_pattern": "clamshell",
+      "confidence": 0.91,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "clamshell",
+      "confidence": 0.91,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 588
+    },
+    "entry": {
+      "id": "high_key_beauty",
+      "image_path": "data/reference_dataset/high_key/high_key_beauty/image.jpg",
+      "expected_pattern": "high_key",
+      "acceptable_patterns": [
+        "high_key",
+        "flat_fashion",
+        "butterfly",
+        "clamshell",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        6
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "blown white background reduces edge contrast",
+        "multiple sources cancel shadows \u2014 pattern geometry ambiguous"
+      ],
+      "notes": "High key beauty \u2014 bright white background, even multi-source lighting, minimal shadows, clean beauty closeup"
+    }
+  },
+  {
+    "id": "corporate_soft_key",
+    "image_path": "data/reference_dataset/loop/corporate_soft_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "loop",
+      "predicted_pattern": "loop",
+      "confidence": 0.35,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "loop",
+      "confidence": 0.35,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 5037
+    },
+    "entry": {
+      "id": "corporate_soft_key",
+      "image_path": "data/reference_dataset/loop/corporate_soft_key/image.jpg",
+      "expected_pattern": "loop",
+      "acceptable_patterns": [
+        "loop",
+        "rembrandt",
+        "flat_fashion",
+        "butterfly",
+        "clamshell"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        3
+      ],
+      "expected_key_direction": "upper_left",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "high fill ratio reduces shadow contrast \u2014 may read as flat",
+        "corporate lighting prioritizes flattering over dramatic \u2014 pattern borders are soft"
+      ],
+      "notes": "Corporate soft key + fill \u2014 soft key from upper left with fill, professional headshot, gray background"
+    }
+  },
+  {
+    "id": "images__5_",
+    "image_path": "data/reference_dataset/loop/images__5_/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "miss",
+      "exact_match": false,
+      "acceptable_match": false,
+      "expected_pattern": "loop",
+      "predicted_pattern": "butterfly",
+      "confidence": 0.81,
+      "calibration_issue": "over_confident_miss",
+      "dataset_tier": "gold",
+      "trust_score": 0.5,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "butterfly",
+      "confidence": 0.81,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 418
+    },
+    "entry": {
+      "id": "images__5_",
+      "image_path": "data/reference_dataset/loop/images__5_/image.jpg",
+      "expected_pattern": "loop",
+      "acceptable_patterns": [
+        "loop"
+      ],
+      "expected_light_count": null,
+      "acceptable_light_count_range": null,
+      "expected_key_direction": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.5,
+      "difficulty": "standard",
+      "known_challenges": [],
+      "notes": ""
+    }
+  },
+  {
+    "id": "loop_standard",
+    "image_path": "data/reference_dataset/loop/loop_standard/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "loop",
+      "predicted_pattern": "loop",
+      "confidence": 0.9,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "loop",
+      "confidence": 0.9,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 1399
+    },
+    "entry": {
+      "id": "loop_standard",
+      "image_path": "data/reference_dataset/loop/loop_standard/image.jpg",
+      "expected_pattern": "loop",
+      "acceptable_patterns": [
+        "loop",
+        "rembrandt"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_right",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "loop vs rembrandt boundary depends on nose shadow extent"
+      ],
+      "notes": "Standard loop lighting \u2014 key slightly above and 30 degrees off-axis, nose shadow loops down"
+    }
+  },
+  {
+    "id": "soft_editorial_key",
+    "image_path": "data/reference_dataset/loop/soft_editorial_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "loop",
+      "predicted_pattern": "loop",
+      "confidence": 0.32,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "loop",
+      "confidence": 0.32,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 615
+    },
+    "entry": {
+      "id": "soft_editorial_key",
+      "image_path": "data/reference_dataset/loop/soft_editorial_key/image.jpg",
+      "expected_pattern": "loop",
+      "acceptable_patterns": [
+        "loop",
+        "rembrandt",
+        "window_portrait",
+        "golden_hour",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "left",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "natural light editorial blurs studio pattern categories",
+        "warm tones may suggest golden hour",
+        "environmental bounce fill complicates source count"
+      ],
+      "notes": "Soft editorial key \u2014 warm natural soft key from left, open shade fill, jewelry editorial, architectural setting"
+    }
+  },
+  {
+    "id": "low_key",
+    "image_path": "data/reference_dataset/low_key/low_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "low_key",
+      "predicted_pattern": "low_key",
+      "confidence": 0.29,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "low_key",
+      "confidence": 0.29,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 541
+    },
+    "entry": {
+      "id": "low_key",
+      "image_path": "data/reference_dataset/low_key/low_key/image.jpg",
+      "expected_pattern": "low_key",
+      "acceptable_patterns": [
+        "low_key",
+        "rembrandt",
+        "loop",
+        "butterfly",
+        "short"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_right",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "warm color cast may affect CCT detection",
+        "low_key is a mood/ratio not a geometric pattern \u2014 classifiers may return the geometric pattern instead"
+      ],
+      "notes": "Low key editorial \u2014 warm single key from upper right, dark background, dramatic falloff, fashion pose"
+    }
+  },
+  {
+    "id": "rembrandt_classic",
+    "image_path": "data/reference_dataset/rembrandt/rembrandt_classic/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "rembrandt",
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.322,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.322,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 653
+    },
+    "entry": {
+      "id": "rembrandt_classic",
+      "image_path": "data/reference_dataset/rembrandt/rembrandt_classic/image.jpg",
+      "expected_pattern": "rembrandt",
+      "acceptable_patterns": [
+        "rembrandt",
+        "loop",
+        "short"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_left",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "loop vs rembrandt boundary is subtle"
+      ],
+      "notes": "Classic Rembrandt portrait \u2014 single key at 45 degrees, triangle on shadow-side cheek"
+    }
+  },
+  {
+    "id": "split_strong",
+    "image_path": "data/reference_dataset/split/split_strong/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "split",
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.73,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.73,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 430
+    },
+    "entry": {
+      "id": "split_strong",
+      "image_path": "data/reference_dataset/split/split_strong/image.jpg",
+      "expected_pattern": "split",
+      "acceptable_patterns": [
+        "split",
+        "rembrandt",
+        "loop"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "right",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "hard shadow edge may confuse softness estimator"
+      ],
+      "notes": "Strong split lighting \u2014 key at 90 degrees, half face in shadow, hard edge"
+    }
+  },
+  {
+    "id": "hurley_triangle",
+    "image_path": "data/reference_dataset/triangle/hurley_triangle/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "triangle",
+      "predicted_pattern": "clamshell",
+      "confidence": 0.91,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "clamshell",
+      "confidence": 0.91,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 618
+    },
+    "entry": {
+      "id": "hurley_triangle",
+      "image_path": "data/reference_dataset/triangle/hurley_triangle/image.jpg",
+      "expected_pattern": "triangle",
+      "acceptable_patterns": [
+        "triangle",
+        "clamshell",
+        "rembrandt",
+        "butterfly"
+      ],
+      "expected_light_count": 3,
+      "acceptable_light_count_range": [
+        3,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "contrast gate may reject triangle if contrast is higher than expected"
+      ],
+      "notes": "Hurley triangle setup \u2014 3 lights, two upper and one lower, even wrap"
+    }
+  },
+  {
+    "id": "window_light_side",
+    "image_path": "data/reference_dataset/window_portrait/window_light_side/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "window_portrait",
+      "predicted_pattern": "window_portrait",
+      "confidence": 0.88,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "window_portrait",
+      "confidence": 0.88,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 701
+    },
+    "entry": {
+      "id": "window_light_side",
+      "image_path": "data/reference_dataset/window_portrait/window_light_side/image.jpg",
+      "expected_pattern": "window_portrait",
+      "acceptable_patterns": [
+        "window_portrait",
+        "loop",
+        "rembrandt"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "left",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "window light may be classified as studio if catchlights are absent"
+      ],
+      "notes": "Natural window light from the side \u2014 soft falloff, single large source"
+    }
+  },
+  {
+    "id": "window_soft_side",
+    "image_path": "data/reference_dataset/window_portrait/window_soft_side/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "window_portrait",
+      "predicted_pattern": "window_portrait",
+      "confidence": 0.88,
+      "calibration_issue": null,
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "window_portrait",
+      "confidence": 0.88,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 607
+    },
+    "entry": {
+      "id": "window_soft_side",
+      "image_path": "data/reference_dataset/window_portrait/window_soft_side/image.jpg",
+      "expected_pattern": "window_portrait",
+      "acceptable_patterns": [
+        "window_portrait",
+        "loop",
+        "rembrandt",
+        "window_negative_fill"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_right",
+      "dataset_tier": "gold",
+      "trust_score": 0.9,
+      "difficulty": "standard",
+      "known_challenges": [
+        "B&W removes color temperature cues for environment detection",
+        "window visible in frame \u2014 may help or confuse environment classification",
+        "soft falloff similar to large studio softbox"
+      ],
+      "notes": "Window soft side light \u2014 soft diffused window light from left, B&W portrait, intimate mood, brick/window setting"
+    }
+  },
+  {
+    "id": "athletic_rim_sculpt",
+    "image_path": "data/reference_dataset/athletic_rim_sculpt/athletic_rim_sculpt/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "athletic_rim_sculpt",
+      "predicted_pattern": "athletic_rim_sculpt",
+      "confidence": 0.7,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "athletic_rim_sculpt",
+      "confidence": 0.7,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 650
+    },
+    "entry": {
+      "id": "athletic_rim_sculpt",
+      "image_path": "data/reference_dataset/athletic_rim_sculpt/athletic_rim_sculpt/image.jpg",
+      "expected_pattern": "athletic_rim_sculpt",
+      "acceptable_patterns": [
+        "athletic_rim_sculpt",
+        "rim_only",
+        "split",
+        "short",
+        "low_key",
+        "rembrandt",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        3
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "sunglasses occlude eyes \u2014 no catchlight detection possible",
+        "sweat specular highlights may confuse surface analysis",
+        "rim-dominant lighting is rare in pattern training data",
+        "face partially obscured by glasses"
+      ],
+      "notes": "Athletic rim sculpt \u2014 hard edge/rim light from behind, sweat highlights, dark key side, sports editorial"
+    }
+  },
+  {
+    "id": "bottle_backlight",
+    "image_path": "data/reference_dataset/bottle_backlight/bottle_backlight/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "bottle_backlight",
+      "predicted_pattern": "low_key",
+      "confidence": 0.85,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "low_key",
+      "confidence": 0.85,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 488
+    },
+    "entry": {
+      "id": "bottle_backlight",
+      "image_path": "data/reference_dataset/bottle_backlight/bottle_backlight/image.jpg",
+      "expected_pattern": "bottle_backlight",
+      "acceptable_patterns": [
+        "bottle_backlight",
+        "rim_only",
+        "low_key",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "no face \u2014 face mesh and catchlight analysis unavailable",
+        "product photography pattern not in core portrait classifiers",
+        "translucent glass creates complex light transmission",
+        "reflective surface on base adds specular complexity"
+      ],
+      "notes": "Bottle backlight product shot \u2014 perfume bottle backlit on black, light transmits through glass, reflective surface"
+    }
+  },
+  {
+    "id": "broad",
+    "image_path": "data/reference_dataset/broad/broad/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "broad",
+      "predicted_pattern": "broad",
+      "confidence": 0.9,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "broad",
+      "confidence": 0.9,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 459
+    },
+    "entry": {
+      "id": "broad",
+      "image_path": "data/reference_dataset/broad/broad/image.jpg",
+      "expected_pattern": "broad",
+      "acceptable_patterns": [
+        "broad",
+        "loop",
+        "rembrandt",
+        "short"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "right",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "broad vs short depends on face turn vs light direction \u2014 requires pose analysis",
+        "B&W removes color temperature cues"
+      ],
+      "notes": "Broad lighting \u2014 key on the wide side of face (side turned toward camera), dramatic B&W portrait"
+    }
+  },
+  {
+    "id": "editorial_rim_key",
+    "image_path": "data/reference_dataset/editorial_rim_key/editorial_rim_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "editorial_rim_key",
+      "predicted_pattern": "editorial_rim_key",
+      "confidence": 0.92,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "editorial_rim_key",
+      "confidence": 0.92,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 657
+    },
+    "entry": {
+      "id": "editorial_rim_key",
+      "image_path": "data/reference_dataset/editorial_rim_key/editorial_rim_key/image.jpg",
+      "expected_pattern": "editorial_rim_key",
+      "acceptable_patterns": [
+        "editorial_rim_key",
+        "rim_only",
+        "split",
+        "short",
+        "low_key",
+        "gobo",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        3
+      ],
+      "expected_key_direction": "right",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "face obscured by cap \u2014 no face mesh possible",
+        "rim-dominant with near-silhouette body",
+        "full-body framing reduces face detail",
+        "B&W removes color temperature cues"
+      ],
+      "notes": "Editorial rim + key \u2014 strong rim/backlight from behind-right creating silhouette edge, minimal front fill, fashion pose"
+    }
+  },
+  {
+    "id": "overfill_flat",
+    "image_path": "data/reference_dataset/flat_fashion/overfill_flat/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "flat_fashion",
+      "predicted_pattern": "high_key",
+      "confidence": 0.83,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "high_key",
+      "confidence": 0.83,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 563
+    },
+    "entry": {
+      "id": "overfill_flat",
+      "image_path": "data/reference_dataset/flat_fashion/overfill_flat/image.jpg",
+      "expected_pattern": "flat_fashion",
+      "acceptable_patterns": [
+        "flat_fashion",
+        "high_key",
+        "clamshell",
+        "unknown"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "flat lighting has minimal shadows, pattern classifiers may return unknown",
+        "full-body shot \u2014 face may be too small for face mesh"
+      ],
+      "notes": "Over-filled flat lighting \u2014 multiple sources cancel shadows, very low contrast"
+    }
+  },
+  {
+    "id": "gobo",
+    "image_path": "data/reference_dataset/gobo/gobo/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "gobo",
+      "predicted_pattern": "gobo",
+      "confidence": 0.85,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "gobo",
+      "confidence": 0.85,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 492
+    },
+    "entry": {
+      "id": "gobo",
+      "image_path": "data/reference_dataset/gobo/gobo/image.jpg",
+      "expected_pattern": "gobo",
+      "acceptable_patterns": [
+        "gobo",
+        "split",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "gobo pattern is rare in training data",
+        "extreme shadow ratio may confuse pattern classifiers",
+        "face mesh may fail with partial face visibility"
+      ],
+      "notes": "Gobo/flag lighting \u2014 cross-shaped light strip across face, deep black surround, dramatic editorial"
+    }
+  },
+  {
+    "id": "window_negative_fill",
+    "image_path": "data/reference_dataset/gobo/window_negative_fill/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "gobo",
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.238,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "rembrandt",
+      "confidence": 0.238,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 504
+    },
+    "entry": {
+      "id": "window_negative_fill",
+      "image_path": "data/reference_dataset/gobo/window_negative_fill/image.jpg",
+      "expected_pattern": "gobo",
+      "acceptable_patterns": [
+        "gobo",
+        "window_portrait",
+        "window_negative_fill",
+        "split",
+        "rembrandt",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "right",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "blind shadows create gobo-like stripe pattern on face",
+        "window_negative_fill is a setup variant but visual reads as gobo",
+        "striped shadows may confuse face mesh landmark detection"
+      ],
+      "notes": "Window with negative fill \u2014 window blinds casting striped shadow pattern across face, warm side light, high contrast"
+    }
+  },
+  {
+    "id": "golden_hour",
+    "image_path": "data/reference_dataset/golden_hour/golden_hour/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "golden_hour",
+      "predicted_pattern": "golden_hour",
+      "confidence": 0.87,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "golden_hour",
+      "confidence": 0.87,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 558
+    },
+    "entry": {
+      "id": "golden_hour",
+      "image_path": "data/reference_dataset/golden_hour/golden_hour/image.jpg",
+      "expected_pattern": "golden_hour",
+      "acceptable_patterns": [
+        "golden_hour",
+        "loop",
+        "rembrandt",
+        "short",
+        "gobo",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "golden_hour is an environment not a geometric pattern \u2014 classifiers may return the shadow geometry instead",
+        "warm color cast saturates skin tones",
+        "eyes closed limits catchlight analysis"
+      ],
+      "notes": "Golden hour portrait \u2014 warm low-angle natural sunlight, strong orange/gold color cast, outdoor"
+    }
+  },
+  {
+    "id": "reflector_fill",
+    "image_path": "data/reference_dataset/loop/reflector_fill/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "loop",
+      "predicted_pattern": "loop",
+      "confidence": 0.3,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "loop",
+      "confidence": 0.3,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 1002
+    },
+    "entry": {
+      "id": "reflector_fill",
+      "image_path": "data/reference_dataset/loop/reflector_fill/image.jpg",
+      "expected_pattern": "loop",
+      "acceptable_patterns": [
+        "loop",
+        "rembrandt",
+        "clamshell"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_left",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "reflector may produce weak lower catchlight, triggering false clamshell"
+      ],
+      "notes": "Loop key with reflector fill from below \u2014 1 active light + passive reflector"
+    }
+  },
+  {
+    "id": "overcast_natural",
+    "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "overcast_natural",
+      "predicted_pattern": "overcast_natural",
+      "confidence": 0.83,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "overcast_natural",
+      "confidence": 0.83,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 497
+    },
+    "entry": {
+      "id": "overcast_natural",
+      "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
+      "expected_pattern": "overcast_natural",
+      "acceptable_patterns": [
+        "overcast_natural",
+        "flat_fashion",
+        "high_key",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "overcast is an environment not a geometric pattern",
+        "very soft diffused light produces near-zero shadow signal",
+        "outdoor scene with complex background may confuse analysis"
+      ],
+      "notes": "Overcast natural \u2014 outdoor portrait under overcast sky, soft diffused light, no harsh shadows, urban setting"
+    }
+  },
+  {
+    "id": "weak_catchlight",
+    "image_path": "data/reference_dataset/rembrandt/weak_catchlight/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "rembrandt",
+      "predicted_pattern": "loop",
+      "confidence": 0.324,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "loop",
+      "confidence": 0.324,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 483
+    },
+    "entry": {
+      "id": "weak_catchlight",
+      "image_path": "data/reference_dataset/rembrandt/weak_catchlight/image.jpg",
+      "expected_pattern": "rembrandt",
+      "acceptable_patterns": [
+        "rembrandt",
+        "loop",
+        "short"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_right",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "catchlight detector may miss, forcing reliance on shadow-only classification"
+      ],
+      "notes": "Rembrandt-lit portrait with dark eyes \u2014 catchlights barely visible, shadow pattern strong"
+    }
+  },
+  {
+    "id": "rim_only",
+    "image_path": "data/reference_dataset/rim_only/rim_only/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "rim_only",
+      "predicted_pattern": "rim_only",
+      "confidence": 0.322,
+      "calibration_issue": "under_confident_correct",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "rim_only",
+      "confidence": 0.322,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 478
+    },
+    "entry": {
+      "id": "rim_only",
+      "image_path": "data/reference_dataset/rim_only/rim_only/image.jpg",
+      "expected_pattern": "rim_only",
+      "acceptable_patterns": [
+        "rim_only",
+        "low_key",
+        "split",
+        "rembrandt",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "face completely in shadow \u2014 no face mesh or catchlight signals",
+        "hat occludes most of head",
+        "rim_only is rare in pattern training data",
+        "near-silhouette may return unknown"
+      ],
+      "notes": "Rim only \u2014 pure rim/edge light from behind, face in deep shadow, hat obscures features, dramatic silhouette"
+    }
+  },
+  {
+    "id": "ring_light",
+    "image_path": "data/reference_dataset/ring_light/ring_light/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "ring_light",
+      "predicted_pattern": "ring_light",
+      "confidence": 0.85,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "ring_light",
+      "confidence": 0.85,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 583
+    },
+    "entry": {
+      "id": "ring_light",
+      "image_path": "data/reference_dataset/ring_light/ring_light/image.jpg",
+      "expected_pattern": "ring_light",
+      "acceptable_patterns": [
+        "ring_light",
+        "butterfly",
+        "flat_fashion",
+        "clamshell",
+        "rembrandt",
+        "loop",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "ring light is identified by catchlight shape not shadow geometry",
+        "B&W image removes color cues",
+        "engine may classify as butterfly due to similar frontal/centered key"
+      ],
+      "notes": "Ring light portrait \u2014 circular catchlights, even frontal illumination, slight shadow halo behind subject"
+    }
+  },
+  {
+    "id": "short",
+    "image_path": "data/reference_dataset/short/short/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "exact",
+      "exact_match": true,
+      "acceptable_match": true,
+      "expected_pattern": "short",
+      "predicted_pattern": "short",
+      "confidence": 0.88,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "short",
+      "confidence": 0.88,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 480
+    },
+    "entry": {
+      "id": "short",
+      "image_path": "data/reference_dataset/short/short/image.jpg",
+      "expected_pattern": "short",
+      "acceptable_patterns": [
+        "short",
+        "rembrandt",
+        "loop",
+        "split",
+        "broad"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "upper_left",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "short vs broad depends on face turn direction relative to key \u2014 requires pose solver",
+        "very dark image may limit shadow analysis",
+        "rim light on far shoulder could register as second source"
+      ],
+      "notes": "Short lighting \u2014 key on narrow side of face (side turned away from camera), dark moody portrait with rim"
+    }
+  },
+  {
+    "id": "short_fashion_key",
+    "image_path": "data/reference_dataset/short/short_fashion_key/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "acceptable",
+      "exact_match": false,
+      "acceptable_match": true,
+      "expected_pattern": "short",
+      "predicted_pattern": "low_key",
+      "confidence": 0.85,
+      "calibration_issue": null,
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "low_key",
+      "confidence": 0.85,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 427
+    },
+    "entry": {
+      "id": "short_fashion_key",
+      "image_path": "data/reference_dataset/short/short_fashion_key/image.jpg",
+      "expected_pattern": "short",
+      "acceptable_patterns": [
+        "short",
+        "split",
+        "rembrandt",
+        "rim_only",
+        "low_key",
+        "gobo",
+        "unknown"
+      ],
+      "expected_light_count": 1,
+      "acceptable_light_count_range": [
+        1,
+        2
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "extreme low-key with most of face in shadow",
+        "face angled down \u2014 limited frontal face mesh coverage",
+        "short vs split boundary ambiguous at extreme angles",
+        "hair backlighting may register as second source"
+      ],
+      "notes": "Short fashion key \u2014 dramatic key on narrow side, hair lit from behind, extreme contrast, B&W fashion editorial"
+    }
+  },
+  {
+    "id": "tabletop_soft_product",
+    "image_path": "data/reference_dataset/tabletop_soft_product/tabletop_soft_product/image.jpg",
+    "ok": true,
+    "error": null,
+    "evaluation": {
+      "correctness": "miss",
+      "exact_match": false,
+      "acceptable_match": false,
+      "expected_pattern": "tabletop_soft_product",
+      "predicted_pattern": "golden_hour",
+      "confidence": 0.85,
+      "calibration_issue": "over_confident_miss",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard"
+    },
+    "raw": {
+      "ok": true,
+      "predicted_pattern": "golden_hour",
+      "confidence": 0.85,
+      "candidate_patterns": [],
+      "light_count": null,
+      "signal_reliability": {
+        "face_detected": null,
+        "catchlight_quality": null,
+        "overall_score": null
+      },
+      "elapsed_ms": 553
+    },
+    "entry": {
+      "id": "tabletop_soft_product",
+      "image_path": "data/reference_dataset/tabletop_soft_product/tabletop_soft_product/image.jpg",
+      "expected_pattern": "tabletop_soft_product",
+      "acceptable_patterns": [
+        "tabletop_soft_product",
+        "flat_fashion",
+        "high_key",
+        "unknown",
+        "rembrandt"
+      ],
+      "expected_light_count": 2,
+      "acceptable_light_count_range": [
+        1,
+        4
+      ],
+      "expected_key_direction": "unknown",
+      "dataset_tier": "community",
+      "trust_score": 0.7,
+      "difficulty": "hard",
+      "known_challenges": [
+        "no face \u2014 all face-based classifiers unavailable",
+        "product photography patterns outside core portrait training",
+        "soft diffused multi-source lighting has minimal shadow signal"
+      ],
+      "notes": "Tabletop soft product \u2014 cosmetics jar on stacked stones, soft even diffused lighting, green seamless background"
+    }
+  }
+]

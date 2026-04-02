@@ -1,0 +1,50 @@
+{
+  "reference_id": "taylor_bottle_001",
+  "pattern_id": "bottle_backlight",
+  "photographer": "Karl Taylor",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "studio",
+  "notes": "Three stripboxes: backlight through bottle for glow plus dual rim lights defining bottle edges",
+  "lights": [
+    {
+      "role": "backlight",
+      "modifier": "stripbox",
+      "angle_deg": 180,
+      "height_deg": 0,
+      "distance_ft": 2
+    },
+    {
+      "role": "rim",
+      "modifier": "stripbox",
+      "angle_deg": 120,
+      "height_deg": 0,
+      "distance_ft": 2
+    },
+    {
+      "role": "rim",
+      "modifier": "stripbox",
+      "angle_deg": -120,
+      "height_deg": 0,
+      "distance_ft": 2
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": null,
+    "chin_shadow": null,
+    "cheek_shadow": null
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 3,
+    "focal_length": 100
+  },
+  "use_cases": [
+    "beverage",
+    "wine",
+    "spirits"
+  ],
+  "light_count": 3,
+  "shadow_pattern": "bottle_backlight",
+  "key_height_relative": "eye_level"
+}

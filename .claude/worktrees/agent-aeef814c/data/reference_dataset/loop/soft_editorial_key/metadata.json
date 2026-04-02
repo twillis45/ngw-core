@@ -1,0 +1,49 @@
+{
+  "reference_id": "soft_editorial_key",
+  "pattern_id": "loop",
+  "photographer": "benchmark_verified",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.9,
+  "approval_status": "approved",
+  "environment": "studio",
+  "source_type": "found_online",
+  "light_count": 1,
+  "key_direction_deg": 270.0,
+  "shadow_pattern": "loop",
+  "notes": "Soft editorial key \u2014 warm natural soft key from left, open shade fill, jewelry editorial, architectural setting",
+  "ground_truth": {
+    "expected_pattern": "loop",
+    "acceptable_patterns": [
+      "loop",
+      "rembrandt",
+      "window_portrait",
+      "golden_hour",
+      "unknown"
+    ],
+    "expected_light_count": 1,
+    "acceptable_light_count_range": [
+      1,
+      2
+    ],
+    "expected_key_direction": "left"
+  },
+  "benchmark_metadata": {
+    "category": "editorial",
+    "difficulty": "standard",
+    "known_challenges": [
+      "natural light editorial blurs studio pattern categories",
+      "warm tones may suggest golden hour",
+      "environmental bounce fill complicates source count"
+    ],
+    "added_date": "2026-03-17",
+    "promoted_to_dataset": "2026-03-17T22:27:21.265964+00:00"
+  },
+  "image_dimensions": {
+    "width": 474,
+    "height": 845
+  },
+  "ingested_at": "2026-03-17T22:27:21.266037+00:00",
+  "has_signals": false,
+  "has_vlm_reconstruction": false,
+  "has_debug_overlay": false
+}

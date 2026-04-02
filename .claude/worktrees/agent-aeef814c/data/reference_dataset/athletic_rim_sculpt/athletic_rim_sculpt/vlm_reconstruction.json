@@ -1,0 +1,206 @@
+{
+  "primary_reconstruction": {
+    "dominant_source_direction_deg": 80.0,
+    "dominant_source_height_class": "eye_level",
+    "dominant_source_height_deg_estimate": 0.0,
+    "dominant_source_distance_class": "medium",
+    "dominant_source_distance_ft": 6.2,
+    "source_size_class": "medium",
+    "modifier_family_candidates": [
+      {
+        "type": "bare_bulb",
+        "confidence": 0.5
+      },
+      {
+        "type": "zoom_reflector",
+        "confidence": 0.5
+      },
+      {
+        "type": "fresnel",
+        "confidence": 0.5
+      },
+      {
+        "type": "window",
+        "confidence": 0.44
+      }
+    ],
+    "environment": "window",
+    "likely_light_count": 1,
+    "roles": {
+      "key": {
+        "present": true,
+        "confidence": 0.9
+      },
+      "fill": {
+        "present": false,
+        "confidence": 0.15
+      },
+      "negative_fill": {
+        "present": false,
+        "confidence": 0.15
+      },
+      "rim": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "kicker": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "background": {
+        "present": false,
+        "confidence": 0.0
+      },
+      "bounce": {
+        "present": true,
+        "confidence": 0.72
+      }
+    },
+    "reconstruction_confidence": 0.54,
+    "ambiguity_notes": [
+      "Catchlight geometry is absent, reducing certainty in source height and modifier.",
+      "Shadow direction and dominant light vector show partial disagreement.",
+      "Window and sun candidates both present; window evidence slightly stronger.",
+      "Reflection shape suggests point source, but window gradient and rectangular reflections also detected.",
+      "Bounce fill from left is significant."
+    ],
+    "contradiction_notes": [
+      "Shadow direction (331\u00b0) inconsistent with dominant light vector (80\u00b0).",
+      "Estimated distance (6.2ft) differs from solar hypothesis (infinite distance).",
+      "Physics consistency is low (0.48)."
+    ]
+  },
+  "candidates": [
+    {
+      "candidate_id": "candidate_1",
+      "key_light_angle_deg": 80.0,
+      "key_light_height_class": "eye_level",
+      "key_light_height_deg_estimate": 0.0,
+      "key_light_distance_class": "medium",
+      "key_light_distance_ft_estimate": 6.2,
+      "source_size_class": "medium",
+      "modifier_family_candidates": [
+        {
+          "type": "bare_bulb",
+          "confidence": 0.5
+        },
+        {
+          "type": "zoom_reflector",
+          "confidence": 0.5
+        },
+        {
+          "type": "fresnel",
+          "confidence": 0.5
+        }
+      ],
+      "environment": "window",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 0.72
+        }
+      },
+      "confidence_score": 0.54,
+      "ambiguity_notes": [
+        "Catchlight geometry is absent, reducing certainty in source height and modifier.",
+        "Shadow direction and dominant light vector show partial disagreement.",
+        "Reflection shape suggests point source, but window gradient and rectangular reflections also detected.",
+        "Bounce fill from left is significant."
+      ]
+    },
+    {
+      "candidate_id": "candidate_2",
+      "key_light_angle_deg": 85.0,
+      "key_light_height_class": "eye_level",
+      "key_light_height_deg_estimate": 0.0,
+      "key_light_distance_class": "far",
+      "key_light_distance_ft_estimate": 999.0,
+      "source_size_class": "medium",
+      "modifier_family_candidates": [
+        {
+          "type": "sun",
+          "confidence": 0.44
+        },
+        {
+          "type": "window",
+          "confidence": 0.44
+        }
+      ],
+      "environment": "sun",
+      "likely_light_count": 1,
+      "roles": {
+        "key": {
+          "present": true,
+          "confidence": 0.9
+        },
+        "fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "negative_fill": {
+          "present": false,
+          "confidence": 0.15
+        },
+        "rim": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "kicker": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "background": {
+          "present": false,
+          "confidence": 0.0
+        },
+        "bounce": {
+          "present": true,
+          "confidence": 0.72
+        }
+      },
+      "confidence_score": 0.44,
+      "ambiguity_notes": [
+        "Solar candidate present (parallel shadows, warmth), but indoor window evidence also strong.",
+        "Shadow and highlight axes are not fully aligned.",
+        "Bounce fill from left is significant."
+      ]
+    }
+  ],
+  "ok": true,
+  "notes": [],
+  "needs_review": false,
+  "needs_review_reasons": [],
+  "validation_scores": null,
+  "contradiction_notes": [],
+  "ambiguity_notes": [],
+  "signal_reliability_summary": null,
+  "solver_trace_summary": null,
+  "master_profile": null,
+  "master_profile_confidence": 0.0,
+  "style_family": null
+}

@@ -101,6 +101,21 @@ export async function analyzeImage(file, { debug = false } = {}) {
   return labFetch(`/analyze${query}`, { method: 'POST', body: form });
 }
 
+/**
+ * Regenerate a debug overlay with a specific subset of layers.
+ * @param {string} overlayUrl  - Existing overlay URL, e.g. "/static/debug/overlay_foo_abc.jpg"
+ * @param {string[]} layers    - Layer names to include. Empty = all layers.
+ *   Valid: shadow, highlights, catchlights, background, pose,
+ *          specular, surface, light_roles, summary
+ * @returns {Promise<{debug_overlay_url: string}>}
+ */
+export async function regenerateDebugOverlay(overlayUrl, layers = []) {
+  return labFetch('/debug-overlay/regenerate', {
+    method: 'POST',
+    body: JSON.stringify({ overlay_url: overlayUrl, layers }),
+  });
+}
+
 
 // ── Gold Set ─────────────────────────────────────────────
 
@@ -175,6 +190,12 @@ export async function listCandidates(status = null, limit = 50) {
 
 export async function getCandidate(candidateId) {
   return labFetch(`/candidates/${candidateId}`);
+}
+
+export async function uploadCandidateImage(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return labFetch('/candidates/upload-image', { method: 'POST', body: form });
 }
 
 export async function createCandidate(data) {
@@ -358,6 +379,10 @@ export async function getMonitoringSummary() {
   return labFetch('/learning/monitoring');
 }
 
+export async function getSignalHygiene() {
+  return labFetch('/signals/hygiene');
+}
+
 export async function getMonitoringReport(attributionId) {
   return labFetch(`/learning/monitoring/${attributionId}`);
 }
@@ -533,11 +558,17 @@ export async function aggregatePatternSignals(patternId, days = 30) {
   });
 }
 
-/** Run 3-gate CI evaluation for a pattern candidate. */
-export async function runCIGate(patternId, candidateDict) {
+/**
+ * Run 3-gate CI evaluation for a pattern.
+ * If candidateId is provided, runs the full DB-backed evaluation for that candidate.
+ * If omitted, runs a pattern-level readiness check using live production signals.
+ */
+export async function runCIGate(patternId, candidateId = null) {
+  const body = candidateId ? { candidate_id: candidateId } : {};
   return labFetch(`/learning/knowledge/${patternId}/ci-gate`, {
     method: 'POST',
-    body: JSON.stringify({ candidate_dict: candidateDict }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
 }
 
@@ -674,4 +705,62 @@ export async function getApiMetrics(hours = 24) {
 
 export async function getMonitoringStats(hours = 24) {
   return labFetch(`/monitoring-stats?hours=${hours}`);
+}
+
+
+// ── Distillation Candidate Reviews ───────────────────────────────────────────
+
+/** List distillation candidate review rows. All filters are optional. */
+export async function listDistillationReviews({
+  review_status = null,
+  path_type     = null,
+  entry_type    = null,
+  limit         = 100,
+} = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (review_status) params.set('review_status', review_status);
+  if (path_type)     params.set('path_type',     path_type);
+  if (entry_type)    params.set('entry_type',     entry_type);
+  return coreFetch(`/admin/distillation-reviews?${params}`);
+}
+
+/** Get a single distillation candidate review row by id. */
+export async function getDistillationReview(reviewId) {
+  return coreFetch(`/admin/distillation-reviews/${reviewId}`);
+}
+
+/** Update review decision for one distillation candidate. */
+export async function patchDistillationReview(reviewId, { review_status, rationale = '', notes = '' }) {
+  return coreFetch(`/admin/distillation-reviews/${reviewId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ review_status, rationale, notes }),
+  });
+}
+
+/**
+ * Submit a teach label from the Workbench.
+ * correctness: 'correct' | 'incorrect'
+ * When incorrect, expected_pattern should be the corrected pattern.
+ */
+export async function submitTeachLabel({
+  image_path,
+  predicted_pattern,
+  expected_pattern,
+  confidence = 0,
+  path_type = 'primary',
+  correctness,
+  notes = '',
+}) {
+  return coreFetch('/admin/distillation-reviews/from-workbench', {
+    method: 'POST',
+    body: JSON.stringify({ image_path, predicted_pattern, expected_pattern, confidence, path_type, correctness, notes }),
+  });
+}
+
+/** Fetch the image for a distillation review entry (returns object URL). */
+export async function getDistillationReviewImageUrl(reviewId) {
+  const res = await apiFetch(`/api/admin/distillation-reviews/${reviewId}/image`, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`Review image fetch failed (${res.status})`);
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
 }

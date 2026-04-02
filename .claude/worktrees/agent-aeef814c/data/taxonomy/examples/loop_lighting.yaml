@@ -1,0 +1,154 @@
+identity:
+  setup_id: loop_lighting_v1
+  setup_name: Loop Lighting
+  use_case: corporate
+  visual_intent: clean
+  pattern_family: loop
+  tags:
+    - corporate
+    - headshot
+    - natural
+    - portrait
+    - universally_flattering
+
+subject_fit:
+  subject_types:
+    - male_portrait
+    - female_portrait
+    - mature_skin
+    - glasses
+    - seated_portrait
+    - group_portrait
+  skin_or_surface_notes:
+    - flatters_every_face_shape
+    - increase_fill_to_minus_half_stop_for_dark_skin
+    - safest_for_groups_with_varied_skin_tones
+  pose_assumptions:
+    - square_to_camera_or_slight_turn
+    - chin_slightly_down
+    - eyes_to_lens
+
+environment_fit:
+  minimum_ceiling_height_ft: 8
+  recommended_ceiling_height_ft: 9
+  minimum_room_width_ft: 8
+  minimum_room_depth_ft: 12
+  indoor_outdoor_fit:
+    - indoor
+    - studio
+    - office
+    - on_location
+  portability: medium
+  power_requirements: low_to_medium
+  environment_tags:
+    - standard_ceiling
+    - small_room
+    - medium_room
+
+light_architecture:
+  key_source:
+    role: key
+    modifier_family: large_octa
+    angle_deg: 30
+    height_relative_to_subject: slightly_above_eye_level
+    distance_ft:
+      min: 3.0
+      max: 4.0
+    feather_direction: near_edge_past_forehead
+  fill_source:
+    role: fill
+    modifier_family: reflector
+    position: at_camera_axis_slightly_below_key
+    ratio_to_key_stops: -1.0
+  rim_sources:
+    - role: rim
+      modifier_family: stripbox
+      position: behind_subject_opposite_key
+      angle_deg: 140
+      ratio_to_key_stops: -1.0
+  background_source:
+    role: background
+    modifier_family: grid_spot
+    position: aimed_at_background_centered
+    ratio_to_key_stops: -1.5
+  negative_fill: null
+  bounce: null
+
+camera_architecture:
+  lens_range_mm:
+    min: 85
+    max: 105
+  camera_height_relative_to_subject: eye_level
+  camera_angle: straight_on
+  camera_distance_ft:
+    min: 8
+    max: 10
+
+distance_references:
+  key_to_subject_ft:
+    min: 3.0
+    max: 4.0
+  fill_to_subject_ft:
+    min: 4.0
+    max: 5.0
+  rim_to_subject_ft:
+    min: 4.5
+    max: 5.5
+  subject_to_background_ft:
+    min: 5
+    max: 8
+  camera_to_subject_ft:
+    min: 8
+    max: 10
+  background_light_to_background_ft:
+    min: 3.0
+    max: 5.0
+
+expected_result:
+  shadow_pattern: small_loop_nose_shadow_not_touching_cheek
+  contrast_profile: low_to_medium
+  catchlight_style: single_at_10_to_11_oclock
+  background_relationship: even_or_gentle_gradient
+  visual_notes:
+    - small_loop_shaped_nose_shadow
+    - both_eyes_fully_illuminated
+    - gentle_shadow_under_chin_on_far_side
+    - even_skin_illumination_with_subtle_modeling
+
+diagnostics:
+  common_failure_modes:
+    - nose_shadow_too_long
+    - face_too_flat
+    - catchlight_too_high
+    - no_subject_separation
+
+substitutions:
+  modifier_alternatives:
+    - primary: large_octa
+      alternatives:
+        - umbrella_white
+        - medium_softbox
+  gear_alternatives:
+    - primary: strobe_mono
+      alternatives:
+        - led_cob
+        - speedlight
+  adaptation_variants:
+    - ideal_setup
+    - low_ceiling_version
+    - small_room_version
+    - one_light_version
+    - two_light_version
+    - speedlight_version
+    - portable_version
+
+reliability:
+  rule_confidence: 96
+  reliability_label: very_reliable
+  field_verified: false
+  verification_count: 0
+  notes:
+    - highest_reliability_pattern
+    - flatters_nearly_every_face_shape_and_skin_tone
+    - difficult_to_get_catastrophically_wrong
+    - safest_for_beginners_and_volume_work

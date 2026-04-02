@@ -108,6 +108,7 @@ class LightingPattern(_LabelMixin, str, Enum):
     BOTTLE_BACKLIGHT = "bottle_backlight"
     ATHLETIC_RIM_SCULPT = "athletic_rim_sculpt"
     WINDOW_NEGATIVE_FILL = "window_negative_fill"
+    SHALLOW_LOOP = "shallow_loop"
     HYBRID = "hybrid"
     UNKNOWN = "unknown"
 
@@ -133,6 +134,7 @@ _register_labels(LightingPattern, {
 "bottle_backlight": "Bottle Backlight",
 "athletic_rim_sculpt": "Athletic Rim Sculpt",
 "window_negative_fill": "Window Negative Fill",
+"shallow_loop": "Shallow Loop",
 })
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -977,6 +979,40 @@ _register_labels(ContaminationFlag, {
 "shadow_interruption_pattern": "Shadow Interruption Pattern",
 "low_resolution": "Low Resolution",
 })
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 43. Field Status — Phase 1 Truth Lockdown
+# ═══════════════════════════════════════════════════════════════════════════
+
+class FieldStatus(str, Enum):
+    """Confidence and provenance status for any inferred field value.
+
+    Assigned by the layer that produces the value — not inferred post-hoc.
+
+    Conservative assignment rules:
+      MEASURED        — direct observation from image signal
+      INFERRED        — derived from indirect cues; reasonable confidence
+      ASSUMED         — explicit no-signal / default path; nothing resolved
+      SEMANTIC_HINT   — provided by VLM as a structured hint; not yet validated
+      FUSED_FINAL     — fusion layer resolved from multiple ranked sources
+      HUMAN_CORRECTED — admin override applied after original resolution
+      USER_CONFIRMED  — NAILED_IT outcome linked to this field's value
+      CONTESTED       — multiple sources disagree materially; not resolved
+      UNKNOWN         — status not yet assigned; pre-resolution state
+
+    Do not assign ASSUMED to any path that resolved a real pattern value.
+    Do not assign FUSED_FINAL unless multiple candidates actually existed.
+    CONTESTED is reserved for material disagreement — not low confidence.
+    """
+    MEASURED        = "measured"
+    INFERRED        = "inferred"
+    ASSUMED         = "assumed"
+    SEMANTIC_HINT   = "semantic_hint"
+    FUSED_FINAL     = "fused_final"
+    HUMAN_CORRECTED = "human_corrected"
+    USER_CONFIRMED  = "user_confirmed"
+    CONTESTED       = "contested"
+    UNKNOWN         = "unknown"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Lookup helpers

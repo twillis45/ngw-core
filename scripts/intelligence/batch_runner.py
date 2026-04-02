@@ -112,11 +112,16 @@ def _run_one(image_path: Path, run_vlm: bool = False) -> dict:
             except Exception:
                 pass
 
+        # Phase 5b: capture authoritative_pattern_source for path-type classification.
+        # "specialty:" prefix indicates specialty-path resolution (orchestrator.py ~line 1915).
+        authoritative_source = getattr(ar, "authoritative_pattern_source", "none") or "none"
+
         return {
             "ok": True,
             "predicted_pattern": predicted_pattern,
             "confidence": round(confidence, 4),
             "candidate_patterns": candidate_patterns[:5],
+            "authoritative_pattern_source": authoritative_source,
             "light_count": getattr(ar, "light_count", None),
             "signal_reliability": signal_info,
             "elapsed_ms": elapsed_ms,

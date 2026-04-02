@@ -1,0 +1,25 @@
+{
+  "reference_id": "images__5_",
+  "pattern_id": "loop",
+  "photographer": "Patrick Demarchelier",
+  "dataset_tier": "gold",
+  "entry_trust_score": 0.5,
+  "environment": "studio",
+  "approval_status": "draft",
+  "catchlight_pattern": "strip",
+  "underfill_ev": 0.44,
+  "separation_light_type": "none",
+  "light_technology": "continuous_tube",
+  "source_type_candidates": [
+    "cluster_geometry=strip \u2192 continuous source likely"
+  ],
+  "ingested_at": "2026-03-19T15:53:04.850366+00:00",
+  "has_signals": true,
+  "has_vlm_reconstruction": true,
+  "has_debug_overlay": true,
+  "image_dimensions": {
+    "width": 203,
+    "height": 249
+  },
+  "reprocessed_at": "2026-03-19T15:55:47.821001+00:00"
+}

@@ -1,0 +1,652 @@
+# Master Modes — NGW Lighting Recommendation Bias Layer
+#
+# Each mode biases the scoring, diagram, and coaching pipeline toward a named
+# photographic philosophy. When no mode is selected (null), the system behaves
+# identically to the default pipeline.
+#
+# Schema:
+#   label        — Human-readable name
+#   tagline      — One-line creative description
+#   icon         — Unicode emoji for UI display
+#   scoring_bias — Controls which systems score higher
+#   diagram_override — Overrides diagram geometry when non-null
+#   coaching_overlay — Replaces/supplements coaching text
+
+hurley:
+  label: "Hurley Mode"
+  tagline: "Clean commercial headshot — triangle catchlights, centered, repeatable"
+  icon: "\U0001F4A1"
+
+  scoring_bias:
+    mood_affinity:
+      - beauty
+      - corporate
+      - high_key
+    modifier_affinity:
+      - softbox
+      - umbrella
+      - beauty_dish
+    gear_affinity:
+      - continuous_led
+      - continuous_panel
+    bonus_points: 12
+
+  diagram_override:
+    force_pattern: triangle
+    key_angle: null
+    key_modifier_pref:
+      - softbox
+      - umbrella
+      - beauty_dish
+    fill_enable: true
+    rim_enable: false
+    background_light: false
+    camera_distance_m: 2.5
+    subject_pose: "straight-on, chin slightly forward and down"
+
+  coaching_overlay:
+    rationale: >
+      This setup follows Peter Hurley's signature triangle catchlight technique.
+      Three lights create a distinctive inverted-triangle reflection in the eyes,
+      delivering clean, even illumination ideal for headshots and commercial portraits.
+      The centered composition and repeatable geometry make this perfect for
+      high-volume sessions where consistency matters.
+    camera:
+      focal_length: "85-105mm"
+      aperture: "f/5.6-f/8"
+      shutter: "1/125-1/160"
+      iso: "100-200"
+    good_signs:
+      - "Three distinct catchlights forming a clean triangle pattern"
+      - "Even skin tones across both sides of the face"
+      - "Soft, minimal shadows under the chin"
+      - "Eyes pop with clear, symmetrical reflections"
+    warnings:
+      - "Catchlights not forming a clean triangle — recheck fill position relative to chin"
+      - "One side of the face brighter than the other — check key symmetry"
+      - "Harsh shadow under nose — fill is too low or too far back"
+    quick_fixes:
+      - "Lower the fill closer to chin level for a stronger third catchlight"
+      - "Move keys slightly closer together if triangle is too wide"
+      - "Add a white V-flat on either side to bounce stray spill back onto the face"
+    substitution_notes:
+      - "Two strip softboxes can replace umbrellas for more directional control"
+      - "A ring light can approximate the triangle feel for quick headshot sessions"
+    lights_guide:
+      - role: key_left
+        label: "Key Left"
+        purpose: "Primary sculpting light on the left side"
+        positioning: "45 degrees left of camera, slightly above eye level"
+        modifier: "Large softbox or shoot-through umbrella"
+        modifier_rationale: "Soft wrap minimizes texture, creates upper-left catchlight"
+        power_guidance: "Start at f/5.6 equivalent, adjust for skin tone"
+      - role: key_right
+        label: "Key Right"
+        purpose: "Matching sculpting light on the right side"
+        positioning: "45 degrees right of camera, slightly above eye level"
+        modifier: "Large softbox or shoot-through umbrella"
+        modifier_rationale: "Mirrors key left to create balanced illumination"
+        power_guidance: "Match key left — even exposure across the face"
+      - role: fill
+        label: "Fill / Bottom Light"
+        purpose: "Creates the third catchlight and fills shadows under chin and nose"
+        positioning: "Below chin, near camera axis, angled up at face"
+        modifier: "Reflector or softbox at low power"
+        modifier_rationale: "Creates the lower catchlight completing the triangle formation"
+        power_guidance: "1-2 stops below key lights"
+
+adler:
+  label: "Adler Mode"
+  tagline: "Fashion/beauty sculpting — beauty dish, strip rims, editorial precision"
+  icon: "\U0001F48E"
+
+  scoring_bias:
+    mood_affinity:
+      - beauty
+      - editorial
+    modifier_affinity:
+      - beauty_dish
+      - stripbox
+      - grid_spot
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+    bonus_points: 10
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 15.0
+    key_modifier_pref:
+      - beauty_dish
+      - softbox
+    fill_enable: true
+    rim_enable: true
+    background_light: false
+    camera_distance_m: 2.0
+    subject_pose: "angled slightly, chin lifted"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Lindsay Adler's fashion-forward approach: a beauty dish as key
+      creates specular highlights that sculpt facial structure, while strip rim lights
+      carve the subject from the background. The emphasis is on editorial precision
+      and intentional light shaping for beauty and fashion work.
+    camera:
+      focal_length: "70-135mm"
+      aperture: "f/8-f/11"
+      shutter: "1/160-1/200"
+      iso: "100"
+    good_signs:
+      - "Specular highlight on the cheekbone with soft falloff"
+      - "Clean rim separation on both shoulders"
+      - "Catchlight from beauty dish is round and centered in the iris"
+    warnings:
+      - "Beauty dish too close — hot spot on forehead or nose bridge"
+      - "Rim lights creating double-edge on jawline — feather or flag"
+    quick_fixes:
+      - "Move beauty dish back 6 inches if skin looks too specular"
+      - "Add a grid to the beauty dish for tighter falloff control"
+      - "Flag the rim lights to keep spill off the background"
+    substitution_notes:
+      - "A large softbox with a grid can approximate beauty dish quality"
+      - "Barn doors on strip lights give finer rim control"
+    lights_guide:
+      - role: key
+        label: "Beauty Dish Key"
+        purpose: "Primary sculpting light — specular highlights define facial structure"
+        positioning: "Directly in front and slightly above, 15 degrees off center"
+        modifier: "Beauty dish (22-inch or larger)"
+        modifier_rationale: "Semi-specular source creates the signature editorial skin texture"
+        power_guidance: "f/8-f/11 — enough to overpower ambient and freeze motion"
+      - role: fill
+        label: "Fill"
+        purpose: "Subtle fill to preserve detail in shadows without flattening"
+        positioning: "On opposite side of key, 2-3 stops below"
+        modifier: "Reflector or large softbox"
+        modifier_rationale: "Just enough to lift blacks without competing with the beauty dish"
+        power_guidance: "2-3 stops below key"
+      - role: rim_left
+        label: "Left Rim / Strip"
+        purpose: "Edge separation on the left shoulder and hair"
+        positioning: "Behind subject, 45 degrees left, aimed at shoulder"
+        modifier: "Strip softbox with grid"
+        modifier_rationale: "Narrow beam carves a clean edge without spilling onto the face"
+        power_guidance: "Match key or slightly above"
+      - role: rim_right
+        label: "Right Rim / Strip"
+        purpose: "Edge separation on the right shoulder and hair"
+        positioning: "Behind subject, 45 degrees right, aimed at shoulder"
+        modifier: "Strip softbox with grid"
+        modifier_rationale: "Symmetrical rim for even separation on both sides"
+        power_guidance: "Match left rim"
+
+heisler:
+  label: "Heisler Mode"
+  tagline: "Analytical narrative portrait — motivated light, environment-aware, multi-light"
+  icon: "\U0001F3AD"
+
+  scoring_bias:
+    mood_affinity:
+      - cinematic
+      - editorial
+      - natural
+    modifier_affinity:
+      - softbox
+      - grid_spot
+      - barn_doors
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+      - continuous_led
+    bonus_points: 10
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 45.0
+    key_modifier_pref:
+      - softbox
+      - grid_spot
+    fill_enable: true
+    rim_enable: true
+    background_light: true
+    camera_distance_m: 2.5
+    subject_pose: "environmental, relaxed, turned into key"
+
+  coaching_overlay:
+    rationale: >
+      Following Gregory Heisler's philosophy of motivated, narrative lighting.
+      Each light serves a purpose tied to the story — the key is placed where
+      a practical source would logically exist, fill controls the story's mood,
+      and rim separates subject from environment. Every decision is analytical
+      and intentional, building a multi-light setup that feels natural.
+    camera:
+      focal_length: "50-85mm"
+      aperture: "f/4-f/8"
+      shutter: "1/125"
+      iso: "200-400"
+    good_signs:
+      - "Light feels motivated — as if it comes from a window or practical lamp"
+      - "Multiple light sources blend seamlessly without visible overlap"
+      - "Subject has dimensionality — not flat, not over-sculpted"
+    warnings:
+      - "Light sources competing for attention — one should dominate"
+      - "Fill too bright — story loses drama, becomes corporate"
+      - "Background light disconnected from the narrative"
+    quick_fixes:
+      - "Flag the fill to control spill and preserve the key's dominance"
+      - "Gel the background light to match the scene's color story"
+      - "Add a practical (lamp, window) to motivate the key direction"
+    substitution_notes:
+      - "A large diffusion panel can replace a softbox for a more natural feel"
+      - "Bounce cards work as fill when you need zero-footprint on set"
+    lights_guide:
+      - role: key
+        label: "Motivated Key"
+        purpose: "Primary light placed where a practical source would logically exist"
+        positioning: "45 degrees off-axis, at a height that matches the scene's narrative"
+        modifier: "Softbox or diffusion panel — shaped to simulate the practical source"
+        modifier_rationale: "Light should feel motivated by the environment, not arbitrary"
+        power_guidance: "Set to match the apparent brightness of the practical being simulated"
+      - role: fill
+        label: "Narrative Fill"
+        purpose: "Controls the mood by managing shadow depth"
+        positioning: "Opposite key, flagged to control spill"
+        modifier: "Bounce card, reflector, or a large soft source at very low power"
+        modifier_rationale: "Fill should be invisible — just enough to preserve shadow detail"
+        power_guidance: "2-4 stops below key depending on mood"
+      - role: rim
+        label: "Separation / Rim"
+        purpose: "Separates subject from environment without drawing attention"
+        positioning: "Behind and above, aimed at hair or far shoulder"
+        modifier: "Strip softbox or bare reflector with barn doors"
+        modifier_rationale: "Subtle edge that reads as environmental light, not studio"
+        power_guidance: "Just enough to create separation — should not overpower key"
+      - role: background
+        label: "Background / Practical"
+        purpose: "Illuminates or colors the background to support the narrative"
+        positioning: "Aimed at the background or placed as a visible practical"
+        modifier: "Gelled to match scene color story"
+        modifier_rationale: "Connects the background to the key light's story"
+        power_guidance: "Below key — background should support, not compete"
+
+bryce:
+  label: "Bryce Mode"
+  tagline: "Soft feminine portrait — window light, wrap, gentle fill, emotional"
+  icon: "\U0001F338"
+
+  scoring_bias:
+    mood_affinity:
+      - natural
+      - beauty
+    modifier_affinity:
+      - softbox
+      - umbrella
+      - reflector
+    gear_affinity:
+      - continuous_led
+      - continuous_panel
+      - strobe_mono
+    bonus_points: 10
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 30.0
+    key_modifier_pref:
+      - softbox
+      - umbrella
+    fill_enable: true
+    rim_enable: false
+    background_light: false
+    camera_distance_m: 2.0
+    subject_pose: "soft angle, relaxed, eyes toward camera"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Sue Bryce's signature style of soft, flattering, feminine
+      portraiture. A large soft source wraps light around the face, a reflector
+      or second soft source provides gentle fill, and the overall feel is warm,
+      approachable, and emotionally connected. The light should feel like a
+      beautiful window — directional but forgiving.
+    camera:
+      focal_length: "70-105mm"
+      aperture: "f/2.8-f/5.6"
+      shutter: "1/125-1/200"
+      iso: "200-400"
+    good_signs:
+      - "Light wraps around the face with a soft, gradual transition to shadow"
+      - "Skin looks luminous and smooth without being flat"
+      - "Eyes are bright with a single, soft catchlight"
+    warnings:
+      - "Shadow side too dark — add a reflector or move the key more frontal"
+      - "Light feels clinical rather than warm — consider a warming gel or WB shift"
+      - "Background competing with subject — keep it simple and muted"
+    quick_fixes:
+      - "Bring a white reflector within 2 feet of the shadow side of the face"
+      - "Raise the key slightly to create a gentle loop shadow on the nose"
+      - "Open up the aperture for a softer, more intimate feel"
+    substitution_notes:
+      - "A large sheer curtain in front of a window replicates this style naturally"
+      - "A 5-in-1 reflector (white side) is the ideal fill for this approach"
+    lights_guide:
+      - role: key
+        label: "Soft Key"
+        purpose: "Wrapping main light that creates a luminous, flattering feel"
+        positioning: "30 degrees off-axis, slightly above eye level"
+        modifier: "Large softbox (4x6 foot) or shoot-through umbrella"
+        modifier_rationale: "Largest source possible for maximum wrap and soft transitions"
+        power_guidance: "f/2.8-f/5.6 — keep it gentle, not overwhelming"
+      - role: fill
+        label: "Reflector Fill"
+        purpose: "Gentle fill to open shadows on the far side of the face"
+        positioning: "Opposite the key, within 2 feet of the subject"
+        modifier: "White reflector or white V-flat"
+        modifier_rationale: "Passive fill (no power needed) keeps the look natural and soft"
+        power_guidance: "No power — distance from subject controls fill intensity"
+
+caravaggio:
+  label: "Caravaggio Mode"
+  tagline: "Dramatic chiaroscuro — single-source, deep shadow, minimal fill"
+  icon: "\U0001F525"
+
+  scoring_bias:
+    mood_affinity:
+      - cinematic
+      - low_key
+      - editorial
+    modifier_affinity:
+      - grid_spot
+      - grid
+      - barn_doors
+      - snoot
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+    bonus_points: 14
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 60.0
+    key_modifier_pref:
+      - grid_spot
+      - grid
+      - barn_doors
+    fill_enable: false
+    rim_enable: false
+    background_light: false
+    camera_distance_m: 2.5
+    subject_pose: "turned into key, body angled away, dramatic"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Caravaggio's chiaroscuro paintings — a single, hard-ish source
+      creates deep, dramatic shadows with minimal fill. The emphasis is on
+      sculptural light that reveals form through contrast. This is intentionally
+      moody: shadow is not a problem to fix, it's the point of the image.
+    camera:
+      focal_length: "85-135mm"
+      aperture: "f/5.6-f/8"
+      shutter: "1/160-1/200"
+      iso: "100"
+    good_signs:
+      - "Deep shadows on the far side of the face with clean falloff"
+      - "Strong sense of three-dimensionality and sculptural form"
+      - "Background falls to near-black without dedicated light"
+    warnings:
+      - "Shadow side too bright — remove or reduce any fill"
+      - "Background too bright — move subject further from wall, kill ambient"
+      - "Light feels soft rather than sculpted — add a grid to tighten the beam"
+    quick_fixes:
+      - "Add a grid or snoot to the key to tighten the pool of light"
+      - "Pull subject 4+ feet from the background to let it fall dark"
+      - "Use negative fill (black V-flat) on the shadow side to deepen contrast"
+    substitution_notes:
+      - "A head with standard reflector and barn doors creates the hardest chiaroscuro look"
+      - "A single window with blackout on the far side replicates this naturally"
+    lights_guide:
+      - role: key
+        label: "Single Dramatic Key"
+        purpose: "The only light source — sculpts the subject through contrast"
+        positioning: "60 degrees off-axis, slightly above eye level"
+        modifier: "Grid spot, snoot, or barn doors on a bare reflector"
+        modifier_rationale: "Controlled beam keeps light off the background and intensifies the shadow side"
+        power_guidance: "f/5.6-f/8 — enough for clean exposure but no more"
+
+penn:
+  label: "Penn Mode"
+  tagline: "Editorial minimalism — hard light, stark shadows, graphic precision"
+  icon: "\U0001F5BC"
+
+  scoring_bias:
+    mood_affinity:
+      - editorial
+      - dramatic
+      - fine_art
+    modifier_affinity:
+      - stripbox
+      - grid_spot
+      - barn_doors
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+    bonus_points: 12
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 45.0
+    key_modifier_pref:
+      - stripbox
+      - grid_spot
+      - barn_doors
+    fill_enable: false
+    rim_enable: false
+    background_light: false
+    camera_distance_m: 2.0
+    subject_pose: "direct gaze, minimal expression, graphic composition"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Irving Penn's iconic editorial and fine-art portraiture.
+      Penn favored a single, hard-ish source with minimal fill, creating
+      dramatic shadows and graphic compositions. His work emphasizes
+      simplicity, stark contrast, and the subject's raw presence. Every
+      element in the frame is intentional — nothing superfluous.
+    camera:
+      focal_length: "105-150mm"
+      aperture: "f/8-f/16"
+      shutter: "1/160-1/250"
+      iso: "100"
+    good_signs:
+      - "Hard, defined shadow edges that create graphic shapes"
+      - "Strong contrast between lit and shadow areas"
+      - "Clean, uncluttered composition with purposeful negative space"
+      - "Subject's expression reads as powerful and direct"
+    warnings:
+      - "Shadows too soft — source may be too large or too close"
+      - "Fill light flattening the drama — remove it entirely"
+      - "Background elements competing with the subject"
+    quick_fixes:
+      - "Use a smaller modifier or move the source further back for harder shadows"
+      - "Remove all fill — use negative fill (black V-flat) to deepen shadow side"
+      - "Simplify the background to pure white or grey seamless"
+    substitution_notes:
+      - "A bare head with reflector dish creates Penn-like hard-source quality"
+      - "Strip softbox with grid creates directional, controlled hard light"
+    lights_guide:
+      - role: key
+        label: "Hard Key"
+        purpose: "Single dominant light creating graphic, defined shadows"
+        positioning: "45 degrees off-axis, slightly above eye level"
+        modifier: "Strip softbox with grid, or bare reflector with barn doors"
+        modifier_rationale: "Hard, directional source for graphic shadow definition"
+        power_guidance: "f/8-f/16 — shoot stopped down for maximum sharpness and depth"
+
+karsh:
+  label: "Karsh Mode"
+  tagline: "Heroic portraiture — powerful key, Rembrandt triangle, deliberate separation"
+  icon: "\U0001F451"
+
+  scoring_bias:
+    mood_affinity:
+      - cinematic
+      - dramatic
+      - portrait
+    modifier_affinity:
+      - grid_spot
+      - grid
+      - barn_doors
+      - reflector
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+    bonus_points: 13
+
+  diagram_override:
+    force_pattern: rembrandt
+    key_angle: 40.0
+    key_modifier_pref:
+      - grid_spot
+      - grid
+      - barn_doors
+    fill_enable: false
+    rim_enable: true
+    background_light: false
+    camera_distance_m: 2.5
+    subject_pose: "three-quarter turn into key, hands visible, commanding"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Yousuf Karsh's legendary portrait technique. A single
+      powerful key creates the classic Rembrandt triangle on the shadow
+      cheek, while a deliberate hair or separation light adds dimension
+      without softening the drama. The hands are often prominently lit,
+      and the overall feel is heroic, monumental, and deeply dimensional.
+      Shadow is used as a compositional tool, not avoided.
+    camera:
+      focal_length: "85-135mm"
+      aperture: "f/5.6-f/8"
+      shutter: "1/125-1/200"
+      iso: "100-200"
+    good_signs:
+      - "Clear Rembrandt triangle visible on the shadow-side cheek"
+      - "Deep, rich shadows that give the face sculptural depth"
+      - "Hair or separation light creating a subtle luminous edge"
+      - "Hands (if visible) are well-lit and contribute to the composition"
+    warnings:
+      - "Triangle broken or missing — reposition key angle"
+      - "Separation light too strong — reads as a studio artifact"
+      - "Fill destroying the shadow contrast — remove or flag it down"
+    quick_fixes:
+      - "Move key to ~40 degrees and slightly above to form the Rembrandt triangle"
+      - "Add a hair light from behind and above, gridded to avoid spill on face"
+      - "Use black V-flat on the shadow side for negative fill"
+    substitution_notes:
+      - "A Fresnel lens creates the hard, focused key Karsh often used"
+      - "A reflector dish with grid spot emulates the controlled beam"
+    lights_guide:
+      - role: key
+        label: "Powerful Key"
+        purpose: "Creates the Rembrandt triangle and heroic shadow pattern"
+        positioning: "40 degrees off-axis, above eye level, aimed at far cheek"
+        modifier: "Grid spot, Fresnel, or barn-doored reflector"
+        modifier_rationale: "Controlled, focused beam creates the defined triangle and deep shadows"
+        power_guidance: "f/5.6-f/8 — powerful enough for clean rendering without fill dependence"
+      - role: separation
+        label: "Hair / Separation Light"
+        purpose: "Adds a luminous edge to hair and far shoulder"
+        positioning: "Behind and above the subject, on the same side as the key"
+        modifier: "Grid spot or small stripbox"
+        modifier_rationale: "Narrow beam separates subject from background without flooding the scene"
+        power_guidance: "1 stop below key — subtle, not competing"
+
+leibovitz:
+  label: "Leibovitz Mode"
+  tagline: "Complex editorial narrative — multi-light, environmental, emotionally layered"
+  icon: "\U0001F30D"
+
+  scoring_bias:
+    mood_affinity:
+      - editorial
+      - cinematic
+      - natural
+    modifier_affinity:
+      - softbox
+      - umbrella
+      - grid_spot
+      - reflector
+    gear_affinity:
+      - strobe_mono
+      - strobe_pack
+      - continuous_led
+    bonus_points: 11
+
+  diagram_override:
+    force_pattern: null
+    key_angle: 30.0
+    key_modifier_pref:
+      - softbox
+      - umbrella
+    fill_enable: true
+    rim_enable: true
+    background_light: true
+    camera_distance_m: 3.0
+    subject_pose: "narrative pose connected to environment and story"
+
+  coaching_overlay:
+    rationale: >
+      Inspired by Annie Leibovitz's editorial and conceptual portraiture.
+      Multiple lights work together to create a complex, layered scene
+      where artificial and environmental light blend seamlessly. Each
+      source serves the narrative — key light sculpts the subject, fill
+      preserves shadow detail, rim provides separation, and background
+      lighting integrates the environment into the story. The result
+      feels cinematic rather than studio-bound.
+    camera:
+      focal_length: "35-85mm"
+      aperture: "f/4-f/8"
+      shutter: "1/125-1/250"
+      iso: "200-800"
+    good_signs:
+      - "Multiple light sources blend naturally without visible seams"
+      - "Environmental elements are purposefully illuminated"
+      - "Subject connected to their surroundings through light and composition"
+      - "Moderate fill preserves detail across the full dynamic range"
+    warnings:
+      - "Lights reading as separate, disconnected sources — blend and feather"
+      - "Environment overpowering the subject — rebalance key"
+      - "Too many catchlights creating confusion — flag or reposition"
+    quick_fixes:
+      - "Gel background lights to match the scene's color temperature"
+      - "Use a large silk or scrim to blend key with ambient light"
+      - "Add practical lights (lamps, candles) to motivate the studio sources"
+    substitution_notes:
+      - "A large diffusion panel as key blends better with environmental light"
+      - "Mix continuous and strobe to layer ambient and flash exposures"
+    lights_guide:
+      - role: key
+        label: "Editorial Key"
+        purpose: "Primary source sculpting the subject within the environment"
+        positioning: "30 degrees off-axis, matched to the scene's natural direction"
+        modifier: "Large softbox or umbrella"
+        modifier_rationale: "Soft enough to blend with environment, large enough to wrap"
+        power_guidance: "Balance with ambient — typically 1 stop above environmental exposure"
+      - role: fill
+        label: "Narrative Fill"
+        purpose: "Preserves shadow detail, maintains the full tonal range"
+        positioning: "Near camera axis, below or beside the lens"
+        modifier: "Large reflector or soft source"
+        modifier_rationale: "Subtle fill that doesn't flatten the key's sculpting"
+        power_guidance: "1.5-2.5 stops below key"
+      - role: rim
+        label: "Separation / Edge"
+        purpose: "Creates depth by separating subject from environment"
+        positioning: "Behind subject, opposite the key"
+        modifier: "Strip softbox or gridded head"
+        modifier_rationale: "Narrow, controlled beam for clean edge without spill"
+        power_guidance: "Match key or slightly above for visible separation"
+      - role: background
+        label: "Environmental Light"
+        purpose: "Illuminates the location or background to integrate the scene"
+        positioning: "Aimed at key environmental elements"
+        modifier: "Gelled to match scene color, bounced or diffused"
+        modifier_rationale: "Should feel natural and connected to the overall lighting narrative"
+        power_guidance: "Below key — environment supports but doesn't compete"

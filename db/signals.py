@@ -69,6 +69,9 @@ _NEW_COLUMNS = [
     ("include_in_metrics",      "INTEGER DEFAULT 1"),
     ("include_in_conversion",   "INTEGER DEFAULT 1"),
     ("include_in_cohorts",      "INTEGER DEFAULT 1"),
+    # Phase 4b — analysis traceability
+    ("analysis_id",             "TEXT"),
+    ("system_version",          "TEXT"),
 ]
 
 _SEED_ROWS = [
@@ -234,6 +237,8 @@ def record_signal(
     upgraded: bool = False,
     revenue_value: float = 0.0,
     signal_source: str = "live",
+    analysis_id: Optional[str] = None,
+    system_version: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Write one signal row immediately. No batching.
@@ -266,8 +271,9 @@ def record_signal(
                 shoot_mode_entered, steps_completed, steps_total,
                 deviation_count, saved_setup, upgraded, revenue_value, created_at,
                 signal_source, include_in_learning, include_in_metrics,
-                include_in_conversion, include_in_cohorts)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                include_in_conversion, include_in_cohorts,
+                analysis_id, system_version)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 sig_id, session_id, user_id, pattern_id, confidence_score, outcome,
                 input_method, subject_type, environment, mood,
@@ -277,6 +283,7 @@ def record_signal(
                 1 if upgraded else 0,
                 revenue_value, created_at,
                 signal_source, include, include, include, include,
+                analysis_id, system_version,
             ),
         )
 

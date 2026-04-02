@@ -1,0 +1,45 @@
+{
+  "reference_id": "karsh_rembrandt_001",
+  "pattern_id": "rembrandt",
+  "photographer": "Yousuf Karsh",
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "environment": "studio",
+  "notes": "Hard sculpted key with deep shadow side, classic Rembrandt triangle patch on cheek",
+  "lights": [
+    {
+      "role": "key",
+      "modifier": "fresnel",
+      "angle_deg": 45,
+      "height_deg": 30,
+      "distance_ft": 8
+    },
+    {
+      "role": "fill",
+      "modifier": "reflector",
+      "angle_deg": -30,
+      "height_deg": 10,
+      "distance_ft": 6
+    }
+  ],
+  "shadow_signature": {
+    "nose_shadow": "opposite_key",
+    "chin_shadow": "defined",
+    "cheek_shadow": "triangle_patch"
+  },
+  "camera": {
+    "height_relative": "eye_level",
+    "distance_ft": 8,
+    "focal_length": 150
+  },
+  "use_cases": [
+    "portrait",
+    "editorial"
+  ],
+  "light_count": 2,
+  "key_direction_deg": 45,
+  "modifier_family": "fresnel",
+  "estimated_distance_ft": 8,
+  "shadow_pattern": "rembrandt",
+  "key_height_relative": "eye_level"
+}

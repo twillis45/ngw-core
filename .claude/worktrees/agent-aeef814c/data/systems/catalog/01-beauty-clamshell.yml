@@ -1,0 +1,43 @@
+id: beauty-clamshell
+name: Beauty Clamshell (Dish + Fill)
+pack: pro
+rank: 1
+
+taxonomy-refs:
+  mood: beauty
+  environment: studio
+  gear-profile: strobe-mono
+  modifier-family: beauty-dish
+
+shadow:
+  expected:
+    pattern: clamshell
+    notes:
+      - Minimal nose shadow, soft under-chin fill.
+      - Catchlights typically top + bottom.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: eye-level
+    lens: standard
+
+lights:
+  - role: key
+    name: Key
+    angle-deg: 0.0
+    distance-ft: "3–5"
+    height: just above eye line
+    modifier: beauty dish (optional sock)
+    notes:
+      - Centered above camera axis, slightly down.
+
+  - role: fill
+    name: Fill
+    angle-deg: 0.0
+    distance-ft: "2–4"
+    height: below face level
+    modifier: reflector / small soft source
+    notes:
+      - Under-key to open chin/eye sockets.

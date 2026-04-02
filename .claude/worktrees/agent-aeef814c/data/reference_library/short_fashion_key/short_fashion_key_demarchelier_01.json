@@ -1,0 +1,19 @@
+{
+  "reference_id": "short_fashion_key_demarchelier_01",
+  "pattern_id": "short_fashion_key",
+  "photographer": "Patrick Demarchelier",
+  "title": "Demarchelier Style Short Fashion Key 01",
+  "source_type": "editorial",
+  "source_url": "",
+  "environment": "studio",
+  "light_count": 1,
+  "key_direction_deg": 45,
+  "key_height_relative": "above_eye",
+  "shadow_pattern": "short_fashion",
+  "modifier_family": "octa",
+  "estimated_distance_ft": 6,
+  "dataset_tier": "gold",
+  "entry_trust_score": 1.0,
+  "matched_setup_ids": ["short_fashion_key", "soft_editorial_key"],
+  "notes": "Editorial fashion setup with short-lighting facial geometry and body shaping."
+}

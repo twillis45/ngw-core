@@ -677,7 +677,7 @@ class TestSetupFamilyInference:
         )
         sf = self._full_pipeline(report)
         all_hyp = [sf.primary_hypothesis] + [
-            a["hypothesis"] for a in sf.alternate_hypotheses
+            a.value for a in sf.alternate_hypotheses
         ]
         assert "slit_cut_light" in all_hyp
 
@@ -694,7 +694,7 @@ class TestSetupFamilyInference:
         )
         sf = self._full_pipeline(report)
         all_hyp = [sf.primary_hypothesis] + [
-            a["hypothesis"] for a in sf.alternate_hypotheses
+            a.value for a in sf.alternate_hypotheses
         ]
         assert "gobo_projection" in all_hyp
 
@@ -715,7 +715,7 @@ class TestSetupFamilyInference:
         sf = self._full_pipeline(report)
         # Traditional candidates should be penalized — slit/gobo should rank high
         all_hyp = [sf.primary_hypothesis] + [
-            a["hypothesis"] for a in sf.alternate_hypotheses
+            a.value for a in sf.alternate_hypotheses
         ]
         assert "slit_cut_light" in all_hyp
         assert any("shadow interruption" in n.lower() for n in sf.ambiguity_notes)
@@ -748,7 +748,7 @@ class TestSetupFamilyInference:
         )
         sf = self._full_pipeline(report)
         all_hyp = [sf.primary_hypothesis] + [
-            a["hypothesis"] for a in sf.alternate_hypotheses
+            a.value for a in sf.alternate_hypotheses
         ]
         assert "slit_cut_light" not in all_hyp
         assert "gobo_projection" not in all_hyp

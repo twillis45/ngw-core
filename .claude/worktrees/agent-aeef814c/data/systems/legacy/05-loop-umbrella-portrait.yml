@@ -1,0 +1,25 @@
+id: loop_umbrella_portrait
+name: Loop Umbrella Portrait
+criteria:
+  brightness: 7000
+  color_accuracy: 94
+  setup_speed: 9
+  control: 6
+features:
+  dimmable: true
+  battery_capable: true
+  smart_ready: false
+taxonomy_refs:
+  gear_profile: strobe_mono
+  modifier_family: umbrella
+  mood: portrait
+  environment: studio_small
+  skin_tone: light
+notes:
+- Fast portrait lighting with loop shadow
+diagram_hints:
+  key:
+    angle_deg: 35
+    height: slightly_above_eye
+    distance_ft: "4\u20136"
+    modifier: umbrella

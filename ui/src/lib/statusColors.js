@@ -5,6 +5,9 @@
  * Lab tab components (inline styles). Import from here — never hardcode
  * the hex values directly in component files.
  *
+ * Values are CSS custom properties so they respond to light/dark theme
+ * switching automatically (tokens defined in theme/tokens.css).
+ *
  * Usage:
  *   import { C } from '../../lib/statusColors';
  *   style={{ color: C.green }}
@@ -13,28 +16,29 @@
 
 /** Core text / icon colours */
 export const C = {
-  green:  '#34D399',
-  amber:  '#FBBF24',
-  red:    '#F87171',
-  blue:   '#4DA3FF',
-  muted:  '#6B7280',
+  green:  'var(--color-status-green)',
+  amber:  'var(--color-status-amber)',
+  red:    'var(--color-status-red)',
+  blue:   'var(--color-status-blue)',
+  muted:  'var(--color-status-muted)',
 
-  /** Subtle background fills — badges, chips (12 % opacity) */
-  greenBg: 'rgba(52,211,153,0.12)',
-  amberBg: 'rgba(251,191,36,0.12)',
-  redBg:   'rgba(248,113,113,0.12)',
-  blueBg:  'rgba(77,163,255,0.12)',
+  /** Subtle background fills — badges, chips */
+  greenBg: 'var(--color-status-green-bg)',
+  amberBg: 'var(--color-status-amber-bg)',
+  redBg:   'var(--color-status-red-bg)',
+  blueBg:  'var(--color-status-blue-bg)',
 
-  /** Slightly stronger fills — score bars, status callouts (15 % opacity) */
-  greenBg2: 'rgba(52,211,153,0.15)',
-  amberBg2: 'rgba(251,191,36,0.15)',
-  redBg2:   'rgba(248,113,113,0.15)',
-  blueBg2:  'rgba(77,163,255,0.15)',
+  /** Slightly stronger fills — score bars, status callouts */
+  greenBg2: 'var(--color-status-green-bg2)',
+  amberBg2: 'var(--color-status-amber-bg2)',
+  redBg2:   'var(--color-status-red-bg2)',
+  blueBg2:  'var(--color-status-blue-bg2)',
 
   /** Border / stroke variants */
-  redBorder:   '#F8717166',
-  greenBorder: '#34D39966',
-  amberBorder: '#FBBF2466',
+  redBorder:   'var(--color-status-red-border)',
+  greenBorder: 'var(--color-status-green-border)',
+  amberBorder: 'var(--color-status-amber-border)',
+  blueBorder:  'var(--color-status-blue-border)',
 };
 
 /**

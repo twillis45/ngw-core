@@ -1,0 +1,449 @@
+{
+  "run_path": "/Users/toddwillis/Documents/ngw-core/data/intelligence_runs/20260324T224224_gold",
+  "n_total": 33,
+  "n_evaluated": 33,
+  "n_errors": 0,
+  "overall": {
+    "exact_accuracy": 0.545,
+    "acceptable_accuracy": 0.333,
+    "miss_rate": 0.121
+  },
+  "per_pattern": {
+    "butterfly": {
+      "total": 2,
+      "exact_accuracy": 0.5,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.93,
+      "min_confidence": 0.92,
+      "max_confidence": 0.94
+    },
+    "clamshell": {
+      "total": 2,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.5,
+      "mean_confidence": 0.93,
+      "min_confidence": 0.92,
+      "max_confidence": 0.94
+    },
+    "flat_fashion": {
+      "total": 2,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.74,
+      "min_confidence": 0.65,
+      "max_confidence": 0.83
+    },
+    "high_key": {
+      "total": 2,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.5,
+      "mean_confidence": 0.87,
+      "min_confidence": 0.83,
+      "max_confidence": 0.91
+    },
+    "loop": {
+      "total": 5,
+      "exact_accuracy": 0.8,
+      "miss_rate": 0.2,
+      "mean_confidence": 0.536,
+      "min_confidence": 0.3,
+      "max_confidence": 0.9
+    },
+    "low_key": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.29,
+      "min_confidence": 0.29,
+      "max_confidence": 0.29
+    },
+    "rembrandt": {
+      "total": 2,
+      "exact_accuracy": 0.5,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.323,
+      "min_confidence": 0.322,
+      "max_confidence": 0.324
+    },
+    "split": {
+      "total": 1,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.73,
+      "min_confidence": 0.73,
+      "max_confidence": 0.73
+    },
+    "triangle": {
+      "total": 1,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.91,
+      "min_confidence": 0.91,
+      "max_confidence": 0.91
+    },
+    "window_portrait": {
+      "total": 2,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.88,
+      "min_confidence": 0.88,
+      "max_confidence": 0.88
+    },
+    "athletic_rim_sculpt": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.7,
+      "min_confidence": 0.7,
+      "max_confidence": 0.7
+    },
+    "bottle_backlight": {
+      "total": 1,
+      "exact_accuracy": 0.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.85,
+      "min_confidence": 0.85,
+      "max_confidence": 0.85
+    },
+    "broad": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.9,
+      "min_confidence": 0.9,
+      "max_confidence": 0.9
+    },
+    "editorial_rim_key": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.92,
+      "min_confidence": 0.92,
+      "max_confidence": 0.92
+    },
+    "gobo": {
+      "total": 2,
+      "exact_accuracy": 0.5,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.544,
+      "min_confidence": 0.238,
+      "max_confidence": 0.85
+    },
+    "golden_hour": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.87,
+      "min_confidence": 0.87,
+      "max_confidence": 0.87
+    },
+    "overcast_natural": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.83,
+      "min_confidence": 0.83,
+      "max_confidence": 0.83
+    },
+    "rim_only": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.322,
+      "min_confidence": 0.322,
+      "max_confidence": 0.322
+    },
+    "ring_light": {
+      "total": 1,
+      "exact_accuracy": 1.0,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.85,
+      "min_confidence": 0.85,
+      "max_confidence": 0.85
+    },
+    "short": {
+      "total": 2,
+      "exact_accuracy": 0.5,
+      "miss_rate": 0.0,
+      "mean_confidence": 0.865,
+      "min_confidence": 0.85,
+      "max_confidence": 0.88
+    },
+    "tabletop_soft_product": {
+      "total": 1,
+      "exact_accuracy": 0.0,
+      "miss_rate": 1.0,
+      "mean_confidence": 0.85,
+      "min_confidence": 0.85,
+      "max_confidence": 0.85
+    }
+  },
+  "top_confused_pairs": [
+    {
+      "expected": "flat_fashion",
+      "predicted": "high_key",
+      "count": 2,
+      "pct_of_expected": 1.0
+    },
+    {
+      "expected": "split",
+      "predicted": "rembrandt",
+      "count": 1,
+      "pct_of_expected": 1.0
+    },
+    {
+      "expected": "triangle",
+      "predicted": "clamshell",
+      "count": 1,
+      "pct_of_expected": 1.0
+    },
+    {
+      "expected": "bottle_backlight",
+      "predicted": "low_key",
+      "count": 1,
+      "pct_of_expected": 1.0
+    },
+    {
+      "expected": "tabletop_soft_product",
+      "predicted": "golden_hour",
+      "count": 1,
+      "pct_of_expected": 1.0
+    },
+    {
+      "expected": "butterfly",
+      "predicted": "clamshell",
+      "count": 1,
+      "pct_of_expected": 0.5
+    },
+    {
+      "expected": "clamshell",
+      "predicted": "high_key",
+      "count": 1,
+      "pct_of_expected": 0.5
+    },
+    {
+      "expected": "clamshell",
+      "predicted": "butterfly",
+      "count": 1,
+      "pct_of_expected": 0.5
+    },
+    {
+      "expected": "high_key",
+      "predicted": "triangle",
+      "count": 1,
+      "pct_of_expected": 0.5
+    },
+    {
+      "expected": "high_key",
+      "predicted": "clamshell",
+      "count": 1,
+      "pct_of_expected": 0.5
+    }
+  ],
+  "low_confidence_correct": 6,
+  "low_confidence_miss": 0,
+  "calibration_failures": {
+    "over_confident_misses": 4,
+    "under_confident_hits": 6,
+    "details": [
+      {
+        "type": "over_confident_miss",
+        "expected": "clamshell",
+        "predicted": "high_key",
+        "confidence": 0.92
+      },
+      {
+        "type": "over_confident_miss",
+        "expected": "high_key",
+        "predicted": "triangle",
+        "confidence": 0.83
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "loop",
+        "predicted": "loop",
+        "confidence": 0.35
+      },
+      {
+        "type": "over_confident_miss",
+        "expected": "loop",
+        "predicted": "butterfly",
+        "confidence": 0.81
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "loop",
+        "predicted": "loop",
+        "confidence": 0.32
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "low_key",
+        "predicted": "low_key",
+        "confidence": 0.29
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "rembrandt",
+        "predicted": "rembrandt",
+        "confidence": 0.322
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "loop",
+        "predicted": "loop",
+        "confidence": 0.3
+      },
+      {
+        "type": "under_confident_correct",
+        "expected": "rim_only",
+        "predicted": "rim_only",
+        "confidence": 0.322
+      },
+      {
+        "type": "over_confident_miss",
+        "expected": "tabletop_soft_product",
+        "predicted": "golden_hour",
+        "confidence": 0.85
+      }
+    ]
+  },
+  "difficulty_breakdown": {
+    "standard": {
+      "n": 17,
+      "exact_accuracy": 0.471
+    },
+    "hard": {
+      "n": 16,
+      "exact_accuracy": 0.625
+    }
+  },
+  "suggestions": [
+    {
+      "priority": "high",
+      "pattern": "tabletop_soft_product",
+      "issue": "High miss rate 100%",
+      "suggested_action": "Review classifier for tabletop_soft_product; commonly confused with golden_hour"
+    },
+    {
+      "priority": "high",
+      "pattern": "clamshell",
+      "issue": "Over-confident miss: predicted high_key with 0.92 confidence",
+      "suggested_action": "Add contradiction check between clamshell and high_key"
+    },
+    {
+      "priority": "high",
+      "pattern": "high_key",
+      "issue": "Over-confident miss: predicted triangle with 0.83 confidence",
+      "suggested_action": "Add contradiction check between high_key and triangle"
+    },
+    {
+      "priority": "high",
+      "pattern": "loop",
+      "issue": "Over-confident miss: predicted butterfly with 0.81 confidence",
+      "suggested_action": "Add contradiction check between loop and butterfly"
+    },
+    {
+      "priority": "high",
+      "pattern": "tabletop_soft_product",
+      "issue": "Over-confident miss: predicted golden_hour with 0.85 confidence",
+      "suggested_action": "Add contradiction check between tabletop_soft_product and golden_hour"
+    },
+    {
+      "priority": "medium",
+      "pattern": "loop",
+      "issue": "Low confidence 0.54 despite 80% accuracy",
+      "suggested_action": "Boost confidence signal for loop \u2014 classifier is correct but uncertain. Review feature weights."
+    },
+    {
+      "priority": "medium",
+      "pattern": "low_key",
+      "issue": "Low confidence 0.29 despite 100% accuracy",
+      "suggested_action": "Boost confidence signal for low_key \u2014 classifier is correct but uncertain. Review feature weights."
+    },
+    {
+      "priority": "medium",
+      "pattern": "rim_only",
+      "issue": "Low confidence 0.32 despite 100% accuracy",
+      "suggested_action": "Boost confidence signal for rim_only \u2014 classifier is correct but uncertain. Review feature weights."
+    },
+    {
+      "priority": "medium",
+      "pattern": "flat_fashion",
+      "issue": "Confused with high_key 100% of the time",
+      "suggested_action": "Add discriminating signal for flat_fashion vs high_key boundary"
+    }
+  ],
+  "confusion_matrix": {
+    "butterfly": {
+      "butterfly": 1,
+      "clamshell": 1
+    },
+    "clamshell": {
+      "high_key": 1,
+      "butterfly": 1
+    },
+    "flat_fashion": {
+      "high_key": 2
+    },
+    "high_key": {
+      "triangle": 1,
+      "clamshell": 1
+    },
+    "loop": {
+      "loop": 4,
+      "butterfly": 1
+    },
+    "low_key": {
+      "low_key": 1
+    },
+    "rembrandt": {
+      "rembrandt": 1,
+      "loop": 1
+    },
+    "split": {
+      "rembrandt": 1
+    },
+    "triangle": {
+      "clamshell": 1
+    },
+    "window_portrait": {
+      "window_portrait": 2
+    },
+    "athletic_rim_sculpt": {
+      "athletic_rim_sculpt": 1
+    },
+    "bottle_backlight": {
+      "low_key": 1
+    },
+    "broad": {
+      "broad": 1
+    },
+    "editorial_rim_key": {
+      "editorial_rim_key": 1
+    },
+    "gobo": {
+      "gobo": 1,
+      "rembrandt": 1
+    },
+    "golden_hour": {
+      "golden_hour": 1
+    },
+    "overcast_natural": {
+      "overcast_natural": 1
+    },
+    "rim_only": {
+      "rim_only": 1
+    },
+    "ring_light": {
+      "ring_light": 1
+    },
+    "short": {
+      "short": 1,
+      "low_key": 1
+    },
+    "tabletop_soft_product": {
+      "golden_hour": 1
+    }
+  }
+}

@@ -1,0 +1,51 @@
+id: athletic-rim-kicker
+name: Athletic (Rim + Kicker)
+pack: pro
+rank: 10
+
+taxonomy-refs:
+  mood: athletic
+  environment: studio
+  gear-profile: strobe-mono
+  modifier-family: stripbox
+
+shadow:
+  expected:
+    pattern: rim
+    notes:
+      - Strong edges; separation; shadowy front unless filled.
+
+diagram-defaults:
+  subject:
+    position: center
+  camera:
+    angle: slightly-low
+    lens: short-tele
+
+lights:
+  - role: rim
+    name: Rim
+    angle-deg: 150.0
+    distance-ft: "6–12"
+    height: above head height
+    modifier: stripbox + grid
+    notes:
+      - Back/side edge light; keep controlled.
+
+  - role: kicker
+    name: Kicker
+    angle-deg: -150.0
+    distance-ft: "6–12"
+    height: above head height
+    modifier: stripbox + grid
+    notes:
+      - Symmetric edge / highlight control.
+
+  - role: key
+    name: Key (optional)
+    angle-deg: 20.0
+    distance-ft: "6–10"
+    height: above eye line
+    modifier: softbox (low power)
+    notes:
+      - Add only if face goes dead.

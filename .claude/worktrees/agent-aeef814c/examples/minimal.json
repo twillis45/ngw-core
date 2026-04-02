@@ -1,0 +1,29 @@
+{
+  "systems": [
+    {
+      "id": "led-1",
+      "name": "LED Panel",
+      "criteria": {
+        "brightness": 5000,
+        "color_accuracy": 85,
+        "portability": 50,
+        "battery_life": 50,
+        "energy_efficiency": 50
+      },
+      "features": {
+        "dimmable": true
+      },
+      "taxonomy_refs": {
+        "mood": "corporate",
+        "environment": "studio",
+        "gear_profile": "led_panel"
+      }
+    }
+  ],
+  "input": {
+    "mood": "corporate",
+    "environment": "studio",
+    "gear_profile": "led_panel",
+    "modifiers_available": ["softbox_rect", "umbrella_white"]
+  }
+}

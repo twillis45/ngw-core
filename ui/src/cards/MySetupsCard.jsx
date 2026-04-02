@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useDispatch } from '../context/AppContext';
 import { loadSetups, getStylePattern } from '../data/setupStore';
 import { trackEvent } from '../data/analytics';
+import { fmtPattern } from '../lib/formatters';
 import CardIcon from '../components/CardIcon';
 
 const _DEVICE_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -58,7 +59,7 @@ export default function MySetupsCard() {
         <div className="my-setups-card__identity">
           <span>
             You consistently use{' '}
-            <span className="my-setups-card__pattern-badge">{stylePattern.pattern}</span>
+            <span className="my-setups-card__pattern-badge">{fmtPattern(stylePattern.pattern)}</span>
             {' '}lighting
             {stylePattern.total >= 3 && (
               <span className="my-setups-card__pattern-count">
@@ -82,7 +83,7 @@ export default function MySetupsCard() {
                 <span className="my-setups-card__item-name">{setup.name}</span>
                 <div className="my-setups-card__item-meta">
                   {pattern && (
-                    <span className="my-setups-card__pattern-pill">{pattern}</span>
+                    <span className="my-setups-card__pattern-pill">{fmtPattern(pattern)}</span>
                   )}
                   {score != null && (
                     <span className="my-setups-card__score">{Math.round(score * 100)}%</span>

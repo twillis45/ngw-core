@@ -5,7 +5,7 @@
   "dataset_tier": "gold",
   "entry_trust_score": 0.5,
   "environment": "studio",
-  "approval_status": "draft",
+  "approval_status": "rejected",
   "catchlight_pattern": "single",
   "underfill_ev": 0.44,
   "separation_light_type": "none",
@@ -25,5 +25,8 @@
   "light_count": 1,
   "key_direction_deg": 45.0,
   "key_height_relative": "above_eye_level",
-  "style_family": "editorial"
+  "style_family": "editorial",
+  "approved_by": null,
+  "approved_at": null,
+  "rejection_reason": "gold issue not a clear loop or butterfly pattern "
 }

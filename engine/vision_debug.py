@@ -560,12 +560,28 @@ def _draw_light_roles(
 
 # ── Main overlay function ────────────────────────────────────────────────
 
+# All valid layer names — passed as a set to generate_analysis_overlay.
+# None (the default) means "all layers".
+ALL_LAYERS: frozenset[str] = frozenset({
+    "shadow",
+    "highlights",
+    "catchlights",
+    "background",
+    "pose",
+    "specular",
+    "surface",
+    "light_roles",
+    "summary",
+})
+
+
 def generate_analysis_overlay(
     img_bgr: np.ndarray,
     pipeline_results: Dict[str, Any],
     face_box: Optional[Tuple[int, int, int, int]] = None,
     person_mask: Optional[np.ndarray] = None,
     output_path: Optional[str] = None,
+    layers: Optional[frozenset[str]] = None,
 ) -> Optional[str]:
     """Generate a debug overlay image with all detected signals visualized.
 
@@ -575,6 +591,9 @@ def generate_analysis_overlay(
         face_box: Face bounding box (x0, y0, x1, y1)
         person_mask: Binary person segmentation mask
         output_path: Custom output path. If None, uses default.
+        layers: Set of layer names to draw. None means all layers.
+                Valid names: shadow, highlights, catchlights, background,
+                pose, specular, surface, light_roles, summary.
 
     Returns:
         Path to saved overlay image, or None on failure.
@@ -582,6 +601,9 @@ def generate_analysis_overlay(
     if cv2 is None:
         logger.warning("cv2 not available, cannot generate overlay")
         return None
+
+    # Resolve active layers — None means "draw everything"
+    active = ALL_LAYERS if layers is None else (layers & ALL_LAYERS)
 
     try:
         overlay = img_bgr.copy()
@@ -594,53 +616,63 @@ def generate_analysis_overlay(
         _FONT_THICKNESS = max(1, round(_FONT_SCALE))
 
         # Shadow vector
-        shadow = pipeline_results.get("shadow", {})
-        if shadow.get("ok"):
-            _draw_shadow_vector(overlay, shadow, face_box)
+        if "shadow" in active:
+            shadow = pipeline_results.get("shadow", {})
+            if shadow.get("ok"):
+                _draw_shadow_vector(overlay, shadow, face_box)
 
         # Highlight heatmap
-        highlight = pipeline_results.get("highlight", {})
-        if highlight.get("ok"):
-            _draw_highlight_heatmap(overlay, gray, person_mask)
+        if "highlights" in active:
+            highlight = pipeline_results.get("highlight", {})
+            if highlight.get("ok"):
+                _draw_highlight_heatmap(overlay, gray, person_mask)
 
         # Catchlight circles
-        catchlight = pipeline_results.get("catchlight", {})
-        if catchlight.get("ok"):
-            _draw_catchlight_circles(overlay, catchlight, face_box)
+        if "catchlights" in active:
+            catchlight = pipeline_results.get("catchlight", {})
+            if catchlight.get("ok"):
+                _draw_catchlight_circles(overlay, catchlight, face_box)
 
         # Background gradient center
-        background = pipeline_results.get("background", {})
-        if background.get("ok"):
-            _draw_bg_gradient_center(overlay, background)
+        if "background" in active:
+            background = pipeline_results.get("background", {})
+            if background.get("ok"):
+                _draw_bg_gradient_center(overlay, background)
 
-        # Pose axis (basic from geometry)
-        geometry = pipeline_results.get("geometry", {})
-        _draw_pose_axis(overlay, geometry, face_box)
+        # Pose axis (basic geometry) + pose solver overlays
+        # Both grouped under "pose" — they describe the same subject geometry.
+        if "pose" in active:
+            geometry = pipeline_results.get("geometry", {})
+            _draw_pose_axis(overlay, geometry, face_box)
+
+            pose_solver = pipeline_results.get("pose_solver", {})
+            recon = pipeline_results.get("reconstruction", {})
+            if pose_solver.get("ok"):
+                _draw_pose_solver(overlay, pose_solver, recon, face_box)
+        else:
+            # recon is still needed for summary even when pose is off
+            recon = pipeline_results.get("reconstruction", {})
 
         # Specular highlights
-        specular = pipeline_results.get("specular_surface", {})
-        if specular.get("ok"):
-            _draw_specular_highlights(overlay, specular, img_bgr, person_mask)
-
-        # Pose solver overlays (shoulder/hip axes, self-shadow,
-        # corrected light arrow, complexity badge)
-        pose_solver = pipeline_results.get("pose_solver", {})
-        recon = pipeline_results.get("reconstruction", {})
-        if pose_solver.get("ok"):
-            _draw_pose_solver(overlay, pose_solver, recon, face_box)
+        if "specular" in active:
+            specular = pipeline_results.get("specular_surface", {})
+            if specular.get("ok"):
+                _draw_specular_highlights(overlay, specular, img_bgr, person_mask)
 
         # Surface class overlays
-        surface = pipeline_results.get("surface_class", {})
-        if surface.get("ok"):
-            _draw_surface_classes(overlay, surface, face_box, person_mask)
+        if "surface" in active:
+            surface = pipeline_results.get("surface_class", {})
+            if surface.get("ok"):
+                _draw_surface_classes(overlay, surface, face_box, person_mask)
 
         # Light role overlays
-        light_role = pipeline_results.get("light_role", {})
-        if light_role.get("ok"):
-            _draw_light_roles(overlay, light_role)
+        if "light_roles" in active:
+            light_role = pipeline_results.get("light_role", {})
+            if light_role.get("ok"):
+                _draw_light_roles(overlay, light_role)
 
         # Reconstruction summary in corner
-        if recon.get("ok"):
+        if "summary" in active and recon.get("ok"):
             line_h = max(20, round(_FONT_SCALE * 30))
             y_pos = line_h
             summary_keys = [
@@ -659,7 +691,7 @@ def generate_analysis_overlay(
                     _put_label(overlay, f"{key}: {val}", (10, y_pos))
                     y_pos += line_h
 
-        # Validation status
+        # Validation status (always shown — not part of the per-layer toggle)
         validation = pipeline_results.get("validation", {})
         if validation.get("ok"):
             conf = validation.get("confidence", 0)

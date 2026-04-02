@@ -141,8 +141,9 @@ Return a JSON object with two sections:
       "catchlight_shape": "<'round' | 'rectangular' | 'octagonal' | 'strip' | 'mixed' | 'none_visible' | null>",
       "catchlight_position": "<clock position of primary catchlight: '1_oclock' through '12_oclock' or null>",
       "catchlight_relative_intensity": "<'bright' | 'dim' | 'mixed' | null>",
+      "jewellery_catchlight_suspected": <true if a lateral catchlight (3–5 or 7–9 o'clock) is present AND the subject is wearing large hoop earrings, statement earrings, or other reflective jewellery near eye level; false otherwise>,
       "confidence": <float 0.0-1.0>,
-      "notes": ["<what you see in the eye reflections>"]
+      "notes": ["<what you see in the eye reflections — if jewellery_catchlight_suspected is true, describe which earring or accessory and which eye is affected>"]
     },
     "reconstruction": {
       "key_light_angle_deg": <float 0-180, estimated angle of key light from camera axis or null>,
@@ -184,6 +185,7 @@ SIGNAL EXTRACTION RULES:
 - shadow_vector_deg uses a clock/compass convention: 0°=shadow falls straight down (light from above), 90°=shadow falls to subject's left (light from subject's right), etc.
 - Confidence per section: 0.0 = cannot determine, 0.5 = rough estimate, 0.8+ = clearly visible
 - Be concise in notes — state what visual evidence you used
+- CATCHLIGHT CONTAMINATION: Large hoop earrings, chandelier earrings, and other reflective jewellery worn near eye level can reflect into the lateral edge of the iris and appear as a catchlight at 3–5 or 7–9 o'clock. These are NOT key-light catchlights. If you observe a lateral catchlight in an eye closest to visible earrings, set jewellery_catchlight_suspected=true and describe it in notes. The primary catchlight for lighting analysis should be the upper-hemisphere catchlight (10–2 o'clock range), not the lateral one.
 
 GENERAL RULES:
 - Use photographer language, be specific
