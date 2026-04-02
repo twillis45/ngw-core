@@ -1403,28 +1403,28 @@ body {
 
 /* ── Active: clean top-to-bottom scan line ─────────────────────────────────── */
 .ref-scan-overlay__line {
-  position: absolute; left: 0; right: 0; top: -10px; height: 10px;
+  position: absolute; left: 0; right: 0; top: -30px; height: 30px;
   background: linear-gradient(90deg,
     transparent 0%,
-    rgba(77, 163, 255, 0.3) 15%,
-    var(--color-accent) 40%,
-    rgba(255, 255, 255, 0.9) 50%,
-    var(--color-accent) 60%,
-    rgba(77, 163, 255, 0.3) 85%,
+    rgba(77, 163, 255, 0.25) 10%,
+    rgba(77, 163, 255, 0.8) 35%,
+    rgba(180, 220, 255, 0.95) 50%,
+    rgba(77, 163, 255, 0.8) 65%,
+    rgba(77, 163, 255, 0.25) 90%,
     transparent 100%
   );
-  box-shadow: 0 0 14px 4px rgba(77, 163, 255, 0.55), 0 4px 28px 8px rgba(77, 163, 255, 0.2);
+  box-shadow: 0 0 18px 6px rgba(77, 163, 255, 0.5), 0 6px 40px 10px rgba(77, 163, 255, 0.18);
   animation: ref-scan 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 /* Trailing glow that follows the line */
 .ref-scan-overlay__line::after {
   content: '';
-  position: absolute; left: 8%; right: 8%; top: 10px; height: 56px;
+  position: absolute; left: 6%; right: 6%; top: 30px; height: 70px;
   background: linear-gradient(to bottom, rgba(77, 163, 255, 0.14), transparent);
   pointer-events: none;
 }
 @keyframes ref-scan {
-  0%   { top: -4px;  opacity: 0; }
+  0%   { top: -30px; opacity: 0; }
   6%   { opacity: 1; }
   94%  { opacity: 1; }
   100% { top: 100%;  opacity: 0; }
@@ -6154,9 +6154,22 @@ body {
     gap: var(--space-lg);
     align-items: start;
   }
+  /* Left column: sticky + capped to viewport so actions row is ALWAYS visible */
   .lab-wb-layout__left {
     position: sticky;
     top: calc(var(--lab-top-bar-h, 0px) + var(--space-sm));
+    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - var(--space-md));
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  /* Preview fills remaining height — flex child; image fits within it */
+  .lab-wb-layout__left .lab-workbench__preview {
+    flex: 1 1 0;
+    min-height: 220px;
+  }
+  .lab-wb-layout__left .lab-workbench__preview img {
+    max-height: 100%;
   }
   /* Right column: independently scrollable so it never slides under the header */
   .lab-wb-layout__right {
@@ -6165,10 +6178,6 @@ body {
     overflow-x: hidden;
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;
-  }
-  /* Preview: min-height at tablet so empty state has presence; grows with portrait images */
-  .lab-wb-layout__left .lab-workbench__preview {
-    min-height: 320px;
   }
   .lab-wb-layout__right-empty {
     min-height: 300px;
