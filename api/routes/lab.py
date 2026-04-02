@@ -1595,25 +1595,35 @@ async def reprocess_dataset_entry(
 
 @router.get("/monitoring-stats")
 async def get_monitoring_stats(
-    hours: int = Query(24, ge=1, le=168),
+    hours: int = Query(24, ge=1, le=720),
     user: Dict = Depends(get_dev_user),
 ):
     """
     Single endpoint for the Monitoring section: VLM sparkline, analysis funnel,
     and Stripe webhook health.  Returns all three datasets in one round trip.
+
+    Bucketing: hourly for windows ≤ 48 h, daily for longer windows.
     """
     cutoff = time.time() - hours * 3600
 
     with get_db() as conn:
-        # ── VLM sparkline (hourly call counts with ok/err breakdown) ──────────
+        # ── VLM sparkline ─────────────────────────────────────────────────────
         vlm_rows = conn.execute(
             "SELECT called_at, ok FROM vlm_call_metrics WHERE called_at > ? ORDER BY called_at DESC",
             (cutoff,),
         ).fetchall()
 
         now = time.time()
-        bucket_secs = 3600
-        n_buckets = hours
+        # Use daily buckets for windows longer than 48 h to keep bar count sane
+        if hours > 48:
+            bucket_secs = 86400          # 1 day
+            n_buckets   = max(hours // 24, 1)
+            bucket_unit = "day"
+        else:
+            bucket_secs = 3600           # 1 hour
+            n_buckets   = hours
+            bucket_unit = "hour"
+
         ok_buckets: Dict[int, int] = {}
         err_buckets: Dict[int, int] = {}
         for r in vlm_rows:
@@ -1626,9 +1636,9 @@ async def get_monitoring_stats(
 
         sparkline = [
             {
-                "hours_ago": h,
-                "ok": ok_buckets.get(h, 0),
-                "err": err_buckets.get(h, 0),
+                "hours_ago": h * (bucket_secs // 3600),
+                "ok":    ok_buckets.get(h, 0),
+                "err":   err_buckets.get(h, 0),
                 "total": ok_buckets.get(h, 0) + err_buckets.get(h, 0),
             }
             for h in range(n_buckets)
@@ -1674,6 +1684,7 @@ async def get_monitoring_stats(
 
     return {
         "window_hours": hours,
+        "bucket_unit":  bucket_unit,
         "sparkline":    sparkline,
         "funnel":       funnel,
         "stripe":       stripe_health,
@@ -1684,7 +1695,7 @@ async def get_monitoring_stats(
 
 @router.get("/api-metrics")
 async def get_api_metrics(
-    hours: int = Query(24, ge=1, le=168),
+    hours: int = Query(24, ge=1, le=720),
     user: Dict = Depends(get_dev_user),
 ):
     """

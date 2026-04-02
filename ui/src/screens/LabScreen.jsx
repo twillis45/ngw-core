@@ -872,6 +872,10 @@ export default function LabScreen() {
     if (tabId === 'monitoring_intel') {
       switchTab('learning');
       setLearningNavRequest({ panel: 'monitoring' });
+    } else if (tabId === 'learning') {
+      // Always reset to overview so switching away from Monitoring and back works
+      switchTab('learning');
+      setLearningNavRequest({ panel: 'overview' });
     } else {
       handleTabSwitch(tabId);
     }

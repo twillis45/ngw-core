@@ -2029,18 +2029,25 @@ function MonitoringDetail({ attributionId }) {
 
 // ── Live Health sub-panel ─────────────────────────────────────────────────────
 
-function MonitoringLiveHealth({ onNavigate }) {
-  const [stats,   setStats]   = useState(null);
-  const [metrics, setMetrics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [err,     setErr]     = useState(null);
+const WINDOW_OPTIONS = [
+  { hours: 24,  label: '24h' },
+  { hours: 168, label: '7d'  },
+  { hours: 720, label: '30d' },
+];
 
-  const load = useCallback(async () => {
+function MonitoringLiveHealth({ onNavigate }) {
+  const [stats,       setStats]       = useState(null);
+  const [metrics,     setMetrics]     = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [err,         setErr]         = useState(null);
+  const [windowHours, setWindowHours] = useState(24);
+
+  const load = useCallback(async (hrs = windowHours) => {
     setLoading(true); setErr(null);
     try {
       const [s, m] = await Promise.all([
-        getMonitoringStats(24).catch(() => null),
-        getApiMetrics(24).catch(() => null),
+        getMonitoringStats(hrs).catch(() => null),
+        getApiMetrics(hrs).catch(() => null),
       ]);
       setStats(s);
       setMetrics(m);
@@ -2049,9 +2056,9 @@ function MonitoringLiveHealth({ onNavigate }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [windowHours]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(windowHours); }, [windowHours]);
 
   if (loading) return <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', padding: 'var(--space-sm) 0' }}>Loading live health…</div>;
   if (err)     return <div style={{ color: C.red, fontSize: 'var(--text-xs)', padding: 'var(--space-sm) 0' }}>⚠ {err}</div>;
@@ -2157,44 +2164,130 @@ function MonitoringLiveHealth({ onNavigate }) {
         )}
       </div>
 
-      {/* ── Hourly sparkline ── */}
-      {sparkline.length > 0 && (
-        <div style={{ marginBottom: 'var(--space-md)' }}>
-          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600, marginBottom: 6 }}>
-            VLM Call Volume — last 24h
+      {/* ── Call volume sparkline ── */}
+      {sparkline.length > 0 && (() => {
+        const bucketUnit = stats?.bucket_unit ?? 'hour';
+        const reversed   = [...sparkline].reverse();   // oldest → newest
+        const n          = reversed.length;
+
+        // Axis labels: pick ~5 evenly distributed positions
+        const labelCount = Math.min(5, n);
+        const labelIdxs  = Array.from({ length: labelCount }, (_, k) =>
+          k === labelCount - 1 ? n - 1 : Math.round(k * (n - 1) / (labelCount - 1))
+        );
+        function fmtBucket(bucket) {
+          if (bucket.hours_ago === 0) return 'now';
+          return bucketUnit === 'day'
+            ? `${bucket.hours_ago / 24}d ago`
+            : `${bucket.hours_ago}h ago`;
+        }
+        // Most-recent bucket total (for last-bar label)
+        const lastBucket      = reversed[n - 1];
+        const lastBucketTotal = lastBucket.ok + lastBucket.err;
+
+        return (
+          <div style={{ marginBottom: 'var(--space-md)' }}>
+            {/* Header row: title + time-window toggle */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', fontWeight: 600 }}>
+                VLM Call Volume
+              </div>
+              <div style={{ display: 'flex', gap: 3 }}>
+                {WINDOW_OPTIONS.map(({ hours, label }) => (
+                  <button
+                    key={hours}
+                    onClick={() => setWindowHours(hours)}
+                    style={{
+                      fontSize: 9, padding: '2px 7px', borderRadius: 4,
+                      cursor: 'pointer', fontWeight: 600, lineHeight: 1.4,
+                      background: windowHours === hours ? 'var(--color-accent)' : 'var(--color-surface)',
+                      color:      windowHours === hours ? '#fff' : 'var(--color-text-secondary)',
+                      border:     `1px solid ${windowHours === hours ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bar chart */}
+            <div style={{ position: 'relative' }}>
+              <div style={{
+                display: 'flex', alignItems: 'flex-end', gap: 2,
+                height: 52, padding: '0 2px',
+                background: 'var(--color-surface)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                overflow: 'visible',
+              }}>
+                {reversed.map((bucket, i) => {
+                  const total    = bucket.ok + bucket.err;
+                  const height   = sparkMax > 0 ? Math.max((total / sparkMax) * 44, 2) : 2;
+                  const errFrac  = total > 0 ? bucket.err / total : 0;
+                  const barColor = errFrac > 0.2 ? C.red : errFrac > 0 ? C.amber : C.green;
+                  const isLast   = i === n - 1;
+                  return (
+                    <div
+                      key={i}
+                      title={bucketUnit === 'day'
+                        ? `${bucket.hours_ago / 24}d ago — ${total} calls (${bucket.ok} ok, ${bucket.err} err)`
+                        : `${bucket.hours_ago}h ago — ${total} calls (${bucket.ok} ok, ${bucket.err} err)`}
+                      style={{
+                        flex: 1, height, background: barColor,
+                        borderRadius: '2px 2px 0 0', minWidth: 3,
+                        opacity: 0.7 + (i / n) * 0.3,
+                        position: 'relative',
+                        alignSelf: 'flex-end',
+                      }}
+                    >
+                      {/* Label on the most-recent bar */}
+                      {isLast && lastBucketTotal > 0 && (
+                        <div style={{
+                          position: 'absolute', bottom: height + 3, left: '50%',
+                          transform: 'translateX(-50%)',
+                          fontSize: 8, fontWeight: 700, whiteSpace: 'nowrap',
+                          fontFamily: 'var(--font-mono)',
+                          color: barColor,
+                          background: 'var(--color-bg)',
+                          padding: '0 2px', borderRadius: 2,
+                          pointerEvents: 'none',
+                        }}>
+                          {lastBucketTotal}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Axis labels */}
+            <div style={{ position: 'relative', height: 14, marginTop: 2 }}>
+              {labelIdxs.map((idx, k) => {
+                const bucket = reversed[idx];
+                const pct    = n > 1 ? (idx / (n - 1)) * 100 : 0;
+                return (
+                  <span
+                    key={k}
+                    style={{
+                      position: 'absolute', left: `${pct}%`,
+                      transform: k === 0 ? 'none'
+                               : k === labelCount - 1 ? 'translateX(-100%)'
+                               : 'translateX(-50%)',
+                      fontSize: 9, color: 'var(--color-text-dim)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {fmtBucket(bucket)}
+                  </span>
+                );
+              })}
+            </div>
           </div>
-          <div style={{
-            display: 'flex', alignItems: 'flex-end', gap: 2,
-            height: 48, padding: '0 2px',
-            background: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-          }}>
-            {[...sparkline].reverse().map((bucket, i) => {
-              const total  = bucket.ok + bucket.err;
-              const height = sparkMax > 0 ? Math.max((total / sparkMax) * 44, 2) : 2;
-              const errFrac = total > 0 ? bucket.err / total : 0;
-              const barColor = errFrac > 0.2 ? C.red : errFrac > 0 ? C.amber : C.green;
-              return (
-                <div
-                  key={i}
-                  title={`${bucket.hours_ago}h ago — ${total} calls (${bucket.ok} ok, ${bucket.err} err)`}
-                  style={{
-                    flex: 1, height, background: barColor,
-                    borderRadius: '2px 2px 0 0', minWidth: 3,
-                    opacity: 0.75 + (i / sparkline.length) * 0.25,
-                  }}
-                />
-              );
-            })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
-            <span style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>24h ago</span>
-            <span style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>now</span>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Alert thresholds reference ── */}
       <div style={{
