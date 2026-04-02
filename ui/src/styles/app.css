@@ -5986,20 +5986,27 @@ body {
   filter: blur(3px);
   transition: filter 0.3s ease;
 }
+/* Keep the image inside the LCD frame during analysis — scale pulse instead of
+   translateY which clips against overflow:hidden and escapes the bezel. */
 .lab-workbench__img-shell--analyzing {
-  will-change: transform; /* only during active animation — avoids Safari fixed-pos bug */
-  transform: translateY(-18px);
-  box-shadow:
-    0 32px 80px rgba(0, 0, 0, 0.70),
-    0 12px 32px rgba(0, 0, 0, 0.50),
-    0  4px 10px rgba(0, 0, 0, 0.30);
-  filter: brightness(1.04);
-  animation: lab-img-breathe 5s ease-in-out infinite;
+  will-change: transform, filter;
+  transform: scale(1.012);
+  filter: brightness(1.05);
+  animation: lab-img-breathe 4s ease-in-out infinite;
 }
 @keyframes lab-img-breathe {
-  0%   { transform: translateY(-18px); }
-  50%  { transform: translateY(-26px); }
-  100% { transform: translateY(-18px); }
+  0%   { transform: scale(1.012); filter: brightness(1.05); }
+  50%  { transform: scale(1.020); filter: brightness(1.09); }
+  100% { transform: scale(1.012); filter: brightness(1.05); }
+}
+/* LCD bezel glows when analyzing — gives clear "inside the screen" feel */
+.lab-workbench__preview:has(.lab-workbench__img-shell--analyzing) {
+  border-color: rgba(77, 163, 255, 0.45);
+  box-shadow:
+    var(--lcd-shadow),
+    0 0 0 1px rgba(77, 163, 255, 0.12),
+    0 0 24px rgba(77, 163, 255, 0.10);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
 }
 /* Scanline overlay + glare reflection — only on the empty/idle state, not over a loaded image */
 .lab-workbench__preview:not(:has(img))::after {
@@ -6108,22 +6115,35 @@ body {
   }
   /* Preview: min-height at tablet so empty state has presence; grows with portrait images */
   .lab-wb-layout__left .lab-workbench__preview {
-    min-height: 260px;
+    min-height: 320px;
   }
   .lab-wb-layout__right-empty {
-    min-height: 280px;
+    min-height: 300px;
   }
 }
 
-/* Desktop 1080px+ — wider gap, even taller preview */
+/* Desktop 1080px+ — wider gap, taller preview */
 @media (min-width: 1080px) {
   .lab-wb-layout {
     grid-template-columns: 42fr 58fr;
     gap: var(--space-2xl);
   }
-  /* Preview: min-height at desktop so empty state has presence; grows with portrait images */
   .lab-wb-layout__left .lab-workbench__preview {
-    min-height: 300px;
+    min-height: 380px;
+  }
+}
+
+/* Large desktop 1400px+ — bigger canvas proportional to screen */
+@media (min-width: 1400px) {
+  .lab-wb-layout {
+    grid-template-columns: 46fr 54fr;
+    gap: var(--space-2xl);
+  }
+  .lab-wb-layout__left .lab-workbench__preview {
+    min-height: 480px;
+  }
+  .lab-workbench__preview img {
+    max-height: 75vh;
   }
 }
 
