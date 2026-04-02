@@ -102,7 +102,7 @@ def send_verification_email(to_email: str, token: str) -> None:
 
 
 def send_magic_link_email(to_email: str, token: str) -> None:
-    magic_url = f"{APP_URL}/static/ui/?magic_token={token}"
+    magic_url = f"{APP_URL}/ui?magic_token={token}"
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -138,7 +138,7 @@ def send_magic_link_email(to_email: str, token: str) -> None:
 
 
 def send_password_reset_email(to_email: str, token: str) -> None:
-    reset_url = f"{APP_URL}/static/ui/?reset_token={token}"
+    reset_url = f"{APP_URL}/ui?reset_token={token}"
 
     html = f"""<!DOCTYPE html>
 <html>
