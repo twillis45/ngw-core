@@ -6020,6 +6020,13 @@ body {
 }
 /* Shell shrinks to the image's actual rendered dimensions so the scan
    overlay covers only the image, not the surrounding letterbox area. */
+/* Tight wrapper that matches the image's rendered dimensions — overlay clips here */
+.lab-workbench__img-wrap {
+  position: relative;
+  display: inline-flex;
+  line-height: 0;
+}
+
 .lab-workbench__img-shell {
   position: relative;
   display: inline-flex;

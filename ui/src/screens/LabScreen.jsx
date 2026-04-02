@@ -1733,12 +1733,15 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
           {preview && (
             <div className="lab-workbench__preview">
               <div className={`lab-workbench__img-shell${loading ? ' lab-workbench__img-shell--analyzing' : ''}`}>
-                <ZoomImg src={preview} alt="Selected for analysis" />
-                {loading && (
-                  <div className="ref-scan-overlay">
-                    <div className="ref-scan-overlay__line" />
-                  </div>
-                )}
+                {/* img-wrap shrinks to the image's rendered size — overlay clips to image only */}
+                <div className="lab-workbench__img-wrap">
+                  <ZoomImg src={preview} alt="Selected for analysis" />
+                  {loading && (
+                    <div className="ref-scan-overlay">
+                      <div className="ref-scan-overlay__line" />
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
