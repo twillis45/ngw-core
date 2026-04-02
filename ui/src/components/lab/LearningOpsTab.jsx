@@ -2670,15 +2670,21 @@ function LearningReadinessCard() {
           <div style={{ fontSize: 'var(--text-xs)', color: scoreColor, fontWeight: 600, marginTop: 4 }}>{statusLabel}</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 'var(--space-xs)' }}>
-            Composite health of the learning pipeline — pattern coverage, open cluster count, candidate evaluation backlog, and active monitoring alerts.
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', lineHeight: 1.5, marginBottom: 6 }}>
+            Pipeline readiness — not accuracy. Measures whether the learning infrastructure
+            is clear enough to safely promote changes: no critical clusters, no evaluation
+            backlog, no active regressions. The engine runs at any score; ≥80 means it's
+            safe to promote candidates without hidden blockers.
+          </div>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', lineHeight: 1.5, marginBottom: 'var(--space-xs)' }}>
+            For accuracy, see <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Benchmarks</span>. For signal quality, see <span style={{ color: 'var(--color-text-secondary)', fontWeight: 600 }}>Learning Health</span> in Control Center.
           </div>
           <div style={{ display: 'flex', gap: 8, fontSize: 'var(--text-xs)', flexWrap: 'wrap' }}>
-            <span style={{ color: C.green }}>≥80 Ready</span>
+            <span style={{ color: C.green }} title="No critical clusters, no eval backlog, no active alerts — safe to promote">≥80 Ready to promote</span>
             <span style={{ color: 'var(--color-text-dim)' }}>·</span>
-            <span style={{ color: C.amber }}>55–79 Needs attention</span>
+            <span style={{ color: C.amber }} title="Some clusters open or candidates pending — review before promoting">55–79 Clear backlog first</span>
             <span style={{ color: 'var(--color-text-dim)' }}>·</span>
-            <span style={{ color: C.red }}>&lt;55 Action required</span>
+            <span style={{ color: C.red }} title="Critical clusters or active regressions — do not promote until resolved">&lt;55 Resolve blockers</span>
           </div>
         </div>
       </div>
