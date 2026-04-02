@@ -274,17 +274,24 @@ class PasswordResetConfirmBody(BaseModel):
 
 @router.post("/password-reset/request")
 def request_password_reset(body: PasswordResetRequestBody, request: Request):
-    """Send a password-reset link. Always returns success to avoid email enumeration."""
+    """Send a password-reset link. Always returns success to avoid email enumeration.
+
+    Admin/internal emails bypass the passwordless guard — they can always set a
+    password regardless of how the account was originally created.
+    """
     check_rate_limit("password_reset", request, limit=3, window=900, extra=body.email.lower())
-    user = get_user_by_email(body.email.lower())
-    # Only send reset emails for password-based accounts (not Google/magic-link users)
-    if user and user.get("hashed_pw") != "__passwordless__":
-        token = create_password_reset_token(body.email.lower())
+    from db.provenance import get_internal_emails
+    email_lower = body.email.lower()
+    user = get_user_by_email(email_lower)
+    is_admin = email_lower in get_internal_emails()
+    # Send reset for password-based accounts AND for admin emails (even if passwordless)
+    if user and (user.get("hashed_pw") != "__passwordless__" or is_admin):
+        token = create_password_reset_token(email_lower)
         try:
-            send_password_reset_email(body.email.lower(), token)
+            send_password_reset_email(email_lower, token)
         except Exception:
             pass  # non-fatal
-    return {"detail": "If that email has a password-based account, a reset link was sent."}
+    return {"detail": "If that email has an account, a reset link was sent."}
 
 @router.post("/password-reset/confirm")
 def confirm_password_reset(body: PasswordResetConfirmBody, request: Request):
