@@ -2712,6 +2712,38 @@ function LearningReadinessCard() {
   );
 }
 
+/** Deterministic hue from a pattern_id string — stable across renders. */
+function _patternHue(id = '') {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+  return h % 360;
+}
+
+/** 48×48 pattern swatch — colored tile with 2-letter initials. No real image needed. */
+function PatternSwatch({ patternId, size = 48 }) {
+  const hue = _patternHue(patternId);
+  const initials = (patternId || '?')
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0].toUpperCase())
+    .join('');
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 8, flexShrink: 0,
+      background: `hsl(${hue}, 45%, 22%)`,
+      border: `1.5px solid hsl(${hue}, 55%, 35%)`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-mono)', fontSize: size * 0.3,
+      fontWeight: 700, color: `hsl(${hue}, 70%, 72%)`,
+      letterSpacing: '0.04em', userSelect: 'none',
+    }}>
+      {initials}
+    </div>
+  );
+}
+
 function GoldSetSuggestionsPanel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -2743,28 +2775,53 @@ function GoldSetSuggestionsPanel() {
       {!suggestions || suggestions.length === 0 ? (
         <p className="lo-empty">No gold set candidates yet. Suggestions appear when high-confidence nailed_it reference photo sessions are recorded.</p>
       ) : (
-        <table className="lo-table">
-          <thead>
-            <tr>
-              <th>Pattern</th>
-              <th>Confidence</th>
-              <th>Environment</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {suggestions.map((s, i) => (
-              <tr key={i}>
-                <td><code>{s.pattern_id}</code></td>
-                <td style={{ color: C.green }}>{s.confidence != null ? `${(s.confidence * 100).toFixed(1)}%` : '—'}</td>
-                <td>{s.environment || '—'}</td>
-                <td style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)' }}>
-                  {s.created_at ? new Date(s.created_at * 1000).toLocaleDateString(undefined, { timeZone: _TZ }) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {suggestions.map((s, i) => {
+            const confPct = s.confidence != null ? `${(s.confidence * 100).toFixed(1)}%` : '—';
+            const confColor = s.confidence >= 0.9 ? C.green : s.confidence >= 0.8 ? C.amber : 'var(--color-text-dim)';
+            const dateStr = s.created_at
+              ? new Date(s.created_at * 1000).toLocaleDateString(undefined, { timeZone: _TZ, month: 'short', day: 'numeric', year: 'numeric' })
+              : '—';
+            return (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '10px 12px',
+                background: 'var(--color-surface)',
+                border: '0.5px solid var(--color-border)',
+                borderRadius: 10,
+              }}>
+                <PatternSwatch patternId={s.pattern_id} size={44} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <code style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 600 }}>
+                      {s.pattern_id}
+                    </code>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: confColor,
+                      fontFamily: 'var(--font-mono)',
+                    }}>{confPct}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: 'var(--color-text-dim)', flexWrap: 'wrap' }}>
+                    {s.environment && <span title="Environment">{s.environment}</span>}
+                    {s.subject_type && <span title="Subject type">{s.subject_type}</span>}
+                    {s.environment && s.subject_type && <span style={{ color: 'var(--color-border)' }}>·</span>}
+                    <span title="Recorded">{dateStr}</span>
+                  </div>
+                </div>
+                <div style={{
+                  fontSize: 10, color: 'var(--color-text-dim)',
+                  background: 'var(--color-surface-elevated)',
+                  border: '0.5px solid var(--color-border)',
+                  borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0,
+                }}
+                  title={s.reason}
+                >
+                  nailed it
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
