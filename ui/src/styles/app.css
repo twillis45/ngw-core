@@ -6090,7 +6090,7 @@ body {
   max-width: 100%;
   /* Reserve space for section label (~24px), actions bar (~56px), preview padding (~24px),
      and top bar — so Analyze is always visible without scrolling on any device. */
-  max-height: calc(100svh - var(--lab-top-bar-h, 60px) - 130px);
+  max-height: calc(100svh - var(--lab-top-bar-h, 0px) - 140px);
   width: auto;
   height: auto;
   display: block;
@@ -6184,13 +6184,11 @@ body {
     align-items: center;
     justify-content: center;
   }
-  /* Image now resolves 100% against the shell's explicit height */
+  /* Image: use viewport formula (not 100% — inline-flex img-wrap has no explicit height,
+     so 100% can't resolve and overrides the global formula with unconstrained). */
   .lab-wb-layout__left .lab-workbench__preview img {
-    max-width: 100%;
-    max-height: 100%;
-    width: auto;
-    height: auto;
-    object-fit: contain;
+    max-width: calc(100% - var(--space-sm) * 2);
+    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - 140px);
   }
   /* Right column: independently scrollable so it never slides under the header */
   .lab-wb-layout__right {
@@ -6226,8 +6224,7 @@ body {
     min-height: 480px;
   }
   .lab-workbench__preview img {
-    /* Keep the viewport-aware formula — just allow a little more at 1400px+ */
-    max-height: calc(100svh - var(--lab-top-bar-h, 60px) - 110px);
+    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - 120px);
   }
 }
 
