@@ -6081,7 +6081,9 @@ body {
 }
 .lab-workbench__preview img {
   max-width: 100%;
-  max-height: 70vh;
+  /* Reserve space for section label (~24px), actions bar (~56px), preview padding (~24px),
+     and top bar — so Analyze is always visible without scrolling on any device. */
+  max-height: calc(100svh - var(--lab-top-bar-h, 60px) - 130px);
   width: auto;
   height: auto;
   display: block;
@@ -6194,7 +6196,8 @@ body {
     min-height: 480px;
   }
   .lab-workbench__preview img {
-    max-height: 75vh;
+    /* Keep the viewport-aware formula — just allow a little more at 1400px+ */
+    max-height: calc(100svh - var(--lab-top-bar-h, 60px) - 110px);
   }
 }
 
