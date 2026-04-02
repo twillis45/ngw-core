@@ -1359,24 +1359,46 @@ body {
   position: absolute; inset: 0;
   border-radius: var(--radius-sm);
   overflow: hidden; pointer-events: none;
-  /* No tint — only the scan line shows, so letterbox areas stay clean */
 }
-.ref-scan-overlay__line {
-  position: absolute; left: 0; right: 0; height: 20px;
-  background: linear-gradient(90deg, transparent 5%, var(--color-accent) 35%, var(--color-accent) 65%, transparent 95%);
-  box-shadow: 0 0 14px 4px var(--color-accent);
-  animation: ref-scan 7s ease-in-out infinite;
+
+/* ── Option 1: Camera AF corner brackets ───────────────────────────────────── */
+.ref-scan-corner {
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: var(--color-accent);
+  border-style: solid;
+  opacity: 0.5;
+  animation: corner-bracket-pulse 2.4s ease-in-out infinite;
 }
-@keyframes ref-scan {
-  0%    { top: 0%;   transform: scaleY(1.8); opacity: 1;    } /* TOP impact — squash */
-  4%    { top: 3%;   transform: scaleY(0.7); opacity: 0.9;  } /* release, stretch thin */
-  27%   { top: 50%;  transform: scaleY(0.72); opacity: 0.88;} /* max speed down */
-  46%   { top: 90%;  transform: scaleY(0.9);  opacity: 0.96;} /* decelerate */
-  50%   { top: 94%;  transform: scaleY(1.8); opacity: 1;    } /* BOTTOM impact — squash */
-  54%   { top: 91%;  transform: scaleY(0.7); opacity: 0.9;  } /* release, stretch thin */
-  73%   { top: 50%;  transform: scaleY(0.72); opacity: 0.88;} /* max speed up */
-  96%   { top: 3%;   transform: scaleY(0.9);  opacity: 0.96;} /* decelerate */
-  100%  { top: 0%;   transform: scaleY(1.8); opacity: 1;    } /* TOP impact — loop */
+.ref-scan-corner--tl { top: 10px;    left: 10px;    border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
+.ref-scan-corner--tr { top: 10px;    right: 10px;   border-width: 2px 2px 0 0; border-radius: 0 2px 0 0; animation-delay: 0.6s; }
+.ref-scan-corner--br { bottom: 10px; right: 10px;   border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; animation-delay: 1.2s; }
+.ref-scan-corner--bl { bottom: 10px; left: 10px;    border-width: 0 0 2px 2px; border-radius: 0 0 0 2px; animation-delay: 1.8s; }
+@keyframes corner-bracket-pulse {
+  0%, 100% { opacity: 0.28; filter: none; }
+  40%, 60% { opacity: 1;    filter: drop-shadow(0 0 5px var(--color-accent)); }
+}
+
+/* ── Option 4: Drifting particle dots ──────────────────────────────────────── */
+.ref-scan-dot {
+  position: absolute;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  opacity: 0;
+  animation: dot-drift 3.6s ease-in-out infinite;
+}
+.ref-scan-dot:nth-child(1) { left: 22%; top: 65%; animation-delay: 0.0s; }
+.ref-scan-dot:nth-child(2) { left: 45%; top: 70%; animation-delay: 0.9s; width: 3px; height: 3px; }
+.ref-scan-dot:nth-child(3) { left: 68%; top: 60%; animation-delay: 1.8s; }
+.ref-scan-dot:nth-child(4) { left: 33%; top: 55%; animation-delay: 2.7s; width: 3px; height: 3px; }
+.ref-scan-dot:nth-child(5) { left: 78%; top: 72%; animation-delay: 1.2s; width: 5px; height: 5px; }
+.ref-scan-dot:nth-child(6) { left: 55%; top: 45%; animation-delay: 2.1s; width: 3px; height: 3px; }
+@keyframes dot-drift {
+  0%   { opacity: 0;    transform: translateY(0)    scale(0.6); }
+  20%  { opacity: 0.75; transform: translateY(-6px) scale(1);   }
+  80%  { opacity: 0.5;  transform: translateY(-18px) scale(0.8); }
+  100% { opacity: 0;    transform: translateY(-26px) scale(0.5); }
 }
 /* Compact inline scan status — pulsing dot + cycling text, one line */
 .ref-scan-status {

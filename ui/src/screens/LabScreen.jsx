@@ -1736,7 +1736,12 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
                 <ZoomImg src={preview} alt="Selected for analysis" />
                 {loading && (
                   <div className="ref-scan-overlay">
-                    <div className="ref-scan-overlay__line" />
+                    {/* Option 1 active — swap for particles by replacing these 4 spans
+                        with 6 × <span className="ref-scan-dot" /> */}
+                    <span className="ref-scan-corner ref-scan-corner--tl" />
+                    <span className="ref-scan-corner ref-scan-corner--tr" />
+                    <span className="ref-scan-corner ref-scan-corner--br" />
+                    <span className="ref-scan-corner ref-scan-corner--bl" />
                   </div>
                 )}
               </div>
