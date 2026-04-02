@@ -2719,6 +2719,27 @@ function _patternHue(id = '') {
   return h % 360;
 }
 
+/** Authenticated image component — fetches with auth headers and creates an object URL. */
+function AuthImage({ path, alt, style }) {
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (!path) return;
+    let objectUrl = null;
+    setError(false);
+    setSrc(null);
+    const token = typeof window !== 'undefined' ? (localStorage.getItem('ngw_auth_token') || localStorage.getItem('ngw_token') || '') : '';
+    fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.blob(); })
+      .then(blob => { objectUrl = URL.createObjectURL(blob); setSrc(objectUrl); })
+      .catch(() => setError(true));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [path]);
+  if (error) return <div style={{ ...style, background: 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: 'var(--color-text-dim)' }}>—</div>;
+  if (!src) return <div style={{ ...style, background: 'var(--color-surface-elevated)', animation: 'pulse 1.5s ease-in-out infinite' }} />;
+  return <img src={src} alt={alt || ''} style={style} />;
+}
+
 /** 48×48 pattern swatch — colored tile with 2-letter initials. No real image needed. */
 function PatternSwatch({ patternId, size = 48 }) {
   const hue = _patternHue(patternId);
@@ -2790,7 +2811,15 @@ function GoldSetSuggestionsPanel() {
                 border: '0.5px solid var(--color-border)',
                 borderRadius: 10,
               }}>
-                <PatternSwatch patternId={s.pattern_id} size={44} />
+                {s.image_path ? (
+                  <AuthImage
+                    path={`/api/lab/signals/${s.signal_id}/thumbnail`}
+                    alt={s.pattern_id}
+                    style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                  />
+                ) : (
+                  <PatternSwatch patternId={s.pattern_id} size={44} />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
                     <code style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 600 }}>

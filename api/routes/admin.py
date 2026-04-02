@@ -458,6 +458,23 @@ def teach_from_workbench(
         reviewer=reviewer,
         notes=req.notes,
     )
+
+    # Also record a live signal for the learning loop when marked correct
+    if req.correctness == "correct":
+        try:
+            from db.signals import record_signal
+            record_signal(
+                pattern_id=req.expected_pattern,
+                confidence_score=req.confidence,
+                outcome="nailed_it",
+                input_method="reference_photo",
+                signal_source="internal",
+                image_path=req.image_path,
+                analysis_id=None,
+            )
+        except Exception:
+            pass  # non-fatal — don't fail the teach label if signal write fails
+
     return {"status": "ok", "review": row}
 
 

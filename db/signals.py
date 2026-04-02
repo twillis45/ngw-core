@@ -72,6 +72,7 @@ _NEW_COLUMNS = [
     # Phase 4b — analysis traceability
     ("analysis_id",             "TEXT"),
     ("system_version",          "TEXT"),
+    ("image_path",              "TEXT"),
 ]
 
 _SEED_ROWS = [
@@ -239,6 +240,7 @@ def record_signal(
     signal_source: str = "live",
     analysis_id: Optional[str] = None,
     system_version: Optional[str] = None,
+    image_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Write one signal row immediately. No batching.
@@ -272,8 +274,8 @@ def record_signal(
                 deviation_count, saved_setup, upgraded, revenue_value, created_at,
                 signal_source, include_in_learning, include_in_metrics,
                 include_in_conversion, include_in_cohorts,
-                analysis_id, system_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                analysis_id, system_version, image_path)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 sig_id, session_id, user_id, pattern_id, confidence_score, outcome,
                 input_method, subject_type, environment, mood,
@@ -283,7 +285,7 @@ def record_signal(
                 1 if upgraded else 0,
                 revenue_value, created_at,
                 signal_source, include, include, include, include,
-                analysis_id, system_version,
+                analysis_id, system_version, image_path,
             ),
         )
 
@@ -662,7 +664,7 @@ def get_gold_set_suggestions(days: int = 90, limit: int = 20) -> list:
             if "session_id" in gold_cols:
                 rows = conn.execute(
                     """SELECT s.id, s.session_id, s.pattern_id, s.confidence_score,
-                              s.environment, s.subject_type, s.created_at
+                              s.environment, s.subject_type, s.created_at, s.image_path
                        FROM session_signals s
                        WHERE s.outcome='nailed_it'
                          AND s.confidence_score >= 0.80
@@ -681,7 +683,7 @@ def get_gold_set_suggestions(days: int = 90, limit: int = 20) -> list:
                 # gold_set_entries exists but has no session_id link — skip dedup
                 rows = conn.execute(
                     """SELECT id, session_id, pattern_id, confidence_score,
-                              environment, subject_type, created_at
+                              environment, subject_type, created_at, image_path
                        FROM session_signals
                        WHERE outcome='nailed_it'
                          AND confidence_score >= 0.80
@@ -695,7 +697,7 @@ def get_gold_set_suggestions(days: int = 90, limit: int = 20) -> list:
         else:
             rows = conn.execute(
                 """SELECT id, session_id, pattern_id, confidence_score,
-                          environment, subject_type, created_at
+                          environment, subject_type, created_at, image_path
                    FROM session_signals
                    WHERE outcome='nailed_it'
                      AND confidence_score >= 0.80
@@ -716,6 +718,7 @@ def get_gold_set_suggestions(days: int = 90, limit: int = 20) -> list:
             "environment":    r["environment"],
             "subject_type":   r["subject_type"],
             "created_at":     r["created_at"],
+            "image_path":     dict(r).get("image_path"),
             "reason":         f"High-confidence nailed_it ({round(r['confidence_score']*100,1)}%) reference photo",
         }
         for r in rows

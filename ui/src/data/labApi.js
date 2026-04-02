@@ -515,6 +515,11 @@ export async function getGoldSetSuggestions(days = 90, limit = 20) {
   return labFetch(`/signals/gold-set-suggestions?days=${days}&limit=${limit}`);
 }
 
+/** Returns the URL path for a signal's thumbnail image. */
+export function getSignalThumbnailUrl(signalId) {
+  return `/api/lab/signals/${signalId}/thumbnail`;
+}
+
 /** Concrete per-pattern recalibration hints (reduce X by Ypp). */
 export async function getRecalibrationHints(days = 30) {
   return labFetch(`/signals/recalibration-hints?days=${days}`);

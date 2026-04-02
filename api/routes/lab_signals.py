@@ -81,6 +81,9 @@ class RecordSignalRequest(BaseModel):
     analysis_id:    Optional[str] = None
     system_version: Optional[str] = None
 
+    # Image reference
+    image_path:     Optional[str] = None
+
     @field_validator("outcome")
     @classmethod
     def validate_outcome(cls, v):
@@ -139,6 +142,7 @@ async def post_signal(body: RecordSignalRequest):
             signal_source      = body.signal_source,
             analysis_id        = body.analysis_id,
             system_version     = body.system_version,
+            image_path         = body.image_path,
         )
         return {
             "success":       True,
@@ -290,6 +294,29 @@ async def signals_gold_set_suggestions(
     Criteria: nailed_it + confidence >= 0.80 + input_method=reference_photo + not already in gold set.
     """
     return {"suggestions": get_gold_set_suggestions(days=days, limit=limit)}
+
+
+@router.get("/{signal_id}/thumbnail")
+async def signal_thumbnail(
+    signal_id: str,
+    user=Depends(get_dev_user),
+):
+    """Serve the image associated with a signal, if stored."""
+    from db.database import get_db
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT image_path FROM session_signals WHERE id = ?", (signal_id,)
+        ).fetchone()
+    if not row or not row["image_path"]:
+        raise HTTPException(status_code=404, detail="No image for this signal")
+    img = Path(row["image_path"])
+    if not img.exists():
+        raise HTTPException(status_code=404, detail="Image file not found")
+    suffix = img.suffix.lower()
+    mt = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".heic": "image/heic"}.get(suffix, "image/jpeg")
+    return FileResponse(str(img), media_type=mt)
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────────
