@@ -94,11 +94,16 @@ export async function probeAndEnableLab() {
 
 // ── Workbench ────────────────────────────────────────────
 
-export async function analyzeImage(file, { debug = false } = {}) {
+export async function analyzeImage(file, { debug = false, signal } = {}) {
   const form = new FormData();
   form.append('image', file);
   const query = debug ? '?debug=true' : '';
-  return labFetch(`/analyze${query}`, { method: 'POST', body: form });
+  return labFetch(`/analyze${query}`, { method: 'POST', body: form, signal });
+}
+
+/** Cancel an in-flight analysis by id. */
+export async function cancelAnalysis(analysisId) {
+  return labFetch(`/analyze/cancel/${analysisId}`, { method: 'POST' });
 }
 
 /**
@@ -708,8 +713,79 @@ export async function getApiMetrics(hours = 24) {
   return labFetch(`/api-metrics?hours=${hours}`);
 }
 
+
+// ── Gold Set QC ─────────────────────────────────────────────────────────────
+
+/** Fetch gold set quality-control buckets — read-only inspection. */
+export async function fetchGoldSetQC() {
+  return labFetch('/gold-set/qc');
+}
+
+// ── Coverage Map (Build 4) ──────────────────────────────────────────────────
+
+/** Fetch per-pattern coverage summary — read-only. */
+export async function fetchCoverageMap() {
+  return labFetch('/coverage-map');
+}
+
+// ── Failure Triage (LAB Build 2) ─────────────────────────────────────────────
+
+/**
+ * Fetch VLM cases where VLM was confident but disagreed with CV resolver.
+ * DATA NOTE: ground_truth_pattern = CV-resolved value, NOT human-labeled ground truth.
+ */
+export async function fetchOverconfidentFailures(threshold = 0.65, limit = 20) {
+  const params = new URLSearchParams({ threshold: String(threshold), limit: String(limit) });
+  return labFetch(`/failure-triage/overconfident?${params}`);
+}
+
+/**
+ * Fetch VLM cases where VLM agreed with CV but at low confidence.
+ * DATA NOTE: These are boundary/uncertain cases, not confirmed failures.
+ */
+export async function fetchUnderconfidentHits(threshold = 0.45, limit = 20) {
+  const params = new URLSearchParams({ threshold: String(threshold), limit: String(limit) });
+  return labFetch(`/failure-triage/underconfident?${params}`);
+}
+
+/**
+ * Send a triage item to the gold set as a DRAFT (pending_review).
+ * Never auto-approves — requires explicit review in the Gold Set panel.
+ * @param {object} item - { image_path, predicted_pattern, ground_truth_pattern, confidence, analysis_id?, notes? }
+ */
+export async function sendToGoldSetReview(item) {
+  return labFetch('/failure-triage/send-to-gold-set', {
+    method: 'POST',
+    body: JSON.stringify(item),
+  });
+}
+
+/**
+ * Dismiss a triage item.
+ * NOTE: No dismissed column exists in vlm_disagreements schema (v1).
+ * This function is intentionally null — dismiss is implemented as frontend-only state.
+ * Returns a resolved promise so callers can treat it uniformly.
+ */
+export async function dismissTriageItem(_disagreementId) {
+  // Backend dismiss not implemented in v1 — no dismissed/status column in vlm_disagreements.
+  // Frontend removes the item from local state. No server call.
+  return Promise.resolve({ dismissed: true, local_only: true });
+}
+
 export async function getMonitoringStats(hours = 24) {
   return labFetch(`/monitoring-stats?hours=${hours}`);
+}
+
+
+// ── Case Replay (Build 3A) ────────────────────────────────────────────────────
+
+/**
+ * Fetch stored replay data for a past analysis run (Build 3A).
+ * Returns { analysis_id, found, result, vlm_disagreements, user_feedback, corrections, data_notes }
+ * result is null for analyses run before Build 3A deployment.
+ */
+export async function fetchAnalysisReplay(analysisId) {
+  return labFetch(`/analysis/${encodeURIComponent(analysisId)}`);
 }
 
 
@@ -768,4 +844,101 @@ export async function getDistillationReviewImageUrl(reviewId) {
   if (!res.ok) throw new Error(`Review image fetch failed (${res.status})`);
   const blob = await res.blob();
   return URL.createObjectURL(blob);
+}
+
+
+// ── Review Ops Dashboard ─────────────────────────────────────────────────────
+
+/**
+ * Fetch counts for all 6 Review Ops queues in a single parallel batch.
+ * Returns an object with a count (number) and optional error per queue.
+ * Never throws — each queue degrades independently.
+ */
+export async function fetchReviewOpsCounts() {
+  const settle = async (fn) => {
+    try { return { count: await fn(), error: null }; }
+    catch (err) { return { count: null, error: err.message || 'Error' }; }
+  };
+
+  const [goldSet, distillation, vlmCorrections, referenceBacklog, correctionLog, groundTruth] =
+    await Promise.all([
+      // 1. Pending Gold Set Reviews — status=draft means awaiting review
+      settle(async () => {
+        const d = await labFetch('/gold-set?status=draft&limit=500');
+        return d.count ?? 0;
+      }),
+      // 2. Distillation Reviews Pending
+      settle(async () => {
+        const d = await coreFetch('/admin/distillation-reviews?review_status=pending_review&limit=500');
+        return d.total ?? 0;
+      }),
+      // 3. VLM Corrections — total corrections logged
+      settle(async () => {
+        const d = await labFetch('/vlm-corrections');
+        // vlm-corrections returns a summary; use total_corrections or record count
+        return d.total_corrections ?? d.total ?? (Array.isArray(d.corrections) ? d.corrections.length : 0);
+      }),
+      // 4. Reference Dataset: needs reprocessing
+      settle(async () => {
+        const d = await labFetch('/reference-dataset?status=needs_reprocessing');
+        return d.total ?? (Array.isArray(d.entries) ? d.entries.length : 0);
+      }),
+      // 5. Correction Log — total entries (no flagged filter in current API)
+      settle(async () => {
+        const d = await coreFetch('/admin/correction-log?limit=500');
+        return d.total ?? 0;
+      }),
+      // 6. Ground Truth — total image labels (no verified field in current schema)
+      settle(async () => {
+        const d = await coreFetch('/admin/image-labels?limit=500');
+        return d.total ?? 0;
+      }),
+    ]);
+
+  return { goldSet, distillation, vlmCorrections, referenceBacklog, correctionLog, groundTruth };
+}
+
+// ── Build 3.1: Replay image URL ───────────────────────────────────────────────
+
+/**
+ * Return the authenticated URL for a replay image.
+ * Does NOT fetch — just builds the URL for use in <img src>.
+ * The token is passed as a query param for img tag compat.
+ * @param {string} analysisId
+ * @returns {string|null}
+ */
+export function replayImageUrl(analysisId) {
+  if (!analysisId) return null;
+  const token = getToken();
+  const base = `/api/lab/analysis/${encodeURIComponent(analysisId)}/image`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+// ── Layer 4: Calibration surface ──────────────────────────────────────────────
+
+/**
+ * Fetch per-pattern recalibration suggestions from signal history.
+ * @param {number} [days=30] — lookback window in days
+ */
+export async function fetchCalibrationSuggestions(days = 30) {
+  return labFetch(`/calibration/suggestions?days=${days}`);
+}
+
+/**
+ * Fetch current confidence_overrides.json (active floors).
+ */
+export async function fetchCalibrationCurrent() {
+  return labFetch('/calibration/current');
+}
+
+/**
+ * Apply reviewed confidence floors.
+ * @param {Object.<string, number>} floors — pattern_id → floor value
+ * @param {string} [notes=''] — optional reviewer notes
+ */
+export async function applyCalibrationFloors(floors, notes = '') {
+  return labFetch('/calibration/apply', {
+    method: 'POST',
+    body: JSON.stringify({ floors, notes }),
+  });
 }

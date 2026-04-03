@@ -73,18 +73,41 @@ def _infer_pattern_from_catchlights(
     left_quads = [_classify_clock(h) for h in left_hours]
     right_quads = [_classify_clock(h) for h in right_hours]
 
-    # ── Triangle: 3 per eye — two upper + one lower ──
-    def _is_triangle(hours: List[int], quads: List[str]) -> bool:
+    # ── Triangle: 3 per eye — multiple formations ──
+    # Classic: two upper (10+2 o'clock) + one lower fill (5-7 o'clock)
+    # Hurley lateral: one top (12 o'clock) + two lateral strips (3+9 o'clock)
+    # Inverted: two lateral (3+9) + one lower fill
+    _TRI_VARIANT_CLASSIC = "classic"    # 2 upper + 1 lower
+    _TRI_VARIANT_HURLEY = "hurley"      # 1 top + 2 lateral (strip lights at 3+9)
+    _TRI_VARIANT_NONE = None
+
+    def _triangle_variant(hours: List[int], quads: List[str]) -> Optional[str]:
         if len(hours) < 3:
-            return False
+            return _TRI_VARIANT_NONE
         upper = sum(1 for q in quads if q in ("upper_left", "upper_right", "top_center"))
         lower = sum(1 for q in quads if q == "lower")
-        return upper >= 2 and lower >= 1
+        lateral = sum(1 for q in quads if q in ("hard_left", "hard_right"))
+        top = sum(1 for q in quads if q == "top_center")
+        # Classic: 2 upper + 1 lower
+        if upper >= 2 and lower >= 1:
+            return _TRI_VARIANT_CLASSIC
+        # Hurley lateral: 1 top center + 2 laterals (strip lights at 3 and 9)
+        if top >= 1 and lateral >= 2:
+            return _TRI_VARIANT_HURLEY
+        # Hurley lateral with upper-offset keys: 1 top + 1 lateral + 1 upper
+        if top >= 1 and lateral >= 1 and upper >= 2:
+            return _TRI_VARIANT_HURLEY
+        return _TRI_VARIANT_NONE
 
-    left_tri = _is_triangle(left_hours, left_quads)
-    right_tri = _is_triangle(right_hours, right_quads)
+    left_tri_var = _triangle_variant(left_hours, left_quads)
+    right_tri_var = _triangle_variant(right_hours, right_quads)
 
-    if left_tri and right_tri:
+    if left_tri_var and right_tri_var:
+        _tri_note = (
+            "Hurley-style lateral triangle (top + 3/9 o'clock strips) in both eyes."
+            if _TRI_VARIANT_HURLEY in (left_tri_var, right_tri_var)
+            else "Three catchlights in triangle formation detected in both eyes."
+        )
         return {
             "pattern": "triangle",
             "pattern_confidence": 0.85,
@@ -92,9 +115,15 @@ def _infer_pattern_from_catchlights(
             "fill_method_text": "",
             "light_count": 3,
             "unrecognized_details": [],
-            "notes": ["Three catchlights in triangle formation detected in both eyes."],
+            "notes": [_tri_note],
         }
-    if left_tri or right_tri:
+    if left_tri_var or right_tri_var:
+        _var = left_tri_var or right_tri_var
+        _tri_note = (
+            "Hurley-style lateral triangle detected in one eye."
+            if _var == _TRI_VARIANT_HURLEY
+            else "Triangle catchlight pattern detected in one eye only."
+        )
         return {
             "pattern": "triangle",
             "pattern_confidence": 0.55,
@@ -102,26 +131,32 @@ def _infer_pattern_from_catchlights(
             "fill_method_text": "",
             "light_count": 3,
             "unrecognized_details": [],
-            "notes": ["Triangle catchlight pattern detected in one eye only."],
+            "notes": [_tri_note],
         }
 
-    # ── Bilateral symmetric keys: upper_left + upper_right in both eyes ──
-    # Hurley Triangle lower fill (V-flat, reflector, low panel) often produces
-    # catchlights too small/dim to register at typical image resolutions.
-    # Two flanking upper keys at ~10 and ~2 o'clock are the dominant diagnostic
-    # signal and sufficient to identify a Hurley-style setup.
-    # Guard: skip when any lower catchlight IS present — that case is handled
-    # by the full triangle path above or clamshell below.
+    # ── Bilateral symmetric keys ──
+    # Hurley setups where only two of three lights produce visible catchlights:
+    # Case A: two upper flanking keys (10 + 2 o'clock) with lower fill unresolved
+    # Case B: two lateral strips (3 + 9 o'clock) with top key unresolved
     def _is_bilateral_symmetric(quads: List[str]) -> bool:
         return (
             any(q == "upper_left" for q in quads)
             and any(q == "upper_right" for q in quads)
         )
 
+    def _is_lateral_symmetric(quads: List[str]) -> bool:
+        return (
+            any(q == "hard_left" for q in quads)
+            and any(q == "hard_right" for q in quads)
+        )
+
     _any_lower = any(q == "lower" for q in left_quads + right_quads)
     if not _any_lower and max_per_eye >= 2:
         left_bil = len(left_quads) >= 2 and _is_bilateral_symmetric(left_quads)
         right_bil = len(right_quads) >= 2 and _is_bilateral_symmetric(right_quads)
+        left_lat = len(left_quads) >= 2 and _is_lateral_symmetric(left_quads)
+        right_lat = len(right_quads) >= 2 and _is_lateral_symmetric(right_quads)
+
         if left_bil and right_bil:
             return {
                 "pattern": "triangle",
@@ -135,13 +170,29 @@ def _infer_pattern_from_catchlights(
                     "— Hurley-style twin keys confirmed; lower fill not resolved."
                 ],
             }
+        if left_lat and right_lat:
+            return {
+                "pattern": "triangle",
+                "pattern_confidence": 0.60,
+                "key_position_text": "triangle",
+                "fill_method_text": "",
+                "light_count": 3,
+                "unrecognized_details": [],
+                "notes": [
+                    "Bilateral lateral strip catchlights in both eyes (3 + 9 o'clock) "
+                    "— Hurley-style lateral strips confirmed; top key not resolved."
+                ],
+            }
 
     # ── Clamshell: 2 per eye — one upper, one lower (vertically aligned) ──
     # Floor-bounce filter: lower catchlights that are significantly dimmer
     # than upper ones are likely reflections from the ground/floor, not a
     # dedicated fill light.  True clamshell fill produces catchlights at
     # comparable intensity to the key.
-    _FLOOR_BOUNCE_RATIO = 0.6  # lower must be >= 60% of upper intensity
+    _FLOOR_BOUNCE_RATIO = 0.30  # lower must be >= 30% of upper intensity
+    # Relaxed from 0.6: fill lights in clamshell setups are often 1-2 stops
+    # dimmer than the key (25-50% intensity). 0.30 catches floor bounces
+    # while preserving legitimate fill detection.
 
     def _is_clamshell(eye_catchlights: List[Dict[str, Any]], hours: List[int], quads: List[str]) -> bool:
         if len(hours) < 2:
@@ -342,25 +393,33 @@ def _infer_modifier_from_catchlights(
         return {"modifier": None, "modifier_confidence": 0.0}
 
     shapes = [c.get("shape", "unknown") for c in catchlights]
-    round_count = sum(1 for s in shapes if s == "round")
-    rect_count = sum(1 for s in shapes if s == "rectangular")
-    total = round_count + rect_count
+
+    # Group shapes into modifier families
+    ring_count = sum(1 for s in shapes if s == "ring")
+    round_count = sum(1 for s in shapes if s in ("round", "octagonal"))
+    strip_count = sum(1 for s in shapes if s == "strip")
+    rect_count = sum(1 for s in shapes if s in ("rectangular", "square"))
+    total = ring_count + round_count + strip_count + rect_count
 
     if total == 0:
         return {"modifier": None, "modifier_confidence": 0.0}
 
-    if round_count > rect_count:
-        return {
-            "modifier": "beauty_dish",
-            "modifier_confidence": 0.5 if round_count == total else 0.3,
-        }
-    if rect_count > round_count:
-        return {
-            "modifier": "softbox_rect",
-            "modifier_confidence": 0.6 if rect_count == total else 0.3,
-        }
-    # Equal mix
-    return {"modifier": "softbox_rect", "modifier_confidence": 0.2}
+    # Dominant family wins
+    counts = [
+        (ring_count, "ring_light", 0.7),
+        (strip_count, "strip_box", 0.6),
+        (round_count, "beauty_dish", 0.5),
+        (rect_count, "softbox_rect", 0.6),
+    ]
+    counts.sort(key=lambda x: x[0], reverse=True)
+    best_count, best_mod, base_conf = counts[0]
+
+    if best_count == 0:
+        return {"modifier": None, "modifier_confidence": 0.0}
+
+    # Full agreement = higher confidence, mixed = lower
+    conf = base_conf if best_count == total else base_conf * 0.6
+    return {"modifier": best_mod, "modifier_confidence": round(conf, 2)}
 
 
 def _merge_with_classification(
@@ -653,46 +712,40 @@ def infer_lighting_from_vision(
     modifier_result = _infer_modifier_from_catchlights(catchlight_list)
 
     # Triangle contrast gate: real triangle lighting wraps from 3 directions
-    # producing low contrast.  High/extreme contrast disproves the 3-light
-    # theory — extra catchlights are reflections (glasses, jewellery, etc.),
-    # not separate lights.  Fall back to "unknown" so downstream uses
-    # direction-based pattern detection instead.
+    # producing low-to-moderate contrast.  Very high contrast weakens the
+    # 3-light theory — extra catchlights may be reflections.
+    # Soft gate: penalise confidence instead of hard-vetoing to "unknown",
+    # so triangle can still win if other classifiers agree.
     if pattern_result.get("pattern") == "triangle" and cue_report is not None:
         _cr = getattr(cue_report, "contrast_ratio", None)
         _cr_label = (getattr(_cr, "label", "") if _cr else "").lower()
         if _cr_label in ("high", "extreme"):
             pattern_result = dict(pattern_result)  # don't mutate original
-            pattern_result["pattern"] = "unknown"
-            pattern_result["pattern_confidence"] = 0.2
-            pattern_result["light_count"] = 1  # extra catchlights are reflections
-            pattern_result["notes"] = [
-                f"Triangle rejected: {_cr_label} contrast contradicts 3-light wrap. "
-                "Extra catchlights likely from reflective surfaces."
+            _orig_conf = pattern_result.get("pattern_confidence", 0.5)
+            _penalty = 0.5 if _cr_label == "extreme" else 0.35
+            pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
+            pattern_result["notes"] = pattern_result.get("notes", []) + [
+                f"Triangle confidence penalised (−{_penalty:.2f}): {_cr_label} contrast "
+                "weakens 3-light theory. Extra catchlights may be reflections."
             ]
 
-    # Split asymmetry gate: a genuine 90° side key produces strong left-right
-    # facial shadow asymmetry.  When a catchlight lands at 3/9 o'clock but
-    # the face is nearly evenly lit (left_right_asymmetry < 0.12), the
-    # catchlight is from a reflective surface (jewellery, glasses, specular
-    # clothing) — not the key light itself.  Demote to loop at the detected
-    # side so downstream pattern resolution can refine with nose-shadow data.
+    # Split asymmetry gate: a genuine 90° side key produces left-right
+    # facial shadow asymmetry.  Low asymmetry weakens the split hypothesis.
+    # Soft gate: penalise confidence proportionally instead of hard-vetoing
+    # to "loop", so split can still win if other classifiers confirm it.
     if pattern_result.get("pattern") == "split" and cue_report is not None:
         _ls = getattr(cue_report, "light_structure", None)
         _lra = getattr(_ls, "left_right_asymmetry", None)
-        if _lra is not None and _lra < 0.12:
-            # Identify which side the spurious catchlight was on so we keep
-            # the correct key direction.
-            _spurious_notes = pattern_result.get("notes", [])
-            _side = "left" if any("9 o'clock" in n for n in _spurious_notes) else "right"
-            _kpt = "30-45 off-axis left" if _side == "right" else "30-45 off-axis right"
+        if _lra is not None and _lra < 0.20:
             pattern_result = dict(pattern_result)
-            pattern_result["pattern"] = "loop"
-            pattern_result["pattern_confidence"] = 0.30
-            pattern_result["key_position_text"] = _kpt
-            pattern_result["notes"] = [
-                f"Split rejected: catchlight at 3/9 o'clock but left_right_asymmetry={_lra:.3f} "
-                "(<0.12) contradicts 90° side key. Catchlight likely from jewellery or "
-                "reflective surface. Downgraded to loop; nose-shadow will refine."
+            _orig_conf = pattern_result.get("pattern_confidence", 0.5)
+            # Scale penalty: 0.20 → small, 0.05 → large
+            _penalty = 0.35 * (1.0 - _lra / 0.20)
+            pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
+            pattern_result["notes"] = pattern_result.get("notes", []) + [
+                f"Split confidence penalised (−{_penalty:.2f}): left_right_asymmetry={_lra:.3f} "
+                f"is low for a 90° side key (threshold 0.20). "
+                "May be catchlight from reflective surface rather than key light."
             ]
 
     all_notes.extend(pattern_result.get("notes", []))

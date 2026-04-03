@@ -283,6 +283,24 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_pwd_reset_token ON password_reset_tokens(token);
             CREATE INDEX IF NOT EXISTS idx_pwd_reset_email ON password_reset_tokens(email);
+
+            -- ── Build 3A: Analysis replay blobs ──────────────────────────
+            -- Stores trimmed JSON snapshots of each AnalysisResult for later
+            -- case replay. Only available for analyses run after Build 3A
+            -- deployment (2026-04-02). result_json is produced by
+            -- analysis_result_to_replay_dict() in engine.orchestrator.
+            -- Excludes numpy arrays, cv2 objects, and debug frames.
+            CREATE TABLE IF NOT EXISTS analysis_results (
+                analysis_id   TEXT PRIMARY KEY,
+                image_path    TEXT,
+                system_version TEXT,
+                result_json   TEXT NOT NULL,
+                created_at    REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_image_path
+                ON analysis_results(image_path);
+            CREATE INDEX IF NOT EXISTS idx_analysis_results_created_at
+                ON analysis_results(created_at);
         """)
     # Migrate existing users table — add email_verified if missing
     with get_db() as conn:
@@ -304,6 +322,12 @@ def init_db():
             conn.execute("ALTER TABLE user_feedback ADD COLUMN analysis_id TEXT")
         if "system_version" not in fb_cols:
             conn.execute("ALTER TABLE user_feedback ADD COLUMN system_version TEXT")
+
+    # Build 3A — add analysis_id to gold_set_entries for replay linkage
+    with get_db() as conn:
+        gs_cols = [r[1] for r in conn.execute("PRAGMA table_info(gold_set_entries)").fetchall()]
+        if "analysis_id" not in gs_cols:
+            conn.execute("ALTER TABLE gold_set_entries ADD COLUMN analysis_id TEXT")
 
     from db.analytics import init_analytics_table
     init_analytics_table()

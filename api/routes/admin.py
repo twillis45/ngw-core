@@ -421,6 +421,97 @@ def patch_distillation_review(
 
     if updated is None:
         raise HTTPException(status_code=404, detail=f"Review '{review_id}' not found")
+
+    # ── Learning loop close: Layers 1 + 2 ────────────────────────────────
+    # Only fire when transitioning TO approved_candidate.
+    # These are consequences of the explicit human approval — not automation.
+    if req.review_status == "approved_candidate":
+        # Layer 1: Promote to gold set (status='approved', not draft)
+        try:
+            from db.database import create_gold_set_entry
+            create_gold_set_entry(
+                image_path=updated["image_path"],
+                expected_analysis={
+                    "pattern": updated.get("expected_pattern"),
+                    "predicted_pattern": updated.get("predicted_pattern"),
+                    "confidence": updated.get("confidence"),
+                    "correctness": updated.get("correctness"),
+                    "distillation_review_id": review_id,
+                    "source": "distillation_approval",
+                },
+                notes=f"Auto-promoted from distillation review {review_id} — approved by {reviewer}",
+                status="approved",
+                created_by=reviewer,
+            )
+        except Exception as _gold_err:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Layer 1: gold set promotion failed for review %s: %s", review_id, _gold_err
+            )
+
+        # Layer 2: Graduate corresponding signal to expert_review + include_in_learning=1
+        try:
+            from db.database import get_db as _get_db
+            with _get_db() as _conn:
+                _conn.execute(
+                    """UPDATE session_signals
+                       SET signal_source = 'expert_review',
+                           include_in_learning = 1,
+                           include_in_metrics  = 1
+                       WHERE image_path = ?
+                         AND include_in_learning = 0""",
+                    (updated["image_path"],),
+                )
+        except Exception as _sig_err:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Layer 2: signal promotion failed for review %s: %s", review_id, _sig_err
+            )
+
+        # Layer 3: Reference library ingestion — incorrect predictions get a draft
+        # reference-dataset entry so the corrected pattern enters the pipeline.
+        # Only fires when the original prediction was WRONG (correctness='incorrect'),
+        # meaning the human supplied a corrected expected_pattern.
+        if updated.get("correctness") == "incorrect":
+            try:
+                from engine.reference_dataset import ingest_reference_image as _ingest_ref
+                _image_path = updated.get("image_path", "")
+                _expected_pat = updated.get("expected_pattern", "")
+                if _image_path and _expected_pat and Path(_image_path).exists():
+                    _ref_id = f"distill_{review_id}"
+                    _ingest_ref(
+                        image_path=_image_path,
+                        metadata={
+                            "pattern_id":       _expected_pat,
+                            "reference_id":     _ref_id,
+                            "source_type":      "distillation_approved",
+                            "approval_status":  "draft",
+                            "entry_trust_score": 0.5,
+                            "notes": (
+                                f"Auto-created from distillation review {review_id} — "
+                                f"corrected from '{updated.get('predicted_pattern')}' to '{_expected_pat}' "
+                                f"by {reviewer}"
+                            ),
+                        },
+                        run_pipeline=False,   # image already analysed — skip heavy re-run
+                        run_vlm=False,
+                        generate_debug_overlay=False,
+                        overwrite=False,
+                    )
+                else:
+                    import logging
+                    logging.getLogger(__name__).info(
+                        "Layer 3: skipped for review %s — image missing or no expected_pattern",
+                        review_id,
+                    )
+            except FileExistsError:
+                pass  # idempotent — entry already exists from a prior approval
+            except Exception as _ref_err:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Layer 3: reference ingestion failed for review %s: %s", review_id, _ref_err
+                )
+
     return updated
 
 

@@ -15,6 +15,12 @@ from engine.constants import (
     SKIN,
 )
 
+import logging as _logging
+import platform as _platform
+import os as _os
+
+_vp_logger = _logging.getLogger(__name__)
+
 try:
     import cv2
     import mediapipe as mp
@@ -23,6 +29,29 @@ except Exception:  # pragma: no cover
     mp = None  # type: ignore
 
 _MODEL_DIR = Path(__file__).resolve().parent.parent / "data" / "mp_models"
+
+# ── MediaPipe delegate selection ──────────────────────────────────────
+# GPU delegate crashes on macOS headless (NSOpenGLPixelFormat unavailable).
+# Use GPU only on Linux with a display or when explicitly requested.
+_MP_MAX_DIM = int(_os.environ.get("NGW_MP_MAX_DIM", "1920"))
+_MP_MIN_DIM = int(_os.environ.get("NGW_MP_MIN_DIM", "1024"))
+
+def _mp_delegate():
+    """Choose best MediaPipe delegate for this platform."""
+    if mp is None:
+        return None
+    force = _os.environ.get("NGW_MP_DELEGATE", "").lower()
+    if force == "gpu":
+        return mp.tasks.BaseOptions.Delegate.GPU
+    if force == "cpu":
+        return mp.tasks.BaseOptions.Delegate.CPU
+    # macOS has broken OpenGL in headless server contexts
+    if _platform.system() == "Darwin":
+        return mp.tasks.BaseOptions.Delegate.CPU
+    # Linux with display — try GPU
+    if _platform.system() == "Linux" and _os.environ.get("DISPLAY"):
+        return mp.tasks.BaseOptions.Delegate.GPU
+    return mp.tasks.BaseOptions.Delegate.CPU
 
 
 # -------------------------
@@ -159,7 +188,10 @@ def _pose_guess(img_bgr: np.ndarray) -> Dict[str, Any]:
     mp_image = _make_mp_image(img_rgb)
 
     opts = mp.tasks.vision.PoseLandmarkerOptions(
-        base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+        base_options=mp.tasks.BaseOptions(
+            model_asset_path=str(model_path),
+            delegate=_mp_delegate(),
+        ),
         running_mode=mp.tasks.vision.RunningMode.IMAGE,
     )
     landmarker = mp.tasks.vision.PoseLandmarker.create_from_options(opts)
@@ -492,7 +524,10 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     mp_image = _make_mp_image(img_rgb)
 
     opts = mp.tasks.vision.FaceLandmarkerOptions(
-        base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
+        base_options=mp.tasks.BaseOptions(
+            model_asset_path=str(model_path),
+            delegate=_mp_delegate(),
+        ),
         running_mode=mp.tasks.vision.RunningMode.IMAGE,
         num_faces=1,
     )
@@ -615,15 +650,64 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             dx = ccx - iris_cx_local
             dy = ccy - iris_cy_local
 
-            # Shape: round vs rectangular
+            # Shape classification: ring, round, octagonal, strip, square, rectangular
             (_, enc_r) = cv2.minEnclosingCircle(cnt)
             enc_area = math.pi * enc_r * enc_r
             circularity = area / enc_area if enc_area > 0 else 0
-            shape = "round" if circularity > CATCHLIGHT.CIRCULARITY_ROUND else "rectangular"
+
+            # Bounding rect for aspect ratio
+            _brx, _bry, _brw, _brh = cv2.boundingRect(cnt)
+            _aspect = max(_brw, _brh) / max(min(_brw, _brh), 1)
+
+            # Contour vertex count (approxPolyDP)
+            _epsilon = 0.03 * cv2.arcLength(cnt, True)
+            _approx = cv2.approxPolyDP(cnt, _epsilon, True)
+            _vertices = len(_approx)
+
+            # Hollowness check for ring vs filled round:
+            # A ring light catchlight is a donut — bright ring with dark center.
+            cnt_mask_shape = np.zeros(crop.shape[:2], dtype=np.uint8)
+            cv2.drawContours(cnt_mask_shape, [cnt], 0, 255, -1)
+            _center_val = 0.0
+            _edge_val = 0.0
+            if enc_r > 3:
+                # Sample center region (inner 40% radius)
+                _cmask_center = np.zeros(crop.shape[:2], dtype=np.uint8)
+                cv2.circle(_cmask_center, (int(ccx), int(ccy)), max(1, int(enc_r * 0.4)), 255, -1)
+                _center_pixels = v_chan[(_cmask_center > 0) & (cnt_mask_shape > 0)]
+                # Sample edge ring (outer 30%)
+                _cmask_outer = np.zeros(crop.shape[:2], dtype=np.uint8)
+                cv2.circle(_cmask_outer, (int(ccx), int(ccy)), max(1, int(enc_r * 0.85)), 255, -1)
+                _edge_pixels = v_chan[(cnt_mask_shape > 0) & (_cmask_outer == 0)]
+                if len(_center_pixels) > 0:
+                    _center_val = float(np.mean(_center_pixels))
+                if len(_edge_pixels) > 0:
+                    _edge_val = float(np.mean(_edge_pixels))
+
+            _is_hollow = (_edge_val > 0 and _center_val > 0 and
+                          _center_val < _edge_val * 0.65 and enc_r > 4)
+
+            # Classify shape
+            # Aspect thresholds:
+            #   strip  >= 1.8  (Hurley-style vertical strip boxes are ~1.8–3.0+)
+            #   square <  1.3  (near-equal sides)
+            #   rectangular: everything between 1.3–1.8
+            if circularity > CATCHLIGHT.CIRCULARITY_ROUND and _is_hollow:
+                shape = "ring"          # donut — ring light
+            elif circularity > CATCHLIGHT.CIRCULARITY_ROUND:
+                if _vertices >= 7 and _vertices <= 9 and circularity < 0.85:
+                    shape = "octagonal"  # octabox — near-round with 8 vertices
+                else:
+                    shape = "round"      # beauty dish, umbrella, round softbox
+            elif _aspect >= 1.8:
+                shape = "strip"          # strip box — elongated (Hurley, strip softbox)
+            elif _aspect < 1.3 and circularity < CATCHLIGHT.CIRCULARITY_ROUND:
+                shape = "square"         # square softbox
+            else:
+                shape = "rectangular"    # standard softbox (1.3–1.8 aspect)
 
             # Intensity
-            cnt_mask = np.zeros(crop.shape[:2], dtype=np.uint8)
-            cv2.drawContours(cnt_mask, [cnt], 0, 255, -1)
+            cnt_mask = cnt_mask_shape  # reuse the mask we already drew
             intensity = float(np.mean(v_chan[cnt_mask > 0]) / 255.0)
 
             results.append({
@@ -647,16 +731,17 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     all_catchlights = left_catchlights + right_catchlights
 
     # ── Filter lower-hemisphere catchlights ───────────────────────────
-    # Positions 4–8 o'clock are below the iris horizontal axis.  In a standard
-    # portrait the key is always above (9–3 via 12), so bright spots in the
-    # lower hemisphere almost always come from reflective costume elements —
-    # medals, name-tags, jewellery, eyeglass rims — not from the actual source.
+    # Positions 4–8 o'clock are below the iris horizontal axis.  Most are
+    # costume reflections (medals, jewellery, eyeglass rims), but 5–7 o'clock
+    # catchlights can be legitimate fill lights in clamshell / beauty setups.
     # Strategy:
-    #   • When upper-hemisphere (9–3 via 12) catchlights also exist, discard
-    #     all lower-hemisphere ones — they are false positives.
-    #   • When ONLY lower-hemisphere catchlights exist, keep them but annotate
-    #     with suspect_lower=True so downstream inference can discount them.
+    #   • Keep lower catchlights at 5-7 o'clock if they have reasonable
+    #     intensity relative to the upper key (fill detection).
+    #   • Drop lower catchlights at 4 or 8 o'clock (lateral = costume).
+    #   • When ONLY lower-hemisphere catchlights exist with no upper,
+    #     discard — lone lower catchlight is almost certainly a reflection.
     _LOWER_HEMISPHERE_CLOCKS = {4, 5, 6, 7, 8}
+    _FILL_CLOCKS = {5, 6, 7}  # legitimate fill positions (below center)
 
     def _is_lower(c: dict) -> bool:
         try:
@@ -664,21 +749,40 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         except (ValueError, IndexError):
             return False
 
+    def _is_fill_candidate(c: dict) -> bool:
+        """Lower catchlight at 5-7 o'clock with reasonable intensity = possible fill."""
+        try:
+            clk = int(c["position"].split()[0])
+            return clk in _FILL_CLOCKS
+        except (ValueError, IndexError):
+            return False
+
     _upper_cls = [c for c in all_catchlights if not _is_lower(c)]
     _lower_cls  = [c for c in all_catchlights if     _is_lower(c)]
 
     if _upper_cls and _lower_cls:
-        # Mix of valid + suspect — drop the suspect lower-hemisphere ones
-        all_catchlights   = _upper_cls
-        left_catchlights  = [c for c in left_catchlights  if not _is_lower(c)]
-        right_catchlights = [c for c in right_catchlights if not _is_lower(c)]
+        # Keep lower catchlights that look like fill lights (5-7 o'clock).
+        # Drop lateral lower catchlights (4, 8 o'clock) UNLESS they are strip-shaped
+        # (Hurley-style strip lights sit at 3-4 or 8-9 o'clock and are legitimate).
+        _max_upper_int = max((c.get("intensity", 0) for c in _upper_cls), default=0)
+        _kept_lower = []
+        for c in _lower_cls:
+            c_int = c.get("intensity", 0)
+            _is_strip = c.get("shape") in ("strip", "rectangular")
+            if _is_fill_candidate(c) and (_max_upper_int == 0 or c_int >= _max_upper_int * 0.35):
+                c["fill_candidate"] = True
+                _kept_lower.append(c)
+            elif _is_strip and c_int >= _max_upper_int * 0.25:
+                # Strip-shaped lateral catchlight (4, 8 o'clock) — likely a side strip light
+                c["lateral_strip"] = True
+                _kept_lower.append(c)
+        all_catchlights = _upper_cls + _kept_lower
+        _kept_lower_set = {id(c) for c in _kept_lower}
+        left_catchlights = [c for c in left_catchlights if not _is_lower(c) or id(c) in _kept_lower_set]
+        right_catchlights = [c for c in right_catchlights if not _is_lower(c) or id(c) in _kept_lower_set]
     elif _lower_cls and not _upper_cls:
-        # Only lower-hemisphere catchlights — discard entirely for key-position
-        # inference.  In a standard portrait the key always comes from above; a
-        # lone catchlight below the iris is almost certainly a costume reflection
-        # (medal, name-tag, jewellery, eyeglass rim) rather than the actual source.
-        # Clearing here lets the count=0 early-return fire, which prevents a wrong
-        # key position ("below left") from polluting all downstream inferences.
+        # Only lower-hemisphere catchlights — discard entirely.
+        # Lone catchlight below iris is almost certainly a costume reflection.
         all_catchlights   = []
         left_catchlights  = []
         right_catchlights = []
@@ -764,22 +868,47 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     if cv2 is None or mp is None:
         return {"ok": False, "error": "opencv-python and mediapipe are required"}
 
+    import time as _time
+    _t_pipe_start = _time.perf_counter()
+
     img = cv2.imread(image_path)
     if img is None:
         return {"ok": False, "error": f"Could not read image: {image_path}"}
 
     h, w = img.shape[:2]
 
+    # ── Resize images to optimal range for MediaPipe ───────────────────
+    # Too large (>1920px): wastes CPU, no benefit. Downscale with INTER_AREA.
+    # Too small (<1024px): eye regions too tiny for catchlight detection,
+    #   face landmarks imprecise. Upscale with INTER_CUBIC.
+    _scale = 1.0
+    if _MP_MAX_DIM > 0 and max(h, w) > _MP_MAX_DIM:
+        _scale = _MP_MAX_DIM / max(h, w)
+        _new_w, _new_h = int(w * _scale), int(h * _scale)
+        _vp_logger.info("[vision_pipeline] Downscaling %dx%d → %dx%d for MediaPipe", w, h, _new_w, _new_h)
+        img = cv2.resize(img, (_new_w, _new_h), interpolation=cv2.INTER_AREA)
+        h, w = img.shape[:2]
+    elif _MP_MIN_DIM > 0 and max(h, w) < _MP_MIN_DIM:
+        _scale = _MP_MIN_DIM / max(h, w)
+        _new_w, _new_h = int(w * _scale), int(h * _scale)
+        _vp_logger.info("[vision_pipeline] Upscaling %dx%d → %dx%d for catchlight detection", int(_new_w / _scale), int(_new_h / _scale), _new_w, _new_h)
+        img = cv2.resize(img, (_new_w, _new_h), interpolation=cv2.INTER_CUBIC)
+        h, w = img.shape[:2]
+
     # Person segmentation
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     mp_image = _make_mp_image(img_rgb)
+    _delegate = _mp_delegate()
 
     seg_model = _MODEL_DIR / "selfie_segmenter.tflite"
     if not seg_model.exists():
         return {"ok": False, "error": "selfie_segmenter model not found"}
 
     seg_opts = mp.tasks.vision.ImageSegmenterOptions(
-        base_options=mp.tasks.BaseOptions(model_asset_path=str(seg_model)),
+        base_options=mp.tasks.BaseOptions(
+            model_asset_path=str(seg_model),
+            delegate=_mp_delegate(),
+        ),
         running_mode=mp.tasks.vision.RunningMode.IMAGE,
         output_confidence_masks=True,
     )
@@ -809,7 +938,10 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     fd_model = _MODEL_DIR / "face_detector.tflite"
     if fd_model.exists():
         fd_opts = mp.tasks.vision.FaceDetectorOptions(
-            base_options=mp.tasks.BaseOptions(model_asset_path=str(fd_model)),
+            base_options=mp.tasks.BaseOptions(
+                model_asset_path=str(fd_model),
+                delegate=_mp_delegate(),
+            ),
             running_mode=mp.tasks.vision.RunningMode.IMAGE,
             min_detection_confidence=SEGMENTATION.FACE_DETECTOR_CONFIDENCE,
         )
@@ -971,4 +1103,5 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
         }
         result["_img_bgr"] = img
 
+    _vp_logger.info("[vision_pipeline] analyze_image_regions: %.1fs (%dx%d)", _time.perf_counter() - _t_pipe_start, w, h)
     return result

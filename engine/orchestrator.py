@@ -82,6 +82,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from engine.enums import FieldStatus
@@ -443,11 +444,16 @@ def _signal_contradiction_score(
 
     elif pattern == "split":
         # Split = half-face shadow, high asymmetry.
-        if lr_asym < 0.15:
-            score += 0.5  # too symmetric for split
+        # Softened: lighting_inference already penalises confidence at <0.20,
+        # so this contradiction is a secondary signal, not a double-veto.
+        if lr_asym < 0.10:
+            score += 0.35  # very symmetric — unlikely split
+            cues.append("left_right_asymmetry")
+        elif lr_asym < 0.15:
+            score += 0.15  # mildly symmetric — weak contradiction
             cues.append("left_right_asymmetry")
         if hl_width > 0.60 and lr_asym < 0.25:
-            score += 0.2  # wide highlights inconsistent with split
+            score += 0.15  # wide highlights inconsistent with split
             cues.append("highlight_width_ratio")
             cues.append("left_right_asymmetry")
 
@@ -492,21 +498,35 @@ def _signal_contradiction_score(
             score += 0.2  # extreme asymmetry → split
             cues.append("left_right_asymmetry")
 
-    elif pattern in ("triangle", "rembrandt"):
-        # Rembrandt/triangle requires a visible cheek triangle and asymmetry.
+    elif pattern == "rembrandt":
+        # Rembrandt requires a visible cheek triangle and asymmetry.
         # Low triangle_isolation = no distinct cheek triangle → contradiction.
-        # Also check triangle_detected directly when available.
         tri_detected = getattr(ls, "triangle_detected", None)
-        if tri_iso < 0.05:
-            if tri_detected is False:
-                score += 0.65  # CV explicitly says no triangle — strong contradiction
-            else:
-                score += 0.40  # very low isolation — likely not rembrandt
+        if tri_iso < 0.03 and tri_detected is False:
+            score += 0.45  # CV explicitly says no triangle + very low isolation
             cues.append("triangle_isolation")
-        elif tri_iso < 0.10 and lr_asym < 0.15:
-            score += 0.30  # weak triangle signal + near-symmetric face
+        elif tri_iso < 0.05:
+            score += 0.25  # very low isolation — mild contradiction
+            cues.append("triangle_isolation")
+        elif tri_iso < 0.10 and lr_asym < 0.10:
+            score += 0.15  # weak triangle signal + very symmetric face
             cues.append("triangle_isolation")
             cues.append("left_right_asymmetry")
+
+    elif pattern == "triangle":
+        # Hurley triangle is a catchlight-based pattern (3 lights forming triangle).
+        # Face shadow signals (triangle_isolation) are NOT relevant here — Hurley
+        # setups produce flat, even lighting with minimal face shadows.
+        # Contradiction comes from catchlight count: need 3+ or bilateral pairs.
+        _cl_data = getattr(ls, "catchlight_data", None) or {}
+        _cl_count = _cl_data.get("count", 0)
+        _cl_cluster = getattr(ls, "cluster_geometry", "unknown")
+        if _cl_count < 2:
+            score += 0.40  # fewer than 2 catchlights — can't form triangle
+            cues.append("catchlight_count")
+        elif _cl_count == 2 and _cl_cluster not in ("bilateral", "triangular"):
+            score += 0.20  # 2 catchlights but not bilateral — weak triangle signal
+            cues.append("catchlight_topology")
 
     # Deduplicate cues while preserving order
     seen: set = set()
@@ -517,6 +537,34 @@ def _signal_contradiction_score(
             unique_cues.append(_c)
 
     return min(1.0, score), unique_cues
+
+
+# ── Confidence overrides (Layer 4) ───────────────────────────────────
+# Loaded once per process lifetime — engine restart picks up new floors.
+_CONFIDENCE_OVERRIDES_PATH = Path(__file__).resolve().parent / "confidence_overrides.json"
+_CONFIDENCE_OVERRIDES_CACHE: Optional[Dict[str, Any]] = None
+
+
+def _load_confidence_overrides() -> Dict[str, Any]:
+    """Load per-pattern confidence floors from confidence_overrides.json.
+
+    Cached in memory after first load — engine restart picks up changes.
+    Returns empty dict if the file doesn't exist or can't be parsed.
+    """
+    global _CONFIDENCE_OVERRIDES_CACHE
+    if _CONFIDENCE_OVERRIDES_CACHE is not None:
+        return _CONFIDENCE_OVERRIDES_CACHE
+    if _CONFIDENCE_OVERRIDES_PATH.exists():
+        try:
+            import json as _json
+            _CONFIDENCE_OVERRIDES_CACHE = _json.loads(
+                _CONFIDENCE_OVERRIDES_PATH.read_text(encoding="utf-8")
+            )
+        except Exception:
+            _CONFIDENCE_OVERRIDES_CACHE = {}
+    else:
+        _CONFIDENCE_OVERRIDES_CACHE = {}
+    return _CONFIDENCE_OVERRIDES_CACHE
 
 
 # Threshold above which reference_read primary is demoted (priority shifted
@@ -687,6 +735,18 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     # shadow_density, left_right_asymmetry, etc. without creating new
     # classification paths.
     _apply_signal_confidence(candidates, result)
+
+    # ── Layer 4: Confidence floor clamping ────────────────────────
+    # Apply per-pattern confidence floors from confidence_overrides.json
+    # (written by the learning module after human-approved recalibration).
+    # Floors REDUCE over-confident predictions; they never inflate.
+    _overrides = _load_confidence_overrides()
+    for _c in candidates:
+        _floor_entry = _overrides.get(_c.pattern)
+        if _floor_entry:
+            _floor_val = _floor_entry.get("confidence_floor")
+            if _floor_val is not None and _c.confidence > _floor_val:
+                _c.confidence = round(_floor_val, 3)
 
     # ── Signal contradiction demotion ────────────────────────────
     # When reference_read is the top candidate but vision signals strongly
@@ -925,7 +985,7 @@ class AnalysisResult:
         "perception_explanation", "edge_case_flags",
         "pattern_status", "version_metadata", "pattern_provenance",
         "vlm_semantic_hint", "vlm_disagreements",
-        "analysis_id",
+        "analysis_id", "stage_timings",
     )
 
     def __init__(self) -> None:
@@ -959,6 +1019,7 @@ class AnalysisResult:
         self.vlm_semantic_hint: Optional[VLMSemanticHint] = None
         self.vlm_disagreements: List[VLMDisagreementRecord] = []
         self.analysis_id: str = ""
+        self.stage_timings: Dict[str, float] = {}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1210,7 +1271,8 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # a narrow highlight sliver indicates a hard off-axis backlight (rim key),
     # not a ring — even if the specular catchlight looks circular.
     cs = getattr(cr, "catchlight_shape", None)
-    if cs and getattr(cs, "dominant_shape", "") == "round":
+    _cs_shape = getattr(cs, "dominant_shape", "") if cs else ""
+    if _cs_shape in ("round", "ring"):
         is_natural = getattr(env, "is_natural_light", False) if env else False
         ls_data = getattr(cr, "light_structure", None) if cr else None
         _rl_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
@@ -1654,6 +1716,7 @@ def analyze_image(
     run_vlm: bool = False,
     run_solver: bool = True,
     debug: bool = False,
+    analysis_id_override: str | None = None,
 ) -> AnalysisResult:
     """Full analysis pipeline — single entry point for all image analysis.
 
@@ -1685,14 +1748,20 @@ def analyze_image(
     AnalysisResult
         Structured result with all pipeline outputs.
     """
+    import time as _time
     result = AnalysisResult()
-    result.analysis_id = str(uuid.uuid4())
+    result.analysis_id = analysis_id_override or str(uuid.uuid4())
+    _t0 = _time.perf_counter()
 
     # ── Step 1: Image description (cue extraction) ──────────────────
     try:
         from engine.image_analysis import describe_image as _describe
 
+        _t_step = _time.perf_counter()
         raw = _describe(image_path, "vision", debug=debug)
+        _elapsed = round(_time.perf_counter() - _t_step, 2)
+        result.stage_timings["describe_image"] = _elapsed
+        logger.info("[analyze_image] Step 1 describe_image: %.1fs", _elapsed)
         result.description = {k: v for k, v in raw.items() if not k.startswith("_")}
         result.cue_report = raw.get("_cue_report")
         result.vlm_description = raw.get("_vlm_description")
@@ -1723,7 +1792,11 @@ def analyze_image(
 
     # ── Step 2: Extended pipeline (signal + synthesis passes) ───────
     if run_extended:
+        _t_step = _time.perf_counter()
         result.pipeline_results = _run_extended_pipeline(result)
+        _elapsed = round(_time.perf_counter() - _t_step, 2)
+        result.stage_timings["extended_pipeline"] = _elapsed
+        logger.info("[analyze_image] Step 2 extended_pipeline: %.1fs", _elapsed)
 
         # Merge light_structure from extended pipeline into cue_report.
         # The cue_report was built in Step 1 (describe_image) before the
@@ -1788,12 +1861,16 @@ def analyze_image(
     try:
         from engine.lighting_inference import infer_lighting_from_vision
 
+        _t_step = _time.perf_counter()
         result.lighting_intel = infer_lighting_from_vision(
             result.vision_data,
             classification=result.classification,
             cue_report=result.cue_report,
             vlm_description=result.vlm_description,
         )
+        _elapsed = round(_time.perf_counter() - _t_step, 2)
+        result.stage_timings["lighting_inference"] = _elapsed
+        logger.info("[analyze_image] Step 3 lighting_inference: %.1fs", _elapsed)
     except Exception as exc:
         logger.warning("Lighting inference failed: %s", exc)
         result.notes.append(f"lighting_inference skipped: {exc}")
@@ -1804,7 +1881,11 @@ def analyze_image(
         try:
             from engine.cue_inference import run_cue_inference_pipeline
 
+            _t_step = _time.perf_counter()
             cue_inference_result = run_cue_inference_pipeline(result.cue_report)
+            _elapsed = round(_time.perf_counter() - _t_step, 2)
+            result.stage_timings["cue_inference"] = _elapsed
+            logger.info("[analyze_image] Step 4 cue_inference: %.1fs", _elapsed)
             result.cue_inference_result = cue_inference_result
         except Exception as exc:
             logger.warning("Cue inference failed: %s", exc)
@@ -1812,17 +1893,22 @@ def analyze_image(
 
     # ── Step 5: Solver chain (consensus → consistency → contradiction) ──
     if run_solver and result.pipeline_results:
+        _t_step = _time.perf_counter()
         result.solver_result = _run_solver_chain(
             result.pipeline_results,
             result.cue_report,
             cue_inference_result,
             result.vision_data,
         )
+        _elapsed = round(_time.perf_counter() - _t_step, 2)
+        result.stage_timings["solver_chain"] = _elapsed
+        logger.info("[analyze_image] Step 5 solver_chain: %.1fs", _elapsed)
 
     # ── Step 6: Reference read (three-layer analysis) ───────────────
     try:
         from engine.reference_read import build_reference_photo_analysis
 
+        _t_step = _time.perf_counter()
         result.reference_analysis = build_reference_photo_analysis(
             vision_data=result.vision_data,
             classification=result.classification,
@@ -1831,6 +1917,9 @@ def analyze_image(
             image_analysis=raw if 'raw' in dir() else result.description,
             vlm_description=result.vlm_description,
         )
+        _elapsed = round(_time.perf_counter() - _t_step, 2)
+        result.stage_timings["reference_read"] = _elapsed
+        logger.info("[analyze_image] Step 6 reference_read: %.1fs", _elapsed)
     except Exception as exc:
         logger.warning("Reference read failed: %s", exc)
         result.notes.append(f"reference_read skipped: {exc}")
@@ -2170,7 +2259,205 @@ def analyze_image(
     # ── Perception layer (read-only diagnostics) ─────────────────────
     _compute_perception_layer(result)
 
+    _total = round(_time.perf_counter() - _t0, 2)
+    result.stage_timings["total"] = _total
+    logger.info("[analyze_image] TOTAL: %.1fs", _total)
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Build 3A: Case Replay serialization helper
+# ═══════════════════════════════════════════════════════════════════════════
+
+def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
+    """Return a trimmed, JSON-safe dict from an AnalysisResult for replay storage.
+
+    DESIGN CONSTRAINTS
+    ------------------
+    - NEVER includes numpy arrays, cv2 Mat objects, raw image bytes, or debug frames.
+    - Skips any field that is None or missing (graceful — must never raise on any
+      real AnalysisResult).
+    - AnalysisResult uses __slots__ so a method cannot be added to the class;
+      this standalone function is the canonical serialization entry point.
+
+    DATA NOTES
+    ----------
+    - Available only for analyses run AFTER Build 3A deployment (2026-04-02).
+    - session_signals.outcome is synthetic — not human-confirmed ground truth.
+    - resolved_value in vlm_disagreements is CV-resolver decision, not human label.
+    """
+    out: dict = {}
+
+    def _safe(val):
+        """Return val if it is JSON-safe, else its str() representation."""
+        if val is None:
+            return None
+        if isinstance(val, (str, int, float, bool)):
+            return val
+        # Enums: str() gives "FieldStatus.CONFIRMED" — use .value when available
+        if hasattr(val, "value") and isinstance(val.value, str):
+            return val.value
+        return str(val)
+
+    # ── Top-level scalar fields ──────────────────────────────────────────────
+    for _field in (
+        "analysis_id",
+        "authoritative_pattern",
+        "authoritative_pattern_source",
+        "pattern_confidence",
+        "pattern_confidence_label",
+    ):
+        v = getattr(result, _field, None)
+        if v is not None:
+            out[_field] = _safe(v)
+
+    # pattern_status (Enum)
+    _ps = getattr(result, "pattern_status", None)
+    if _ps is not None:
+        out["pattern_status"] = str(_ps.value) if hasattr(_ps, "value") else str(_ps)
+
+    # ── PatternCandidates ────────────────────────────────────────────────────
+    _pc = getattr(result, "pattern_candidates", None)
+    if _pc is not None:
+        try:
+            out["pattern_candidates"] = _pc.to_dict()
+        except Exception:
+            pass
+
+    # ── FieldProvenance (pattern_provenance) ────────────────────────────────
+    _prov = getattr(result, "pattern_provenance", None)
+    if _prov is not None:
+        try:
+            _alts = []
+            for _alt in (getattr(_prov, "alternates", None) or []):
+                _alts.append({
+                    "value":      getattr(_alt, "value", None),
+                    "source":     getattr(_alt, "source", None),
+                    "confidence": getattr(_alt, "confidence", None),
+                    "status":     str(getattr(_alt, "status", None)),
+                    "demotion_reason": getattr(_alt, "demotion_reason", None) or "",
+                })
+            out["pattern_provenance"] = {
+                "field_name":       getattr(_prov, "field_name", None),
+                "value":            getattr(_prov, "value", None),
+                "status":           str(getattr(_prov, "status", None)),
+                "confidence":       getattr(_prov, "confidence", None),
+                "source":           getattr(_prov, "source", None),
+                "supporting_cues":  list(getattr(_prov, "supporting_cues", None) or []),
+                "alternates":       _alts,
+                "assumption_reason": getattr(_prov, "assumption_reason", None) or "",
+                "demotion_applied": getattr(_prov, "demotion_applied", False),
+                "pipeline_stage":   getattr(_prov, "pipeline_stage", None) or "",
+            }
+        except Exception:
+            pass
+
+    # ── VLMSemanticHint ──────────────────────────────────────────────────────
+    _hint = getattr(result, "vlm_semantic_hint", None)
+    if _hint is not None:
+        try:
+            def _field_hint_to_dict(h):
+                if h is None:
+                    return None
+                return {
+                    "value":      getattr(h, "value", None),
+                    "confidence": getattr(h, "confidence", None),
+                    "status":     str(getattr(h, "status", None)),
+                    "raw_value":  getattr(h, "raw_value", None) or "",
+                    "assumption": getattr(h, "assumption", None) or "",
+                }
+            out["vlm_semantic_hint"] = {
+                "pattern":         _field_hint_to_dict(getattr(_hint, "pattern", None)),
+                "environment":     _field_hint_to_dict(getattr(_hint, "environment", None)),
+                "modifier":        _field_hint_to_dict(getattr(_hint, "modifier", None)),
+                "ambiguity_notes": list(getattr(_hint, "ambiguity_notes", None) or []),
+                "mapping_failures": list(getattr(_hint, "mapping_failures", None) or []),
+                "source_vlm_style": getattr(_hint, "source_vlm_style", None) or "",
+                "pipeline_stage":  getattr(_hint, "pipeline_stage", None) or "",
+            }
+        except Exception:
+            pass
+
+    # ── VLMDisagreementRecord list ───────────────────────────────────────────
+    _disags = getattr(result, "vlm_disagreements", None)
+    if _disags:
+        try:
+            out["vlm_disagreements"] = [
+                {
+                    "field_name":             getattr(d, "field_name", None),
+                    "vlm_value":              getattr(d, "vlm_value", None),
+                    "vlm_confidence":         getattr(d, "vlm_confidence", None),
+                    "resolved_value":         getattr(d, "resolved_value", None),
+                    "resolved_source":        getattr(d, "resolved_source", None),
+                    "agreement":              getattr(d, "agreement", None),
+                    "disagreement_magnitude": getattr(d, "disagreement_magnitude", None),
+                    "pipeline_version":       getattr(d, "pipeline_version", None),
+                }
+                for d in _disags
+            ]
+        except Exception:
+            pass
+
+    # ── AnalysisVersionMetadata ──────────────────────────────────────────────
+    _vm = getattr(result, "version_metadata", None)
+    if _vm is not None:
+        try:
+            out["version_metadata"] = {
+                "system_version":     getattr(_vm, "system_version", None),
+                "taxonomy_version":   getattr(_vm, "taxonomy_version", None),
+                "pipeline_version":   getattr(_vm, "pipeline_version", None),
+                "analysis_timestamp": getattr(_vm, "analysis_timestamp", None),
+            }
+        except Exception:
+            pass
+
+    # ── FaceValidation ───────────────────────────────────────────────────────
+    _fv = getattr(result, "face_validation", None)
+    if _fv is not None:
+        try:
+            out["face_validation"] = {
+                "face_detected":      getattr(_fv, "face_detected", False),
+                "face_confidence":    getattr(_fv, "face_confidence", 0.0),
+                "face_quality":       getattr(_fv, "face_quality", "none"),
+                "face_yaw":           getattr(_fv, "face_yaw", None),
+                "face_box_area_ratio": getattr(_fv, "face_box_area_ratio", 0.0),
+            }
+        except Exception:
+            pass
+
+    # ── SignalReliability ────────────────────────────────────────────────────
+    _sr = getattr(result, "signal_reliability", None)
+    if _sr is not None:
+        try:
+            out["signal_reliability"] = {
+                "signals_available":                  getattr(_sr, "signals_available", 0),
+                "signals_total":                      getattr(_sr, "signals_total", 0),
+                "face_dependent_signals_available":   getattr(_sr, "face_dependent_signals_available", 0),
+                "overall_signal_strength":            getattr(_sr, "overall_signal_strength", 0.0),
+                "weak_signals":                       list(getattr(_sr, "weak_signals", None) or []),
+                "missing_signals":                    list(getattr(_sr, "missing_signals", None) or []),
+            }
+        except Exception:
+            pass
+
+    # ── EdgeCaseFlags ────────────────────────────────────────────────────────
+    _ecf = getattr(result, "edge_case_flags", None)
+    if _ecf is not None:
+        try:
+            out["edge_case_flags"] = {
+                "blown_highlights":               getattr(_ecf, "blown_highlights", False),
+                "mixed_color_temperature":        getattr(_ecf, "mixed_color_temperature", False),
+                "outdoor_foliage_shadows":        getattr(_ecf, "outdoor_foliage_shadows", False),
+                "window_light_gradient":          getattr(_ecf, "window_light_gradient", False),
+                "extreme_low_key":                getattr(_ecf, "extreme_low_key", False),
+                "bw_processing":                  getattr(_ecf, "bw_processing", False),
+                "no_face":                        getattr(_ecf, "no_face", False),
+                "earring_catchlight_contamination": getattr(_ecf, "earring_catchlight_contamination", False),
+            }
+        except Exception:
+            pass
+
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════

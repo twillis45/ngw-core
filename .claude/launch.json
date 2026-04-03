@@ -9,7 +9,7 @@
     },
     {
       "name": "ngw-ui",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "/usr/local/Cellar/node/25.8.2/bin/npm",
       "runtimeArgs": ["run", "dev", "--prefix", "ui"],
       "port": 5173,
       "autoPort": true

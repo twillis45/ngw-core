@@ -109,6 +109,7 @@ class LightingPattern(_LabelMixin, str, Enum):
     ATHLETIC_RIM_SCULPT = "athletic_rim_sculpt"
     WINDOW_NEGATIVE_FILL = "window_negative_fill"
     SHALLOW_LOOP = "shallow_loop"
+    GOBO_PROJECTION = "gobo_projection"
     HYBRID = "hybrid"
     UNKNOWN = "unknown"
 
@@ -135,6 +136,7 @@ _register_labels(LightingPattern, {
 "athletic_rim_sculpt": "Athletic Rim Sculpt",
 "window_negative_fill": "Window Negative Fill",
 "shallow_loop": "Shallow Loop",
+"gobo_projection": "Gobo / Projection",
 })
 
 # ═══════════════════════════════════════════════════════════════════════════

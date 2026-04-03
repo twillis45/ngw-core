@@ -10,9 +10,11 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import os
 import shutil
+import threading
 import time
 import uuid
 from functools import partial
@@ -48,6 +50,12 @@ UPLOAD_DIR = DATA_DIR / "uploads" / "lab"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 _MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+ANALYSIS_TIMEOUT_SECONDS = int(os.getenv("NGW_ANALYSIS_TIMEOUT", "180"))
+
+# ── In-flight analysis tracking (cancel support) ─────────────
+_inflight_lock = threading.Lock()
+_inflight: Dict[str, asyncio.Future] = {}   # analysis_id → Future
+_cancelled: set[str] = set()                # analysis_ids that were cancelled
 _ALLOWED_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".tiff", ".tif"}
 _ALLOWED_CONTENT_TYPES = {
     "image/jpeg", "image/png", "image/webp",
@@ -148,11 +156,34 @@ async def lab_analyze(
     try:
         from engine.orchestrator import analyze_image
 
+        # Generate analysis_id up-front so the client can cancel by id
+        analysis_id = uuid.uuid4().hex
         loop = asyncio.get_event_loop()
-        ar = await loop.run_in_executor(
+        future = loop.run_in_executor(
             None,
-            partial(analyze_image, str(fpath), run_extended=True, run_vlm=True, debug=debug),
+            partial(analyze_image, str(fpath), run_extended=True, run_vlm=True, debug=debug,
+                    analysis_id_override=analysis_id),
         )
+
+        # Register in-flight task for cancellation
+        with _inflight_lock:
+            _inflight[analysis_id] = future
+
+        try:
+            ar = await asyncio.wait_for(future, timeout=ANALYSIS_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            future.cancel()
+            raise HTTPException(
+                status_code=504,
+                detail=f"Analysis timed out after {ANALYSIS_TIMEOUT_SECONDS}s. "
+                       "Try a smaller image or increase NGW_ANALYSIS_TIMEOUT.",
+            )
+        except asyncio.CancelledError:
+            raise HTTPException(status_code=499, detail="Analysis cancelled.")
+        finally:
+            with _inflight_lock:
+                _inflight.pop(analysis_id, None)
+                _cancelled.discard(analysis_id)
 
         if not ar.ok:
             raise HTTPException(status_code=500, detail="; ".join(ar.notes))
@@ -376,24 +407,26 @@ async def lab_analyze(
             if _contrast_obj:
                 _cr_label = (getattr(_contrast_obj, "label", "") or "").lower()
 
+            _split_penalty = 0.35 * (1.0 - _lra / 0.20) if _lra < 0.20 else 0.0
+            _tri_penalty = (0.50 if _cr_label == "extreme" else 0.35) if _cr_label in ("high", "extreme") else 0.0
             signal_diagnostics["gates"] = [
                 {
                     "name": "split_asymmetry_gate",
-                    "description": "Veto split/90° when lr_asymmetry < 0.12 (no facial shadow supports a 90° key)",
+                    "description": "Penalise split confidence when lr_asymmetry < 0.20 (weak shadow for 90° key)",
                     "checked": True,
-                    "triggered": _lra < 0.12,
+                    "triggered": _lra < 0.20,
                     "value": _lra,
-                    "threshold": 0.12,
-                    "result": "vetoed → loop" if _lra < 0.12 else "passed",
+                    "threshold": 0.20,
+                    "result": f"confidence −{_split_penalty:.2f}" if _lra < 0.20 else "passed",
                 },
                 {
                     "name": "triangle_contrast_gate",
-                    "description": "Veto triangle when contrast is high/extreme (extra catchlights are reflections)",
+                    "description": "Penalise triangle confidence when contrast is high/extreme (catchlights may be reflections)",
                     "checked": True,
                     "triggered": _cr_label in ("high", "extreme"),
                     "value": _cr_label or "n/a",
                     "threshold": "high | extreme",
-                    "result": "vetoed → unknown" if _cr_label in ("high", "extreme") else "passed",
+                    "result": f"confidence −{_tri_penalty:.2f}" if _cr_label in ("high", "extreme") else "passed",
                 },
             ]
 
@@ -428,10 +461,43 @@ async def lab_analyze(
             "authoritative_confidence_label": getattr(ar, "pattern_confidence_label", "weak"),
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
+            "stage_timings": getattr(ar, "stage_timings", {}),
+            "image_dimensions": ar.description.get("size") if ar.description else None,
         }
 
         if debug_overlay_url:
             response["debug_overlay_url"] = debug_overlay_url
+
+        # Build 3A: persist trimmed replay blob — best-effort, non-blocking
+        try:
+            import json as _replay_json
+            import time as _replay_time
+            from engine.orchestrator import analysis_result_to_replay_dict
+            replay_payload = analysis_result_to_replay_dict(ar)
+            replay_json_str = _replay_json.dumps(replay_payload, default=str)
+            _sys_ver = (
+                replay_payload.get("version_metadata", {}).get("pipeline_version")
+                if isinstance(replay_payload.get("version_metadata"), dict)
+                else None
+            )
+            with get_db() as _replay_conn:
+                _replay_conn.execute(
+                    """INSERT OR REPLACE INTO analysis_results
+                       (analysis_id, image_path, system_version, result_json, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (
+                        ar.analysis_id,
+                        str(fpath),
+                        _sys_ver,
+                        replay_json_str,
+                        _replay_time.time(),
+                    ),
+                )
+        except Exception as _replay_err:
+            import logging as _replay_log
+            _replay_log.getLogger(__name__).warning(
+                "Build 3A: failed to persist replay blob: %s", _replay_err
+            )
 
         return response
     except Exception as e:
@@ -441,6 +507,234 @@ async def lab_analyze(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
         )
+
+
+@router.post("/analyze/cancel/{analysis_id}")
+async def cancel_analysis(
+    analysis_id: str,
+    user: Dict = Depends(get_dev_user),
+):
+    """Cancel an in-flight analysis by its analysis_id.
+
+    Returns 200 whether or not the task was still running (idempotent).
+    """
+    with _inflight_lock:
+        future = _inflight.pop(analysis_id, None)
+        _cancelled.add(analysis_id)
+    if future and not future.done():
+        future.cancel()
+        return {"cancelled": True, "analysis_id": analysis_id}
+    return {"cancelled": False, "analysis_id": analysis_id, "detail": "Not in-flight (already finished or unknown)"}
+
+
+@router.get("/analyze/status")
+async def analyze_status(user: Dict = Depends(get_dev_user)):
+    """Return the list of currently in-flight analysis ids."""
+    with _inflight_lock:
+        ids = list(_inflight.keys())
+    return {"in_flight": ids, "count": len(ids), "timeout_seconds": ANALYSIS_TIMEOUT_SECONDS}
+
+
+@router.get("/analysis/{analysis_id}")
+async def get_analysis_replay(
+    analysis_id: str,
+    user: Dict = Depends(get_dev_user),
+):
+    """Return stored replay data for a past analysis run.
+
+    Returns:
+    - result: stored replay blob from analysis_results (if persisted — only available
+              for analyses run AFTER Build 3A was deployed on 2026-04-02)
+    - vlm_disagreements: all disagreement records for this analysis_id
+    - user_feedback: all feedback records for this analysis_id
+    - corrections: all correction log entries for this analysis_id
+
+    DATA NOTES:
+    - result is only available for analyses run after Build 3A deployment
+    - session_signals.outcome is synthetic, not human ground truth
+    - resolved_value in vlm_disagreements is CV-resolved, not human-labeled
+    """
+    import json as _rj
+
+    with get_db() as conn:
+        # 1. Stored replay blob
+        row = conn.execute(
+            "SELECT analysis_id, image_path, system_version, result_json, created_at"
+            " FROM analysis_results WHERE analysis_id = ?",
+            (analysis_id,),
+        ).fetchone()
+
+        result_data = None
+        if row:
+            try:
+                result_data = {
+                    "analysis_id":   row["analysis_id"],
+                    "image_path":    row["image_path"],
+                    "system_version": row["system_version"],
+                    "created_at":    row["created_at"],
+                    "replay_payload": _rj.loads(row["result_json"]),
+                }
+            except Exception:
+                result_data = {
+                    "analysis_id": analysis_id,
+                    "error": "failed to parse stored result",
+                }
+
+        # 2. VLM disagreements
+        disagreements = conn.execute(
+            """SELECT id, field_name, vlm_value, vlm_confidence, resolved_value,
+                      resolved_source, agreement, disagreement_magnitude,
+                      pipeline_version, created_at
+               FROM vlm_disagreements WHERE analysis_id = ? ORDER BY created_at""",
+            (analysis_id,),
+        ).fetchall()
+
+        # 3. User feedback
+        feedback_rows = conn.execute(
+            "SELECT * FROM user_feedback WHERE analysis_id = ? ORDER BY created_at",
+            (analysis_id,),
+        ).fetchall()
+
+        # 4. Corrections
+        correction_rows = conn.execute(
+            """SELECT id, image_path, field_name, old_value, new_value,
+                      corrected_by, corrected_at, system_version, source
+               FROM image_correction_log WHERE analysis_id = ? ORDER BY corrected_at""",
+            (analysis_id,),
+        ).fetchall()
+
+    return {
+        "analysis_id": analysis_id,
+        "result": result_data,
+        "vlm_disagreements": [dict(r) for r in disagreements],
+        "user_feedback": [dict(r) for r in feedback_rows],
+        "corrections": [dict(r) for r in correction_rows],
+        "data_notes": {
+            "result_availability": (
+                "Only available for analyses run after Build 3A deployment (2026-04-02)."
+                " Returns null for earlier runs."
+            ),
+            "outcome_field": (
+                "session_signals.outcome is synthetic — not human-confirmed ground truth."
+            ),
+            "resolved_value": (
+                "vlm_disagreements.resolved_value is CV-resolver decision,"
+                " not human-labeled ground truth."
+            ),
+        },
+        "found": result_data is not None,
+    }
+
+
+# ── Build 3.1: Safe replay image serving ──────────────────────────────────────
+
+_REPLAY_IMAGE_MEDIA_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".png": "image/png", ".webp": "image/webp",
+    ".tiff": "image/tiff", ".tif": "image/tiff",
+    ".heic": "image/heic", ".heif": "image/heif",
+}
+
+# Safe base directories for replay image serving.
+# Only images inside these directories may be served.
+_SAFE_IMAGE_BASES = [
+    UPLOAD_DIR.resolve(),                                          # data/uploads/lab/
+    (DATA_DIR / "uploads" / "reference_dataset").resolve(),        # reference dataset images
+    (DATA_DIR / "uploads" / "reference_ingest").resolve(),         # reference ingest staging
+    (DATA_DIR / "reference_dataset").resolve(),                    # reference dataset entries
+    (DATA_DIR / "reference_library").resolve(),                    # reference library entries
+]
+
+
+def _is_safe_image_path(image_path: Path) -> bool:
+    """Check that a resolved image path falls inside an approved base directory.
+
+    Prevents directory traversal — only images inside known upload/reference
+    directories may be served.
+    """
+    resolved = image_path.resolve()
+    return any(
+        resolved == base or str(resolved).startswith(str(base) + "/")
+        for base in _SAFE_IMAGE_BASES
+    )
+
+
+@router.get("/analysis/{analysis_id}/image")
+def get_analysis_replay_image(
+    analysis_id: str,
+    request: Request,
+    token: Optional[str] = Query(None),
+):
+    """Serve the image file associated with a stored analysis replay.
+
+    Build 3.1 — safe image serving for Case Replay.
+
+    Auth: accepts token via Authorization header OR ?token= query param.
+    Query-param auth is needed because <img src> cannot send headers.
+
+    Safety:
+    - Image path is looked up from the database (not from client input)
+    - Path is resolved and validated against approved base directories
+    - Only known image MIME types are served
+    - Returns 404 if the image is missing, path is outside safe bases,
+      or the analysis record doesn't exist
+    """
+    # Authenticate: try header first, then query param
+    from auth.security import decode_token as _decode, _dev_mode_active, _DEV_MODE_USER
+    from db.database import get_user_by_id as _get_user
+
+    user = None
+    if _dev_mode_active():
+        user = _DEV_MODE_USER
+    else:
+        # Try Authorization header
+        auth_header = request.headers.get("authorization", "")
+        bearer_token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else None
+        jwt_token = bearer_token or token  # fallback to query param
+        if not jwt_token:
+            raise HTTPException(status_code=401, detail="Not authenticated")
+        user_id = _decode(jwt_token)
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        user = _get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # Dev email check (same as get_dev_user)
+        from auth.dev_guard import _get_dev_emails
+        allowed = _get_dev_emails()
+        if allowed and (user.get("email", "").lower() not in allowed):
+            raise HTTPException(status_code=403, detail="Lab access denied")
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT image_path FROM analysis_results WHERE analysis_id = ?",
+            (analysis_id,),
+        ).fetchone()
+
+    if not row or not row["image_path"]:
+        raise HTTPException(status_code=404, detail="No image path for this analysis")
+
+    image_path = Path(row["image_path"])
+
+    # Resolve symlinks and normalize before safety check
+    if not image_path.is_absolute():
+        image_path = (DATA_DIR / image_path).resolve()
+    else:
+        image_path = image_path.resolve()
+
+    if not _is_safe_image_path(image_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Image path is outside approved directories",
+        )
+
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found on disk")
+
+    suffix = image_path.suffix.lower()
+    media_type = _REPLAY_IMAGE_MEDIA_TYPES.get(suffix, "application/octet-stream")
+
+    return FileResponse(str(image_path), media_type=media_type)
 
 
 def _generate_debug_overlay(raw: Dict[str, Any], image_path: Path) -> Optional[str]:
@@ -615,6 +909,288 @@ async def list_gold_set(
     """List gold set entries, optionally filtered by status."""
     entries = get_gold_set_entries(status=status, limit=limit)
     return {"entries": entries, "count": len(entries)}
+
+
+# ── Gold Set QC (must be before {entry_id} to avoid path capture) ──
+
+@router.get("/gold-set/qc")
+async def gold_set_qc(user: Dict = Depends(get_dev_user)):
+    """Compute quality-control buckets for gold set / benchmark entries.
+
+    Reads the gold set manifest + benchmark_cases table + distillation review
+    escalations. Returns structured QC data for the LAB QC surface.
+
+    No mutations — read-only inspection surface.
+    """
+    import json as _json
+    manifest_path = Path(__file__).resolve().parent.parent.parent / "data" / "gold_set" / "manifest.json"
+
+    # ── Load manifest entries ──
+    manifest_entries: list[dict] = []
+    if manifest_path.exists():
+        try:
+            with open(manifest_path) as f:
+                manifest_data = _json.load(f)
+            manifest_entries = manifest_data.get("entries", [])
+        except Exception:
+            pass
+
+    # ── Load gold_set_issue escalations from distillation reviews ──
+    escalated_images: set[str] = set()
+    escalated_reviews: list[dict] = []
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT id, image_path, expected_pattern, review_status, rationale, notes "
+                "FROM distillation_candidate_reviews WHERE review_status = 'gold_set_issue'"
+            ).fetchall()
+            for r in rows:
+                d = dict(r)
+                escalated_images.add(d.get("image_path", ""))
+                escalated_reviews.append(d)
+    except Exception:
+        pass
+
+    # ── Load disagreement counts per image (via analysis_results join) ──
+    disagreement_counts: dict[str, int] = {}
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT a.image_path, COUNT(d.id) as cnt "
+                "FROM vlm_disagreements d "
+                "JOIN analysis_results a ON d.analysis_id = a.analysis_id "
+                "WHERE d.agreement = 'conflicting' "
+                "GROUP BY a.image_path"
+            ).fetchall()
+            for r in rows:
+                disagreement_counts[dict(r)["image_path"]] = dict(r)["cnt"]
+    except Exception:
+        pass
+
+    # ── Classify each manifest entry into QC buckets ──
+    qc_items: list[dict] = []
+    counts = {
+        "qc_low_trust": 0,
+        "qc_strict_acceptable_patterns": 0,
+        "qc_ambiguous_geometry": 0,
+        "qc_repeated_disagreement": 0,
+        "qc_gold_set_issue_escalated": 0,
+        "qc_stale_entry": 0,
+        "total_entries": len(manifest_entries),
+        "flagged_entries": 0,
+    }
+
+    for entry in manifest_entries:
+        reasons: list[str] = []
+        trust = entry.get("trust_score", 1.0)
+        acceptable = entry.get("acceptable_patterns", [])
+        expected = entry.get("expected_pattern", "")
+        challenges = entry.get("known_challenges", [])
+        image_path = entry.get("image_path", "")
+        difficulty = entry.get("difficulty", "standard")
+
+        # 1. Low trust
+        if trust <= 0.6:
+            reasons.append("qc_low_trust")
+            counts["qc_low_trust"] += 1
+
+        # 2. Strict acceptable patterns (only 1 acceptable pattern = rigid, fragile)
+        if len(acceptable) <= 1:
+            reasons.append("qc_strict_acceptable_patterns")
+            counts["qc_strict_acceptable_patterns"] += 1
+
+        # 3. Ambiguous geometry (many acceptable patterns = genuinely ambiguous)
+        if len(acceptable) >= 5:
+            reasons.append("qc_ambiguous_geometry")
+            counts["qc_ambiguous_geometry"] += 1
+
+        # 4. Repeated disagreement (VLM disagreed on this image multiple times)
+        dis_count = disagreement_counts.get(image_path, 0)
+        if dis_count == 0:
+            # Try matching by filename suffix
+            for path, cnt in disagreement_counts.items():
+                if path.endswith(image_path) or image_path.endswith(path.rsplit("/", 1)[-1]):
+                    dis_count = cnt
+                    break
+        if dis_count >= 2:
+            reasons.append("qc_repeated_disagreement")
+            counts["qc_repeated_disagreement"] += 1
+
+        # 5. Gold set issue escalated (from distillation reviews)
+        if image_path in escalated_images:
+            reasons.append("qc_gold_set_issue_escalated")
+            counts["qc_gold_set_issue_escalated"] += 1
+
+        # 6. Stale — entries with known_challenges that suggest labeling difficulty
+        if difficulty == "hard" or len(challenges) >= 3:
+            reasons.append("qc_stale_entry")
+            counts["qc_stale_entry"] += 1
+
+        if reasons:
+            counts["flagged_entries"] += 1
+            qc_items.append({
+                "id": entry.get("id", ""),
+                "image_path": image_path,
+                "expected_pattern": expected,
+                "trust_score": trust,
+                "acceptable_patterns": acceptable,
+                "acceptable_count": len(acceptable),
+                "difficulty": difficulty,
+                "known_challenges": challenges,
+                "notes": entry.get("notes", ""),
+                "disagreement_count": dis_count,
+                "qc_reasons": reasons,
+                "qc_primary": reasons[0],
+            })
+
+    # Sort: most QC reasons first, then lowest trust
+    qc_items.sort(key=lambda x: (-len(x["qc_reasons"]), x["trust_score"]))
+
+    return {
+        "counts": counts,
+        "items": qc_items,
+        "escalated_reviews": escalated_reviews,
+    }
+
+
+# ── Coverage Map (Build 4) ──────────────────────────────────────────────────
+
+# Canonical pattern universe — source of truth from engine/enums.py LightingPattern
+_COVERAGE_PATTERNS = {
+    "clamshell":            "Clamshell",
+    "loop":                 "Loop",
+    "rembrandt":            "Rembrandt",
+    "split":                "Split",
+    "butterfly":            "Butterfly / Paramount",
+    "triangle":             "Triangle (Hurley)",
+    "broad":                "Broad",
+    "short":                "Short",
+    "rim_only":             "Rim / Edge Light",
+    "high_key":             "High Key",
+    "low_key":              "Low Key",
+    "flat_fashion":         "Flat Fashion",
+    "window_portrait":      "Window Portrait",
+    "golden_hour":          "Golden Hour",
+    "overcast_natural":     "Overcast Natural",
+    "ring_light":           "Ring Light",
+    "bare_bulb_editorial":  "Bare Bulb Editorial",
+    "strip_dramatic":       "Strip Light Dramatic",
+    "short_fashion_key":    "Short Fashion Key",
+    "soft_editorial_key":   "Soft Editorial Key",
+    "editorial_rim_key":    "Editorial Rim + Key",
+    "tabletop_soft_product":"Tabletop Soft Product",
+    "bottle_backlight":     "Bottle Backlight",
+    "athletic_rim_sculpt":  "Athletic Rim Sculpt",
+    "window_negative_fill": "Window Negative Fill",
+    "shallow_loop":         "Shallow Loop",
+    "gobo_projection":      "Gobo / Projection",
+    "hybrid":               "Hybrid",
+    "unknown":              "Unknown",
+}
+
+def _coverage_tier(signal_count: int) -> str:
+    """Display-only tier. Does not affect model behavior."""
+    if signal_count >= 20:
+        return "strong"
+    if signal_count >= 8:
+        return "moderate"
+    if signal_count >= 2:
+        return "thin"
+    return "absent"
+
+
+@router.get("/coverage-map")
+async def coverage_map(user: Dict = Depends(get_dev_user)):
+    """Per-pattern coverage summary — read-only inspection surface.
+
+    Data sources:
+      - session_signals (live only, include_in_metrics=1) for signal counts + avg confidence + last timestamp
+      - gold_set/manifest.json pattern_coverage for gold set counts
+    Excludes seeded/internal signals via include_in_metrics filter.
+    """
+    import json as _json
+
+    # ── 1. Signal counts per pattern (live production signals only) ──
+    signal_stats: dict[str, dict] = {}
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT pattern_id, "
+                "       COUNT(*) as cnt, "
+                "       AVG(confidence_score) as avg_conf, "
+                "       MAX(created_at) as last_ts "
+                "FROM session_signals "
+                "WHERE include_in_metrics = 1 "
+                "GROUP BY pattern_id"
+            ).fetchall()
+            for r in rows:
+                d = dict(r)
+                signal_stats[d["pattern_id"]] = {
+                    "signal_count": d["cnt"],
+                    "avg_confidence": round(d["avg_conf"], 3) if d["avg_conf"] is not None else None,
+                    "last_signal_ts": d["last_ts"],
+                }
+    except Exception:
+        pass
+
+    # ── 2. Gold set counts from manifest ──
+    gold_counts: dict[str, int] = {}
+    manifest_path = Path(__file__).resolve().parent.parent.parent / "data" / "gold_set" / "manifest.json"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path) as f:
+                manifest_data = _json.load(f)
+            gold_counts = manifest_data.get("pattern_coverage", {})
+        except Exception:
+            pass
+
+    # ── 3. Reference dataset counts from manifest ──
+    ref_counts: dict[str, int] = {}
+    ref_manifest_path = Path(__file__).resolve().parent.parent.parent / "data" / "reference_dataset" / "_manifest.json"
+    if ref_manifest_path.exists():
+        try:
+            with open(ref_manifest_path) as f:
+                ref_data = _json.load(f)
+            ref_counts = ref_data.get("pattern_coverage", {})
+        except Exception:
+            pass
+
+    # ── 4. Assemble per-pattern rows from canonical universe ──
+    patterns: list[dict] = []
+    for pid, pname in _COVERAGE_PATTERNS.items():
+        stats = signal_stats.get(pid, {})
+        sc = stats.get("signal_count", 0)
+        patterns.append({
+            "pattern_id":     pid,
+            "pattern_name":   pname,
+            "signal_count":   sc,
+            "gold_set_count": gold_counts.get(pid, 0),
+            "ref_count":      ref_counts.get(pid, 0),
+            "avg_confidence": stats.get("avg_confidence"),
+            "last_signal_ts": stats.get("last_signal_ts"),
+            "coverage_tier":  _coverage_tier(sc),
+        })
+
+    # Sort: absent first, then thin, moderate, strong — within tier by signal_count asc
+    tier_order = {"absent": 0, "thin": 1, "moderate": 2, "strong": 3}
+    patterns.sort(key=lambda p: (tier_order.get(p["coverage_tier"], 9), p["signal_count"]))
+
+    return {
+        "counts_source_note": (
+            "signal_count from session_signals WHERE include_in_metrics=1 (live production only). "
+            "gold_set_count from data/gold_set/manifest.json. "
+            "ref_count from data/reference_dataset/_manifest.json. "
+            "Seeded/internal signals excluded."
+        ),
+        "tier_thresholds": {
+            "strong": ">= 20 signals",
+            "moderate": ">= 8 signals",
+            "thin": ">= 2 signals",
+            "absent": "0 signals",
+        },
+        "total_patterns": len(patterns),
+        "patterns": patterns,
+    }
 
 
 @router.get("/gold-set/{entry_id}")
@@ -1710,3 +2286,288 @@ async def get_api_metrics(
     stats["vlm_provider"]   = _VLM_PROVIDER
     stats["vlm_model"]      = _VLM_MODEL or None
     return stats
+
+
+# ── Failure Triage (LAB Build 2) ───────────────────────────────────────────────
+#
+# DATA QUALITY NOTES:
+#   - vlm_disagreements stores VLM hint vs. resolved value per field, per analysis.
+#   - There is NO predicted_pattern / ground_truth_pattern column.
+#     Instead: field_name (e.g. 'pattern'), vlm_value (VLM's suggestion),
+#              resolved_value (what the pipeline resolved to), agreement
+#              ('confirmed' | 'conflicting' | 'vlm_only').
+#   - "Overconfident miss" = agreement='conflicting' AND vlm_confidence >= threshold
+#     (VLM was confident but disagreed with CV resolver — a candidate failure case).
+#   - "Underconfident hit" = agreement='confirmed' AND vlm_confidence < threshold
+#     (VLM agreed with CV but was uncharacteristically uncertain).
+#   - There is NO join path from vlm_disagreements to image_ground_truth
+#     (vlm_disagreements has analysis_id; image_ground_truth has image_path only).
+#   - There is NO image_path column on vlm_disagreements — the image path
+#     is not stored in that table.
+#   - "ground_truth_pattern" in responses = resolved_value (CV-resolved, not human-labeled).
+#   - "confidence" in responses = vlm_confidence (VLM's confidence, not CV confidence).
+#   - No status/dismissed column on vlm_disagreements — dismiss is frontend-only in v1.
+
+
+class TriageSendToGoldSetBody(BaseModel):
+    image_path: str
+    predicted_pattern: str
+    ground_truth_pattern: str
+    confidence: float
+    analysis_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+@router.get("/failure-triage/overconfident")
+async def failure_triage_overconfident(
+    limit:     int   = Query(20, ge=1, le=100),
+    threshold: float = Query(0.65, ge=0.0, le=1.0),
+    user:      Dict  = Depends(get_dev_user),
+):
+    """Return VLM disagreement cases where VLM was confident but conflicted with CV resolver.
+
+    DATA QUALITY NOTE: These are NOT human-verified failures.  They represent cases where
+    the VLM hint disagreed with the rule-based CV resolver at high confidence.  The resolver
+    may be wrong in some cases — treat these as candidate review items, not confirmed errors.
+
+    Columns returned:
+      - id:                   vlm_disagreements.id
+      - analysis_id:          analysis run identifier
+      - field_name:           which field disagreed (e.g. 'pattern')
+      - predicted_pattern:    vlm_value  (what VLM predicted)
+      - ground_truth_pattern: resolved_value (what CV resolver decided — NOT human-labeled)
+      - confidence:           vlm_confidence
+      - pipeline_version:     pipeline version string
+      - created_at:           epoch timestamp
+      - descriptor:           "High confidence miss"
+    """
+    from db.database import get_db
+    params: list = [threshold, limit]
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, analysis_id, field_name, vlm_value, vlm_confidence,
+                      resolved_value, resolved_source, agreement,
+                      disagreement_magnitude, pipeline_version, created_at
+               FROM vlm_disagreements
+               WHERE agreement = 'conflicting'
+                 AND vlm_confidence >= ?
+               ORDER BY vlm_confidence DESC
+               LIMIT ?""",
+            params,
+        ).fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "id":                   r["id"],
+            "analysis_id":          r["analysis_id"],
+            "field_name":           r["field_name"],
+            "predicted_pattern":    r["vlm_value"],
+            "ground_truth_pattern": r["resolved_value"],   # CV-resolved, not human-labeled
+            "confidence":           r["vlm_confidence"],
+            "resolved_source":      r["resolved_source"],
+            "disagreement_magnitude": r["disagreement_magnitude"],
+            "pipeline_version":     r["pipeline_version"],
+            "created_at":           r["created_at"],
+            "descriptor":           "High confidence miss",
+        })
+    return {
+        "total":     len(items),
+        "threshold": threshold,
+        "items":     items,
+        "data_note": (
+            "ground_truth_pattern = CV-resolved value, not human-labeled. "
+            "No image_path available in vlm_disagreements table. "
+            "Dismiss is frontend-only in v1 (no dismissed column in schema)."
+        ),
+    }
+
+
+@router.get("/failure-triage/underconfident")
+async def failure_triage_underconfident(
+    limit:     int   = Query(20, ge=1, le=100),
+    threshold: float = Query(0.45, ge=0.0, le=1.0),
+    user:      Dict  = Depends(get_dev_user),
+):
+    """Return VLM cases where VLM agreed with CV resolver but at low confidence.
+
+    DATA QUALITY NOTE: These are cases where VLM confirmed the CV resolver's result
+    but appeared uncertain.  They may indicate boundary cases worth adding to the gold set
+    for coverage, but they are NOT confirmed failures.
+
+    Uses the same vlm_disagreements table with agreement='confirmed' AND
+    vlm_confidence < threshold.  Sorted confidence ASC (least confident first).
+    """
+    from db.database import get_db
+    params: list = [threshold, limit]
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT id, analysis_id, field_name, vlm_value, vlm_confidence,
+                      resolved_value, resolved_source, agreement,
+                      disagreement_magnitude, pipeline_version, created_at
+               FROM vlm_disagreements
+               WHERE agreement = 'confirmed'
+                 AND vlm_confidence IS NOT NULL
+                 AND vlm_confidence < ?
+               ORDER BY vlm_confidence ASC
+               LIMIT ?""",
+            params,
+        ).fetchall()
+    items = []
+    for r in rows:
+        items.append({
+            "id":                   r["id"],
+            "analysis_id":          r["analysis_id"],
+            "field_name":           r["field_name"],
+            "predicted_pattern":    r["vlm_value"],
+            "ground_truth_pattern": r["resolved_value"],   # CV-resolved, matches VLM here
+            "confidence":           r["vlm_confidence"],
+            "resolved_source":      r["resolved_source"],
+            "disagreement_magnitude": r["disagreement_magnitude"],
+            "pipeline_version":     r["pipeline_version"],
+            "created_at":           r["created_at"],
+            "descriptor":           "Low confidence hit",
+        })
+    return {
+        "total":     len(items),
+        "threshold": threshold,
+        "items":     items,
+        "data_note": (
+            "agreement='confirmed' means VLM agreed with CV resolver. "
+            "Low vlm_confidence here suggests boundary / uncertain case. "
+            "No image_path available in vlm_disagreements table. "
+            "Dismiss is frontend-only in v1."
+        ),
+    }
+
+
+@router.post("/failure-triage/send-to-gold-set", status_code=201)
+async def failure_triage_send_to_gold_set(
+    body: TriageSendToGoldSetBody,
+    user: Dict = Depends(get_dev_user),
+):
+    """Create a DRAFT gold set entry from a triage item.
+
+    Status is always set to 'draft' — requires explicit review/approval before
+    being used for evaluation.  Never auto-approves.
+    """
+    # Build expected_analysis from the triage data — captures the intended correction.
+    expected_analysis: Dict[str, Any] = {
+        "pattern":             body.ground_truth_pattern,
+        "triage_source":       "failure_triage",
+        "vlm_predicted":       body.predicted_pattern,
+        "vlm_confidence":      body.confidence,
+    }
+    if body.analysis_id:
+        expected_analysis["source_analysis_id"] = body.analysis_id
+
+    notes_parts = []
+    if body.notes:
+        notes_parts.append(body.notes)
+    notes_parts.append(
+        f"Queued from Failure Triage — predicted={body.predicted_pattern!r}, "
+        f"resolved={body.ground_truth_pattern!r}, confidence={body.confidence:.3f}"
+    )
+
+    entry = create_gold_set_entry(
+        image_path=body.image_path,
+        expected_analysis=expected_analysis,
+        notes=" | ".join(notes_parts),
+        status="draft",   # NEVER auto-approve
+        created_by=user.get("email", "triage"),
+    )
+    return {"created": True, "id": entry["id"], "status": entry["status"]}
+
+
+# ── Layer 4: Calibration surface ─────────────────────────────────────────────
+
+@router.get("/calibration/suggestions")
+def calibration_suggestions(
+    days: int = Query(30, ge=7, le=180),
+    user: Dict = Depends(get_dev_user),
+):
+    """Return per-pattern recalibration suggestions.
+
+    Surfaces patterns where avg_confidence exceeds success_rate by > 10pp,
+    with >= 5 live sessions. Each suggestion includes a suggested_floor
+    that can be approved via POST /calibration/apply.
+    """
+    from db.signals import get_recalibration_hints, get_confidence_calibration
+    hints = get_recalibration_hints(days=days)
+    calibration = get_confidence_calibration(days=days)
+    return {
+        "days": days,
+        "suggestions": hints,
+        "calibration": calibration,
+    }
+
+
+@router.get("/calibration/current")
+def calibration_current(user: Dict = Depends(get_dev_user)):
+    """Return current confidence_overrides.json contents (active floors)."""
+    overrides_path = Path(__file__).resolve().parent.parent.parent / "engine" / "confidence_overrides.json"
+    if not overrides_path.exists():
+        return {"overrides": {}, "path": str(overrides_path), "exists": False}
+    try:
+        overrides = json.loads(overrides_path.read_text(encoding="utf-8"))
+    except Exception:
+        overrides = {}
+    return {"overrides": overrides, "path": str(overrides_path), "exists": True}
+
+
+class CalibrationApplyBody(BaseModel):
+    floors: Dict[str, float] = Field(..., description="pattern_id → confidence floor value")
+    notes: str = ""
+
+
+@router.post("/calibration/apply")
+def calibration_apply(
+    body: CalibrationApplyBody,
+    user: Dict = Depends(get_dev_user),
+):
+    """Apply reviewed confidence floors to confidence_overrides.json.
+
+    Each floor entry is merged into the existing overrides file. Floors reduce
+    over-confident predictions — they never inflate. Engine restart required.
+
+    SAFETY: This only writes the file. The resolver loads it on startup.
+    No automatic engine restart is performed.
+    """
+    overrides_path = Path(__file__).resolve().parent.parent.parent / "engine" / "confidence_overrides.json"
+    overrides: dict = {}
+    if overrides_path.exists():
+        try:
+            overrides = json.loads(overrides_path.read_text(encoding="utf-8"))
+        except Exception:
+            overrides = {}
+
+    reviewer = user.get("email", "lab")
+    applied = []
+    for pattern_id, floor_val in body.floors.items():
+        if floor_val < 0.0 or floor_val > 1.0:
+            continue  # skip invalid
+        overrides[pattern_id] = {
+            "confidence_floor": round(floor_val, 3),
+            "applied_at":      time.time(),
+            "applied_by":      reviewer,
+            "reason":          "lab_calibration_review",
+            "notes":           body.notes or "",
+            "previous_floor":  overrides.get(pattern_id, {}).get("confidence_floor"),
+        }
+        applied.append(pattern_id)
+
+    try:
+        overrides_path.parent.mkdir(parents=True, exist_ok=True)
+        overrides_path.write_text(json.dumps(overrides, indent=2), encoding="utf-8")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to write overrides: {exc}")
+
+    return {
+        "applied": True,
+        "patterns": applied,
+        "total_overrides": len(overrides),
+        "restart_required": True,
+        "message": (
+            f"Applied confidence floors for {len(applied)} pattern(s). "
+            "Engine restart required for changes to take effect."
+        ),
+    }

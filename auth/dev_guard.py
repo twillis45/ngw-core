@@ -26,7 +26,7 @@ def _dev_mode_active() -> bool:
     return os.getenv("NGW_DEV_MODE", "").strip().lower() in ("1", "true", "yes")
 
 
-_DEV_MODE_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
+_DEV_MODE_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode", "username": "Dev Mode"}
 
 
 async def get_dev_user(user: Dict[str, Any] = Depends(get_optional_user)) -> Dict[str, Any]:

@@ -178,31 +178,32 @@ class CATCHLIGHT:
     """Catchlight detection and shape classification."""
 
     # ── Brightness thresholds ──
-    V_THRESHOLD_COLOR = 200      # V-channel (brightness) for normal images
-    V_THRESHOLD_BW = 170         # V-channel for B&W / dramatic images
+    V_THRESHOLD_COLOR = 190      # V-channel (brightness) for normal images
+    V_THRESHOLD_BW = 160         # V-channel for B&W / dramatic images
     S_MAX = 80                   # S-channel (saturation) max for catchlight mask
 
     # ── B&W detection ──
-    BW_SATURATION_CUTOFF = 25    # mean saturation < this → treat as B&W
+    BW_SATURATION_CUTOFF = 45    # mean saturation < this → treat as B&W
+    #   Editorial B&W often has mean sat 25-50; old threshold of 25 missed them
 
     # ── Morphology kernel sizes ──
     MORPH_KERNEL_BW = 2
-    MORPH_KERNEL_COLOR = 3
+    MORPH_KERNEL_COLOR = 2       # was 3 — too aggressive on downscaled images
 
     # ── Area thresholds ──
-    MIN_AREA_BW = 3              # minimum contour area (B&W images)
-    MIN_AREA_COLOR = 5           # minimum contour area (color images)
+    MIN_AREA_BW = 2              # minimum contour area (B&W images)
+    MIN_AREA_COLOR = 3           # minimum contour area (color images)
     MAX_AREA_RATIO = 0.4         # max contour area relative to crop
 
     # ── Shape classification ──
-    CIRCULARITY_ROUND = 0.65     # circularity > this → round; else rectangular
+    CIRCULARITY_ROUND = 0.60     # circularity > this → round; else rectangular
 
     # ── Eye crop ──
     IRIS_CROP_RADIUS_MULT = 3    # radius multiplier for eye region extraction
 
     # ── Deduplication ──
     FLOOR_REFLECTION_CLOCKS = (5, 6, 7)  # clock positions filtered as floor reflections
-    PROXIMITY_TOLERANCE = 2              # ±hours for grouping catchlights
+    PROXIMITY_TOLERANCE = 1              # ±hours for grouping catchlights (was 2)
 
     # ── Clock positions for passive bounce (reference_read.py) ──
     UPPER_CLOCKS = (10, 11, 12, 1, 2)   # above eye level

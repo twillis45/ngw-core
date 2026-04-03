@@ -6,6 +6,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging as _logging
+
+# ── Logging — ensure runtime errors are always visible in server output ──
+_log_level = os.environ.get("NGW_LOG_LEVEL", "INFO").upper() if "os" in dir() else "INFO"
+import os as _os_early
+_log_level = _os_early.environ.get("NGW_LOG_LEVEL", "INFO").upper()
+_logging.basicConfig(
+    level=getattr(_logging, _log_level, _logging.INFO),
+    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
 _startup_logger = _logging.getLogger("ngw.startup")
 
 import os

@@ -97,7 +97,7 @@ def decode_token_payload(token: str) -> Optional[dict]:
 
 # ── Dev mode ───────────────────────────────────────────────
 
-_DEV_MODE_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode"}
+_DEV_MODE_USER = {"id": "dev-mode", "email": "dev@localhost", "name": "Dev Mode", "username": "Dev Mode"}
 
 
 def _dev_mode_active() -> bool:

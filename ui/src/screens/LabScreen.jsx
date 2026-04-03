@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppState, useDispatch } from '../context/AppContext';
 import NGWLogo from '../components/NGWLogo';
@@ -12,6 +12,9 @@ import { C } from '../lib/statusColors';
 import { fmtPattern } from '../lib/formatters';
 import {
   analyzeImage,
+  cancelAnalysis,
+  fetchGoldSetQC,
+  fetchCoverageMap,
   listGoldSet,
   createGoldSetEntry,
   updateGoldSetEntry,
@@ -312,7 +315,6 @@ const LAB_HELP = {
     features: [
       { label: 'Overview', desc: 'Ops summary: open clusters, pending evaluations, active monitoring windows, alerts.' },
       { label: 'Clusters', desc: 'Failure clusters grouped by pattern and error type. Generate a Candidate directly from any cluster.' },
-      { label: 'Monitoring', desc: 'Post-release monitoring windows. View drift alerts and trigger sweep to check live performance.' },
       { label: 'Knowledge Base', desc: 'Per-pattern ruleset knowledge: signal counts by risk tier, required thresholds, current risk level.' },
       { label: 'Revenue', desc: 'Simulate 30-day revenue delta under Conservative / Moderate / Aggressive deployment scenarios.' },
       { label: 'Scheduler', desc: 'Background ingestion scheduler: enable/disable, configure interval, trigger a manual run.' },
@@ -585,23 +587,24 @@ export default function LabScreen() {
   const [activeIntelTab, setActiveIntelTab] = useState('signals');
   const [activeSystemTab, setActiveSystemTab] = useState('control_center');
 
-  /** Navigate to a specific tab+panel, optionally with filter state. */
-  function handleNavigateTo({ tab, panel, status, severity, clusterId } = {}) {
+  /** Navigate to a specific tab+panel, optionally with filter state.
+   *  Build 3.1: pendingImage support — dispatches SET_LAB_PENDING_IMAGE
+   *  before switching to workbench so WorkbenchTab picks it up. */
+  function handleNavigateTo({ tab, panel, status, severity, clusterId, pendingImage: navImage } = {}) {
+    // Build 3.1: set pending image before tab switch so WorkbenchTab consumes it
+    if (navImage && tab === 'workbench') {
+      dispatch({ type: 'SET_LAB_PENDING_IMAGE', payload: navImage });
+    }
     if (tab) {
       let legacyTab = tab;
-      if (['gold_set', 'goldset', 'queue', 'reviews', 'ref_dataset', 'candidates'].includes(tab)) {
+      if (['gold_set', 'goldset', 'queue', 'qc', 'coverage', 'reviews', 'ref_dataset', 'candidates'].includes(tab)) {
         setActiveSection('training');
         const trainingTab = tab === 'gold_set' ? 'goldset' : tab;
         setActiveTrainingTab(trainingTab);
-        legacyTab = ['queue', 'goldset', 'reviews'].includes(trainingTab) ? 'gold_set' : trainingTab;
-      } else if (['signals', 'learning', 'benchmarks', 'monitoring_intel'].includes(tab)) {
+        legacyTab = ['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(trainingTab) ? 'gold_set' : trainingTab;
+      } else if (['signals', 'learning', 'benchmarks'].includes(tab)) {
         setActiveSection('intelligence');
         setActiveIntelTab(tab);
-        if (tab === 'monitoring_intel') {
-          switchTab('learning');
-          setLearningNavRequest({ panel: 'monitoring' });
-          return; // skip default switchTab call at the bottom
-        }
       } else if (['control_center', 'user'].includes(tab)) {
         setActiveSection('system');
         setActiveSystemTab(tab);
@@ -649,7 +652,7 @@ export default function LabScreen() {
                 ? `Rollback review needed${a.candidate_id ? ` — candidate ${a.candidate_id}` : ''}`
                 : `Candidate regression detected${a.candidate_id ? ` — candidate ${a.candidate_id}` : ''}`,
               time: a.window_days ? `${a.window_days}d window` : null,
-              nav: { section: 'intelligence', tab: 'monitoring_intel' },
+              nav: { section: 'system', tab: 'control_center', panel: 'monitoring' },
             }));
             // Also surface critical clusters as alerts
             (r?.top_clusters ?? []).filter(c => c.severity === 'critical').forEach(c => {
@@ -811,7 +814,13 @@ export default function LabScreen() {
       <div className="screen lab-screen">
         <div className="lab-header">
           <div className="lab-header__brand">
-            <NGWLogo size="sm" loading={false} />
+            <button
+              className="lab-header__logo-btn"
+              onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
+              aria-label="Go to home screen"
+            >
+              <NGWLogo size="sm" loading={false} />
+            </button>
             <span className="lab-header__brand-sep" />
             <h2 className="lab-header__title">LAB</h2>
           </div>
@@ -846,15 +855,10 @@ export default function LabScreen() {
     if (sectionId === 'workbench') {
       switchTab('workbench');
     } else if (sectionId === 'training') {
-      const legacyId = ['queue', 'goldset', 'reviews'].includes(activeTrainingTab) ? 'gold_set' : activeTrainingTab;
+      const legacyId = ['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(activeTrainingTab) ? 'gold_set' : activeTrainingTab;
       handleTabSwitch(legacyId);
     } else if (sectionId === 'intelligence') {
-      if (activeIntelTab === 'monitoring_intel') {
-        switchTab('learning');
-        setLearningNavRequest({ panel: 'monitoring' });
-      } else {
-        handleTabSwitch(activeIntelTab);
-      }
+      handleTabSwitch(activeIntelTab);
     } else if (sectionId === 'system') {
       switchTab(activeSystemTab);
     }
@@ -863,17 +867,13 @@ export default function LabScreen() {
 
   function handleTrainingSubSwitch(tabId) {
     setActiveTrainingTab(tabId);
-    const legacyId = ['queue', 'goldset', 'reviews'].includes(tabId) ? 'gold_set' : tabId;
+    const legacyId = ['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(tabId) ? 'gold_set' : tabId;
     handleTabSwitch(legacyId);
   }
 
   function handleIntelSubSwitch(tabId) {
     setActiveIntelTab(tabId);
-    if (tabId === 'monitoring_intel') {
-      switchTab('learning');
-      setLearningNavRequest({ panel: 'monitoring' });
-    } else if (tabId === 'learning') {
-      // Always reset to overview so switching away from Monitoring and back works
+    if (tabId === 'learning') {
       switchTab('learning');
       setLearningNavRequest({ panel: 'overview' });
     } else {
@@ -893,7 +893,13 @@ export default function LabScreen() {
       {/* ── Figma: LAB header + Online pill ── */}
       <div className="lab-header">
         <div className="lab-header__brand">
-          <NGWLogo size="sm" loading={false} />
+          <button
+            className="lab-header__logo-btn"
+            onClick={() => dispatch({ type: 'NAVIGATE', screen: 'home' })}
+            aria-label="Go to home screen"
+          >
+            <NGWLogo size="sm" loading={false} />
+          </button>
           <span className="lab-header__brand-sep" />
           <h2 className="lab-header__title">LAB</h2>
         </div>
@@ -967,6 +973,8 @@ export default function LabScreen() {
           {[
             { id: 'queue',       label: 'Intake Queue' },
             { id: 'goldset',     label: '★ Gold Set'   },
+            { id: 'qc',          label: 'QC'           },
+            { id: 'coverage',    label: 'Coverage'     },
             { id: 'reviews',     label: 'Review Queue' },
             { id: 'ref_dataset', label: 'Ref Library'  },
             { id: 'candidates',  label: 'Candidates'   },
@@ -990,7 +998,6 @@ export default function LabScreen() {
             { id: 'signals',          label: 'Signals',      metricKey: 'signals'   },
             { id: 'learning',         label: 'Learning Ops', metricKey: 'learning'  },
             { id: 'benchmarks',       label: 'Benchmarks',   metricKey: 'benchmarks'},
-            { id: 'monitoring_intel', label: 'Monitoring',   metricKey: 'learning'  },
           ].map(sub => (
             <button
               key={sub.id}
@@ -1168,7 +1175,7 @@ export default function LabScreen() {
             <GoldSetTab
               prefill={goldSetPrefill}
               onPrefillConsumed={() => setGoldSetPrefill(null)}
-              activeGoldTab={['queue', 'goldset', 'reviews'].includes(activeTrainingTab) ? activeTrainingTab : 'goldset'}
+              activeGoldTab={['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(activeTrainingTab) ? activeTrainingTab : 'goldset'}
               onGoldTabChange={(tab) => setActiveTrainingTab(tab)}
             />
           </div>
@@ -1521,11 +1528,22 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
   const [overlayRegen,      setOverlayRegen]      = useState(false);  // regen in progress
   const [overlayUrl,        setOverlayUrl]        = useState(null);   // current (possibly re-generated) overlay URL
   const [overlayRegenError, setOverlayRegenError] = useState(null);   // regen error message string
+  const [elapsed,           setElapsed]           = useState(0);      // seconds since analysis started
+  const abortRef = useRef(null);                                      // AbortController for in-flight analysis
+  const timerRef = useRef(null);                                      // interval id for elapsed counter
 
   // Revoke object URL when preview changes or component unmounts
   useEffect(() => {
     return () => { if (preview) URL.revokeObjectURL(preview); };
   }, [preview]);
+
+  // Clean up timer + abort on unmount
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
 
   // Consume a pending image forwarded from "Open in Lab" on ReferenceEvalScreen
   useEffect(() => {
@@ -1592,21 +1610,48 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
 
   async function handleAnalyze() {
     if (!file) return;
+    // Abort any previous in-flight request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
+    setElapsed(0);
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setElapsed(s => s + 1), 1000);
+
     try {
-      const data = await analyzeImage(file, { debug: debugMode });
+      const data = await analyzeImage(file, { debug: debugMode, signal: controller.signal });
       setResult(data);
-      // Reset overlay state for the new result
       setOverlayUrl(data.debug_overlay_url || null);
       setOverlayLayers(null);
       setOverlayRegenError(null);
       onWorkbenchChange?.({ file, preview, imagePath: data.image_path || null, result: data });
     } catch (err) {
-      setError(err.message || 'Analysis failed');
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        setError('Analysis cancelled.');
+      } else {
+        setError(err.message || 'Analysis failed');
+      }
     } finally {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+      abortRef.current = null;
       setLoading(false);
     }
+  }
+
+  function handleCancel() {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    clearInterval(timerRef.current);
+    timerRef.current = null;
+    setLoading(false);
+    setElapsed(0);
+    setError('Analysis cancelled.');
   }
 
   async function handleOverlayLayerToggle(layerName) {
@@ -1765,6 +1810,15 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
               {!loading && result && (
                 <button className="lab-wb__action-btn" onClick={handleAnalyze} title="Re-run analysis with current settings">
                   Re-analyze
+                </button>
+              )}
+              {loading && (
+                <button
+                  className="lab-wb__action-btn"
+                  onClick={handleCancel}
+                  style={{ color: C.red, borderColor: `color-mix(in srgb, ${C.red} 40%, transparent)` }}
+                >
+                  Cancel{elapsed > 0 ? ` (${elapsed}s)` : ''}
                 </button>
               )}
               <button className="lab-wb__action-btn" onClick={handleReset} disabled={loading}>
@@ -1994,7 +2048,10 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
               onPropose={(prefill) => onProposeRule(result, prefill)}
             />
           ) : (
-            <WorkbenchFormatted data={result} />
+            <>
+              <WorkbenchFormatted data={result} />
+              <PipelineTimingPanel data={result} />
+            </>
           )}
 
           {/* Teach the engine — inline label panel */}
@@ -2941,6 +2998,202 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
       {diag.error && (
         <div style={{ fontSize: 11, color: C.red, fontFamily: 'var(--font-mono)' }}>
           Diagnostics error: {diag.error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ── Acceptable Patterns Dropdown — multi-select with checkboxes ───── */
+function AcceptablePatternsDropdown({ value, onChange, excludePattern }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = useMemo(() => {
+    return value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
+  }, [value]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const toggle = (pattern) => {
+    const next = selected.includes(pattern)
+      ? selected.filter(p => p !== pattern)
+      : [...selected, pattern];
+    onChange(next.join(', '));
+  };
+
+  const available = KNOWN_PATTERNS.filter(p => p !== excludePattern);
+
+  return (
+    <div className="lab-form__label" ref={ref} style={{ position: 'relative' }}>
+      Acceptable Patterns
+      <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
+        boundary cases
+      </span>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="lab-form__input"
+        style={{
+          marginTop: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer', textAlign: 'left', minHeight: 34,
+        }}
+      >
+        <span style={{ fontSize: 12, color: selected.length ? 'var(--color-text)' : 'var(--color-text-dim)' }}>
+          {selected.length ? selected.map(fmtPattern).join(', ') : 'None — expected pattern only'}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-dim)', marginLeft: 8 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+          maxHeight: 240, overflowY: 'auto',
+          background: 'var(--color-surface-raised, #1e293b)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 6, marginTop: 2, padding: '4px 0',
+          boxShadow: '0 4px 12px rgba(0,0,0,.4)',
+        }}>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { onChange(''); setOpen(false); }}
+              style={{
+                width: '100%', padding: '5px 10px', border: 'none', background: 'transparent',
+                color: '#f87171', fontSize: 11, textAlign: 'left', cursor: 'pointer',
+                borderBottom: '1px solid var(--color-border)',
+              }}
+            >
+              Clear all
+            </button>
+          )}
+          {available.map(p => {
+            const checked = selected.includes(p);
+            return (
+              <label
+                key={p}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '5px 10px', cursor: 'pointer', fontSize: 12,
+                  color: 'var(--color-text)',
+                  background: checked ? 'color-mix(in srgb, #60a5fa 12%, transparent)' : 'transparent',
+                }}
+                onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--color-surface)'; }}
+                onMouseLeave={e => { if (!checked) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(p)}
+                  style={{ accentColor: '#60a5fa' }}
+                />
+                {fmtPattern(p)}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ── Pipeline Timing Panel — collapsible performance breakdown ──────── */
+function PipelineTimingPanel({ data }) {
+  const [open, setOpen] = useState(false);
+  const timings = data?.stage_timings;
+  const dims = data?.image_dimensions;
+  if (!timings || !timings.total) return null;
+
+  const stages = [
+    { key: 'describe_image',     label: 'Cue Extraction',     icon: '🔍' },
+    { key: 'extended_pipeline',  label: 'Vision Passes (30+)', icon: '🧪' },
+    { key: 'lighting_inference', label: 'Lighting Inference',  icon: '💡' },
+    { key: 'cue_inference',      label: 'Cue Inference',       icon: '🧠' },
+    { key: 'solver_chain',       label: 'Solver Chain',        icon: '⚖️' },
+    { key: 'reference_read',     label: 'Reference Read',      icon: '📖' },
+  ];
+
+  const total = timings.total || 0;
+  const tierColor = total < 15 ? '#4ade80' : total < 45 ? '#FBBF24' : '#f87171';
+  const tierLabel = total < 15 ? 'Fast' : total < 45 ? 'Normal' : 'Slow';
+
+  return (
+    <div style={{
+      marginTop: 12, borderRadius: 8,
+      border: '1px solid var(--color-border)',
+      background: 'var(--color-surface)',
+      overflow: 'hidden',
+    }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
+          color: 'var(--color-text)', fontSize: 12, fontWeight: 600,
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13 }}>⏱</span>
+          Pipeline Performance
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+            background: `color-mix(in srgb, ${tierColor} 18%, transparent)`,
+            color: tierColor, marginLeft: 4,
+          }}>
+            {total.toFixed(1)}s — {tierLabel}
+          </span>
+          {dims && (
+            <span style={{ fontSize: 10, color: 'var(--color-text-dim)', marginLeft: 4 }}>
+              {dims.width}×{dims.height}
+            </span>
+          )}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '4px 12px 12px' }}>
+          {/* Bar chart */}
+          {stages.map(({ key, label, icon }) => {
+            const t = timings[key];
+            if (t == null) return null;
+            const pct = total > 0 ? (t / total) * 100 : 0;
+            const barColor = t > total * 0.5 ? '#f87171' : t > total * 0.25 ? '#FBBF24' : '#4ade80';
+            return (
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <span style={{ width: 130, fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                  {icon} {label}
+                </span>
+                <div style={{ flex: 1, height: 10, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${Math.max(pct, 2)}%`, height: '100%',
+                    background: barColor, borderRadius: 4,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <span style={{ width: 50, fontSize: 11, fontWeight: 600, color: 'var(--color-text)', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                  {t.toFixed(1)}s
+                </span>
+                <span style={{ width: 36, fontSize: 10, color: 'var(--color-text-dim)', textAlign: 'right' }}>
+                  {pct.toFixed(0)}%
+                </span>
+              </div>
+            );
+          })}
+
+          {/* Metadata row */}
+          <div style={{ marginTop: 8, display: 'flex', gap: 16, fontSize: 10, color: 'var(--color-text-dim)' }}>
+            {data.analysis_id && <span>ID: {data.analysis_id.slice(0, 8)}</span>}
+            {data.system_version && <span>v{data.system_version}</span>}
+            {data.analyzed_at && <span>{new Date(data.analyzed_at * 1000).toLocaleTimeString()}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -4028,6 +4281,16 @@ function GoldSetTab({ prefill, onPrefillConsumed, activeGoldTab = 'goldset', onG
         <DistillationReviewsPanel />
       )}
 
+      {/* QC — gold set quality control inspection */}
+      {activeGoldTab === 'qc' && (
+        <GoldSetQCPanel />
+      )}
+
+      {/* Coverage — pattern coverage map */}
+      {activeGoldTab === 'coverage' && (
+        <CoverageMapPanel />
+      )}
+
       {/* Gold Set view */}
       {activeGoldTab === 'goldset' && <>
       {/* Toolbar */}
@@ -4572,20 +4835,12 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
         </select>
       </div>
 
-      {/* Acceptable patterns — boundary cases */}
-      <label className="lab-form__label">
-        Acceptable Patterns
-        <span style={{ color: 'var(--color-text-secondary)', fontWeight: 400, marginLeft: 6, fontSize: 11 }}>
-          comma-separated, for boundary cases
-        </span>
-        <input
-          className="lab-form__input"
-          value={acceptableRaw}
-          onChange={e => setAcceptableRaw(e.target.value)}
-          placeholder="e.g. loop, rembrandt (leave blank = expected only)"
-          style={{ marginTop: 4 }}
-        />
-      </label>
+      {/* Acceptable patterns — multi-select dropdown */}
+      <AcceptablePatternsDropdown
+        value={acceptableRaw}
+        onChange={setAcceptableRaw}
+        excludePattern={expectedPattern}
+      />
 
       {/* Difficulty */}
       <div className="lab-form__label">
@@ -4617,6 +4872,669 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
 
 
 /* ═══════════════════════════════════════════════════════════
+   GoldSetQCPanel — Truth-quality inspection surface
+   ═══════════════════════════════════════════════════════════ */
+
+const QC_BUCKET_META = {
+  qc_low_trust:                   { label: 'Low Trust',            color: C.red,    icon: '⚠' },
+  qc_strict_acceptable_patterns:  { label: 'Strict Patterns',      color: C.amber,  icon: '⬡' },
+  qc_ambiguous_geometry:          { label: 'Ambiguous Geometry',    color: C.amber,  icon: '◇' },
+  qc_repeated_disagreement:       { label: 'Repeated Disagreement', color: C.red,    icon: '✗' },
+  qc_gold_set_issue_escalated:    { label: 'Escalated',            color: C.red,    icon: '⚑' },
+  qc_stale_entry:                 { label: 'Stale / Hard',         color: C.muted,  icon: '◌' },
+};
+
+function GoldSetQCPanel() {
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [filter, setFilter]     = useState('all');  // 'all' or a qc_bucket key
+  const [expanded, setExpanded] = useState(null);   // item id
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await fetchGoldSetQC();
+      setData(d);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const items = data?.items || [];
+  const counts = data?.counts || {};
+  const escalated = data?.escalated_reviews || [];
+
+  const filtered = filter === 'all'
+    ? items
+    : items.filter(it => it.qc_reasons?.includes(filter));
+
+  return (
+    <div className="lab-list">
+      {/* ── Header ── */}
+      <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600 }}>Gold Set QC</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-dim)' }}>
+              Truth-quality inspection — {counts.flagged_entries ?? 0} flagged of {counts.total_entries ?? 0} entries
+            </p>
+          </div>
+          <button className="lab-tab" onClick={load} disabled={loading}>
+            {loading ? 'Loading…' : '↻ Refresh'}
+          </button>
+        </div>
+
+        {/* ── Summary cards ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+          gap: 'var(--space-sm)',
+          marginTop: 'var(--space-sm)',
+        }}>
+          {Object.entries(QC_BUCKET_META).map(([key, meta]) => {
+            const cnt = counts[key] ?? 0;
+            const isActive = filter === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setFilter(isActive ? 'all' : key)}
+                className="lab-card"
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  border: isActive ? `2px solid ${meta.color}` : '1px solid var(--color-border)',
+                  background: isActive ? `${meta.color}11` : 'var(--color-surface)',
+                  padding: 'var(--space-sm) var(--space-md)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                  <span style={{ fontSize: 'var(--text-lg)' }}>{meta.icon}</span>
+                  <span style={{
+                    fontSize: 'var(--text-xl)',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: cnt > 0 ? meta.color : 'var(--color-text-dim)',
+                  }}>
+                    {cnt}
+                  </span>
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>
+                  {meta.label}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Filter indicator ── */}
+      {filter !== 'all' && (
+        <div style={{
+          padding: 'var(--space-xs) var(--space-lg)',
+          background: 'var(--color-surface-raised)',
+          borderBottom: '1px solid var(--color-border)',
+          fontSize: 'var(--text-sm)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-sm)',
+        }}>
+          <span>Showing: <strong>{QC_BUCKET_META[filter]?.label}</strong> ({filtered.length})</span>
+          <button
+            onClick={() => setFilter('all')}
+            style={{
+              background: 'none', border: 'none', color: 'var(--color-text-dim)',
+              cursor: 'pointer', fontSize: 'var(--text-sm)', textDecoration: 'underline',
+            }}
+          >
+            Clear filter
+          </button>
+        </div>
+      )}
+
+      {/* ── Loading / Error ── */}
+      {loading && <p className="lab-list__status">Loading QC data…</p>}
+      {error && <p className="lab-list__status lab-list__status--error">{error}</p>}
+
+      {/* ── Empty state ── */}
+      {!loading && !error && filtered.length === 0 && (
+        <div className="lab-content__placeholder" style={{ padding: 'var(--space-2xl) var(--space-lg)' }}>
+          <h3 style={{ margin: 0 }}>
+            {filter === 'all' ? 'No QC flags' : `No ${QC_BUCKET_META[filter]?.label ?? filter} items`}
+          </h3>
+          <p style={{ color: 'var(--color-text-dim)', marginTop: 'var(--space-xs)' }}>
+            {filter === 'all'
+              ? 'All gold set entries pass quality checks.'
+              : 'No entries match this QC bucket.'}
+          </p>
+        </div>
+      )}
+
+      {/* ── QC item list ── */}
+      {!loading && filtered.map(item => {
+        const isExpanded = expanded === item.id;
+        return (
+          <div
+            key={item.id}
+            className="lab-card"
+            style={{
+              margin: 'var(--space-xs) var(--space-lg)',
+              padding: 'var(--space-sm) var(--space-md)',
+              cursor: 'pointer',
+              border: isExpanded ? '1px solid var(--color-accent)' : '1px solid var(--color-border)',
+            }}
+            onClick={() => setExpanded(isExpanded ? null : item.id)}
+          >
+            {/* ── Row summary ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+              {/* Pattern */}
+              <span style={{
+                fontWeight: 600,
+                fontSize: 'var(--text-base)',
+                minWidth: 140,
+              }}>
+                {fmtPattern(item.expected_pattern)}
+              </span>
+
+              {/* Trust badge */}
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-sm)',
+                color: item.trust_score <= 0.6 ? C.red : item.trust_score >= 0.9 ? C.green : C.amber,
+                background: 'var(--color-surface)',
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-sm)',
+              }}>
+                trust {item.trust_score}
+              </span>
+
+              {/* Acceptable count */}
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 'var(--text-sm)',
+                color: 'var(--color-text-dim)',
+              }}>
+                {item.acceptable_count} pattern{item.acceptable_count !== 1 ? 's' : ''}
+              </span>
+
+              {/* QC reason badges */}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginLeft: 'auto' }}>
+                {(item.qc_reasons || []).map(r => (
+                  <span key={r} style={{
+                    fontSize: 'var(--text-xs)',
+                    padding: '2px 6px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: `${QC_BUCKET_META[r]?.color ?? C.muted}22`,
+                    color: QC_BUCKET_META[r]?.color ?? C.muted,
+                    fontFamily: 'var(--font-mono)',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {QC_BUCKET_META[r]?.icon} {QC_BUCKET_META[r]?.label ?? r}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* ── Expanded detail ── */}
+            {isExpanded && (
+              <div style={{
+                marginTop: 'var(--space-md)',
+                paddingTop: 'var(--space-md)',
+                borderTop: '1px solid var(--color-border)',
+                fontSize: 'var(--text-sm)',
+              }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 'var(--space-sm) var(--space-lg)',
+                }}>
+                  <div>
+                    <span style={{ color: 'var(--color-text-dim)' }}>ID</span>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>{item.id}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--color-text-dim)' }}>Difficulty</span>
+                    <div>{item.difficulty}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--color-text-dim)' }}>Image Path</span>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', wordBreak: 'break-all' }}>
+                      {item.image_path || '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--color-text-dim)' }}>VLM Disagreements</span>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)',
+                      color: item.disagreement_count >= 2 ? C.red : 'var(--color-text)',
+                    }}>
+                      {item.disagreement_count}
+                    </div>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <span style={{ color: 'var(--color-text-dim)' }}>Acceptable Patterns</span>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                      {(item.acceptable_patterns || []).map(p => (
+                        <span key={p} style={{
+                          padding: '2px 8px',
+                          background: 'var(--color-surface)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: 'var(--text-xs)',
+                          fontFamily: 'var(--font-mono)',
+                        }}>
+                          {fmtPattern(p)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  {item.known_challenges?.length > 0 && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ color: 'var(--color-text-dim)' }}>Known Challenges</span>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                        {item.known_challenges.map(ch => (
+                          <span key={ch} style={{
+                            padding: '2px 8px',
+                            background: `${C.amber}18`,
+                            borderRadius: 'var(--radius-sm)',
+                            fontSize: 'var(--text-xs)',
+                          }}>
+                            {ch}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {item.notes && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <span style={{ color: 'var(--color-text-dim)' }}>Notes</span>
+                      <div style={{ marginTop: 4, color: 'var(--color-text)' }}>{item.notes}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Inspection notice — read-only surface */}
+                <div style={{
+                  marginTop: 'var(--space-md)',
+                  padding: 'var(--space-sm) var(--space-md)',
+                  background: `${C.blue}11`,
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: 'var(--text-xs)',
+                  color: 'var(--color-text-dim)',
+                }}>
+                  Inspection only — no automatic edits. Address issues in ★ Gold Set or Review Queue.
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ── Escalated reviews section ── */}
+      {!loading && escalated.length > 0 && (
+        <div style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+          <h4 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-text-dim)', marginBottom: 'var(--space-sm)' }}>
+            ⚑ Escalated from Distillation Review ({escalated.length})
+          </h4>
+          {escalated.map(rev => (
+            <div key={rev.id} className="lab-card" style={{
+              padding: 'var(--space-sm) var(--space-md)',
+              marginBottom: 'var(--space-xs)',
+              fontSize: 'var(--text-sm)',
+            }}>
+              <div style={{ display: 'flex', gap: 'var(--space-md)', alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 600 }}>{fmtPattern(rev.expected_pattern)}</span>
+                <span style={{
+                  padding: '2px 6px', borderRadius: 'var(--radius-sm)',
+                  background: `${C.red}22`, color: C.red,
+                  fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)',
+                }}>
+                  gold_set_issue
+                </span>
+                {rev.rationale && (
+                  <span style={{ color: 'var(--color-text-dim)' }}>
+                    Reason: {rev.rationale}
+                  </span>
+                )}
+                {rev.notes && (
+                  <span style={{ color: 'var(--color-text-dim)', fontStyle: 'italic' }}>
+                    {rev.notes}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Footer note ── */}
+      {!loading && (
+        <div style={{
+          padding: 'var(--space-sm) var(--space-lg)',
+          fontSize: 'var(--text-xs)',
+          color: 'var(--color-text-dim)',
+          borderTop: '1px solid var(--color-border)',
+        }}>
+          QC buckets: low trust (≤0.6), strict patterns (≤1 acceptable), ambiguous geometry (≥5 acceptable),
+          repeated disagreement (≥2 VLM conflicts), escalated (gold_set_issue from review), stale (hard difficulty or ≥3 challenges).
+          Data sourced from manifest + distillation reviews + VLM disagreements.
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   CoverageMapPanel — Build 4 pattern coverage visibility
+   ═══════════════════════════════════════════════════════════ */
+
+const TIER_META = {
+  strong:   { label: 'Strong',   color: C.green, icon: '●' },
+  moderate: { label: 'Moderate', color: C.blue,  icon: '◐' },
+  thin:     { label: 'Thin',     color: C.amber, icon: '◔' },
+  absent:   { label: 'Absent',   color: C.red,   icon: '○' },
+};
+
+function CoverageMapPanel() {
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [tierFilter, setTierFilter] = useState('all');
+  const [sortKey, setSortKey]   = useState('tier'); // 'tier' | 'signals' | 'gold' | 'name' | 'confidence'
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await fetchCoverageMap();
+      setData(d);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const patterns = data?.patterns || [];
+
+  // Tier summary counts
+  const tierCounts = { strong: 0, moderate: 0, thin: 0, absent: 0 };
+  patterns.forEach(p => { if (tierCounts[p.coverage_tier] !== undefined) tierCounts[p.coverage_tier]++; });
+
+  // Filter
+  const filtered = tierFilter === 'all'
+    ? patterns
+    : patterns.filter(p => p.coverage_tier === tierFilter);
+
+  // Sort
+  const sorted = [...filtered].sort((a, b) => {
+    const tierOrd = { absent: 0, thin: 1, moderate: 2, strong: 3 };
+    switch (sortKey) {
+      case 'tier':       return tierOrd[a.coverage_tier] - tierOrd[b.coverage_tier] || a.signal_count - b.signal_count;
+      case 'signals':    return a.signal_count - b.signal_count;
+      case 'gold':       return a.gold_set_count - b.gold_set_count;
+      case 'confidence': return (a.avg_confidence ?? 0) - (b.avg_confidence ?? 0);
+      case 'name':       return a.pattern_name.localeCompare(b.pattern_name);
+      default:           return 0;
+    }
+  });
+
+  return (
+    <div className="lab-list">
+      {/* ── Header ── */}
+      <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-sm)' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600 }}>Coverage Map</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-dim)' }}>
+              {data?.total_patterns ?? '—'} patterns in universe — where to focus next
+            </p>
+          </div>
+          <button className="lab-tab" onClick={load} disabled={loading}>
+            {loading ? 'Loading…' : '↻ Refresh'}
+          </button>
+        </div>
+
+        {/* ── Tier summary cards ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 'var(--space-sm)',
+          marginTop: 'var(--space-sm)',
+        }}>
+          {Object.entries(TIER_META).map(([tier, meta]) => {
+            const cnt = tierCounts[tier] ?? 0;
+            const isActive = tierFilter === tier;
+            return (
+              <button
+                key={tier}
+                onClick={() => setTierFilter(isActive ? 'all' : tier)}
+                className="lab-card"
+                style={{
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  border: isActive ? `2px solid ${meta.color}` : '1px solid var(--color-border)',
+                  background: isActive ? `${meta.color}11` : 'var(--color-surface)',
+                  padding: 'var(--space-sm) var(--space-md)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
+                  <span style={{ fontSize: 'var(--text-lg)', color: meta.color }}>{meta.icon}</span>
+                  <span style={{
+                    fontSize: 'var(--text-xl)',
+                    fontWeight: 700,
+                    fontFamily: 'var(--font-mono)',
+                    color: cnt > 0 ? meta.color : 'var(--color-text-dim)',
+                  }}>
+                    {cnt}
+                  </span>
+                </div>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginTop: 2 }}>
+                  {meta.label}
+                  <span style={{ marginLeft: 4, fontFamily: 'var(--font-mono)', opacity: 0.7 }}>
+                    {tier === 'strong' ? '≥20' : tier === 'moderate' ? '≥8' : tier === 'thin' ? '≥2' : '0'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Sort strip ── */}
+      <div style={{
+        padding: 'var(--space-xs) var(--space-lg)',
+        borderBottom: '1px solid var(--color-border)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--space-sm)',
+        fontSize: 'var(--text-xs)',
+        color: 'var(--color-text-dim)',
+      }}>
+        <span>Sort:</span>
+        {[
+          { key: 'tier',       label: 'Coverage tier' },
+          { key: 'signals',    label: 'Signals' },
+          { key: 'gold',       label: 'Gold set' },
+          { key: 'confidence', label: 'Confidence' },
+          { key: 'name',       label: 'Name' },
+        ].map(opt => (
+          <button
+            key={opt.key}
+            onClick={() => setSortKey(opt.key)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 'var(--text-xs)',
+              color: sortKey === opt.key ? 'var(--color-accent)' : 'var(--color-text-dim)',
+              fontWeight: sortKey === opt.key ? 600 : 400,
+              textDecoration: sortKey === opt.key ? 'underline' : 'none',
+              padding: '2px 4px',
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+        {tierFilter !== 'all' && (
+          <span style={{ marginLeft: 'auto' }}>
+            Showing: <strong>{TIER_META[tierFilter]?.label}</strong> ({filtered.length})
+            <button
+              onClick={() => setTierFilter('all')}
+              style={{
+                background: 'none', border: 'none', color: 'var(--color-text-dim)',
+                cursor: 'pointer', fontSize: 'var(--text-xs)', textDecoration: 'underline',
+                marginLeft: 'var(--space-xs)',
+              }}
+            >
+              Clear
+            </button>
+          </span>
+        )}
+      </div>
+
+      {/* ── Loading / Error ── */}
+      {loading && <p className="lab-list__status">Loading coverage data…</p>}
+      {error && <p className="lab-list__status lab-list__status--error">{error}</p>}
+
+      {/* ── Empty state ── */}
+      {!loading && !error && sorted.length === 0 && (
+        <div className="lab-content__placeholder" style={{ padding: 'var(--space-2xl) var(--space-lg)' }}>
+          <h3 style={{ margin: 0 }}>No patterns match</h3>
+          <p style={{ color: 'var(--color-text-dim)', marginTop: 'var(--space-xs)' }}>
+            No patterns in the selected tier.
+          </p>
+        </div>
+      )}
+
+      {/* ── Pattern table ── */}
+      {!loading && sorted.length > 0 && (
+        <div style={{ padding: '0 var(--space-lg) var(--space-md)' }}>
+          <table style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            fontSize: 'var(--text-sm)',
+            marginTop: 'var(--space-sm)',
+          }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--color-border)' }}>
+                <th style={{ textAlign: 'left', padding: '8px 12px', color: 'var(--color-text-dim)', fontWeight: 500 }}>Pattern</th>
+                <th style={{ textAlign: 'center', padding: '8px 8px', color: 'var(--color-text-dim)', fontWeight: 500, width: 80 }}>Tier</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--color-text-dim)', fontWeight: 500, width: 70 }}>Signals</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--color-text-dim)', fontWeight: 500, width: 60 }}>Gold</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--color-text-dim)', fontWeight: 500, width: 50 }}>Ref</th>
+                <th style={{ textAlign: 'right', padding: '8px 8px', color: 'var(--color-text-dim)', fontWeight: 500, width: 70 }}>Conf</th>
+                <th style={{ textAlign: 'right', padding: '8px 12px', color: 'var(--color-text-dim)', fontWeight: 500, width: 100 }}>Last Signal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(p => {
+                const tier = TIER_META[p.coverage_tier] || TIER_META.absent;
+                return (
+                  <tr key={p.pattern_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    {/* Pattern name */}
+                    <td style={{ padding: '8px 12px' }}>
+                      <div style={{ fontWeight: 500 }}>{p.pattern_name}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-mono)', color: 'var(--color-text-dim)' }}>
+                        {p.pattern_id}
+                      </div>
+                    </td>
+                    {/* Tier badge */}
+                    <td style={{ textAlign: 'center', padding: '8px 8px' }}>
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        background: `${tier.color}18`,
+                        color: tier.color,
+                        fontSize: 'var(--text-xs)',
+                        fontWeight: 600,
+                      }}>
+                        {tier.icon} {tier.label}
+                      </span>
+                    </td>
+                    {/* Signal count */}
+                    <td style={{
+                      textAlign: 'right', padding: '8px 8px',
+                      fontFamily: 'var(--font-mono)',
+                      color: p.signal_count === 0 ? C.red : 'var(--color-text)',
+                      fontWeight: p.signal_count === 0 ? 600 : 400,
+                    }}>
+                      {p.signal_count}
+                    </td>
+                    {/* Gold set */}
+                    <td style={{
+                      textAlign: 'right', padding: '8px 8px',
+                      fontFamily: 'var(--font-mono)',
+                      color: p.gold_set_count === 0 ? 'var(--color-text-dim)' : 'var(--color-text)',
+                    }}>
+                      {p.gold_set_count}
+                    </td>
+                    {/* Ref */}
+                    <td style={{
+                      textAlign: 'right', padding: '8px 8px',
+                      fontFamily: 'var(--font-mono)',
+                      color: p.ref_count === 0 ? 'var(--color-text-dim)' : 'var(--color-text)',
+                    }}>
+                      {p.ref_count}
+                    </td>
+                    {/* Confidence */}
+                    <td style={{
+                      textAlign: 'right', padding: '8px 8px',
+                      fontFamily: 'var(--font-mono)',
+                      color: p.avg_confidence == null ? 'var(--color-text-dim)'
+                        : p.avg_confidence >= 0.8 ? C.green
+                        : p.avg_confidence >= 0.6 ? C.amber
+                        : C.red,
+                    }}>
+                      {p.avg_confidence != null ? p.avg_confidence.toFixed(2) : '—'}
+                    </td>
+                    {/* Last signal */}
+                    <td style={{
+                      textAlign: 'right', padding: '8px 12px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 'var(--text-xs)',
+                      color: 'var(--color-text-dim)',
+                    }}>
+                      {p.last_signal_ts ? fmtDT(p.last_signal_ts) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Footer ── */}
+      {!loading && (
+        <div style={{
+          padding: 'var(--space-sm) var(--space-lg)',
+          fontSize: 'var(--text-xs)',
+          color: 'var(--color-text-dim)',
+          borderTop: '1px solid var(--color-border)',
+        }}>
+          {data?.counts_source_note || 'Coverage data from session_signals + gold set manifest.'}
+          {' '}Tier thresholds are display-only and do not affect model behavior.
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
    DistillationReviewsPanel — Phase 5c human review queue
    ═══════════════════════════════════════════════════════════ */
 
@@ -4635,6 +5553,37 @@ const DR_STATUS_COLOR = {
   rejected:           C.red,
   specialty_watch:    C.blue,
   gold_set_issue:     C.red,
+};
+
+/* ── Structured review reasons — trackable in charts/exports ── */
+const DR_REASONS = {
+  approved_candidate: [
+    { value: 'visual_confirmed',        label: 'Visually confirmed correct' },
+    { value: 'reference_match',         label: 'Matches reference dataset' },
+    { value: 'high_confidence_correct', label: 'High confidence, correct prediction' },
+    { value: 'specialty_validated',     label: 'Specialty path validated' },
+    { value: 'multiple_signals',        label: 'Multiple confirming signals' },
+  ],
+  rejected: [
+    { value: 'incorrect_prediction',    label: 'Incorrect prediction' },
+    { value: 'low_quality_image',       label: 'Low quality / unusable image' },
+    { value: 'ambiguous_pattern',       label: 'Ambiguous or unclear pattern' },
+    { value: 'insufficient_confidence', label: 'Insufficient confidence' },
+    { value: 'duplicate_entry',         label: 'Duplicate of existing entry' },
+    { value: 'gold_set_conflict',       label: 'Conflicts with gold set' },
+  ],
+  specialty_watch: [
+    { value: 'insufficient_data',       label: 'Insufficient data points' },
+    { value: 'specialty_provisional',   label: 'Specialty path provisional' },
+    { value: 'borderline_confidence',   label: 'Borderline confidence' },
+    { value: 'needs_more_samples',      label: 'Needs additional samples' },
+  ],
+  gold_set_issue: [
+    { value: 'gold_label_suspect',          label: 'Gold set label may be wrong' },
+    { value: 'gold_image_quality',          label: 'Gold set image quality concern' },
+    { value: 'pattern_definition_unclear',  label: 'Pattern definition ambiguous' },
+    { value: 'multiple_valid_patterns',     label: 'Multiple valid interpretations' },
+  ],
 };
 
 function ReviewImage({ reviewId, size = 64, cover = true }) {
@@ -4695,6 +5644,8 @@ function DistillationReviewsPanel() {
   const [expanded,     setExpanded]     = useState(null);  // reviewId currently open
   const [working,      setWorking]      = useState({});    // { [id]: true }
   const [notice,       setNotice]       = useState(null);  // { type, msg }
+  const [reason,       setReason]       = useState('');    // structured reason (dropdown)
+  const [notes,        setNotes]        = useState('');    // free-text notes
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -4719,12 +5670,16 @@ function DistillationReviewsPanel() {
     setTimeout(() => setNotice(null), 3500);
   }
 
-  async function handleDecision(row, newStatus, rationale = '') {
+  async function handleDecision(row, newStatus) {
+    const rationale = reason || '';
+    const noteText = notes.trim();
     setWorking(w => ({ ...w, [row.id]: true }));
     try {
-      await patchDistillationReview(row.id, { review_status: newStatus, rationale });
-      setRows(prev => prev.map(r => r.id === row.id ? { ...r, review_status: newStatus } : r));
+      await patchDistillationReview(row.id, { review_status: newStatus, rationale, notes: noteText });
+      setRows(prev => prev.map(r => r.id === row.id ? { ...r, review_status: newStatus, rationale, notes: noteText } : r));
       setExpanded(null);
+      setReason('');
+      setNotes('');
       showNotice('ok', `${row.expected_pattern} → ${newStatus.replace(/_/g, ' ')}`);
     } catch (err) {
       showNotice('err', err.message);
@@ -4801,7 +5756,7 @@ function DistillationReviewsPanel() {
             {/* Row header */}
             <div
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', cursor: 'pointer' }}
-              onClick={() => setExpanded(isOpen ? null : row.id)}
+              onClick={() => { setExpanded(isOpen ? null : row.id); if (!isOpen) { setReason(''); setNotes(''); } }}
             >
               <ReviewImage reviewId={row.id} />
 
@@ -4840,16 +5795,14 @@ function DistillationReviewsPanel() {
             {/* Expanded actions */}
             {isOpen && (
               <div style={{ borderTop: '0.5px solid var(--color-border)', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {row.notes && (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', fontStyle: 'italic' }}>
-                    {row.notes}
-                  </div>
-                )}
+                {/* Previous rationale / notes (read-only, from last save) */}
                 {row.rationale && (
-                  <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    Rationale: {row.rationale}
+                  <div style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                    Last decision: <strong>{row.rationale.replace(/_/g, ' ')}</strong>
+                    {row.notes ? ` — ${row.notes}` : ''}
                   </div>
                 )}
+
                 {/* Expanded image — full view for review decision */}
                 <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <div style={{
@@ -4867,47 +5820,104 @@ function DistillationReviewsPanel() {
                   </div>
                 </div>
 
+                {/* ── Review reason (structured dropdown) + notes ── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '4px 0' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)' }}>
+                    Reason
+                  </label>
+                  <select
+                    value={reason}
+                    onChange={e => setReason(e.target.value)}
+                    style={{
+                      fontSize: 12, padding: '6px 8px',
+                      background: 'var(--color-bg)', color: 'var(--color-text)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      width: '100%',
+                    }}
+                  >
+                    <option value="">Select reason…</option>
+                    {Object.entries(DR_REASONS).map(([status, opts]) => (
+                      <optgroup key={status} label={status.replace(/_/g, ' ')}>
+                        {opts.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+
+                  <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-secondary)', marginTop: 2 }}>
+                    Notes <span style={{ fontWeight: 400 }}>(optional)</span>
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Additional context…"
+                    rows={2}
+                    style={{
+                      fontSize: 12, padding: '6px 8px',
+                      background: 'var(--color-bg)', color: 'var(--color-text)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      resize: 'vertical', width: '100%',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+
                 {/* Decision buttons */}
-                {row.review_status !== 'approved_candidate' && (
-                  <button
-                    className="btn btn--sm"
-                    style={{ background: `color-mix(in srgb, ${C.green} 14%, transparent)`, color: C.green, border: `1px solid color-mix(in srgb, ${C.green} 28%, transparent)` }}
-                    onClick={() => handleDecision(row, 'approved_candidate', 'Manually approved')}
-                    disabled={isBusy}
-                  >
-                    ✓ Approve for distillation
-                  </button>
-                )}
-                {row.review_status !== 'rejected' && (
-                  <button
-                    className="btn btn--sm btn--ghost"
-                    onClick={() => handleDecision(row, 'rejected', 'Manually rejected')}
-                    disabled={isBusy}
-                    style={{ color: C.red }}
-                  >
-                    ✗ Reject
-                  </button>
-                )}
-                {row.review_status !== 'specialty_watch' && (
-                  <button
-                    className="btn btn--sm btn--ghost"
-                    onClick={() => handleDecision(row, 'specialty_watch', 'Flagged for specialty watch')}
-                    disabled={isBusy}
-                    style={{ fontSize: 11 }}
-                  >
-                    ⚑ Watch (specialty)
-                  </button>
-                )}
-                {row.review_status !== 'pending_review' && (
-                  <button
-                    className="btn btn--sm btn--ghost"
-                    onClick={() => handleDecision(row, 'pending_review', '')}
-                    disabled={isBusy}
-                    style={{ fontSize: 11 }}
-                  >
-                    ↺ Reset to pending
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 2 }}>
+                  {row.review_status !== 'approved_candidate' && (
+                    <button
+                      className="btn btn--sm"
+                      style={{ background: `color-mix(in srgb, ${C.green} 14%, transparent)`, color: C.green, border: `1px solid color-mix(in srgb, ${C.green} 28%, transparent)` }}
+                      onClick={() => handleDecision(row, 'approved_candidate')}
+                      disabled={isBusy}
+                    >
+                      ✓ Approve
+                    </button>
+                  )}
+                  {row.review_status !== 'rejected' && (
+                    <button
+                      className="btn btn--sm"
+                      onClick={() => handleDecision(row, 'rejected')}
+                      disabled={isBusy}
+                      style={{ background: `color-mix(in srgb, ${C.red} 10%, transparent)`, color: C.red, border: `1px solid color-mix(in srgb, ${C.red} 22%, transparent)` }}
+                    >
+                      ✗ Reject
+                    </button>
+                  )}
+                  {row.review_status !== 'specialty_watch' && (
+                    <button
+                      className="btn btn--sm btn--ghost"
+                      onClick={() => handleDecision(row, 'specialty_watch')}
+                      disabled={isBusy}
+                      style={{ fontSize: 11 }}
+                    >
+                      ⚑ Watch
+                    </button>
+                  )}
+                  {row.review_status !== 'gold_set_issue' && (
+                    <button
+                      className="btn btn--sm btn--ghost"
+                      onClick={() => handleDecision(row, 'gold_set_issue')}
+                      disabled={isBusy}
+                      style={{ fontSize: 11, color: C.amber }}
+                    >
+                      ⚠ GS Issue
+                    </button>
+                  )}
+                  {row.review_status !== 'pending_review' && (
+                    <button
+                      className="btn btn--sm btn--ghost"
+                      onClick={() => handleDecision(row, 'pending_review')}
+                      disabled={isBusy}
+                      style={{ fontSize: 11 }}
+                    >
+                      ↺ Reset
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -5094,11 +6104,11 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
 
 const _PC_PATTERNS = [
   'rembrandt','clamshell','loop','shallow_loop','split','butterfly','broad','short',
-  'rim_only','high_key','low_key','flat_fashion','window_portrait',
+  'triangle','rim_only','high_key','low_key','flat_fashion','window_portrait',
   'golden_hour','overcast_natural','ring_light','bare_bulb_editorial',
   'strip_dramatic','short_fashion_key','soft_editorial_key',
   'editorial_rim_key','tabletop_soft_product','bottle_backlight',
-  'athletic_rim_sculpt','window_negative_fill',
+  'athletic_rim_sculpt','window_negative_fill','gobo_projection','hybrid',
 ];
 
 const _PC_SIGNALS = [
@@ -6072,11 +7082,12 @@ const REF_TIER_FILTERS = ['all', 'gold', 'community', 'synthetic'];
 // Known pattern IDs for the import form dropdown
 const KNOWN_PATTERNS = [
   'rembrandt', 'clamshell', 'loop', 'shallow_loop', 'split', 'butterfly', 'broad', 'short',
-  'rim_only', 'high_key', 'low_key', 'flat_fashion', 'window_portrait',
+  'triangle', 'rim_only', 'high_key', 'low_key', 'flat_fashion', 'window_portrait',
   'golden_hour', 'overcast_natural', 'ring_light', 'bare_bulb_editorial',
   'strip_dramatic', 'short_fashion_key', 'soft_editorial_key',
-  'window_soft_side', 'window_negative_fill', 'athletic_rim_sculpt',
+  'window_negative_fill', 'athletic_rim_sculpt',
   'bottle_backlight', 'tabletop_soft_product', 'editorial_rim_key',
+  'gobo_projection', 'hybrid',
 ];
 
 function ReferenceDatasetTab() {

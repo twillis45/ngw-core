@@ -60,9 +60,9 @@ def _user_public(user: dict) -> dict:
     from db.provenance import get_internal_emails
     email = user.get("email", "")
     return {
-        "id": user["id"],
+        "id": user.get("id", ""),
         "email": email,
-        "username": user["username"],
+        "username": user.get("username", "") or user.get("name", "") or email,
         "email_verified": bool(user.get("email_verified", 0)),
         "is_admin": email.lower() in get_internal_emails(),
     }

@@ -1191,15 +1191,24 @@ def catchlight_pass(
                         _eye_contour_areas.append(area)
 
     # ── Vision-based shape override ──────────────────────────────────
-    # When modifier-hint shape is unknown or rectangular, check if
-    # contour circularity indicates a round/ring catchlight.
-    # Only override when we have consistent evidence from both eyes.
-    if _eye_circularities and shape in ("unknown", "rectangular"):
+    # When modifier-hint shape is unknown or ambiguous, use contour
+    # circularity and aspect ratio to classify the catchlight shape.
+    if _eye_circularities and shape in ("unknown", "rectangular", "round"):
         _mean_circ = sum(_eye_circularities) / len(_eye_circularities)
         _max_area = max(_eye_contour_areas) if _eye_contour_areas else 0
-        # Circular catchlights: circularity > 0.55 and reasonably large
-        if _mean_circ > 0.55 and _max_area > 20:
-            shape = "round"
+        if _mean_circ > 0.55 and _max_area > 8:
+            # Check existing per-catchlight shapes from vision_pipeline
+            # for ring detection (hollow circle)
+            _shapes_from_pipeline = []
+            for eye in eyes:
+                if isinstance(eye, dict):
+                    for cl in eye.get("catchlights", []):
+                        if isinstance(cl, dict) and cl.get("shape"):
+                            _shapes_from_pipeline.append(cl["shape"])
+            if "ring" in _shapes_from_pipeline:
+                shape = "ring"
+            elif shape != "round":
+                shape = "round"
 
     return {
         "ok": True,
@@ -1423,11 +1432,13 @@ def catchlight_topology_pass(
                 cluster_geometry = "dual"
         elif catchlight_count == 3:
             # Check if triangular: all three spacings roughly equal
+            # Threshold 50° std dev accommodates both classic (120/120/120)
+            # and Hurley lateral triangles (90/90/180) which have ~42° std dev
             if len(inter_catchlight_spacing) == 3:
                 mean_sp = sum(inter_catchlight_spacing) / 3
                 variance = sum((s - mean_sp) ** 2 for s in inter_catchlight_spacing) / 3
                 import math
-                if math.sqrt(variance) < 40:
+                if math.sqrt(variance) < 50:
                     cluster_geometry = "triangular"
                 else:
                     # Check if linear: two spacings small, one large (~sum)

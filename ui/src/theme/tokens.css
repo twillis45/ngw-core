@@ -199,6 +199,13 @@
   --color-status-amber-border: rgba(251, 191, 36,  0.40);
   --color-status-blue-border:  rgba(77,  163, 255, 0.40);
 
+  /* ── Scan overlay — derived from accent so one-push recolor works ── */
+  --scan-line:       var(--color-accent);
+  --scan-line-bright: color-mix(in srgb, var(--color-accent) 70%, #fff);
+  --scan-glow:       color-mix(in srgb, var(--color-accent) 50%, transparent);
+  --scan-glow-soft:  color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --scan-trail:      color-mix(in srgb, var(--color-accent) 14%, transparent);
+
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg:   0 8px 24px rgba(0,0,0,0.5);
@@ -302,6 +309,13 @@
   --color-status-green-border: rgba(22,  163, 74,  0.35);
   --color-status-amber-border: rgba(217, 119, 6,   0.35);
   --color-status-blue-border:  rgba(37,  99,  235, 0.35);
+
+  /* ── Scan overlay — derived from accent so one-push recolor works ── */
+  --scan-line:       var(--color-accent);
+  --scan-line-bright: color-mix(in srgb, var(--color-accent) 70%, #fff);
+  --scan-glow:       color-mix(in srgb, var(--color-accent) 50%, transparent);
+  --scan-glow-soft:  color-mix(in srgb, var(--color-accent) 18%, transparent);
+  --scan-trail:      color-mix(in srgb, var(--color-accent) 14%, transparent);
 
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.1);

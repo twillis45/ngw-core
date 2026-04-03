@@ -42,6 +42,9 @@ import {
   getMonitoringStats,
   getApiMetrics,
 } from '../../data/labApi';
+import ReviewOpsPanel from './ReviewOpsPanel';
+import FailureTriagePanel from './FailureTriagePanel';
+import CaseReplayPanel from './CaseReplayPanel';
 import { C, pctColor, okColor } from '../../lib/statusColors';
 
 /** Device timezone — resolved once at module load for all date formatting. */
@@ -3820,13 +3823,14 @@ function RevenuePanel() {
 
 export default function LearningOpsTab({ navRequest = null, onNavConsumed = null, onNavigateTo = null }) {
   const [panel, setPanel]           = useState('overview');
+  const [replayId, setReplayId]     = useState(null);
   const [clusterNavStatus,   setClusterNavStatus]   = useState('open');
   const [clusterNavSeverity, setClusterNavSeverity] = useState(null);
   const [clusterNavId,       setClusterNavId]       = useState(null);
   const [clusterNavPattern,  setClusterNavPattern]  = useState(null);
   const [knowledgeNavId,     setKnowledgeNavId]     = useState(null);
 
-  // Consume incoming nav requests from LabScreen (e.g. from ControlCenterTab)
+  // Consume incoming nav requests from LabScreen (e.g. from ControlCenterTab or ReviewOpsPanel)
   useEffect(() => {
     if (!navRequest) return;
     if (navRequest.panel) setPanel(navRequest.panel);
@@ -3882,12 +3886,14 @@ export default function LearningOpsTab({ navRequest = null, onNavConsumed = null
   }
 
   const panels = [
-    { id: 'overview',   label: 'Overview' },
-    { id: 'clusters',   label: `Clusters${ops?.open_clusters ? ` (${ops.open_clusters})` : ''}` },
-    { id: 'monitoring', label: `Monitoring${ops?.active_alerts ? ` ⚠${ops.active_alerts}` : ''}` },
-    { id: 'intel',      label: 'Intelligence' },
-    { id: 'knowledge',  label: 'Knowledge' },
-    { id: 'revenue',    label: 'Revenue' },
+    { id: 'overview',    label: 'Overview' },
+    { id: 'clusters',    label: `Clusters${ops?.open_clusters ? ` (${ops.open_clusters})` : ''}` },
+    { id: 'monitoring',  label: `Monitoring${ops?.active_alerts ? ` ⚠${ops.active_alerts}` : ''}` },
+    { id: 'intel',       label: 'Intelligence' },
+    { id: 'knowledge',   label: 'Knowledge' },
+    { id: 'revenue',     label: 'Revenue' },
+    { id: 'review_ops',  label: 'Review Ops' },
+    { id: 'triage',      label: 'Triage' },
   ];
 
   return (
@@ -3968,6 +3974,27 @@ export default function LearningOpsTab({ navRequest = null, onNavConsumed = null
         />
       )}
       {panel === 'revenue'    && <RevenuePanel />}
+      {panel === 'review_ops' && (
+        <ReviewOpsPanel
+          onNavigate={(dest) => setPanel(dest)}
+        />
+      )}
+      {panel === 'triage' && !replayId && (
+        <FailureTriagePanel
+          onNavigate={(dest) => setPanel(dest)}
+          onReplay={(id) => setReplayId(id)}
+        />
+      )}
+      {replayId && (
+        <CaseReplayPanel
+          analysisId={replayId}
+          onBack={() => setReplayId(null)}
+          onOpenWorkbench={onNavigateTo ? (imageData) => {
+            // Build 3.1: dispatch pending image and switch to Workbench tab
+            onNavigateTo({ tab: 'workbench', pendingImage: imageData });
+          } : undefined}
+        />
+      )}
     </div>
   );
 }
