@@ -2,13 +2,15 @@
 API Key & Service Health — /api/health/*
 ========================================
 
-GET  /api/health          — basic liveness check
-GET  /api/health/api-keys — test configured API keys + return recent health events
+GET  /api/health            — basic liveness check
+GET  /api/health/api-keys   — service probes + recent VLM health events
+GET  /api/health/system     — uptime, storage, scheduler, VLM rolling stats
 POST /api/health/api-keys/probe — force a live key probe right now
 """
 from __future__ import annotations
 
 import logging
+import time
 from typing import Dict
 
 from fastapi import APIRouter, Depends
@@ -17,6 +19,9 @@ from auth.security import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["health"])
+
+# Process boot time — used for uptime calculation
+_BOOT_EPOCH = time.time()
 
 import os
 ADMIN_EMAILS = {"todd@toddwillisphoto.com"}
@@ -99,3 +104,73 @@ async def force_key_probe(user=Depends(get_current_user)):
         return {"ok": False, "detail": "VLM not configured — set VLM_PROVIDER and API key in .env"}
     result = probe_api_key()
     return result
+
+
+@router.get("/health/system")
+async def system_health(user=Depends(get_current_user)):
+    """Operational health: uptime, storage, background tasks, VLM rolling stats."""
+    _require_admin(user)
+    from pathlib import Path
+    import shutil
+
+    # ── Uptime ────────────────────────────────────────────────────────────
+    uptime_secs = round(time.time() - _BOOT_EPOCH, 1)
+
+    # ── Upload storage ────────────────────────────────────────────────────
+    uploads_dir = Path("static/uploads")
+    uploads_writable = os.access(uploads_dir, os.W_OK) if uploads_dir.exists() else False
+    try:
+        disk = shutil.disk_usage(uploads_dir if uploads_dir.exists() else Path("."))
+        uploads_free_gb = round(disk.free / (1024 ** 3), 2)
+    except Exception:
+        uploads_free_gb = None
+
+    # ── Scheduler ─────────────────────────────────────────────────────────
+    try:
+        from engine.scheduler import get_scheduler_status, is_task_running
+        sched = get_scheduler_status()
+        scheduler_running  = is_task_running()
+        scheduler_last_run = sched.get("last_run_at")
+        scheduler_error    = sched.get("last_run_error")
+        scheduler_runs     = sched.get("run_count", 0)
+    except Exception:
+        scheduler_running  = None
+        scheduler_last_run = None
+        scheduler_error    = None
+        scheduler_runs     = 0
+
+    # ── Email sequence ────────────────────────────────────────────────────
+    try:
+        from engine.email_sequence import _seq_task
+        sequence_running = _seq_task is not None and not _seq_task.done()
+    except Exception:
+        sequence_running = None
+
+    # ── VLM rolling stats (1h + 24h) ─────────────────────────────────────
+    try:
+        from db.database import get_vlm_call_stats
+        vlm_1h  = get_vlm_call_stats(hours=1)
+        vlm_24h = get_vlm_call_stats(hours=24)
+    except Exception:
+        vlm_1h  = None
+        vlm_24h = None
+
+    # ── JWT safety ────────────────────────────────────────────────────────
+    jwt_secret = os.getenv("NGW_JWT_SECRET", "").strip()
+    jwt_ok = bool(jwt_secret) and jwt_secret not in (
+        "CHANGE_ME", "changeme", "your-secret-here", "replace-this",
+    )
+
+    return {
+        "uptime_secs":        uptime_secs,
+        "uploads_writable":   uploads_writable,
+        "uploads_free_gb":    uploads_free_gb,
+        "scheduler_running":  scheduler_running,
+        "scheduler_last_run": scheduler_last_run,
+        "scheduler_error":    scheduler_error,
+        "scheduler_runs":     scheduler_runs,
+        "sequence_running":   sequence_running,
+        "jwt_configured":     jwt_ok,
+        "vlm_stats_1h":       vlm_1h,
+        "vlm_stats_24h":      vlm_24h,
+    }
