@@ -41,7 +41,7 @@ async def api_key_status(user=Depends(get_current_user)):
     _require_admin(user)
     from db.database import get_api_health_events, get_latest_api_health
     from engine.vlm          import _VLM_PROVIDER, _VLM_MODEL, vlm_available, _vlm_probe_result
-    from engine.service_health import _db_probe_result, _smtp_probe_result, _stripe_probe_result
+    from engine.service_health import _db_probe_result, _smtp_probe_result, _stripe_probe_result, _sentry_probe_result
 
     latest        = get_latest_api_health(_VLM_PROVIDER) if _VLM_PROVIDER != "none" else None
     recent_events = get_api_health_events(limit=20)
@@ -85,6 +85,7 @@ async def api_key_status(user=Depends(get_current_user)):
             "db":     _svc(_db_probe_result),
             "smtp":   _svc(_smtp_probe_result),
             "stripe": _svc(_stripe_probe_result),
+            "sentry": _svc(_sentry_probe_result),
         },
     }
 

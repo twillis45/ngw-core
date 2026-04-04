@@ -360,6 +360,7 @@ const SVC_ROWS = [
   { key: 'db',     label: 'Database'     },
   { key: 'smtp',   label: 'SMTP / Email' },
   { key: 'stripe', label: 'Stripe'       },
+  { key: 'sentry', label: 'Sentry'       },
 ];
 
 function ServiceHealthGrid() {

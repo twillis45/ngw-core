@@ -125,7 +125,7 @@ async def lifespan(app):
         import engine.vlm          as _vlm_mod
         import engine.service_health as _svc_health
         from engine.vlm          import probe_api_key, vlm_available, _VLM_PROVIDER
-        from engine.service_health import probe_db, probe_smtp, probe_stripe
+        from engine.service_health import probe_db, probe_smtp, probe_stripe, probe_sentry
 
         async def _probe(fn, timeout_s: float, fallback: dict):
             """Run fn() in a thread with a wall-clock timeout."""
@@ -142,21 +142,23 @@ async def lifespan(app):
         async def _vlm_probe_or_skip():
             if vlm_available():
                 return await _probe(probe_api_key, 10.0, {"ok": False, "provider": _VLM_PROVIDER})
-            return {"ok": None, "provider": _VLM_PROVIDER, "detail": f"not configured"}
+            return {"ok": None, "provider": _VLM_PROVIDER, "detail": "not configured"}
 
-        vlm_r, db_r, smtp_r, stripe_r = await _aio.gather(
+        vlm_r, db_r, smtp_r, stripe_r, sentry_r = await _aio.gather(
             _vlm_probe_or_skip(),
             _probe(probe_db,     5.0,  {"ok": False, "service": "db"}),
             _probe(probe_smtp,   10.0, {"ok": False, "service": "smtp"}),
             _probe(probe_stripe, 10.0, {"ok": False, "service": "stripe"}),
+            _probe(probe_sentry, 10.0, {"ok": False, "service": "sentry"}),
         )
 
         _vlm_mod._vlm_probe_result         = vlm_r
         _svc_health._db_probe_result       = db_r
         _svc_health._smtp_probe_result     = smtp_r
         _svc_health._stripe_probe_result   = stripe_r
+        _svc_health._sentry_probe_result   = sentry_r
 
-        for label, r in (("VLM", vlm_r), ("DB", db_r), ("SMTP", smtp_r), ("Stripe", stripe_r)):
+        for label, r in (("VLM", vlm_r), ("DB", db_r), ("SMTP", smtp_r), ("Stripe", stripe_r), ("Sentry", sentry_r)):
             if r.get("ok") is True:
                 _startup_logger.info("✓ %s: %s", label, r.get("detail", "OK"))
             elif r.get("ok") is None:
