@@ -201,6 +201,19 @@ class CATCHLIGHT:
     # ── Eye crop ──
     IRIS_CROP_RADIUS_MULT = 3    # radius multiplier for eye region extraction
 
+    # ── Iris proximity filter ──
+    # Catchlight centroid must be within this many iris-radii of the iris center.
+    # True catchlights land on the iris surface (0–1.0×); lash-line shimmer from
+    # mascara or specular makeup sits at the lash edge (~1.3–2.0×).
+    # Raising from ∞ (no filter) to 1.25 eliminates lash/lid artifacts in
+    # dramatic B&W and heavy-makeup images without dropping real catchlights.
+    IRIS_PROXIMITY_MAX_MULT = 1.25
+
+    # ── Topology pass minimum blob area ──
+    # Raised from 3 to 6 px²: mascara flecks on B&W images survive the P90
+    # threshold as 3-5 px² blobs; genuine catchlights are ≥ 8 px².
+    TOPOLOGY_MIN_AREA = 6
+
     # ── Deduplication ──
     FLOOR_REFLECTION_CLOCKS = (5, 6, 7)  # clock positions filtered as floor reflections
     PROXIMITY_TOLERANCE = 1              # ±hours for grouping catchlights (was 2)

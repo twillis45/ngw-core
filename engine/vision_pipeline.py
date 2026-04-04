@@ -650,6 +650,18 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             dx = ccx - iris_cx_local
             dy = ccy - iris_cy_local
 
+            # ── Iris proximity filter ─────────────────────────────────────
+            # Reject contours whose centroid is too far from the iris center.
+            # Genuine catchlights appear on the iris surface (≤ 1.0× radius);
+            # lash-line shimmer from mascara/makeup sits at the lash edge
+            # (~1.3–2.0× radius).  1.25× is the cut-off.
+            # This eliminates false catchlights from dramatic makeup (heavy
+            # mascara, metallic eye shadow, specular lashes) in B&W images
+            # without touching real light-source reflections.
+            _dist = math.hypot(dx, dy)
+            if _dist > CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT * radius:
+                continue
+
             # Shape classification: ring, round, octagonal, strip, square, rectangular
             (_, enc_r) = cv2.minEnclosingCircle(cnt)
             enc_area = math.pi * enc_r * enc_r

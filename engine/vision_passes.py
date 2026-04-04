@@ -54,6 +54,8 @@ try:
 except Exception:  # pragma: no cover
     cv2 = None  # type: ignore
 
+from engine.constants import CATCHLIGHT
+
 logger = logging.getLogger(__name__)
 
 
@@ -1332,8 +1334,8 @@ def catchlight_topology_pass(
 
         for label_idx in range(1, num_labels):
             area = stats[label_idx, cv2.CC_STAT_AREA]
-            if area < 3:
-                continue  # noise
+            if area < CATCHLIGHT.TOPOLOGY_MIN_AREA:
+                continue  # noise — raised from 3 to 6 to filter mascara flecks
 
             cx, cy = centroids[label_idx]
 
