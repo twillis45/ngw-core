@@ -352,6 +352,113 @@ function ScoreGauge({ score, interpretation, insufficient }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SERVICE HEALTH GRID
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SVC_ROWS = [
+  { key: 'vlm',    label: 'VLM / OpenAI' },
+  { key: 'db',     label: 'Database'     },
+  { key: 'smtp',   label: 'SMTP / Email' },
+  { key: 'stripe', label: 'Stripe'       },
+];
+
+function ServiceHealthGrid() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getApiKeyHealth();
+      setData(res);
+    } catch (e) {
+      if (e.status === 403 || e.message?.includes('403')) { setData(null); setLoading(false); return; }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (!loading && !data) return null; // admin-only
+
+  const svcs     = data?.services || {};
+  const anyFailed = SVC_ROWS.some(r => svcs[r.key]?.ok === false);
+  const allOk     = SVC_ROWS.every(r => svcs[r.key]?.ok !== false);
+  const badgeColor = anyFailed ? C.red   : C.green;
+  const badgeBg    = anyFailed ? C.redBg : C.greenBg;
+
+  return (
+    <Card
+      title={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Service Health
+          {!loading && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '2px 8px', borderRadius: 999,
+              fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)',
+              background: badgeBg, color: badgeColor,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
+              {anyFailed ? 'degraded' : 'healthy'}
+            </span>
+          )}
+        </span>
+      }
+      description="Startup probe results for all external services. Results reflect server boot — restart to re-probe."
+      action={<InlineBtn onClick={load} loading={loading}>{Icons.refresh} Refresh</InlineBtn>}
+    >
+      {loading && <EmptyState message="Checking services…" />}
+      {!loading && data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {SVC_ROWS.map(({ key, label }) => {
+            const svc = svcs[key] || {};
+            const dotColor = svc.ok === true ? C.green : svc.ok === false ? C.red : C.amber;
+            const statusText = svc.ok === true ? null : svc.ok === false ? 'error' : 'not configured';
+            return (
+              <div key={key} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '6px 10px',
+                background: 'var(--color-surface-elevated)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 'var(--text-xs)',
+              }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%',
+                  background: dotColor, flexShrink: 0,
+                }} />
+                <span style={{
+                  minWidth: 110, fontWeight: 'var(--weight-medium)',
+                  color: 'var(--color-text)',
+                }}>
+                  {label}
+                </span>
+                {statusText && (
+                  <span style={{
+                    marginRight: 6,
+                    color: svc.ok === false ? C.red : C.amber,
+                    fontWeight: 'var(--weight-medium)',
+                  }}>
+                    {statusText}
+                  </span>
+                )}
+                <span style={{
+                  color: 'var(--color-text-dim)', flex: 1,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {svc.detail || '—'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // VLM API KEY HEALTH CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -769,7 +876,10 @@ function SystemSection({ onNavigateTo }) {
         )}
       </Card>
 
-      {/* VLM API Key Health */}
+      {/* Service Health Grid — DB / SMTP / Stripe / VLM */}
+      <ServiceHealthGrid />
+
+      {/* VLM API Key Health — detailed event log */}
       <ApiKeyHealthCard />
 
       {/* VLM Call Metrics */}

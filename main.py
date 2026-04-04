@@ -117,35 +117,62 @@ async def lifespan(app):
     from db.experiments import init_experiments_tables
     init_experiments_tables()
 
-    # Probe API keys at startup (with timeout so server starts even if API is slow)
+    # ── Startup service probes — VLM, DB, SMTP, Stripe (all parallel) ──────────
+    # Each probe is informational only — a failure is logged and stored for the
+    # health endpoint but never blocks startup or disables the service.
     try:
-        import engine.vlm as _vlm_mod
-        from engine.vlm import probe_api_key, vlm_available, _VLM_PROVIDER
-        if vlm_available():
-            import asyncio as _aio
+        import asyncio as _aio
+        import engine.vlm          as _vlm_mod
+        import engine.service_health as _svc_health
+        from engine.vlm          import probe_api_key, vlm_available, _VLM_PROVIDER
+        from engine.service_health import probe_db, probe_smtp, probe_stripe
+
+        async def _probe(fn, timeout_s: float, fallback: dict):
+            """Run fn() in a thread with a wall-clock timeout."""
             try:
-                result = await _aio.wait_for(
-                    _aio.get_event_loop().run_in_executor(None, probe_api_key),
-                    timeout=10.0,
+                return await _aio.wait_for(
+                    _aio.get_running_loop().run_in_executor(None, fn),
+                    timeout=timeout_s,
                 )
             except _aio.TimeoutError:
-                result = {"ok": False, "provider": _VLM_PROVIDER, "detail": "probe timed out (10s)"}
-            # Store probe result for health reporting (not a kill-switch)
-            _vlm_mod._vlm_probe_result = result
-            if result["ok"]:
-                _startup_logger.info("✓ VLM API key OK (provider=%s)", result["provider"])
+                return {**fallback, "detail": f"probe timed out ({timeout_s:.0f}s)"}
+            except Exception as exc:
+                return {**fallback, "detail": str(exc)}
+
+        async def _vlm_probe_or_skip():
+            if vlm_available():
+                return await _probe(probe_api_key, 10.0, {"ok": False, "provider": _VLM_PROVIDER})
+            return {"ok": None, "provider": _VLM_PROVIDER, "detail": f"not configured"}
+
+        vlm_r, db_r, smtp_r, stripe_r = await _aio.gather(
+            _vlm_probe_or_skip(),
+            _probe(probe_db,     5.0,  {"ok": False, "service": "db"}),
+            _probe(probe_smtp,   10.0, {"ok": False, "service": "smtp"}),
+            _probe(probe_stripe, 10.0, {"ok": False, "service": "stripe"}),
+        )
+
+        _vlm_mod._vlm_probe_result         = vlm_r
+        _svc_health._db_probe_result       = db_r
+        _svc_health._smtp_probe_result     = smtp_r
+        _svc_health._stripe_probe_result   = stripe_r
+
+        for label, r in (("VLM", vlm_r), ("DB", db_r), ("SMTP", smtp_r), ("Stripe", stripe_r)):
+            if r.get("ok") is True:
+                _startup_logger.info("✓ %s: %s", label, r.get("detail", "OK"))
+            elif r.get("ok") is None:
+                _startup_logger.warning("  %s: %s (skipped)", label, r.get("detail", "not configured"))
             else:
-                _startup_logger.error(
-                    "✗ VLM API key probe FAILED — provider=%s detail=%s\n"
-                    "  → Update %s_API_KEY in .env and restart the server.\n"
-                    "  → VLM calls will still attempt but may fail with 30s timeout.",
-                    result["provider"], result["detail"],
-                    result["provider"].upper(),
-                )
-        else:
-            _startup_logger.warning("VLM not configured (VLM_PROVIDER=%s) — skipping key probe", _VLM_PROVIDER)
+                _startup_logger.error("✗ %s: %s", label, r.get("detail", "probe failed"))
+
+        # Detailed VLM failure guidance
+        if vlm_r.get("ok") is False:
+            _startup_logger.error(
+                "  → Update %s_API_KEY in .env and restart.\n"
+                "  → VLM calls will still attempt but may fail.",
+                _VLM_PROVIDER.upper(),
+            )
     except Exception as exc:
-        _startup_logger.warning("API key probe failed at startup: %s", exc)
+        _startup_logger.warning("Service probes failed at startup: %s", exc)
 
     # Start background scheduler (no-op if ENABLE_SCHEDULER is not set)
     from engine.scheduler import boot_scheduler, stop_scheduler
