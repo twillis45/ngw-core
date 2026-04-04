@@ -452,8 +452,21 @@ function ApiKeyHealthCard() {
             )}
           </div>
 
+          {/* Startup probe failure banner */}
+          {data.vlm_probe_ok === false && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', marginBottom: 'var(--space-sm)',
+              background: C.redBg, border: `1px solid ${C.redBorder}`,
+              borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
+              color: C.red,
+            }}>
+              <span>⚠</span>
+              <span>Startup probe failed{data.vlm_probe_detail ? `: ${data.vlm_probe_detail}` : ''}. VLM calls will attempt but may fail. Update the API key in .env and restart.</span>
+            </div>
+          )}
           {/* Error banner */}
-          {hasErrors && (
+          {hasErrors && data.vlm_probe_ok !== false && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,
               padding: '8px 12px', marginBottom: 'var(--space-md)',

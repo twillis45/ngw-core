@@ -62,8 +62,18 @@ if not _VLM_MODEL:
         _VLM_MODEL = ""
 
 
+# Probe result dict — set by main.py lifespan after startup probe.
+# {"ok": bool, "provider": str, "detail": str} or None if not yet probed.
+_vlm_probe_result: Optional[dict] = None
+
 def vlm_available() -> bool:
-    """Return True if a VLM provider is configured and usable."""
+    """Return True if a VLM provider is configured (key present).
+
+    Does NOT check probe result — a failed probe means the key may be bad,
+    but VLM calls have their own per-request timeouts (30s) and auth-error
+    detection, so we let them try and fail fast rather than killing VLM
+    entirely for the session.
+    """
     if _VLM_PROVIDER == "none":
         return False
     if _VLM_PROVIDER == "openai":
@@ -294,22 +304,37 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
 def probe_api_key() -> dict:
     """Test the configured API key with a cheap non-token call.
 
+    Uses lightweight httpx directly instead of the full SDK client —
+    the openai SDK v2.30.0 import takes 50+ seconds on Python 3.10,
+    which makes SDK-based probes impractical for startup health checks.
+
     For OpenAI: calls GET /v1/models (free, no token cost).
-    For Anthropic: calls models list endpoint.
+    For Anthropic: calls GET /v1/models (free, no token cost).
 
     Returns:
         {"ok": bool, "provider": str, "detail": str}
     """
+    import httpx
     from db.database import log_api_health_event
 
     if _VLM_PROVIDER == "openai":
         try:
-            from openai import OpenAI
-            client = OpenAI(timeout=10)
-            client.models.list()
-            log_api_health_event("openai", "probe_ok", f"model={_VLM_MODEL}")
-            logger.info("OpenAI API key probe: OK (model=%s)", _VLM_MODEL)
-            return {"ok": True, "provider": "openai", "detail": f"model={_VLM_MODEL}"}
+            key = os.environ.get("OPENAI_API_KEY", "")
+            r = httpx.get(
+                "https://api.openai.com/v1/models",
+                headers={"Authorization": f"Bearer {key}"},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                log_api_health_event("openai", "probe_ok", f"model={_VLM_MODEL}")
+                logger.info("OpenAI API key probe: OK (model=%s)", _VLM_MODEL)
+                return {"ok": True, "provider": "openai", "detail": f"model={_VLM_MODEL}"}
+            else:
+                detail = f"HTTP {r.status_code}"
+                event = "401_error" if r.status_code == 401 else "probe_fail"
+                log_api_health_event("openai", event, detail)
+                logger.error("OpenAI API key probe FAILED: %s", detail)
+                return {"ok": False, "provider": "openai", "detail": detail}
         except Exception as exc:
             event = "401_error" if _is_auth_error(exc) else "probe_fail"
             log_api_health_event("openai", event, str(exc)[:500])
@@ -318,12 +343,25 @@ def probe_api_key() -> dict:
 
     elif _VLM_PROVIDER == "anthropic":
         try:
-            import anthropic
-            client = anthropic.Anthropic(timeout=10)
-            client.models.list()
-            log_api_health_event("anthropic", "probe_ok", f"model={_VLM_MODEL}")
-            logger.info("Anthropic API key probe: OK (model=%s)", _VLM_MODEL)
-            return {"ok": True, "provider": "anthropic", "detail": f"model={_VLM_MODEL}"}
+            key = os.environ.get("ANTHROPIC_API_KEY", "")
+            r = httpx.get(
+                "https://api.anthropic.com/v1/models",
+                headers={
+                    "x-api-key": key,
+                    "anthropic-version": "2023-06-01",
+                },
+                timeout=10,
+            )
+            if r.status_code == 200:
+                log_api_health_event("anthropic", "probe_ok", f"model={_VLM_MODEL}")
+                logger.info("Anthropic API key probe: OK (model=%s)", _VLM_MODEL)
+                return {"ok": True, "provider": "anthropic", "detail": f"model={_VLM_MODEL}"}
+            else:
+                detail = f"HTTP {r.status_code}"
+                event = "401_error" if r.status_code == 401 else "probe_fail"
+                log_api_health_event("anthropic", event, detail)
+                logger.error("Anthropic API key probe FAILED: %s", detail)
+                return {"ok": False, "provider": "anthropic", "detail": detail}
         except Exception as exc:
             event = "401_error" if _is_auth_error(exc) else "probe_fail"
             log_api_health_event("anthropic", event, str(exc)[:500])

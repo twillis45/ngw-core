@@ -20,7 +20,7 @@
  *   - Conversion per pattern
  *   - Revenue per pattern
  */
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   getSignalSummary,
   getSignalPatterns,
@@ -268,9 +268,8 @@ function PatternTable({ patterns, loading }) {
             const devColor    = devVal <= 2 ? C.green : devVal <= 4 ? C.amber : C.red;
 
             return (
-              <>
+              <React.Fragment key={p.pattern_id}>
                 <tr
-                  key={p.pattern_id}
                   className={`sig-table__row ${rowClass}`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => setExpandedPat(e => e === p.pattern_id ? null : p.pattern_id)}
@@ -362,7 +361,7 @@ function PatternTable({ patterns, loading }) {
                     </td>
                   </tr>
                 )}
-              </>
+              </React.Fragment>
             );
           })}
         </tbody>

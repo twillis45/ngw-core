@@ -117,17 +117,28 @@ async def lifespan(app):
     from db.experiments import init_experiments_tables
     init_experiments_tables()
 
-    # Probe API keys at startup
+    # Probe API keys at startup (with timeout so server starts even if API is slow)
     try:
+        import engine.vlm as _vlm_mod
         from engine.vlm import probe_api_key, vlm_available, _VLM_PROVIDER
         if vlm_available():
-            result = probe_api_key()
+            import asyncio as _aio
+            try:
+                result = await _aio.wait_for(
+                    _aio.get_event_loop().run_in_executor(None, probe_api_key),
+                    timeout=10.0,
+                )
+            except _aio.TimeoutError:
+                result = {"ok": False, "provider": _VLM_PROVIDER, "detail": "probe timed out (10s)"}
+            # Store probe result for health reporting (not a kill-switch)
+            _vlm_mod._vlm_probe_result = result
             if result["ok"]:
                 _startup_logger.info("✓ VLM API key OK (provider=%s)", result["provider"])
             else:
                 _startup_logger.error(
-                    "✗ VLM API key INVALID — provider=%s detail=%s\n"
-                    "  → Update %s_API_KEY in .env and restart the server.",
+                    "✗ VLM API key probe FAILED — provider=%s detail=%s\n"
+                    "  → Update %s_API_KEY in .env and restart the server.\n"
+                    "  → VLM calls will still attempt but may fail with 30s timeout.",
                     result["provider"], result["detail"],
                     result["provider"].upper(),
                 )

@@ -40,7 +40,7 @@ async def api_key_status(user=Depends(get_current_user)):
     """Return API key health status: last probe result + recent error events."""
     _require_admin(user)
     from db.database import get_api_health_events, get_latest_api_health
-    from engine.vlm import _VLM_PROVIDER, _VLM_MODEL, vlm_available
+    from engine.vlm import _VLM_PROVIDER, _VLM_MODEL, vlm_available, _vlm_probe_result
 
     latest = get_latest_api_health(_VLM_PROVIDER) if _VLM_PROVIDER != "none" else None
     recent_events = get_api_health_events(limit=20)
@@ -53,13 +53,20 @@ async def api_key_status(user=Depends(get_current_user)):
     from_email = os.getenv("FROM_EMAIL", "")
     app_url    = os.getenv("APP_URL", "")
 
+    # Startup probe failed → surface as error even if no recent DB events
+    has_errors = any(e["event_type"] in ("401_error", "probe_fail") for e in recent_events[:5])
+    if _vlm_probe_result and not _vlm_probe_result["ok"]:
+        has_errors = True
+
     return {
         "provider":        _VLM_PROVIDER,
         "model":           _VLM_MODEL,
         "vlm_available":   vlm_available(),
+        "vlm_probe_ok":    _vlm_probe_result["ok"] if _vlm_probe_result else None,
+        "vlm_probe_detail": _vlm_probe_result.get("detail") if _vlm_probe_result else None,
         "latest_event":    latest,
         "recent_events":   recent_events,
-        "has_errors":      any(e["event_type"] in ("401_error", "probe_fail") for e in recent_events[:5]),
+        "has_errors":      has_errors,
         "smtp_configured": smtp_configured,
         "smtp_host":       os.getenv("SMTP_HOST", ""),
         "from_email":      from_email,

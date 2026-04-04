@@ -53,119 +53,77 @@ body {
      700ms–5s : long 1/200 pop builds → warm glow settles
    ─────────────────────────────────────────────────────────────── */
 
-/* Natural strobe rhythm — 5 rapid flashes (~80ms apart), beat, then 1 main pop.
-   Each flash: 60ms wide = 1.2% of 5s
-   Flashes at: 0%, 1.6%, 3.2%, 4.8%, 6.0%  (0/80/160/240/300ms)
-   Main pop:   14.1% (705ms) after dark beat                         */
+/* Single Profoto flash pop — matches the single-fire audio.
+   Timeline (3s): ~50ms dark → flash peak → fast decay → warm idle.
+   Audio layers: trigger crack at 0ms, xenon pop at 2ms, cap thump 0-280ms,
+   tube resonance 1-540ms, recycle whine 60-1250ms.                      */
 
 @keyframes ngw-strobe-svg {
   0%    { filter: brightness(1)   saturate(1); }
-  0.1%  { filter: brightness(18)  saturate(0.05); }  /* F1 peak */
-  1.4%  { filter: brightness(2)   saturate(0.8); }
-  1.6%  { filter: brightness(16)  saturate(0.1); }   /* F2 peak */
-  2.9%  { filter: brightness(2)   saturate(0.8); }
-  3.2%  { filter: brightness(15)  saturate(0.1); }   /* F3 peak */
-  4.5%  { filter: brightness(1.5) saturate(0.9); }
-  4.8%  { filter: brightness(15)  saturate(0.1); }   /* F4 peak */
-  5.9%  { filter: brightness(1.5) saturate(0.9); }
-  6.0%  { filter: brightness(14)  saturate(0.15);}   /* F5 peak */
-  8%    { filter: brightness(1)   saturate(1); }
-  14%   { filter: brightness(1)   saturate(1); }     /* dark beat */
-  14.1% { filter: brightness(16)  saturate(0.1); }   /* main pop */
-  15.5% { filter: brightness(1)   saturate(1); }
+  1.5%  { filter: brightness(18)  saturate(0.05); }  /* flash peak (~45ms) */
+  4%    { filter: brightness(4)   saturate(0.5); }   /* fast decay */
+  8%    { filter: brightness(1.5) saturate(0.9); }
+  15%   { filter: brightness(1)   saturate(1); }
   100%  { filter: brightness(1)   saturate(1); }
 }
 
 @keyframes ngw-strobe-ring {
   0%    { opacity: 0; }
-  0.1%  { opacity: 1; }
-  1.5%  { opacity: 0.05; }
-  1.6%  { opacity: 0.9; }
-  2.9%  { opacity: 0.05; }
-  3.2%  { opacity: 0.85; }
-  4.5%  { opacity: 0.05; }
-  4.8%  { opacity: 0.85; }
-  5.9%  { opacity: 0.05; }
-  6.0%  { opacity: 0.8; }
+  1.5%  { opacity: 1; }       /* flash */
+  4%    { opacity: 0.15; }    /* fast decay */
   8%    { opacity: 0; }
-  14%   { opacity: 0; }
-  14.1% { opacity: 1; }
-  15.5% { opacity: 0; }
-  22%   { opacity: 0.1; }
-  50%   { opacity: 0.7; }
-  75%   { opacity: 0.95; }
+  25%   { opacity: 0.15; }    /* warm-up fade in */
+  55%   { opacity: 0.7; }
   100%  { opacity: 1; }
 }
 
 @keyframes ngw-strobe-beam {
   0%    { opacity: 0; }
-  0.1%  { opacity: 0.9; }
+  1.5%  { opacity: 0.9; }     /* flash */
+  4%    { opacity: 0.1; }
   8%    { opacity: 0; }
-  14%   { opacity: 0; }
-  14.1% { opacity: 0.9; }
-  15.5% { opacity: 0; }
-  28%   { opacity: 0.15; }
-  60%   { opacity: 0.65; }
+  30%   { opacity: 0.2; }     /* warm-up */
+  65%   { opacity: 0.7; }
   100%  { opacity: 1; }
 }
 
 @keyframes ngw-strobe-glow {
   0%    { opacity: 0;    transform: scale(0.1); }
-  0.1%  { opacity: 1;    transform: scale(3.0); }  /* F1 */
-  1.4%  { opacity: 0.05; transform: scale(0.3); }
-  1.6%  { opacity: 0.9;  transform: scale(2.8); }  /* F2 */
-  2.9%  { opacity: 0.05; transform: scale(0.3); }
-  3.2%  { opacity: 0.85; transform: scale(2.6); }  /* F3 */
-  4.5%  { opacity: 0.05; transform: scale(0.3); }
-  4.8%  { opacity: 0.85; transform: scale(2.6); }  /* F4 */
-  5.9%  { opacity: 0.05; transform: scale(0.3); }
-  6.0%  { opacity: 0.8;  transform: scale(2.5); }  /* F5 */
+  1.5%  { opacity: 1;    transform: scale(3.0); }  /* flash bloom */
+  4%    { opacity: 0.15; transform: scale(0.5); }  /* fast decay */
   8%    { opacity: 0;    transform: scale(0.2); }
-  14%   { opacity: 0;    transform: scale(0.2); }
-  14.1% { opacity: 1.0;  transform: scale(2.8); }  /* main pop */
-  15.5% { opacity: 0.05; transform: scale(0.3); }
-  22%   { opacity: 0.2;  transform: scale(0.6); }
-  45%   { opacity: 0.85; transform: scale(1.0); }
+  25%   { opacity: 0.25; transform: scale(0.6); }  /* warm-up glow */
+  55%   { opacity: 0.85; transform: scale(1.0); }
   100%  { opacity: 1.0;  transform: scale(1.0); }
 }
 
 @keyframes ngw-strobe-dot {
   0%    { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px #fff); }
-  0.1%  { opacity: 1;   filter: brightness(28)  drop-shadow(0 0 22px #fff); }  /* F1 */
-  1.4%  { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px #fff); }
-  1.6%  { opacity: 1;   filter: brightness(25)  drop-shadow(0 0 20px #fff); }  /* F2 */
-  2.9%  { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px #fff); }
-  3.2%  { opacity: 1;   filter: brightness(24)  drop-shadow(0 0 18px #fff); }  /* F3 */
-  4.5%  { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px #fff); }
-  4.8%  { opacity: 1;   filter: brightness(22)  drop-shadow(0 0 18px #fff); }  /* F4 */
-  5.9%  { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px #fff); }
-  6.0%  { opacity: 1;   filter: brightness(20)  drop-shadow(0 0 16px #fff); }  /* F5 */
+  1.5%  { opacity: 1;   filter: brightness(28)  drop-shadow(0 0 22px #fff); }  /* flash */
+  4%    { opacity: 0.2; filter: brightness(3)   drop-shadow(0 0 4px #fff); }   /* fast decay */
   8%    { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px var(--color-accent)); }
-  14%   { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px var(--color-accent)); }
-  14.1% { opacity: 1;   filter: brightness(24)  drop-shadow(0 0 20px #fff); }  /* main pop */
-  15.5% { opacity: 0;   filter: brightness(1)   drop-shadow(0 0 0px var(--color-accent)); }
-  22%   { opacity: 0.4; filter: brightness(2)   drop-shadow(0 0 3px var(--color-accent)); }
-  45%   { opacity: 1;   filter: brightness(2.2) drop-shadow(0 0 4px var(--color-accent)); }
+  25%   { opacity: 0.5; filter: brightness(2)   drop-shadow(0 0 3px var(--color-accent)); }
+  55%   { opacity: 1;   filter: brightness(2.2) drop-shadow(0 0 4px var(--color-accent)); }
   100%  { opacity: 1;   filter: brightness(1.8) drop-shadow(0 0 3px var(--color-accent)); }
 }
 
-/* 2 iterations × 5s = 10s total, then holds warm final state */
+/* Single play, 3s duration — matches audio (~1.25s of sound content) */
 .ngw-logo svg {
-  animation: ngw-strobe-svg 5s linear 2 forwards;
+  animation: ngw-strobe-svg 3s linear 1 forwards;
 }
 .ngw-logo__ring {
-  animation: ngw-strobe-ring 5s ease-out 2 forwards;
+  animation: ngw-strobe-ring 3s ease-out 1 forwards;
 }
 .ngw-logo__beam {
-  animation: ngw-strobe-beam 5s ease-out 2 forwards;
+  animation: ngw-strobe-beam 3s ease-out 1 forwards;
 }
 .ngw-logo__glow-group {
   transform-box: fill-box;
   transform-origin: center;
-  animation: ngw-strobe-glow 5s cubic-bezier(0.22, 1, 0.36, 1) 2 forwards;
+  animation: ngw-strobe-glow 3s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
 }
 .ngw-logo__dot {
-  animation: ngw-strobe-dot 5s linear 2 forwards;
+  animation: ngw-strobe-dot 3s linear 1 forwards;
 }
 .app-header__theme-toggle {
   background: none; border: none; color: var(--color-text-secondary);
@@ -6206,25 +6164,38 @@ body {
 /* Desktop 1080px+ — wider gap, taller preview */
 @media (min-width: 1080px) {
   .lab-wb-layout {
-    grid-template-columns: 42fr 58fr;
+    grid-template-columns: 48fr 52fr;
     gap: var(--space-2xl);
   }
   .lab-wb-layout__left .lab-workbench__preview {
-    min-height: clamp(320px, 42svh, 520px);
+    min-height: clamp(360px, 50svh, 640px);
   }
 }
 
 /* Large desktop 1400px+ — bigger canvas proportional to screen */
 @media (min-width: 1400px) {
   .lab-wb-layout {
-    grid-template-columns: 46fr 54fr;
+    grid-template-columns: 52fr 48fr;
     gap: var(--space-2xl);
   }
   .lab-wb-layout__left .lab-workbench__preview {
-    min-height: clamp(380px, 46svh, 620px);
+    min-height: clamp(440px, 58svh, 800px);
   }
   .lab-workbench__preview img {
-    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - 120px);
+    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - 80px);
+  }
+}
+
+/* Extra-large desktop 1800px+ — image-dominant layout */
+@media (min-width: 1800px) {
+  .lab-wb-layout {
+    grid-template-columns: 55fr 45fr;
+  }
+  .lab-wb-layout__left .lab-workbench__preview {
+    min-height: clamp(520px, 62svh, 920px);
+  }
+  .lab-workbench__preview img {
+    max-height: calc(100vh - var(--lab-top-bar-h, 0px) - 60px);
   }
 }
 

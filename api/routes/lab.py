@@ -2280,11 +2280,14 @@ async def get_api_metrics(
     Also reports whether VLM is currently configured so the UI can show a clear state.
     """
     from db.database import get_vlm_call_stats
-    from engine.vlm import vlm_available, _VLM_PROVIDER, _VLM_MODEL
+    from engine.vlm import vlm_available, _VLM_PROVIDER, _VLM_MODEL, _vlm_probe_result
     stats = get_vlm_call_stats(hours=hours)
     stats["vlm_configured"] = vlm_available()
     stats["vlm_provider"]   = _VLM_PROVIDER
     stats["vlm_model"]      = _VLM_MODEL or None
+    # Probe status: None = not probed, {"ok": True/False, ...}
+    stats["vlm_probe_ok"]   = _vlm_probe_result["ok"] if _vlm_probe_result else None
+    stats["vlm_probe_detail"] = _vlm_probe_result.get("detail") if _vlm_probe_result else None
     return stats
 
 
