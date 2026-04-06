@@ -5945,6 +5945,7 @@ def reconstruction_pass(
     modifier_shape: Optional[Dict[str, Any]] = None,
     hypothesis: Optional[Dict[str, Any]] = None,
     physics: Optional[Dict[str, Any]] = None,
+    existing_catchlights: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Combine all pass signals to estimate lighting setup parameters.
 
@@ -7126,6 +7127,7 @@ def run_extended_pipeline(
             modifier_shape=results.get("modifier_shape"),
             hypothesis=results.get("hypothesis"),
             physics=results.get("physics"),
+            existing_catchlights=existing_catchlights,
         )
     except Exception as exc:
         logger.warning("reconstruction_pass failed: %s", exc)
