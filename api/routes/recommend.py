@@ -99,10 +99,13 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
         user_email = user.get("email", "")
         if user_email.lower() in get_internal_emails():
             is_paid = True
+            logger.info("[recommend] paywall bypass: user=%s is_internal=True (unlimited analyses)", user_email)
         else:
             try:
                 sub = get_active_subscription(user_email)
                 is_paid = sub is not None
+                if is_paid:
+                    logger.info("[recommend] paywall bypass: user=%s is_paid=True plan=%s", user_email, sub.get("plan") if isinstance(sub, dict) else "active")
             except Exception as exc:
                 logger.error("subscription check failed for user=%s: %s", user_email, exc)
                 raise HTTPException(
@@ -110,6 +113,8 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
                     detail={"code": "SUBSCRIPTION_CHECK_FAILED",
                             "message": "Unable to verify subscription. Please try again."},
                 )
+    else:
+        logger.info("[recommend] paywall check: anonymous user (no JWT)")
 
     if not is_paid:
         session_id: str = (body.get("metadata") or {}).get("session_id", "")

@@ -379,10 +379,13 @@ def _is_authorized(user) -> bool:
         return False
     email = user.get("email", "")
     if email.lower() in get_internal_emails():
+        logger.info("[shoot-mode] access granted: user=%s is_internal=True (unlimited)", email)
         return True
     sub = get_active_subscription(email)
-    if not sub:
-        logger.info("[shoot-mode] auth denied — no subscription for %s", email)
+    if sub:
+        logger.info("[shoot-mode] access granted: user=%s is_paid=True", email)
+    else:
+        logger.info("[shoot-mode] access denied — no subscription for %s", email)
     return sub is not None
 
 
