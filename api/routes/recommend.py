@@ -134,8 +134,8 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
                 )
                 if paywall_flag:
                     threshold = paywall_flag.get("config", {}).get("threshold", _DEFAULT_PAYWALL_THRESHOLD)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("[recommend] paywall flags load failed: %s", exc)
             if count >= threshold:
                 raise HTTPException(
                     status_code=402,

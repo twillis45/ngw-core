@@ -1,11 +1,14 @@
 """JWT token creation / verification and password hashing."""
 from __future__ import annotations
 
+import logging
 import os
 import time
 import uuid
 from threading import Lock
 from typing import Optional
+
+logger = logging.getLogger("ngw.auth.security")
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -81,9 +84,11 @@ def decode_token(token: str) -> Optional[str]:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         jti = payload.get("jti")
         if jti and is_revoked(jti):
+            logger.warning("[jwt] revoked token used jti=%s", jti)
             return None
         return payload.get("sub")
-    except JWTError:
+    except JWTError as exc:
+        logger.warning("[jwt] decode failed: %s", exc)
         return None
 
 

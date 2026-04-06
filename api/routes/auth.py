@@ -1,7 +1,10 @@
 """Authentication routes: register, login, me, email verification, logout."""
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger("ngw.auth")
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -74,17 +77,19 @@ def register(body: RegisterBody, request: Request):
     check_rate_limit("register", request, limit=10, window=3600)
     existing = get_user_by_email(body.email)
     if existing:
+        logger.info("[register] rejected — email already registered: %s", body.email)
         raise HTTPException(status_code=409, detail="Email already registered")
     hashed = hash_password(body.password)
     user = create_user(body.email, body.username, hashed)
     token = create_access_token(user["id"])
+    logger.info("[register] new user id=%s email=%s", user["id"], body.email)
 
     # Send verification email (non-blocking — failure doesn't break registration)
     try:
         verif_token = create_verification_token(user["id"])
         send_verification_email(body.email, verif_token)
-    except Exception:
-        pass  # logged inside send_verification_email
+    except Exception as exc:
+        logger.error("[register] verification email failed for %s: %s", body.email, exc)
 
     return {"token": token, "user": _user_public(user)}
 
@@ -96,8 +101,10 @@ def login(body: LoginBody, request: Request):
     check_rate_limit("login_account", request, limit=10, window=900, extra=body.email.lower())
     user = get_user_by_email(body.email)
     if not user or not verify_password(body.password, user["hashed_pw"]):
+        logger.warning("[login] failed for %s", body.email)
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["id"])
+    logger.info("[login] success user_id=%s email=%s", user["id"], body.email)
     return {"token": token, "user": _user_public(user)}
 
 
@@ -112,7 +119,9 @@ def verify_email(body: VerifyBody, request: Request):
     check_rate_limit("verify_email", request, limit=10, window=3600)
     user = consume_verification_token(body.token)
     if not user:
+        logger.warning("[verify-email] invalid/expired token")
         raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+    logger.info("[verify-email] verified user_id=%s", user["id"])
     token = create_access_token(user["id"])
     return {"token": token, "user": _user_public(user)}
 
@@ -199,6 +208,7 @@ def logout(
             jti = payload.get("jti")
             if jti:
                 revoke_token(jti)
+                logger.info("[logout] revoked jti=%s", jti)
     return {"detail": "Logged out"}
 
 
@@ -214,19 +224,23 @@ class MagicLinkVerifyBody(BaseModel):
 def request_magic_link(body: MagicLinkRequestBody, request: Request):
     check_rate_limit("magic_link", request, limit=5, window=900, extra=body.email.lower())
     token = create_magic_link_token(body.email.lower())
+    logger.info("[magic-link] request for %s", body.email.lower())
     try:
         send_magic_link_email(body.email.lower(), token)
-    except Exception:
-        pass  # non-fatal — token is stored, email failure shouldn't break the flow
+        logger.info("[magic-link] email sent to %s", body.email.lower())
+    except Exception as exc:
+        logger.error("[magic-link] email send FAILED for %s: %s", body.email.lower(), exc)
     return {"detail": "Magic link sent. Check your email."}
 
 @router.post("/magic-link/verify")
 def verify_magic_link(body: MagicLinkVerifyBody, request: Request):
     email = consume_magic_link_token(body.token)
     if not email:
+        logger.warning("[magic-link] verify failed — invalid/expired token")
         raise HTTPException(status_code=401, detail="Invalid or expired magic link.")
     user = get_or_create_passwordless_user(email)
     token = create_access_token(user["id"])
+    logger.info("[magic-link] verified user_id=%s email=%s", user["id"], email)
     return {"token": token, "user": _user_public(user)}
 
 
@@ -249,7 +263,8 @@ def google_auth(body: GoogleAuthBody, request: Request):
             google_requests.Request(),
             GOOGLE_CLIENT_ID,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("[google] credential verification failed: %s", exc)
         raise HTTPException(status_code=401, detail="Invalid Google credential.")
 
     email = idinfo.get("email", "")
@@ -260,6 +275,7 @@ def google_auth(body: GoogleAuthBody, request: Request):
     check_rate_limit("google_auth", request, limit=20, window=900, extra=email.lower())
     user  = get_or_create_passwordless_user(email, username=name)
     token = create_access_token(user["id"])
+    logger.info("[google] auth success user_id=%s email=%s", user["id"], email)
     return {"token": token, "user": _user_public(user)}
 
 
@@ -284,13 +300,19 @@ def request_password_reset(body: PasswordResetRequestBody, request: Request):
     email_lower = body.email.lower()
     user = get_user_by_email(email_lower)
     is_admin = email_lower in get_internal_emails()
+    logger.info("[password-reset] request for %s | user_found=%s is_admin=%s",
+                email_lower, user is not None, is_admin)
     # Send reset for password-based accounts AND for admin emails (even if passwordless)
     if user and (user.get("hashed_pw") != "__passwordless__" or is_admin):
         token = create_password_reset_token(email_lower)
         try:
             send_password_reset_email(email_lower, token)
-        except Exception:
-            pass  # non-fatal
+            logger.info("[password-reset] email sent to %s", email_lower)
+        except Exception as exc:
+            logger.error("[password-reset] email send FAILED for %s: %s", email_lower, exc)
+    else:
+        logger.info("[password-reset] skipped — %s",
+                     "no user" if not user else "passwordless account (non-admin)")
     return {"detail": "If that email has an account, a reset link was sent."}
 
 @router.post("/password-reset/confirm")
@@ -298,13 +320,16 @@ def confirm_password_reset(body: PasswordResetConfirmBody, request: Request):
     """Validate reset token, update password, return new JWT."""
     email = consume_password_reset_token(body.token)
     if not email:
+        logger.warning("[password-reset] confirm failed — invalid/expired token")
         raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
     user = get_user_by_email(email)
     if not user:
+        logger.warning("[password-reset] confirm failed — account not found for %s", email)
         raise HTTPException(status_code=400, detail="Account not found.")
     hashed = hash_password(body.new_password)
     update_user_password(user["id"], hashed)
     token = create_access_token(user["id"])
+    logger.info("[password-reset] password updated for %s", email)
     return {"token": token, "user": _user_public(user)}
 
 
@@ -322,6 +347,7 @@ def delete_account(
             if jti:
                 revoke_token(jti)
     delete_user_account(user["id"], user["email"])
+    logger.info("[delete-account] user_id=%s email=%s", user["id"], user["email"])
     return {"detail": "Account deleted"}
 
 
@@ -332,6 +358,8 @@ def resend_verification(user=Depends(get_current_user)):
     try:
         verif_token = create_verification_token(user["id"])
         send_verification_email(user["email"], verif_token)
+        logger.info("[resend-verification] sent to user_id=%s email=%s", user["id"], user["email"])
     except Exception as exc:
+        logger.error("[resend-verification] failed for %s: %s", user["email"], exc)
         raise HTTPException(status_code=500, detail="Failed to send email") from exc
     return {"detail": "Verification email sent"}

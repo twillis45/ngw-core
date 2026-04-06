@@ -9,6 +9,10 @@ step-by-step on-set workflow.  Two endpoints:
 """
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger("ngw.shoot_mode")
+
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -408,9 +412,12 @@ def shoot_mode_start(req: ShootModeStartRequest, user=Depends(get_optional_user)
     light_steps = sum(1 for s in steps if s["type"] == "light_placement")
     estimated_min = light_steps * 2 + 3
 
+    session_id = f"shoot_{uuid.uuid4().hex[:8]}"
+    logger.info("[shoot-mode] start session=%s pattern=%s role=%s steps=%d",
+                session_id, pattern, req.role, len(steps))
     return {
         "status": "success",
-        "sessionId": f"shoot_{uuid.uuid4().hex[:8]}",
+        "sessionId": session_id,
         "metadata": {
             "setupName": setup_name,
             "pattern": pattern,
@@ -470,7 +477,8 @@ async def evaluate_test_shot(req: EvaluateTestShotRequest, user=Depends(get_opti
                         feedback["notes"].append("No catchlights detected. Check that your key light is positioned correctly.")
                     elif len(cl_list) >= 1:
                         feedback["notes"].append(f"{len(cl_list)} catchlight(s) detected — light placement looks correct.")
-    except Exception:
+    except Exception as exc:
+        logger.error("[shoot-mode] evaluate-test-shot vision analysis failed: %s", exc)
         feedback["notes"].append("Could not analyze image. Ensure the image is a clear, well-lit photo.")
 
     if not feedback["notes"]:

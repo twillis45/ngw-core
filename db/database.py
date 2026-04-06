@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+
+logger = logging.getLogger("ngw.db")
 import time
 import uuid
 from pathlib import Path
@@ -356,6 +359,7 @@ def create_user(email: str, username: str, hashed_pw: str) -> Dict[str, Any]:
             "INSERT INTO users (id, email, username, hashed_pw, email_verified, created_at, updated_at) VALUES (?,?,?,?,0,?,?)",
             (uid, email.lower(), username, hashed_pw, now, now),
         )
+    logger.info("[db] create_user id=%s email=%s", uid, email.lower())
     return {"id": uid, "email": email.lower(), "username": username, "email_verified": False}
 
 
@@ -530,6 +534,7 @@ def update_user_password(user_id: str, hashed_pw: str) -> None:
             "UPDATE users SET hashed_pw = ?, updated_at = ? WHERE id = ?",
             (hashed_pw, now, user_id),
         )
+    logger.info("[db] update_user_password user_id=%s", user_id)
 
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
@@ -558,6 +563,7 @@ def delete_user_account(user_id: str, email: str) -> None:
         conn.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
         # Finally remove the account itself (cascades email_verifications)
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    logger.info("[db] delete_user_account user_id=%s email=%s", user_id, email)
 
 
 # ── Subscription CRUD ──────────────────────────────────────
