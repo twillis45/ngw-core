@@ -92,48 +92,53 @@ async def lifespan(app):
             )
 
     # ── Sentry (optional — only initialised when SENTRY_DSN is set) ──────────
-    _sentry_dsn = os.getenv("SENTRY_DSN")
+    _sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
     if _sentry_dsn:
-        import subprocess as _sp
-        import sentry_sdk
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-        from sentry_sdk.integrations.starlette import StarletteIntegration
-        from sentry_sdk.integrations.logging import LoggingIntegration
-        import logging as _sl
+        try:
+            import subprocess as _sp
+            import sentry_sdk
+            from sentry_sdk.integrations.fastapi import FastApiIntegration
+            from sentry_sdk.integrations.starlette import StarletteIntegration
+            from sentry_sdk.integrations.logging import LoggingIntegration
+            import logging as _sl
 
-        # Release: prefer Render/CI env vars, fall back to local git SHA
-        _release = (
-            os.getenv("RENDER_GIT_COMMIT")
-            or os.getenv("GIT_COMMIT")
-        )
-        if not _release:
-            try:
-                _release = _sp.check_output(
-                    ["git", "rev-parse", "--short", "HEAD"],
-                    cwd=str(Path(__file__).parent),
-                    stderr=_sp.DEVNULL,
-                ).decode().strip()
-            except Exception:
-                _release = "unknown"
+            # Release: prefer Render/CI env vars, fall back to local git SHA
+            _release = (
+                os.getenv("RENDER_GIT_COMMIT")
+                or os.getenv("GIT_COMMIT")
+            )
+            if not _release:
+                try:
+                    _release = _sp.check_output(
+                        ["git", "rev-parse", "--short", "HEAD"],
+                        cwd=str(Path(__file__).parent),
+                        stderr=_sp.DEVNULL,
+                    ).decode().strip()
+                except Exception:
+                    _release = "unknown"
 
-        sentry_sdk.init(
-            dsn=_sentry_dsn,
-            environment=_env,
-            release=_release,
-            traces_sample_rate=0.1,
-            send_default_pii=False,
-            integrations=[
-                StarletteIntegration(transaction_style="endpoint"),
-                FastApiIntegration(transaction_style="endpoint"),
-                LoggingIntegration(
-                    level=_sl.WARNING,       # breadcrumbs at WARNING+
-                    event_level=_sl.ERROR,   # Sentry events at ERROR+
-                ),
-            ],
-        )
-        _startup_logger.info(
-            "✓ Sentry initialised (environment=%s release=%s)", _env, _release
-        )
+            sentry_sdk.init(
+                dsn=_sentry_dsn,
+                environment=_env,
+                release=_release,
+                traces_sample_rate=0.1,
+                send_default_pii=False,
+                integrations=[
+                    StarletteIntegration(transaction_style="endpoint"),
+                    FastApiIntegration(transaction_style="endpoint"),
+                    LoggingIntegration(
+                        level=_sl.WARNING,       # breadcrumbs at WARNING+
+                        event_level=_sl.ERROR,   # Sentry events at ERROR+
+                    ),
+                ],
+            )
+            _startup_logger.info(
+                "✓ Sentry initialised (environment=%s release=%s)", _env, _release
+            )
+        except Exception as _sentry_exc:
+            _startup_logger.error(
+                "Sentry init failed (server continues without Sentry): %s", _sentry_exc
+            )
     else:
         _startup_logger.warning(
             "SENTRY_DSN not set — runtime errors will not be captured by Sentry"
