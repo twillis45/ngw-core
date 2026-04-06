@@ -293,6 +293,14 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
                     "%s VLM rate-limited (429) on attempt %d — retrying in %ds",
                     provider_name, attempt, delay,
                 )
+                try:
+                    import sentry_sdk
+                    sentry_sdk.add_breadcrumb(
+                        category="vlm", level="warning",
+                        message=f"{provider_name} 429 retry {attempt} (wait {delay}s)",
+                    )
+                except Exception:
+                    pass
                 time.sleep(delay)
             else:
                 raise
@@ -559,6 +567,17 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         except Exception:
             pass  # metrics logging must never break analysis
 
+        # Sentry breadcrumb — successful VLM call
+        try:
+            import sentry_sdk
+            sentry_sdk.add_breadcrumb(
+                category="vlm", level="info",
+                message=f"{used_provider}/{_VLM_MODEL} OK ({latency_ms:.0f}ms)",
+                data={"provider": used_provider, "model": _VLM_MODEL, "latency_ms": round(latency_ms)},
+            )
+        except Exception:
+            pass
+
         # Parse signals namespace (graceful — each sub-model independent)
         signals = _parse_signals(raw.get("signals", {}))
 
@@ -588,6 +607,14 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
             from db.database import log_vlm_call
             log_vlm_call(_VLM_PROVIDER, _VLM_MODEL, latency_ms, ok=False,
                          caller="analyze_image", error=str(exc)[:500])
+        except Exception:
+            pass
+        # Sentry — capture VLM failure with provider context
+        try:
+            import sentry_sdk
+            sentry_sdk.set_tag("vlm.provider", _VLM_PROVIDER)
+            sentry_sdk.set_tag("vlm.model", _VLM_MODEL)
+            sentry_sdk.capture_exception(exc)
         except Exception:
             pass
         logger.warning("VLM call failed: %s", exc, exc_info=True)

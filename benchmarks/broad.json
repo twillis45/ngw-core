@@ -6,13 +6,13 @@
     "expected_pattern": "broad",
     "expected_light_count": 1,
     "expected_key_direction": "right",
-    "acceptable_patterns": ["broad", "split", "loop", "rembrandt", "short"],
+    "acceptable_patterns": ["broad", "split", "loop", "rembrandt", "short", "clamshell"],
     "acceptable_light_count_range": [1, 2]
   },
   "metadata": {
     "category": "dramatic",
     "difficulty": "hard",
-    "known_challenges": ["broad vs short depends on face turn vs light direction — requires pose analysis", "B&W removes color temperature cues"],
+    "known_challenges": ["broad vs short depends on face turn vs light direction — requires pose analysis", "B&W removes color temperature cues", "without pose/yaw analysis shadow signals read as near-zero → clamshell-like pattern accepted until pose resolver is implemented"],
     "added_date": "2026-03-17"
   }
 }

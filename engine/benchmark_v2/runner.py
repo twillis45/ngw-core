@@ -208,8 +208,19 @@ def _run_single_case(
     image_path = case["image_path"]
     exp_bp     = case.get("expected_blueprint") or {}
     exp_an     = case.get("expected_analysis") or {}
-    exp_pat            = exp_an.get("lighting_family") or exp_an.get("expected_pattern") or pattern_id
+    exp_pat            = exp_an.get("expected_pattern") or exp_an.get("lighting_family") or pattern_id
     acceptable_pats    = exp_an.get("acceptable_patterns") or []
+
+    # Derive expected_blueprint from expected_analysis when the case
+    # doesn't have explicit blueprint data.  This gives the Blueprint Diff
+    # UI something to show on the "Expected" side.
+    if not exp_bp.get("key"):
+        kd = exp_an.get("expected_key_direction")
+        exp_bp.setdefault("key", {
+            "position": kd if kd and kd != "unknown" else None,
+            "modifier": None,
+        })
+        exp_bp.setdefault("fill", {"ratio": None})
 
     try:
         analysis = _run_pipeline(image_path)
@@ -223,7 +234,7 @@ def _run_single_case(
         fix_score  = score_fix_effectiveness(pattern_id, fix_rates)
 
         # Use historical fix success rate as actual outcome for calibration.
-        # Fall back to None (neutral 0.5) when no fix rate data exists — using
+        # Fall back to None (neutral 1.0) when no fix rate data exists — using
         # pat_score (0 or 1) as the actual_rate distorts calibration because
         # CV-only confidence scores are legitimately lower than binary outcomes.
         actual_rate = fix_rates.get(f"{pattern_id}:success_rate") or None

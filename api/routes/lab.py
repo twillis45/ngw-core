@@ -87,13 +87,17 @@ class GoldSetCreate(BaseModel):
     image_path: str
     expected_analysis: Dict[str, Any] = Field(default_factory=dict)
     notes: Optional[str] = None
-    status: str = "draft"  # draft | approved | archived
+    status: str = "draft"         # draft | approved | archived | rejected
+    setup_family: Optional[str] = None   # SetupFamily machine value
+    provenance: Optional[str] = None     # SP-001: source/rights provenance
 
 
 class GoldSetUpdate(BaseModel):
     expected_analysis: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    setup_family: Optional[str] = None   # SetupFamily machine value
+    provenance: Optional[str] = None     # SP-001: source/rights provenance
 
 
 class RuleCandidateCreate(BaseModel):
@@ -188,6 +192,23 @@ async def lab_analyze(
         if not ar.ok:
             raise HTTPException(status_code=500, detail="; ".join(ar.notes))
 
+        # ── Sentry context — attach pattern/confidence to this request scope ──
+        try:
+            import sentry_sdk as _sentry
+            _sentry.set_tag("pattern", ar.authoritative_pattern or "unknown")
+            _sentry.set_tag("confidence_label", getattr(ar, "pattern_confidence_label", "weak"))
+            _sentry.set_context("analysis", {
+                "analysis_id": analysis_id,
+                "pattern": ar.authoritative_pattern or "unknown",
+                "confidence": getattr(ar, "pattern_confidence", 0.0),
+                "source": getattr(ar, "authoritative_pattern_source", "none"),
+                "needs_review": bool(
+                    getattr(getattr(ar, "pattern_candidates", None), "needs_review", False)
+                ),
+            })
+        except Exception:
+            pass
+
         # ── Debug overlay generation (diagnostic only) ──
         debug_overlay_url = None
         if debug and ar.pipeline_results is not None:
@@ -203,12 +224,22 @@ async def lab_analyze(
                 overlay_filename = f"{overlay_stem}.jpg"
                 overlay_path = Path("static/debug") / overlay_filename
 
+                # Extract classified catchlights (with roles) from lighting intelligence
+                _li_for_overlay = ar.lighting_intel
+                _ci_for_overlay = getattr(_li_for_overlay, "catchlight_intelligence", None) or {}
+                _intel_cls = (
+                    _ci_for_overlay.get("catchlights", [])
+                    if isinstance(_ci_for_overlay, dict) else []
+                )
+
                 saved_path = generate_analysis_overlay(
                     img_bgr,
                     ar.pipeline_results,
                     face_box=face_box,
                     person_mask=person_mask,
                     output_path=str(overlay_path),
+                    vision_data=ar.vision_data,
+                    intel_catchlights=_intel_cls,
                 )
                 if saved_path:
                     debug_overlay_url = f"/static/debug/{overlay_filename}"
@@ -235,6 +266,14 @@ async def lab_analyze(
                         sidecar = {
                             "pipeline_results": _json_safe(ar.pipeline_results),
                             "face_box": face_box,
+                            # vision_catchlights: full MediaPipe catchlight data (face_geometry +
+                            # per-catchlight list) — required for catchlight dot overlay on regen.
+                            "vision_catchlights": _json_safe(
+                                ar.vision_data.get("catchlights") if ar.vision_data else None
+                            ),
+                            # intel_catchlights: role-classified catchlights from lighting_inference
+                            # (each has eye, position, role) — drives key/fill color-coding on regen.
+                            "intel_catchlights": _json_safe(_intel_cls),
                             # person_mask is a numpy array — too large; skip.
                             # Highlight heatmap layer won't have person mask on regen,
                             # but all other layers are unaffected.
@@ -309,6 +348,7 @@ async def lab_analyze(
                 "detected_distance_class":       getattr(_li, "detected_distance_class", None),
                 "detected_environment":          getattr(_li, "detected_environment", None),
                 "notes":                         getattr(_li, "notes", []),
+                "catchlight_intelligence":       getattr(_li, "catchlight_intelligence", None),
             }
             _li_log.info(
                 "lighting_intel: pattern=%s conf=%.2f key_pos=%r modifier=%s light_count=%s",
@@ -355,15 +395,21 @@ async def lab_analyze(
             )
 
         # ── Signal diagnostics — catchlight clock positions + key signal values ──
-        # Surfaces the raw inputs to pattern gates so classification decisions
-        # can be inspected in the Lab Workbench.
+        # Surfaces the deduped inputs to pattern gates so classification
+        # decisions can be inspected in the Lab Workbench.
         signal_diagnostics: Dict[str, Any] = {}
         try:
-            # Catchlight clock positions
+            # ── Catchlights: prefer deduped reflection_architecture ──────
+            # Raw catchlight lists include floor bounces, jewellery
+            # reflections, and proximity duplicates.  Show the deduped
+            # count the pipeline actually uses for pattern gates, with the
+            # raw count for context.
             _cl_raw = ar.vision_data.get("catchlights", {})
             _cl_list = _cl_raw.get("catchlights", []) if _cl_raw.get("ok") else []
-            _cl_table = []
-            for _c in _cl_list:
+            _raw_count = len(_cl_list)
+
+            # Build clock-position table from raw list (for dedup filtering)
+            def _build_entry(_c):
                 _pos = _c.get("position", "")
                 try:
                     _hour = int(_pos.split()[0]) if _pos else None
@@ -377,19 +423,68 @@ async def lab_analyze(
                     elif _hour == 3: _quad = "hard_right"
                     elif _hour == 9: _quad = "hard_left"
                     elif 4 <= _hour <= 8: _quad = "lower"
-                _cl_table.append({
+                return {
                     "eye": _c.get("eye"),
                     "position": _pos,
                     "hour": _hour,
                     "quad": _quad,
                     "shape": _c.get("shape"),
-                    "size_ratio": _c.get("size_ratio"),  # enclosing-circle radius / iris radius
-                })
-            signal_diagnostics["catchlights"] = _cl_table
+                    "size_ratio": _c.get("size_ratio"),
+                }
+
+            # Use reflection_architecture deduped data when available
+            _cr_diag = getattr(ar, "cue_report", None)
+            _ra_diag = getattr(_cr_diag, "reflection_architecture", None) if _cr_diag else None
+            if _ra_diag and _ra_diag.total_catchlights < _raw_count:
+                # Show deduped summary — filter raw list to keep only the
+                # brightest per clock-position group (same logic as dedup).
+                # Group by (eye, clock-hour ±1) and keep highest size_ratio.
+                _seen: Dict[str, dict] = {}
+                for _c in _cl_list:
+                    _entry = _build_entry(_c)
+                    _h = _entry.get("hour")
+                    _e = _entry.get("eye", "?")
+                    if _h is None:
+                        continue
+                    # Skip floor bounces (5-7 o'clock) when 3+ raw exist
+                    if _raw_count >= 3 and 5 <= _h <= 7:
+                        continue
+                    # Skip hard-left/right jewellery risk
+                    if _entry.get("quad") in ("hard_left", "hard_right"):
+                        continue
+                    # Group by eye + clock zone (±1 hour = same source)
+                    _zone = f"{_e}_{_h // 2}"
+                    _existing = _seen.get(_zone)
+                    if _existing is None or (_entry.get("size_ratio") or 0) > (_existing.get("size_ratio") or 0):
+                        _seen[_zone] = _entry
+                _deduped_table = list(_seen.values())
+                signal_diagnostics["catchlights"] = _deduped_table
+                signal_diagnostics["catchlight_summary"] = {
+                    "raw_count": _raw_count,
+                    "deduped_count": _ra_diag.total_catchlights,
+                    "displayed_count": len(_deduped_table),
+                    "per_eye": _ra_diag.per_eye_counts,
+                    "symmetry": round(_ra_diag.symmetry_score, 2),
+                    "dedup_note": _ra_diag.notes[0] if _ra_diag.notes else None,
+                    "filtered": [
+                        "floor_bounces (5-7 o'clock)",
+                        "jewellery_risk (3/9 o'clock)",
+                        "proximity_duplicates",
+                    ],
+                }
+            else:
+                # No dedup available or no reduction — show raw
+                signal_diagnostics["catchlights"] = [_build_entry(_c) for _c in _cl_list]
+                signal_diagnostics["catchlight_summary"] = {
+                    "raw_count": _raw_count,
+                    "deduped_count": _raw_count,
+                    "displayed_count": _raw_count,
+                }
 
             # Key signals from light_structure
             _cr = getattr(ar, "cue_report", None)
             _ls = getattr(_cr, "light_structure", None) if _cr else None
+            _ls_pattern_name = getattr(_ls, "pattern_name", None) or ""
             signal_diagnostics["signals"] = {
                 "left_right_asymmetry":   round(getattr(_ls, "left_right_asymmetry", 0.0), 4),
                 "shadow_density":          round(getattr(_ls, "shadow_density", 0.0), 4),
@@ -397,18 +492,47 @@ async def lab_analyze(
                 "highlight_width_ratio":   round(getattr(_ls, "highlight_width_ratio", 0.0), 4),
                 "nose_shadow_angle_deg":   round(getattr(_ls, "nose_shadow_centroid_angle_deg", 0.0), 1),
                 "nose_shadow_distance":    round(getattr(_ls, "nose_shadow_centroid_distance", 0.0), 4),
+                "shadow_pass_pattern":     _ls_pattern_name,
+            }
+
+            # Catchlight intelligence boost diagnostic
+            _li_diag = getattr(ar, "lighting_intel", None)
+            _ci_diag = getattr(_li_diag, "catchlight_intelligence", None) or {}
+            _ci_diag = _ci_diag if isinstance(_ci_diag, dict) else {}
+            _pk_diag = (_ci_diag.get("primary_key") or {})
+            _pk_quad_diag = _pk_diag.get("quad", "") or ""
+            _has_cl_diag = bool(_pk_diag)
+            _ring_diag = _ci_diag.get("ring_light_detected", False)
+            _ca_deg_diag = round(getattr(_ls, "nose_shadow_centroid_angle_deg", 0.0), 1)
+            _ca_diagonal = (20 < _ca_deg_diag < 80) or (280 < _ca_deg_diag < 340)
+            _lra_diag = signal_diagnostics["signals"]["left_right_asymmetry"]
+            _cd_diag = round(getattr(_ls, "nose_shadow_centroid_distance", 0.0), 4)
+            signal_diagnostics["catchlight_boost"] = {
+                "primary_key_quad":           _pk_quad_diag or "none",
+                "has_catchlights":            _has_cl_diag,
+                "ring_light_detected":        _ring_diag,
+                "off_axis_boost_fired":       _pk_quad_diag in ("upper_right", "upper_left"),
+                "off_axis_boost_value":       0.08 if _pk_quad_diag in ("upper_right", "upper_left") else 0.0,
+                "shadow_pass_called_loop":    _ls_pattern_name == "loop",
+                "fill_heavy_boost_eligible":  (
+                    _lra_diag < 0.10
+                    and _cd_diag > 0.08
+                    and _ls_pattern_name == "loop"
+                    and _ca_diagonal
+                ),
+                "fill_heavy_boost_value":     0.05 if (
+                    _lra_diag < 0.10 and _cd_diag > 0.08
+                    and _ls_pattern_name == "loop" and _ca_diagonal
+                ) else 0.0,
+                "centroid_angle_deg":         _ca_deg_diag,
+                "centroid_diagonal":          _ca_diagonal,
             }
 
             # Gate evaluations — which gates fired and what they decided
             _pattern = (lighting_data.get("pattern") or "")
             _lra = signal_diagnostics["signals"]["left_right_asymmetry"]
-            _cr_label = ""
-            _contrast_obj = getattr(_cr, "contrast_ratio", None) if _cr else None
-            if _contrast_obj:
-                _cr_label = (getattr(_contrast_obj, "label", "") or "").lower()
 
             _split_penalty = 0.35 * (1.0 - _lra / 0.20) if _lra < 0.20 else 0.0
-            _tri_penalty = (0.50 if _cr_label == "extreme" else 0.35) if _cr_label in ("high", "extreme") else 0.0
             signal_diagnostics["gates"] = [
                 {
                     "name": "split_asymmetry_gate",
@@ -419,21 +543,78 @@ async def lab_analyze(
                     "threshold": 0.20,
                     "result": f"confidence −{_split_penalty:.2f}" if _lra < 0.20 else "passed",
                 },
-                {
-                    "name": "triangle_contrast_gate",
-                    "description": "Penalise triangle confidence when contrast is high/extreme (catchlights may be reflections)",
-                    "checked": True,
-                    "triggered": _cr_label in ("high", "extreme"),
-                    "value": _cr_label or "n/a",
-                    "threshold": "high | extreme",
-                    "result": f"confidence −{_tri_penalty:.2f}" if _cr_label in ("high", "extreme") else "passed",
-                },
             ]
 
-            # Prefer lighting_data pattern; fall back to authoritative_pattern on ar
-            signal_diagnostics["final_pattern"] = _pattern or ar.authoritative_pattern or ""
+            # Always use the authoritative (post-resolution) pattern — lighting_intel
+            # can disagree with the resolver (e.g. "loop" vs "butterfly").
+            signal_diagnostics["final_pattern"] = ar.authoritative_pattern or _pattern or ""
+
+            # ── Layer 0: full catchlight intelligence dump ──────────────────
+            _ci_full = getattr(ar.lighting_intel, "catchlight_intelligence", None) if ar.lighting_intel else None
+            _ci_full = _ci_full if isinstance(_ci_full, dict) else {}
+            signal_diagnostics["layer_0"] = {
+                "ring_light_detected":       _ci_full.get("ring_light_detected", False),
+                "primary_key":               _ci_full.get("primary_key"),
+                "modifier":                  _ci_full.get("modifier"),
+                "fill_bilateral":            _ci_full.get("fill_bilateral"),
+                "key_intensity_pct":         _ci_full.get("key_intensity_pct"),
+                "fill_intensity_pct":        _ci_full.get("fill_intensity_pct"),
+                "fill_ratio":                _ci_full.get("fill_ratio"),
+                "stops_down":                _ci_full.get("stops_down"),
+                "light_count_from_catchlights": _ci_full.get("light_count_from_catchlights"),
+                "catchlights":               _ci_full.get("catchlights"),
+                "notes":                     _ci_full.get("notes"),
+            }
+
+            # ── Layer 1: shadow pass + pattern boosts ───────────────────────
+            _lsp_pattern = getattr(_ls, "pattern_name", None) or "none"
+            _lsp_lra     = round(getattr(_ls, "left_right_asymmetry", 0.0), 4)
+            _lsp_sd      = round(getattr(_ls, "shadow_density", 0.0), 4)
+            _lsp_ti      = round(getattr(_ls, "triangle_isolation", 0.0), 4)
+            _lsp_cd      = round(getattr(_ls, "nose_shadow_centroid_distance", 0.0), 4)
+            _lsp_ca      = round(getattr(_ls, "nose_shadow_centroid_angle_deg", 0.0), 1)
+            _lsp_tb      = round(getattr(_ls, "top_bottom_ratio", 0.0), 4)
+            _lsp_hw      = round(getattr(_ls, "highlight_width_ratio", 0.0), 4)
+            _lsp_symm    = round(getattr(_ls, "symmetry_score", 0.0), 4)
+            _lsp_ca_diag = (20 < _lsp_ca < 80) or (280 < _lsp_ca < 340)
+            _boost_shadow_pass  = 0.12 if _lsp_pattern == "loop" else 0.0
+            _boost_lrasym       = 0.06 if (0.10 < _lsp_lra < 0.25 and _lsp_cd > 0.1) else 0.0
+            _boost_fill_heavy   = 0.05 if (_lsp_lra < 0.10 and _lsp_cd > 0.08 and _lsp_pattern == "loop" and _lsp_ca_diag) else 0.0
+            _boost_offaxis_cl   = 0.08 if _pk_quad_diag in ("upper_right", "upper_left") else 0.0
+            _penalty_tri_iso    = -0.04 if _lsp_ti > 0.12 else 0.0
+            signal_diagnostics["layer_1"] = {
+                "shadow_pass_pattern":    _lsp_pattern,
+                "left_right_asymmetry":   _lsp_lra,
+                "shadow_density":         _lsp_sd,
+                "triangle_isolation":     _lsp_ti,
+                "centroid_angle_deg":     _lsp_ca,
+                "centroid_diagonal":      _lsp_ca_diag,
+                "centroid_distance":      _lsp_cd,
+                "top_bottom_ratio":       _lsp_tb,
+                "highlight_width_ratio":  _lsp_hw,
+                "symmetry_score":         _lsp_symm,
+                "boosts": {
+                    "shadow_pass_loop_confirmed": _boost_shadow_pass,
+                    "lr_asym_plus_centroid":      _boost_lrasym,
+                    "fill_heavy_loop_centroid":   _boost_fill_heavy,
+                    "catchlight_off_axis":        _boost_offaxis_cl,
+                    "triangle_iso_penalty":       _penalty_tri_iso,
+                    "total_delta":                round(_boost_shadow_pass + _boost_lrasym + _boost_fill_heavy + _boost_offaxis_cl + _penalty_tri_iso, 3),
+                },
+            }
         except Exception as _diag_exc:
             signal_diagnostics["error"] = str(_diag_exc)
+
+        # ── Phase L1 observability record ────────────────────────────────────
+        # emit_analysis_l1 was already called inside analyze_image() (at the end
+        # of the pipeline).  We call _build_record here separately to get the
+        # dict for the API response — no duplicate log emission.
+        _l1_record: dict = {}
+        try:
+            from engine.observability import _build_record as _obs_build
+            _l1_record = _obs_build(ar)
+        except Exception as _obs_exc:
+            _log.getLogger(__name__).debug("L1 record build failed: %s", _obs_exc)
 
         response = {
             "status": "ok",
@@ -459,10 +640,14 @@ async def lab_analyze(
             "authoritative_pattern_source": getattr(ar, "authoritative_pattern_source", "none"),
             "authoritative_confidence":     getattr(ar, "pattern_confidence", 0.0),
             "authoritative_confidence_label": getattr(ar, "pattern_confidence_label", "weak"),
+            # OD-3: source_context coexists with pattern (window_portrait → window, etc.)
+            "source_context":               getattr(ar, "source_context", None),
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
             "stage_timings": getattr(ar, "stage_timings", {}),
             "image_dimensions": ar.description.get("size") if ar.description else None,
+            # Phase L1 — structured observability surface
+            "observability": _l1_record,
         }
 
         if debug_overlay_url:
@@ -483,14 +668,15 @@ async def lab_analyze(
             with get_db() as _replay_conn:
                 _replay_conn.execute(
                     """INSERT OR REPLACE INTO analysis_results
-                       (analysis_id, image_path, system_version, result_json, created_at)
-                       VALUES (?, ?, ?, ?, ?)""",
+                       (analysis_id, image_path, system_version, result_json, created_at, user_email)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
                     (
                         ar.analysis_id,
                         str(fpath),
                         _sys_ver,
                         replay_json_str,
                         _replay_time.time(),
+                        user.get("email"),
                     ),
                 )
         except Exception as _replay_err:
@@ -503,6 +689,11 @@ async def lab_analyze(
     except Exception as e:
         import traceback
         traceback.print_exc()
+        try:
+            import sentry_sdk as _sentry
+            _sentry.capture_exception(e)
+        except Exception:
+            pass
         raise HTTPException(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
@@ -786,6 +977,7 @@ def _generate_debug_overlay(raw: Dict[str, Any], image_path: Path) -> Optional[s
             face_box=face_box,
             person_mask=person_mask,
             output_path=str(overlay_path),
+            vision_data=vision_data,
         )
 
         if saved_path:
@@ -839,6 +1031,9 @@ async def regenerate_debug_overlay(
         sidecar = _json.loads(sidecar_path.read_text())
         pipeline_results = sidecar.get("pipeline_results", {})
         face_box_raw = sidecar.get("face_box")
+        vision_catchlights = sidecar.get("vision_catchlights")
+        sidecar_vision_data = {"catchlights": vision_catchlights} if vision_catchlights else None
+        sidecar_intel_catchlights = sidecar.get("intel_catchlights") or []
         face_box = tuple(face_box_raw) if face_box_raw else None
 
         # Determine active layers
@@ -884,6 +1079,8 @@ async def regenerate_debug_overlay(
             person_mask=None,   # mask not stored in sidecar (too large)
             output_path=str(out_path),
             layers=active_layers,
+            vision_data=sidecar_vision_data,
+            intel_catchlights=sidecar_intel_catchlights,
         )
         if not saved:
             raise HTTPException(status_code=500, detail="Overlay generation failed.")
@@ -1056,23 +1253,28 @@ async def gold_set_qc(user: Dict = Depends(get_dev_user)):
 # ── Coverage Map (Build 4) ──────────────────────────────────────────────────
 
 # Canonical pattern universe — source of truth from engine/enums.py LightingPattern
+# Canonical pattern universe — source of truth from engine/enums.py LightingPattern
+# Machine values (keys) are stable snake_case. Display labels (values) are UI-only.
 _COVERAGE_PATTERNS = {
-    "clamshell":            "Clamshell",
+    # ── Core 14 ──────────────────────────────────────────────────────────────
     "loop":                 "Loop",
     "rembrandt":            "Rembrandt",
-    "split":                "Split",
     "butterfly":            "Butterfly / Paramount",
-    "triangle":             "Triangle (Hurley)",
+    "clamshell":            "Clamshell",
+    "split":                "Split",
     "broad":                "Broad",
     "short":                "Short",
-    "rim_only":             "Rim / Edge Light",
     "high_key":             "High Key",
     "low_key":              "Low Key",
-    "flat_fashion":         "Flat Fashion",
-    "window_portrait":      "Window Portrait",
-    "golden_hour":          "Golden Hour",
-    "overcast_natural":     "Overcast Natural",
+    "flat":                 "Flat",
     "ring_light":           "Ring Light",
+    "rim":                  "Rim / Edge Light",
+    "silhouette_key":       "Silhouette / Back Key",
+    "projected":            "Projected / Interrupted Light",
+    # ── Specialty tier ───────────────────────────────────────────────────────
+    "triangle":             "Triangle (Hurley)",
+    "shallow_loop":         "Shallow Loop",
+    "window_portrait":      "Window Portrait",
     "bare_bulb_editorial":  "Bare Bulb Editorial",
     "strip_dramatic":       "Strip Light Dramatic",
     "short_fashion_key":    "Short Fashion Key",
@@ -1082,8 +1284,6 @@ _COVERAGE_PATTERNS = {
     "bottle_backlight":     "Bottle Backlight",
     "athletic_rim_sculpt":  "Athletic Rim Sculpt",
     "window_negative_fill": "Window Negative Fill",
-    "shallow_loop":         "Shallow Loop",
-    "gobo_projection":      "Gobo / Projection",
     "hybrid":               "Hybrid",
     "unknown":              "Unknown",
 }
@@ -1211,6 +1411,8 @@ async def create_gold_set(body: GoldSetCreate, user: Dict = Depends(get_dev_user
         notes=body.notes,
         status=body.status,
         created_by=user.get("email", "unknown"),
+        setup_family=body.setup_family,
+        provenance=body.provenance,
     )
     return entry
 
@@ -2265,6 +2467,118 @@ async def get_monitoring_stats(
         "funnel":       funnel,
         "stripe":       stripe_health,
     }
+
+
+# ── L1 Stream — recent analysis observability records ─────────────────────────
+
+@router.get("/l1-stream")
+async def get_l1_stream(
+    limit: int = Query(100, ge=1, le=500),
+    user_email: Optional[str] = Query(None),
+    pattern: Optional[str] = Query(None),
+    flags: Optional[str] = Query(None),  # "review" | "contradiction" | "paradox"
+    search: Optional[str] = Query(None),  # partial match on analysis_id or image_path
+    user: Dict = Depends(get_dev_user),
+):
+    """Return lightweight L1 telemetry for the most recent analyses.
+
+    Supports server-side filtering by user_email, pattern, flags, and
+    a free-text search across analysis_id and image_path.
+    """
+    import json as _j
+
+    where_clauses = []
+    params: list = []
+
+    if user_email:
+        where_clauses.append("user_email LIKE ?")
+        params.append(f"%{user_email}%")
+    if search:
+        where_clauses.append("(analysis_id LIKE ? OR image_path LIKE ?)")
+        params.append(f"%{search}%")
+        params.append(f"%{search}%")
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    params.append(limit)
+
+    with get_db() as conn:
+        rows = conn.execute(
+            f"SELECT analysis_id, image_path, system_version, result_json, created_at, user_email "
+            f"FROM analysis_results {where_sql} ORDER BY created_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+
+    records = []
+    for row in rows:
+        try:
+            rj = _j.loads(row["result_json"]) if row["result_json"] else {}
+        except Exception:
+            rj = {}
+
+        pc = rj.get("pattern_candidates") or {}
+        notes = rj.get("notes") or []
+
+        paradoxes: list = []
+        for note in notes:
+            if isinstance(note, str) and note.startswith("signal_paradoxes detected:"):
+                payload = note.split(":", 1)[1].strip()
+                paradoxes = [p.strip() for p in payload.split(",") if p.strip()]
+                break
+
+        st = rj.get("stage_timings") or {}
+        ecf = rj.get("edge_case_flags") or {}
+        active_edge = [k for k, v in ecf.items() if v is True] if isinstance(ecf, dict) else []
+
+        # Apply post-fetch pattern/flags filters (done in Python since stored in JSON)
+        resolved_pattern = rj.get("authoritative_pattern") or "unknown"
+        if pattern and pattern.lower() not in resolved_pattern.lower():
+            continue
+        has_review = bool(pc.get("needs_review", False))
+        has_contradiction = bool(pc.get("contradictions"))
+        if flags == "review" and not has_review:
+            continue
+        if flags == "contradiction" and not has_contradiction:
+            continue
+        if flags == "paradox" and not paradoxes:
+            continue
+
+        records.append({
+            "analysis_id":      row["analysis_id"],
+            "user_email":       row["user_email"],
+            "image_path":       row["image_path"],
+            "system_version":   row["system_version"],
+            "created_at":       row["created_at"],
+            "pattern":          resolved_pattern,
+            "confidence":       rj.get("pattern_confidence"),
+            "confidence_label": rj.get("pattern_confidence_label"),
+            "source":           rj.get("authoritative_pattern_source"),
+            "needs_review":     has_review,
+            "contradictions":   pc.get("contradictions") or [],
+            "active_paradoxes": paradoxes,
+            "active_edge_cases": active_edge,
+            "total_time_s":     st.get("total"),
+        })
+
+    return {"count": len(records), "records": records}
+
+
+# ── Server Logs ───────────────────────────────────────────────────────────────
+
+@router.get("/server-logs")
+async def get_server_logs(
+    limit: int = Query(200, ge=1, le=1000),
+    level: Optional[str] = Query(None),   # DEBUG | INFO | WARNING | ERROR | CRITICAL
+    search: Optional[str] = Query(None, max_length=200),
+    user: Dict = Depends(get_dev_user),
+):
+    """Return recent in-process log records from the memory buffer.
+
+    Records are newest-first.  The buffer holds the last 1000 lines emitted
+    by any logger in the process (noisy HTTP access logs suppressed).
+    """
+    from engine.log_buffer import get_records
+    records = get_records(limit=limit, level=level or None, search=search or None)
+    return {"records": records, "count": len(records)}
 
 
 # ── API Metrics ────────────────────────────────────────────────────────────────

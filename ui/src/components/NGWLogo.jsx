@@ -125,24 +125,16 @@ function fireProfotoHead(ctx, t) {
   fireRecycleWhine(ctx, t);
 }
 
-/* 3 fast pops (~110ms apart) then 2 spaced pops */
+/* Single flash pop with light */
 function fireSequence(audioCtx) {
   const t = audioCtx.currentTime + 0.05;
-
-  // Three rapid pops
   fireProfotoHead(audioCtx, t);
-  fireProfotoHead(audioCtx, t + 0.11);
-  fireProfotoHead(audioCtx, t + 0.22);
-
-  // Two slower, weighted pops
-  fireProfotoHead(audioCtx, t + 0.87);
-  fireProfotoHead(audioCtx, t + 1.62);
 }
 
 export default function NGWLogo({ size = 'sm', className = '', loading = false }) {
   const s     = SIZES[size] ?? SIZES.sm;
 
-  /* Fire strobe sequence on home arrival — 3 rapid pops + 2 spaced pops (~1.7s).
+  /* Fire single strobe pop on home arrival.
    *
    * Uses a module-level _sharedCtx primed by any gesture app-wide (including
    * the nav tap that brought us here). If it's already running → fire instantly.

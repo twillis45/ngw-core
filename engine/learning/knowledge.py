@@ -471,9 +471,9 @@ PATTERN_KNOWLEDGE_BASE: Dict[str, PatternEntry] = {
 
     # ── Rim and separation patterns ───────────────────────────────────────────
 
-    "rim_only": PatternEntry(
-        pattern_id   = "rim_only",
-        display_name = "Rim / Edge Light Only",
+    "rim": PatternEntry(
+        pattern_id   = "rim",
+        display_name = "Rim / Edge Light",
         family       = "portrait",
         description  = (
             "Single backlight or hairlight with no significant frontal fill. "
@@ -483,8 +483,8 @@ PATTERN_KNOWLEDGE_BASE: Dict[str, PatternEntry] = {
         min_signals_for_change = 75,
         symptoms = [
             SymptomEntry(
-                symptom_id   = "rim_only_vs_split",
-                description  = "Rim-only classified as split when catchlight visible frontally",
+                symptom_id   = "rim_vs_split",
+                description  = "Rim classified as split when catchlight visible frontally",
                 failure_mode = "confidence_mismatch",
                 severity     = "medium",
                 frequency    = "occasional",

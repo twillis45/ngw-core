@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 NGW Complete Documentation System
-Premium PDF Documentation Suite — 15 Documents
+Premium PDF Documentation Suite — 18 Documents
 Brand: No Guesswork Lighting (NGW)
 Quality: Apple / Notion / Stripe documentation level
 """
@@ -3877,7 +3877,7 @@ def doc_lab_manual():
         table([
             ['Family',             'Patterns'],
             ['Portrait (studio)',  'loop, rembrandt, butterfly, clamshell, split, broad, short, paramount'],
-            ['Portrait (natural)', 'window_portrait, golden_hour, overcast_natural'],
+            ['Portrait (natural)', 'window_portrait, window_negative_fill (source_context: window, golden_hour, overcast)'],
             ['Fashion / high-key', 'beauty, high_key_white, glamour, editorial_dramatic'],
             ['Cinematic / moody',  'noir, chiaroscuro, low_key_dramatic'],
             ['Environmental',      'silhouette, rim_backlit, hair_light_separation'],
@@ -4774,8 +4774,8 @@ def doc_analysis_guide():
 
         *callout('28 Canonical Patterns', [
             'split, rembrandt, loop, butterfly, clamshell, triangle, broad, short',
-            'gobo, flat, rim_only, high_key, low_key, flat_fashion, window_portrait',
-            'golden_hour, overcast_natural, ring_light, bare_bulb_editorial, strip_dramatic',
+            'projected, flat, rim, high_key, low_key, ring_light, silhouette_key',
+            'window_portrait, bare_bulb_editorial, strip_dramatic',
             'short_fashion_key, soft_editorial_key, editorial_rim_key',
             'tabletop_soft_product, bottle_backlight, athletic_rim_sculpt',
             'window_negative_fill, hybrid, unknown',
@@ -5257,14 +5257,14 @@ def build_single(doc_num, title, filename, content_fn):
 
 
 def build_combined():
-    """Build the combined master PDF with all 15 documents."""
+    """Build the combined master PDF with all 18 documents."""
     outpath = os.path.join(OUT_DIR, 'NGW_Documentation_Complete.pdf')
     doc     = _make_doc(outpath, 'NGW Documentation — Complete Suite')
 
     # Master cover
     master_cover = [
         NextPageTemplate('cover'),
-        DocCover(0, 'NGW Documentation', 'Complete Suite — All 15 Documents', accent=BLUE),
+        DocCover(0, 'NGW Documentation', 'Complete Suite — All 18 Documents', accent=BLUE),
         NextPageTemplate('body'),
         PageBreak(),
     ]
@@ -5345,7 +5345,7 @@ def build_combined():
 def main():
     print()
     print('━' * 60)
-    print('  NGW Documentation System — Building 15 PDFs')
+    print(f'  NGW Documentation System — Building {len(DOCS)} PDFs')
     print(f'  Output: {OUT_DIR}')
     print('━' * 60)
     print()

@@ -120,9 +120,10 @@ async def _run_ingestion_once() -> None:
         auto_applied = autonomy_result.get("auto_applied", 0)
         queued       = autonomy_result.get("queued_for_review", 0)
         skipped      = autonomy_result.get("skipped", 0)
+        _skipped_n   = len(skipped) if isinstance(skipped, list) else int(skipped or 0)
         logger.info(
             "[scheduler] autonomy complete — auto_applied=%d queued=%d skipped=%d",
-            auto_applied, queued, skipped,
+            auto_applied, queued, _skipped_n,
         )
         if _status.get("last_run_result") and isinstance(_status["last_run_result"], dict):
             _status["last_run_result"]["autonomy"] = {

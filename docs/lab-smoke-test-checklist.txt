@@ -1,0 +1,327 @@
+
+================================================================================
+  NGW LAB  —  REVIEWER SMOKE-TEST CHECKLIST
+  Print this. Work through it. Mark each box.
+================================================================================
+
+  Reviewer: ________________________    Date: _______________
+  Environment:  [ ] Dev mode   [ ] Authenticated (email: _________________)
+  URL: ________________________________
+
+--------------------------------------------------------------------------------
+  BEFORE YOU START — confirm these exist
+--------------------------------------------------------------------------------
+
+  [ ] At least 1 analysis run after 2026-04-02 (post-3A replay data exists)
+  [ ] At least 1 triage row with analysis_id (Replay button will be enabled)
+        → Triage rows come from VLM disagreements. If empty, seed test data:
+          python3 scripts/seed_triage_data.py
+  [ ] At least 1 replay row where image file still exists on disk
+  [ ] At least 1 distillation review row in pending_review status
+  [ ] Backend running, frontend served, app loads
+
+  If any are missing, note which and skip dependent steps.
+  Seeding: Run `python3 scripts/seed_triage_data.py` to populate triage +
+           distillation rows with synthetic test data for smoke testing.
+  Missing: _______________________________________________________________
+
+
+================================================================================
+  A.  REVIEW OPS DASHBOARD
+================================================================================
+  Path: LAB > Intel section > Learning Ops tab > Review Ops panel
+
+  1. [ ] Panel renders with title "Review Ops"
+         Subtitle reads "6 queues . visibility only"
+
+  2. [ ] All 6 queue cards appear:
+         [ ] Gold Set Queue
+         [ ] Distillation Queue
+         [ ] Correction Queue
+         [ ] Reference Backlog
+         [ ] Flagged Corrections
+         [ ] Ground Truth Queue
+
+  3. [ ] Each card shows a number or dash — no NaN, no stuck spinner
+         Non-zero counts are colored. Zero counts are dim.
+         Any card showing "fetch failed"? Note which: ______________________
+
+  4. [ ] Click "View panel" on a non-zero card
+         Navigates to target panel (Overview, Intel, or Monitoring)
+         No blank screen, no crash
+
+  5. [ ] Priority Table appears below cards
+         Non-zero queues sorted first, descending by count
+         "Go" buttons navigate correctly
+
+  6. [ ] Click Refresh — counts reload, no layout jump, no duplicated cards
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  B.  FAILURE TRIAGE
+================================================================================
+  Path: LAB > Intel > Learning Ops > Triage panel
+
+  7.  [ ] Two sub-tabs visible: "Overconfident Misses" / "Underconfident Hits"
+          Active tab shows a count badge (or nothing if still loading)
+
+  8.  [ ] Overconfident Misses tab
+          Threshold badge: "vlm_confidence >= 0.65"
+          Table columns: Field, VLM Predicted, CV Resolved, VLM Conf,
+                         Version/Date, Actions
+          Confidence color-coded (red >= 85%, orange >= 70%, amber below)
+          If empty: "No items found for this threshold..."
+
+  9.  [ ] Switch to Underconfident Hits tab
+          Threshold badge: "vlm_confidence < 0.45"
+          Rows load or honest empty state
+          Footer note visible:
+            "CV Resolved = CV resolver decision, not human-labeled ground truth"
+
+  10. [ ] Click "Queue for Review" on any row
+          Button shows "Queuing..." then changes to "Queued" badge
+          CONFIRM: no text implies auto-approval (creates DRAFT only)
+          If error: inline error message appears
+
+  11. [ ] Click "Dismiss" on any row
+          Row disappears from list
+          NOTE: this is frontend-only — refresh brings it back
+
+  12. [ ] Find a row with Replay button ENABLED — click it
+          Panel switches to Case Replay (continue to Section C)
+          If disabled: tooltip says "No analysis_id on this record"
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  C.  CASE REPLAY
+================================================================================
+  Opened from Triage Replay button (Step 12)
+
+  13. [ ] Header bar visible
+          Back button (arrow Back) present
+          Analysis ID shown (truncated) with full ID on hover
+
+  14. [ ] Case Header section
+          Timestamp, System version, Image path all present or show dash
+
+  15. [ ] Image preview
+          [ ] Image available: photo renders, dark background, contained fit
+          [ ] Image unavailable: "Image unavailable — file may have been
+              moved or deleted" (no broken icon, no console error flood)
+          Circle one:  AVAILABLE  /  UNAVAILABLE  /  NO IMAGE PATH
+
+  16. [ ] Prediction Summary
+          Authoritative pattern (badge), confidence (color-coded),
+          source, status — or "No replay payload available"
+
+  17. [ ] Pattern Candidates
+          Primary badge, alternates if any, contradictions if any
+          Or "No pattern candidates in replay record"
+
+  18. [ ] VLM Analysis
+          Hint fields and/or disagreements table
+          Table columns: Field, VLM Value, Resolved, Agreement, Confidence
+          Or "No VLM data in replay record"
+
+  19. [ ] Signal Quality
+          Face detected, signal strength, active flags
+          Or "No signal quality data in replay record"
+
+  20. [ ] Feedback & Corrections
+          Tables with data or "No feedback or corrections recorded"
+
+  21. [ ] Data Quality Footer
+          Shows: Replay available Yes/No, disagreement count,
+          correction count, feedback count
+
+  22. [ ] IF PRE-3A ROW (no replay blob):
+          Yellow notice: "This analysis was run before Build 3A..."
+          Prediction Summary shows "No replay payload available"
+          Joined records (disagreements, corrections) still attempt to show
+          Circle: TESTED PRE-3A ROW?   YES  /  NO (none available)
+
+  23. [ ] Click Back button
+          Returns to Triage panel, same tab
+          Previously dismissed items stay dismissed
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  D.  WORKBENCH HANDOFF
+================================================================================
+  Requires a Case Replay with visible image preview
+
+  24. [ ] Open Case Replay with image preview showing (repeat step 12)
+
+  25. [ ] "Open in Workbench" button state:
+          [ ] ENABLED — image path exists
+          [ ] DISABLED — tooltip explains why
+
+  26. [ ] Click "Open in Workbench" (if enabled)
+          [ ] View switches to Workbench tab
+          [ ] Image appears in Workbench preview area
+          [ ] Workbench ready for re-analysis (Analyze button visible)
+          How long for image to load? _________
+
+  27. [ ] IF BUTTON DISABLED:
+          Helper text: "image path unavailable"
+          No crash or silent failure
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  E.  DISTILLATION REVIEW
+================================================================================
+  Path: LAB > Training section > Review Queue sub-tab
+
+  28. [ ] Review list loads
+          Rows show: pattern, predicted, correctness, status, reason, confidence
+
+  29. [ ] Click a row in pending_review status
+          Detail panel opens
+          Source facts visible but NOT editable:
+            expected pattern, predicted pattern, confidence, correctness,
+            path type, trust score, candidate reason
+
+  30. [ ] Review decision controls visible:
+          [ ] Reason dropdown (structured categories for tracking)
+          [ ] Notes text field (optional free-text)
+          [ ] Action buttons: Approve, Reject, Watch, Reset
+
+  31. [ ] Select a reason from dropdown, then click "Approve"
+          [ ] Reason dropdown has categorized options (✓ approval, ✗ rejection, ⚑ watch, ⚠ gold set)
+          [ ] Button shows brief working state
+          [ ] Success notice appears with pattern name + new status
+          [ ] Row in list updates to new status
+          [ ] Source facts unchanged after save
+
+  32. [ ] Add a note, select a rejection reason, click "Reject"
+          [ ] Saves with notice: "→ rejected"
+          [ ] Row updates
+          [ ] Rationale (from dropdown) and notes (free-text) both sent to backend
+
+  33. [ ] Reset a row to pending
+          [ ] Row reverts, reason/notes cleared
+
+  34. [ ] Valid status options present:
+          [ ] pending_review
+          [ ] approved_candidate
+          [ ] rejected
+          [ ] gold_set_issue
+          [ ] specialty_watch
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  F.  END-TO-END FLOW
+================================================================================
+  Full path — no interruptions. Time yourself.
+
+  35. [ ] Start at Review Ops — note which queues have work
+     > navigate to Triage
+     > find a row with Replay enabled — open Replay
+     > inspect image preview
+     > click Open in Workbench (if image available)
+     > navigate to Training > Review Queue
+     > find a pending row — save a review decision
+
+     Completed without dead ends?              [ ] YES  [ ] NO
+     Always knew where you were?               [ ] YES  [ ] NO
+     Any point implied automatic model change? [ ] YES  [ ] NO
+     Time to complete: _________ minutes
+
+  Notes: __________________________________________________________________
+  ________________________________________________________________________
+
+
+================================================================================
+  ISSUE LOG — record anything you hit
+================================================================================
+  Use these tags:
+
+    BROKEN NAV ........ dead end, wrong destination, no back button
+    MISLEADING LABEL .. implies automation or ground truth that isn't real
+    MISSING IMAGE ..... preview fails (note analysis_id)
+    STALE COUNT ....... Review Ops number doesn't match panel reality
+    SAVE FAILURE ...... save doesn't persist, error, or silently drops
+    DATA HONESTY ...... value shown as ground truth but is actually synthetic
+    WORKFLOW FRICTION . confusing step, unnecessary clicks, unclear next action
+    EMPTY STATE ....... panel with no data — was the message helpful?
+    LAYOUT ISSUE ...... overflow, overlap, unreadable text
+
+  #   Tag                 Step    Description
+  --- ------------------- ------- -------------------------------------------
+  1.  _______________      ____   ________________________________________
+  2.  _______________      ____   ________________________________________
+  3.  _______________      ____   ________________________________________
+  4.  _______________      ____   ________________________________________
+  5.  _______________      ____   ________________________________________
+  6.  _______________      ____   ________________________________________
+  7.  _______________      ____   ________________________________________
+  8.  _______________      ____   ________________________________________
+  9.  _______________      ____   ________________________________________
+  10. _______________      ____   ________________________________________
+
+
+================================================================================
+  KNOWN LIMITATIONS — do NOT file as bugs
+================================================================================
+
+  - Pre-3A analyses have no replay blob (yellow notice is correct)
+  - Some rows have no image file on disk ("unavailable" is correct)
+  - Dismiss is frontend-only — rows reappear on refresh (v1 design)
+  - "CV Resolved" is not human ground truth (footer says so)
+  - session_signals.outcome is synthetic
+  - Token visible in image URL network tab (dev-internal acceptable)
+  - Review Ops counts are honest proxies, not perfect queue depths
+  - First visit to any tab triggers a data fetch (brief spinner is normal)
+  - Triage rows come from VLM disagreements during live analysis; if empty,
+    run `python3 scripts/seed_triage_data.py` to populate with test data
+  - Seeded triage rows have analysis_id prefix "seed-" — Replay will not
+    have a real analysis blob (pre-3A notice expected)
+  - Monitoring lives under System > Control Center (single location)
+
+
+================================================================================
+  FINAL JUDGMENT
+================================================================================
+
+  Steps completed: ____ / 35
+  Steps skipped:   ____ (reason: ___________________________________)
+
+  Review Ops Dashboard:     [ ] PASS    [ ] FAIL    [ ] PARTIAL
+  Failure Triage:           [ ] PASS    [ ] FAIL    [ ] PARTIAL
+  Case Replay:              [ ] PASS    [ ] FAIL    [ ] PARTIAL
+  Image Preview:            [ ] PASS    [ ] FAIL    [ ] PARTIAL    [ ] N/A
+  Workbench Handoff:        [ ] PASS    [ ] FAIL    [ ] PARTIAL    [ ] N/A
+  Distillation Review:      [ ] PASS    [ ] FAIL    [ ] PARTIAL
+  End-to-End Flow:          [ ] PASS    [ ] FAIL    [ ] PARTIAL
+
+  Total issues logged: ____
+  Critical issues:     ____
+
+  OVERALL:
+    [ ] WORKFLOW OPERATIONALLY USABLE
+    [ ] USABLE WITH KNOWN ISSUES (list: _______________________________)
+    [ ] NOT USABLE — blocking: ________________________________________
+
+  Additional notes:
+  ________________________________________________________________________
+  ________________________________________________________________________
+  ________________________________________________________________________
+
+  Signed: _________________________    Date: _______________
+
+================================================================================

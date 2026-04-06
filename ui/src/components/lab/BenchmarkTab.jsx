@@ -10,7 +10,7 @@
  *   CaseCreator      — form to create or promote a benchmark case
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   triggerBenchmarkRun,
   listBenchmarkRuns,
@@ -246,15 +246,25 @@ function GlobalMetrics({ summary, trend, onRun, running, runElapsed, runMode, on
           {summary.passed_cases}/{summary.total_cases} cases passed ·{' '}
           {relTime(summary.completed_at)}
         </p>
-        {summary.total_cases > 0 && (
+        {summary.total_cases > 0 && (() => {
+          const total = summary.total_cases ?? 0;
+          const passed = summary.passed_cases ?? 0;
+          const softPassed = summary.soft_passed_cases ?? 0;
+          const failed = softPassed > 0 ? total - passed - softPassed : total - passed;
+          return (
           <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.greenBg, padding: '1px 7px', borderRadius: 10 }}>PASS {summary.passed_cases ?? 0}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.red,   background: C.redBg,   padding: '1px 7px', borderRadius: 10 }}>FAIL {(summary.total_cases ?? 0) - (summary.passed_cases ?? 0)}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.greenBg, padding: '1px 7px', borderRadius: 10 }}>PASS {passed}</span>
+            {softPassed > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.amber, background: `${C.amber}18`, padding: '1px 7px', borderRadius: 10 }}>SOFT {softPassed}</span>
+            )}
+            {failed > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.red, background: C.redBg, padding: '1px 7px', borderRadius: 10 }}>FAIL {failed}</span>
+            )}
             {(summary.regression_count ?? 0) > 0 && (
               <span style={{ fontSize: 11, fontWeight: 700, color: C.red, background: C.redBg, padding: '1px 7px', borderRadius: 10 }}>⚠ {summary.regression_count} REGRESSION{summary.regression_count !== 1 ? 'S' : ''}</span>
             )}
           </div>
-        )}
+        );})()}
         <p className="bm-metric__hint" style={{ marginTop: 4 }}>
           PASS ≥80% · SOFT PASS ≥60% · FAIL &lt;60% — expand a run for full breakdown
         </p>
@@ -307,8 +317,18 @@ function GlobalMetrics({ summary, trend, onRun, running, runElapsed, runMode, on
 
 // ── Pattern table ─────────────────────────────────────────────────────────────
 
-function PatternTable({ metrics, onNavigateTo }) {
+function PatternTable({ metrics, cases, onNavigateTo }) {
   const [sort, setSort] = useState({ key: 'benchmark_score', dir: 'desc' });
+
+  // Build pattern_id → first matching case_id for thumbnails
+  const thumbMap = useMemo(() => {
+    const m = {};
+    for (const c of (cases || [])) {
+      const pid = c.pattern_id;
+      if (pid && !m[pid]) m[pid] = { caseId: c.id, goldSetId: c.source_gold_set_id };
+    }
+    return m;
+  }, [cases]);
 
   if (!metrics || metrics.length === 0) {
     return (
@@ -329,6 +349,7 @@ function PatternTable({ metrics, onNavigateTo }) {
   });
 
   const COLS = [
+    { key: '_thumb',            label: '',                  title: 'Representative image',                                          fmt: null },
     { key: 'pattern_id',       label: 'Pattern',           title: 'Lighting pattern ID',                                           fmt: v => v },
     { key: 'benchmark_score',  label: 'Benchmark Score',   title: 'Composite score for this pattern — target ≥80% (green)',        fmt: pct },
     { key: 'delta_change',     label: 'Δ vs Prev',         title: 'Change vs previous benchmark run',                             fmt: v => <Delta value={v} /> },
@@ -366,11 +387,21 @@ function PatternTable({ metrics, onNavigateTo }) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map(m => (
+          {sorted.map(m => {
+            const thumb = thumbMap[m.pattern_id];
+            return (
             <tr key={m.pattern_id} className="bm-table__row">
               {COLS.map(c => (
-                <td key={c.key} className="bm-table__td">
-                  {c.key === 'benchmark_score' ? (
+                <td key={c.key} className="bm-table__td" style={c.key === '_thumb' ? { width: 44, padding: '4px 4px 4px 8px' } : undefined}>
+                  {c.key === '_thumb' ? (
+                    thumb ? (
+                      <BmCaseThumb
+                        goldSetId={thumb.goldSetId}
+                        caseId={!thumb.goldSetId ? thumb.caseId : undefined}
+                        size={36}
+                      />
+                    ) : null
+                  ) : c.key === 'benchmark_score' ? (
                     <ScoreBadge value={m[c.key]} />
                   ) : c.key === '_kb' ? (
                     onNavigateTo ? (
@@ -394,7 +425,7 @@ function PatternTable({ metrics, onNavigateTo }) {
                 </td>
               ))}
             </tr>
-          ))}
+          );})}
         </tbody>
       </table>
     </div>
@@ -452,20 +483,35 @@ function VerdictChip({ verdict }) {
 
 // ── Benchmark case thumbnail (fetches image with auth — gold-set or case ID) ───
 
-function BmCaseThumb({ goldSetId, caseId, size = 52 }) {
+function BmCaseThumb({ goldSetId, caseId, size = 72 }) {
   const [src, setSrc] = useState(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
     let url = null;
-    const path = goldSetId
-      ? `/gold-set/${goldSetId}/image`
-      : caseId ? `/benchmarks/cases/${caseId}/image` : null;
-    if (!path) return;
-    labFetchBlob(path)
-      .then(u => { url = u; setSrc(u); })
-      .catch(() => setErr(true));
-    return () => { if (url) URL.revokeObjectURL(url); };
+    let cancelled = false;
+
+    async function load() {
+      // Try gold-set image first, fall back to case image
+      const paths = [];
+      if (goldSetId) paths.push(`/gold-set/${goldSetId}/image`);
+      if (caseId)    paths.push(`/benchmarks/cases/${caseId}/image`);
+      if (paths.length === 0) return;
+
+      for (const p of paths) {
+        try {
+          const u = await labFetchBlob(p);
+          if (cancelled) { URL.revokeObjectURL(u); return; }
+          url = u;
+          setSrc(u);
+          return;
+        } catch { /* try next */ }
+      }
+      if (!cancelled) setErr(true);
+    }
+    load();
+
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url); };
   }, [goldSetId, caseId]);
 
   const style = {
@@ -565,7 +611,7 @@ function CaseExplorer({ runId }) {
               style={{ alignItems: 'center' }}
             >
               {/* Thumbnail — gold-set image preferred, falls back to case image */}
-              <BmCaseThumb goldSetId={r.source_gold_set_id} caseId={!r.source_gold_set_id ? r.case_id || r.id : undefined} />
+              <BmCaseThumb goldSetId={r.source_gold_set_id} caseId={r.case_id || r.id} />
               <span className="bm-case__pattern">{r.pattern_id}</span>
               <span className="bm-case__image" style={{ fontSize: 10, opacity: 0.6, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {r.image_path?.split('/').pop()}
@@ -734,7 +780,7 @@ function CaseCreator({ onCreated }) {
         pattern_id:         form.pattern_id,
         image_path:         form.image_path,
         difficulty:         form.difficulty,
-        expected_analysis:  { lighting_family: form.expected_pattern },
+        expected_analysis:  { expected_pattern: form.expected_pattern },
         expected_blueprint: {
           key:  { position: form.key_position, modifier: form.key_modifier },
           fill: { ratio: form.fill_ratio },
@@ -779,7 +825,7 @@ function CaseCreator({ onCreated }) {
           <div className="bm-promote-list">
             {goldSet.map(e => (
               <div key={e.id} className="bm-promote-item">
-                <BmCaseThumb goldSetId={e.id} size={44} />
+                <BmCaseThumb goldSetId={e.id} size={64} />
                 <span className="bm-promote-item__path">{e.image_path}</span>
                 <button
                   className="btn btn--primary btn--sm"
@@ -893,7 +939,7 @@ function CaseList({ cases, onRefresh }) {
     setEditForm({
       pattern_id:         c.pattern_id || '',
       difficulty:         c.difficulty || 'medium',
-      expected_analysis:  { lighting_family: c.expected_analysis?.lighting_family || '' },
+      expected_analysis:  { expected_pattern: c.expected_analysis?.expected_pattern || c.expected_analysis?.lighting_family || '' },
       expected_blueprint: {
         key:  { position: c.expected_blueprint?.key?.position  || '',
                 modifier: c.expected_blueprint?.key?.modifier  || '' },
@@ -965,7 +1011,7 @@ function CaseList({ cases, onRefresh }) {
       {filtered.map(c => {
         const isExpanded     = expanded === c.id;
         const isEditing      = editing  === c.id;
-        const expectedPattern = c.expected_analysis?.lighting_family;
+        const expectedPattern = c.expected_analysis?.expected_pattern || c.expected_analysis?.lighting_family;
         const caseHistory    = history[c.id];
 
         return (
@@ -982,7 +1028,7 @@ function CaseList({ cases, onRefresh }) {
                 </svg>
               </button>
 
-              <BmCaseThumb caseId={c.id} size={44} />
+              <BmCaseThumb caseId={c.id} size={64} />
 
               <div className="bm-case-item__meta">
                 <span className="bm-case-item__pattern">{c.pattern_id}</span>
@@ -1040,10 +1086,10 @@ function CaseList({ cases, onRefresh }) {
                         <span className="bm-field__label">
                           Expected pattern — must match engine output exactly
                         </span>
-                        <input className="bm-field__input" value={editForm.expected_analysis.lighting_family}
+                        <input className="bm-field__input" value={editForm.expected_analysis.expected_pattern}
                           placeholder="e.g. rembrandt_short"
                           onChange={e => setEditForm(f => ({
-                            ...f, expected_analysis: { ...f.expected_analysis, lighting_family: e.target.value },
+                            ...f, expected_analysis: { ...f.expected_analysis, expected_pattern: e.target.value },
                           }))} />
                       </label>
                       <label className="bm-field">
@@ -1496,7 +1542,7 @@ export default function BenchmarkTab({ onNavigateTo }) {
               <p className="bm-section-label" style={{ marginTop: 'var(--space-lg)' }}>
                 Pattern Performance
               </p>
-              <PatternTable metrics={metrics} onNavigateTo={onNavigateTo} />
+              <PatternTable metrics={metrics} cases={cases} onNavigateTo={onNavigateTo} />
             </>
           )}
 

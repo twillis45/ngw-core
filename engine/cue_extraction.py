@@ -84,6 +84,7 @@ def extract_shadow_edge_hardness(
     person_mask: np.ndarray,
     skin_mask: np.ndarray,
     is_high_contrast_grade: bool = False,
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Optional[ShadowEdgeHardness]:
     """Cue 1: Classify shadow edges as hard, soft, or mixed.
 
@@ -95,25 +96,48 @@ def extract_shadow_edge_hardness(
     edge density at shadow boundaries.  We raise the hard threshold to
     compensate — a "hard" classification under heavy grading needs stronger
     evidence than under neutral processing.
+
+    Constrained to an expanded face region when available: clothing texture,
+    hair, and accessories in the full person mask inflate edge density and
+    corrupt hard/soft classification. Face shadow edges directly reflect
+    modifier quality. Face box expanded 20% on all sides to include forehead,
+    chin, and cheek shadow falloff areas.
     """
     if cv2 is None:
         return None
 
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    # Isolate person region
-    person_gray = gray.copy()
-    person_gray[~person_mask] = 0
 
-    # Shadow region: darker third of person pixels
-    person_pixels = gray[person_mask]
+    # Prefer face-box-constrained region for edge density measurement.
+    analysis_mask = person_mask
+    if face_box is not None:
+        _h, _w = gray.shape
+        _fx0, _fy0, _fx1, _fy1 = face_box
+        _pad = int((_fy1 - _fy0) * 0.2)
+        _ex0 = max(0, _fx0 - _pad)
+        _ey0 = max(0, _fy0 - _pad)
+        _ex1 = min(_w, _fx1 + _pad)
+        _ey1 = min(_h, _fy1 + _pad)
+        _face_zone = np.zeros((_h, _w), dtype=bool)
+        _face_zone[_ey0:_ey1, _ex0:_ex1] = True
+        _face_mask = person_mask & _face_zone
+        if np.sum(_face_mask) >= SHADOW.MIN_PERSON_PIXELS:
+            analysis_mask = _face_mask
+
+    # Isolate analysis region
+    person_gray = gray.copy()
+    person_gray[~analysis_mask] = 0
+
+    # Shadow region: darker third of analysis pixels
+    person_pixels = gray[analysis_mask]
     if person_pixels.size < SHADOW.MIN_PERSON_PIXELS:
         return None
 
     p33 = np.percentile(person_pixels, SHADOW.SHADOW_PERCENTILE)
     p66 = np.percentile(person_pixels, SHADOW.MIDTONE_PERCENTILE)
 
-    shadow_mask = person_mask & (gray <= p33)
-    midtone_mask = person_mask & (gray > p33) & (gray <= p66)
+    shadow_mask = analysis_mask & (gray <= p33)
+    midtone_mask = analysis_mask & (gray > p33) & (gray <= p66)
 
     # Canny edges
     edges = cv2.Canny(person_gray, SHADOW.CANNY_LOW, SHADOW.CANNY_HIGH)
@@ -279,17 +303,24 @@ def extract_primary_shadow_direction(
                 right_votes += 1
             # Between 0.47-0.53 is ambiguous (centered shadow)
 
-        if total_votes >= 3:
+        # Require 2+ agreeing rows (lowered from 3) so subtle Rembrandt
+        # shadows — where moderate shadow density means fewer rows pass
+        # the darkness threshold — still resolve direction.  Confidence
+        # is lower at 2 votes (starts at 0.35 vs 0.45 for 3+) so that
+        # the half-face method retains priority in ambiguous cases.
+        if total_votes >= 2:
             if left_votes > right_votes and left_votes >= total_votes * 0.5:
                 nose_shadow_side = "left"
-                nose_shadow_confidence = min(0.80, 0.45 + left_votes / total_votes * 0.35)
+                _base_conf = 0.35 if total_votes == 2 else 0.45
+                nose_shadow_confidence = min(0.80, _base_conf + left_votes / total_votes * 0.35)
                 notes.append(
                     f"Nose shadow falls LEFT of center ({left_votes}/{total_votes} rows) "
                     f"— key light from camera-right."
                 )
             elif right_votes > left_votes and right_votes >= total_votes * 0.5:
                 nose_shadow_side = "right"
-                nose_shadow_confidence = min(0.80, 0.45 + right_votes / total_votes * 0.35)
+                _base_conf = 0.35 if total_votes == 2 else 0.45
+                nose_shadow_confidence = min(0.80, _base_conf + right_votes / total_votes * 0.35)
                 notes.append(
                     f"Nose shadow falls RIGHT of center ({right_votes}/{total_votes} rows) "
                     f"— key light from camera-left."
@@ -377,10 +408,12 @@ def extract_primary_shadow_direction(
     )
     if _prefer_nose:
         # Clothing interfered with half-face → trust nose shadow
-        if nose_shadow_side == "left":
-            direction = "upper_left"
-        else:
-            direction = "upper_right"
+        # Determine vertical prefix from face brightness split
+        _mid_y0 = face_h // 2
+        _upper_m0 = float(np.mean(face_gray[:_mid_y0, :])) if _mid_y0 > 0 else 128.0
+        _lower_m0 = float(np.mean(face_gray[_mid_y0:, :])) if _mid_y0 < face_h else 128.0
+        _v_prefix0 = "lower" if (_lower_m0 - _upper_m0) > 25.0 else "upper"
+        direction = f"{_v_prefix0}_{nose_shadow_side}"
         confidence = nose_shadow_confidence
         if halfface_side != "unknown" and halfface_side != nose_shadow_side:
             notes.append(
@@ -391,10 +424,6 @@ def extract_primary_shadow_direction(
             confidence = min(0.90, confidence + 0.05)
             notes.append("Nose shadow agrees with half-face despite clothing interference.")
     elif halfface_side != "unknown":
-        if halfface_side == "left":
-            direction = "upper_left"
-        else:
-            direction = "upper_right"
         confidence = halfface_confidence
         # Cross-check with nose shadow
         if nose_shadow_side != "unknown" and nose_shadow_side == halfface_side:
@@ -406,12 +435,20 @@ def extract_primary_shadow_direction(
                 f"(disagreeing with half-face). Possible hat/hair shadow confound — "
                 f"using half-face brightness as primary method."
             )
+        # Determine vertical prefix: if bottom of face is brighter than top,
+        # key is from below → lower_*; otherwise assume key above → upper_*
+        _mid_y = face_h // 2
+        _upper_m = float(np.mean(face_gray[:_mid_y, :])) if _mid_y > 0 else 128.0
+        _lower_m = float(np.mean(face_gray[_mid_y:, :])) if _mid_y < face_h else 128.0
+        _v_prefix = "lower" if (_lower_m - _upper_m) > 25.0 else "upper"
+        direction = f"{_v_prefix}_{halfface_side}"
     elif nose_shadow_side != "unknown":
         # Fallback to nose shadow when half-face is inconclusive
-        if nose_shadow_side == "left":
-            direction = "upper_left"
-        else:
-            direction = "upper_right"
+        _mid_y2 = face_h // 2
+        _upper_m2 = float(np.mean(face_gray[:_mid_y2, :])) if _mid_y2 > 0 else 128.0
+        _lower_m2 = float(np.mean(face_gray[_mid_y2:, :])) if _mid_y2 < face_h else 128.0
+        _v_prefix2 = "lower" if (_lower_m2 - _upper_m2) > 25.0 else "upper"
+        direction = f"{_v_prefix2}_{nose_shadow_side}"
         confidence = nose_shadow_confidence
     else:
         direction = "unknown"
@@ -419,11 +456,13 @@ def extract_primary_shadow_direction(
 
     # Map direction label to clock position (shadow fall direction)
     _DIR_TO_CLOCK = {
-        "upper_left": 10,
-        "upper_right": 2,
-        "left": 9,
-        "right": 3,
-        "below": 6,
+        "upper_left":  10,
+        "upper_right":  2,
+        "lower_left":   8,
+        "lower_right":  4,
+        "left":         9,
+        "right":        3,
+        "below":        6,
     }
     clock_angle = _DIR_TO_CLOCK.get(direction)
 
@@ -548,10 +587,18 @@ def extract_catchlight_shape(
     shapes = [c.get("shape", "unknown") for c in catchlights]
     shapes_seen = list(set(shapes))
 
+    ring_count = shapes.count("ring")
     round_count = shapes.count("round")
     rect_count = shapes.count("rectangular")
 
-    if round_count > rect_count:
+    # "ring" (donut/hollow center) is the strongest signal — it's the
+    # defining signature of a ring light and harder to false-positive on
+    # than plain "round".  If ANY catchlight is "ring", promote it to
+    # dominant immediately.  This prevents a mixed ["ring", "round"] pair
+    # from averaging down to "round" and losing the ring_light detection.
+    if ring_count > 0:
+        dominant = "ring"
+    elif round_count > rect_count:
         dominant = "round"
     elif rect_count > round_count:
         dominant = "rectangular"
@@ -771,16 +818,32 @@ def extract_light_structure(
 def extract_highlight_to_shadow_transition(
     img_bgr: np.ndarray,
     skin_mask: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Optional[HighlightToShadowTransition]:
     """Cue 6: Measure how gradually highlights transition to shadows on skin.
 
     Method: Histogram of skin luminance. Bimodal = sharp; unimodal spread = gradual.
+
+    Constrained to face box when available: neck/shoulder skin may have different
+    lighting than the face (e.g. rim light on shoulder, fill on neck) and would
+    contaminate the histogram with irrelevant luminance values.
     """
     if cv2 is None:
         return None
 
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    skin_pixels = gray[skin_mask]
+
+    # Prefer face-box-constrained skin pixels.
+    if face_box is not None:
+        _h, _w = gray.shape
+        _fx0, _fy0, _fx1, _fy1 = face_box
+        _face_only = np.zeros((_h, _w), dtype=bool)
+        _face_only[_fy0:_fy1, _fx0:_fx1] = True
+        _face_skin = skin_mask & _face_only
+        skin_pixels = gray[_face_skin] if _face_skin.any() else gray[skin_mask]
+    else:
+        skin_pixels = gray[skin_mask]
+
     if skin_pixels.size < 200:
         return None
 
@@ -1020,11 +1083,16 @@ def extract_specular_highlight_behavior(
     img_bgr: np.ndarray,
     skin_mask: np.ndarray,
     person_mask: Optional[np.ndarray] = None,
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Optional[SpecularHighlightBehavior]:
     """Cue 10: Analyze specular highlights on skin (bright spots).
 
     Falls back to person_mask when skin_mask has insufficient pixels
     (e.g. B&W images where skin segmentation fails).
+
+    Constrained to face box when available: specular highlights on the face
+    encode key light position and intensity. Shoulder/arm highlights may come
+    from rim or fill lights and inflate the count, obscuring the key signal.
     """
     if cv2 is None:
         return None
@@ -1044,6 +1112,18 @@ def extract_specular_highlight_behavior(
 
     if skin_pixels.size < 200:
         return None
+
+    # Constrain to face box: face highlights encode key light; body highlights inflate counts.
+    if face_box is not None and active_mask is not None:
+        _h, _w = gray.shape
+        _fx0, _fy0, _fx1, _fy1 = face_box
+        _face_only = np.zeros((_h, _w), dtype=bool)
+        _face_only[_fy0:_fy1, _fx0:_fx1] = True
+        _face_constrained = active_mask & _face_only
+        _face_px = gray[_face_constrained] if _face_constrained.any() else np.array([])
+        if _face_px.size >= 100:
+            active_mask = _face_constrained
+            skin_pixels = _face_px
 
     # Specular highlights: very bright pixels in skin/person region
     threshold = max(SPECULAR.BRIGHT_THRESHOLD, float(np.percentile(skin_pixels, 95)))
@@ -1211,23 +1291,51 @@ def extract_reflection_architecture(
 def extract_multi_shadow_detection(
     img_bgr: np.ndarray,
     person_mask: np.ndarray,
+    face_box: Optional[Tuple[int, int, int, int]] = None,
 ) -> Optional[MultiShadowDetection]:
     """Cue 12: Detect multiple distinct shadow directions (multi-light setup).
 
     Method: Edge detection in shadow regions, then look for multiple distinct
     edge orientations via gradient direction histogram.
+
+    Constrained to an expanded face region when available: clothing folds, hair,
+    and limb contours in the full person mask produce spurious edge directions
+    that read as multi-source lighting. Face/neck shadows directly encode
+    key and fill geometry.  Face box is expanded 40% below (neck/chin) and 20%
+    horizontally to capture shoulder-adjacent shadow directions.
     """
     if cv2 is None:
         return None
 
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-    person_pixels = gray[person_mask]
+
+    # Constrain to expanded face region when available.
+    active_mask = person_mask
+    if face_box is not None:
+        _h, _w = gray.shape
+        _fx0, _fy0, _fx1, _fy1 = face_box
+        _fh = _fy1 - _fy0
+        _fw = _fx1 - _fx0
+        _pad_x = int(_fw * 0.2)
+        _pad_y_above = int(_fh * 0.2)
+        _pad_y_below = int(_fh * 0.4)  # more below to include neck/chin shadows
+        _ex0 = max(0, _fx0 - _pad_x)
+        _ey0 = max(0, _fy0 - _pad_y_above)
+        _ex1 = min(_w, _fx1 + _pad_x)
+        _ey1 = min(_h, _fy1 + _pad_y_below)
+        _expanded = np.zeros((_h, _w), dtype=bool)
+        _expanded[_ey0:_ey1, _ex0:_ex1] = True
+        _face_region = person_mask & _expanded
+        if np.sum(_face_region) >= 50:
+            active_mask = _face_region
+
+    person_pixels = gray[active_mask]
     if person_pixels.size < 200:
         return None
 
     # Shadow region
     p30 = np.percentile(person_pixels, 30)
-    shadow_mask = person_mask & (gray <= p30)
+    shadow_mask = active_mask & (gray <= p30)
 
     if np.sum(shadow_mask) < 50:
         return MultiShadowDetection(shadow_count=0, confidence=0.3,
@@ -1235,7 +1343,7 @@ def extract_multi_shadow_detection(
 
     # Sobel gradients for direction
     masked_gray = gray.copy()
-    masked_gray[~person_mask] = 128  # neutral
+    masked_gray[~active_mask] = 128  # neutral
 
     gx = cv2.Sobel(masked_gray, cv2.CV_64F, 1, 0, ksize=3)
     gy = cv2.Sobel(masked_gray, cv2.CV_64F, 0, 1, ksize=3)
@@ -2161,8 +2269,26 @@ def extract_fill_ratio(
     shadow_on_right = shadow_direction in ("upper_right", "right", "lower_right")
     shadow_on_left = shadow_direction in ("upper_left", "left", "lower_left")
     if not shadow_on_right and not shadow_on_left:
-        # Unknown direction — fall back to comparing both halves
-        shadow_on_right = True  # assume right shadow (most common portrait key)
+        # Unknown direction — measure both halves directly rather than
+        # defaulting to "right".  The darker half is the shadow side.
+        # This prevents a systematic fill_ratio inversion for images
+        # where the key is from the left (shadow on left) and the
+        # shadow direction was not resolved by extract_primary_shadow_direction.
+        _fr_cx  = (x0 + x1) // 2
+        _fr_vpad = int((y1 - y0) * 0.10)
+        _fr_vy0 = max(0, y0 + _fr_vpad)
+        _fr_vy1 = min(gray.shape[0], y1 - _fr_vpad)
+        _fr_left  = gray[_fr_vy0:_fr_vy1, x0:_fr_cx]
+        _fr_right = gray[_fr_vy0:_fr_vy1, _fr_cx:x1]
+        _fr_lm = float(np.mean(_fr_left))  if _fr_left.size  > 0 else 128.0
+        _fr_rm = float(np.mean(_fr_right)) if _fr_right.size > 0 else 128.0
+        # Shadow (darker) side drives the measurement
+        shadow_on_right = _fr_rm < _fr_lm
+        notes.append(
+            f"shadow_dir=unknown: self-measured — "
+            f"left={_fr_lm:.1f}, right={_fr_rm:.1f}, "
+            f"shadow={'right' if shadow_on_right else 'left'}"
+        )
 
     face_cx = (x0 + x1) // 2
     if shadow_on_right:
@@ -2382,7 +2508,7 @@ def extract_visual_cues(
         )
         report.shadow_edge_hardness = _safe_extract(
             "shadow_edge_hardness", extract_shadow_edge_hardness,
-            img_bgr, person_mask, skin_mask, _is_hcg,
+            img_bgr, person_mask, skin_mask, _is_hcg, face_box,
         )
         report.primary_shadow_direction = _safe_extract(
             "primary_shadow_direction", extract_primary_shadow_direction,
@@ -2394,7 +2520,7 @@ def extract_visual_cues(
         )
         report.highlight_to_shadow_transition = _safe_extract(
             "highlight_to_shadow_transition", extract_highlight_to_shadow_transition,
-            img_bgr, skin_mask,
+            img_bgr, skin_mask, face_box,
         )
         report.contrast_ratio = _safe_extract(
             "contrast_ratio", extract_contrast_ratio,
@@ -2410,11 +2536,11 @@ def extract_visual_cues(
         )
         report.specular_highlight_behavior = _safe_extract(
             "specular_highlight_behavior", extract_specular_highlight_behavior,
-            img_bgr, skin_mask, person_mask,
+            img_bgr, skin_mask, person_mask, face_box,
         )
         report.multi_shadow_detection = _safe_extract(
             "multi_shadow_detection", extract_multi_shadow_detection,
-            img_bgr, person_mask,
+            img_bgr, person_mask, face_box,
         )
         report.environmental_shadow_continuity = _safe_extract(
             "environmental_shadow_continuity", extract_environmental_shadow_continuity,
@@ -2568,10 +2694,12 @@ def enrich_cue_report_from_pipeline(
                     else:
                         # Eyes were visible in topology but not basic pass — create shape cue
                         shapes = [c.get("shape", "unknown") for c in topo_entries]
+                        ring_count = shapes.count("ring")
                         rect_count = shapes.count("rectangular")
                         round_count = shapes.count("round")
                         dominant = (
-                            "rectangular" if rect_count > round_count
+                            "ring" if ring_count > 0
+                            else "rectangular" if rect_count > round_count
                             else "round" if round_count > rect_count
                             else "mixed" if shapes else "unknown"
                         )

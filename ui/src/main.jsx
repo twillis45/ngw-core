@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import * as Sentry from '@sentry/react';
 import App from './App';
 import { AppProvider } from './context/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -8,6 +9,30 @@ import { applySettings } from './data/settingsStore';
 import { setFlag } from './modes/featureFlags';
 import './theme/tokens.css';
 import './styles/app.css';
+
+/* ── Sentry browser SDK ─────────────────────────────────────────── */
+Sentry.init({
+  dsn: 'https://df727ad4e9163f9ccb4c9b2f33f14b4f@o4511174955565056.ingest.us.sentry.io/4511174984269824',
+  environment: import.meta.env.DEV ? 'development' : 'production',
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration({ maskAllText: false, blockAllMedia: false }),
+  ],
+  tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.3,
+  replaysSessionSampleRate: 0,
+  replaysOnErrorSampleRate: 1.0,
+  beforeSend(event) {
+    // Attach auth user context if available
+    try {
+      const raw = localStorage.getItem('ngw_auth_user');
+      if (raw) {
+        const u = JSON.parse(raw);
+        event.user = { id: u.id, email: u.email, username: u.username };
+      }
+    } catch { /* ignore */ }
+    return event;
+  },
+});
 
 /* Apply saved theme and settings before first paint */
 applyTheme(loadTheme());

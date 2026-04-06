@@ -1,18 +1,31 @@
 {
   "benchmark_id": "soft_editorial_key",
-  "description": "Soft editorial key — warm natural soft key from left, open shade fill, jewelry editorial, architectural setting",
+  "description": "Soft editorial key \u2014 warm natural soft key from left, open shade fill, jewelry editorial, architectural setting",
   "image_path": "benchmarks/images/soft_editorial_key.jpg",
   "ground_truth": {
     "expected_pattern": "loop",
     "expected_light_count": 1,
     "expected_key_direction": "left",
-    "acceptable_patterns": ["loop", "rembrandt", "window_portrait", "golden_hour", "unknown"],
-    "acceptable_light_count_range": [1, 2]
+    "acceptable_patterns": [
+      "loop",
+      "rembrandt",
+      "window_portrait",
+      "unknown",
+      "window_negative_fill"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      2
+    ]
   },
   "metadata": {
     "category": "editorial",
     "difficulty": "standard",
-    "known_challenges": ["natural light editorial blurs studio pattern categories", "warm tones may suggest golden hour", "environmental bounce fill complicates source count"],
+    "known_challenges": [
+      "natural light editorial blurs studio pattern categories",
+      "warm tones may suggest golden hour",
+      "environmental bounce fill complicates source count"
+    ],
     "added_date": "2026-03-17"
   }
 }

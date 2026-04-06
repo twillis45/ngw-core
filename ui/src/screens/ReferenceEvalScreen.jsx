@@ -24,8 +24,8 @@ const DEFAULT_MOOD_OPTIONS = [
 
 const DEFAULT_PATTERN_OPTIONS = [
   'rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad',
-  'short', 'rim_only', 'beauty_dish', 'high_key', 'low_key',
-  'natural_window', 'dramatic_key', 'three_point',
+  'short', 'rim', 'ring_light', 'high_key', 'low_key',
+  'projected', 'silhouette_key', 'natural_window', 'dramatic_key', 'three_point',
 ];
 
 const DEFAULT_ISSUE_TYPES = [
@@ -39,7 +39,7 @@ const DEFAULT_ISSUE_TYPES = [
 // ── Admin: submit ground truth ─────────────────────────────────────────────
 
 // Option constants for correction form
-const SHADOW_PATTERN_OPTIONS = ['rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad', 'short', 'rim_only', 'high_key', 'low_key', 'natural_window', 'dramatic_key', 'three_point', 'beauty_dish', 'unknown'];
+const SHADOW_PATTERN_OPTIONS = ['rembrandt', 'loop', 'butterfly', 'split', 'flat', 'broad', 'short', 'rim', 'ring_light', 'high_key', 'low_key', 'projected', 'silhouette_key', 'natural_window', 'dramatic_key', 'three_point', 'beauty_dish', 'unknown'];
 const SOURCE_DIRECTION_OPTIONS = ['left-45', 'right-45', 'left-90', 'right-90', 'front', 'top', 'left-135', 'right-135', 'overhead', 'unknown'];
 const FILL_OPTIONS = ['none', 'subtle', 'moderate', 'strong', 'unknown'];
 const LIGHTING_FAMILY_OPTIONS = ['broad', 'narrow', 'front', 'split', 'rim', 'high_key', 'low_key', 'beauty', 'unknown'];

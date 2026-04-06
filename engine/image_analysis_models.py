@@ -649,6 +649,16 @@ class GeometryInference:
     notes: List[str] = field(default_factory=list)
     field_status: FieldStatus = FieldStatus.UNKNOWN
 
+    # ── Continuous angle estimates ─────────────────────────────────────────
+    # These are CV-derived estimates, not ground truth.  They bridge the gap
+    # between categorical labels ("high", "upper_left") and the degree values
+    # used by the blueprint service for physical reconstruction.
+    # Elevation: 0° = eye level, 90° = directly overhead, negative = below.
+    # Azimuth:   0° = camera axis (on-axis), ±45° = classic 45° key position,
+    #            ±90° = side light, ±120°+ = rim/backlight territory.
+    key_elevation_deg_estimate: Optional[float] = None   # 0–90° (key above eye level)
+    key_azimuth_deg_estimate: Optional[float] = None     # 0–±180° (0 = on-axis)
+
 
 @dataclass
 class SourceQualityInference:

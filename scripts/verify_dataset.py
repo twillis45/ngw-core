@@ -31,13 +31,17 @@ DATASET_DIR = PROJECT_ROOT / "data" / "reference_dataset"
 # ═══════════════════════════════════════════════════════════════════════════
 
 CANONICAL_PATTERNS = {
+    # Core 14
     "clamshell", "loop", "rembrandt", "split", "butterfly", "triangle",
-    "broad", "short", "rim_only", "high_key", "low_key", "flat_fashion",
-    "window_portrait", "golden_hour", "overcast_natural", "ring_light",
-    "bare_bulb_editorial", "strip_dramatic", "short_fashion_key",
-    "soft_editorial_key", "editorial_rim_key", "tabletop_soft_product",
-    "bottle_backlight", "athletic_rim_sculpt", "window_negative_fill",
-    "hybrid", "unknown", "gobo", "flat",
+    "broad", "short", "rim", "high_key", "low_key", "flat",
+    "ring_light", "silhouette_key", "projected",
+    # Specialty tier
+    "window_portrait", "bare_bulb_editorial", "strip_dramatic",
+    "short_fashion_key", "soft_editorial_key", "editorial_rim_key",
+    "tabletop_soft_product", "bottle_backlight", "athletic_rim_sculpt",
+    "window_negative_fill", "hybrid", "unknown",
+    # Migration shims (accepted during transition period until 2026-05-06)
+    "rim_only", "flat_fashion", "gobo_projection", "golden_hour", "overcast_natural",
 }
 
 REQUIRED_META_FIELDS = {"reference_id", "pattern_id", "dataset_tier", "entry_trust_score"}

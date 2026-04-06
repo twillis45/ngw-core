@@ -566,7 +566,7 @@ export function buildRefQuickFixes(lightingRead, recreationSetup) {
     });
   }
 
-  if (lr.shadow_pattern === 'gobo') {
+  if (lr.shadow_pattern === 'projected') {
     fixes.push({
       problem: 'Projected pattern is too broad or diffuse',
       fix: 'Narrow the gobo opening, or move the source further from the gobo and closer to the subject',

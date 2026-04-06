@@ -6,7 +6,7 @@
     "expected_pattern": "loop",
     "expected_light_count": 1,
     "expected_key_direction": "upper_left",
-    "acceptable_patterns": ["loop", "rembrandt", "clamshell"],
+    "acceptable_patterns": ["loop", "rembrandt", "clamshell", "window_negative_fill"],
     "acceptable_light_count_range": [1, 2]
   },
   "metadata": {

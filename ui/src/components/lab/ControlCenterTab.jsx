@@ -36,6 +36,7 @@ import {
   listFailureClusters,
   getApiKeyHealth,
   probeApiKey,
+  sentryTest,
   getIntelligenceScoreHistory,
   getApiMetrics,
   getMonitoringStats,
@@ -627,6 +628,164 @@ function ApiKeyHealthCard() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// SENTRY HEALTH CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SentryHealthCard() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [testing, setTesting] = useState(false);
+  const [notice, setNotice]   = useState(null);
+
+  function showNotice(type, msg) {
+    setNotice({ type, msg });
+    setTimeout(() => setNotice(null), 6000);
+  }
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await getApiKeyHealth();
+      setData(res);
+    } catch (e) {
+      if (e.status === 403 || e.message?.includes('403')) { setData(null); setLoading(false); return; }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleTest() {
+    setTesting(true);
+    try {
+      const res = await sentryTest();
+      showNotice(res.ok ? 'ok' : 'err', res.detail || (res.ok ? 'Test event sent' : 'Failed'));
+    } catch (e) {
+      showNotice('err', e.message || 'Request failed');
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  if (!loading && !data) return null; // admin-only
+
+  const sentry    = data?.sentry || {};
+  const ok        = sentry.ok;
+  const detail    = sentry.detail || '';
+  const host      = sentry.host || null;
+  const latencyMs = sentry.latency_ms ?? null;
+  const sdkOk     = sentry.sdk_ok;
+  const env       = sentry.environment || null;
+  const release   = sentry.release || null;
+
+  const configured = ok !== null; // null = not configured
+  const badgeColor = ok === true ? C.green : ok === false ? C.red : C.amber;
+  const badgeBg    = ok === true ? C.greenBg : ok === false ? C.redBg : 'color-mix(in srgb, var(--color-accent) 12%, transparent)';
+  const badgeLabel = ok === true ? 'connected' : ok === false ? 'error' : 'not configured';
+
+  return (
+    <Card
+      title={
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Sentry Error Monitoring
+          {!loading && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '2px 8px', borderRadius: 999,
+              fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-medium)',
+              background: badgeBg, color: badgeColor,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} />
+              {badgeLabel}
+            </span>
+          )}
+        </span>
+      }
+      description="Captures runtime errors, 500s, and crashes. Set SENTRY_DSN in .env to enable. Use the test button to verify the pipeline end-to-end."
+      action={
+        <div style={{ display: 'flex', gap: 4 }}>
+          <InlineBtn onClick={load} loading={loading}>{Icons.refresh} Refresh</InlineBtn>
+          <InlineBtn
+            variant={ok === true ? 'ghost' : ok === null ? 'ghost' : 'primary'}
+            onClick={handleTest}
+            loading={testing}
+          >
+            {Icons.zap} Send Test
+          </InlineBtn>
+        </div>
+      }
+    >
+      {notice && <Notice message={notice.msg} type={notice.type} />}
+      {loading && <EmptyState message="Checking Sentry…" />}
+      {!loading && data && (
+        <div>
+          {/* Structured detail row */}
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap', marginBottom: 'var(--space-md)' }}>
+            <Stat
+              label="Status"
+              value={ok === true ? 'Reachable' : ok === false ? 'Unreachable' : 'Not configured'}
+              color={badgeColor}
+            />
+            {host && <Stat label="Host" value={host} />}
+            {latencyMs !== null && <Stat label="Latency" value={`${latencyMs}ms`} color={latencyMs < 300 ? C.green : C.amber} />}
+            {configured && (
+              <Stat
+                label="SDK"
+                value={sdkOk ? 'Initialised' : 'Not initialised'}
+                color={sdkOk ? C.green : C.red}
+              />
+            )}
+            {env     && <Stat label="Environment" value={env} />}
+            {release && <Stat label="Release"     value={release.length > 20 ? release.slice(0, 20) + '…' : release} />}
+          </div>
+
+          {/* Not-configured guidance */}
+          {ok === null && (
+            <div style={{
+              padding: '8px 12px',
+              background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)',
+              borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
+              color: 'var(--color-text-secondary)',
+            }}>
+              Add <code style={{ fontFamily: 'monospace', color: 'var(--color-text)' }}>SENTRY_DSN=https://…@o….ingest.sentry.io/…</code> to your <code style={{ fontFamily: 'monospace', color: 'var(--color-text)' }}>.env</code> and restart to enable error monitoring.
+            </div>
+          )}
+
+          {/* Error detail */}
+          {ok === false && detail && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px',
+              background: C.redBg, border: `1px solid ${C.redBorder}`,
+              borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', color: C.red,
+            }}>
+              <span>⚠</span>
+              <span>{detail}</span>
+            </div>
+          )}
+
+          {/* SDK not initialised warning when DSN is set but SDK failed */}
+          {ok === true && sdkOk === false && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', marginTop: 'var(--space-xs)',
+              background: C.amberBg, border: `1px solid ${C.amberBorder || C.amber}`,
+              borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)',
+              color: C.amber,
+            }}>
+              <span>⚠</span>
+              <span>Ingest host is reachable but the Sentry SDK did not initialise. Events will not be captured until the server is restarted with a valid DSN.</span>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function SystemSection({ onNavigateTo }) {
   const [scheduler, setScheduler]   = useState(null);
   const [opsData, setOpsData]       = useState(null);
@@ -882,6 +1041,9 @@ function SystemSection({ onNavigateTo }) {
 
       {/* VLM API Key Health — detailed event log */}
       <ApiKeyHealthCard />
+
+      {/* Sentry Error Monitoring — connection status + test button */}
+      <SentryHealthCard />
 
       {/* VLM Call Metrics */}
       <VlmMetricsCard />

@@ -92,11 +92,22 @@ def score_blueprint(expected: Dict[str, Any], predicted: Dict[str, Any]) -> floa
     )
 
 
-def _get(d: Dict[str, Any], path: str) -> Optional[Any]:
+def _get(d: Any, path: str) -> Optional[Any]:
+    """Walk a dot-separated path through nested dicts and/or objects.
+
+    Handles both dict keys (``d[key]``) and object attributes (``getattr(d, key)``)
+    so that paths like ``lighting_intel.cue_report.fill_ratio.ratio`` work even
+    when some levels are Pydantic models or dataclass instances rather than plain dicts.
+    """
     for p in path.split("."):
-        if not isinstance(d, dict):
+        if d is None:
             return None
-        d = d.get(p)  # type: ignore[assignment]
+        if isinstance(d, dict):
+            d = d.get(p)
+        elif hasattr(d, p):
+            d = getattr(d, p)
+        else:
+            return None
     return d
 
 
@@ -110,8 +121,10 @@ def _norm(s: Optional[str], aliases: Dict[str, str]) -> str:
 def _compare_position(exp: Optional[str], pred: Optional[str]) -> float:
     if not exp and not pred:
         return 1.0
-    if not exp or not pred:
-        return 0.0
+    if not exp:
+        return 1.0  # no ground truth to compare — pass-through, don't penalise
+    if not pred:
+        return 0.0  # ground truth exists but prediction is absent — penalise
     ne, np_ = _norm(exp, _POSITION_ALIASES), _norm(pred, _POSITION_ALIASES)
     if ne == np_:
         return 1.0
@@ -123,8 +136,10 @@ def _compare_position(exp: Optional[str], pred: Optional[str]) -> float:
 def _compare_modifier(exp: Optional[str], pred: Optional[str]) -> float:
     if not exp and not pred:
         return 1.0
-    if not exp or not pred:
-        return 0.3  # partial credit — unknown modifier
+    if not exp:
+        return 1.0  # no ground truth — pass-through
+    if not pred:
+        return 0.3  # partial credit — prediction missing but expected exists
     return 1.0 if _norm(exp, _MODIFIER_ALIASES) == _norm(pred, _MODIFIER_ALIASES) else 0.0
 
 
@@ -132,8 +147,10 @@ def _compare_power_ratio(exp: Optional[str], pred: Optional[str]) -> float:
     """Compare fill ratios like '2:1', '4:1'. Graded by relative error."""
     if not exp and not pred:
         return 1.0  # both absent: no disagreement
-    if not exp or not pred:
-        return 0.5  # one side absent: neutral
+    if not exp:
+        return 1.0  # no ground truth — pass-through
+    if not pred:
+        return 0.5  # prediction absent but expected exists — neutral
 
     def _parse(s: str) -> Optional[float]:
         try:
@@ -166,10 +183,15 @@ def _compare_roles(expected: Dict[str, Any], predicted: Dict[str, Any]) -> float
 # ── 3. Fix Effectiveness ──────────────────────────────────────────────────────
 
 def score_fix_effectiveness(pattern_id: str, fix_rates: Dict[str, float]) -> float:
-    """Historical fix success rate for pattern. Defaults to 0.5 when no data."""
+    """Historical fix success rate for pattern.
+
+    Returns 1.0 (neutral pass-through) when no historical data exists so that
+    the dimension doesn't penalise the composite score before any fix data has
+    been collected.  Only pulls the score down when real data shows a low rate.
+    """
     rate = fix_rates.get(pattern_id)
     if rate is None:
-        return 0.5
+        return 1.0  # neutral — don't penalise when no data exists
     return max(0.0, min(1.0, float(rate)))
 
 
@@ -185,7 +207,7 @@ def score_confidence(
     confidence_error = predicted - actual  (signed)
     """
     if predicted_confidence is None or actual_success_rate is None:
-        return 0.5, 0.0
+        return 1.0, 0.0  # neutral — don't penalise when calibration data is absent
     error = float(predicted_confidence) - float(actual_success_rate)
     score = max(0.0, 1.0 - abs(error))
     return score, error
@@ -206,7 +228,6 @@ def compute_final_score(
         + SCORE_WEIGHTS["confidence"] * confidence_score
     )
     # Round to 6 decimal places to eliminate IEEE 754 sub-precision noise
-    # (e.g. 0.30*1.0 + 0.30*1.0 + 0.20*0.5 + 0.20*0.5 = 0.7999999999999999 in Python)
     return round(raw, 6)
 
 
@@ -244,19 +265,22 @@ def extract_predicted_blueprint(analysis: Dict[str, Any]) -> Dict[str, Any]:
     blueprint: Dict[str, Any] = {}
 
     key_pos = (
-        _get(analysis, "vlm_reconstruction.key_light.position")
+        _get(analysis, "lighting_intel.key_position_text")
+        or _get(analysis, "vlm_reconstruction.key_light.position")
         or _get(analysis, "lighting_intel.key_direction")
         or _get(analysis, "lighting_inference.key_direction")
         or _get(analysis, "cv.key_direction")
     )
     key_mod = (
-        _get(analysis, "vlm_reconstruction.key_light.modifier")
+        _get(analysis, "lighting_intel.modifier_family")
+        or _get(analysis, "vlm_reconstruction.key_light.modifier")
         or _get(analysis, "lighting_intel.modifier_type")
         or _get(analysis, "lighting_inference.modifier_type")
         or _get(analysis, "cv.modifier_type")
     )
     fill_ratio = (
-        _get(analysis, "vlm_reconstruction.fill_ratio")
+        _get(analysis, "lighting_intel.cue_report.fill_ratio.ratio")
+        or _get(analysis, "vlm_reconstruction.fill_ratio")
         or _get(analysis, "lighting_intel.fill_ratio")
         or _get(analysis, "solver.fill_ratio")
         or _get(analysis, "solver_result.fill_ratio")

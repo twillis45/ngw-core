@@ -165,6 +165,7 @@ def init_db():
                 notes               TEXT,
                 status              TEXT NOT NULL DEFAULT 'draft',
                 created_by          TEXT,
+                provenance          TEXT,   -- SP-001: source/rights tracking (see SetupFamily provenance values)
                 created_at          REAL NOT NULL,
                 updated_at          REAL NOT NULL
             );
@@ -328,6 +329,12 @@ def init_db():
         gs_cols = [r[1] for r in conn.execute("PRAGMA table_info(gold_set_entries)").fetchall()]
         if "analysis_id" not in gs_cols:
             conn.execute("ALTER TABLE gold_set_entries ADD COLUMN analysis_id TEXT")
+
+    # Logs — add user_email to analysis_results for per-user filtering
+    with get_db() as conn:
+        ar_cols = [r[1] for r in conn.execute("PRAGMA table_info(analysis_results)").fetchall()]
+        if "user_email" not in ar_cols:
+            conn.execute("ALTER TABLE analysis_results ADD COLUMN user_email TEXT")
 
     from db.analytics import init_analytics_table
     init_analytics_table()
@@ -990,29 +997,54 @@ def refresh_feedback_aggregates() -> int:
 
 # ── Gold Set Entries CRUD ─────────────────────────────────
 
+_GOLD_SET_VALID_STATUSES = {"draft", "approved", "archived", "rejected"}
+_GOLD_SET_VALID_PROVENANCE = {
+    "photographer_original",  # image taken by the contributing photographer
+    "licensed_stock",         # licensed from stock library
+    "public_domain",          # explicitly public domain
+    "creative_commons",       # CC-licensed with appropriate terms
+    "fair_use_reference",     # used for reference/research under fair use
+    "synthetic",              # AI-generated or rendered
+    "internal_test",          # internal test asset, not for redistribution
+    "unknown",                # provenance not recorded
+}
+
+
 def create_gold_set_entry(
     image_path: str,
     expected_analysis: Optional[Dict[str, Any]] = None,
     notes: Optional[str] = None,
     status: str = "draft",
     created_by: Optional[str] = None,
+    setup_family: Optional[str] = None,
+    provenance: Optional[str] = None,
 ) -> Dict[str, Any]:
+    # TR-002: approved status requires created_by
+    if status == "approved" and not created_by:
+        raise ValueError("TR-002: 'approved' status requires created_by to be set.")
+    # Validate status
+    if status not in _GOLD_SET_VALID_STATUSES:
+        raise ValueError(f"Invalid status '{status}'. Must be one of: {sorted(_GOLD_SET_VALID_STATUSES)}")
     gid = uuid.uuid4().hex
     now = time.time()
     with get_db() as conn:
         conn.execute(
             """INSERT INTO gold_set_entries
-               (id, image_path, expected_analysis, notes, status, created_by, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               (id, image_path, expected_analysis, notes, status, created_by,
+                setup_family, provenance, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
             (gid, image_path,
              json.dumps(expected_analysis) if expected_analysis else None,
-             notes, status, created_by, now, now),
+             notes, status, created_by,
+             setup_family, provenance, now, now),
         )
     return {
         "id": gid, "image_path": image_path,
         "expected_analysis": expected_analysis,
         "notes": notes, "status": status,
         "created_by": created_by,
+        "setup_family": setup_family,
+        "provenance": provenance,
         "created_at": now, "updated_at": now,
     }
 
@@ -1055,11 +1087,24 @@ def get_gold_set_entry(entry_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_gold_set_entry(entry_id: str, **kwargs) -> Optional[Dict[str, Any]]:
+    # TR-002: 'approved' status requires created_by on the existing entry
+    if kwargs.get("status") == "approved":
+        if kwargs.get("status") not in _GOLD_SET_VALID_STATUSES:
+            raise ValueError(f"Invalid status. Must be one of: {sorted(_GOLD_SET_VALID_STATUSES)}")
+        existing = get_gold_set_entry(entry_id)
+        if existing and not existing.get("created_by"):
+            raise ValueError(
+                f"TR-002: Cannot approve gold set entry '{entry_id}' — "
+                "created_by is not set. Assign an author before approving."
+            )
+    elif "status" in kwargs and kwargs["status"] not in _GOLD_SET_VALID_STATUSES:
+        raise ValueError(f"Invalid status '{kwargs['status']}'. Must be one of: {sorted(_GOLD_SET_VALID_STATUSES)}")
+
     now = time.time()
     sets = ["updated_at = ?"]
     vals: list = [now]
-    for key in ("expected_analysis", "notes", "status"):
-        if key in kwargs:
+    for key in ("expected_analysis", "notes", "status", "setup_family", "provenance"):
+        if key in kwargs and kwargs[key] is not None:
             v = kwargs[key]
             if key == "expected_analysis" and isinstance(v, dict):
                 v = json.dumps(v)

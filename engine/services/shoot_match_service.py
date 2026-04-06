@@ -480,14 +480,14 @@ def _build_setup_summary(
         "triangle": "Triangle",
         "broad": "Broad",
         "short": "Short",
-        "gobo": "Gobo/Projected",
+        "projected": "Projected / Interrupted Light",
         "flat": "Flat",
-        "flat_fashion": "Flat Fashion",
         "high_key": "High Key",
         "low_key": "Low Key",
         "window_portrait": "Window Portrait",
-        "rim_only": "Rim Only",
+        "rim": "Rim / Edge Light",
         "ring_light": "Ring Light",
+        "silhouette_key": "Silhouette / Back Key",
     }
     pattern_name = _PATTERN_NAMES.get(pattern, pattern.replace("_", " ").title())
     parts.append(f"{pattern_name} lighting")

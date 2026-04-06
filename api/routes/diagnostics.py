@@ -91,7 +91,7 @@ def get_config() -> Dict[str, Any]:
 
     patterns = [
         "rembrandt", "loop", "butterfly", "split", "flat", "broad",
-        "short", "rim_only", "beauty_dish", "high_key", "low_key",
+        "short", "rim", "ring_light", "high_key", "low_key",
         "natural_window", "dramatic_key", "three_point",
     ]
 

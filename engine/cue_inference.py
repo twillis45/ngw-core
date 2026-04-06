@@ -102,12 +102,20 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
             eye_count = sum(1 for h in clock_hours if h in (3, 9))
             low_count = sum(1 for h in clock_hours if h in (4, 5, 6, 7, 8))
             total = len(clock_hours)
-            if high_count / total >= 0.5:
+            # Key height uses upper catchlights as the primary signal.
+            # Lower catchlights (4-8) are fill/reflector evidence, NOT key-height
+            # evidence.  Counting them alongside upper catchlights incorrectly
+            # drags butterfly and clamshell setups (which have intentional fill
+            # from below) toward "low" or "eye_level".
+            # Rule: if ANY upper catchlight exists, the key is high.  Only call
+            # "low" when there are no upper catchlights at all (e.g. ring from
+            # below, under-face reflector as primary source — genuinely unusual).
+            if high_count > 0:
                 cl_height = "high"
-            elif low_count / total >= 0.5:
-                cl_height = "low"
-            elif eye_count / total >= 0.5:
+            elif eye_count > 0 and low_count == 0:
                 cl_height = "eye_level"
+            elif low_count > 0:
+                cl_height = "low"
             else:
                 cl_height = "unknown"
 
@@ -179,13 +187,23 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
         # confidence to override the 1-light default.
         min_multi_conf = 0.4 if catchlights_found else 0.6
         if multi.confidence >= min_multi_conf and light_count < multi.shadow_count:
+            # When catchlights are found, cap multi-shadow's contribution.
+            # Multi-shadow detects gradient directions (hair, clothing folds,
+            # bone structure) which inflate counts.  Allow it to add at most
+            # 2 lights beyond the catchlight-based estimate to prevent wild
+            # overestimates (e.g. multi=4 for a 2-light setup).
+            if catchlights_found:
+                _capped = min(multi.shadow_count, light_count + 2)
+            else:
+                _capped = multi.shadow_count
             notes.append(
                 f"Multi-shadow suggests {multi.shadow_count} lights "
                 f"(conf {multi.confidence:.2f}, "
                 f"threshold {min_multi_conf:.1f}), "
-                f"catchlights show {light_count} — using higher estimate."
+                f"catchlights show {light_count}"
+                + (f" — capped to {_capped}." if _capped < multi.shadow_count else " — using higher estimate.")
             )
-            light_count = max(light_count, multi.shadow_count)
+            light_count = max(light_count, _capped)
         elif not catchlights_found and multi.confidence < min_multi_conf:
             notes.append(
                 f"Multi-shadow suggests {multi.shadow_count} lights "
@@ -234,6 +252,43 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
     # -- Shadow pattern --
     shadow_pattern = _infer_shadow_pattern(cue_report, key_direction, key_height, light_count)
 
+    # -- Continuous angle estimates --
+    # Elevation: derived from catchlight clock positions (most direct source).
+    # Clock hour → approximate elevation above eye level:
+    #   12 → 85°, 11/1 → 70°, 10/2 → 50°, 9/3 → 15°, 8/4 → -10°, 7/5 → -30°, 6 → -50°
+    # Falls back to key_height category if catchlights unavailable.
+    _CLOCK_TO_ELEV = {
+        12: 85, 11: 70, 1: 70, 10: 50, 2: 50,
+        9: 15, 3: 15, 8: -10, 4: -10, 7: -30, 5: -30, 6: -50,
+    }
+    _HEIGHT_FALLBACK = {"high": 45.0, "eye_level": 10.0, "low": -20.0}
+    key_elevation_est: Optional[float] = None
+    try:
+        _cl_up_hours = [h for h in clock_hours if h in (10, 11, 12, 1, 2)]
+        if _cl_up_hours:
+            key_elevation_est = round(
+                sum(_CLOCK_TO_ELEV[h] for h in _cl_up_hours) / len(_cl_up_hours), 1
+            )
+    except NameError:
+        pass  # clock_hours not populated (no catchlights or low confidence)
+    if key_elevation_est is None:
+        key_elevation_est = _HEIGHT_FALLBACK.get(key_height)
+
+    # Azimuth: derived from shadow direction → key position.
+    # 0° = on-axis, ±45° = classic 45° portrait key, ±90° = side, ±120°+ = rim.
+    _DIR_TO_AZIMUTH: dict = {
+        "top_center":   0.0,
+        "upper_right":  45.0,
+        "upper_left":  -45.0,
+        "right":        80.0,
+        "left":        -80.0,
+        "lower_right":  120.0,
+        "lower_left":  -120.0,
+        "below":        0.0,   # fill from below — same axis as key
+        "unknown":      None,
+    }
+    key_azimuth_est: Optional[float] = _DIR_TO_AZIMUTH.get(key_direction)
+
     # -- Composite confidence --
     confidences = [c for c in [direction_confidence, vl.confidence if vl else 0] if c > 0]
     confidence = sum(confidences) / len(confidences) if confidences else 0.2
@@ -258,76 +313,55 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
         confidence=round(confidence, 2),
         notes=notes,
         field_status=_shadow_status,
+        key_elevation_deg_estimate=key_elevation_est,
+        key_azimuth_deg_estimate=key_azimuth_est,
     )
 
 
-def _has_triangle_catchlights(cue_report: VisualCueReport) -> bool:
-    """Check if catchlight positions form a Hurley-style triangle.
-
-    True triangle requires at least ONE eye showing:
-      - Two upper catchlights (10, 11, 12, 1, 2 o'clock) AND
-      - One lower catchlight (4, 5, 6, 7, 8 o'clock)
-    forming the signature inverted-triangle pattern from two flanking
-    keys above + one fill below.
-
-    Both eyes should show ≥3 catchlights total (after dedup), but the
-    geometric check needs only one eye with clear upper+lower to confirm
-    the triangle shape — the other eye may be partially occluded by pose.
-    """
-    cp = cue_report.catchlight_position
-    if not cp:
-        return False
-
-    def _is_triangle(positions: list) -> bool:
-        hours = []
-        for pos in positions:
-            try:
-                h = int(str(pos).split()[0])
-                hours.append(h)
-            except (ValueError, IndexError):
-                continue
-        upper = [h for h in hours if h in (10, 11, 12, 1, 2)]
-        lower = [h for h in hours if h in (4, 5, 6, 7, 8)]
-        # Need at least 2 distinct upper positions + 1 lower
-        return len(set(upper)) >= 2 and len(lower) >= 1
-
-    left_ok = _is_triangle(cp.left_eye) if cp.left_eye else False
-    right_ok = _is_triangle(cp.right_eye) if cp.right_eye else False
-    return left_ok or right_ok
-
-
-def _has_bilateral_symmetric_catchlights(cue_report: VisualCueReport) -> bool:
-    """Check if both eyes show bilateral symmetric upper catchlights (10 + 2 o'clock).
-
-    This is the Hurley Triangle twin-key signature without a lower fill catchlight.
-    Lower fill (V-flat, reflector, low panel) is often too dim to register at
-    typical image resolutions; the flanking upper keys are the diagnostic signal.
-
-    Requires:
-      - Both eyes have ≥2 catchlights
-      - Both eyes have at least one upper_left (10/11 o'clock) AND one upper_right (1/2 o'clock)
-      - Neither eye has a lower catchlight (which would indicate clamshell instead)
-    """
-    cp = cue_report.catchlight_position
-    if not cp or not cp.left_eye or not cp.right_eye:
-        return False
-
-    def _is_bilateral(positions: list) -> bool:
-        hours = []
-        for pos in positions:
-            try:
-                h = int(str(pos).split()[0])
-                hours.append(h)
-            except (ValueError, IndexError):
-                continue
-        if len(hours) < 2:
-            return False
-        has_upper_left = any(h in (10, 11) for h in hours)
-        has_upper_right = any(h in (1, 2) for h in hours)
-        has_lower = any(h in (4, 5, 6, 7, 8) for h in hours)
-        return has_upper_left and has_upper_right and not has_lower
-
-    return _is_bilateral(cp.left_eye) and _is_bilateral(cp.right_eye)
+# ── HURLEY CATCHLIGHT FUNCTIONS — commented out pending pipeline cleanup ──────
+# These functions rely on 3+ catchlights forming specific geometric patterns,
+# which requires the catchlight pipeline to be clean and reliable.  Re-enable
+# after catchlight consolidation is validated on real images.
+#
+# def _has_triangle_catchlights(cue_report: VisualCueReport) -> bool:
+#     cp = cue_report.catchlight_position
+#     if not cp:
+#         return False
+#     def _is_triangle(positions: list) -> bool:
+#         hours = []
+#         for pos in positions:
+#             try:
+#                 h = int(str(pos).split()[0])
+#                 hours.append(h)
+#             except (ValueError, IndexError):
+#                 continue
+#         upper = [h for h in hours if h in (10, 11, 12, 1, 2)]
+#         lower = [h for h in hours if h in (4, 5, 6, 7, 8)]
+#         return len(set(upper)) >= 2 and len(lower) >= 1
+#     left_ok = _is_triangle(cp.left_eye) if cp.left_eye else False
+#     right_ok = _is_triangle(cp.right_eye) if cp.right_eye else False
+#     return left_ok or right_ok
+#
+# def _has_bilateral_symmetric_catchlights(cue_report: VisualCueReport) -> bool:
+#     cp = cue_report.catchlight_position
+#     if not cp or not cp.left_eye or not cp.right_eye:
+#         return False
+#     def _is_bilateral(positions: list) -> bool:
+#         hours = []
+#         for pos in positions:
+#             try:
+#                 h = int(str(pos).split()[0])
+#                 hours.append(h)
+#             except (ValueError, IndexError):
+#                 continue
+#         if len(hours) < 2:
+#             return False
+#         has_upper_left = any(h in (10, 11) for h in hours)
+#         has_upper_right = any(h in (1, 2) for h in hours)
+#         has_lower = any(h in (4, 5, 6, 7, 8) for h in hours)
+#         return has_upper_left and has_upper_right and not has_lower
+#     return _is_bilateral(cp.left_eye) and _is_bilateral(cp.right_eye)
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _has_clamshell_catchlights(cue_report: VisualCueReport) -> bool:
@@ -363,6 +397,23 @@ def _infer_shadow_pattern(
     light_count: int,
 ) -> str:
     """Map geometry cues to a named shadow pattern."""
+    # ── Ring light: modifier-first detection via catchlight shape ──────────
+    # Ring lights produce a distinctive annular (donut) catchlight reflection.
+    # This signal is more reliable than shadow geometry for ring-light detection
+    # because ring lights intentionally minimize shadows — direction-based
+    # analysis is weak.  If the catchlight extractor detected 'ring' in the
+    # shapes_seen list, accept it as ring_light immediately.
+    # Confidence gate 0.45: ring detection is relatively specific; the 'ring'
+    # value is only set when the donut/annular morphology is confirmed.
+    _cs_rl = cue_report.catchlight_shape
+    _rl_shape_signal = (
+        _cs_rl is not None
+        and _cs_rl.confidence >= 0.45
+        and "ring" in getattr(_cs_rl, "shapes_seen", [])
+    )
+    if _rl_shape_signal:
+        return "ring_light"
+
     # Triangle requires 3+ lights AND low/medium contrast.
     # Triangle lighting wraps from 3 directions, producing very even
     # illumination with minimal shadow depth.  High/extreme contrast
@@ -381,31 +432,24 @@ def _infer_shadow_pattern(
             face_cr_label = getattr(cr, "face_label", None) if cr else None
             cr_label = (face_cr_label or (cr.label if cr else "unknown")).lower()
             if cr_label in ("low", "medium"):
-                # Geometry gate: verify catchlights actually form a triangle
-                # (two upper + one lower) — not just 3 random reflections.
-                if _has_triangle_catchlights(cue_report):
-                    return "triangle"
-                # 3+ catchlights, low contrast, but positions don't form
-                # a triangle — fall through to direction-based patterns.
+                # Triangle geometry gate via catchlights commented out pending
+                # catchlight pipeline consolidation — re-enable once clean.
+                # if _has_triangle_catchlights(cue_report):
+                #     return "triangle"
+                pass
             # High/extreme contrast with 3+ catchlights per eye →
             # NOT triangle.  Extra catchlights are reflections from
             # glasses, jewellery, or specular skin surfaces.
             # Allow direction-based patterns to fire below.
             _triangle_rejected = True
 
-    # Bilateral symmetric keys (Hurley without lower fill catchlight resolved).
-    # When per_eye_max == 2 AND both eyes show bilateral upper catchlights at
-    # ~10 and ~2 o'clock, the lower V-flat/reflector fill is likely too dim
-    # to register.  Contrast gate still required — single-key setups produce
-    # high contrast that would not reach here.
-    if not _triangle_rejected and refl and refl.total_catchlights >= 2:
-        per_eye_max_2 = max(refl.per_eye_counts.get("left", 0), refl.per_eye_counts.get("right", 0))
-        if per_eye_max_2 >= 2:
-            cr = cue_report.contrast_ratio
-            cr_label = (cr.label if cr else "unknown").lower()
-            if cr_label in ("low", "medium"):
-                if _has_bilateral_symmetric_catchlights(cue_report):
-                    return "triangle"
+    # Gate 3 (bilateral symmetric / Hurley approximation) removed.
+    # Rationale: 2 upper catchlights per eye with low contrast is insufficient
+    # evidence for triangle lighting.  The same signal fires on loop setups with
+    # a strong frontal fill, soft corporate keys, and any 2-light portrait where
+    # the fill doesn't register its own catchlight.  Downstream triangle detection
+    # (gate 2 with explicit 3-catchlight evidence) and reference_read's triangle
+    # classification are more specific.  Corporate_soft_key false-positive confirmed.
 
     # Clamshell: 2 lights, vertical alignment, key high, direction on-axis.
     # BUT — require catchlight evidence of upper + lower in BOTH eyes.
@@ -418,21 +462,73 @@ def _infer_shadow_pattern(
     # eye wetness or specular reflections, not a dedicated fill.
     if light_count >= 2 and key_height == "high":
         if key_direction not in ("upper_left", "upper_right", "left", "right"):
-            if _has_clamshell_catchlights(cue_report):
+            # Pose guard: clamshell requires a near-frontal face.
+            # An overhead key + reflector fill reads correctly as clamshell
+            # only when the face is presented frontally.  When |yaw| >= 0.25
+            # (~15° turn) the "lower" catchlights are from a lateral fill or
+            # eye wetness, not a dedicated below-chin reflector.
+            # fo.confidence >= 0.65 corresponds to |yaw| >= 0.25 in the
+            # face-yaw confidence scale (moderate+ turn).
+            # If the face is turned, fall through so P6 can resolve the
+            # direction-based pattern (loop → broad / short).
+            _fo_clam = getattr(cue_report, "face_orientation", None)
+            _face_turned = (
+                _fo_clam is not None
+                and _fo_clam.confidence >= 0.65
+                and getattr(_fo_clam, "broad_side", "unknown") not in ("unknown", "")
+            )
+            # BW guard: in B&W images, shadow-direction extraction loses color
+            # signal, so key_direction frequently falls to "unknown".  Treating
+            # an unknown direction as on-axis (clamshell) is a false assumption —
+            # the key could equally be lateral (broad/short territory).
+            # Suppress clamshell when both conditions hold; fall through so
+            # direction-based patterns handle the result instead.
+            _tp_clam = getattr(cue_report, "tonal_processing_estimation", None)
+            _is_bw_img = getattr(_tp_clam, "is_bw", False)
+            _bw_dir_unknown = _is_bw_img and key_direction == "unknown"
+            if not _face_turned and not _bw_dir_unknown and _has_clamshell_catchlights(cue_report):
                 return "clamshell"
         # else: fall through to direction-based patterns
 
     # ── High-key / flat detection ──
-    # High-key scenes have bright backgrounds + low contrast.  Detect before
-    # direction-based patterns because even high-key images can have a slight
-    # directional shadow that would incorrectly trigger rembrandt/loop.
+    # ANALYSIS-ORDER ENFORCEMENT (Stage 2 → tonal shapes, does not lead):
+    # Tonal signals narrow confidence and suppress implausible branches.
+    # They must not hard-replace a geometry read unless no directional
+    # geometry evidence exists.
+    #
+    # Gate — TWO independent geometry signals, evaluated in priority order:
+    #   PRIMARY:   key_direction from shadow analysis (Stage 3 in expert order)
+    #              If the shadow analysis returned a definitive lateral direction
+    #              (not "unknown", not "top_center"), a directional key IS present
+    #              and cannot be collapsed to flat/symmetric high_key.
+    #   SECONDARY: light_structure.pattern_name (Stage 6, secondary confirmation)
+    #              If light_structure independently confirms a directional pattern
+    #              at ≥ 0.55 confidence, geometry leads.
+    #
+    # Either signal alone is sufficient to suppress the tonal shortcut.
+    # The tonal evidence still influences the contradiction scorer downstream.
     contrast = cue_report.contrast_ratio
     cr_label = (contrast.label if contrast else "unknown").lower()
     bg = cue_report.background_illumination
     bg_bright = bg and bg.brightness_relative == "brighter" if bg else False
 
     if cr_label == "low" and bg_bright:
-        return "high_key"
+        _DIRECTIONAL_PATTERNS = {
+            "loop", "rembrandt", "broad", "short", "split", "butterfly",
+        }
+        # PRIMARY gate: lateral key_direction from shadow analysis.
+        # "unknown" and "top_center" are consistent with high_key / flat
+        # illumination.  Any lateral direction contradicts it.
+        _key_is_lateral = key_direction not in ("unknown", "top_center", "", None)
+        # SECONDARY gate: light_structure confirms a directional pattern.
+        _ls_early = getattr(cue_report, "light_structure", None)
+        _ls_pat_early = getattr(_ls_early, "pattern_name", "unknown") if _ls_early else "unknown"
+        _ls_conf_early = getattr(_ls_early, "confidence", 0.0) if _ls_early else 0.0
+        _ls_geometry_leads = _ls_pat_early in _DIRECTIONAL_PATTERNS and _ls_conf_early >= 0.55
+        _geometry_leads = _key_is_lateral or _ls_geometry_leads
+        if not _geometry_leads:
+            return "high_key"
+        # geometry leads — fall through; tonal high_key signal suppressed
 
     # ── Butterfly detection (enhanced) ──
     # Butterfly = key directly above, centered.  Classic test: symmetric
@@ -440,48 +536,126 @@ def _infer_shadow_pattern(
     # The shadow-direction extractor sometimes picks a slight lateral bias
     # on a centered key, so also check highlight symmetry as confirmation.
     hs = cue_report.highlight_symmetry
-    high_symmetry = hs and hs.symmetry_score > 0.7 if hs else False
+    # >0.70: clear bilateral symmetry confirms key is near-center.
+    # Range 0.60–0.69 overlaps with well-filled loop/broad images (measured
+    # 0.625 loop_standard, 0.627 broad) — lowering below 0.70 causes those
+    # portraits to misclassify as butterfly.  Near-on-axis butterfly images
+    # with symmetry in the 0.60–0.69 range are handled by the P3 nose-shadow
+    # path below, which uses a direct CV measurement rather than symmetry alone.
+    high_symmetry = hs and hs.symmetry_score > 0.70 if hs else False
 
-    if key_height == "high":
-        # Strong path: shadow detector says centered (unknown direction)
-        if key_direction == "unknown":
-            return "butterfly"
-        # Weak path: shadow says slightly off-axis, but highlights are
-        # symmetric — the key is actually near-center, not truly off-axis.
-        if high_symmetry and key_direction in ("upper_left", "upper_right"):
-            return "butterfly"
-
-    # ── P3: Nose shadow length → butterfly / loop disambiguation ──────────
-    # When CV directly measures that the nose shadow barely drops below the
-    # nose tip, it is near-definitive evidence of butterfly/paramount (key
-    # centered above, not off to the side).  This fires before direction-based
-    # patterns so that high-symmetry + short-drop images skip the loop/rembrandt
-    # branch entirely.
-    nsl = cue_report.nose_shadow_length
-    if nsl and nsl.confidence > 0.4 and nsl.shadow_label == "butterfly":
-        # Short drop + current context: if direction is roughly centered or
-        # unknown, call butterfly.  Off-axis keys can still produce a short
-        # drop on the near-camera side, so require direction evidence too.
-        if key_direction in ("unknown", "top_center") or high_symmetry:
-            return "butterfly"
-
-    # ── Light-structure-informed pattern refinement ──
+    # ── Light-structure data (early access for clamshell disambiguation) ──
     # light_structure_pass() in vision_passes.py performs nose-shadow-shape
-    # analysis including triangle detection on the cheek.  When available
-    # and confident, use it to distinguish loop from rembrandt (and
-    # potentially confirm butterfly/split).
+    # analysis including triangle detection on the cheek.  Accessed early so
+    # the butterfly heuristics below can yield when light_structure already
+    # identified clamshell — both patterns share key-high + on-axis geometry,
+    # but clamshell's fill-from-below cancels the nose shadow that butterfly
+    # creates.  Also used in P4 shadow continuity and direction-based patterns.
     ls = cue_report.light_structure
     _ls_pattern = getattr(ls, "pattern_name", "unknown") if ls else "unknown"
     _ls_conf = getattr(ls, "confidence", 0.0) if ls else 0.0
     _ls_triangle = getattr(ls, "triangle_detected", False) if ls else False
+
+    _ls_says_clamshell = _ls_pattern == "clamshell" and _ls_conf >= 0.5
+    # Positive butterfly confirmation from light_structure nose-shadow-shape
+    # analysis.  When confidence ≥0.6, this is the most reliable butterfly
+    # indicator: it directly measures whether the nose shadow drops straight
+    # down (butterfly) or has a lateral component (loop/rembrandt).
+    _ls_says_butterfly = _ls_pattern == "butterfly" and _ls_conf >= 0.6
+
+    # Pre-read nose_shadow_length — used primarily for _nsl_blocks_butterfly.
+    # NOTE: nsl.shadow_label currently returns "butterfly" as a near-constant
+    # default across most images (observed confidence ~0.49 for all patterns).
+    # It is NOT a reliable discriminating signal and must not be used alone to
+    # distinguish butterfly from loop.  _nsl_blocks_butterfly (shadow_label ==
+    # "none") remains valid as an explicit contradiction signal.
+    nsl = cue_report.nose_shadow_length
+    # If nsl explicitly says "none" — no visible nose shadow — butterfly is
+    # contradicted (butterfly requires a downward nose shadow).
+    _nsl_blocks_butterfly = (
+        nsl is not None
+        and nsl.confidence > 0.3
+        and nsl.shadow_label == "none"
+    )
+
+    # Pre-read fill_ratio for P2c flat-fill butterfly path.
+    # fill_label=="flat" (ratio ≥ ~0.85) means the shadow side is nearly as
+    # bright as the key side — only possible when the key is near-centered
+    # (butterfly/clamshell) or when a very heavy fill is used.
+    # Measured separability: butterfly 0.899 (flat), tangents portrait 0.897
+    # (flat) vs. loop_standard 0.581 (soft_fill), broad 0.605 (soft_fill).
+    _fr = cue_report.fill_ratio
+    _flat_fill = (
+        _fr is not None
+        and getattr(_fr, "fill_label", "") == "flat"
+    )
+
+    if key_height == "high":
+        # Strong path: shadow detector says centered (unknown direction).
+        # Clamshell escape: clamshell also has key-high + on-axis, but
+        # fill-from-below cancels the nose shadow that butterfly creates.
+        # nsl "none" escape: no visible shadow → likely clamshell/flat.
+        if key_direction == "unknown":
+            if not _ls_says_clamshell and not _nsl_blocks_butterfly:
+                return "butterfly"
+        # Weak path: shadow says slightly off-axis, but highlights are
+        # symmetric — key is near-center, not truly off-axis.
+        # NOTE: very large fill sources (e.g. reflector fill) can push
+        # hs.symmetry above 0.70 even for a genuine loop key — the resolver
+        # handles this by preferring lighting_inference when it says "loop"
+        # and is not heavily contradicted (see LI demotion threshold).
+        if high_symmetry and key_direction in ("upper_left", "upper_right"):
+            if not _ls_says_clamshell and not _nsl_blocks_butterfly:
+                return "butterfly"
+        # P2c: Flat fill + high key + slightly off-axis → soft butterfly.
+        # fill_ratio.fill_label=="flat" means the shadow side is nearly as
+        # bright as the key side (ratio ≥ ~0.85).  This level of fill is
+        # only achievable when the key is near-centered — loop and broad
+        # setups produce "soft_fill" (0.55–0.75) at most.  A key that reads
+        # upper_left / upper_right but produces flat fill is a soft butterfly
+        # where the shadow detector picked up a minor lateral bias.
+        if _flat_fill and key_direction in ("upper_left", "upper_right"):
+            if not _ls_says_clamshell and not _nsl_blocks_butterfly:
+                return "butterfly"
+
+    # ── P3: Nose shadow length → butterfly / loop disambiguation ──────────
+    # When CV measures a short nose shadow drop, it is evidence of a near-
+    # centered key.  fire before direction-based patterns so high-symmetry
+    # + short-drop images skip the loop/rembrandt branch.
+    # NOTE: nsl.shadow_label is known to default to "butterfly" for many
+    # images — it is not a precise discriminating signal on its own.  The
+    # combination with key_direction context and the resolver's contradiction
+    # scoring provides the necessary disambiguation.
+    nsl = cue_report.nose_shadow_length
+    if nsl and nsl.confidence > 0.4 and nsl.shadow_label == "butterfly":
+        if key_direction in ("unknown", "top_center") or high_symmetry:
+            if not _ls_says_clamshell:
+                return "butterfly"
+    # P3-ext: light_structure explicitly identifies butterfly geometry on a
+    # barely-off-axis key (upper_left / upper_right, key high).  This covers
+    # soft butterfly setups where the shadow direction detector sees a slight
+    # lateral bias but the nose-shadow-shape analysis confirms centered geometry.
+    # Requires ls.confidence ≥ 0.6 — ls is the more reliable CV signal here.
+    if _ls_says_butterfly and key_direction in ("upper_left", "upper_right") and key_height == "high":
+        if not _ls_says_clamshell:
+            return "butterfly"
 
     # ── P4: Shadow continuity → Rembrandt triangle confirmation ──────────
     # Merge shadow_continuity into the triangle signal used by the
     # loop/rembrandt decision.  If CV directly measures the nose shadow
     # connecting to the cheek shadow, treat it as triangle_detected=True
     # regardless of what light_structure_pass found.
+    #
+    # Guard: when light_structure confidently identifies a pattern that is
+    # physically incompatible with a Rembrandt triangle, skip the override:
+    #   - clamshell: near-zero shadow density → no triangle possible
+    #   - split: straight shadow line, no cheek-nose connection
+    #   - butterfly: symmetric centered shadow, no lateral triangle
+    # Shadow continuity can false-positive on these due to tonal gradients,
+    # high-contrast-grade processing, or pose-induced shadow patterns.
+    _ls_blocks_triangle = _ls_conf >= 0.5 and _ls_pattern in ("clamshell", "split", "butterfly")
     sc = cue_report.shadow_continuity
-    if sc and sc.confidence > 0.4:
+    if sc and sc.confidence > 0.4 and not _ls_blocks_triangle:
         if sc.triangle_connected and sc.connectivity_score > 0.6:
             _ls_triangle = True  # CV confirmed the connection
         elif not sc.triangle_connected and sc.gap_width_ratio > 0.05:
@@ -595,24 +769,48 @@ def _infer_shadow_pattern(
             if not _is_hcg:
                 return "rembrandt"
 
-        if _ls_conf >= 0.6 and _ls_pattern in ("butterfly", "split", "broad"):
+        # light_structure escape for patterns compatible with upper diagonal keys.
+        # NOTE: "split" is excluded — split requires a true 90° side key.
+        # NOTE: "clamshell" is excluded — clamshell requires an on-axis key
+        # (top_center or unknown direction).  key_direction of upper_left/upper_right
+        # is a 45° lateral key which is physically incompatible with clamshell.
+        # If light_structure says "clamshell" for a lateral key it is misreading
+        # bilateral facial symmetry or heavy fill as a clamshell pattern — trust
+        # direction instead.
+        if _ls_conf >= 0.6 and _ls_pattern in ("butterfly", "broad"):
             return _ls_pattern
 
-        # Default: loop for soft/ambiguous off-axis patterns.
+        # Default: loop for ambiguous off-axis patterns.
         # Rembrandt is a *specific* diagnostic that requires the triangle;
-        # loop is the general category.  Under HCG this is especially true.
-        _default = "loop" if _is_hcg else "rembrandt"
-        # P6: qualify the default "loop" → "short"/"broad" when face is turned;
-        # but don't downgrade "rembrandt" to "short" — keep rembrandt as is.
-        if _default == "loop":
-            return _p6_qualify_loop(key_direction)
-        return _default  # "rembrandt" stays rembrandt
+        # loop is the general category.  Only call rembrandt when
+        # shadow_continuity directly confirms the triangle connection —
+        # don't assume it from direction alone.
+        if not _is_hcg and sc and sc.confidence > 0.3 and sc.triangle_connected:
+            # Shadow continuity confirms triangle — rembrandt even without
+            # strong light_structure confidence.
+            return "rembrandt"
+        # No triangle evidence → default to loop (qualified by P6).
+        return _p6_qualify_loop(key_direction)
 
     if key_direction in ("left", "right"):
-        # Hard side light: split unless light_structure disagrees
-        if _ls_conf >= 0.5 and _ls_pattern in ("rembrandt", "loop"):
-            return _ls_pattern  # Not truly 90° — closer to 45°
-        return "split"
+        # Off-axis light without height info (no "upper_" prefix).
+        # Most portrait lighting at 30-60° produces "left"/"right" direction
+        # — loop is the most common pattern at these angles.  Split requires
+        # a true 90° placement with a hard vertical divide across the face.
+        # Default to loop (not split) and only call split when light_structure
+        # explicitly confirms it AND highlight symmetry is LOW.
+        # Guard: split = half-face dark → very low bilateral symmetry (< 0.45).
+        # A loop/broad portrait with slightly lateral lighting can trigger
+        # light_structure "split" if the shadow angle is steep.  Requiring
+        # low highlight symmetry (both sides NOT lit) prevents these false positives.
+        if _ls_conf >= 0.5 and _ls_pattern == "split":
+            _hs_sym_for_split = getattr(hs, "symmetry_score", 1.0) if hs else 1.0
+            if _hs_sym_for_split <= 0.45:
+                return "split"
+        if _ls_conf >= 0.5 and _ls_pattern in ("rembrandt", "loop", "broad", "short"):
+            return _ls_pattern
+        # Default: loop, qualified by P6 for short/broad
+        return _p6_qualify_loop(key_direction)
 
     # ── Light-structure fallback for unknown key direction ──
     # When shadow direction extraction failed (key_direction == "unknown") but
@@ -927,14 +1125,14 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
             f"— shadow-based cues may be less reliable."
         )
 
-    # -- Shadow interruption pattern (gobo / projection / slit) --
+    # -- Shadow interruption pattern (projected / slit) --
     sip = cue_report.shadow_interruption_pattern
     if sip and sip.detected:
         special_cases.append("shadow_interruption_pattern")
         notes.append(
             f"Shadow interruption pattern detected ({sip.classification}, "
             f"{sip.line_count} lines, parallelism={sip.line_parallelism:.2f}) "
-            f"— shadow-based cues may reflect projected/gobo lighting, "
+            f"— shadow-based cues may reflect projected (interrupted) lighting, "
             f"not conventional modifier placement."
         )
 
@@ -1191,7 +1389,7 @@ def infer_setup_family(
                     ),
                 })
                 hints.append(
-                    "Shadow geometry suggests a masked light source (gobo or slit flag) "
+                    "Shadow geometry suggests a masked light source (projected or slit flag) "
                     "rather than traditional portrait lighting."
                 )
             elif sip.classification in ("patterned_projection", "unknown"):
@@ -1200,7 +1398,7 @@ def infer_setup_family(
                     "confidence": sip.confidence * 0.80,
                     "reason": (
                         f"Shadow interruption ({sip.classification}, "
-                        f"{sip.line_count} lines) — gobo or projection"
+                        f"{sip.line_count} lines) — projected pattern"
                     ),
                 })
                 hints.append(

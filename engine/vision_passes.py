@@ -453,6 +453,147 @@ def pose_solver_pass(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 1B. CAMERA GEOMETRY PASS
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def camera_geometry_pass(
+    face_geometry: Optional[Dict[str, Any]] = None,
+    pose_solver: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Estimate camera height and horizontal angle from face mesh landmarks.
+
+    Camera height: uses perspective foreshortening of facial vertical
+    proportions.  When the camera is above eye level, the forehead region
+    appears compressed and the chin region expands (and vice versa).
+    Metric: where the nose tip falls between forehead top and chin (0–1).
+
+    Camera horizontal angle: combines the face yaw (from face mesh
+    landmarks 1/234/454) with torso rotation (from PoseLandmarker)
+    to distinguish head turns from camera offset.
+
+    Parameters
+    ----------
+    face_geometry : dict
+        Landmark positions from ``_detect_catchlights()``:
+        forehead_top, nose_bridge, nose_tip, chin, left/right_eye_center,
+        face_yaw, image_size.
+    pose_solver : dict
+        Output from ``pose_solver_pass()``: torso_rotation_deg,
+        head_rotation_deg, etc.
+
+    Returns
+    -------
+    dict
+        camera_height: "above" | "at_eye_level" | "below"
+        camera_horizontal_angle: "straight_on" | "slight_left" | "slight_right"
+            | "profile_left" | "profile_right"
+        height_confidence / angle_confidence: 0.0–1.0
+        measurements: raw metric values for debugging
+    """
+    if not face_geometry:
+        return {"ok": False, "error": "no face geometry data"}
+
+    forehead = face_geometry.get("forehead_top")
+    nose_tip = face_geometry.get("nose_tip")
+    chin     = face_geometry.get("chin")
+
+    if not all([forehead, nose_tip, chin]):
+        return {"ok": False, "error": "missing key landmarks (forehead/nose/chin)"}
+
+    # ── Camera height ────────────────────────────────────────────────
+    # t = where nose_tip falls between forehead and chin (0=forehead, 1=chin).
+    # Standard facial proportions: nose tip ≈ 0.55 of the forehead-chin span.
+    # Camera above → forehead compressed, nose pushed toward chin → t > 0.66
+    # Camera below → chin compressed, nose pushed toward forehead → t < 0.46
+    #
+    # NOTE: thresholds widened from 0.62/0.48 after benchmark comparison
+    # against gpt-4.1 / gpt-4o / o4-mini.  Butterfly lighting (key directly
+    # above) pushes nose_t to ~0.63 via shadow displacement even when the
+    # camera is at eye level.  0.66 absorbs that without losing real "above"
+    # detection (true above-angle images push nose_t > 0.70).
+    total_height = chin[1] - forehead[1]
+    if total_height < 10:
+        return {"ok": False, "error": "face too small for geometry estimation"}
+
+    nose_t = (nose_tip[1] - forehead[1]) / total_height
+
+    if nose_t > 0.66:
+        camera_height = "above"
+        height_confidence = min(0.9, 0.5 + (nose_t - 0.66) * 5)
+    elif nose_t < 0.46:
+        camera_height = "below"
+        height_confidence = min(0.9, 0.5 + (0.46 - nose_t) * 5)
+    else:
+        camera_height = "at_eye_level"
+        # Higher confidence nearer the center of the neutral band
+        height_confidence = max(0.4, 0.7 - abs(nose_t - 0.56) * 3)
+
+    # ── Camera horizontal angle ──────────────────────────────────────
+    # face_yaw convention (from vision_pipeline.py):
+    #   positive → nose toward camera-right → subject's right side visible
+    #              → camera to subject's LEFT
+    #   negative → nose toward camera-left  → subject's left side visible
+    #              → camera to subject's RIGHT
+    #
+    # VLM label convention: "slight_left" = camera to viewer's left.
+    # Since VLM describes the camera position from the viewer's perspective,
+    # and face_yaw > 0 means the face points to our right (camera is to
+    # subject's left, which is VIEWER'S LEFT when looking at the photo):
+    #   face_yaw > 0  → "slight_left" / "profile_left"
+    #   face_yaw < 0  → "slight_right" / "profile_right"
+    face_yaw = face_geometry.get("face_yaw", 0.0)
+    torso_rot = 0.0
+    if pose_solver and pose_solver.get("ok"):
+        torso_rot = pose_solver.get("torso_rotation_deg", 0.0) or 0.0
+
+    yaw_deg = face_yaw * 90  # approximate face yaw in degrees
+
+    # Combine face and torso rotation.  When both rotate the same direction,
+    # the effective camera offset is stronger (whole body angled, not just head).
+    # When torso is frontal but head turned, it's a head pose — still an effective
+    # camera angle for lighting purposes, but lower confidence.
+    combined = yaw_deg
+    torso_aligned = False
+    if abs(torso_rot) > 5 and (yaw_deg > 0) == (torso_rot > 0):
+        combined = (yaw_deg + torso_rot * 0.5) / 1.5  # weighted blend
+        torso_aligned = True
+
+    abs_combined = abs(combined)
+    if abs_combined < 15:
+        # Dead zone widened from 8° → 12° → 15° after VLM comparison:
+        # face_yaw picks up subtle asymmetries that all three VLMs classify
+        # as "straight_on".  Head turns under ~15° are natural posing micro-
+        # adjustments, not meaningful camera offset.  At 15° we match VLM
+        # consensus on 80% of benchmark images while still catching real
+        # camera angles (>18°).
+        camera_horizontal = "straight_on"
+        angle_confidence = 0.8
+    elif abs_combined < 30:
+        camera_horizontal = "slight_left" if combined > 0 else "slight_right"
+        angle_confidence = 0.7 if torso_aligned else 0.55
+    else:
+        camera_horizontal = "profile_left" if combined > 0 else "profile_right"
+        angle_confidence = 0.65 if torso_aligned else 0.45
+
+    return {
+        "ok": True,
+        "camera_height": camera_height,
+        "camera_horizontal_angle": camera_horizontal,
+        "height_confidence": round(height_confidence, 3),
+        "angle_confidence": round(angle_confidence, 3),
+        "measurements": {
+            "nose_t": round(nose_t, 4),
+            "face_yaw_raw": round(face_yaw, 4),
+            "face_yaw_deg": round(yaw_deg, 1),
+            "torso_rotation_deg": round(torso_rot, 1),
+            "combined_angle_deg": round(combined, 1),
+            "torso_aligned": torso_aligned,
+        },
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # 1A. SURFACE CLASS PASS
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -776,11 +917,17 @@ def shadow_pass(
     """Extract detailed shadow signals from the image.
 
     Returns:
-        shadow_vector_deg: Direction shadow falls (0-360, clock convention)
+        shadow_vector_deg: Direction shadow falls (0-360). Convention matches VLM:
+            0° = shadow falls straight down (butterfly / key directly above).
+            90° = shadow falls to camera-right.
+            180° = shadow falls straight up (unusual; back-lit).
+            270° = shadow falls to camera-left (typical loop with key at camera-right).
         shadow_vertical_angle_deg: Vertical angle of shadow
         shadow_softness: 0.0 (razor sharp) → 1.0 (fully diffused)
         shadow_length_ratio: Nose shadow length / nose length
         shadow_edge_gradient: How gradual the shadow transition is (0-1)
+        shadow_visible_on: Facial zones with measurable shadow coverage
+            (subset of: nose, cheek_left, cheek_right, jaw_left, jaw_right, neck)
     """
     if cv2 is None:
         return {"ok": False, "error": "cv2 not available"}
@@ -815,6 +962,36 @@ def shadow_pass(
     if not np.any(valid):
         return {"ok": False, "error": "no valid pixels for shadow analysis"}
 
+    # ── Shadow boundary refinement — nose-level ROI ────────────────────────────
+    # Computing gradients over ALL face edges (hair, eye outline, lips) corrupts
+    # the mean direction because hair and clothing edges dominate the top-25% pool.
+    # Fix: focus on the NOSE-LEVEL region (rows 45–72% of face height) where the
+    # key cast shadow lies, then restrict to shadow-boundary pixels only.
+    # Hair shadows (top of face) and jaw/neck shadows (bottom) are excluded —
+    # they contain spurious edges that pull the mean away from the actual shadow.
+    if face_box is not None:
+        _sv_x0, _sv_y0, _sv_x1, _sv_y1 = face_box
+        _sv_fh = _sv_y1 - _sv_y0
+        # Nose shadow zone: rows 45–72% of face height
+        _sv_r0 = _sv_y0 + int(0.45 * _sv_fh)
+        _sv_r1 = _sv_y0 + int(0.72 * _sv_fh)
+        _sv_face_nose = gray[_sv_r0:_sv_r1, _sv_x0:_sv_x1].astype(float)
+        if _sv_face_nose.size > 0:
+            # Use overall face mean for thresholding (not just nose sub-region)
+            _sv_face_full = gray[_sv_y0:_sv_y1, _sv_x0:_sv_x1].astype(float)
+            _sv_mean = float(np.mean(_sv_face_full))
+            _sv_shadow_m = (_sv_face_nose < _sv_mean * 0.82).astype(np.uint8)
+            if np.sum(_sv_shadow_m) > 20:
+                _sv_ker = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+                _sv_dilated = cv2.dilate(_sv_shadow_m, _sv_ker)
+                # Shadow boundary = pixels just outside the shadow mask
+                _sv_boundary = (_sv_dilated.astype(bool)) & (~_sv_shadow_m.astype(bool))
+                _sv_full = np.zeros((h, w), dtype=bool)
+                _sv_full[_sv_r0:_sv_r1, _sv_x0:_sv_x1] = _sv_boundary
+                _valid_shadow = valid & _sv_full
+                if np.sum(_valid_shadow) > 15:
+                    valid = _valid_shadow  # refined: nose-level shadow-edge pixels only
+
     gx = grad_x[valid]
     gy = grad_y[valid]
 
@@ -828,9 +1005,12 @@ def shadow_pass(
     else:
         mean_gx = np.mean(gx[strong])
         mean_gy = np.mean(gy[strong])
-        # Convert to degrees (0=up, 90=right, clockwise)
+        # Convert to degrees matching VLM convention:
+        # 0° = shadow falls straight down (key directly above = butterfly).
+        # The gradient points toward the bright side; shadow falls opposite.
+        # atan2(gx, -gy) gives clock-from-top; adding 180° shifts so 0=down.
         angle_rad = math.atan2(mean_gx, -mean_gy)
-        shadow_vector = (math.degrees(angle_rad) + 360) % 360
+        shadow_vector = (math.degrees(angle_rad) + 180.0 + 360.0) % 360.0
         # Vertical component
         shadow_vertical = abs(math.degrees(math.atan2(mean_gy, mean_gx)))
         shadow_vertical = min(shadow_vertical, 90.0)
@@ -851,24 +1031,34 @@ def shadow_pass(
         shadow_softness = 0.5  # default
 
     # -- Shadow length ratio --
-    # Analyze vertical luminance gradient in face region
+    # Measure the vertical extent of nose cast shadow relative to estimated nose length.
+    # Convention matches VLM: nose shadow length / nose length, nose length ≈ 15% face height.
+    # Strategy: scan rows 50–72% of face height on the shadow side (whichever half is darker),
+    # count rows below (face_mean * 0.88), divide by nose_est.
     shadow_length_ratio = None
     if face_box is not None:
         x0, y0, x1, y1 = face_box
-        face_gray = gray[y0:y1, x0:x1]
+        face_gray = gray[y0:y1, x0:x1].astype(float)
         if face_gray.size > 0:
             face_h = y1 - y0
-            # Divide face into thirds (forehead, nose, chin)
-            third = face_h // 3
-            if third > 5:
-                nose_region = face_gray[third:2*third, :]
-                chin_region = face_gray[2*third:, :]
-                nose_mean = float(np.mean(nose_region))
-                chin_mean = float(np.mean(chin_region))
-                if nose_mean > 0:
-                    # Shadow extending below nose → higher ratio
-                    darkness_ratio = 1.0 - (chin_mean / max(nose_mean, 1.0))
-                    shadow_length_ratio = max(0.0, min(2.0, darkness_ratio * 2.0))
+            face_w_sl = x1 - x0
+            face_mean_sl = float(np.mean(face_gray))
+            shadow_thr_sl = face_mean_sl * 0.88
+            nose_est = max(1, int(face_h * 0.15))
+            # Determine shadow side: left or right half of face, whichever is darker
+            mid = face_w_sl // 2
+            left_mean = float(np.mean(face_gray[:, :mid]))
+            right_mean = float(np.mean(face_gray[:, mid:]))
+            c_start, c_end = (0, mid) if left_mean < right_mean else (mid, face_w_sl)
+            # Scan under-nose rows on shadow side
+            r_start = int(face_h * 0.50)
+            r_end = int(face_h * 0.72)
+            shadow_rows = 0
+            for row in range(r_start, min(r_end, face_h)):
+                row_mean = float(np.mean(face_gray[row, c_start:c_end]))
+                if row_mean < shadow_thr_sl:
+                    shadow_rows += 1
+            shadow_length_ratio = max(0.0, min(2.0, shadow_rows / nose_est))
 
     # -- Shadow edge gradient --
     # Measure transition zone width between light and dark areas
@@ -891,6 +1081,68 @@ def shadow_pass(
     else:
         shadow_edge_gradient = 0.5
 
+    # -- Shadow visible on (cascade zone detection) --
+    # Detect which facial zones carry measurable shadow, matching VLM's shadow_visible_on field.
+    # Zones: nose, cheek_left, cheek_right, jaw_left, jaw_right, neck.
+    # A zone is "in shadow" if its mean brightness is < face_mean * 0.82 (18% darker than average).
+    shadow_visible_on: List[str] = []
+    if face_box is not None:
+        x0, y0, x1, y1 = face_box
+        fh = y1 - y0
+        fw = x1 - x0
+        face_region = gray[y0:y1, x0:x1].astype(float)
+        # Use the brighter horizontal half as the skin-tone reference so the
+        # threshold tracks actual reflectance rather than the shadow-depressed
+        # whole-face mean. This keeps zone thresholds stable across skin tones
+        # and lighting ratios (loop fill-side shadow pulls the whole-face mean
+        # down ~10–15%, causing the cheek threshold to miss subtler shadows).
+        if face_region.size > 0:
+            _col_means = np.mean(face_region, axis=0)
+            _half = max(1, len(_col_means) // 2)
+            face_mean_brightness = float(max(np.mean(_col_means[:_half]), np.mean(_col_means[_half:])))
+        else:
+            face_mean_brightness = 128.0
+        shadow_thresh = face_mean_brightness * 0.82
+
+        # Zone definitions as (row_start, row_end, col_start, col_end, threshold_mult).
+        # "nose" is handled separately — the cast shadow falls on the SHADOW SIDE of the face
+        # (the side with lower mean brightness).  Both left and right sub-zones are checked
+        # and "nose" is added if either is in shadow.
+        # Cheeks use 0.92 (8% darker): loop fill-side cheek shadow is compressed by fill to
+        # only 5–8% below face mean — too subtle for the 0.88 jaw/neck threshold.
+        # Jaw/neck use 0.88 (12% darker): these deeper shadow zones are more pronounced.
+        shadow_thresh = face_mean_brightness * 0.88  # retained for nose/neck below
+        zone_defs = {
+            "cheek_left":  (0.30, 0.60, 0.00, 0.42, 0.92),
+            "cheek_right": (0.30, 0.60, 0.58, 1.00, 0.92),
+            "jaw_left":    (0.62, 0.85, 0.05, 0.48, 0.88),
+            "jaw_right":   (0.62, 0.85, 0.52, 0.95, 0.88),
+        }
+        for zone_name, (r0, r1, c0, c1, thresh_mult) in zone_defs.items():
+            ry0 = int(r0 * fh)
+            ry1 = int(r1 * fh)
+            cx0 = int(c0 * fw)
+            cx1 = int(c1 * fw)
+            patch = face_region[ry0:ry1, cx0:cx1]
+            zone_thresh = face_mean_brightness * thresh_mult
+            if patch.size > 20 and float(np.mean(patch)) < zone_thresh:
+                shadow_visible_on.append(zone_name)
+
+        # Nose: check left and right sub-zones of under-nose area (rows 55–72%, split at center)
+        nose_left  = face_region[int(0.55*fh):int(0.72*fh), :fw//2]
+        nose_right = face_region[int(0.55*fh):int(0.72*fh), fw//2:]
+        if ((nose_left.size > 20 and float(np.mean(nose_left)) < shadow_thresh) or
+                (nose_right.size > 20 and float(np.mean(nose_right)) < shadow_thresh)):
+            shadow_visible_on.insert(0, "nose")  # nose first in the list
+
+        # Neck: region just below the face box
+        neck_y0 = y1
+        neck_y1 = min(gray.shape[0], y1 + fh // 5)
+        if neck_y1 > neck_y0:
+            neck_region = gray[neck_y0:neck_y1, x0:x1].astype(float)
+            if neck_region.size > 20 and float(np.mean(neck_region)) < shadow_thresh:
+                shadow_visible_on.append("neck")
+
     return {
         "ok": True,
         "shadow_vector_deg": round(shadow_vector, 1) if shadow_vector is not None else None,
@@ -898,6 +1150,7 @@ def shadow_pass(
         "shadow_softness": round(shadow_softness, 3),
         "shadow_length_ratio": round(shadow_length_ratio, 3) if shadow_length_ratio is not None else None,
         "shadow_edge_gradient": round(shadow_edge_gradient, 3),
+        "shadow_visible_on": shadow_visible_on,
     }
 
 
@@ -913,6 +1166,7 @@ def highlight_pass(
     person_mask: Optional[np.ndarray] = None,
     skin_mask: Optional[np.ndarray] = None,
     face_box: Optional[Tuple[int, int, int, int]] = None,
+    shadow_vector_deg: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Detect highlight regions and extract highlight signals.
 
@@ -920,8 +1174,13 @@ def highlight_pass(
         highlight_width_ratio: Width of lit side / total face width
         highlight_rolloff_rate: How quickly intensity falls off (0-1)
         highlight_edge_gradient: Highlight edge transition smoothness
-        highlight_axis_deg: Angle of main highlight band
-        highlight_specularity: 0.0 (matte) → 1.0 (mirror specular)
+        highlight_axis_deg: Angle of highlight band relative to vertical (0=vertical, 90=horizontal).
+            Convention matches VLM.  Derived geometrically from shadow_vector_deg when available:
+            90° × |cos(sv_rad)|.  Butterfly/on-axis → 90°; side key → 0°; loop (sv≈90°) → ~0–15°.
+        highlight_specularity: 0.0 (matte diffuse) → 1.0 (mirror specular).
+            Measured as the fraction of face highlight pixels that also carry sharp edges.
+            Matte skin: broad highlights with smooth falloff → low value.
+            Specular: tight hotspot with hard edge → high value.
     """
     if cv2 is None:
         return {"ok": False, "error": "cv2 not available"}
@@ -1004,46 +1263,55 @@ def highlight_pass(
         edge_gradient = 0.5
 
     # -- Highlight axis --
-    # Use 2D gradient direction of the highlight band within person region
-    person_gray = gray.copy()
-    if person_mask is not None:
-        person_gray[~person_mask] = 0
-
-    # Threshold to highlight-only pixels
-    thresh_val = int(np.percentile(person_gray[person_gray > 0], 85)) if np.any(person_gray > 0) else 200
-    _, highlight_binary = cv2.threshold(person_gray, thresh_val, 255, cv2.THRESH_BINARY)
-
-    # Find contours of highlight region and fit a line
+    # Convention matches VLM: 0° = perfectly vertical highlight band (side key at 90° off-axis),
+    # 90° = perfectly horizontal band (butterfly / key directly above).
+    # Primary method: fitEllipse on the top-quartile highlight region of the face — directly
+    #   measures the tilt of the bright band without depending on shadow_vector accuracy.
+    # Fallback: derive geometrically from shadow_vector_deg when no face box is available.
+    #   highlight_axis = 90° × |cos(shadow_vector_deg_rad)|
     highlight_axis_deg = None
-    contours, _ = cv2.findContours(highlight_binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if contours:
-        largest = max(contours, key=cv2.contourArea)
-        if len(largest) >= 5:
-            (_, _), (_, _), angle = cv2.fitEllipse(largest)
-            highlight_axis_deg = float(angle)
+    if face_box is not None:
+        x0_h, y0_h, x1_h, y1_h = face_box
+        face_gray_h = gray[y0_h:y1_h, x0_h:x1_h]
+        if face_gray_h.size > 0:
+            thresh_val = int(np.percentile(face_gray_h, 75))
+            _, hl_bin = cv2.threshold(face_gray_h, thresh_val, 255, cv2.THRESH_BINARY)
+            contours_h, _ = cv2.findContours(hl_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours_h:
+                largest_h = max(contours_h, key=cv2.contourArea)
+                if len(largest_h) >= 5:
+                    (_, _), (_, _), fit_angle = cv2.fitEllipse(largest_h)
+                    highlight_axis_deg = float(abs(90.0 - fit_angle))
+    if highlight_axis_deg is None and shadow_vector_deg is not None:
+        highlight_axis_deg = round(90.0 * abs(math.cos(math.radians(shadow_vector_deg))), 1)
 
     # -- Specularity --
-    # Detect sharp bright spots (specular vs diffuse highlights)
-    if person_mask is not None:
-        person_pixels = gray[person_mask]
-    else:
-        person_pixels = gray.flatten()
+    # Convention matches VLM: 0.0 = fully matte/diffuse, 1.0 = mirror specular.
+    # Two-component blend:
+    #   edge_component (40%): bright ∩ sharp / bright — captures hard specular hotspots.
+    #   peak_component (60%): (p90 / p50 − 1) / 2 — captures surface reflectance including
+    #       the natural skin sheen floor (~0.15–0.25) present even on matte skin.
+    # Combined: specularity = 0.4 × edge + 0.6 × peak.
+    specularity = 0.2  # neutral default
+    if face_box is not None:
+        x0_s, y0_s, x1_s, y1_s = face_box
+        face_gray_s = gray[y0_s:y1_s, x0_s:x1_s].astype(np.float32)
+        if face_gray_s.size > 100:
+            bright_thresh = float(np.percentile(face_gray_s, 75))
+            bright_mask = face_gray_s > bright_thresh
+            sobel_x = cv2.Sobel(face_gray_s, cv2.CV_32F, 1, 0, ksize=3)
+            sobel_y = cv2.Sobel(face_gray_s, cv2.CV_32F, 0, 1, ksize=3)
+            sobel_mag = np.sqrt(sobel_x**2 + sobel_y**2)
+            sharp_thresh = float(np.percentile(sobel_mag, 75))
+            sharp_mask = sobel_mag > sharp_thresh
+            bright_count = int(np.sum(bright_mask))
+            edge_component = float(np.sum(bright_mask & sharp_mask)) / bright_count if bright_count > 0 else 0.0
 
-    if len(person_pixels) > 100:
-        p95 = float(np.percentile(person_pixels, 95))
-        p99 = float(np.percentile(person_pixels, 99))
-        mean_brightness = float(np.mean(person_pixels))
+            p50_s = float(np.percentile(face_gray_s, 50))
+            p90_s = float(np.percentile(face_gray_s, 90))
+            peak_component = min(1.0, max(0.0, (p90_s / max(p50_s, 1.0) - 1.0) / 2.0))
 
-        # Specularity: how concentrated are the brightest pixels?
-        very_bright = np.sum(person_pixels > p95)
-        total = len(person_pixels)
-        bright_ratio = very_bright / total
-
-        # Sharp specular → few very bright pixels, high peak
-        peak_sharpness = (p99 - p95) / max(mean_brightness, 1.0)
-        specularity = min(1.0, peak_sharpness * 2.0 + bright_ratio * 5.0)
-    else:
-        specularity = 0.5
+            specularity = min(1.0, 0.4 * edge_component + 0.6 * peak_component)
 
     return {
         "ok": True,
@@ -1236,10 +1504,13 @@ def catchlight_topology_pass(
 ) -> Dict[str, Any]:
     """Multi-catchlight topology analysis.
 
-    Extends basic catchlight detection to find secondary/tertiary catchlights
-    and classify cluster geometry (single, dual, triangular, linear, strip,
-    ring).  The pass re-scans eye regions with lower brightness thresholds
-    to discover weaker catchlights that the primary pass may ignore.
+    Consumes Pipeline 1 catchlight data (MediaPipe iris landmarks, precise
+    filtering) as the authoritative source.  Only falls back to a pixel
+    re-scan when Pipeline 1 returned no catchlights.
+
+    The re-scan path (lower threshold, face-box halving) is kept as a
+    last-resort fallback — it produces noisier results and should not be
+    the primary source.
 
     Parameters
     ----------
@@ -1248,15 +1519,20 @@ def catchlight_topology_pass(
     face_box : tuple or None
         (x0, y0, x1, y1) face bounding box.
     existing_catchlights : dict or None
-        Raw catchlight pipeline data (from ``detect_catchlights``).
+        Raw catchlight pipeline data (from ``analyze_catchlights`` in
+        vision_pipeline.py — Pipeline 1, MediaPipe iris landmarks).
     catchlight_data : dict or None
-        Output from ``catchlight_pass`` for corroboration.
+        Output from ``catchlight_pass`` for corroboration (unused now).
 
     Returns
     -------
     dict
-        Flat dict suitable for pipeline ``results`` storage.
+        Flat dict suitable for pipeline ``results`` storage.  Includes
+        ``raw_count`` (before dedup), ``displayed_count`` (after dedup),
+        and ``dedup_note`` describing any merging that occurred.
     """
+    import math as _math
+
     if cv2 is None:
         return {"ok": False, "error": "cv2 not available"}
 
@@ -1264,6 +1540,9 @@ def catchlight_topology_pass(
         return {
             "ok": True,
             "catchlight_count": 0,
+            "raw_count": 0,
+            "displayed_count": 0,
+            "dedup_note": None,
             "cluster_geometry": "unknown",
             "cluster_spread_deg": 0.0,
             "inter_catchlight_spacing": [],
@@ -1282,6 +1561,9 @@ def catchlight_topology_pass(
         return {
             "ok": True,
             "catchlight_count": 0,
+            "raw_count": 0,
+            "displayed_count": 0,
+            "dedup_note": None,
             "cluster_geometry": "unknown",
             "cluster_spread_deg": 0.0,
             "inter_catchlight_spacing": [],
@@ -1295,87 +1577,112 @@ def catchlight_topology_pass(
 
     notes: List[str] = []
 
-    # ── Locate eye regions ──────────────────────────────────────────
-    eye_y_start = y0 + face_h // 4
-    eye_y_end = y0 + face_h // 2
-    eye_mid_x = x0 + face_w // 2
+    # ── Convert clock-position string → clock_deg ─────────────────────
+    # Pipeline 1 uses clock_position() which returns e.g. "12 o'clock upper_center".
+    # We parse the leading integer and multiply by 30° (12 hours = 360°).
+    def _pos_to_deg(pos_str: str) -> float:
+        try:
+            hour = int(pos_str.split()[0])
+            return float((hour % 12) * 30)  # 12 o'clock → 0°, 3 → 90°, etc.
+        except (ValueError, IndexError, AttributeError):
+            return 0.0
 
-    # Collect per-eye catchlight detections
-    eye_regions = {
-        "left": (max(0, x0), max(0, eye_y_start), eye_mid_x, min(img_bgr.shape[0], eye_y_end)),
-        "right": (eye_mid_x, max(0, eye_y_start), min(img_bgr.shape[1], x1), min(img_bgr.shape[0], eye_y_end)),
-    }
+    # ── Primary source: Pipeline 1 (MediaPipe iris landmarks) ────────
+    all_catchlights: List[Dict[str, Any]] = []
+    using_p1 = False
 
-    all_catchlights: List[Dict[str, Any]] = []  # [{clock_deg, shape, size_ratio, intensity, eye}]
-
-    for eye_label, (ex0, ey0, ex1, ey1) in eye_regions.items():
-        if ey1 <= ey0 or ex1 <= ex0:
-            continue
-
-        eye_roi = cv2.cvtColor(
-            img_bgr[ey0:ey1, ex0:ex1], cv2.COLOR_BGR2GRAY
-        )
-        if eye_roi.size < 50:
-            continue
-
-        # Use a LOWER threshold than the primary pass to catch secondary/tertiary
-        p90 = float(np.percentile(eye_roi, 90))
-        thresh_val = max(180, int(p90))
-        _, bright = cv2.threshold(eye_roi, thresh_val, 255, cv2.THRESH_BINARY)
-
-        # Find connected components
-        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-            bright, connectivity=8
-        )
-
-        # Collect catchlights (skip background label 0)
-        roi_h, roi_w = eye_roi.shape[:2]
-        roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
-
-        for label_idx in range(1, num_labels):
-            area = stats[label_idx, cv2.CC_STAT_AREA]
-            if area < CATCHLIGHT.TOPOLOGY_MIN_AREA:
-                continue  # noise — raised from 3 to 6 to filter mascara flecks
-
-            cx, cy = centroids[label_idx]
-
-            # Clock-style angle: 12 o'clock = top center
-            dx = cx - roi_cx
-            dy = roi_cy - cy  # positive = up
-            import math
-            angle_rad = math.atan2(dx, dy)  # 0 = up, positive = clockwise
-            clock_deg = math.degrees(angle_rad) % 360
-
-            # Estimate shape from bounding box aspect ratio
-            bw = stats[label_idx, cv2.CC_STAT_WIDTH]
-            bh = stats[label_idx, cv2.CC_STAT_HEIGHT]
-            aspect = bw / max(bh, 1)
-            if aspect > 2.0:
-                shape = "strip"
-            elif aspect < 0.5:
-                shape = "strip"
-            elif 0.8 <= aspect <= 1.25:
-                shape = "round"
-            else:
-                shape = "rectangular"
-
-            # Size ratio relative to eye ROI
-            eye_area = roi_w * roi_h
-            size_ratio = area / max(eye_area * 0.1, 1)  # normalize to ~iris size
-
-            # Intensity of this catchlight
-            component_mask = (labels == label_idx)
-            bright_vals = eye_roi[component_mask]
-            intensity = float(np.mean(bright_vals)) / 255.0 if len(bright_vals) > 0 else 0.0
-
+    p1_list: List[Dict[str, Any]] = (existing_catchlights or {}).get("catchlights", [])
+    if p1_list:
+        using_p1 = True
+        for cl in p1_list:
+            clock_deg = _pos_to_deg(cl.get("position", "12"))
             all_catchlights.append({
                 "clock_deg": round(clock_deg, 1),
-                "shape": shape,
-                "size_ratio": round(min(0.5, size_ratio), 3),
-                "intensity": round(intensity, 3),
-                "eye": eye_label,
-                "area": int(area),
+                "shape": cl.get("shape", "unknown"),
+                "size_ratio": cl.get("size_ratio") or 0.0,
+                "intensity": cl.get("intensity", 0.0),
+                "eye": cl.get("eye", "unknown"),
+                "area": 0,  # not available from P1
             })
+        notes.append(f"Source: Pipeline 1 (MediaPipe iris, {len(p1_list)} raw catchlights)")
+
+    # ── Fallback: pixel re-scan (face-box halving, lower threshold) ───
+    # Used only when Pipeline 1 returned nothing — noisier, kept for
+    # images where MediaPipe iris landmarks couldn't be detected.
+    if not using_p1:
+        notes.append("Source: pixel re-scan fallback (Pipeline 1 had no data)")
+
+        eye_y_start = y0 + face_h // 4
+        eye_y_end = y0 + face_h // 2
+        eye_mid_x = x0 + face_w // 2
+
+        eye_regions = {
+            "left": (max(0, x0), max(0, eye_y_start), eye_mid_x, min(img_bgr.shape[0], eye_y_end)),
+            "right": (eye_mid_x, max(0, eye_y_start), min(img_bgr.shape[1], x1), min(img_bgr.shape[0], eye_y_end)),
+        }
+
+        for eye_label, (ex0, ey0, ex1, ey1) in eye_regions.items():
+            if ey1 <= ey0 or ex1 <= ex0:
+                continue
+
+            eye_roi = cv2.cvtColor(
+                img_bgr[ey0:ey1, ex0:ex1], cv2.COLOR_BGR2GRAY
+            )
+            if eye_roi.size < 50:
+                continue
+
+            p90 = float(np.percentile(eye_roi, 90))
+            thresh_val = max(180, int(p90))
+            _, bright = cv2.threshold(eye_roi, thresh_val, 255, cv2.THRESH_BINARY)
+
+            num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+                bright, connectivity=8
+            )
+
+            roi_h, roi_w = eye_roi.shape[:2]
+            roi_cx, roi_cy = roi_w / 2.0, roi_h / 2.0
+
+            for label_idx in range(1, num_labels):
+                area = stats[label_idx, cv2.CC_STAT_AREA]
+                if area < CATCHLIGHT.TOPOLOGY_MIN_AREA:
+                    continue
+
+                cx, cy = centroids[label_idx]
+                dx = cx - roi_cx
+                dy = roi_cy - cy
+                angle_rad = _math.atan2(dx, dy)
+                clock_deg = _math.degrees(angle_rad) % 360
+
+                bw = stats[label_idx, cv2.CC_STAT_WIDTH]
+                bh = stats[label_idx, cv2.CC_STAT_HEIGHT]
+                aspect = bw / max(bh, 1)
+                # Strip requires ≥ 2.5:1 elongation (aligns with _SHAPE_LABELS).
+                # 2:1 catchlights from large rectangular softboxes/panels must not
+                # be misclassified as strip boxes.
+                if aspect > 2.5 or aspect < 0.4:
+                    shape = "strip"
+                elif 0.8 <= aspect <= 1.25:
+                    shape = "round"
+                else:
+                    shape = "rectangular"
+
+                eye_area = roi_w * roi_h
+                size_ratio = area / max(eye_area * 0.1, 1)
+
+                component_mask = (labels == label_idx)
+                bright_vals = eye_roi[component_mask]
+                intensity = float(np.mean(bright_vals)) / 255.0 if len(bright_vals) > 0 else 0.0
+
+                all_catchlights.append({
+                    "clock_deg": round(clock_deg, 1),
+                    "shape": shape,
+                    "size_ratio": round(min(0.5, size_ratio), 3),
+                    "intensity": round(intensity, 3),
+                    "eye": eye_label,
+                    "area": int(area),
+                })
+
+    raw_count = len(all_catchlights)
 
     # Sort by intensity (brightest first) then by area
     all_catchlights.sort(key=lambda c: (-c["intensity"], -c["area"]))
@@ -1398,6 +1705,12 @@ def catchlight_topology_pass(
 
     deduped = _dedup(all_catchlights)
     catchlight_count = len(deduped)
+
+    # Track raw vs displayed counts and note any merging
+    dedup_note: Optional[str] = None
+    if raw_count > catchlight_count:
+        dedup_note = f"{raw_count} raw → {catchlight_count} after dedup (angular proximity)"
+        notes.append(dedup_note)
 
     # ── Assign primary / secondary / tertiary ─────────────────────
     primary = deduped[0] if len(deduped) >= 1 else None
@@ -1433,14 +1746,11 @@ def catchlight_topology_pass(
             else:
                 cluster_geometry = "dual"
         elif catchlight_count == 3:
-            # Check if triangular: all three spacings roughly equal
-            # Threshold 50° std dev accommodates both classic (120/120/120)
-            # and Hurley lateral triangles (90/90/180) which have ~42° std dev
+            # Check if triangular: all three spacings roughly equal (classic 120/120/120)
             if len(inter_catchlight_spacing) == 3:
                 mean_sp = sum(inter_catchlight_spacing) / 3
                 variance = sum((s - mean_sp) ** 2 for s in inter_catchlight_spacing) / 3
-                import math
-                if math.sqrt(variance) < 50:
+                if _math.sqrt(variance) < 50:
                     cluster_geometry = "triangular"
                 else:
                     # Check if linear: two spacings small, one large (~sum)
@@ -1461,9 +1771,8 @@ def catchlight_topology_pass(
                 # Check ring: all spacings roughly equal
                 if len(inter_catchlight_spacing) >= 3:
                     mean_sp = sum(inter_catchlight_spacing) / len(inter_catchlight_spacing)
-                    import math
                     variance = sum((s - mean_sp) ** 2 for s in inter_catchlight_spacing) / len(inter_catchlight_spacing)
-                    if math.sqrt(variance) < 30 and cluster_spread_deg > 180:
+                    if _math.sqrt(variance) < 30 and cluster_spread_deg > 180:
                         cluster_geometry = "ring"
                     else:
                         cluster_geometry = "linear"
@@ -1506,6 +1815,9 @@ def catchlight_topology_pass(
     return {
         "ok": True,
         "catchlight_count": catchlight_count,
+        "raw_count": raw_count,
+        "displayed_count": catchlight_count,
+        "dedup_note": dedup_note,
         "cluster_geometry": cluster_geometry,
         "cluster_spread_deg": round(cluster_spread_deg, 1),
         "inter_catchlight_spacing": inter_catchlight_spacing,
@@ -2371,8 +2683,10 @@ def off_axis_key_pass(
     if shadow_data and isinstance(shadow_data, dict) and shadow_data.get("ok"):
         shadow_vec = shadow_data.get("shadow_vector_deg")
         if isinstance(shadow_vec, (int, float)):
-            # Shadow falls opposite to key: invert by 180
-            key_from_shadow = (float(shadow_vec) + 180.0) % 360.0
+            # shadow_vector_deg is now in VLM convention (0=down=butterfly baseline).
+            # Key direction is opposite to shadow direction.  Since we added +180° to
+            # output convention, the inversion simplifies: key = shadow_vec (not +180).
+            key_from_shadow = float(shadow_vec) % 360.0
             # Normalize to -180..+180 range (0=front, negative=left, positive=right)
             if key_from_shadow > 180:
                 key_from_shadow -= 360
@@ -2535,11 +2849,17 @@ def light_structure_pass(
             "notes": notes,
         }
 
-    fx, fy, fw, fh = face_box
-    fx = max(0, fx)
-    fy = max(0, fy)
-    fw = min(fw, w - fx)
-    fh = min(fh, h - fy)
+    # face_box is (x0, y0, x1, y1) — two corner coordinates, not (x, y, w, h).
+    # Every other pass in this file unpacks as x0, y0, x1, y1.  Convert to
+    # width/height here so the remainder of the function is unchanged.
+    _bx0, _by0, _bx1, _by1 = face_box
+    _bx0 = max(0, _bx0)
+    _by0 = max(0, _by0)
+    _bx1 = min(_bx1, w)
+    _by1 = min(_by1, h)
+    fx, fy = _bx0, _by0
+    fw = _bx1 - _bx0
+    fh = _by1 - _by0
 
     if fw < 20 or fh < 20:
         notes.append("face box too small")
@@ -2659,7 +2979,17 @@ def light_structure_pass(
         _centroid_in_sp_convention = (_centroid_angle + 180.0) % 360.0
         _angle_near_vertical = (160 < _centroid_in_sp_convention < 200)
     elif nose_shadow_angle_deg > 0:
-        _angle_near_vertical = (160 < nose_shadow_angle_deg < 200)
+        # nose_shadow_angle_deg uses shadow_pass convention (0°=up, 180°=down).
+        # "Near vertical" means shadow falls approximately downward (≈180°).
+        # But overhead keys produce angles near 0°/360° (shadow falls from
+        # above, gradient points UP) as well as near 180° depending on
+        # measurement frame.  Check BOTH ranges to catch overhead keys:
+        #   - 160-200° = shadow gradient points down (direct measurement)
+        #   - 340-360° or 0-20° = shadow gradient points up (overhead key
+        #     where atan2 wraps around 0°; nose_shadow_angle 355.8° is a
+        #     textbook overhead/butterfly key)
+        _nsa = nose_shadow_angle_deg
+        _angle_near_vertical = (160 < _nsa < 200) or (_nsa > 340) or (_nsa < 20)
     else:
         # No reliable angle data — do NOT presume vertical.
         # Defaulting True allowed butterfly to fire on dark skin where compressed
@@ -2669,21 +2999,55 @@ def light_structure_pass(
         # Require actual measured evidence of a near-vertical angle for butterfly.
         _angle_near_vertical = False
 
-    # ── Very low shadow: on-axis source (butterfly / beauty dish) ──
+    # ── Low-abs diagonal: near-zero L/R asymmetry + confirmed diagonal centroid ──
+    # A well-filled loop (1:1 fill ratio, ≤0.3 stops down) compresses both
+    # shadow_ratio AND L/R asymmetry toward zero.  It also collapses the
+    # bottom/top shadow ratio — so the main loop branch (which requires
+    # bottom > top * 1.05) fails.  BUT the key is physically at 30–45° off-axis:
+    # the shadow centroid stays diagonal regardless of fill strength.
+    # When abs < 0.10 AND centroid is reliably diagonal, the geometry is the
+    # stronger signal than any ratio heuristic.  Fire loop FIRST, before any
+    # symmetric-source branch (clamshell/butterfly) can claim the case.
+    # Require shadow_ratio > 0.02 so centroid is measured on real shadow pixels,
+    # not noise, and centroid_dist > 0.05 for a reliable directional measurement.
+    _face_bright_enough = face_mean > 60
+    _low_abs_lra = abs(left_shadow - right_shadow) < 0.10
+    _ca_now = _centroid_angle
+    _diagonal_centroid = (20 < _ca_now < 80) or (280 < _ca_now < 340)
+    if (
+        _centroid_dist > 0.05
+        and not _angle_near_vertical
+        and shadow_ratio > 0.02
+        and _low_abs_lra
+        and _diagonal_centroid
+    ):
+        pattern_name = "loop"
+        nose_shadow_shape = "short_angled"
+        notes.append(
+            f"low-abs diagonal loop: L/R asym={abs(left_shadow - right_shadow):.3f} (<0.10), "
+            f"centroid={_ca_now:.0f}° (dist={_centroid_dist:.2f}), "
+            f"shadow_ratio={shadow_ratio:.3f} — diagonal centroid overrides ratio heuristics"
+        )
+
+    # ── Very low shadow: on-axis source (clamshell / flat / beauty) ──
     # When shadow_density is extremely low (< 5%), the nose region has
     # essentially no shadow pixels.  Shadow distribution metrics (left/right,
-    # top/bottom) are running on noise.  Minimal shadow = centered, on-axis
-    # source — classify as butterfly.  This catches beauty dish and ring
-    # light setups that produce almost no nose shadow.
-    # Guard: a nearly-silhouetted face (face_mean < 60) likely means backlighting
+    # top/bottom) are running on noise.  Minimal shadow = fill is canceling
+    # key shadow → clamshell or flat beauty lighting.  Butterfly produces a
+    # *visible* nose shadow (the "butterfly wings" shape); when the shadow
+    # is truly absent, a fill-from-below (clamshell) or multi-source flat
+    # setup is the more likely cause.
+    # Guard 1: a nearly-silhouetted face (face_mean < 60) likely means backlighting
     # or rim light, not an on-axis source.  Low shadow_ratio there is noise.
-    # Threshold lowered from 80 → 60 so dark-skinned subjects in normal studio
-    # lighting (face_mean 70-100) are not incorrectly excluded from butterfly detection.
-    _face_bright_enough = face_mean > 60
-    if shadow_ratio < 0.05 and abs(left_shadow - right_shadow) < 0.15 and _face_bright_enough:
-        pattern_name = "butterfly"
+    # Guard 2: clamshell requires an ON-AXIS source → near-vertical shadow direction.
+    # Loop with heavy fill (1:1 ratio, 0.3 stops down) collapses shadow_ratio to
+    # near-zero AND compresses L/R asymmetry below 0.15 — but the shadow direction
+    # remains DIAGONAL (30–45° off-axis).  Requiring _angle_near_vertical prevents
+    # clamshell from stealing fill-heavy loop cases.
+    elif shadow_ratio < 0.05 and abs(left_shadow - right_shadow) < 0.15 and _face_bright_enough and _angle_near_vertical:
+        pattern_name = "clamshell"
         nose_shadow_shape = "minimal_centered"
-        notes.append(f"very low shadow density ({shadow_ratio:.3f}) + symmetric → on-axis/butterfly")
+        notes.append(f"very low shadow density ({shadow_ratio:.3f}) + symmetric + near-vertical → clamshell/flat (fill cancels key shadow)")
 
     # Butterfly: symmetric shadow below nose AND shadow angle near-vertical.
     elif abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3 and _angle_near_vertical:
@@ -2691,16 +3055,23 @@ def light_structure_pass(
         nose_shadow_shape = "butterfly_below"
         notes.append("symmetric shadow below nose → butterfly pattern")
 
-    # Loop: would match butterfly thresholds (symmetric + bottom-heavy) but
-    # the shadow direction is diagonal, not vertical.  This catches cases
-    # where the key is ~30-45° off-axis and the nose shadow falls diagonally
-    # but doesn't create enough L/R asymmetry for the rembrandt zone.
-    # Use the SAME thresholds as butterfly to avoid catching rembrandt images
-    # that merely have low nose-region asymmetry.
-    elif abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3 and not _angle_near_vertical:
+    # Loop: key at 30–45° off-axis creates a diagonal nose shadow that wraps
+    # under ONE nostril (not both).  This produces moderate L/R asymmetry —
+    # one side darker — but NOT enough to reach Rembrandt's cheek shadow.
+    # The single-nostril comma shadow is the anatomical signature: it is
+    # physically impossible from a frontal source (butterfly cannot make it).
+    #
+    # Threshold: < 0.20 (up to where Rembrandt starts) with a diagonal angle
+    # confirms loop.  The prior threshold (< 0.15) was too strict — it excluded
+    # the natural single-nostril asymmetry that defines loop.  Bottom-heavy
+    # relaxed to > 1.1 (shadow falls below nose at any ratio, not just 1.3×).
+    elif abs(left_shadow - right_shadow) < 0.20 and bottom_shadow > top_shadow * 1.05 and not _angle_near_vertical:
         pattern_name = "loop"
         nose_shadow_shape = "short_angled"
-        notes.append(f"symmetric shadow distribution with diagonal angle ({nose_shadow_angle_deg:.0f}°) → loop pattern")
+        notes.append(
+            f"single-nostril nose shadow (L/R asym {abs(left_shadow - right_shadow):.3f}) "
+            f"+ diagonal angle ({nose_shadow_angle_deg:.0f}°) → loop pattern"
+        )
 
     # Split: half face in shadow
     elif abs(left_shadow - right_shadow) > 0.5:
@@ -2711,6 +3082,33 @@ def light_structure_pass(
     # Rembrandt: triangle on shadow-side cheek
     elif abs(left_shadow - right_shadow) > 0.2:
         shadow_side = "left" if left_shadow > right_shadow else "right"
+
+        # ── Shadow connectivity: nose shadow → cheek zone ─────────────
+        # A genuine Rembrandt shadow runs continuously from the nose
+        # downward to the shadow-side cheek, forming one connected dark
+        # zone that the lit triangle interrupts at the lower cheek.
+        # Verify that the mid-face strip (face rows 35-65%) on the shadow
+        # side is dark (below 90% of face mean), confirming the shadow
+        # connects nose shadow to the cheek measurement zone.
+        _rem_conn_y0 = int(fh * 0.35)
+        _rem_conn_y1 = int(fh * 0.65)
+        if shadow_side == "left":
+            _rem_conn_region = face_roi[_rem_conn_y0:_rem_conn_y1, :fw // 3]
+        else:
+            _rem_conn_region = face_roi[_rem_conn_y0:_rem_conn_y1, 2 * fw // 3:]
+        _shadow_connected = (
+            _rem_conn_region.size > 20
+            and float(np.mean(_rem_conn_region)) < face_mean * 0.90
+        )
+
+        # ── Shadow strength: shadow side must have real shadow pixels ──
+        # Require >= 15% of nose-region shadow-side pixels to be below the
+        # shadow threshold.  This prevents "Rembrandt" from being called
+        # when the L/R asymmetry comes from a soft tonal gradient with no
+        # actual deep shadow pixels (which would be loop or broad, not Rembrandt).
+        _shadow_side_pct = left_shadow if shadow_side == "left" else right_shadow
+        _shadow_strong = _shadow_side_pct >= 0.15
+
         # Check for triangle: look at the cheek area on shadow side.
         # The Rembrandt triangle is an ISOLATED bright patch on an otherwise
         # shadowed cheek — mere "above threshold" brightness isn't enough.
@@ -2743,7 +3141,9 @@ def light_structure_pass(
             # mean brighter than surround); skin-tone noise stays well below 0.08.
             _above_threshold = cheek_brightness > shadow_threshold
             _isolation_ok = _triangle_isolation >= 0.12
-            if _above_threshold and _isolation_ok:
+            # Full Rembrandt: triangle confirmed + shadow connects nose to cheek
+            # + meaningful shadow depth on the shadow side.
+            if _above_threshold and _isolation_ok and _shadow_connected and _shadow_strong:
                 triangle_detected = True
                 triangle_cheek = shadow_side
                 triangle_completeness = round(
@@ -2754,7 +3154,25 @@ def light_structure_pass(
                 notes.append(
                     f"illuminated triangle on {shadow_side} cheek "
                     f"(completeness={triangle_completeness:.2f}, "
-                    f"isolation={_triangle_isolation:.2f}) → Rembrandt"
+                    f"isolation={_triangle_isolation:.2f}, "
+                    f"shadow_pct={_shadow_side_pct:.2f}, "
+                    f"connected={'yes' if _shadow_connected else 'no'}) → Rembrandt"
+                )
+            elif _above_threshold and _isolation_ok:
+                # Triangle visible but connectivity or shadow strength weak —
+                # record the triangle for downstream use but classify as loop
+                # (the shadow zone doesn't fully support a Rembrandt call).
+                triangle_detected = True
+                triangle_cheek = shadow_side
+                triangle_completeness = round(
+                    min(1.0, cheek_brightness / max(face_mean, 1.0)), 3
+                )
+                pattern_name = "loop"
+                nose_shadow_shape = "angled_with_triangle"
+                notes.append(
+                    f"triangle on {shadow_side} cheek (isolation={_triangle_isolation:.2f}) "
+                    f"but shadow not fully connected (conn={'yes' if _shadow_connected else 'no'}, "
+                    f"pct={_shadow_side_pct:.2f}) → loop (Rembrandt uncertain)"
                 )
             else:
                 # Check nose shadow angle: if near-horizontal (80-100° or
@@ -2813,16 +3231,81 @@ def light_structure_pass(
                 f"centroid={_ca:.0f}°/{_centroid_dist:.2f}"
             )
 
-    # Broad lighting: symmetry > 0.7, wide highlight side
-    elif symmetry_score > 0.7 and shadow_ratio < 0.2:
+    # Fill-heavy loop: very low abs asymmetry but confirmed diagonal centroid.
+    # A well-filled loop (1:1 ratio) compresses both shadow_ratio and L/R asymmetry
+    # to near-zero — all the earlier conditions fail.  But the shadow direction is
+    # still diagonal.  If centroid is reliably diagonal and shadow isn't near-vertical,
+    # call it loop.  This is the last chance before broad/unknown consumes it.
+    elif _centroid_dist > 0.05 and not _angle_near_vertical and shadow_ratio > 0.02:
+        _ca = _centroid_angle
+        _is_diagonal = (20 < _ca < 80) or (280 < _ca < 340)
+        if _is_diagonal:
+            pattern_name = "loop"
+            nose_shadow_shape = "short_angled"
+            notes.append(
+                f"fill-heavy loop: low shadow density ({shadow_ratio:.3f}), "
+                f"diagonal centroid ({_ca:.0f}°, dist={_centroid_dist:.2f}) → loop"
+            )
+        else:
+            pattern_name = "unknown"
+            nose_shadow_shape = "indeterminate"
+            notes.append(f"diagonal centroid but non-loop angle ({_ca:.0f}°) → unknown")
+
+    # Broad lighting: symmetry > 0.7, wide highlight, near-vertical shadow.
+    # Require _angle_near_vertical — broad/flat uses an on-axis or near-axis key;
+    # a diagonal shadow direction rules out broad even when shadow_ratio is low.
+    elif symmetry_score > 0.7 and shadow_ratio < 0.2 and _angle_near_vertical:
         pattern_name = "broad"
         nose_shadow_shape = "minimal"
-        notes.append("high symmetry with minimal shadow → broad/flat lighting")
+        notes.append("high symmetry + minimal shadow + near-vertical → broad/flat lighting")
 
     else:
         pattern_name = "unknown"
         nose_shadow_shape = "indeterminate"
         notes.append(f"shadow_ratio={shadow_ratio:.2f}, asymmetry={abs(left_shadow - right_shadow):.2f}")
+
+    # ── Unconditional cheek triangle scan ───────────────────────────
+    # The Rembrandt branch above (elif abs(left-right) > 0.2) only runs
+    # the cheek triangle measurement when there is significant nose L/R
+    # shadow asymmetry.  A genuine Rembrandt triangle can exist even when
+    # the nose shadow appears symmetric:
+    #   (a) subtle key angle → mostly downward nose shadow with a small
+    #       off-axis displacement  (b) low-key image → dark face averaging hides the cheek triangle
+    # Scan BOTH cheeks unconditionally and update _triangle_isolation if
+    # the Rembrandt branch did not already set it (i.e., still 0.0).
+    # This does NOT change pattern_name — the cheek triangle alone does
+    # not override the nose-shadow-based classification.  It only ensures
+    # that the triangle_isolation metric is populated so that downstream
+    # contradiction checks (orchestrator.py butterfly block) can use it.
+    # True butterfly has no cheek triangle (tri_iso ≈ 0.00–0.08).
+    # Rembrandt with near-symmetric nose: tri_iso measured here will
+    # correctly show > 0.12 on the shadow-side cheek.
+    if _triangle_isolation < 0.12 and face_mean > 0 and fh > 0 and fw > 0:
+        _ct_cheek_top = 2 * fh // 3
+        _ct_cheek_bot = fh
+        _ct_surr_top  = fh // 2
+        _ct_surr_bot  = _ct_cheek_top
+        # Left cheek
+        _ct_lc = face_roi[_ct_cheek_top:_ct_cheek_bot, :fw // 3]
+        _ct_ls = face_roi[_ct_surr_top:_ct_surr_bot,  :fw // 3]
+        # Right cheek
+        _ct_rc = face_roi[_ct_cheek_top:_ct_cheek_bot, 2 * fw // 3:]
+        _ct_rs = face_roi[_ct_surr_top:_ct_surr_bot,  2 * fw // 3:]
+        _ct_best = 0.0
+        for _cc, _cs in ((_ct_lc, _ct_ls), (_ct_rc, _ct_rs)):
+            if _cc.size > 20:
+                _cc_b = float(np.mean(_cc))
+                _cs_b = float(np.mean(_cs)) if _cs.size > 20 else _cc_b
+                _iso  = (_cc_b - _cs_b) / max(face_mean, 1.0)
+                if _iso > _ct_best:
+                    _ct_best = _iso
+        if _ct_best > _triangle_isolation:
+            _triangle_isolation = round(_ct_best, 3)
+            if _ct_best >= 0.12:
+                notes.append(
+                    f"unconditional cheek scan found triangle_isolation={_ct_best:.3f} "
+                    f"(Rembrandt triangle present despite low nose L/R asymmetry)"
+                )
 
     # ── Confidence ───────────────────────────────────────────────
     confidence = 0.3
@@ -4928,8 +5411,10 @@ def physics_consistency_engine(
         # Check 1: Shadow alignment
         if shd.get("ok") and shd.get("shadow_vector_deg") is not None:
             shadow_dir = shd["shadow_vector_deg"]
-            # Shadow should be ~180° from light
-            expected_shadow = (key_dir + 180) % 360
+            # Shadow should be ~180° from light.
+            # shadow_vector_deg is now in VLM convention (0=down=butterfly baseline),
+            # so expected_shadow = key_dir (not key_dir + 180; the +180 is already baked in).
+            expected_shadow = key_dir % 360.0
             diff = abs(shadow_dir - expected_shadow)
             if diff > 180:
                 diff = 360 - diff
@@ -5528,69 +6013,103 @@ def reconstruction_pass(
             )
 
     # -- Key light angle --
-    # Priority: catchlight position > shadow vector
+    # Measurement is FACE-relative, not camera-relative.
+    # The face and its shadow pattern are the reference surface.
+    # Shoulder/torso rotation is irrelevant — the face can be straight
+    # to camera regardless of body angle.  Signals are weighted by how
+    # directly they read the face surface:
+    #   1. Catchlight clock position (highest) — light direction encoded in iris
+    #   2. Nose shadow centroid offset (lr_asym proxy) — face shadow geometry
+    #   3. Shadow vector from full image (lowest) — scene-level, less precise
+    weighted_angles: list = []  # (angle_deg, weight)
     key_angle_raw = None
 
-    # From catchlight position
-    cat_pos = cat.get("catchlight_position", "")
-    if cat_pos and cat_pos != "unknown":
-        angle_map = {
-            "upper_left": 45.0, "upper_right": 45.0,
-            "left": 90.0, "right": 90.0,
-            "center_top": 0.0, "center": 0.0,
-            "10_oclock": 60.0, "2_oclock": 60.0,
-            "11_oclock": 30.0, "1_oclock": 30.0,
-            "9_oclock": 90.0, "3_oclock": 90.0,
-        }
-        # Try to match
-        for key, angle in angle_map.items():
-            if key in cat_pos.lower().replace(" ", "_"):
-                key_angle_raw = angle
-                notes.append(f"key_angle from catchlight: {cat_pos}")
-                break
+    # ── 1. Per-eye catchlight clock position (face-direct, highest weight) ──
+    # Use the per-catchlight list when available (from vision_data catchlights).
+    # Clock position in the iris directly encodes where the light source sits
+    # relative to the eye — independent of body pose entirely.
+    _cl_list = []
+    if existing_catchlights and isinstance(existing_catchlights, dict):
+        _cl_list = existing_catchlights.get("catchlights", [])
+    _clock_to_angle = {
+        1: 30.0, 2: 60.0, 3: 90.0, 4: 60.0, 5: 30.0,
+        6: 0.0,
+        7: 30.0, 8: 60.0, 9: 90.0, 10: 60.0, 11: 30.0, 12: 0.0,
+    }
+    for _cl in _cl_list:
+        if _cl.get("role") not in ("key", None):
+            continue
+        _pos = _cl.get("position", "")
+        try:
+            _hour = int(_pos.split()[0])
+            _cl_angle = _clock_to_azimuth_angle = _clock_to_angle.get(_hour, 45.0)
+            weighted_angles.append((_cl_angle, 2.5))
+            notes.append(f"key_angle from catchlight clock {_hour}: {_cl_angle:.0f}°")
+        except (ValueError, IndexError):
+            pass
 
-    if key_angle_raw is None and shd.get("shadow_vector_deg") is not None:
-        # Convert shadow vector to key angle (shadow opposite to light)
+    # Fallback: coarser catchlight_position string from earlier pass
+    if not weighted_angles:
+        cat_pos = cat.get("catchlight_position", "")
+        if cat_pos and cat_pos != "unknown":
+            _coarse_map = {
+                "upper_left": 45.0, "upper_right": 45.0,
+                "left": 90.0, "right": 90.0,
+                "center_top": 0.0, "center": 0.0,
+                "10_oclock": 60.0, "2_oclock": 60.0,
+                "11_oclock": 30.0, "1_oclock": 30.0,
+                "9_oclock": 90.0, "3_oclock": 90.0,
+            }
+            for _key, _angle in _coarse_map.items():
+                if _key in cat_pos.lower().replace(" ", "_"):
+                    weighted_angles.append((_angle, 2.0))
+                    notes.append(f"key_angle from catchlight_position {cat_pos}: {_angle:.0f}°")
+                    break
+
+    # ── 2. Left/right illumination asymmetry → face angle estimate ──────
+    # lr_asym measures how unequal the two halves of the face are lit.
+    # More asymmetry = steeper off-axis angle.  This reads shadow position
+    # directly from the face surface — pose-independent.
+    #   lr_asym ≈ 0.00–0.05 → frontal (~0–10°)
+    #   lr_asym ≈ 0.10–0.18 → loop range (~25–40°)
+    #   lr_asym ≈ 0.20–0.35 → broad/short range (~40–55°)
+    #   lr_asym ≈ 0.40+     → split territory (~60°+)
+    _ls_for_angle = getattr(getattr(result, "cue_report", None), "light_structure", None) if hasattr(result, "cue_report") else None
+    _lr_asym_angle = None
+    if _ls_for_angle is not None:
+        _lra = getattr(_ls_for_angle, "left_right_asymmetry", None)
+        if _lra is not None:
+            # Linear mapping: asym 0→0°, asym 0.5→70°
+            _lr_asym_angle = min(70.0, float(_lra) * 140.0)
+            weighted_angles.append((_lr_asym_angle, 1.5))
+            notes.append(f"key_angle from lr_asym {_lra:.3f}: {_lr_asym_angle:.0f}°")
+
+    # ── 3. Shadow vector (scene-level, lower weight) ─────────────────────
+    if shd.get("shadow_vector_deg") is not None:
         sv = shd["shadow_vector_deg"]
-        # Shadow falling right → light from left (and vice versa)
-        key_angle_raw = abs(sv - 180.0) if sv > 180 else sv
-        key_angle_raw = min(key_angle_raw, 180.0)
-        notes.append(f"key_angle from shadow_vector: {sv}°")
+        sv_angle = abs(sv - 180.0) if sv > 180 else sv
+        sv_angle = min(sv_angle, 180.0)
+        weighted_angles.append((sv_angle, 1.0))
+        notes.append(f"key_angle from shadow_vector {sv}°: {sv_angle:.0f}°")
 
-    if key_angle_raw is None:
+    # ── Weighted average ──────────────────────────────────────────────────
+    if weighted_angles:
+        _total_w = sum(w for _, w in weighted_angles)
+        key_angle_raw = sum(a * w for a, w in weighted_angles) / _total_w
+    else:
         key_angle_raw = 30.0  # default moderate angle
         notes.append("key_angle defaulted to 30°")
 
-    # ── Pose-corrected key angle ────────────────────────────────────────
-    key_angle_corrected = key_angle_raw
-    if has_pose:
-        torso_rot = pose.get("torso_rotation_deg", 0.0)
-        head_rot = pose.get("head_rotation_deg", 0.0)
-        chin_yaw = pose.get("chin_yaw_deg", 0.0)
+    # ── Face-relative angle — no pose correction ─────────────────────────
+    # Shadow and catchlight measurements on the face ARE already face-relative.
+    # Shoulders can be turned while head is straight; the face surface is the
+    # reference frame.  Do NOT subtract torso or head rotation — those are
+    # camera-relative corrections that do not apply to face-surface measurements.
+    key_angle_corrected = round(max(0.0, min(180.0, key_angle_raw)), 1)
+    notes.append(f"key_angle_face_relative={key_angle_corrected:.1f}° (no pose correction applied)")
 
-        # Correction: subtract head/torso rotation from the raw angle.
-        # If subject is turned 20° right, a shadow that LOOKS 50° off-axis
-        # is actually only 30° off-axis relative to the face normal.
-        head_correction = head_rot * 0.6   # face normal contribution
-        torso_correction = torso_rot * 0.3  # body normal contribution
-        chin_correction = chin_yaw * 0.1   # minor chin yaw contribution
-        total_correction = head_correction + torso_correction + chin_correction
-
-        key_angle_corrected = key_angle_raw - total_correction
-        key_angle_corrected = max(0.0, min(180.0, key_angle_corrected))
-
-        if abs(total_correction) > 2.0:
-            notes.append(
-                f"pose correction: {total_correction:+.1f}° "
-                f"(head={head_correction:+.1f}, torso={torso_correction:+.1f}, "
-                f"chin={chin_correction:+.1f})"
-            )
-
-        # ── Highlight-axis correction ───────────────────────────────────
-        # When pose_highlight_interference is detected, weight catchlights
-        # and highlight rolloff MORE, shadow direction LESS.
-        if pose.get("pose_highlight_interference"):
-            notes.append("highlight_interference: upweighting catchlights + rolloff")
+    if has_pose and pose.get("pose_highlight_interference"):
+        notes.append("highlight_interference noted (catchlight weight already dominant)")
 
     # -- Key light height --
     key_height = "eye_level"  # default
@@ -6193,7 +6712,7 @@ def run_extended_pipeline(
     """Run the full extended vision pipeline.
 
     Pipeline order:
-        geometry (from existing) → pose_solver → surface_class → shadow →
+        geometry (from existing) → pose_solver → camera_geometry → surface_class → shadow →
         highlight → catchlight → background → specular_surface →
         ── NEW SIGNAL PASSES ──
         light_direction_field → inverse_square → solar_geometry →
@@ -6232,6 +6751,16 @@ def run_extended_pipeline(
         logger.warning("pose_solver_pass failed: %s", exc)
         results["pose_solver"] = {"ok": False, "error": str(exc)}
 
+    # ── Camera geometry (CV-based height + horizontal angle) ─────────
+    try:
+        results["camera_geometry"] = camera_geometry_pass(
+            face_geometry=existing_catchlights.get("face_geometry") if existing_catchlights else None,
+            pose_solver=results.get("pose_solver"),
+        )
+    except Exception as exc:
+        logger.warning("camera_geometry_pass failed: %s", exc)
+        results["camera_geometry"] = {"ok": False, "error": str(exc)}
+
     # ── Wave 1: Independent passes — run concurrently ────────────────
     # These passes read only img_bgr + masks; none depend on each other.
     _wave1_tasks = {
@@ -6268,6 +6797,18 @@ def run_extended_pipeline(
             except Exception as exc:
                 logger.warning("%s_pass failed: %s", _key, exc)
                 results[_key] = {"ok": False, "error": str(exc)}
+
+    # ── Patch highlight_axis_deg from shadow_vector_deg ──────────────
+    # Both passed run in Wave 1 concurrently, so shadow_vector_deg is now available.
+    # Replace the fitEllipse fallback with the geometric derivation.
+    _shd_res = results.get("shadow", {})
+    _hl_res = results.get("highlight", {})
+    if _shd_res.get("ok") and _hl_res.get("ok"):
+        _sv = _shd_res.get("shadow_vector_deg")
+        if isinstance(_sv, (int, float)):
+            _hl_res["highlight_axis_deg"] = round(
+                90.0 * abs(math.cos(math.radians(float(_sv)))), 1
+            )
 
     # ── Catchlight topology pass (multi-catchlight analysis) ─────────
     try:

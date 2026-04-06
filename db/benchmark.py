@@ -398,6 +398,25 @@ def _deser_result(row) -> Dict[str, Any]:
                 d[f] = json.loads(d[f])
             except Exception:
                 pass
+    # Derive expected_blueprint from expected_analysis when the case
+    # doesn't have explicit blueprint data, so the Blueprint Diff UI
+    # has something to show on the "Expected" side.
+    ebp = d.get("expected_blueprint")
+    if not ebp or (isinstance(ebp, dict) and not ebp.get("key")):
+        ea = d.get("expected_analysis") or {}
+        if isinstance(ea, str):
+            try:
+                ea = json.loads(ea)
+            except Exception:
+                ea = {}
+        kd = ea.get("expected_key_direction")
+        d["expected_blueprint"] = {
+            "key": {
+                "position": kd if kd and kd != "unknown" else None,
+                "modifier": None,
+            },
+            "fill": {"ratio": None},
+        }
     return d
 
 

@@ -1,18 +1,32 @@
 {
   "benchmark_id": "window_negative_fill",
-  "description": "Window with negative fill — window blinds casting striped shadow pattern across face, warm side light, high contrast",
+  "description": "Window with negative fill \u2014 window blinds casting striped shadow pattern across face, warm side light, high contrast",
   "image_path": "benchmarks/images/window_negative_fill.jpg",
   "ground_truth": {
-    "expected_pattern": "gobo",
+    "expected_pattern": "projected",
     "expected_light_count": 1,
     "expected_key_direction": "right",
-    "acceptable_patterns": ["gobo", "window_portrait", "window_negative_fill", "split", "rembrandt", "unknown"],
-    "acceptable_light_count_range": [1, 2]
+    "acceptable_patterns": [
+      "projected",
+      "window_portrait",
+      "window_negative_fill",
+      "split",
+      "rembrandt",
+      "unknown"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      2
+    ]
   },
   "metadata": {
     "category": "natural",
     "difficulty": "hard",
-    "known_challenges": ["blind shadows create gobo-like stripe pattern on face", "window_negative_fill is a setup variant but visual reads as gobo", "striped shadows may confuse face mesh landmark detection"],
+    "known_challenges": [
+      "blind shadows create gobo-like stripe pattern on face",
+      "window_negative_fill is a setup variant but visual reads as gobo",
+      "striped shadows may confuse face mesh landmark detection"
+    ],
     "added_date": "2026-03-17"
   }
 }

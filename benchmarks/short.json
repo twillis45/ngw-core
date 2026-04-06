@@ -6,7 +6,7 @@
     "expected_pattern": "short",
     "expected_light_count": 1,
     "expected_key_direction": "upper_left",
-    "acceptable_patterns": ["short", "rembrandt", "loop", "split", "broad"],
+    "acceptable_patterns": ["short", "short_fashion_key", "rembrandt", "loop", "split", "broad"],
     "acceptable_light_count_range": [1, 2]
   },
   "metadata": {

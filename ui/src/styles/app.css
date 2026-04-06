@@ -6119,34 +6119,59 @@ body {
     gap: var(--space-lg);
     align-items: start;
   }
-  /* Left column: sticky + capped to viewport so actions row is ALWAYS visible */
+  /* Left column: sticky + capped to viewport so actions row is ALWAYS visible.
+     overflow:hidden is required so the flex children (preview) can't escape the
+     max-height bound — without it a tall image chain can push beyond the window. */
   .lab-wb-layout__left {
     position: sticky;
     top: calc(var(--lab-top-bar-h, 0px) + var(--space-sm));
     max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - var(--space-md));
+    overflow: hidden;
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
   }
-  /* Preview fills remaining height — flex child; image fits within it */
+  /* Preview fills remaining height — flex child; image fits within it.
+     max-height:100% closes the height chain: preview ≤ left column ≤ viewport.
+     width:fit-content + max-width:100% collapses the canvas horizontally to the
+     image's rendered width so portrait images don't leave dead space on the right. */
   .lab-wb-layout__left .lab-workbench__preview {
     flex: 1 1 0;
+    width: fit-content;
+    max-width: 100%;
     min-height: clamp(240px, 38svh, 440px);
+    max-height: 100%;
+    overflow: hidden;
+    justify-content: flex-start;
+    align-items: flex-start;
   }
-  /* img-shell must be block-level + fill the preview so children can resolve
-     max-height:100%. Default inline-flex shrink-wraps, breaking the height chain. */
+  /* img-shell shrinks to the image's rendered width (fit-content) so the canvas
+     collapses for portrait images. max-width:100% prevents overflow into the right column. */
   .lab-wb-layout__left .lab-workbench__img-shell {
     display: flex;
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     height: 100%;
-    align-items: center;
-    justify-content: center;
+    align-items: flex-start;
+    overflow: hidden;
   }
-  /* Image: use viewport formula (not 100% — inline-flex img-wrap has no explicit height,
-     so 100% can't resolve and overrides the global formula with unconstrained). */
+  /* img-wrap matches the shell — both shrink-wrap the image. */
+  .lab-wb-layout__left .lab-workbench__img-wrap {
+    width: fit-content;
+    max-width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+  /* Image contained within the bounded canvas; height drives the fit for portrait images.
+     object-fit:contain preserves aspect ratio; the inline-flex img-wrap shrinks to the
+     image's actual rendered dimensions so scan overlays cover only the image area. */
   .lab-wb-layout__left .lab-workbench__preview img {
-    max-width: calc(100% - var(--space-sm) * 2);
+    width: auto;
+    height: 100%;
+    max-width: 100%;
     max-height: calc(100vh - var(--lab-top-bar-h, 0px) - var(--space-sm) - 140px);
+    object-fit: contain;
+    display: block;
   }
   /* Right column: independently scrollable so it never slides under the header */
   .lab-wb-layout__right {
@@ -14321,9 +14346,9 @@ body {
 /* Single image: default (post-analysis) state */
 .ref-eval__img {
   display: block;
-  max-width: 100%;
-  max-height: 52vh;
-  min-width: min(220px, 100%);
+  width: 100%;          /* fill the stage / bounding box */
+  height: auto;         /* maintain aspect ratio naturally */
+  max-height: 70vh;     /* safety cap for very tall images */
   border-radius: var(--radius-md);
   cursor: zoom-in;
 }
@@ -14331,8 +14356,9 @@ body {
 /* ── Image stage: relative container for the scan overlay ── */
 .ref-eval__img-stage {
   position: relative;
-  display: inline-flex;
-  line-height: 0;  /* collapse whitespace below img */
+  display: block;       /* was inline-flex — that shrank to content size */
+  width: 100%;          /* fill the preview-wrap bounding box */
+  line-height: 0;       /* collapse whitespace below img */
   border-radius: var(--radius-md);
   overflow: hidden;
 }
@@ -16034,6 +16060,120 @@ body {
   border-color: var(--color-accent);
   color: var(--color-bg);
 }
+
+/* ── Log Section panels ──────────────────────────────────── */
+.lab-log {
+  padding: var(--space-md) var(--space-xl);
+  width: 100%;
+  box-sizing: border-box;
+}
+.lab-log__header {
+  display: flex; align-items: center; gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+.lab-log__header-actions { margin-left: auto; display: flex; gap: var(--space-xs); }
+.lab-log__label {
+  font-size: var(--text-2xs); font-weight: var(--weight-bold);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-sm);
+}
+.lab-log__empty {
+  font-size: var(--text-xs); color: var(--color-text-dim);
+  padding: var(--space-4xl) 0; text-align: center;
+}
+/* Card */
+.lab-log__card {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-sm);
+}
+.lab-log__card--flush { padding: 0; }
+.lab-log__card--green { border-color: var(--color-status-green-border); background: var(--color-status-green-bg); }
+.lab-log__card--amber { border-color: var(--color-status-amber-border); background: var(--color-status-amber-bg); }
+.lab-log__card--red   { border-color: var(--color-status-red-border);   background: var(--color-status-red-bg); }
+.lab-log__card--blue  { border-color: var(--color-status-blue-border);  background: var(--color-status-blue-bg); }
+/* Row (inside flush card) */
+.lab-log__row {
+  display: flex; align-items: flex-start; gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+.lab-log__row:last-child { border-bottom: none; }
+/* Dot */
+.lab-log__dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0; margin-top: 3px; display: inline-block;
+}
+.lab-log__dot--green { background: var(--color-status-green); }
+.lab-log__dot--amber { background: var(--color-status-amber); }
+.lab-log__dot--red   { background: var(--color-status-red); }
+.lab-log__dot--muted { background: var(--color-status-muted); }
+/* Pill badge */
+.lab-log__pill {
+  display: inline-block;
+  font-family: var(--font-family);
+  font-size: var(--text-2xs); font-weight: var(--weight-semibold);
+  padding: 2px 7px; border-radius: var(--radius-sm); margin: 1px 2px;
+  line-height: 1.4;
+}
+.lab-log__pill--green { background: var(--color-status-green-bg); color: var(--color-status-green); }
+.lab-log__pill--amber { background: var(--color-status-amber-bg); color: var(--color-status-amber); }
+.lab-log__pill--red   { background: var(--color-status-red-bg);   color: var(--color-status-red); }
+.lab-log__pill--blue  { background: var(--color-status-blue-bg);  color: var(--color-status-blue); }
+.lab-log__pill--muted { background: transparent; border: 1px solid var(--color-border); color: var(--color-text-secondary); }
+/* Action button */
+.lab-log__btn {
+  font-family: var(--font-family);
+  font-size: var(--text-xs); font-weight: var(--weight-semibold);
+  padding: 4px var(--space-sm); border-radius: var(--radius-sm);
+  cursor: pointer; white-space: nowrap; border: 1px solid transparent;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.lab-log__btn:disabled { border-color: var(--color-border); background: transparent; color: var(--color-text-dim); cursor: default; opacity: 0.5; }
+.lab-log__btn--green { border-color: var(--color-status-green-border); background: var(--color-status-green-bg); color: var(--color-status-green); }
+.lab-log__btn--amber { border-color: var(--color-status-amber-border); background: var(--color-status-amber-bg); color: var(--color-status-amber); }
+.lab-log__btn--red   { border-color: var(--color-status-red-border);   background: var(--color-status-red-bg);   color: var(--color-status-red); }
+.lab-log__btn--blue  { border-color: var(--color-status-blue-border);  background: var(--color-status-blue-bg);  color: var(--color-status-blue); }
+.lab-log__btn--green:hover:not(:disabled) { background: var(--color-status-green-bg2); }
+.lab-log__btn--amber:hover:not(:disabled) { background: var(--color-status-amber-bg2); }
+.lab-log__btn--red:hover:not(:disabled)   { background: var(--color-status-red-bg2); }
+.lab-log__btn--blue:hover:not(:disabled)  { background: var(--color-status-blue-bg2); }
+/* Table */
+.lab-log__table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.lab-log__table {
+  width: 100%; border-collapse: collapse;
+  font-size: var(--text-xs); font-family: var(--font-family);
+  table-layout: auto;
+}
+.lab-log__table th {
+  text-align: left; padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-2xs); font-weight: var(--weight-bold);
+  color: var(--color-text-secondary); text-transform: uppercase;
+  letter-spacing: 0.06em; white-space: nowrap;
+  border-bottom: 1px solid var(--color-border);
+}
+.lab-log__table td {
+  padding: 7px var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  vertical-align: middle; font-size: var(--text-xs);
+}
+.lab-log__table td.t-primary  { color: var(--color-text); font-weight: var(--weight-semibold); }
+.lab-log__table td.t-mono     { font-family: var(--font-mono); font-size: var(--text-2xs); }
+.lab-log__table td.t-nowrap   { white-space: nowrap; }
+.lab-log__table td.t-actions  { white-space: nowrap; }
+.lab-log__table tr:last-child td { border-bottom: none; }
+.lab-log__table tr.t-flagged { background: transparent; }
+[data-theme="light"] .lab-log__table tr.t-flagged { background: var(--color-status-amber-bg); }
+/* Inline text colour helpers inside table cells */
+.lab-log__table .t-green { color: var(--color-status-green); }
+.lab-log__table .t-amber { color: var(--color-status-amber); }
+.lab-log__table .t-red   { color: var(--color-status-red); }
+.lab-log__table .t-dim   { color: var(--color-text-dim); font-size: var(--text-2xs); margin-left: 3px; }
 
 /* Status section */
 .lab-status { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md) 0; }

@@ -35,7 +35,7 @@
       "acceptable_patterns": [
         "butterfly",
         "clamshell",
-        "flat_fashion",
+        "flat",
         "high_key",
         "rembrandt",
         "loop",
@@ -63,7 +63,7 @@
       "acceptable_patterns": [
         "butterfly",
         "clamshell",
-        "flat_fashion",
+        "flat",
         "rembrandt",
         "loop",
         "unknown"
@@ -130,9 +130,9 @@
     {
       "id": "white_seamless_catalog",
       "image_path": "data/reference_dataset/flat_fashion/white_seamless_catalog/image.jpg",
-      "expected_pattern": "flat_fashion",
+      "expected_pattern": "flat",
       "acceptable_patterns": [
-        "flat_fashion",
+        "flat",
         "high_key",
         "butterfly",
         "rembrandt",
@@ -161,7 +161,7 @@
       "expected_pattern": "high_key",
       "acceptable_patterns": [
         "high_key",
-        "flat_fashion",
+        "flat",
         "butterfly",
         "clamshell",
         "rembrandt",
@@ -189,7 +189,7 @@
       "expected_pattern": "high_key",
       "acceptable_patterns": [
         "high_key",
-        "flat_fashion",
+        "flat",
         "butterfly",
         "clamshell",
         "rembrandt",
@@ -218,7 +218,7 @@
       "acceptable_patterns": [
         "loop",
         "rembrandt",
-        "flat_fashion",
+        "flat",
         "butterfly",
         "clamshell"
       ],
@@ -283,7 +283,6 @@
         "loop",
         "rembrandt",
         "window_portrait",
-        "golden_hour",
         "unknown"
       ],
       "expected_light_count": 1,
@@ -453,7 +452,7 @@
       "expected_pattern": "athletic_rim_sculpt",
       "acceptable_patterns": [
         "athletic_rim_sculpt",
-        "rim_only",
+        "rim",
         "split",
         "short",
         "low_key",
@@ -483,7 +482,7 @@
       "expected_pattern": "bottle_backlight",
       "acceptable_patterns": [
         "bottle_backlight",
-        "rim_only",
+        "rim",
         "low_key",
         "unknown"
       ],
@@ -535,11 +534,11 @@
       "expected_pattern": "editorial_rim_key",
       "acceptable_patterns": [
         "editorial_rim_key",
-        "rim_only",
+        "rim",
         "split",
         "short",
         "low_key",
-        "gobo",
+        "projected",
         "unknown"
       ],
       "expected_light_count": 1,
@@ -562,9 +561,9 @@
     {
       "id": "overfill_flat",
       "image_path": "data/reference_dataset/flat_fashion/overfill_flat/image.jpg",
-      "expected_pattern": "flat_fashion",
+      "expected_pattern": "flat",
       "acceptable_patterns": [
-        "flat_fashion",
+        "flat",
         "high_key",
         "clamshell",
         "unknown"
@@ -587,9 +586,9 @@
     {
       "id": "gobo",
       "image_path": "data/reference_dataset/gobo/gobo/image.jpg",
-      "expected_pattern": "gobo",
+      "expected_pattern": "projected",
       "acceptable_patterns": [
-        "gobo",
+        "projected",
         "split",
         "unknown"
       ],
@@ -612,9 +611,9 @@
     {
       "id": "window_negative_fill",
       "image_path": "data/reference_dataset/gobo/window_negative_fill/image.jpg",
-      "expected_pattern": "gobo",
+      "expected_pattern": "projected",
       "acceptable_patterns": [
-        "gobo",
+        "projected",
         "window_portrait",
         "window_negative_fill",
         "split",
@@ -640,13 +639,12 @@
     {
       "id": "golden_hour",
       "image_path": "data/reference_dataset/golden_hour/golden_hour/image.jpg",
-      "expected_pattern": "golden_hour",
+      "expected_pattern": "loop",
       "acceptable_patterns": [
-        "golden_hour",
         "loop",
         "rembrandt",
         "short",
-        "gobo",
+        "projected",
         "unknown"
       ],
       "expected_light_count": 1,
@@ -691,10 +689,9 @@
     {
       "id": "overcast_natural",
       "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
-      "expected_pattern": "overcast_natural",
+      "expected_pattern": "flat",
       "acceptable_patterns": [
-        "overcast_natural",
-        "flat_fashion",
+        "flat",
         "high_key",
         "rembrandt",
         "loop",
@@ -742,9 +739,9 @@
     {
       "id": "rim_only",
       "image_path": "data/reference_dataset/rim_only/rim_only/image.jpg",
-      "expected_pattern": "rim_only",
+      "expected_pattern": "rim",
       "acceptable_patterns": [
-        "rim_only",
+        "rim",
         "low_key",
         "split",
         "rembrandt",
@@ -770,11 +767,11 @@
     {
       "id": "ring_light",
       "image_path": "data/reference_dataset/ring_light/ring_light/image.jpg",
-      "expected_pattern": "ring_light",
+      "expected_pattern": "axial",
       "acceptable_patterns": [
-        "ring_light",
+        "axial",
         "butterfly",
-        "flat_fashion",
+        "flat",
         "clamshell",
         "rembrandt",
         "loop",
@@ -831,9 +828,9 @@
         "short",
         "split",
         "rembrandt",
-        "rim_only",
+        "rim",
         "low_key",
-        "gobo",
+        "projected",
         "unknown"
       ],
       "expected_light_count": 1,
@@ -859,7 +856,7 @@
       "expected_pattern": "tabletop_soft_product",
       "acceptable_patterns": [
         "tabletop_soft_product",
-        "flat_fashion",
+        "flat",
         "high_key",
         "unknown",
         "rembrandt"

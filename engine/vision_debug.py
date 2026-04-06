@@ -120,13 +120,15 @@ def _draw_shadow_vector(
         cx, cy = w // 2, h // 3
         arrow_len = min(w, h) // 6
 
-    # Convert degrees to radians (0=up, clockwise)
-    rad = math.radians(vector_deg - 90)
+    # Arrow points TOWARD the light source (shadow direction + 180°).
+    # Shadow falls in `vector_deg` direction; light comes from opposite side.
+    light_deg = (vector_deg + 180) % 360
+    rad = math.radians(light_deg - 90)
     end_x = int(cx + arrow_len * math.cos(rad))
     end_y = int(cy + arrow_len * math.sin(rad))
 
     cv2.arrowedLine(overlay, (cx, cy), (end_x, end_y), _SHADOW_COLOR, 2, tipLength=0.3)
-    _put_label(overlay, f"Shadow {vector_deg:.0f}°", (end_x + 5, end_y), _SHADOW_COLOR)
+    _put_label(overlay, f"Key ~{light_deg:.0f}° (shadow {vector_deg:.0f}°)", (end_x + 5, end_y), _SHADOW_COLOR)
 
     softness = shadow_data.get("shadow_softness")
     if softness is not None:
@@ -168,34 +170,100 @@ def _draw_catchlight_circles(
     overlay: np.ndarray,
     catchlight_data: Dict[str, Any],
     face_box: Optional[Tuple[int, int, int, int]] = None,
+    intel_catchlights: Optional[list] = None,
 ) -> None:
-    """Draw circles around detected catchlight positions."""
-    count = catchlight_data.get("catchlight_count", 0)
-    position = catchlight_data.get("catchlight_position", "")
-    shape = catchlight_data.get("catchlight_shape", "")
+    """Draw outline circles at actual catchlight positions and sizes.
 
-    if not face_box or count == 0:
+    Args:
+        intel_catchlights: Classified catchlights from lighting_inference
+            (each has eye, position, role). Used to color-code circles by
+            role (key=green, fill=amber). Raw catchlights have no role field.
+    """
+    catchlights = catchlight_data.get("catchlights", [])
+    count = catchlight_data.get("count", 0) or len(catchlights)
+
+    if count == 0 and not catchlights:
         return
 
-    x0, y0, x1, y1 = face_box
-    face_w = x1 - x0
-    face_h = y1 - y0
+    # Iris centers from face_geometry (actual pixel coords from MediaPipe)
+    fg = catchlight_data.get("face_geometry", {})
+    left_center  = fg.get("left_eye_center")   # (x, y) tuple or None
+    right_center = fg.get("right_eye_center")
 
-    # Draw circles at estimated eye positions
-    eye_y = y0 + face_h // 3
-    left_eye_x = x0 + face_w // 3
-    right_eye_x = x0 + 2 * face_w // 3
-    radius = max(8, face_w // 15)
+    # Estimate iris radius from face_box
+    iris_r_px = 12  # default
+    if face_box:
+        x0, y0, x1, y1 = face_box
+        iris_r_px = max(8, (x1 - x0) // 14)
 
-    cv2.circle(overlay, (left_eye_x, eye_y), radius, _CATCHLIGHT_COLOR, 2)
-    cv2.circle(overlay, (right_eye_x, eye_y), radius, _CATCHLIGHT_COLOR, 2)
+    # Fallback eye centers from face_box if face_geometry not available
+    if left_center is None and face_box:
+        x0, y0, x1, y1 = face_box
+        left_center  = (x0 + (x1 - x0) // 3,     y0 + (y1 - y0) // 3)
+        right_center = (x0 + 2 * (x1 - x0) // 3, y0 + (y1 - y0) // 3)
 
-    _put_label(
-        overlay,
-        f"CL: {count}x {shape}",
-        (left_eye_x - 20, eye_y - radius - 10),
-        _CATCHLIGHT_COLOR,
-    )
+    eye_centers = {"left": left_center, "right": right_center}
+
+    # Role colors: key=green, fill=amber, else default green
+    _role_colors = {
+        "key": (80, 230, 80),    # BGR → bright green
+        "fill": (60, 160, 230),  # BGR → amber/orange
+    }
+
+    # Build role lookup from intel catchlights: (eye, position) → role
+    # Intel catchlights have roles assigned by lighting_inference; raw
+    # vision catchlights have no role field so we fall back to raw's own
+    # role key (empty string for unclassified).
+    _role_lookup: dict = {}
+    for _ic in (intel_catchlights or []):
+        _ik = (_ic.get("eye", ""), _ic.get("position", ""))
+        _role_lookup[_ik] = _ic.get("role", "")
+
+    # Draw thin iris ring for each detected eye
+    drawn_eyes: set = set()
+    for cl in catchlights:
+        eye = cl.get("eye", "")
+        ec = eye_centers.get(eye)
+        if ec is None:
+            continue
+
+        if eye not in drawn_eyes:
+            cv2.circle(overlay, (int(ec[0]), int(ec[1])), iris_r_px, _CATCHLIGHT_COLOR, 1)
+            drawn_eyes.add(eye)
+
+        # Prefer intel role lookup; fall back to raw catchlight's own role (usually empty)
+        position = cl.get("position", "")
+        role = _role_lookup.get((eye, position), cl.get("role", ""))
+        color = _role_colors.get(role, _CATCHLIGHT_COLOR)
+
+        abs_cx = cl.get("abs_cx")
+        abs_cy = cl.get("abs_cy")
+        enc_r  = cl.get("enc_r_px")
+
+        if abs_cx is not None and abs_cy is not None and enc_r is not None:
+            # Use actual pixel position and size from detection
+            r = max(2, int(enc_r))
+            cv2.circle(overlay, (int(abs_cx), int(abs_cy)), r, color, 1)
+        else:
+            # Fallback: estimate position from clock angle + iris center
+            pos_str = cl.get("position", "12 o'clock")
+            try:
+                hour = int(pos_str.split()[0])
+            except (ValueError, IndexError):
+                hour = 12
+            angle_rad = math.radians((hour / 12) * 360 - 90)
+            r = max(2, int((cl.get("size_ratio") or 0.2) * iris_r_px * 0.7))
+            ox = int(ec[0] + iris_r_px * 0.65 * math.cos(angle_rad))
+            oy = int(ec[1] + iris_r_px * 0.65 * math.sin(angle_rad))
+            cv2.circle(overlay, (ox, oy), r, color, 1)
+
+    if left_center:
+        _put_label(
+            overlay,
+            f"CL: {count}",
+            (int(left_center[0]) - 20, int(left_center[1]) - iris_r_px - 10),
+            _CATCHLIGHT_COLOR,
+        )
 
 
 def _draw_bg_gradient_center(
@@ -582,6 +650,8 @@ def generate_analysis_overlay(
     person_mask: Optional[np.ndarray] = None,
     output_path: Optional[str] = None,
     layers: Optional[frozenset[str]] = None,
+    vision_data: Optional[Dict[str, Any]] = None,
+    intel_catchlights: Optional[list] = None,
 ) -> Optional[str]:
     """Generate a debug overlay image with all detected signals visualized.
 
@@ -594,6 +664,12 @@ def generate_analysis_overlay(
         layers: Set of layer names to draw. None means all layers.
                 Valid names: shadow, highlights, catchlights, background,
                 pose, specular, surface, light_roles, summary.
+        vision_data: Raw vision_data dict from vision_pipeline. When provided,
+                     catchlight dots use vision_data["catchlights"] which contains
+                     the full per-catchlight list and face_geometry from MediaPipe.
+        intel_catchlights: Classified catchlights from lighting_inference
+                     (each has eye, position, role). Used to color-code circles
+                     by role: green=key, amber=fill.
 
     Returns:
         Path to saved overlay image, or None on failure.
@@ -628,10 +704,16 @@ def generate_analysis_overlay(
                 _draw_highlight_heatmap(overlay, gray, person_mask)
 
         # Catchlight circles
+        # pipeline_results["catchlight"] (no 's') = topology/analysis pass (no per-dot data)
+        # vision_data["catchlights"] (with 's') = full MediaPipe result with face_geometry + catchlights array
         if "catchlights" in active:
-            catchlight = pipeline_results.get("catchlight", {})
+            catchlight = (
+                (vision_data or {}).get("catchlights")          # preferred: full per-dot data
+                or pipeline_results.get("catchlights")          # fallback: may have face_yaw only
+                or pipeline_results.get("catchlight", {})       # fallback: topology pass (no dot positions)
+            )
             if catchlight.get("ok"):
-                _draw_catchlight_circles(overlay, catchlight, face_box)
+                _draw_catchlight_circles(overlay, catchlight, face_box, intel_catchlights)
 
         # Background gradient center
         if "background" in active:

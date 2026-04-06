@@ -708,6 +708,11 @@ export async function probeApiKey() {
   return coreFetch('/health/api-keys/probe', { method: 'POST' });
 }
 
+/** Send a test capture_message to Sentry (admin only). */
+export async function sentryTest() {
+  return coreFetch('/health/sentry/test', { method: 'POST' });
+}
+
 /** Return aggregated VLM call metrics for the last N hours. */
 export async function getApiMetrics(hours = 24) {
   return labFetch(`/api-metrics?hours=${hours}`);
@@ -774,6 +779,33 @@ export async function dismissTriageItem(_disagreementId) {
 
 export async function getMonitoringStats(hours = 24) {
   return labFetch(`/monitoring-stats?hours=${hours}`);
+}
+
+/** Fetch recent L1 analysis telemetry records (Logs → L1 Stream).
+ *  @param {number} limit  max rows
+ *  @param {object} filters  { userEmail, search, pattern, flags }
+ */
+export async function getL1Stream(limit = 100, filters = {}) {
+  const qs = new URLSearchParams({ limit });
+  if (filters.userEmail) qs.set('user_email', filters.userEmail);
+  if (filters.search)    qs.set('search',     filters.search);
+  if (filters.pattern)   qs.set('pattern',    filters.pattern);
+  if (filters.flags)     qs.set('flags',      filters.flags);
+  return labFetch(`/l1-stream?${qs}`);
+}
+
+/** Fetch recent in-process server log records from the memory buffer. */
+export async function getServerLogs({ limit = 200, level = '', search = '' } = {}) {
+  const qs = new URLSearchParams({ limit });
+  if (level)  qs.set('level',  level);
+  if (search) qs.set('search', search);
+  return labFetch(`/server-logs?${qs}`);
+}
+
+/** Fetch all diagnostic failure entries, optionally filtered by pattern. */
+export async function getDiagnostics(pattern = null) {
+  const qs = pattern ? `?pattern=${encodeURIComponent(pattern)}` : '';
+  return coreFetch(`/diagnostics${qs}`);
 }
 
 

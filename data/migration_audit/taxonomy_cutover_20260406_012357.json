@@ -1,0 +1,1270 @@
+{
+  "migration": "taxonomy_hard_cutover",
+  "date": "2026-04-06T05:23:57Z",
+  "dry_run": false,
+  "rename_map": {
+    "rim_only": "rim",
+    "ring_light": "axial",
+    "flat_fashion": "flat",
+    "gobo_projection": "projected",
+    "gobo": "projected",
+    "golden_hour": "loop",
+    "overcast_natural": "flat",
+    "mixed_light": "unknown"
+  },
+  "guardrail_exception": "TR-001 acknowledged: distillation_candidate_reviews source fact update. Machine value rename only \u2014 semantic truth preserved.",
+  "surfaces": {
+    "benchmark_files": [
+      {
+        "file": "athletic_rim_sculpt.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "athletic_rim_sculpt",
+              "rim_only",
+              "split",
+              "short",
+              "low_key",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "athletic_rim_sculpt",
+              "rim",
+              "split",
+              "short",
+              "low_key",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "beauty_dish_clean.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "butterfly",
+              "clamshell",
+              "flat_fashion",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "butterfly",
+              "clamshell",
+              "flat",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "bottle_backlight.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "bottle_backlight",
+              "rim_only",
+              "low_key",
+              "unknown"
+            ],
+            "new": [
+              "bottle_backlight",
+              "rim",
+              "low_key",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "butterfly.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "butterfly",
+              "clamshell",
+              "flat_fashion",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "butterfly",
+              "clamshell",
+              "flat",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "corporate_soft_key.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "loop",
+              "rembrandt",
+              "split",
+              "flat_fashion",
+              "butterfly",
+              "clamshell",
+              "triangle",
+              "window_negative_fill"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "split",
+              "flat",
+              "butterfly",
+              "clamshell",
+              "triangle",
+              "window_negative_fill"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "editorial_rim_key.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "editorial_rim_key",
+              "rim_only",
+              "split",
+              "short",
+              "low_key",
+              "gobo",
+              "loop",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "editorial_rim_key",
+              "rim",
+              "split",
+              "short",
+              "low_key",
+              "projected",
+              "loop",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "gobo.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "gobo",
+            "new": "projected"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "gobo",
+              "split",
+              "unknown"
+            ],
+            "new": [
+              "projected",
+              "split",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "golden_hour.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "golden_hour",
+            "new": "loop"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "golden_hour",
+              "loop",
+              "rembrandt",
+              "broad",
+              "split",
+              "short",
+              "butterfly",
+              "gobo",
+              "unknown"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "broad",
+              "split",
+              "short",
+              "butterfly",
+              "projected",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "high_key.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "high_key",
+              "flat_fashion",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "high_key",
+              "flat",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "high_key_beauty.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "high_key",
+              "flat_fashion",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "high_key",
+              "flat",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "mixed_light_failure.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "unknown",
+              "flat_fashion",
+              "hybrid",
+              "rembrandt",
+              "loop",
+              "split",
+              "gobo",
+              "grid/window gobo"
+            ],
+            "new": [
+              "unknown",
+              "flat",
+              "hybrid",
+              "rembrandt",
+              "loop",
+              "split",
+              "projected",
+              "grid/window gobo"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "overcast_natural.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "overcast_natural",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "overcast_natural",
+              "flat_fashion",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "overfill_flat.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "flat_fashion",
+              "high_key",
+              "butterfly",
+              "clamshell",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "butterfly",
+              "clamshell",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "rim_only.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "rim_only",
+            "new": "rim"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "rim_only",
+              "low_key",
+              "split",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "rim",
+              "low_key",
+              "split",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "ring_light.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "ring_light",
+            "new": "axial"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "ring_light",
+              "butterfly",
+              "flat_fashion",
+              "broad",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "axial",
+              "butterfly",
+              "flat",
+              "broad",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "short_fashion_key.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "short",
+              "short_fashion_key",
+              "split",
+              "rembrandt",
+              "rim_only",
+              "low_key",
+              "gobo",
+              "unknown"
+            ],
+            "new": [
+              "short",
+              "short_fashion_key",
+              "split",
+              "rembrandt",
+              "rim",
+              "low_key",
+              "projected",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "soft_editorial_key.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "loop",
+              "rembrandt",
+              "window_portrait",
+              "golden_hour",
+              "unknown",
+              "window_negative_fill"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "window_portrait",
+              "unknown",
+              "window_negative_fill"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "tabletop_soft_product.json",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "tabletop_soft_product",
+              "flat_fashion",
+              "high_key",
+              "low_key",
+              "unknown",
+              "rembrandt"
+            ],
+            "new": [
+              "tabletop_soft_product",
+              "flat",
+              "high_key",
+              "low_key",
+              "unknown",
+              "rembrandt"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "white_seamless_catalog.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "flat_fashion",
+              "high_key",
+              "clamshell",
+              "broad",
+              "short",
+              "split",
+              "butterfly",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "clamshell",
+              "broad",
+              "short",
+              "split",
+              "butterfly",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "file": "window_negative_fill.json",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "gobo",
+            "new": "projected"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "gobo",
+              "window_portrait",
+              "window_negative_fill",
+              "split",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "projected",
+              "window_portrait",
+              "window_negative_fill",
+              "split",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      }
+    ],
+    "gold_set_manifest": [
+      {
+        "entry_id": "beauty_dish_clean",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "butterfly",
+              "clamshell",
+              "flat_fashion",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "butterfly",
+              "clamshell",
+              "flat",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "butterfly",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "butterfly",
+              "clamshell",
+              "flat_fashion",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "butterfly",
+              "clamshell",
+              "flat",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "white_seamless_catalog",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "flat_fashion",
+              "high_key",
+              "butterfly",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "butterfly",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "high_key",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "high_key",
+              "flat_fashion",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "high_key",
+              "flat",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "high_key_beauty",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "high_key",
+              "flat_fashion",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "high_key",
+              "flat",
+              "butterfly",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "corporate_soft_key",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "loop",
+              "rembrandt",
+              "flat_fashion",
+              "butterfly",
+              "clamshell"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "flat",
+              "butterfly",
+              "clamshell"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "soft_editorial_key",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "loop",
+              "rembrandt",
+              "window_portrait",
+              "golden_hour",
+              "unknown"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "window_portrait",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "athletic_rim_sculpt",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "athletic_rim_sculpt",
+              "rim_only",
+              "split",
+              "short",
+              "low_key",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "athletic_rim_sculpt",
+              "rim",
+              "split",
+              "short",
+              "low_key",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "bottle_backlight",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "bottle_backlight",
+              "rim_only",
+              "low_key",
+              "unknown"
+            ],
+            "new": [
+              "bottle_backlight",
+              "rim",
+              "low_key",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "editorial_rim_key",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "editorial_rim_key",
+              "rim_only",
+              "split",
+              "short",
+              "low_key",
+              "gobo",
+              "unknown"
+            ],
+            "new": [
+              "editorial_rim_key",
+              "rim",
+              "split",
+              "short",
+              "low_key",
+              "projected",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "overfill_flat",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "flat_fashion",
+              "high_key",
+              "clamshell",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "clamshell",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "gobo",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "gobo",
+            "new": "projected"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "gobo",
+              "split",
+              "unknown"
+            ],
+            "new": [
+              "projected",
+              "split",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "window_negative_fill",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "gobo",
+            "new": "projected"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "gobo",
+              "window_portrait",
+              "window_negative_fill",
+              "split",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "projected",
+              "window_portrait",
+              "window_negative_fill",
+              "split",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "golden_hour",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "golden_hour",
+            "new": "loop"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "golden_hour",
+              "loop",
+              "rembrandt",
+              "short",
+              "gobo",
+              "unknown"
+            ],
+            "new": [
+              "loop",
+              "rembrandt",
+              "short",
+              "projected",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "overcast_natural",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "overcast_natural",
+            "new": "flat"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "overcast_natural",
+              "flat_fashion",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "flat",
+              "high_key",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "rim_only",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "rim_only",
+            "new": "rim"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "rim_only",
+              "low_key",
+              "split",
+              "rembrandt",
+              "unknown"
+            ],
+            "new": [
+              "rim",
+              "low_key",
+              "split",
+              "rembrandt",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "ring_light",
+        "changes": [
+          {
+            "field": "expected_pattern",
+            "old": "ring_light",
+            "new": "axial"
+          },
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "ring_light",
+              "butterfly",
+              "flat_fashion",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ],
+            "new": [
+              "axial",
+              "butterfly",
+              "flat",
+              "clamshell",
+              "rembrandt",
+              "loop",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "short_fashion_key",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "short",
+              "split",
+              "rembrandt",
+              "rim_only",
+              "low_key",
+              "gobo",
+              "unknown"
+            ],
+            "new": [
+              "short",
+              "split",
+              "rembrandt",
+              "rim",
+              "low_key",
+              "projected",
+              "unknown"
+            ]
+          }
+        ]
+      },
+      {
+        "entry_id": "tabletop_soft_product",
+        "changes": [
+          {
+            "field": "acceptable_patterns",
+            "old": [
+              "tabletop_soft_product",
+              "flat_fashion",
+              "high_key",
+              "unknown",
+              "rembrandt"
+            ],
+            "new": [
+              "tabletop_soft_product",
+              "flat",
+              "high_key",
+              "unknown",
+              "rembrandt"
+            ]
+          }
+        ]
+      }
+    ],
+    "ref_manifest": [
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "flat_fashion",
+            "new": "flat"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "gobo",
+            "new": "projected"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "gobo",
+            "new": "projected"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "golden_hour",
+            "new": "loop"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "overcast_natural",
+            "new": "flat"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "rim_only",
+            "new": "rim"
+          }
+        ]
+      },
+      {
+        "entry_id": "?",
+        "changes": [
+          {
+            "field": "pattern",
+            "old": "ring_light",
+            "new": "axial"
+          }
+        ]
+      }
+    ],
+    "db": {
+      "guardrail_exception": "TR-001 acknowledged: machine value rename only. Semantic truth of each record is preserved. Source facts (expected_pattern, predicted_pattern) are being updated solely to reflect the new canonical machine values.",
+      "distillation_candidate_reviews": [
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "68289f9c4eca440aa57f76670e391977",
+          "old": "rim_only",
+          "new": "rim"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "55b2499c22e5416294a66f49815efece",
+          "old": "rim_only",
+          "new": "rim"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "68289f9c4eca440aa57f76670e391977",
+          "old": "rim_only",
+          "new": "rim"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "55b2499c22e5416294a66f49815efece",
+          "old": "rim_only",
+          "new": "rim"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "c01be85bb5444d3c822e234af44ed143",
+          "old": "ring_light",
+          "new": "axial"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "1759bd2dde044e76a7660be153c094ca",
+          "old": "ring_light",
+          "new": "axial"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "1759bd2dde044e76a7660be153c094ca",
+          "old": "ring_light",
+          "new": "axial"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "b3dcaeaed3254196b055d722258581ca",
+          "old": "flat_fashion",
+          "new": "flat"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "73c42c53c4a14f208e866124a97737dd",
+          "old": "flat_fashion",
+          "new": "flat"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "80a41d08f918485990639f8f9c9b458d",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "77362b40ff7a438f92fb8e105d07a779",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "7f641f63f55e4557bb440601154ffa43",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "f206de96a6834aaaaa99844d53df2ccb",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "7f641f63f55e4557bb440601154ffa43",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "f206de96a6834aaaaa99844d53df2ccb",
+          "old": "gobo",
+          "new": "projected"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "dad620caf3d74c38bd37cee4c1b327f3",
+          "old": "golden_hour",
+          "new": "loop"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "expected_pattern",
+          "id": "746e9765a887426eaead5a9f05c65d37",
+          "old": "overcast_natural",
+          "new": "flat"
+        },
+        {
+          "table": "distillation_candidate_reviews",
+          "column": "predicted_pattern",
+          "id": "746e9765a887426eaead5a9f05c65d37",
+          "old": "overcast_natural",
+          "new": "flat"
+        }
+      ],
+      "gold_set_entries": []
+    }
+  },
+  "verification_passed": true,
+  "status": "complete"
+}

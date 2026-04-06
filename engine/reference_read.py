@@ -1118,10 +1118,10 @@ def _build_lighting_family(
     parts.append("key")
 
     # Include pattern when it's a distinctive non-standard setup.
-    # Gobo/projection setups are their own category — they shouldn't be
+    # Projected/gobo setups are their own category — they shouldn't be
     # described with the same generic family as a normal key light.
-    if "gobo" in pattern:
-        parts.append("gobo")
+    if pattern == "projected" or "gobo" in pattern:
+        parts.append("projected")
     # P1e: butterfly = overhead, clamshell = overhead + fill below
     elif pattern == "butterfly":
         parts.append("overhead")
@@ -1775,7 +1775,7 @@ def build_image_read(
     # technique), so only filter standard shadow patterns.
     _TECHNICAL_PATTERNS = {
         "clamshell", "butterfly", "rembrandt", "loop", "split",
-        "paramount", "triangle", "flat",
+        "paramount", "triangle", "flat", "broad", "short",
     }
     if pattern and pattern != "unknown" and pattern.lower() not in genre_lower:
         if pattern.lower() not in _TECHNICAL_PATTERNS:
@@ -2695,6 +2695,59 @@ def build_lighting_read(
     if not direction_text:
         direction_text = "unknown"
 
+    # ── Catchlight ↔ shadow direction paradox check ───────────────────────
+    # When both a shadow-derived direction (from primary_shadow_direction)
+    # AND catchlight clock positions are available, compare them.
+    # A horizontal contradiction (shadow says key-from-left, catchlight says
+    # key-from-right) is a strong signal that one reading is wrong — flag it
+    # for triage rather than silently propagating a contradicted direction.
+    _psd = getattr(cue_report, "primary_shadow_direction", None) if cue_report else None
+    _psd_dir = getattr(_psd, "direction", "unknown") if _psd else "unknown"
+    if _psd_dir not in ("unknown", "") and vision_data:
+        _cd = vision_data.get("catchlights", {})
+        if _cd and _cd.get("ok"):
+            # Derive key direction from shadow direction
+            _key_from_shadow = _SHADOW_TO_KEY_DIRECTION.get(_psd_dir, "unknown")
+            _shadow_horiz = (
+                "left" if "left" in _key_from_shadow
+                else "right" if "right" in _key_from_shadow
+                else "center"
+            )
+            # Derive key direction from catchlight clock positions
+            for _cl in _cd.get("catchlights", []):
+                _cl_pos = _cl.get("position", "")
+                if not _cl_pos:
+                    continue
+                _cl_clock = _parse_clock_position(_cl_pos)
+                if not _cl_clock:
+                    continue
+                _key_from_cl = _CLOCK_TO_DIRECTION.get(_cl_clock, "unknown")
+                _cl_horiz = (
+                    "left" if "left" in _key_from_cl
+                    else "right" if "right" in _key_from_cl
+                    else "center"
+                )
+                if (
+                    _shadow_horiz in ("left", "right")
+                    and _cl_horiz in ("left", "right")
+                    and _shadow_horiz != _cl_horiz
+                ):
+                    import logging as _rr_log
+                    _rr_log.getLogger(__name__).warning(
+                        "PARADOX: shadow direction=%r (key from %s) contradicts "
+                        "catchlight at %s o'clock (key from %s). "
+                        "Possible fill-light catchlight or face-turn asymmetry.",
+                        _psd_dir, _key_from_shadow,
+                        _cl_clock, _key_from_cl,
+                    )
+                    # Record on contradictions list for downstream triage
+                    if "contradictions" in dir() and isinstance(contradictions, list):
+                        contradictions.append(
+                            f"catchlight_shadow_paradox: shadow→key={_key_from_shadow} "
+                            f"vs catchlight@{_cl_clock}→key={_key_from_cl}"
+                        )
+                    break  # Flag once per build
+
     # Shadow pattern — for gobo/slit, include shape when detectable
     # Low-parallelism SIP override: when SIP fires with very low parallelism
     # (< 0.3) AND cue_inference already identified a standard shadow pattern,
@@ -2738,16 +2791,63 @@ def build_lighting_read(
         # pattern.  The standard pattern *disproves* gobo — use geometry.
         shadow_pattern = _geo_sp
     elif has_shadow_interruption:
-        # Shape from SIP classification
-        _lc = getattr(sip, "line_count", 0) or 0
-        if sip.classification == "patterned_projection" and _lc == 2:
-            shadow_pattern = "cross-shaped gobo"
-        elif sip.classification == "patterned_projection" and _lc >= 4:
-            shadow_pattern = "grid/window gobo"
-        elif sip.classification == "geometric_bar":
-            shadow_pattern = "slit / flag projection"
+        # P3f: Face-boundary shadow divide gate (applied before shape resolution).
+        # Split and rembrandt lighting create a hard half-face shadow terminator
+        # that SIP can detect as "parallel lines" with high parallelism.  In
+        # split lighting the hard vertical face divide yields exactly 2 parallel
+        # shadow lines that the SIP classifier labels "patterned_projection" with
+        # line_count=2 — the same signature as a real cross-shaped gobo.
+        # Disambiguate: when a face is present AND the primary shadow direction
+        # is clearly lateral (left / right), the parallel evidence is consistent
+        # with a face-boundary origin.  "geometric_bar" (single slit / flag) is
+        # physically distinct (narrow beam cut by a flag, not a face boundary)
+        # and is exempt from this suppression.  All other SIP classifications
+        # (patterned_projection, unknown) fall through the suppression when the
+        # face + lateral conditions are met, so pattern resolution uses
+        # geometry-based scoring (split / rembrandt / loop) rather than
+        # committing to "projected".
+        _face_present_p3f = False
+        if scene_ctx is not None:
+            # Face mesh available OR face found but mesh extraction failed
+            _face_present_p3f = (
+                scene_ctx.has_face_mesh
+                or scene_ctx.face_mesh_failure_reason == "no_face_mesh_detected"
+            )
+        if not _face_present_p3f and vision_data:
+            # Tier 2: catchlight pipeline ran ok → face mesh was available
+            _cl_fb = vision_data.get("catchlights", {})
+            _face_present_p3f = bool(isinstance(_cl_fb, dict) and _cl_fb.get("ok"))
+        if not _face_present_p3f and vision_data:
+            # Tier 3: face_box exists → face was detected even without mesh
+            # (B&W / blown-highlight images can detect a face box but fail
+            # the MediaPipe landmark extraction)
+            _ra_p3f = vision_data.get("region_attribution", {})
+            _face_present_p3f = bool(
+                isinstance(_ra_p3f, dict) and _ra_p3f.get("face_box") is not None
+            )
+        _psd_horiz_lateral_p3f = (
+            "left" in _psd_dir or "right" in _psd_dir
+        ) and "center" not in _psd_dir
+
+        if _face_present_p3f and _psd_horiz_lateral_p3f:
+            # Face shadow boundary misidentified as SIP — suppress.
+            # All SIP classifications (patterned_projection, geometric_bar,
+            # or unclassified) are suppressed when a face is present and the
+            # key is clearly lateral.  A real gobo / flag setup with lateral
+            # key is the edge case, but it is rare compared to split / rembrandt
+            # portraits; geometry-based scoring handles those when SIP is cleared.
+            shadow_pattern = "unknown"
         else:
-            shadow_pattern = "gobo"
+            # Shape from SIP classification
+            _lc = getattr(sip, "line_count", 0) or 0
+            if sip.classification == "patterned_projection" and _lc == 2:
+                shadow_pattern = "cross-shaped gobo"
+            elif sip.classification == "patterned_projection" and _lc >= 4:
+                shadow_pattern = "grid/window gobo"
+            elif sip.classification == "geometric_bar":
+                shadow_pattern = "slit / flag projection"
+            else:
+                shadow_pattern = "gobo"
     elif inferred_dramatic_hard:
         # Strong dramatic hard-light signals — likely gobo or chiaroscuro.
         # BUT: if cue_inference geometry already identified a standard named
@@ -2763,6 +2863,21 @@ def build_lighting_read(
             _heur_base = _intel_pattern_dh
         else:
             _heur_base = _intel_pattern_dh if _intel_pattern_dh != "unknown" else "gobo"
+            # P3f-dramatic: lighting_intel may propagate an SIP false-positive
+            # "projected" value when a face shadow boundary was misread as a gobo
+            # pattern (e.g. hard split lighting with no catchlights). When
+            # geometry and lighting_intel both lack a named standard pattern AND
+            # lighting_intel says "projected", check whether the shadow direction
+            # is clearly lateral.  If so, the "projected" label is very likely
+            # a face-shadow artifact.  Fall to "unknown" so downstream geometry
+            # scoring (split / rembrandt) wins.
+            _psd_dh_lateral = (
+                "left" in _psd_dir or "right" in _psd_dir
+            ) and "center" not in _psd_dir
+            # Catch both "projected" (explicit from lighting_intel) and "gobo"
+            # (fallback when intel is "unknown") for the lateral-face suppression.
+            if _heur_base in ("projected", "gobo") and _psd_dh_lateral:
+                _heur_base = "unknown"  # shadow_pattern = _heur_base below
         if _heur_base == "gobo":
             # First check: projected_pattern_shape from person_mask analysis
             _pps = cue_report.projected_pattern_shape
@@ -2854,29 +2969,52 @@ def build_lighting_read(
     if shadow_pattern == "rembrandt" and sq_text in ("soft", "mixed"):
         shadow_pattern = "loop"
 
+    # ── Clamshell reality-check (PROVISIONAL — mirrors cue_inference guards) ──
+    # reference_read operates at priority 0, so cue_inference pose/BW guards
+    # cannot override it.  Apply the same checks here so they have full coverage.
+    #
+    # Guard A — Pose: clamshell requires a near-frontal face.  When the face
+    # is turned (fo.confidence ≥ 0.65 → |yaw| ≈ ≥25°), the "lower" catchlights
+    # are from a lateral fill or eye wetness, not a dedicated below-chin reflector.
+    # Guard B — BW + unknown direction: B&W images lose shadow-direction signal,
+    # so "unknown" key direction is ambiguous (could be lateral, not on-axis).
+    # Treating unknown as on-axis to fire clamshell is a false assumption.
+    if shadow_pattern == "clamshell":
+        _fo_lr = cue_report.face_orientation
+        _face_turned_lr = (
+            _fo_lr is not None
+            and _fo_lr.confidence >= 0.65
+            and getattr(_fo_lr, "broad_side", "unknown") not in ("unknown", "")
+        )
+        _tp_lr = cue_report.tonal_processing_estimation
+        _is_bw_lr = getattr(_tp_lr, "is_bw", False)
+        _geo_dir_lr = getattr(geometry, "key_light_direction", "unknown") if geometry else "unknown"
+        _bw_unknown_lr = _is_bw_lr and _geo_dir_lr in ("unknown", "")
+        if _face_turned_lr or _bw_unknown_lr:
+            shadow_pattern = "unknown"
+
     # ── Normalize shadow_pattern to canonical enum values ──────────────
     # The gobo sub-types above are descriptive ("grid/window gobo",
     # "cross-shaped gobo", "slit / flag projection") but downstream
     # consumers (resolve_pattern_candidates, scoring) expect canonical
     # LightingPattern enum values.  Preserve detail in shadow_pattern_detail,
-    # collapse to "gobo" for the canonical field.
+    # collapse to "projected" for the canonical field (formerly "gobo").
     _CANONICAL_PATTERNS = {
         "split", "rembrandt", "loop", "butterfly", "clamshell", "triangle",
-        "broad", "short", "gobo", "flat", "unknown",
-        # Extended enum values
-        "rim_only", "high_key", "low_key", "flat_fashion", "window_portrait",
-        "golden_hour", "overcast_natural", "ring_light", "bare_bulb_editorial",
-        "strip_dramatic", "short_fashion_key", "soft_editorial_key",
+        "broad", "short", "projected", "flat", "rim", "unknown",
+        # Extended / specialty enum values
+        "ring_light", "silhouette_key", "high_key", "low_key", "window_portrait",
+        "bare_bulb_editorial", "strip_dramatic", "short_fashion_key", "soft_editorial_key",
         "editorial_rim_key", "tabletop_soft_product", "bottle_backlight",
         "athletic_rim_sculpt", "window_negative_fill", "hybrid",
     }
     shadow_pattern_detail = shadow_pattern  # preserve the descriptive version
     if shadow_pattern not in _CANONICAL_PATTERNS:
-        # Map gobo variants to canonical "gobo"
+        # Map gobo/slit variants to canonical "projected"
         if "gobo" in shadow_pattern.lower():
-            shadow_pattern = "gobo"
+            shadow_pattern = "projected"
         elif "slit" in shadow_pattern.lower() or "flag" in shadow_pattern.lower():
-            shadow_pattern = "gobo"
+            shadow_pattern = "projected"
         # else: leave as-is (unknown consumer can handle it)
 
     # Clamshell direction correction: the standard direction mapping produces
@@ -3035,9 +3173,9 @@ def build_lighting_read(
         # Drop "background light" notes when bg is effectively dark
         if effectively_dark_bg and "background light" in note_lower:
             continue
-        # Drop "soft shadow edges" when shadow_pattern is gobo — the B&W
+        # Drop "soft shadow edges" when shadow_pattern is projected — the B&W
         # processing fools the edge detector, producing a contradictory note.
-        if "gobo" in shadow_pattern and "soft shadow" in note_lower:
+        if ("projected" in shadow_pattern or "gobo" in shadow_pattern) and "soft shadow" in note_lower:
             continue
         # Drop "hard shadow edges" note when soft catchlights contradict it
         # (edge hardness inflated by costume textures or post-processing).
@@ -3045,16 +3183,16 @@ def build_lighting_read(
             continue
         key_obs.append(note)
 
-    # P2a: When B&W + heavy contrast grade + gobo, replace the soft-edge note
+    # P2a: When B&W + heavy contrast grade + projected pattern, replace the soft-edge note
     # with a more accurate description of what's actually happening.
     tp_for_obs = cue_report.tonal_processing_estimation
-    if "gobo" in shadow_pattern and tp_for_obs and tp_for_obs.is_bw:
-        key_obs.insert(0, "Hard-edged projected shadows (gobo) — shadow edge detector may read as 'soft' due to B&W processing.")
+    if ("projected" in shadow_pattern or "gobo" in shadow_pattern) and tp_for_obs and tp_for_obs.is_bw:
+        key_obs.insert(0, "Hard-edged projected shadows — shadow edge detector may read as 'soft' due to B&W processing.")
 
-    # P1c: Artistic key observation — when gobo + dark background + small visible
-    # area, the light IS the composition.  Photographers universally recognise
-    # this as a defining characteristic of gobo work: shaped light creates the
-    # image rather than merely illuminating a subject.
+    # P1c: Artistic key observation — when projected pattern + dark background + small
+    # visible area, the light IS the composition.  Photographers universally recognise
+    # this as a defining characteristic of projected / gobo work: shaped light creates
+    # the image rather than merely illuminating a subject.
     _p1c_bg_dark = scene_ctx.bg_is_effectively_dark if scene_ctx is not None else _bg_is_effectively_dark(cue_report)
     if scene_ctx is not None:
         _p1c_person_ratio = scene_ctx.person_ratio
@@ -3065,9 +3203,9 @@ def build_lighting_read(
             if isinstance(_ra_p1c, dict):
                 _p1c_masks = _ra_p1c.get("masks") or {}
         _p1c_person_ratio = _p1c_masks.get("person_ratio", 0.0) or 0.0
-    if "gobo" in shadow_pattern and _p1c_bg_dark and _p1c_person_ratio < FRAMING.GOBO_MYSTERIOUS:
+    if ("projected" in shadow_pattern or "gobo" in shadow_pattern) and _p1c_bg_dark and _p1c_person_ratio < FRAMING.GOBO_MYSTERIOUS:
         key_obs.append(
-            "Shaped light defines the composition — gobo beam carves the "
+            "Shaped light defines the composition — projected beam carves the "
             "subject out of darkness, making light the primary design element."
         )
 

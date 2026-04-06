@@ -1,0 +1,39 @@
+{
+  "migration_id": "setup_family_column_v1",
+  "timestamp_utc": "2026-04-06T06:08:09.715752+00:00",
+  "description": "Add setup_family TEXT NULL column to gold_set_entries and distillation_candidate_reviews; backfill fashion_catalog for migrated flat_fashion records.",
+  "guardrail_class": [
+    "WA",
+    "TR"
+  ],
+  "pre_migration": {
+    "gold_set_flat_candidates": 2,
+    "dcr_flat_expected_pattern": 3
+  },
+  "schema_changes": [
+    "ALTER TABLE gold_set_entries ADD COLUMN setup_family TEXT NULL DEFAULT NULL",
+    "ALTER TABLE distillation_candidate_reviews ADD COLUMN setup_family TEXT NULL DEFAULT NULL"
+  ],
+  "backfill_rule": "SET setup_family = 'fashion_catalog' WHERE expected_pattern = 'flat' AND notes LIKE '%flat_fashion%' (conservative \u2014 only confirmed migrated records)",
+  "valid_setup_families": [
+    "athletic",
+    "beauty",
+    "bottle_liquid",
+    "commercial",
+    "dramatic_portrait",
+    "editorial",
+    "fashion_catalog",
+    "fashion_editorial",
+    "fine_art",
+    "headshot",
+    "high_key_beauty",
+    "high_key_commercial",
+    "lifestyle",
+    "natural_light",
+    "portrait_classic",
+    "product_apparel",
+    "product_tabletop",
+    "projected_textured",
+    "unknown"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "benchmark_id": "projected",
+  "description": "Projected / interrupted light \u2014 cross-shaped light strip across face (gobo flag), deep black surround, dramatic editorial",
+  "image_path": "benchmarks/images/gobo.jpg",
+  "ground_truth": {
+    "expected_pattern": "projected",
+    "expected_light_count": 1,
+    "expected_key_direction": "unknown",
+    "acceptable_patterns": [
+      "projected",
+      "split",
+      "unknown"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      2
+    ]
+  },
+  "metadata": {
+    "category": "editorial",
+    "difficulty": "hard",
+    "known_challenges": [
+      "gobo pattern is rare in training data",
+      "extreme shadow ratio may confuse pattern classifiers",
+      "face mesh may fail with partial face visibility"
+    ],
+    "added_date": "2026-03-17"
+  }
+}

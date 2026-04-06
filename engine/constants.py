@@ -205,9 +205,12 @@ class CATCHLIGHT:
     # Catchlight centroid must be within this many iris-radii of the iris center.
     # True catchlights land on the iris surface (0–1.0×); lash-line shimmer from
     # mascara or specular makeup sits at the lash edge (~1.3–2.0×).
-    # Raising from ∞ (no filter) to 1.25 eliminates lash/lid artifacts in
-    # dramatic B&W and heavy-makeup images without dropping real catchlights.
-    IRIS_PROXIMITY_MAX_MULT = 1.25
+    # COLOR: 1.25 — tight enough to reject lid/lash shimmer in colour images.
+    # B&W:   1.60 — heavy lash mass in B&W beauty portraits partially occludes the
+    #         iris, causing MediaPipe to report a smaller radius; real catchlights
+    #         (beauty dish ring, soft octabox) then appear to sit at 1.3–1.5×.
+    IRIS_PROXIMITY_MAX_MULT    = 1.25   # colour images
+    IRIS_PROXIMITY_MAX_MULT_BW = 1.60   # B&W / dramatic low-saturation images
 
     # ── Topology pass minimum blob area ──
     # Raised from 3 to 6 px²: mascara flecks on B&W images survive the P90
@@ -247,6 +250,11 @@ class SKIN:
     RATIO_BW_FALLBACK = 0.01       # skin_ratio < this triggers B&W fallback
     PERSON_RATIO_BW_FALLBACK = 0.05
     COLOR_VARIANCE_BW = 5          # std < this → B&W image
+    # Luma-proxy bounds for B&W skin estimation (face-box region).
+    # Excludes hair/clothing darks (< BW_LUMA_MIN) and blown speculars (> BW_LUMA_MAX).
+    # Pixels in this range within the face box are treated as skin for luma measurement.
+    BW_LUMA_MIN = 60
+    BW_LUMA_MAX = 220
 
     # ── Tone classification ──
     MIN_PIXELS_TONE = 800          # minimum skin pixels for tone classification

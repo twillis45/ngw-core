@@ -1,18 +1,33 @@
 {
   "benchmark_id": "mixed_light_failure",
-  "description": "Mixed ambient + flash — intentionally ambiguous, no clean pattern",
+  "description": "Mixed ambient + flash \u2014 intentionally ambiguous, no clean pattern",
   "image_path": "benchmarks/images/mixed_light_failure.jpg",
   "ground_truth": {
     "expected_pattern": "unknown",
     "expected_light_count": 2,
     "expected_key_direction": "unknown",
-    "acceptable_patterns": ["unknown", "flat_fashion", "hybrid", "rembrandt", "loop", "split", "gobo", "grid/window gobo"],
-    "acceptable_light_count_range": [1, 3]
+    "acceptable_patterns": [
+      "unknown",
+      "flat",
+      "hybrid",
+      "rembrandt",
+      "loop",
+      "split",
+      "projected",
+      "grid/window gobo"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      3
+    ]
   },
   "metadata": {
     "category": "edge_case",
     "difficulty": "hard",
-    "known_challenges": ["engine should recognize ambiguity, not force a pattern", "reference_read may return free-text patterns not in LightingPattern enum"],
+    "known_challenges": [
+      "engine should recognize ambiguity, not force a pattern",
+      "reference_read may return free-text patterns not in LightingPattern enum"
+    ],
     "added_date": "2026-03-16"
   }
 }

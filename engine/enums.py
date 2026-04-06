@@ -83,64 +83,218 @@ _register_labels(LightRole, {
 # ═══════════════════════════════════════════════════════════════════════════
 
 class LightingPattern(_LabelMixin, str, Enum):
-    CLAMSHELL = "clamshell"
-    LOOP = "loop"
-    REMBRANDT = "rembrandt"
-    SPLIT = "split"
-    BUTTERFLY = "butterfly"
-    TRIANGLE = "triangle"
-    BROAD = "broad"
-    SHORT = "short"
-    RIM_ONLY = "rim_only"
-    HIGH_KEY = "high_key"
-    LOW_KEY = "low_key"
-    FLAT_FASHION = "flat_fashion"
-    WINDOW_PORTRAIT = "window_portrait"
-    GOLDEN_HOUR = "golden_hour"
-    OVERCAST_NATURAL = "overcast_natural"
-    RING_LIGHT = "ring_light"
-    BARE_BULB_EDITORIAL = "bare_bulb_editorial"
-    STRIP_DRAMATIC = "strip_dramatic"
-    SHORT_FASHION_KEY = "short_fashion_key"
-    SOFT_EDITORIAL_KEY = "soft_editorial_key"
-    EDITORIAL_RIM_KEY = "editorial_rim_key"
+    # ── Canonical geometry patterns (14 primary values) ─────────────────────
+    # These describe shadow/highlight geometry only — not source type,
+    # environment, or equipment.  Source context lives in SourceContext enum.
+    LOOP          = "loop"
+    REMBRANDT     = "rembrandt"
+    BUTTERFLY     = "butterfly"
+    CLAMSHELL     = "clamshell"
+    SPLIT         = "split"
+    BROAD         = "broad"
+    SHORT         = "short"
+    HIGH_KEY      = "high_key"
+    LOW_KEY       = "low_key"
+    FLAT          = "flat"           # even, non-directional; replaces flat_fashion
+    RING_LIGHT    = "ring_light"     # on-axis ring source; donut catchlights; canonical
+    RIM           = "rim"            # pure edge/backlight; replaces rim_only
+    SILHOUETTE_KEY = "silhouette_key" # back key with subject in near-silhouette
+    PROJECTED     = "projected"      # gobo/interrupted light pattern; replaces gobo_projection
+
+    # ── Specialty patterns (retained — each has a benchmark and blueprint) ──
+    # These are valid geometry sub-types or composite setups.  They remain in
+    # the enum but are not part of the 14-value primary taxonomy.
+    TRIANGLE          = "triangle"          # Hurley triangle
+    SHALLOW_LOOP      = "shallow_loop"      # loop variant, < 20° azimuth
+    WINDOW_PORTRAIT   = "window_portrait"   # window-sourced; use source_context="window" when possible
+    BARE_BULB_EDITORIAL   = "bare_bulb_editorial"
+    STRIP_DRAMATIC        = "strip_dramatic"
+    SHORT_FASHION_KEY     = "short_fashion_key"
+    SOFT_EDITORIAL_KEY    = "soft_editorial_key"
+    EDITORIAL_RIM_KEY     = "editorial_rim_key"
     TABLETOP_SOFT_PRODUCT = "tabletop_soft_product"
-    BOTTLE_BACKLIGHT = "bottle_backlight"
-    ATHLETIC_RIM_SCULPT = "athletic_rim_sculpt"
-    WINDOW_NEGATIVE_FILL = "window_negative_fill"
-    SHALLOW_LOOP = "shallow_loop"
-    GOBO_PROJECTION = "gobo_projection"
-    HYBRID = "hybrid"
+    BOTTLE_BACKLIGHT      = "bottle_backlight"
+    ATHLETIC_RIM_SCULPT   = "athletic_rim_sculpt"
+    WINDOW_NEGATIVE_FILL  = "window_negative_fill"
+    HYBRID                = "hybrid"
+
     UNKNOWN = "unknown"
+
+    # ── Migration aliases — read-only shims for replay records pre-cutover ──
+    # These allow old stored values to deserialize without error.
+    # REMOVE after 2026-05-06 (30-day alias window).
+    RIM_ONLY      = "rim_only"       # → rim
+    AXIAL         = "axial"          # → ring_light (shim for any stray axial values)
+    FLAT_FASHION  = "flat_fashion"   # → flat
+    GOBO_PROJECTION = "gobo_projection"  # → projected
+    GOLDEN_HOUR   = "golden_hour"    # → source_context only; pattern resolved separately
+    OVERCAST_NATURAL = "overcast_natural"  # → source_context only
 
 
 _register_labels(LightingPattern, {
-"clamshell": "Clamshell",
-"triangle": "Triangle (Hurley)",
-"butterfly": "Butterfly / Paramount",
-"rim_only": "Rim / Edge Light",
-"high_key": "High Key",
-"low_key": "Low Key",
-"flat_fashion": "Flat Fashion",
-"window_portrait": "Window Portrait",
-"golden_hour": "Golden Hour",
-"overcast_natural": "Overcast Natural",
-"ring_light": "Ring Light",
-"bare_bulb_editorial": "Bare Bulb Editorial",
-"strip_dramatic": "Strip Light Dramatic",
-"short_fashion_key": "Short Fashion Key",
-"soft_editorial_key": "Soft Editorial Key",
-"editorial_rim_key": "Editorial Rim + Key",
-"tabletop_soft_product": "Tabletop Soft Product",
-"bottle_backlight": "Bottle Backlight",
-"athletic_rim_sculpt": "Athletic Rim Sculpt",
-"window_negative_fill": "Window Negative Fill",
-"shallow_loop": "Shallow Loop",
-"gobo_projection": "Gobo / Projection",
+    # ── Canonical 14 ──────────────────────────────────────────────────────
+    "loop":           "Loop",
+    "rembrandt":      "Rembrandt",
+    "butterfly":      "Butterfly / Paramount",
+    "clamshell":      "Clamshell",
+    "split":          "Split",
+    "broad":          "Broad",
+    "short":          "Short",
+    "high_key":       "High Key",
+    "low_key":        "Low Key",
+    "flat":           "Flat",
+    "ring_light":     "Ring Light",
+    "rim":            "Rim / Edge Light",
+    "silhouette_key": "Silhouette / Back Key",
+    "projected":      "Projected / Interrupted Light",
+    # ── Specialty ─────────────────────────────────────────────────────────
+    "triangle":               "Triangle (Hurley)",
+    "shallow_loop":           "Shallow Loop",
+    "window_portrait":        "Window Portrait",
+    "bare_bulb_editorial":    "Bare Bulb Editorial",
+    "strip_dramatic":         "Strip Light Dramatic",
+    "short_fashion_key":      "Short Fashion Key",
+    "soft_editorial_key":     "Soft Editorial Key",
+    "editorial_rim_key":      "Editorial Rim + Key",
+    "tabletop_soft_product":  "Tabletop Soft Product",
+    "bottle_backlight":       "Bottle Backlight",
+    "athletic_rim_sculpt":    "Athletic Rim Sculpt",
+    "window_negative_fill":   "Window Negative Fill",
+    "hybrid":                 "Hybrid",
+    # ── Migration aliases (display labels preserved for replay) ───────────
+    "rim_only":          "Rim / Edge Light",      # legacy → rim
+    "axial":             "Ring Light",             # stray axial shim → ring_light
+    "flat_fashion":      "Flat",                   # legacy → flat
+    "gobo_projection":   "Projected / Interrupted Light",  # legacy → projected
+    "golden_hour":       "Golden Hour",            # legacy → source_context
+    "overcast_natural":  "Overcast Natural",       # legacy → source_context
 })
 
 # ═══════════════════════════════════════════════════════════════════════════
-# 3. Pattern Categories
+# 3. Source Context
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SourceContext(_LabelMixin, str, Enum):
+    """Light source origin / shooting environment.
+
+    This field annotates the environmental or source-type context for an
+    analysis result.  It is SEPARATE from LightingPattern (which describes
+    geometry only) and SEPARATE from ModifierFamily (which describes the
+    shaping tool).
+
+    Mapping from removed LightingPattern values:
+        window_light     → window
+        overcast_natural → overcast
+        golden_hour      → golden_hour
+        mixed_light      → mixed_source
+
+    This field is nullable on all records.  Absent value means unknown/studio.
+    NEVER store display labels in this field — values are snake_case machine strings.
+    """
+    STUDIO       = "studio"       # controlled artificial sources; default for unambiguous studio
+    WINDOW       = "window"       # natural through window (replaces window_light pattern)
+    OVERCAST     = "overcast"     # diffuse outdoor natural (replaces overcast_natural pattern)
+    GOLDEN_HOUR  = "golden_hour"  # warm directional sun at low angle (replaces golden_hour pattern)
+    MIXED_SOURCE = "mixed_source" # multiple CCT or source types detected (replaces mixed_light)
+    OUTDOOR_SUN  = "outdoor_sun"  # direct sunlight, hard shadows
+    UNKNOWN      = "unknown"
+
+
+_register_labels(SourceContext, {
+    "studio":       "Studio",
+    "window":       "Window Light",
+    "overcast":     "Overcast",
+    "golden_hour":  "Golden Hour",
+    "mixed_source": "Mixed Sources",
+    "outdoor_sun":  "Outdoor Sun",
+    "unknown":      "Unknown",
+})
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 4. Setup Family
+# ═══════════════════════════════════════════════════════════════════════════
+
+class SetupFamily(_LabelMixin, str, Enum):
+    """Coarse shooting application / commercial context for a lighting setup.
+
+    This field is orthogonal to LightingPattern (geometry) and SourceContext
+    (environment).  It answers "What is this shot for?" rather than "What
+    shape is the light?"
+
+    Stored as a TEXT NULL column on gold_set_entries and
+    distillation_candidate_reviews.  Absent value means context unknown.
+
+    Mapping of migrated flat_fashion records:
+        flat_fashion → pattern=flat, setup_family=fashion_catalog
+
+    Engine's internal setup_family hypotheses (single_key_rembrandt, etc.)
+    are produced by infer_setup_family() and stored on RecreationSetup.setup_family
+    in the analysis result — that is a separate, finer-grained field that
+    coexists with this application-level enum.
+
+    NEVER store display labels in this field — values are snake_case machine
+    strings.
+    """
+    # ── Portrait / Headshot ───────────────────────────────────────────────
+    PORTRAIT_CLASSIC   = "portrait_classic"    # general portrait work (loop, rembrandt, split, etc.)
+    HEADSHOT           = "headshot"            # corporate / business headshot
+    DRAMATIC_PORTRAIT  = "dramatic_portrait"   # low-key, rembrandt hard contrast, editorial drama
+    BEAUTY             = "beauty"              # beauty / cosmetic close-up (clamshell, butterfly, ring)
+
+    # ── Fashion ──────────────────────────────────────────────────────────
+    FASHION_CATALOG    = "fashion_catalog"     # e-commerce / catalog flat light (migrated flat_fashion)
+    FASHION_EDITORIAL  = "fashion_editorial"   # editorial fashion — short key, dramatic or styled
+
+    # ── Editorial / Creative ─────────────────────────────────────────────
+    EDITORIAL          = "editorial"           # editorial / artistic / magazine (creative direction)
+    FINE_ART           = "fine_art"            # fine-art / gallery print
+
+    # ── Commercial / Advertising ─────────────────────────────────────────
+    CORPORATE          = "corporate"           # team / office / workplace / leadership portrait
+    COMMERCIAL         = "commercial"          # advertising / brand / campaign imagery
+
+    # ── Product ──────────────────────────────────────────────────────────
+    PRODUCT_TABLETOP   = "product_tabletop"    # tabletop / still life / small product
+    PRODUCT_APPAREL    = "product_apparel"     # clothing / apparel on mannequin or flat lay
+    BOTTLE_LIQUID      = "bottle_liquid"       # bottle / glassware / liquid product
+
+    # ── Athletic / Fitness ───────────────────────────────────────────────
+    ATHLETIC           = "athletic"            # sports / fitness / body sculpting
+
+    # ── Natural Light / Lifestyle ─────────────────────────────────────────
+    NATURAL_LIGHT      = "natural_light"       # window / natural / ambient portrait
+    LIFESTYLE          = "lifestyle"           # lifestyle / environmental / storytelling
+
+    # ── Specialty / Technical ────────────────────────────────────────────
+    SHAPED_LIGHT       = "shaped_light"        # gobo / flag / projected shadow patterns
+
+    # ── Fallback ─────────────────────────────────────────────────────────
+    UNKNOWN            = "unknown"
+
+
+_register_labels(SetupFamily, {
+    "portrait_classic":   "Classic Portrait",
+    "headshot":           "Headshot",
+    "dramatic_portrait":  "Dramatic Portrait",
+    "beauty":             "Beauty",
+    "fashion_catalog":    "Fashion Catalog",
+    "fashion_editorial":  "Fashion Editorial",
+    "editorial":          "Editorial",
+    "fine_art":           "Fine Art",
+    "corporate":          "Corporate",
+    "commercial":         "Commercial",
+    "product_tabletop":   "Product / Tabletop",
+    "product_apparel":    "Product / Apparel",
+    "bottle_liquid":      "Bottle / Liquid",
+    "athletic":           "Athletic",
+    "natural_light":      "Natural Light",
+    "lifestyle":          "Lifestyle",
+    "shaped_light":       "Shaped Light",
+    "unknown":            "Unknown",
+})
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 5. Pattern Categories
 # ═══════════════════════════════════════════════════════════════════════════
 
 class PatternCategory(_LabelMixin, str, Enum):

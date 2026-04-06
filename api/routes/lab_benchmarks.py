@@ -434,9 +434,13 @@ async def dashboard_summary(user: Dict = Depends(get_dev_user)):
     trend  = get_last_n_run_scores(5)
     metrics = get_pattern_metrics()
 
-    # Surface regressions from the latest run results
+    # Surface regressions and compute verdict breakdown
     results = get_run_results(latest["id"])
     regression_cases = [r for r in results if r.get("regression_flag")]
+    # Accurate PASS/SOFT/FAIL counts matching CaseExplorer verdict thresholds
+    # (UI uses 0.80/0.60 cutoffs, not the runner's 0.70 PASS_THRESHOLD)
+    ui_passed = sum(1 for r in results if r.get("final_score") is not None and r["final_score"] >= 0.8)
+    ui_soft = sum(1 for r in results if r.get("final_score") is not None and 0.6 <= r["final_score"] < 0.8)
 
     return {
         "has_runs":           True,
@@ -447,7 +451,8 @@ async def dashboard_summary(user: Dict = Depends(get_dev_user)):
         "avg_blueprint_score": latest.get("avg_blueprint_score"),
         "confidence_error":   latest.get("confidence_error"),
         "total_cases":        latest.get("total_cases"),
-        "passed_cases":       latest.get("passed_cases"),
+        "passed_cases":       ui_passed,
+        "soft_passed_cases":  ui_soft,
         "regression_count":   latest.get("regression_count"),
         "started_at":         latest.get("started_at"),
         "completed_at":       latest.get("completed_at"),

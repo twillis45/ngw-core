@@ -843,6 +843,184 @@ _PATTERN_BLUEPRINTS: Dict[str, Dict[str, Any]] = {
         },
     },
 
+    # ── Canonical replacements for renamed patterns ──────────────────────────
+    # These are the authoritative blueprint entries going forward.
+    # Old keys (ring, rim_only, gobo) are kept in _PATTERN_ALIASES below
+    # for 30-day replay compat (remove after 2026-05-06).
+
+    "ring_light": {
+        "label": "Ring Light",
+        "lights": [
+            {
+                "role": "key",
+                "clock_default": "12:00",
+                "angle_deg": 0,
+                "height_deg": 0,
+                "height_label": "eye level (source surrounds or aligns with lens axis)",
+                "distance_ft": 3.0,
+                "modifier": "ring_light",
+                "modifier_label": "Ring flash, ring LED, or large circular octa on axis",
+                "power_ratio": 1.0,
+                "power_ratio_label": "Full power",
+                "notes": [
+                    "Source is centered on the lens axis — zero azimuth, zero elevation.",
+                    "Produces flat, shadow-free illumination with distinctive donut catchlight.",
+                    "Dark edge shadow appears on close walls/backgrounds — use distance or dark bg.",
+                ],
+            },
+        ],
+        "subject_notes": "Subject faces directly into source. Works for tight headshots and editorial.",
+        "background_notes": "Any background — on-axis creates a dark halo shadow on close walls.",
+        "coaching": [
+            "Donut-shaped (ring) catchlight is the defining signature of ring light.",
+            "The hollow center of the catchlight distinguishes ring light from beauty dish or octa.",
+            "Move closer to background to increase halo shadow drama.",
+            "Add a rim light behind for separation and depth.",
+        ],
+        "fallbacks": [
+            {
+                "scenario": "No ring light available",
+                "action": "Large circular octa positioned very close to camera axis approximates ring light effect; catchlight shape will be solid round not donut.",
+            },
+        ],
+        "camera_settings": {
+            "aperture": "f/2.8–f/8",
+            "shutter": "1/125–1/200",
+            "iso": "100",
+            "focus_point": "Eye AF",
+            "white_balance": "Flash preset",
+        },
+    },
+
+    "rim": {
+        "label": "Rim / Edge Light",
+        "lights": [
+            {
+                "role": "rim",
+                "clock_default": "7:00",
+                "angle_deg": 135,
+                "height_deg": 30,
+                "height_label": "above eye level",
+                "distance_ft": 5.0,
+                "modifier": "strobe_bare",
+                "modifier_label": "Bare strobe with grid, or Fresnel spot",
+                "power_ratio": 1.0,
+                "power_ratio_label": "Full power",
+                "notes": [
+                    "Light from behind subject — illuminates edge/outline only.",
+                    "Aim to clip just the cheekbone edge, temple, and shoulder.",
+                    "Face is in deep shadow; only the rim of the subject is lit.",
+                ],
+            },
+        ],
+        "subject_notes": "Subject silhouetted or near-silhouetted against dark background. Only the edge is lit.",
+        "background_notes": "Black background essential for maximum contrast.",
+        "coaching": [
+            "Rim lighting is graphic and high-impact — used in athletic, dramatic, and editorial work.",
+            "Two opposing rim lights (7:00 and 5:00) give symmetrical edge detail.",
+            "Even a small key fill (1:8) separates the face from the black background.",
+        ],
+        "fallbacks": [
+            {
+                "scenario": "No gridded strobe",
+                "action": "Barn doors on a Fresnel control spill to near-rim coverage.",
+            },
+        ],
+        "camera_settings": {
+            "aperture": "f/2.8–f/5.6",
+            "shutter": "1/125–1/200",
+            "iso": "100–400",
+            "focus_point": "Face silhouette or eye if visible",
+            "white_balance": "Flash preset",
+        },
+    },
+
+    "projected": {
+        "label": "Projected / Interrupted Light",
+        "lights": [
+            {
+                "role": "key",
+                "clock_default": "10:00",
+                "angle_deg": 45,
+                "height_deg": 30,
+                "height_label": "above eye level",
+                "distance_ft": 6.0,
+                "modifier": "fresnel_spot",
+                "modifier_label": "Fresnel spot or ERS (ellipsoidal) with gobo slot",
+                "power_ratio": 1.0,
+                "power_ratio_label": "Full power — hard focused beam required",
+                "notes": [
+                    "Insert gobo (metal cutout) to project a shape: bars, leaves, grids.",
+                    "Distance controls projection sharpness — closer = sharper, further = softer.",
+                    "Hard source required; softboxes do not project clean gobo shapes.",
+                ],
+            },
+        ],
+        "subject_notes": "Position subject within the projection zone. Preview pattern before placing subject.",
+        "background_notes": "Dark background or allow projection to extend onto background.",
+        "coaching": [
+            "Projected / interrupted light requires a hard focusable source.",
+            "Venetian-blind gobo is the most popular — horizontal shadow bars across face.",
+            "Natural alternative: window with real venetian blinds as a practical gobo.",
+        ],
+        "fallbacks": [
+            {
+                "scenario": "No gobo or ERS available",
+                "action": "Use a window with venetian blinds or a perforated flag as a practical gobo.",
+            },
+        ],
+        "camera_settings": {
+            "aperture": "f/2.8–f/5.6",
+            "shutter": "1/125–1/200",
+            "iso": "100–400",
+            "focus_point": "Eye or face center",
+            "white_balance": "Flash preset",
+        },
+    },
+
+    "silhouette_key": {
+        "label": "Silhouette / Back Key",
+        "lights": [
+            {
+                "role": "key",
+                "clock_default": "6:00",
+                "angle_deg": 180,
+                "height_deg": 20,
+                "height_label": "slightly above eye level, positioned directly behind subject",
+                "distance_ft": 4.0,
+                "modifier": "grid_spot",
+                "modifier_label": "Gridded strobe or Fresnel — control spill tightly",
+                "power_ratio": 1.0,
+                "power_ratio_label": "Full power",
+                "notes": [
+                    "Key is directly behind subject — face is in full shadow toward camera.",
+                    "Subject outline is lit; inner facial detail is intentionally absent.",
+                    "Grid or barn doors prevent lens flare from back-key source.",
+                ],
+            },
+        ],
+        "subject_notes": "Subject positioned between back key and camera. Profile or three-quarter turn increases edge detail.",
+        "background_notes": "Dark background recommended — back key light must not illuminate background.",
+        "coaching": [
+            "True silhouette key has no front fill — shape and outline carry the image.",
+            "Add a very weak front bounce (1:16) to just lift shadow detail without breaking silhouette.",
+            "Works best with a strong, graphic subject silhouette — posture and outline critical.",
+        ],
+        "fallbacks": [
+            {
+                "scenario": "Light spilling onto face",
+                "action": "Add barn doors or grid to back key; move subject further from source.",
+            },
+        ],
+        "camera_settings": {
+            "aperture": "f/2.8–f/8",
+            "shutter": "1/125–1/200",
+            "iso": "100–400",
+            "focus_point": "Subject outline or manual — AF may struggle in deep shadow",
+            "white_balance": "Flash preset",
+        },
+    },
+
     "unknown": {
         "label": "Unknown Pattern",
         "lights": [
@@ -880,15 +1058,31 @@ _PATTERN_BLUEPRINTS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# Alias patterns to canonical blueprints
+# Alias patterns to canonical blueprints.
+# Two alias groups:
+#   1. Semantic aliases — permanent synonyms (paramount = butterfly, etc.)
+#   2. Migration aliases — old canonical values routed to new canonical values.
+#      Remove migration aliases after 2026-05-06 (30-day alias window).
 _PATTERN_ALIASES: Dict[str, str] = {
-    "paramount": "butterfly",
-    "beauty": "clamshell",
+    # ── Semantic aliases (permanent) ────────────────────────────────────────
+    "paramount":       "butterfly",
+    "beauty":          "clamshell",
     "high_key_beauty": "high_key",
-    "flat_fashion": "flat",
-    "silhouette": "gobo",
-    "tabletop": "flat",
-    "bottle_backlight": "rim_only",
+    "tabletop":        "flat",
+    "silhouette":      "silhouette_key",   # updated: silhouette → silhouette_key (not gobo)
+
+    # ── Migration aliases (remove after 2026-05-06) ──────────────────────
+    # Old canonical value  →  new canonical blueprint key
+    "axial":           "ring_light",       # stray axial shim → ring_light (canonical)
+    "ring":            "ring_light",       # ring (legacy blueprint key) → ring_light
+    "rim_only":        "rim",              # rim_only → rim
+    "flat_fashion":    "flat",             # flat_fashion → flat
+    "gobo_projection": "projected",        # gobo_projection → projected
+    "gobo":            "projected",        # gobo (legacy blueprint key) → projected
+    "bottle_backlight": "rim",             # bottle_backlight uses rim geometry
+    "golden_hour":     "loop",             # golden_hour → loop (best geometry default)
+    "overcast_natural": "flat",            # overcast_natural → flat (geometry default)
+    "mixed_light":     "unknown",          # mixed_light → unknown (no geometry default)
 }
 
 

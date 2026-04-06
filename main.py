@@ -18,6 +18,11 @@ _logging.basicConfig(
 )
 _startup_logger = _logging.getLogger("ngw.startup")
 
+# ── In-memory log buffer — captured before any other imports so we catch
+#    startup errors too.  Served by GET /api/lab/server-logs.
+from engine.log_buffer import install as _install_log_buffer  # noqa: E402
+_install_log_buffer()
+
 import os
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List
@@ -89,13 +94,46 @@ async def lifespan(app):
     # ── Sentry (optional — only initialised when SENTRY_DSN is set) ──────────
     _sentry_dsn = os.getenv("SENTRY_DSN")
     if _sentry_dsn:
+        import subprocess as _sp
         import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+        from sentry_sdk.integrations.logging import LoggingIntegration
+        import logging as _sl
+
+        # Release: prefer Render/CI env vars, fall back to local git SHA
+        _release = (
+            os.getenv("RENDER_GIT_COMMIT")
+            or os.getenv("GIT_COMMIT")
+        )
+        if not _release:
+            try:
+                _release = _sp.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    cwd=str(Path(__file__).parent),
+                    stderr=_sp.DEVNULL,
+                ).decode().strip()
+            except Exception:
+                _release = "unknown"
+
         sentry_sdk.init(
             dsn=_sentry_dsn,
             environment=_env,
+            release=_release,
             traces_sample_rate=0.1,
+            send_default_pii=False,
+            integrations=[
+                StarletteIntegration(transaction_style="endpoint"),
+                FastApiIntegration(transaction_style="endpoint"),
+                LoggingIntegration(
+                    level=_sl.WARNING,       # breadcrumbs at WARNING+
+                    event_level=_sl.ERROR,   # Sentry events at ERROR+
+                ),
+            ],
         )
-        _startup_logger.info("✓ Sentry initialised (environment=%s)", _env)
+        _startup_logger.info(
+            "✓ Sentry initialised (environment=%s release=%s)", _env, _release
+        )
     else:
         _startup_logger.warning(
             "SENTRY_DSN not set — runtime errors will not be captured by Sentry"
@@ -256,6 +294,23 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.middleware("http")
 async def security_and_cache_headers(request: Request, call_next):
+    # ── Sentry user context ──────────────────────────────────────────────
+    # Attempt to extract user from JWT Bearer token so every Sentry event
+    # in this request is tagged with the user's email/id.
+    try:
+        import sentry_sdk as _s_ctx
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            from auth.security import decode_token
+            from db.database import get_user_by_id
+            _uid = decode_token(auth_header[7:])
+            if _uid:
+                _u = get_user_by_id(_uid)
+                if _u:
+                    _s_ctx.set_user({"id": str(_u["id"]), "email": _u.get("email", "")})
+    except Exception:
+        pass  # never block a request for telemetry
+
     response = await call_next(request)
 
     # ── Security headers ──────────────────────────────────────────────────────

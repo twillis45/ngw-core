@@ -245,7 +245,7 @@ def _score_fill_strategy(
         else:
             scores.append(0.5)
     # Low-key, split, rim patterns prefer no fill
-    if pid in ("low_key", "split", "rim_only"):
+    if pid in ("low_key", "split", "rim_only", "rim"):
         if fill_present is False or negative_fill:
             scores.append(1.0)
         elif fill_present:

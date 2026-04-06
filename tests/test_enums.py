@@ -29,6 +29,7 @@ from engine.enums import (
     ShadowHardness,
     ShadowPattern,
     SignalType,
+    SourceContext,
     SourceSizeClass,
     SourceType,
     StyleFamily,
@@ -204,14 +205,97 @@ class TestBackwardCompatibility:
         for r in existing:
             assert LightRole(r).value == r
 
-    def test_existing_patterns(self):
-        existing = ["clamshell", "loop", "rembrandt", "split", "butterfly",
-                     "broad", "short", "rim_only", "high_key", "low_key",
-                     "flat_fashion", "window_portrait", "golden_hour",
-                     "overcast_natural", "ring_light", "bare_bulb_editorial",
-                     "strip_dramatic", "window_negative_fill"]
-        for p in existing:
-            assert LightingPattern(p).value == p
+    def test_canonical_patterns(self):
+        """The 14 canonical geometry patterns must all be present and addressable."""
+        canonical = [
+            "loop", "rembrandt", "butterfly", "clamshell", "split",
+            "broad", "short", "high_key", "low_key", "flat",
+            "ring_light", "rim", "silhouette_key", "projected",
+        ]
+        for p in canonical:
+            assert LightingPattern(p).value == p, f"Canonical pattern missing: {p}"
+
+    def test_canonical_pattern_display_labels(self):
+        """Every canonical pattern must have a human-readable display label
+        (not raw snake_case)."""
+        canonical = [
+            "loop", "rembrandt", "butterfly", "clamshell", "split",
+            "broad", "short", "high_key", "low_key", "flat",
+            "ring_light", "rim", "silhouette_key", "projected",
+        ]
+        for p in canonical:
+            label = LightingPattern(p).label
+            assert label != p, f"Pattern '{p}' has no custom display label (shows raw value)"
+            assert "_" not in label, f"Pattern '{p}' label contains underscore: '{label}'"
+
+    def test_new_canonical_values_and_labels(self):
+        assert LightingPattern.RING_LIGHT == "ring_light"
+        assert LightingPattern.RING_LIGHT.label == "Ring Light"
+        assert LightingPattern.RIM == "rim"
+        assert LightingPattern.RIM.label == "Rim / Edge Light"
+        assert LightingPattern.PROJECTED == "projected"
+        assert LightingPattern.PROJECTED.label == "Projected / Interrupted Light"
+        assert LightingPattern.SILHOUETTE_KEY == "silhouette_key"
+        assert LightingPattern.SILHOUETTE_KEY.label == "Silhouette / Back Key"
+
+    def test_migration_aliases_still_deserialize(self):
+        """Old machine values must still deserialize for replay record safety.
+        These are temporary — remove after 2026-05-06 alias window closes."""
+        aliases = {
+            "rim_only":        "Rim / Edge Light",
+            "axial":           "Ring Light",           # stray axial shim → ring_light
+            "flat_fashion":    "Flat",
+            "gobo_projection": "Projected / Interrupted Light",
+            "golden_hour":     "Golden Hour",
+            "overcast_natural": "Overcast Natural",
+        }
+        for value, expected_label in aliases.items():
+            p = LightingPattern(value)
+            assert p.value == value
+            assert p.label == expected_label, (
+                f"Alias '{value}' label mismatch: got '{p.label}', expected '{expected_label}'"
+            )
+
+    def test_removed_values_are_aliases_not_canonical(self):
+        """Renamed/removed patterns must not appear as primary canonical values —
+        they exist only as migration shims."""
+        canonical_values = {p.value for p in LightingPattern
+                            if p not in (
+                                LightingPattern.RIM_ONLY,
+                                LightingPattern.AXIAL,
+                                LightingPattern.FLAT_FASHION,
+                                LightingPattern.GOBO_PROJECTION,
+                                LightingPattern.GOLDEN_HOUR,
+                                LightingPattern.OVERCAST_NATURAL,
+                            )}
+        assert "ring_light" in canonical_values
+        assert "rim" in canonical_values
+        assert "projected" in canonical_values
+        assert "flat" in canonical_values
+
+    def test_existing_specialty_patterns(self):
+        """Specialty patterns must remain in the enum — they have benchmarks."""
+        specialty = [
+            "window_portrait", "bare_bulb_editorial", "strip_dramatic",
+            "short_fashion_key", "soft_editorial_key", "editorial_rim_key",
+            "tabletop_soft_product", "bottle_backlight", "athletic_rim_sculpt",
+            "window_negative_fill", "shallow_loop", "triangle", "hybrid",
+        ]
+        for p in specialty:
+            assert LightingPattern(p).value == p, f"Specialty pattern missing: {p}"
+
+    def test_source_context_enum(self):
+        """SourceContext must contain the canonical source-type values that
+        replaced source-type patterns."""
+        canonical_contexts = ["studio", "window", "overcast", "golden_hour",
+                              "mixed_source", "outdoor_sun", "unknown"]
+        for ctx in canonical_contexts:
+            assert SourceContext(ctx).value == ctx
+        # Display labels must be human-readable
+        assert SourceContext.WINDOW.label == "Window Light"
+        assert SourceContext.GOLDEN_HOUR.label == "Golden Hour"
+        assert SourceContext.MIXED_SOURCE.label == "Mixed Sources"
+        assert SourceContext.OVERCAST.label == "Overcast"
 
     def test_existing_environments(self):
         existing = ["studio", "window_light", "natural", "outdoor", "mixed",
@@ -251,3 +335,126 @@ class TestBackwardCompatibility:
         for a in ["clean", "minor_conflicts", "genuine_ambiguity",
                    "insufficient_data", "hybrid_lighting"]:
             assert AmbiguityClass(a).value == a
+
+
+class TestAnalysisOrderEnforcement:
+    """Analysis-Order Enforcement Pass — negative tests.
+
+    These tests guard against the most dangerous failure modes identified in
+    the Expert Deconstruction Order (s61):
+
+      - Source/environment descriptors must NEVER reach authoritative_pattern
+      - Display labels must NEVER enter canonical backend fields
+      - Unknown key direction must NOT collapse to on-axis assumption
+    """
+
+    def test_source_context_values_blocked_from_pattern_resolution(self):
+        """NEGATIVE TEST (most dangerous failure mode).
+
+        Source-context values (golden_hour, overcast_natural, window_light,
+        mixed_light, etc.) must NEVER become the authoritative_pattern stored
+        in canonical DB/API fields.  If _normalize_pattern lets any of these
+        through, taxonomy contamination occurs.
+
+        These are environment/source descriptors, not shadow geometry patterns.
+        The correct authoritative_pattern for a golden-hour shot is the
+        geometry (e.g. "loop"), not "golden_hour".
+        """
+        from engine.orchestrator import AnalysisResult, resolve_pattern_candidates
+
+        SOURCE_CONTEXT_VALUES = [
+            "golden_hour",
+            "overcast_natural",
+            "overcast",
+            "window_light",
+            "mixed_light",
+            "mixed_source",
+            "outdoor_sun",
+            "outdoor_shade",
+        ]
+
+        for sc_val in SOURCE_CONTEXT_VALUES:
+            # Simulate a reference_read that leaked a source_context value as pattern
+            from engine.orchestrator import PatternCandidate, PatternCandidates
+            from engine.image_analysis_models import VisualCueReport
+
+            result = AnalysisResult()
+            # Inject a fake reference_analysis whose lighting_read.shadow_pattern
+            # is a source_context value (simulating the contamination scenario)
+            class FakeLR:
+                shadow_pattern = sc_val
+                pattern_confidence = 0.8
+                pattern_source = "test"
+                pattern_confidence_label = "strong"
+            class FakeRA:
+                lighting_read = FakeLR()
+                def model_dump(self): return {}
+            result.reference_analysis = FakeRA()
+
+            pc = resolve_pattern_candidates(result)
+            assert pc.authoritative_pattern != sc_val, (
+                f"FAIL: source_context value '{sc_val}' reached authoritative_pattern. "
+                f"Got: '{pc.authoritative_pattern}'. "
+                f"Source-context values must be blocked by _normalize_pattern."
+            )
+
+    def test_display_labels_blocked_from_canonical_fields(self):
+        """Display labels with slashes must never enter canonical pattern fields."""
+        from engine.orchestrator import AnalysisResult, resolve_pattern_candidates
+
+        DISPLAY_LABEL_LEAKS = [
+            "Rim / Edge Light",
+            "Ring / Axial",
+            "Projected / Interrupted Light",
+        ]
+        for label in DISPLAY_LABEL_LEAKS:
+            result = AnalysisResult()
+            class FakeLR:
+                shadow_pattern = label
+                pattern_confidence = 0.9
+                pattern_source = "test"
+                pattern_confidence_label = "strong"
+            class FakeRA:
+                lighting_read = FakeLR()
+                def model_dump(self): return {}
+            result.reference_analysis = FakeRA()
+
+            pc = resolve_pattern_candidates(result)
+            assert " / " not in (pc.authoritative_pattern or ""), (
+                f"FAIL: display label '{label}' with slash reached authoritative_pattern. "
+                f"Got: '{pc.authoritative_pattern}'. Display labels must stay in UI only."
+            )
+
+    def test_mode_flags_populated_after_preread(self):
+        """Layer 0 mode_flags must be populated after _layer0_mode_preread."""
+        from engine.orchestrator import AnalysisResult, _layer0_mode_preread
+        result = AnalysisResult()
+        _layer0_mode_preread(result)
+        assert isinstance(result.mode_flags, dict)
+        assert "no_face"    in result.mode_flags
+        assert "is_bw"      in result.mode_flags
+        assert "is_hcg"     in result.mode_flags
+        assert "scene_type" in result.mode_flags
+
+    def test_definitive_pattern_wins_resolver(self):
+        """Stage 1 definitive_pattern must short-circuit resolve_pattern_candidates."""
+        from engine.orchestrator import AnalysisResult, resolve_pattern_candidates
+        result = AnalysisResult()
+        result.definitive_pattern = "ring_light"
+        # Even with a reference_read saying something else, ring_light wins
+        class FakeLR:
+            shadow_pattern = "loop"
+            pattern_confidence = 0.9
+            pattern_source = "test"
+            pattern_confidence_label = "strong"
+        class FakeRA:
+            lighting_read = FakeLR()
+            def model_dump(self): return {}
+        result.reference_analysis = FakeRA()
+
+        pc = resolve_pattern_candidates(result)
+        assert pc.authoritative_pattern == "ring_light", (
+            f"FAIL: definitive_pattern 'ring_light' was overridden. "
+            f"Got: '{pc.authoritative_pattern}'. Stage 1 must win."
+        )
+        assert pc.primary.source == "definitive_signature"

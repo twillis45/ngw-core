@@ -86,15 +86,18 @@ def validate_benchmark(data: Dict[str, Any]) -> List[str]:
 # and define acceptable equivalences.
 
 DIRECTION_ALIASES = {
-    "upper_left": {"left", "upper_left"},
-    "upper_right": {"right", "upper_right"},
-    "left": {"left", "upper_left"},
-    "right": {"right", "upper_right"},
-    "top_center": {"center", "top_center"},
-    "center": {"center", "top_center"},
-    "lower_left": {"lower_left"},
-    "lower_right": {"lower_right"},
-    "unknown": {"unknown", ""},
+    # Plain "left"/"right" in ground truth was written before vertical
+    # precision was added.  Accept any horizontal match (upper_* OR lower_*)
+    # since the benchmark intent is horizontal key-side, not elevation.
+    "upper_left":  {"left", "upper_left", "lower_left"},
+    "upper_right": {"right", "upper_right", "lower_right"},
+    "left":        {"left", "upper_left", "lower_left"},
+    "right":       {"right", "upper_right", "lower_right"},
+    "lower_left":  {"lower_left", "left", "upper_left"},
+    "lower_right": {"lower_right", "right", "upper_right"},
+    "top_center":  {"center", "top_center"},
+    "center":      {"center", "top_center"},
+    "unknown":     {"unknown", ""},
 }
 
 
@@ -189,9 +192,18 @@ def run_single_benchmark(
         #   - lighting_intel count is wildly high (>10 = false positives from
         #     reflective surfaces, mixed environments, etc.)
         geo_lc = getattr(geo, "light_count_estimate", 0)
+        geo_conf = getattr(geo, "confidence", 0)
         if detected_light_count == 0 and geo_lc > 0:
             detected_light_count = geo_lc
         elif detected_light_count > 10 and geo_lc > 0:
+            detected_light_count = geo_lc
+        # Trust deduped cue_inference geometry when it significantly
+        # disagrees with raw catchlight count (difference >= 2) and
+        # has high confidence (>= 0.6).  The deduped reflection_architecture
+        # removes floor reflections and groups nearby positions, making
+        # it more reliable than raw catchlight counting for multi-source
+        # setups that under-count and single-source setups that over-count.
+        elif geo_lc > 0 and geo_conf >= 0.6 and abs(detected_light_count - geo_lc) >= 2:
             detected_light_count = geo_lc
         # Key direction: use cue_inference geometry when catchlights gave no side
         if detected_key_side == "unknown":

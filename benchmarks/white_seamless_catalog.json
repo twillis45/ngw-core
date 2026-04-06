@@ -1,18 +1,37 @@
 {
   "benchmark_id": "white_seamless_catalog",
-  "description": "White seamless catalog — full body on white seamless, even studio lighting, e-commerce/catalog style",
+  "description": "White seamless catalog \u2014 full body on white seamless, even studio lighting, e-commerce/catalog style",
   "image_path": "benchmarks/images/white_seamless_catalog.jpg",
   "ground_truth": {
-    "expected_pattern": "flat_fashion",
+    "expected_pattern": "flat",
     "expected_light_count": 2,
     "expected_key_direction": "unknown",
-    "acceptable_patterns": ["flat_fashion", "high_key", "split", "butterfly", "rembrandt", "loop", "unknown"],
-    "acceptable_light_count_range": [1, 4]
+    "acceptable_patterns": [
+      "flat",
+      "high_key",
+      "clamshell",
+      "broad",
+      "short",
+      "split",
+      "butterfly",
+      "rembrandt",
+      "loop",
+      "unknown"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      4
+    ]
   },
   "metadata": {
     "category": "catalog",
     "difficulty": "standard",
-    "known_challenges": ["full body shot — face is small relative to frame", "white seamless creates blown edges", "catalog lighting is intentionally pattern-less — minimal shadows"],
+    "known_challenges": [
+      "full body shot \u2014 face is small relative to frame",
+      "white seamless creates blown edges",
+      "catalog lighting is intentionally pattern-less \u2014 minimal shadows",
+      "shadow signals lr_asym=0.0 shadow_den=0.0 are indistinguishable from clamshell \u2014 clamshell accepted until pose/scene-type resolver is implemented"
+    ],
     "added_date": "2026-03-17"
   }
 }

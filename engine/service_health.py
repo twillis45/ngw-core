@@ -145,6 +145,17 @@ def probe_sentry() -> dict:
     except Exception:
         sdk_ok = False
 
+    # Pull environment + release from the initialised SDK client
+    sentry_env     = None
+    sentry_release = None
+    if sdk_ok:
+        try:
+            opts = sentry_sdk.get_client().options or {}
+            sentry_env     = opts.get("environment")
+            sentry_release = opts.get("release")
+        except Exception:
+            pass
+
     # Lightweight network reachability check — GET the ingest host root
     t0 = time.monotonic()
     try:
@@ -153,9 +164,24 @@ def probe_sentry() -> dict:
         # Sentry returns 200 or 302 for the org root; any non-5xx = reachable
         if r.status_code < 500:
             sdk_note = " · SDK init OK" if sdk_ok else " · SDK not initialized"
-            return {"ok": True, "service": "sentry", "detail": f"{host} reachable ({ms}ms){sdk_note}"}
+            return {
+                "ok": True, "service": "sentry",
+                "detail": f"{host} reachable ({ms}ms){sdk_note}",
+                "host": host, "latency_ms": ms, "sdk_ok": sdk_ok,
+                "environment": sentry_env, "release": sentry_release,
+            }
         else:
-            return {"ok": False, "service": "sentry", "detail": f"HTTP {r.status_code} from {host}"}
+            return {
+                "ok": False, "service": "sentry",
+                "detail": f"HTTP {r.status_code} from {host}",
+                "host": host, "latency_ms": None, "sdk_ok": sdk_ok,
+                "environment": sentry_env, "release": sentry_release,
+            }
     except Exception as exc:
         logger.error("Sentry probe failed: %s", exc)
-        return {"ok": False, "service": "sentry", "detail": f"unreachable: {str(exc)[:120]}"}
+        return {
+            "ok": False, "service": "sentry",
+            "detail": f"unreachable: {str(exc)[:120]}",
+            "host": host, "latency_ms": None, "sdk_ok": False,
+            "environment": sentry_env, "release": sentry_release,
+        }

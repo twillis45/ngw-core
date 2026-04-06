@@ -84,7 +84,13 @@ async def api_key_status(user=Depends(get_current_user)):
         "smtp_host":        os.getenv("SMTP_HOST", ""),
         "from_email":       os.getenv("FROM_EMAIL", ""),
         "app_url":          os.getenv("APP_URL", ""),
-        # Structured per-service probe results (all four in one place)
+        # Structured per-service probe results — hoisted to top level so the
+        # frontend can read health.db.ok / health.smtp.ok / etc. directly,
+        # AND nested under "services" for programmatic consumers.
+        "db":     _svc(_db_probe_result),
+        "smtp":   _svc(_smtp_probe_result),
+        "stripe": _svc(_stripe_probe_result),
+        "sentry": _svc(_sentry_probe_result),
         "services": {
             "vlm":    _svc(_vlm_probe_result),
             "db":     _svc(_db_probe_result),
@@ -93,6 +99,24 @@ async def api_key_status(user=Depends(get_current_user)):
             "sentry": _svc(_sentry_probe_result),
         },
     }
+
+
+@router.post("/health/sentry/test")
+async def sentry_test_capture(user=Depends(get_current_user)):
+    """Send a test capture_message to Sentry and return the event ID."""
+    _require_admin(user)
+    dsn = os.getenv("SENTRY_DSN", "").strip()
+    if not dsn:
+        return {"ok": False, "detail": "SENTRY_DSN not set — configure it in .env to enable Sentry"}
+    try:
+        import sentry_sdk
+        client = sentry_sdk.get_client()
+        if client is None or not getattr(client, "options", {}).get("dsn"):
+            return {"ok": False, "detail": "Sentry SDK not initialised — restart the server after setting SENTRY_DSN"}
+        event_id = sentry_sdk.capture_message("NGW Lab health check — test event", level="info")
+        return {"ok": True, "detail": f"Test event sent (id: {event_id or 'unknown'})"}
+    except Exception as exc:
+        return {"ok": False, "detail": f"Sentry capture failed: {str(exc)[:120]}"}
 
 
 @router.post("/health/api-keys/probe")

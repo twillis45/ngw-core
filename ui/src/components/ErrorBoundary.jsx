@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import * as Sentry from '@sentry/react';
 
 /**
  * Top-level error boundary.
@@ -19,6 +20,8 @@ export default class ErrorBoundary extends Component {
   componentDidCatch(error, info) {
     // Surface in console so Render / Vercel logs capture it
     console.error('[NGW ErrorBoundary]', error, info?.componentStack);
+    // Report to Sentry with component stack context
+    Sentry.captureException(error, { contexts: { react: { componentStack: info?.componentStack } } });
   }
 
   handleReset = () => {

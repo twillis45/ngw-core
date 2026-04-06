@@ -1,18 +1,35 @@
 {
   "benchmark_id": "golden_hour",
-  "description": "Golden hour portrait — warm low-angle natural sunlight, strong orange/gold color cast, outdoor",
+  "description": "Golden hour portrait \u2014 warm low-angle natural sunlight, strong orange/gold color cast, outdoor",
   "image_path": "benchmarks/images/golden_hour.jpg",
   "ground_truth": {
-    "expected_pattern": "golden_hour",
+    "expected_pattern": "loop",
     "expected_light_count": 1,
     "expected_key_direction": "unknown",
-    "acceptable_patterns": ["golden_hour", "loop", "rembrandt", "broad", "split", "short", "butterfly", "gobo", "unknown"],
-    "acceptable_light_count_range": [1, 2]
+    "acceptable_patterns": [
+      "loop",
+      "rembrandt",
+      "broad",
+      "split",
+      "short",
+      "butterfly",
+      "clamshell",
+      "projected",
+      "unknown"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      2
+    ]
   },
   "metadata": {
     "category": "natural",
     "difficulty": "hard",
-    "known_challenges": ["golden_hour is an environment not a geometric pattern — classifiers may return the shadow geometry instead", "warm color cast saturates skin tones", "eyes closed limits catchlight analysis"],
+    "known_challenges": [
+      "golden_hour is an environment not a geometric pattern \u2014 classifiers may return the shadow geometry instead",
+      "warm color cast saturates skin tones",
+      "eyes closed limits catchlight analysis"
+    ],
     "added_date": "2026-03-17"
   }
 }

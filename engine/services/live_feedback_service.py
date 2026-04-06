@@ -64,10 +64,11 @@ def _pattern_correction(ref_pat: str, test_pat: str) -> str:
         "high_key": "High Key (multiple lights, white background overexposed)",
         "low_key": "Low Key (single key, no fill, dark background)",
         "window_portrait": "Window portrait (large off-axis diffuse source)",
-        "ring": "Ring flash (ring around lens, flat shadow-free light)",
-        "rim_only": "Rim only (light from behind, silhouette edges only)",
-        "flat": "Flat/Catalog (large source on axis, even illumination)",
-        "gobo": "Gobo/Shaped light (hard spot + gobo pattern projection)",
+        "ring_light": "Ring Light (on-axis ring source, donut catchlights)",
+        "rim": "Rim / Edge Light (pure edge/backlight from behind)",
+        "flat": "Flat (large source on axis, even illumination)",
+        "projected": "Projected / Interrupted Light (hard spot + gobo or flag pattern)",
+        "silhouette_key": "Silhouette / Back Key (backlit; subject silhouetted against light)",
         "athletic_rim_sculpt": "Athletic Rim Sculpt (hard key + opposing rim)",
     }
     ref_label = pattern_labels.get(ref_pat, ref_pat)

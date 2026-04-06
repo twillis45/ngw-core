@@ -316,17 +316,12 @@ export default function UserTab() {
         <Row label="Paid (localStorage)"
           badge={isPaid ? 'PAID' : 'FREE'}
           badgeColor={isPaid ? C.green : C.amber}
-          action={
-            <SmallBtn
-              onClick={isPaid
-                ? () => { try { localStorage.removeItem('ngw_paid'); localStorage.removeItem('ngw_subscription_plan'); } catch {} refresh(); }
-                : () => { try { localStorage.setItem('ngw_paid', 'true'); } catch {} refresh(); }
-              }
-              actionTitle={isPaid ? 'Remove ngw_paid' : 'Set ngw_paid=true'}
-            >
-              {isPaid ? 'Force Lock' : 'Force Unlock'}
-            </SmallBtn>
+          action={isPaid
+            ? () => { try { localStorage.removeItem('ngw_paid'); localStorage.removeItem('ngw_subscription_plan'); } catch {} refresh(); }
+            : () => { try { localStorage.setItem('ngw_paid', 'true'); } catch {} refresh(); }
           }
+          actionLabel={isPaid ? 'Force Lock' : 'Force Unlock'}
+          actionTitle={isPaid ? 'Remove ngw_paid' : 'Set ngw_paid=true'}
         />
         <Row label="Plan tier"        value={planTier || '—'} />
         <Row label="Analysis count"   value={String(analysisCount)} />

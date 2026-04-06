@@ -121,7 +121,7 @@
     },
     {
       "reference_id": "overfill_flat",
-      "pattern": "flat_fashion",
+      "pattern": "flat",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -132,7 +132,7 @@
     },
     {
       "reference_id": "white_seamless_catalog",
-      "pattern": "flat_fashion",
+      "pattern": "flat",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -143,7 +143,7 @@
     },
     {
       "reference_id": "gobo",
-      "pattern": "gobo",
+      "pattern": "projected",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -154,7 +154,7 @@
     },
     {
       "reference_id": "window_negative_fill",
-      "pattern": "gobo",
+      "pattern": "projected",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -165,7 +165,7 @@
     },
     {
       "reference_id": "golden_hour",
-      "pattern": "golden_hour",
+      "pattern": "loop",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -253,7 +253,7 @@
     },
     {
       "reference_id": "overcast_natural",
-      "pattern": "overcast_natural",
+      "pattern": "flat",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -286,7 +286,7 @@
     },
     {
       "reference_id": "rim_only",
-      "pattern": "rim_only",
+      "pattern": "rim",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,
@@ -297,7 +297,7 @@
     },
     {
       "reference_id": "ring_light",
-      "pattern": "ring_light",
+      "pattern": "axial",
       "has_image": true,
       "has_metadata": true,
       "has_signals": false,

@@ -9,10 +9,9 @@
     },
     {
       "name": "ngw-ui",
-      "runtimeExecutable": "/usr/local/Cellar/node/25.8.2/bin/npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "ui"],
-      "port": 5173,
-      "autoPort": true
+      "runtimeExecutable": ".venv/bin/python3",
+      "runtimeArgs": ["scripts/start_vite.py"],
+      "port": 5173
     }
   ]
 }

@@ -1,0 +1,41 @@
+{
+  "migration": "taxonomy_cutover_corrected_v2",
+  "date": "2026-04-06T05:39:58.563667Z",
+  "dry_run": false,
+  "purpose": "Revert incorrect ring_light \u2192 axial rename from prior session; correct enums.py, blueprint_service.py, benchmark JSON, and DB rows",
+  "corrected_decisions": {
+    "ring_light": "KEEP as canonical \u2014 not renamed to axial",
+    "axial": "Demoted to migration shim only \u2014 routes to ring_light"
+  },
+  "db_reverts": [
+    {
+      "table": "distillation_candidate_reviews",
+      "column": "expected_pattern",
+      "id": "c01be85bb5444d3c822e234af44ed143",
+      "old": "axial",
+      "new": "ring_light"
+    },
+    {
+      "table": "distillation_candidate_reviews",
+      "column": "expected_pattern",
+      "id": "1759bd2dde444e76a7660be153c094ca",
+      "old": "axial",
+      "new": "ring_light"
+    },
+    {
+      "table": "distillation_candidate_reviews",
+      "column": "predicted_pattern",
+      "id": "1759bd2dde044e76a7660be153c094ca",
+      "old": "axial",
+      "new": "ring_light"
+    }
+  ],
+  "file_reverts": [
+    "benchmarks/ring_light.json: expected_pattern axial \u2192 ring_light",
+    "engine/enums.py: RING_LIGHT moved to canonical-14; AXIAL moved to migration shim",
+    "engine/services/blueprint_service.py: blueprint key renamed axial \u2192 ring_light; alias ring_light\u2192axial removed; axial\u2192ring_light shim added",
+    "tests/test_enums.py: ring_light tests updated to reflect canonical status"
+  ],
+  "guardrail_exception": "TR-001: ring_light expected_pattern reverts are truth-preserving \u2014 the ground truth was always ring light; axial was an incorrect intermediate value",
+  "negative_test": "After migration: SELECT COUNT(*) FROM distillation_candidate_reviews WHERE expected_pattern = \"axial\" must return 0"
+}

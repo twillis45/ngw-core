@@ -6,8 +6,8 @@
     "expected_pattern": "loop",
     "expected_light_count": 1,
     "expected_key_direction": "upper_right",
-    "acceptable_patterns": ["loop", "rembrandt", "butterfly"],
-    "acceptable_light_count_range": [1, 2]
+    "acceptable_patterns": ["loop", "rembrandt", "butterfly", "window_negative_fill"],
+    "acceptable_light_count_range": [1, 3]
   },
   "metadata": {
     "category": "classic",

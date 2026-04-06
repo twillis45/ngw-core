@@ -659,7 +659,9 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             # mascara, metallic eye shadow, specular lashes) in B&W images
             # without touching real light-source reflections.
             _dist = math.hypot(dx, dy)
-            if _dist > CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT * radius:
+            _prox_limit = (CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT_BW if _is_bw_like
+                           else CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT)
+            if _dist > _prox_limit * radius:
                 continue
 
             # Shape classification: ring, round, octagonal, strip, square, rectangular
@@ -730,6 +732,10 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
                 # size_ratio: catchlight enclosing-circle radius / iris radius (0–1+)
                 # <0.1 = point/hard source, 0.1–0.3 = medium, >0.3 = large diffuse source
                 "size_ratio": round(enc_r / radius, 3) if radius > 0 else None,
+                # Pixel coordinates for overlay — absolute position in full image
+                "abs_cx": int(x0 + ccx),
+                "abs_cy": int(y0 + ccy),
+                "enc_r_px": round(enc_r, 1),
             })
 
         return results
@@ -774,19 +780,13 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
 
     if _upper_cls and _lower_cls:
         # Keep lower catchlights that look like fill lights (5-7 o'clock).
-        # Drop lateral lower catchlights (4, 8 o'clock) UNLESS they are strip-shaped
-        # (Hurley-style strip lights sit at 3-4 or 8-9 o'clock and are legitimate).
+        # Drop everything at 4 and 8 o'clock — these are costume/eyelash artifacts.
         _max_upper_int = max((c.get("intensity", 0) for c in _upper_cls), default=0)
         _kept_lower = []
         for c in _lower_cls:
             c_int = c.get("intensity", 0)
-            _is_strip = c.get("shape") in ("strip", "rectangular")
             if _is_fill_candidate(c) and (_max_upper_int == 0 or c_int >= _max_upper_int * 0.35):
                 c["fill_candidate"] = True
-                _kept_lower.append(c)
-            elif _is_strip and c_int >= _max_upper_int * 0.25:
-                # Strip-shaped lateral catchlight (4, 8 o'clock) — likely a side strip light
-                c["lateral_strip"] = True
                 _kept_lower.append(c)
         all_catchlights = _upper_cls + _kept_lower
         _kept_lower_set = {id(c) for c in _kept_lower}
@@ -817,8 +817,25 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     else:
         _face_yaw = 0.0
 
+    # ── Extract key face mesh landmarks for camera geometry estimation ──
+    # These are cheap to read (already loaded) and consumed downstream by
+    # camera_geometry_pass in vision_passes.py.
+    _face_geometry = {
+        "forehead_top": px(10),      # top of nose bridge / between eyebrows
+        "nose_bridge": px(6),        # middle of nose bridge
+        "nose_tip": px(1),           # tip of nose
+        "chin": px(152),             # bottom of chin
+        "left_eye_center": left_center,
+        "right_eye_center": right_center,
+        "left_face_edge": px(234),
+        "right_face_edge": px(454),
+        "face_yaw": _face_yaw,
+        "image_size": (w, h),
+    }
+
     if not all_catchlights:
-        return {"ok": True, "count": 0, "catchlights": [], "face_yaw": _face_yaw, "inferred": {
+        return {"ok": True, "count": 0, "catchlights": [], "face_yaw": _face_yaw,
+                "face_geometry": _face_geometry, "inferred": {
             "keyLightPosition": "not detected",
             "likelyModifier": "unknown",
             "lightCount": 0,
@@ -868,6 +885,7 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         "count": light_count,
         "catchlights": all_catchlights,
         "face_yaw": _face_yaw,
+        "face_geometry": _face_geometry,
         "inferred": {
             "keyLightPosition": key_pos,
             "likelyModifier": likely_mod,
@@ -997,11 +1015,21 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     _skin_ratio_raw = float(np.mean(skin_mask)) if skin_mask.any() else 0.0
     _person_ratio_raw = float(np.mean(person_mask)) if person_mask.any() else 0.0
     if _skin_ratio_raw < SKIN.RATIO_BW_FALLBACK and _person_ratio_raw > SKIN.PERSON_RATIO_BW_FALLBACK and _is_gs_check:
-        # Use a fraction of person_mask as skin proxy (not all person pixels
-        # are skin — estimate ~60% for typical portrait subjects)
-        skin_mask = person_mask.copy()
-        # Note: skin_ratio will be approximate but non-zero, which prevents
-        # downstream "no skin detected" warnings on B&W portraits.
+        # B&W luma proxy: select mid-tone pixels within the face box.
+        # YCbCr chroma detection is blind on B&W, but luminance IS available.
+        # Mid-luma face pixels (BW_LUMA_MIN–BW_LUMA_MAX) approximate skin —
+        # they exclude hair/clothing darks and blown highlights.
+        # Falls back to full person_mask when no face box is available.
+        _bw_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        if face_box:
+            _fb_x0, _fb_y0, _fb_x1, _fb_y1 = face_box
+            _face_only = np.zeros((h, w), dtype=bool)
+            _face_only[_fb_y0:_fb_y1, _fb_x0:_fb_x1] = True
+            _luma_range = (_bw_gray >= SKIN.BW_LUMA_MIN) & (_bw_gray <= SKIN.BW_LUMA_MAX)
+            _luma_proxy = _face_only & _luma_range & person_mask
+            skin_mask = _luma_proxy if _luma_proxy.any() else (person_mask & _face_only)
+        else:
+            skin_mask = person_mask.copy()
 
     # Clothing mask (rough): person minus skin
     clothing_mask = person_mask & (~skin_mask)
@@ -1053,16 +1081,30 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
             tone = "light"
         ratio = float(skin_px.shape[0] / float(h * w))
         conf = "high" if ratio >= SKIN.CONFIDENCE_HIGH_RATIO else ("medium" if ratio >= SKIN.CONFIDENCE_MEDIUM_RATIO else "low")
+
+        # B&W guard: In grayscale images the luma is driven by exposure and
+        # grading, not by actual skin pigmentation.  A fair-skinned subject
+        # shot in dark low-key B&W can have mean_y=73 → misclassified as
+        # "deep".  When the image is B&W, downgrade confidence to "low" and
+        # add a warning so downstream consumers know the estimate is
+        # unreliable.  We keep the luma-based guess (it's still useful as a
+        # brightness reference) but mark it explicitly as BW-degraded.
+        bw_degraded = False
+        if is_gs:
+            conf = "low"
+            bw_degraded = True
+
         skin_tone = {
             "ok": True,
             "skin_tone_guess": tone,
             "mean_skin_luma_y": mean_y,
             "skin_pixel_ratio": ratio,
             "confidence": conf,
+            "bw_degraded": bw_degraded,
             "limits": [
                 "Exposure/WB can shift results; treat as a starting guess.",
                 "Strong gels/makeup can break inference.",
-            ],
+            ] + (["B&W image — skin tone derived from luma only; actual pigmentation unknown."] if bw_degraded else []),
         }
 
     result = {

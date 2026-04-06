@@ -8,6 +8,7 @@ Pure computation — no I/O, no model loading.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -62,7 +63,49 @@ def _infer_pattern_from_catchlights(
     # Group by eye
     left = [c for c in catchlights if c.get("eye") == "left"]
     right = [c for c in catchlights if c.get("eye") == "right"]
+
+    # ── Artifact filter: lower-hemisphere catchlights larger than the iris ──
+    # Pipeline 1 (MediaPipe iris) can detect bright spots on the sclera, lower
+    # eyelid, or clothing collar that appear at 4-8 o'clock with size_ratio > 1.0
+    # (enclosing circle radius > iris radius).  These cannot be from a real
+    # fill light — a genuine fill-light catchlight fits inside or at the iris
+    # boundary.  Filter them before clamshell/pattern analysis so they don't
+    # produce false clamshell detections.
+    _LOWER_ARTIFACT_SIZE_LIMIT = 1.0
+
+    def _is_credible(c: Dict) -> bool:
+        _h = _clock_num(c.get("position", ""))
+        if _h is None:
+            return True
+        if _classify_clock(_h) != "lower":
+            return True  # only filter lower hemisphere
+        return (c.get("size_ratio") or 0.0) <= _LOWER_ARTIFACT_SIZE_LIMIT
+
+    left = [c for c in left if _is_credible(c)]
+    right = [c for c in right if _is_credible(c)]
     max_per_eye = max(len(left), len(right))
+
+    # ── Ring light: shape-based hard gate (Layer 0 hardware truth) ──
+    # A ring catchlight is morphologically unmistakable — circular annular
+    # reflection that only a ring flash or ring light can produce.  No other
+    # modifier creates a donut-shaped specular in the cornea.  If detected in
+    # either eye, ring_light is the pattern with high confidence — bypassing
+    # all clock-position inference below.
+    # Use filtered (left + right) — artifact-filtered catchlights only.
+    _ring_shapes = [c for c in (left + right) if c.get("shape") == "ring"]
+    if _ring_shapes:
+        return {
+            "pattern":             "ring_light",
+            "pattern_confidence":  0.85,
+            "key_position_text":   "On-axis (ring light)",
+            "fill_method_text":    "Ring light provides wraparound fill",
+            "light_count":         1,
+            "unrecognized_details": [],
+            "notes":               [
+                f"Ring-shaped catchlight detected ({len(_ring_shapes)} occurrence(s)) "
+                "— ring light pattern confirmed at Layer 0 (hardware shape signal)."
+            ],
+        }
 
     # Extract clock positions per eye
     left_hours = [_clock_num(c.get("position", "")) for c in left]
@@ -73,116 +116,36 @@ def _infer_pattern_from_catchlights(
     left_quads = [_classify_clock(h) for h in left_hours]
     right_quads = [_classify_clock(h) for h in right_hours]
 
-    # ── Triangle: 3 per eye — multiple formations ──
+    # ── Triangle: 3 per eye — classic formation only ──
     # Classic: two upper (10+2 o'clock) + one lower fill (5-7 o'clock)
-    # Hurley lateral: one top (12 o'clock) + two lateral strips (3+9 o'clock)
-    # Inverted: two lateral (3+9) + one lower fill
-    _TRI_VARIANT_CLASSIC = "classic"    # 2 upper + 1 lower
-    _TRI_VARIANT_HURLEY = "hurley"      # 1 top + 2 lateral (strip lights at 3+9)
-    _TRI_VARIANT_NONE = None
+    # ── Triangle detection — commented out pending Hurley pipeline cleanup ──────
+    # The "triangle" pattern is Hurley-specific (lateral strip geometry).
+    # A generic 2-upper + 1-lower config is NOT triangle — it's loop/rembrandt
+    # with a fill catchlight.  All triangle detection is gated until the
+    # catchlight pipeline is consolidated and Hurley geometry is re-validated.
+    #
+    # _TRI_VARIANT_CLASSIC = "classic"    # 2 upper + 1 lower (disabled)
+    # _TRI_VARIANT_HURLEY  = "hurley"     # 1 top + 2 lateral (disabled)
+    # _TRI_VARIANT_NONE    = None
+    #
+    # def _triangle_variant(hours, quads): ...  # disabled
+    # left_tri_var  = _triangle_variant(left_hours,  left_quads)
+    # right_tri_var = _triangle_variant(right_hours, right_quads)
+    # if left_tri_var and right_tri_var: return { "pattern": "triangle", ... }
+    # if left_tri_var or  right_tri_var: return { "pattern": "triangle", ... }
 
-    def _triangle_variant(hours: List[int], quads: List[str]) -> Optional[str]:
-        if len(hours) < 3:
-            return _TRI_VARIANT_NONE
-        upper = sum(1 for q in quads if q in ("upper_left", "upper_right", "top_center"))
-        lower = sum(1 for q in quads if q == "lower")
-        lateral = sum(1 for q in quads if q in ("hard_left", "hard_right"))
-        top = sum(1 for q in quads if q == "top_center")
-        # Classic: 2 upper + 1 lower
-        if upper >= 2 and lower >= 1:
-            return _TRI_VARIANT_CLASSIC
-        # Hurley lateral: 1 top center + 2 laterals (strip lights at 3 and 9)
-        if top >= 1 and lateral >= 2:
-            return _TRI_VARIANT_HURLEY
-        # Hurley lateral with upper-offset keys: 1 top + 1 lateral + 1 upper
-        if top >= 1 and lateral >= 1 and upper >= 2:
-            return _TRI_VARIANT_HURLEY
-        return _TRI_VARIANT_NONE
-
-    left_tri_var = _triangle_variant(left_hours, left_quads)
-    right_tri_var = _triangle_variant(right_hours, right_quads)
-
-    if left_tri_var and right_tri_var:
-        _tri_note = (
-            "Hurley-style lateral triangle (top + 3/9 o'clock strips) in both eyes."
-            if _TRI_VARIANT_HURLEY in (left_tri_var, right_tri_var)
-            else "Three catchlights in triangle formation detected in both eyes."
-        )
-        return {
-            "pattern": "triangle",
-            "pattern_confidence": 0.85,
-            "key_position_text": "triangle",
-            "fill_method_text": "",
-            "light_count": 3,
-            "unrecognized_details": [],
-            "notes": [_tri_note],
-        }
-    if left_tri_var or right_tri_var:
-        _var = left_tri_var or right_tri_var
-        _tri_note = (
-            "Hurley-style lateral triangle detected in one eye."
-            if _var == _TRI_VARIANT_HURLEY
-            else "Triangle catchlight pattern detected in one eye only."
-        )
-        return {
-            "pattern": "triangle",
-            "pattern_confidence": 0.55,
-            "key_position_text": "triangle",
-            "fill_method_text": "",
-            "light_count": 3,
-            "unrecognized_details": [],
-            "notes": [_tri_note],
-        }
-
-    # ── Bilateral symmetric keys ──
-    # Hurley setups where only two of three lights produce visible catchlights:
-    # Case A: two upper flanking keys (10 + 2 o'clock) with lower fill unresolved
-    # Case B: two lateral strips (3 + 9 o'clock) with top key unresolved
-    def _is_bilateral_symmetric(quads: List[str]) -> bool:
-        return (
-            any(q == "upper_left" for q in quads)
-            and any(q == "upper_right" for q in quads)
-        )
-
-    def _is_lateral_symmetric(quads: List[str]) -> bool:
-        return (
-            any(q == "hard_left" for q in quads)
-            and any(q == "hard_right" for q in quads)
-        )
-
-    _any_lower = any(q == "lower" for q in left_quads + right_quads)
-    if not _any_lower and max_per_eye >= 2:
-        left_bil = len(left_quads) >= 2 and _is_bilateral_symmetric(left_quads)
-        right_bil = len(right_quads) >= 2 and _is_bilateral_symmetric(right_quads)
-        left_lat = len(left_quads) >= 2 and _is_lateral_symmetric(left_quads)
-        right_lat = len(right_quads) >= 2 and _is_lateral_symmetric(right_quads)
-
-        if left_bil and right_bil:
-            return {
-                "pattern": "triangle",
-                "pattern_confidence": 0.65,
-                "key_position_text": "triangle",
-                "fill_method_text": "",
-                "light_count": 3,
-                "unrecognized_details": [],
-                "notes": [
-                    "Bilateral symmetric upper catchlights in both eyes (10 + 2 o'clock) "
-                    "— Hurley-style twin keys confirmed; lower fill not resolved."
-                ],
-            }
-        if left_lat and right_lat:
-            return {
-                "pattern": "triangle",
-                "pattern_confidence": 0.60,
-                "key_position_text": "triangle",
-                "fill_method_text": "",
-                "light_count": 3,
-                "unrecognized_details": [],
-                "notes": [
-                    "Bilateral lateral strip catchlights in both eyes (3 + 9 o'clock) "
-                    "— Hurley-style lateral strips confirmed; top key not resolved."
-                ],
-            }
+    # ── Bilateral symmetric upper keys (classic twin-key, no lower fill resolved) ──
+    # ── Bilateral symmetric upper → triangle — commented out pending Hurley cleanup ──
+    # This path returned "triangle" for twin flanking keys at 10+2 o'clock.
+    # Disabled with the rest of the Hurley detection stack.
+    #
+    # def _is_bilateral_symmetric(quads): ...
+    # _any_lower = any(q == "lower" for q in left_quads + right_quads)
+    # if not _any_lower and max_per_eye >= 2:
+    #     left_bil = len(left_quads) >= 2 and _is_bilateral_symmetric(left_quads)
+    #     right_bil = len(right_quads) >= 2 and _is_bilateral_symmetric(right_quads)
+    #     if left_bil and right_bil: return { "pattern": "triangle", ... }
+    #     if left_lat and right_lat: return { ... }  # Hurley lateral
 
     # ── Clamshell: 2 per eye — one upper, one lower (vertically aligned) ──
     # Floor-bounce filter: lower catchlights that are significantly dimmer
@@ -237,7 +200,7 @@ def _infer_pattern_from_catchlights(
         return {
             "pattern": "clamshell",
             "pattern_confidence": 0.75,
-            "key_position_text": "clamshell",
+            "key_position_text": "above, on-axis with fill below",
             "fill_method_text": "near camera axis",
             "light_count": 2,
             "unrecognized_details": [],
@@ -371,17 +334,50 @@ def _infer_pattern_from_catchlights(
             "notes": [f"Catchlight at {dominant_hour} o'clock doesn't map to a standard pattern."],
         }
 
-    # ── Multi-catchlight fallback (>1 per eye, not triangle/clamshell) ──
+    # ── Multi-catchlight fallback (>1 per eye, not clamshell) ──
+    # Multiple catchlights per eye typically come from a large soft modifier
+    # (softbox edge reflections, multiple panel edges) or a key + reflector combo.
+    # Infer the key light position from the brightest upper catchlight.
+    _upper_quads = ("top_center", "upper_left", "upper_right")
+    _all_upper = [
+        c for c in (left + right)
+        if _classify_clock(_clock_num(c.get("position", "")) or 12) in _upper_quads
+    ]
+    if _all_upper:
+        _primary_c = max(_all_upper, key=lambda c: c.get("intensity", 0.0))
+        _ph = _clock_num(_primary_c.get("position", ""))
+        _pq = _classify_clock(_ph) if _ph else "top_center"
+        _has_lower_l = any(_classify_clock(h) == "lower" for h in left_hours)
+        _has_lower_r = any(_classify_clock(h) == "lower" for h in right_hours)
+        _bilateral_fill = _has_lower_l and _has_lower_r
+        if _pq == "top_center":
+            _pat = "butterfly"
+            _key_text = "on-axis (elevated)"
+        else:
+            _pat = "loop"
+            _key_text = "30-45 off-axis left" if _pq == "upper_left" else "30-45 off-axis right"
+        return {
+            "pattern": _pat,
+            "pattern_confidence": 0.30,
+            "key_position_text": _key_text,
+            "fill_method_text": "reflector fill" if _bilateral_fill else "",
+            "light_count": 2 if _bilateral_fill else 1,
+            "unrecognized_details": [],
+            "notes": [
+                f"Multiple catchlights ({len(left)}L/{len(right)}R): "
+                f"primary at {_ph} o'clock → {_pat} inferred from key position."
+            ],
+        }
     return {
         "pattern": "unknown",
-        "pattern_confidence": 0.2,
+        "pattern_confidence": 0.15,
         "key_position_text": "",
         "fill_method_text": "",
         "light_count": max_per_eye,
         "unrecognized_details": [
-            f"Found {max_per_eye} catchlights per eye — doesn't match triangle or clamshell geometry."
+            f"Found {max_per_eye} catchlights per eye — pattern unclear."
         ],
-        "notes": ["Multiple catchlights detected but pattern unclear."],
+        "notes": ["Multiple catchlights detected but no upper catchlight identified."],
     }
 
 
@@ -451,6 +447,9 @@ def _merge_with_classification(
         "rembrandt": {"cinematic", "editorial", "low_key"},
         "loop": {"corporate", "natural"},
         "split": {"cinematic", "low_key", "editorial"},
+        "broad": {"corporate", "natural", "editorial"},
+        "short": {"cinematic", "editorial", "low_key"},
+        "flat": {"corporate", "high_key", "natural"},
     }
 
     notes: List[str] = []
@@ -520,6 +519,7 @@ class LightingInference:
     face_mesh_available: bool = True   # Phase 2: False when no face mesh detected
     data_quality: str = "full"         # full | face_limited | environmental_limited
     earring_catchlight_contamination: bool = False  # lateral catchlight excluded by cross-eye consistency check
+    catchlight_intelligence: Optional[Dict] = field(default=None)  # Layer 0 physical catchlight analysis
 
     def to_input_ctx_fields(self) -> Dict[str, Any]:
         """Dict suitable for merging into input_ctx for score_system()."""
@@ -664,6 +664,513 @@ def _infer_background_light(
 
     # Dark background — no background light (or it's turned off / dark gel).
     return {"detected": False, "confidence": 0.0, "notes": []}
+
+
+# ── Layer 0: Catchlight Intelligence ──────────────────────────────────────
+
+def _build_catchlight_intelligence(
+    catchlight_list: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Build Layer 0 catchlight intelligence from raw Pipeline 1 catchlights.
+
+    Classifies each catchlight by role, identifies the primary key, infers
+    the modifier type and size from shape + total relative area coverage, and
+    counts intentional light sources.
+
+    ``total_relative_area`` = Σ(size_ratio²) across key-source catchlights.
+    Since area ∝ enc_r² = (size_ratio × iris_r)², this dimensionless metric
+    directly encodes the apparent angular size of the source — the primary
+    determinant of shadow softness and highlight wrap.
+
+    Returns dict with:
+      primary_key, modifier, fill_bilateral,
+      light_count_from_catchlights, artifact_count, catchlights, notes.
+    """
+    if not catchlight_list:
+        return {
+            "primary_key": None,
+            "modifier": None,
+            "fill_bilateral": False,
+            "light_count_from_catchlights": 0,
+            "artifact_count": 0,
+            "catchlights": [],
+            "notes": ["No catchlights available for Layer 0 analysis."],
+        }
+
+    notes: List[str] = []
+
+    # ── Artifact filter: lower-hemisphere catchlights larger than iris ──
+    _LOWER_ARTIFACT_LIMIT = 1.0
+
+    def _is_lower_hemisphere(c: Dict) -> bool:
+        h = _clock_num(c.get("position", ""))
+        return h is not None and _classify_clock(h) == "lower"
+
+    def _is_artifact(c: Dict) -> bool:
+        return _is_lower_hemisphere(c) and (c.get("size_ratio") or 0.0) > _LOWER_ARTIFACT_LIMIT
+
+    artifact_catchlights = [c for c in catchlight_list if _is_artifact(c)]
+    credible = [c for c in catchlight_list if not _is_artifact(c)]
+    artifact_count = len(artifact_catchlights)
+
+    if artifact_count > 0:
+        notes.append(
+            f"{artifact_count} lower-hemisphere catchlight(s) with size_ratio > "
+            f"{_LOWER_ARTIFACT_LIMIT} filtered as sclera/clothing artifacts "
+            "(extend beyond iris boundary)."
+        )
+
+    # ── Separate by hemisphere ──
+    _UPPER_QUADS = {"top_center", "upper_left", "upper_right"}
+
+    def _quad(c: Dict) -> str:
+        h = _clock_num(c.get("position", ""))
+        return _classify_clock(h) if h is not None else "other"
+
+    upper = [c for c in credible if _quad(c) in _UPPER_QUADS]
+    lower = [c for c in credible if _quad(c) == "lower"]
+
+    # ── Identify primary key: brightest upper catchlight ──
+    primary_key: Optional[Dict[str, Any]] = None
+    primary_key_obj: Optional[Dict] = None  # reference to the raw dict for identity checks
+    if upper:
+        primary_key_obj = max(upper, key=lambda c: c.get("intensity", 0.0))
+        pk_quad = _quad(primary_key_obj)
+        primary_key = {
+            "eye":        primary_key_obj.get("eye"),
+            "position":   primary_key_obj.get("position"),
+            "quad":       pk_quad,
+            "intensity":  primary_key_obj.get("intensity"),
+            "size_ratio": primary_key_obj.get("size_ratio"),
+            "shape":      primary_key_obj.get("shape"),
+            "role":       "key",
+        }
+
+    # ── Classify all credible catchlights ──
+    # key          → the single brightest upper (primary key light)
+    # modifier_edge → remaining upper catchlights (same source, different panel edge)
+    # fill          → credible lower catchlights (bilateral fill light)
+    # other         → lateral or unclassifiable
+    classified: List[Dict[str, Any]] = []
+    for c in credible:
+        q = _quad(c)
+        if q in _UPPER_QUADS:
+            role = "key" if (c is primary_key_obj) else "modifier_edge"
+        elif q == "lower":
+            role = "fill"
+        else:
+            role = "other"
+        classified.append({
+            "eye":        c.get("eye"),
+            "position":   c.get("position"),
+            "quad":       q,
+            "intensity":  c.get("intensity"),
+            "size_ratio": c.get("size_ratio"),
+            "shape":      c.get("shape"),
+            "role":       role,
+        })
+
+    # Display list: only key + fill (modifier_edge rolled into area calc; artifacts hidden)
+    display_catchlights = [cl for cl in classified if cl["role"] in ("key", "fill")]
+
+    # ── Fill detection: bilateral lower in both eyes ──
+    left_has_fill  = any(cl["role"] == "fill" and cl.get("eye") == "left"  for cl in classified)
+    right_has_fill = any(cl["role"] == "fill" and cl.get("eye") == "right" for cl in classified)
+    fill_bilateral = left_has_fill and right_has_fill
+
+    # ── Key / fill intensity (for stop ratio) ──
+    fill_cls = [cl for cl in classified if cl["role"] == "fill"]
+    _key_intens_raw  = (primary_key_obj.get("intensity") or 0.0) if primary_key_obj else 0.0
+    _fill_intens_raw = (
+        sum(cl.get("intensity") or 0.0 for cl in fill_cls) / len(fill_cls)
+        if fill_cls else None
+    )
+    key_intensity_pct  = round(_key_intens_raw * 100)  if primary_key_obj else None
+    fill_intensity_pct = round(_fill_intens_raw * 100)  if _fill_intens_raw is not None else None
+
+    # ── Modifier inference from shape + total relative area ──
+    # key + modifier_edge = same light source (different reflections from same modifier)
+    source_catchlights = [cl for cl in classified if cl["role"] in ("key", "modifier_edge")]
+
+    modifier: Optional[Dict[str, Any]] = None
+    if source_catchlights:
+        # total_relative_area = Σ(size_ratio²) — aggregate angular coverage of the modifier.
+        total_relative_area = sum(
+            (cl.get("size_ratio") or 0.0) ** 2
+            for cl in source_catchlights
+        )
+
+        # key_area = size_ratio² of the primary key catchlight alone — the most reliable
+        # single-point size measurement.  When multiple catchlights from the same source
+        # have inconsistent apparent sizes (different angles / edge vs face reflections),
+        # the primary key is the cleanest signal.  Use it as the size classification input;
+        # total_relative_area is kept for display reference.
+        _pk_sr = (primary_key_obj.get("size_ratio") or 0.0) if primary_key_obj else 0.0
+        key_area = _pk_sr ** 2
+
+        # Size classification anchor:
+        #   Single source  → key_area (primary key is the authoritative reading)
+        #   Multiple sources contributing consistently → total is valid, but cap at
+        #   2× key_area to prevent modifier_edge inflation from dominating.
+        contributing_count = len(source_catchlights)
+
+        size_area = key_area if key_area > 0 else total_relative_area
+        if contributing_count > 1 and total_relative_area > key_area * 2.5:
+            # Aggregate is >2.5× the primary key alone — secondary catchlights are inflating
+            # the estimate.  Default to primary key size.
+            size_area = key_area
+
+        # Determine dominant shape
+        shapes = [cl.get("shape", "unknown") for cl in source_catchlights if cl.get("shape")]
+        ring_ct  = sum(1 for s in shapes if s == "ring")
+        strip_ct = sum(1 for s in shapes if s == "strip")
+        round_ct = sum(1 for s in shapes if s in ("round", "octagonal"))
+        rect_ct  = sum(1 for s in shapes if s in ("rectangular", "square"))
+
+        # ── Photographer-readable size estimates ──────────────────────────────
+        # total_relative_area encodes apparent angular size of the source.
+        # Estimates below are calibrated to standard portrait distance (5-8ft / 1.5-2.5m).
+        # All modifier sizes are approximate equivalents — actual dimensions depend
+        # on subject-to-light distance.
+
+        # ── Cluster meaning: what the combined catchlight pattern tells a photographer ──
+        # Multiple specular points from one modifier are ONE source, not multiple lights.
+        # The cluster count/shape encodes modifier size and working distance.
+        def _cluster_meaning(count: int, shape: str) -> str:
+            if shape == "ring_light":
+                return (
+                    "The ring-shaped specular IS the modifier — circular on-axis reflection "
+                    "is the unmistakable ring light signature. One source."
+                )
+            if shape == "strip_box":
+                if count == 1:
+                    return (
+                        "Single elongated specular bar — strip box face reflecting as a clean "
+                        "streak. One source."
+                    )
+                return (
+                    f"{count} elongated specular points — the strip box face and edges "
+                    "each reflecting separately. One source; the cluster tells you the "
+                    "strip is large or close enough to show its geometry in the cornea."
+                )
+            if shape in ("beauty_dish", "softbox_rect"):
+                if count == 1:
+                    return (
+                        "Single clean specular — source appears compact from this working "
+                        "distance. One light, one reflection."
+                    )
+                if count == 2:
+                    return (
+                        "Two specular points in the iris — the modifier's face and one "
+                        "edge. This is one source. You're seeing the edge of the "
+                        "diffusion surface resolve as a separate hot spot because the "
+                        "modifier is large relative to working distance."
+                    )
+                if count <= 4:
+                    return (
+                        f"{count} specular reflections — all from one source. The modifier's "
+                        "edges and corners are individually visible in the cornea. "
+                        "Classic large-softbox-at-moderate-distance signature."
+                    )
+                return (
+                    f"{count} specular points — all one source. Dense cluster means a very "
+                    "large modifier or the source is very close. The photographer reads "
+                    "this entire cluster as a single key light."
+                )
+            # Generic
+            if count == 1:
+                return "Single specular — one compact source. One light."
+            return (
+                f"{count} specular points from one source. The cluster is the modifier's "
+                "face reflecting in the cornea — size and count together indicate "
+                f"apparent source size."
+            )
+
+        if ring_ct > 0:
+            mod_type   = "ring_light"
+            mod_label  = "Ring Light"
+            size_class = "medium"
+            size_est   = "~18-22\" ring"
+            physical_meaning = (
+                f"Ring light (area {total_relative_area:.3f} iris²) — "
+                "on-axis circular source (~18-22\") creates wraparound catchlight ring, "
+                "minimal shadows, flat-to-butterfly character"
+            )
+            cluster_meaning = _cluster_meaning(contributing_count, "ring_light")
+
+        elif strip_ct >= round_ct and strip_ct >= rect_ct:
+            if size_area < 0.05:
+                size_class, size_label = "small",  "Narrow Strip Box"
+                size_est = "~9–12\"×24–48\" strip"
+                wrap = "tight lateral wrap, painterly shadow roll-off"
+                mod_type  = "strip_box"
+            elif size_area < 0.20:
+                size_class, size_label = "medium", "Strip Box"
+                size_est = "~12–16\"×48–60\" strip"
+                wrap = "lateral highlight sweep, controlled spill"
+                mod_type  = "strip_box"
+            elif rect_ct > 0 and strip_ct - rect_ct <= 1:
+                # At large angular area, a near-tie between strip and rect catchlights
+                # means a large rectangular softbox/panel — not a strip box.
+                # 72"+ rectangular modifiers produce slightly elongated catchlights
+                # that trip the strip detector, but are not strip boxes.
+                size_class, size_label = "large",  "Large Rectangular Softbox"
+                size_est = "~48–72\"+ softbox / panel"
+                wrap = "broad wrap, very soft shadow edge"
+                mod_type  = "softbox_rect"
+            else:
+                # Strip clearly dominates (strip_ct ≥ rect_ct + 2) at large area
+                size_class, size_label = "large",  "Wide Strip Box"
+                size_est = "~20–36\"×60–90\" strip"
+                wrap = "broad lateral wrap, softer shadow edge"
+                mod_type  = "strip_box"
+            mod_label = size_label
+            physical_meaning = (
+                f"{size_label} (area {total_relative_area:.3f} iris², {size_est} equiv.) — "
+                f"{wrap}."
+                + (" Elongated source typical in editorial and hair setups"
+                   if mod_type == "strip_box" else "")
+            )
+            cluster_meaning = _cluster_meaning(contributing_count, mod_type)
+
+        elif round_ct >= rect_ct and round_ct > 0:
+            if size_area < 0.08:
+                size_class, size_label = "small",  "Small Beauty Dish"
+                size_est = "~16-20\" dish"
+                detail = "punchy specular with hard catchlight edge, minimal wrap"
+            elif size_area < 0.25:
+                size_class, size_label = "medium", "Beauty Dish / Octa"
+                size_est = "~22-33\" dish/octa"
+                detail = "classic beauty punch — crisp highlights with gradual shadow falloff"
+            else:
+                size_class, size_label = "large",  "Large Octa"
+                size_est = "~48-60\" octa"
+                detail = "large round source — soft with even highlight coverage"
+            mod_type  = "beauty_dish"
+            mod_label = size_label
+            physical_meaning = (
+                f"{size_label} (area {total_relative_area:.3f} iris², {size_est} equiv.) — "
+                f"{detail}"
+            )
+            cluster_meaning = _cluster_meaning(contributing_count, "beauty_dish")
+
+        elif rect_ct > 0:
+            if size_area < 0.05:
+                size_class, size_label = "small",  "Small Softbox"
+                size_est = "~16-24\" softbox"
+                wrap = "limited wrap, distinct shadow edge"
+            elif size_area < 0.15:
+                size_class, size_label = "medium", "Medium Softbox"
+                size_est = "~30-48\" softbox"
+                wrap = "moderate wrap, gradual shadow transitions"
+            elif size_area < 0.40:
+                size_class, size_label = "large",  "Large Softbox"
+                size_est = "~48-72\" softbox"
+                wrap = "broad wrap, very soft shadow edge"
+            else:
+                size_class, size_label = "xlarge", "Very Large Softbox"
+                size_est = "72\"+ softbox or proximity source"
+                wrap = "extensive wrap, near-shadowless"
+            mod_type  = "softbox_rect"
+            mod_label = size_label
+            physical_meaning = (
+                f"{size_label} (area {total_relative_area:.3f} iris², {size_est} equiv.) — "
+                f"{wrap}"
+            )
+            cluster_meaning = _cluster_meaning(contributing_count, "softbox_rect")
+
+        else:
+            # Shape unknown — classify purely from primary key area
+            if size_area < 0.03:
+                size_class, size_label = "point",  "Hard / Point Source"
+                size_est = "bare strobe / grid spot"
+                detail = "small hot specular, crisp shadow edges, high contrast"
+            elif size_area < 0.15:
+                size_class, size_label = "small",  "Small Modifier"
+                size_est = "~16-36\" equiv."
+                detail = "limited coverage, moderate shadow softness"
+            elif size_area < 0.40:
+                size_class, size_label = "medium", "Medium Modifier"
+                size_est = "~36-60\" equiv."
+                detail = "moderate coverage, soft transitions"
+            else:
+                size_class, size_label = "large",  "Large Modifier"
+                size_est = "60\"+ equiv."
+                detail = "broad coverage, soft shadows"
+            mod_type  = "hard_source" if size_class == "point" else "softbox_rect"
+            mod_label = size_label
+            physical_meaning = (
+                f"{size_label} (area {total_relative_area:.3f} iris², {size_est}) — {detail}"
+            )
+            cluster_meaning = _cluster_meaning(contributing_count, mod_type)
+
+        # ── Working distance estimate from primary key's size_ratio ──────────
+        # size_ratio = enc_r / iris_r encodes the apparent angular half-size of the
+        # source.  Larger size_ratio → source fills more of the visual field →
+        # closer to subject (for a given modifier size).
+        # Thresholds calibrated to a medium-large modifier at typical portrait distances.
+        _pk_sr = (primary_key_obj.get("size_ratio") or 0.0) if primary_key_obj else 0.0
+        if _pk_sr < 0.08:
+            distance_class     = "very_far"
+            distance_est_ft    = "9-12+ ft"
+            distance_quality   = "small angular source — directional, defined shadow edge"
+        elif _pk_sr < 0.18:
+            distance_class     = "far"
+            distance_est_ft    = "6-9 ft"
+            distance_quality   = "classic portrait distance — controlled softness"
+        elif _pk_sr < 0.30:
+            distance_class     = "standard"
+            distance_est_ft    = "4-6 ft"
+            distance_quality   = "standard close distance — soft shadows, gradual transitions"
+        elif _pk_sr < 0.50:
+            distance_class     = "close"
+            distance_est_ft    = "2-4 ft"
+            distance_quality   = "proximity — very soft wrap, broad highlight coverage"
+        else:
+            distance_class     = "proximity"
+            distance_est_ft    = "< 2 ft"
+            distance_quality   = "extreme proximity — wrapping, near-shadowless"
+
+        # ── Size confidence: cross-reference size_class with distance_class ──────
+        # total_relative_area encodes ANGULAR size, not physical size.
+        # The same area reading is consistent with multiple (size, distance) pairs.
+        # We can narrow confidence using the distance estimate.
+        #
+        # High confidence: area AND distance are jointly consistent with ONE size range.
+        # Low confidence:  proximity/close distance makes large-area ambiguous
+        #                  (small mod close vs large mod standard).
+        _size_confidence: str
+        _size_caveat: Optional[str] = None
+
+        if size_class in ("xlarge", "large") and distance_class in ("proximity", "close"):
+            # Large area + close distance = ambiguous — could be smaller mod very close
+            _size_confidence = "low"
+            if distance_class == "proximity":
+                _size_caveat = (
+                    "source is < 2 ft away — apparent size is dominated by proximity, "
+                    "not modifier size. Could be a 24-36\" source at extreme close range."
+                )
+                size_est = "unknown — proximity dominant"
+                mod_label = f"Large/Close Source"
+            else:  # close (2-4ft)
+                _size_caveat = (
+                    "source is 2-4 ft away — area reading is consistent with both "
+                    f"{size_est} at standard distance OR a smaller modifier at close range."
+                )
+        elif size_class == "xlarge" and distance_class == "standard":
+            # Large area + standard distance = genuinely large
+            _size_confidence = "medium"
+            _size_caveat = (
+                "large apparent area at standard distance — consistent with 60-80\"+ "
+                "softbox, but could also be a moderately large source closer than estimated."
+            )
+        elif size_class in ("point", "small") and distance_class in ("far", "very_far"):
+            # Small area + far distance = genuinely compact source
+            _size_confidence = "high"
+        elif size_class in ("medium", "large") and distance_class == "standard":
+            _size_confidence = "high"
+        else:
+            _size_confidence = "medium"
+
+        modifier = {
+            "type":                 mod_type,
+            "label":                mod_label,
+            "size_class":           size_class,
+            "size_estimate":        size_est,
+            "size_confidence":      _size_confidence,
+            "size_caveat":          _size_caveat,
+            "total_relative_area":  round(total_relative_area, 4),
+            "contributing_count":   contributing_count,
+            "physical_meaning":     physical_meaning,
+            "cluster_meaning":      cluster_meaning,
+            "distance_class":       distance_class,
+            "distance_est_ft":      distance_est_ft,
+            "distance_quality":     distance_quality,
+        }
+
+    # ── Light count from credible catchlights ──
+    light_count_from_catchlights = (1 if primary_key is not None else 0)
+    if fill_bilateral:
+        light_count_from_catchlights += 1
+
+    # ── Stops / lighting ratio ──
+    stops_down: Optional[float] = None
+    lighting_ratio_str: Optional[str] = None
+    if (
+        key_intensity_pct and fill_intensity_pct
+        and key_intensity_pct > 0 and fill_intensity_pct > 0
+    ):
+        _s = math.log2(key_intensity_pct / fill_intensity_pct)
+        stops_down = round(_s, 1)
+        ratio_n = max(1, round(2 ** _s))
+        lighting_ratio_str = f"{ratio_n}:1"
+
+    # ── Fill source classification (reflector vs second head) ──
+    _fill_shapes = [cl.get("shape", "") for cl in fill_cls if cl.get("shape")]
+    _fill_hard   = any(s in ("round", "point", "dot") for s in _fill_shapes)
+    if fill_bilateral and not _fill_hard:
+        fill_source_label = "Reflector fill"
+    elif fill_bilateral:
+        fill_source_label = "Fill head"
+    elif fill_cls:
+        fill_source_label = "Fill head (one side)"
+    else:
+        fill_source_label = None
+
+    # ── Photographer-read sentences ──
+    # key_read  → "Large Softbox, camera-right, ~48-72" at 4-6 ft. One light."
+    # fill_read → "Reflector fill, ~1.5 stops down → 3:1 ratio."
+    key_read: Optional[str] = None
+    fill_read: Optional[str] = None
+    lighting_summary: Optional[str] = None
+
+    if primary_key and modifier:
+        _quad_val = primary_key.get("quad", "")
+        _dir = {
+            "upper_right": "camera-right",
+            "upper_left":  "camera-left",
+            "top_center":  "on-axis",
+        }.get(_quad_val, "off-axis")
+        _size    = modifier.get("size_estimate", "")
+        _dist    = modifier.get("distance_est_ft", "")
+        _mlabel  = modifier.get("label", "modifier")
+        _one     = "One light." if light_count_from_catchlights == 1 else ""
+        key_read = f"{_mlabel}, {_dir}, {_size} at {_dist}.{' ' + _one if _one else ''}"
+
+    if fill_source_label:
+        if stops_down is not None and lighting_ratio_str:
+            fill_read = (
+                f"{fill_source_label}, ~{stops_down} stops down "
+                f"\u2192 {lighting_ratio_str} ratio."
+            )
+        else:
+            fill_read = f"{fill_source_label} detected."
+
+    _parts = [p for p in [key_read, fill_read] if p]
+    lighting_summary = "  ".join(_parts) if _parts else None
+
+    # Ring light flag: any source catchlight with ring shape = confirmed ring light.
+    # Exposed so orchestrator can apply hard boost/veto on ring_light pattern candidate.
+    _ring_light_detected = ring_ct > 0 if source_catchlights else False
+
+    return {
+        "primary_key":                  primary_key,
+        "modifier":                     modifier,
+        "fill_bilateral":               fill_bilateral,
+        "fill_source_label":            fill_source_label,
+        "key_intensity_pct":            key_intensity_pct,
+        "fill_intensity_pct":           fill_intensity_pct,
+        "stops_down":                   stops_down,
+        "lighting_ratio":               lighting_ratio_str,
+        "key_read":                     key_read,
+        "fill_read":                    fill_read,
+        "lighting_summary":             lighting_summary,
+        "light_count_from_catchlights": light_count_from_catchlights,
+        "artifact_count":               artifact_count,
+        "catchlights":                  display_catchlights,
+        "ring_light_detected":          _ring_light_detected,
+        "notes":                        notes,
+    }
 
 
 # ── Public entry point ─────────────────────────────────────────────────────
@@ -1033,6 +1540,34 @@ def infer_lighting_from_vision(
     _has_face_mesh = "no_face_mesh" not in _cl_reason
     _data_quality = "full" if _has_face_mesh else "face_limited"
 
+    # ── Layer 0: catchlight intelligence ──
+    _catchlight_intel = _build_catchlight_intelligence(catchlight_list)
+
+    # ── Light count reconciliation ──
+    # Compare pattern-derived light count against catchlight-derived count.
+    # A divergence flags where the two inference paths disagree — useful for
+    # triage and future rule refinement.  No confidence change; informational only.
+    _cl_light_count = (_catchlight_intel or {}).get("light_count_from_catchlights", 0)
+    if _cl_light_count > 0 and abs(_cl_light_count - total_lights) >= 2:
+        all_notes.append(
+            f"Light count divergence: pattern inference → {total_lights}, "
+            f"catchlight intelligence → {_cl_light_count}. "
+            "One path may be over- or under-counting (background light, reflectors, or missed catchlights)."
+        )
+
+    # Promote catchlight intelligence modifier type over the raw shape vote.
+    # _infer_modifier_from_catchlights votes across ALL raw catchlights (including
+    # softbox edge secondaries that tip the strip count).  _build_catchlight_intelligence
+    # uses only credible, role-classified source catchlights with per-source shape
+    # analysis — the primary key catchlight shape is the authoritative reading.
+    _ci_mod = (_catchlight_intel or {}).get("modifier") or {}
+    if _ci_mod.get("type"):
+        modifier_result["modifier"] = _ci_mod["type"]
+        modifier_result["modifier_confidence"] = max(
+            modifier_result.get("modifier_confidence", 0.0),
+            0.65,
+        )
+
     return LightingInference(
         pattern=pattern_result["pattern"],
         pattern_confidence=pattern_result["pattern_confidence"],
@@ -1057,6 +1592,7 @@ def infer_lighting_from_vision(
         face_mesh_available=_has_face_mesh,
         data_quality=_data_quality,
         earring_catchlight_contamination=earring_contamination_detected,
+        catchlight_intelligence=_catchlight_intel,
     )
 
 
@@ -1072,8 +1608,8 @@ def _map_setup_family_to_pattern(setup_family: str) -> str:
         "window_light": "loop",
         "natural_ambient": "unknown",
         "dramatic_chiaroscuro": "rembrandt",
-        "gobo_projection": "unknown",
-        "slit_cut_light": "unknown",
+        "gobo_projection": "projected",
+        "slit_cut_light": "projected",
     }
     return mapping.get(setup_family, "unknown")
 
@@ -1119,6 +1655,21 @@ _ROLE_QUADRANT_MAP: Dict[str, Dict[str, set]] = {
     },
     "split": {
         "key": {"hard_left", "hard_right"},
+    },
+    "broad": {
+        # Broad = key illuminates the camera-facing cheek; same quadrant
+        # positions as loop but on the broad side of the face.
+        "key": {"upper_left", "upper_right", "top_center"},
+    },
+    "short": {
+        # Short = key illuminates the turned-away cheek; same physical
+        # positions as loop/rembrandt but on the short (far) side.
+        "key": {"upper_left", "upper_right"},
+    },
+    "flat": {
+        # Flat = even, non-directional light; key position is ambiguous
+        # or centered — accept all upper/center quadrants.
+        "key": {"upper_left", "upper_right", "top_center"},
     },
 }
 
@@ -1203,6 +1754,24 @@ _PATTERN_DESCRIPTIONS: Dict[str, str] = {
         "illuminating exactly half the face while leaving the other half in deep "
         "shadow. Creates maximum drama and dimension. Often used in cinematic "
         "and editorial work for its bold, graphic look."
+    ),
+    "broad": (
+        "Broad lighting — the key light illuminates the wider, camera-facing side "
+        "of the face. This opens up the facial plane and can make faces appear "
+        "wider. Common in corporate headshots and editorial work where a "
+        "welcoming, approachable look is desired."
+    ),
+    "short": (
+        "Short lighting — the key light illuminates the narrower, turned-away side "
+        "of the face, placing the camera-facing cheek in shadow. This slims the "
+        "face and adds depth and drama. A classic cinematic and editorial choice "
+        "for creating mood and dimension."
+    ),
+    "flat": (
+        "Flat lighting — even, non-directional illumination with minimal shadow "
+        "depth across the face. Typically produced by large, frontal light sources "
+        "or ambient wrap. Common in corporate photography, beauty retouching "
+        "workflows, and high-key commercial setups."
     ),
     "unknown": (
         "The lighting pattern could not be identified with certainty. This may "

@@ -51,6 +51,16 @@ import {
   patchDistillationReview,
   getDistillationReviewImageUrl,
   regenerateDebugOverlay,
+  getL1Stream,
+  getDiagnostics,
+  getServerLogs,
+  getAutonomyLog,
+  getAutonomyQueue,
+  probeApiKey,
+  triggerMonitoringSweep,
+  approveAutonomyAction,
+  rejectAutonomyAction,
+  getMonitoringStats,
 } from '../data/labApi';
 
 /** Device timezone — explicit in all date formatting calls. */
@@ -581,11 +591,12 @@ export default function LabScreen() {
   const [tabMetrics, setTabMetrics] = useState({});
   // Cross-tab navigation — set by ControlCenterTab, consumed by LearningOpsTab
   const [learningNavRequest, setLearningNavRequest] = useState(null);
-  // Section navigation (5-section shell)
+  // Section navigation (6-section shell)
   const [activeSection, setActiveSection] = useState('workbench');
   const [activeTrainingTab, setActiveTrainingTab] = useState('goldset');
   const [activeIntelTab, setActiveIntelTab] = useState('signals');
   const [activeSystemTab, setActiveSystemTab] = useState('control_center');
+  const [activeLogsTab, setActiveLogsTab] = useState('l1_stream');
 
   /** Navigate to a specific tab+panel, optionally with filter state.
    *  Build 3.1: pendingImage support — dispatches SET_LAB_PENDING_IMAGE
@@ -862,7 +873,7 @@ export default function LabScreen() {
     } else if (sectionId === 'system') {
       switchTab(activeSystemTab);
     }
-    // 'status' — no underlying tab; content renders inline
+    // 'status' and 'logs' — content renders inline; no legacy tab needed
   }
 
   function handleTrainingSubSwitch(tabId) {
@@ -916,6 +927,7 @@ export default function LabScreen() {
         <div className="lab-nav" style={{ flex: 1 }}>
           {[
             { id: 'status',       label: 'Status' },
+            { id: 'logs',         label: 'Logs' },
             { id: 'workbench',    label: 'Workbench' },
             { id: 'training',     label: 'Training' },
             { id: 'intelligence', label: 'Intel' },
@@ -966,6 +978,28 @@ export default function LabScreen() {
       </div>
 
       <div className="lab-header__divider" />
+
+      {/* ── Logs sub-nav ── */}
+      {activeSection === 'logs' && (
+        <div className="lab-subnav">
+          {[
+            { id: 'l1_stream',   label: 'L1 Stream'   },
+            { id: 'svc_events',  label: 'Service'     },
+            { id: 'server_logs', label: 'Server Logs' },
+            { id: 'diagnostics', label: 'Diagnostics' },
+            { id: 'monitoring',  label: 'Monitoring'  },
+          ].map(sub => (
+            <button
+              key={sub.id}
+              className={`lab-subnav__tab${activeLogsTab === sub.id ? ' lab-subnav__tab--active' : ''}`}
+              onClick={() => setActiveLogsTab(sub.id)}
+              type="button"
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Training sub-nav: flat strip covering all training views ── */}
       {activeSection === 'training' && (
@@ -1157,7 +1191,14 @@ export default function LabScreen() {
            - Subsequent visits to an already-mounted tab are instant (no re-fetch, no flash)
            - Workbench result is preserved when checking Signals and back
       ── */}
-      <div className="lab-content" style={{ display: activeSection === 'status' ? 'none' : undefined }}>
+      {/* ── Logs section (inline, like Status) ── */}
+      {activeSection === 'logs' && (
+        <div className="lab-content">
+          <LogsSection activeTab={activeLogsTab} onNavigateTo={handleNavigateTo} />
+        </div>
+      )}
+
+      <div className="lab-content" style={{ display: (activeSection === 'status' || activeSection === 'logs') ? 'none' : undefined }}>
         {mountedTabs.has('workbench') && (
           <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
             <WorkbenchTab
@@ -1231,6 +1272,663 @@ export default function LabScreen() {
         </button>
       </div>
     </div>
+  );
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   LogsSection — comprehensive triage / troubleshoot view
+   ═══════════════════════════════════════════════════════════ */
+
+function LogsSection({ activeTab, onNavigateTo }) {
+  return (
+    <div className="lab-log">
+      {activeTab === 'l1_stream'   && <L1StreamPanel    onNavigateTo={onNavigateTo} />}
+      {activeTab === 'svc_events'  && <SvcEventsPanel   onNavigateTo={onNavigateTo} />}
+      {activeTab === 'server_logs' && <ServerLogsPanel  />}
+      {activeTab === 'diagnostics' && <DiagnosticsPanel onNavigateTo={onNavigateTo} />}
+      {activeTab === 'monitoring'  && <MonitoringPanel  onNavigateTo={onNavigateTo} />}
+    </div>
+  );
+}
+
+// ── shared micro-components ───────────────────────────────────────────────────
+
+// Token-mapped variant colours — resolves correctly for dark + light themes
+const _LOG_V = {
+  green: { c: 'var(--color-status-green)', bg: 'var(--color-status-green-bg)',  bd: 'var(--color-status-green-border)' },
+  amber: { c: 'var(--color-status-amber)', bg: 'var(--color-status-amber-bg)',  bd: 'var(--color-status-amber-border)' },
+  red:   { c: 'var(--color-status-red)',   bg: 'var(--color-status-red-bg)',    bd: 'var(--color-status-red-border)'   },
+  blue:  { c: 'var(--color-status-blue)',  bg: 'var(--color-status-blue-bg)',   bd: 'var(--color-status-blue-border)'  },
+  muted: { c: 'var(--color-status-muted)', bg: 'transparent',                   bd: 'var(--color-border)'              },
+};
+
+function LogPill({ label, variant = 'blue' }) {
+  return <span className={`lab-log__pill lab-log__pill--${variant}`}>{label}</span>;
+}
+
+function LogSectionLabel({ children }) {
+  return <div className="lab-log__label">{children}</div>;
+}
+
+function LogCard({ children, style, variant, flush }) {
+  let cls = 'lab-log__card';
+  if (variant) cls += ` lab-log__card--${variant}`;
+  if (flush)   cls += ' lab-log__card--flush';
+  return <div className={cls} style={style}>{children}</div>;
+}
+
+function LogEmpty({ msg = 'No records' }) {
+  return <div className="lab-log__empty">{msg}</div>;
+}
+
+function ActionBtn({ label, onClick, variant = 'blue', disabled = false }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      type="button"
+      className={`lab-log__btn lab-log__btn--${variant}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ── L1 Stream panel ───────────────────────────────────────────────────────────
+
+function L1StreamPanel({ onNavigateTo }) {
+  const [records, setRecords]   = useState(null);
+  const [error, setError]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [filters, setFilters]   = useState({ userEmail: '', search: '', pattern: '', flags: '' });
+
+  function fetch_(f = filters) {
+    setLoading(true);
+    getL1Stream(200, f)
+      .then(d => { setRecords(d.records || []); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }
+
+  useEffect(() => { fetch_(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const id = setInterval(() => fetch_(), 30_000); return () => clearInterval(id); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleFilter(key, val) {
+    const next = { ...filters, [key]: val };
+    setFilters(next);
+  }
+
+  function applyFilters() { fetch_(filters); }
+
+  function clearFilters() {
+    const cleared = { userEmail: '', search: '', pattern: '', flags: '' };
+    setFilters(cleared);
+    fetch_(cleared);
+  }
+
+  const hasActiveFilter = Object.values(filters).some(v => v !== '');
+
+  return (
+    <>
+      <div className="lab-log__header">
+        <LogSectionLabel>
+          L1 Analysis Stream{records != null ? ` — ${records.length} records` : ''}
+        </LogSectionLabel>
+        <div className="lab-log__header-actions">
+          <ActionBtn label="↻ Refresh" onClick={() => fetch_()} variant="blue" />
+          <ActionBtn label="+ Analyze" onClick={() => onNavigateTo?.({ tab: 'workbench' })} variant="green" />
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="Filter by user email…"
+          value={filters.userEmail}
+          onChange={e => handleFilter('userEmail', e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && applyFilters()}
+          style={_filterInputStyle}
+        />
+        <input
+          type="text"
+          placeholder="Search ID / image path…"
+          value={filters.search}
+          onChange={e => handleFilter('search', e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && applyFilters()}
+          style={_filterInputStyle}
+        />
+        <input
+          type="text"
+          placeholder="Pattern…"
+          value={filters.pattern}
+          onChange={e => handleFilter('pattern', e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && applyFilters()}
+          style={{ ..._filterInputStyle, maxWidth: 120 }}
+        />
+        <select
+          value={filters.flags}
+          onChange={e => handleFilter('flags', e.target.value)}
+          style={_filterSelectStyle}
+        >
+          <option value="">All flags</option>
+          <option value="review">Needs review</option>
+          <option value="contradiction">Contradiction</option>
+          <option value="paradox">Paradox</option>
+        </select>
+        <ActionBtn label="Apply" onClick={applyFilters} variant="blue" />
+        {hasActiveFilter && <ActionBtn label="Clear" onClick={clearFilters} variant="muted" />}
+      </div>
+
+      {loading && <LogEmpty msg="Loading…" />}
+      {!loading && error && <LogEmpty msg={`Error: ${error}`} />}
+      {!loading && !error && !records?.length && (
+        <LogEmpty msg={hasActiveFilter ? 'No records match these filters.' : 'No analysis records yet — run an analysis in Workbench first.'} />
+      )}
+      {!loading && !error && records?.length > 0 && (
+        <div className="lab-log__table-wrap">
+          <table className="lab-log__table">
+            <thead>
+              <tr>
+                {['Time', 'User', 'ID', 'Pattern', 'Conf', 'Source', 'Time(s)', 'Flags', ''].map(h => (
+                  <th key={h}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {records.map(r => {
+                const hasIssue = r.needs_review || r.contradictions?.length || r.active_paradoxes?.length;
+                const confVariant = (r.confidence ?? 0) >= 0.8 ? 't-green' : (r.confidence ?? 0) >= 0.5 ? 't-amber' : 't-red';
+                const shortId = r.analysis_id ? r.analysis_id.slice(0, 8) : '—';
+                const imgFile = r.image_path ? r.image_path.split('/').pop() : '—';
+                return (
+                  <tr key={r.analysis_id} className={hasIssue ? 't-flagged' : ''}>
+                    <td className="t-nowrap t-mono">{fmtDT(r.created_at)}</td>
+                    <td className="t-nowrap" title={r.user_email || ''}>
+                      {r.user_email ? r.user_email.split('@')[0] : <span className="t-dim">—</span>}
+                    </td>
+                    <td className="t-mono t-nowrap" title={`${r.analysis_id}\n${r.image_path || ''}`}>
+                      <span style={{ cursor: 'default' }}>{shortId}</span>
+                      {imgFile !== '—' && <span className="t-dim" style={{ display: 'block', fontSize: 'var(--text-2xs)' }}>{imgFile.slice(0, 20)}</span>}
+                    </td>
+                    <td className="t-primary">{r.pattern}</td>
+                    <td className={`t-mono t-primary ${confVariant}`}>
+                      {r.confidence != null ? `${Math.round(r.confidence * 100)}%` : '—'}
+                      {r.confidence_label && <span className="t-dim">({r.confidence_label})</span>}
+                    </td>
+                    <td className="t-mono">{r.source || '—'}</td>
+                    <td className="t-mono">{r.total_time_s != null ? `${r.total_time_s.toFixed(1)}s` : '—'}</td>
+                    <td>
+                      {r.needs_review && <LogPill label="review" variant="amber" />}
+                      {r.contradictions?.map(c => <LogPill key={c} label={c} variant="red" />)}
+                      {r.active_paradoxes?.map(p => <LogPill key={p} label={p} variant="red" />)}
+                      {r.active_edge_cases?.map(e => <LogPill key={e} label={e.replace(/_/g,' ')} variant="amber" />)}
+                    </td>
+                    <td className="t-actions">
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <ActionBtn label="Workbench ↗" onClick={() => onNavigateTo?.({ tab: 'workbench' })} variant="blue" />
+                        {hasIssue && <ActionBtn label="→ Review" onClick={() => onNavigateTo?.({ tab: 'reviews' })} variant="amber" />}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
+const _filterInputStyle = {
+  fontFamily: 'var(--font-family)',
+  fontSize: 'var(--text-xs)',
+  background: 'var(--color-surface-elevated)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
+  color: 'var(--color-text)',
+  padding: '4px var(--space-sm)',
+  outline: 'none',
+  minWidth: 160,
+  flex: '1 1 160px',
+};
+const _filterSelectStyle = {
+  ..._filterInputStyle,
+  minWidth: 130,
+  flex: '0 0 auto',
+  cursor: 'pointer',
+};
+
+// ── Server Logs panel ─────────────────────────────────────────────────────────
+
+const _LEVEL_COLORS = {
+  DEBUG:    'var(--color-text-secondary)',
+  INFO:     'var(--color-text)',
+  WARNING:  'var(--color-status-amber)',
+  ERROR:    'var(--color-status-red)',
+  CRITICAL: 'var(--color-status-red)',
+};
+
+function ServerLogsPanel() {
+  const [records, setRecords]   = useState(null);
+  const [error, setError]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [level, setLevel]       = useState('');
+  const [search, setSearch]     = useState('');
+
+  function fetch_(opts = { level, search }) {
+    setLoading(true);
+    getServerLogs({ limit: 300, level: opts.level, search: opts.search })
+      .then(d => { setRecords(d.records || []); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }
+
+  useEffect(() => { fetch_(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const id = setInterval(() => fetch_(), 10_000); return () => clearInterval(id); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const errorCount = records ? records.filter(r => r.level === 'ERROR' || r.level === 'CRITICAL').length : 0;
+
+  return (
+    <>
+      <div className="lab-log__header">
+        <LogSectionLabel>
+          Server Logs{records != null ? ` — ${records.length} records` : ''}
+          {errorCount > 0 && <LogPill label={`${errorCount} errors`} variant="red" />}
+        </LogSectionLabel>
+        <div className="lab-log__header-actions">
+          <ActionBtn label="↻ Refresh" onClick={() => fetch_()} variant="blue" />
+        </div>
+      </div>
+
+      {/* Filter bar */}
+      <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
+        <select
+          value={level}
+          onChange={e => { setLevel(e.target.value); fetch_({ level: e.target.value, search }); }}
+          style={_filterSelectStyle}
+        >
+          <option value="">All levels</option>
+          <option value="DEBUG">DEBUG</option>
+          <option value="INFO">INFO</option>
+          <option value="WARNING">WARNING</option>
+          <option value="ERROR">ERROR</option>
+          <option value="CRITICAL">CRITICAL</option>
+        </select>
+        <input
+          type="text"
+          placeholder="Search message or logger…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') fetch_({ level, search: e.target.value }); }}
+          style={{ ..._filterInputStyle, flex: '1 1 220px' }}
+        />
+        <ActionBtn label="Apply" onClick={() => fetch_({ level, search })} variant="blue" />
+        {(level || search) && <ActionBtn label="Clear" onClick={() => { setLevel(''); setSearch(''); fetch_({ level: '', search: '' }); }} variant="muted" />}
+      </div>
+
+      {loading && <LogEmpty msg="Loading…" />}
+      {!loading && error && <LogEmpty msg={`Error: ${error}`} />}
+      {!loading && !error && !records?.length && <LogEmpty msg="No log records in buffer yet — logs accumulate at runtime." />}
+      {!loading && !error && records?.length > 0 && (
+        <LogCard flush>
+          {records.map((r, i) => {
+            const col = _LEVEL_COLORS[r.level] || 'var(--color-text-secondary)';
+            const dt = new Date(r.ts * 1000).toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            return (
+              <div key={i} className="lab-log__row" style={{ alignItems: 'flex-start', padding: '3px var(--space-md)', gap: 'var(--space-sm)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)', lineHeight: 1.5 }}>
+                <span style={{ color: 'var(--color-text-dim)', flexShrink: 0, userSelect: 'none' }}>{dt}</span>
+                <span style={{ color: col, fontWeight: r.level === 'ERROR' || r.level === 'CRITICAL' ? 'var(--weight-semibold)' : undefined, flexShrink: 0, minWidth: 56 }}>{r.level}</span>
+                <span style={{ color: 'var(--color-text-secondary)', flexShrink: 0, minWidth: 140, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.name}>{r.name}</span>
+                <span style={{ color: 'var(--color-text)', wordBreak: 'break-all', flex: 1 }}>
+                  {r.msg}
+                  {r.exc && <span style={{ display: 'block', color: 'var(--color-status-red)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{r.exc}</span>}
+                </span>
+              </div>
+            );
+          })}
+        </LogCard>
+      )}
+    </>
+  );
+}
+
+// ── Service Events panel ──────────────────────────────────────────────────────
+
+function SvcEventsPanel() {
+  const [health, setHealth]     = useState(null);
+  const [stats, setStats]       = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+  const [probing, setProbing]   = useState(false);
+
+  function refresh() {
+    setLoading(true);
+    Promise.allSettled([
+      getApiKeyHealth(),
+      getMonitoringStats(24),
+    ]).then(([hRes, sRes]) => {
+      if (hRes.status === 'fulfilled') setHealth(hRes.value);
+      else setError(hRes.reason?.message);
+      if (sRes.status === 'fulfilled') setStats(sRes.value);
+      setLoading(false);
+    });
+  }
+
+  function forceProbe() {
+    setProbing(true);
+    probeApiKey().then(() => refresh()).catch(() => setProbing(false)).finally(() => setProbing(false));
+  }
+
+  useEffect(() => { refresh(); }, []);
+  useEffect(() => { const id = setInterval(() => refresh(), 60_000); return () => clearInterval(id); }, []);
+
+  if (loading) return <LogEmpty msg="Loading…" />;
+  if (error && !health) return <LogEmpty msg={`Error: ${error}`} />;
+
+  const events  = health?.recent_events || [];
+  const funnel  = stats?.funnel || {};
+  const sparkline = (stats?.sparkline || []).slice(0, 24).reverse();
+
+  const svcRows = [
+    { label: 'VLM',    ok: health?.vlm_available,   detail: health?.vlm_probe_detail || '' },
+    { label: 'DB',     ok: health?.db?.ok,           detail: health?.db?.detail || '' },
+    { label: 'SMTP',   ok: health?.smtp?.ok,         detail: health?.smtp?.detail || '' },
+    { label: 'Stripe', ok: health?.stripe?.ok,       detail: health?.stripe?.detail || '' },
+    { label: 'Sentry', ok: health?.sentry?.ok,       detail: health?.sentry?.detail || '' },
+  ];
+
+  const _dotVariant = (ok) => ok === true ? 'green' : ok === false ? 'red' : 'muted';
+
+  return (
+    <>
+      <div className="lab-log__header">
+        <LogSectionLabel>Service Status</LogSectionLabel>
+        <div className="lab-log__header-actions">
+          <ActionBtn label="↻ Refresh" onClick={refresh} variant="blue" />
+          <ActionBtn label="Force Probe VLM" onClick={forceProbe} variant="amber" disabled={probing} />
+        </div>
+      </div>
+      <LogCard>
+        <div style={{ display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+          {svcRows.map(({ label, ok, detail }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)', fontSize: 'var(--text-xs)' }}>
+              <span className={`lab-log__dot lab-log__dot--${_dotVariant(ok)}`} style={{ marginTop: 0 }} />
+              <span style={{ fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>{label}</span>
+              {detail && <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{detail.slice(0, 60)}</span>}
+            </div>
+          ))}
+        </div>
+      </LogCard>
+
+      <LogSectionLabel>VLM Activity — last 24h</LogSectionLabel>
+      <LogCard>
+        <div style={{ display: 'flex', gap: 'var(--space-lg)', flexWrap: 'wrap', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 'var(--space-sm)' }}>
+          <span>Total calls: <strong style={{ color: 'var(--color-text)' }}>{funnel.vlm_calls_total ?? '—'}</strong></span>
+          <span>OK: <strong style={{ color: 'var(--color-status-green)' }}>{funnel.vlm_calls_ok ?? '—'}</strong></span>
+          <span>Error: <strong style={{ color: 'var(--color-status-red)' }}>{funnel.vlm_calls_error ?? '—'}</strong></span>
+          <span>Success rate: <strong style={{ color: 'var(--color-text)' }}>{funnel.success_rate != null ? `${Math.round(funnel.success_rate * 100)}%` : '—'}</strong></span>
+          <span>Sessions: <strong style={{ color: 'var(--color-text)' }}>{funnel.sessions_with_analysis ?? '—'}</strong></span>
+        </div>
+        {sparkline.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 40, overflowX: 'auto' }}>
+            {sparkline.map((b, i) => {
+              const maxTotal = Math.max(...sparkline.map(x => x.total), 1);
+              const okH  = b.total > 0 ? Math.max((b.ok  / maxTotal) * 38, 2) : 1;
+              const errH = b.total > 0 ? Math.max((b.err / maxTotal) * 38, 2) : 0;
+              return (
+                <div key={i} title={`${b.ok} ok / ${b.err} err`} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', width: 12, flexShrink: 0 }}>
+                  {errH > 0 && <div style={{ height: errH, background: 'var(--color-status-red)',   borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0' }} />}
+                  {okH  > 0 && <div style={{ height: okH,  background: 'var(--color-status-green)', borderRadius: errH > 0 ? 0 : 'var(--radius-xs) var(--radius-xs) 0 0' }} />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </LogCard>
+
+      <LogSectionLabel>Recent Health Events</LogSectionLabel>
+      {events.length === 0 ? <LogEmpty msg="No health events recorded." /> : (
+        <LogCard flush>
+          {events.slice(0, 20).map((e, i) => {
+            const isErr = ['401_error', 'probe_fail', 'error'].includes(e.event_type);
+            return (
+              <div key={i} className="lab-log__row">
+                <span className={`lab-log__dot lab-log__dot--${isErr ? 'red' : 'green'}`} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: isErr ? 'var(--color-status-red)' : 'var(--color-text)' }}>{e.event_type}</span>
+                    <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{e.provider}</span>
+                    {e.created_at && <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)', marginLeft: 'auto' }}>{new Date(e.created_at * 1000).toLocaleString()}</span>}
+                  </div>
+                  {e.detail && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)', marginTop: 2, wordBreak: 'break-all' }}>{e.detail}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </LogCard>
+      )}
+    </>
+  );
+}
+
+// ── Diagnostics panel ─────────────────────────────────────────────────────────
+
+function DiagnosticsPanel({ onNavigateTo }) {
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState(null);
+  const [filter, setFilter] = useState('');
+
+  useEffect(() => {
+    setLoading(true);
+    getDiagnostics().then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, []);
+
+  if (loading) return <LogEmpty msg="Loading…" />;
+  if (error)   return <LogEmpty msg={`Error: ${error}`} />;
+
+  const diagnostics = (data?.diagnostics || []).filter(d =>
+    !filter || d.id?.includes(filter) || d.name?.toLowerCase().includes(filter.toLowerCase()) || (d.patterns || []).join(',').includes(filter)
+  );
+
+  return (
+    <>
+      <div className="lab-log__header">
+        <LogSectionLabel>Pattern Diagnostic Failures — {diagnostics.length} of {data?.count ?? 0}</LogSectionLabel>
+        <input
+          placeholder="Filter by pattern or name…"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          style={{ marginLeft: 'auto', fontSize: 'var(--text-xs)', padding: 'var(--space-xs) var(--space-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)', width: 200, fontFamily: 'var(--font-family)' }}
+        />
+      </div>
+      {diagnostics.length === 0 ? <LogEmpty msg="No diagnostics match filter." /> : (
+        diagnostics.map(d => (
+          <LogCard key={d.id}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-sm)', marginBottom: 'var(--space-xs)' }}>
+              <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-bold)', color: 'var(--color-text)' }}>{d.name || d.id}</span>
+              <span style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>{d.id}</span>
+              <div style={{ marginLeft: 'auto' }}>
+                <ActionBtn label="→ Workbench" onClick={() => onNavigateTo?.({ tab: 'workbench' })} variant="blue" />
+              </div>
+            </div>
+            {(d.patterns || []).length > 0 && (
+              <div style={{ marginBottom: 'var(--space-xs)' }}>{d.patterns.map(p => <LogPill key={p} label={p} variant="blue" />)}</div>
+            )}
+            {d.symptoms_display?.length > 0 && (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginBottom: 2 }}>
+                Symptoms: {d.symptoms_display.join(' · ')}
+              </div>
+            )}
+            {d.quick_fixes_display?.length > 0 && (
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-status-green)' }}>
+                Quick fixes: {d.quick_fixes_display.join(' · ')}
+              </div>
+            )}
+          </LogCard>
+        ))
+      )}
+    </>
+  );
+}
+
+// ── Monitoring panel ──────────────────────────────────────────────────────────
+
+function MonitoringPanel() {
+  const [monitoring, setMonitoring] = useState(null);
+  const [autonomy, setAutonomy]     = useState(null);
+  const [queue, setQueue]           = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [sweeping, setSweeping]     = useState(false);
+  const [actioning, setActioning]   = useState({});
+
+  function refresh() {
+    setLoading(true);
+    Promise.allSettled([
+      getMonitoringSummary(),
+      getAutonomyLog({ limit: 20 }),
+      getAutonomyQueue(),
+    ]).then(([mRes, aRes, qRes]) => {
+      if (mRes.status === 'fulfilled') setMonitoring(mRes.value);
+      if (aRes.status === 'fulfilled') setAutonomy(aRes.value);
+      if (qRes.status === 'fulfilled') setQueue(qRes.value);
+      setLoading(false);
+    });
+  }
+
+  function runSweep() {
+    setSweeping(true);
+    triggerMonitoringSweep(30).finally(() => { setSweeping(false); refresh(); });
+  }
+
+  function handleApprove(actionId, email) {
+    setActioning(s => ({ ...s, [actionId]: 'approving' }));
+    approveAutonomyAction(actionId, email).finally(() => { setActioning(s => ({ ...s, [actionId]: null })); refresh(); });
+  }
+
+  function handleReject(actionId, email) {
+    setActioning(s => ({ ...s, [actionId]: 'rejecting' }));
+    rejectAutonomyAction(actionId, email).finally(() => { setActioning(s => ({ ...s, [actionId]: null })); refresh(); });
+  }
+
+  useEffect(() => { refresh(); }, []);
+  useEffect(() => { const id = setInterval(() => refresh(), 60_000); return () => clearInterval(id); }, []);
+
+  if (loading) return <LogEmpty msg="Loading…" />;
+
+  const attributions = monitoring?.attributions || [];
+  const alerts = monitoring?.alert_summary || [];
+  const auditLog = autonomy?.log || [];
+  const pendingQueue = queue?.queue || [];
+
+  function _statusVariant(status) {
+    if (status === 'applied')  return 'green';
+    if (status === 'reverted') return 'red';
+    if (status === 'pending')  return 'amber';
+    return 'muted';
+  }
+  function _riskVariant(tier) {
+    if (tier === 'HIGH')   return 'red';
+    if (tier === 'MEDIUM') return 'amber';
+    return 'blue';
+  }
+
+  return (
+    <>
+      <div className="lab-log__header">
+        <LogSectionLabel>Post-Release Monitoring</LogSectionLabel>
+        <div className="lab-log__header-actions">
+          <ActionBtn label="↻ Refresh" onClick={refresh} variant="blue" />
+          <ActionBtn label="Run Sweep" onClick={runSweep} variant="green" disabled={sweeping} />
+        </div>
+      </div>
+
+      {/* Active alerts */}
+      {alerts.length > 0 && (
+        <>
+          <LogSectionLabel>Active Monitoring Alerts</LogSectionLabel>
+          {alerts.map((a, i) => (
+            <LogCard key={i} variant="red">
+              <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'center' }}>
+                <span className="lab-log__dot lab-log__dot--red" style={{ marginTop: 0 }} />
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-status-red)' }}>{a.alert_type}</span>
+                <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{a.attribution_id}</span>
+              </div>
+              {a.detail && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 'var(--space-xs)' }}>{a.detail}</div>}
+            </LogCard>
+          ))}
+        </>
+      )}
+
+      {/* Post-release attributions */}
+      <LogSectionLabel>Releases Tracked — {attributions.length}</LogSectionLabel>
+      {attributions.length === 0 ? <LogEmpty msg="No release attributions yet." /> : (
+        <LogCard flush>
+          {attributions.slice(0, 10).map((a, i) => {
+            const hasAlert = a.active_alerts > 0;
+            return (
+              <div key={a.id || i} className="lab-log__row" style={{ alignItems: 'center' }}>
+                <span className={`lab-log__dot lab-log__dot--${hasAlert ? 'red' : 'green'}`} style={{ marginTop: 0 }} />
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)', minWidth: 80 }}>{a.release_version || '—'}</span>
+                <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{a.release_date || ''}</span>
+                {hasAlert && <LogPill label={`${a.active_alerts} alerts`} variant="red" />}
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{a.windows_measured ?? 0} windows measured</span>
+              </div>
+            );
+          })}
+        </LogCard>
+      )}
+
+      {/* Autonomy queue */}
+      {pendingQueue.length > 0 && (
+        <>
+          <LogSectionLabel>Autonomy Queue — {pendingQueue.length} pending actions</LogSectionLabel>
+          {pendingQueue.map(a => (
+            <LogCard key={a.action_id} variant="amber">
+              <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'baseline', marginBottom: 'var(--space-xs)' }}>
+                <LogPill label={a.risk_tier} variant={_riskVariant(a.risk_tier)} />
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>{a.action_type}</span>
+                <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{a.scope}</span>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 'var(--space-xs)' }}>
+                  <ActionBtn label="✓ Approve" onClick={() => handleApprove(a.action_id, a.requested_by)} variant="green" disabled={!!actioning[a.action_id]} />
+                  <ActionBtn label="✗ Reject"  onClick={() => handleReject(a.action_id, a.requested_by)}  variant="red"   disabled={!!actioning[a.action_id]} />
+                </div>
+              </div>
+              <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{a.created_at ? new Date(a.created_at * 1000).toLocaleString() : ''}</div>
+            </LogCard>
+          ))}
+        </>
+      )}
+
+      {/* Autonomy audit log */}
+      <LogSectionLabel>Autonomy Audit Log — last 20 actions</LogSectionLabel>
+      {auditLog.length === 0 ? <LogEmpty msg="No autonomy actions recorded yet." /> : (
+        <LogCard flush>
+          {auditLog.map((a, i) => {
+            const sv = _statusVariant(a.status);
+            return (
+              <div key={a.action_id || i} className="lab-log__row">
+                <span className={`lab-log__dot lab-log__dot--${sv}`} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--weight-semibold)', color: 'var(--color-text)' }}>{a.action_type}</span>
+                    <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)' }}>{a.scope}</span>
+                    <LogPill label={a.risk_tier} variant={_riskVariant(a.risk_tier)} />
+                    <LogPill label={a.status} variant={sv} />
+                    <span style={{ marginLeft: 'auto', fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                      {a.created_at ? new Date(a.created_at * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  {a.expected_outcome && <div style={{ fontSize: 'var(--text-2xs)', color: 'var(--color-text-secondary)', marginTop: 2 }}>{a.expected_outcome}</div>}
+                </div>
+              </div>
+            );
+          })}
+        </LogCard>
+      )}
+    </>
   );
 }
 
@@ -2050,6 +2748,7 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
           ) : (
             <>
               <WorkbenchFormatted data={result} />
+              <ObservabilityPanel data={result} />
               <PipelineTimingPanel data={result} />
             </>
           )}
@@ -2559,12 +3258,14 @@ function _buildRulePrefill(param, detectedValue, correctValue, note, data) {
 function SignalDiagnosticsPanel({ data, onPropose }) {
   const diag = data?.signal_diagnostics || {};
   const catchlights = diag.catchlights || [];
+  const clSummary = diag.catchlight_summary || {};
   const signals = diag.signals || {};
   const gates = diag.gates || [];
-  // authoritative_pattern is always set on the response (top-level fallback)
+  // authoritative_pattern is the post-resolution pattern (always set).
+  // Skip lighting_inference.pattern — it can disagree with the resolver.
   const finalPattern = diag.final_pattern
-    || data?.lighting_inference?.pattern
     || data?.authoritative_pattern
+    || data?.lighting_inference?.pattern
     || '—';
   const lightInf = data?.lighting_inference || {};
   // Confidence falls back to the guaranteed top-level field
@@ -2582,12 +3283,12 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
   };
 
   const _th = {
-    padding: '4px 10px', fontSize: 11, fontWeight: 700,
+    padding: '6px 12px', fontSize: 12, fontWeight: 700,
     color: C.textSec, textAlign: 'left', borderBottom: `1px solid ${C.border}`,
     background: 'var(--color-surface-raised, #1e293b)',
   };
   const _td = {
-    padding: '4px 10px', fontSize: 12, color: C.text,
+    padding: '6px 12px', fontSize: 13, color: C.text,
     borderBottom: `1px solid ${C.border}`,
   };
 
@@ -2627,19 +3328,29 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
             display: (() => {
               const v = lightInf.key_position_text;
               if (!v || v === '—') return '—';
-              return /^[\d.]+$/.test(String(v).trim()) ? `${v}°` : v;
+              if (v.includes('°')) return v;
+              // Add ° after angle numbers: "30-45 off-axis left" → "30-45° off-axis left"
+              return v.replace(/\b(\d+(?:-\d+)?)\b/g, '$1°');
             })(),
             inputType: 'text' },
           { id: 'confidence',   label: 'Confidence',
-            val: lightInf.pattern_confidence ?? authConfidence,
+            val: authConfidence ?? lightInf.pattern_confidence,
             display: (() => {
-              const c = lightInf.pattern_confidence ?? authConfidence;
+              const c = authConfidence ?? lightInf.pattern_confidence;
               return c != null ? `${(c * 100).toFixed(0)}%` : '—';
             })(),
             inputType: 'number' },
-          { id: 'modifier',     label: 'Modifier',       val: lightInf.modifier_family || '—',
+          { id: 'modifier',     label: 'Modifier',
+            val: lightInf.catchlight_intelligence?.modifier?.label || lightInf.modifier_family || '—',
+            display: (() => {
+              const v = lightInf.catchlight_intelligence?.modifier?.label || lightInf.modifier_family;
+              if (!v) return '—';
+              // Convert machine values (softbox_rect, ring_light) to title case display
+              return v.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            })(),
             inputType: 'text' },
-          { id: 'light_count',  label: 'Light Count',    val: lightInf.light_count ?? '—',
+          { id: 'light_count',  label: 'Light Count',
+            val: lightInf.catchlight_intelligence?.light_count_from_catchlights ?? lightInf.light_count ?? '—',
             inputType: 'number' },
         ];
         return (
@@ -2794,49 +3505,628 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
         );
       })())}
 
-      {/* ── Catchlight Clock Positions ── */}
-      {section(`Catchlights (${catchlights.length} detected)`, (
+      {/* ── Catchlight Intelligence (Layer 0) ── */}
+      {(() => {
+        const intel = lightInf.catchlight_intelligence;
+        if (!intel) return null;
+        const mod = intel.modifier;
+        const pk  = intel.primary_key;
+        if (!mod && !pk) return null;
+
+        // ── Clock-position → SVG coords helper ──
+        const _clockAngle = (pos) => {
+          const h = parseInt((pos || '12').split(' ')[0]) || 12;
+          return ((h / 12) * 2 * Math.PI) - (Math.PI / 2);
+        };
+        const _pt = (pos, r, cx, cy) => {
+          const a = _clockAngle(pos);
+          return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+        };
+
+        // ── Diagram: modifier → distance → combined iris ──
+        const modD = mod?.distance_class || 'standard';
+        const _distLineLen = { proximity: 24, close: 38, standard: 54, far: 68, very_far: 82 };
+        const distLineLen = _distLineLen[modD] || 54;
+
+        const svgW = 200, svgH = 96;
+        const irisR = 26, pupilR = 10;
+        const ecx = svgW - 44;   // iris center x
+        const ecy = svgH / 2;    // iris center y
+
+        const modIconCx = 14, modIconCy = ecy;
+        const lineX1 = modIconCx + 10;
+
+        const _ptAt = (pos, r) => {
+          const a = _clockAngle(pos);
+          return { x: ecx + r * Math.cos(a), y: ecy + r * Math.sin(a) };
+        };
+        const _arcAt = (angle) => {
+          if (angle == null) return null;
+          const r = irisR * 0.6;
+          const sx = ecx, sy = ecy - r;
+          const ex2 = ecx + r * Math.cos(angle), ey2 = ecy + r * Math.sin(angle);
+          const sweep = ((angle + Math.PI / 2) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+          const large = sweep > Math.PI ? 1 : 0;
+          return `M ${sx} ${sy} A ${r} ${r} 0 ${large} 1 ${ex2} ${ey2}`;
+        };
+        const _dotR = (sr) => Math.min(5, Math.max(2, (sr || 0.2) * irisR * 0.85));
+
+        const allCls = intel.catchlights || [];
+        const pkAngle = pk ? _clockAngle(pk.position) : null;
+        const pkHour  = pk ? parseInt((pk.position || '12').split(' ')[0]) || 12 : null;
+        const arcPath = _arcAt(pkAngle);
+
+        // Modifier icon
+        const _modIcon = (type, icx, icy) => {
+          if (type === 'ring_light')
+            return <circle cx={icx} cy={icy} r={7} fill="none"
+              stroke="#FBBF24" strokeWidth="2"/>;
+          if (type === 'strip_box')
+            return <rect x={icx - 3} y={icy - 13} width={6} height={26}
+              fill="#FBBF2425" stroke="#FBBF24" strokeWidth="1.5" rx="1"/>;
+          if (type === 'beauty_dish')
+            return <circle cx={icx} cy={icy} r={8} fill="#FBBF2420"
+              stroke="#FBBF24" strokeWidth="1.5"/>;
+          return <rect x={icx - 8} y={icy - 8} width={16} height={16}
+            fill="#FBBF2420" stroke="#FBBF24" strokeWidth="1.5" rx="1"/>;
+        };
+
+        // Distance tick marks
+        const _distTicks = () => {
+          const segments = { proximity: 1, close: 2, standard: 3, far: 4, very_far: 5 };
+          const n = segments[modD] || 3;
+          return Array.from({ length: n - 1 }, (_, i) => {
+            const tx = lineX1 + ((i + 1) / n) * distLineLen;
+            return <line key={i} x1={tx} y1={ecy - 3} x2={tx} y2={ecy + 3}
+              stroke="#444" strokeWidth="0.75"/>;
+          });
+        };
+
+        return section('Catchlight Intelligence', (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+            {/* ── Photographer read (Layer 0 summary) ── */}
+            {(intel.key_read || intel.fill_read) && (
+              <div style={{
+                background: '#0d1520', border: '1px solid #1e2e40',
+                borderRadius: 8, padding: '12px 16px',
+              }}>
+                {intel.key_read && (
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', lineHeight: 1.6,
+                    marginBottom: intel.fill_read ? 6 : 0 }}>
+                    {intel.key_read}
+                  </div>
+                )}
+                {intel.fill_read && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 13, color: '#7dd3fc', lineHeight: 1.5 }}>
+                      {intel.fill_read}
+                    </div>
+                    {intel.lighting_ratio && (
+                      <div style={{
+                        background: '#0c2340', border: '1px solid #1d4ed8',
+                        borderRadius: 4, padding: '2px 10px',
+                        fontSize: 15, fontWeight: 800, color: '#60a5fa',
+                        fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
+                      }}>
+                        {intel.lighting_ratio}
+                      </div>
+                    )}
+                    {intel.stops_down != null && (
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        ({intel.stops_down} stops)
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!intel.fill_read && intel.light_count_from_catchlights === 1 && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>No fill detected</div>
+                )}
+                <div style={{ fontSize: 10, color: '#2a3a4a', marginTop: 8,
+                  letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  Layer 0 — corneal record
+                </div>
+              </div>
+            )}
+
+            {/* Key light card */}
+            {pk && (
+              <div style={{
+                background: `${C.green}12`, border: `1px solid ${C.green}40`,
+                borderRadius: 6, padding: '12px 14px',
+              }}>
+                <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+
+                  {/* ── Left: iris diagram (fixed width) ── */}
+                  <div style={{ flexShrink: 0, width: 180 }}>
+                    <svg
+                      viewBox={`0 0 ${svgW} ${svgH}`}
+                      preserveAspectRatio="xMidYMid meet"
+                      style={{ display: 'block', width: '100%', height: 'auto' }}>
+
+                      {/* Modifier icon */}
+                      {mod && _modIcon(mod.type, modIconCx, modIconCy)}
+                      {mod && <text x={modIconCx} y={svgH - 3} textAnchor="middle"
+                        fill="#FBBF2470" fontSize="7" fontFamily="var(--font-mono)">mod</text>}
+
+                      {/* Distance line → iris */}
+                      <line x1={lineX1} y1={ecy} x2={ecx - irisR - 4} y2={ecy}
+                        stroke="#2d2d35" strokeWidth="1.5"/>
+                      {_distTicks()}
+                      <text x={lineX1 + distLineLen / 2} y={ecy - 7} textAnchor="middle"
+                        fill="#555" fontSize="7" fontFamily="var(--font-mono)">
+                        {mod?.distance_est_ft || ''}
+                      </text>
+                      <polygon
+                        points={`${ecx - irisR - 4},${ecy} ${ecx - irisR - 9},${ecy - 3} ${ecx - irisR - 9},${ecy + 3}`}
+                        fill="#2d2d35"/>
+
+                      {/* Sclera */}
+                      <circle cx={ecx} cy={ecy} r={irisR + 4} fill="#111" stroke="#222" strokeWidth="1"/>
+                      {/* Iris */}
+                      <circle cx={ecx} cy={ecy} r={irisR} fill="#1a2535" stroke="#2e4a62" strokeWidth="1.5"/>
+                      {/* Pupil */}
+                      <circle cx={ecx} cy={ecy} r={pupilR} fill="#060a0e"/>
+                      {/* 12 o'clock tick */}
+                      <line x1={ecx} y1={ecy - irisR - 4} x2={ecx} y2={ecy - irisR + 2}
+                        stroke="#3a3a3a" strokeWidth="1"/>
+                      <text x={ecx} y={ecy - irisR - 6} textAnchor="middle"
+                        fill="#3a3a3a" fontSize="6" fontFamily="var(--font-mono)">12</text>
+                      {/* Angle arc */}
+                      {arcPath && <path d={arcPath} fill="none" stroke="#4ade8038"
+                        strokeWidth="1" strokeDasharray="2,2"/>}
+                      {/* Center → key direction line */}
+                      {pk && (() => {
+                        const kp = _ptAt(pk.position, irisR * 0.70);
+                        return <line x1={ecx} y1={ecy} x2={kp.x} y2={kp.y}
+                          stroke="#4ade8028" strokeWidth="1"/>;
+                      })()}
+                      {/* Catchlight dots — glow + opacity encode intensity */}
+                      {allCls.map((cl, i) => {
+                        const p = _ptAt(cl.position, irisR * 0.70);
+                        const dr = _dotR(cl.size_ratio);
+                        const color = cl.role === 'key' ? '#4ade80' : '#60a5fa';
+                        const intens = cl.intensity ?? 0.8;
+                        const glowR = dr + 1.5 + intens * 3;
+                        return (<g key={i}>
+                          <circle cx={p.x} cy={p.y} r={glowR} fill={`${color}${Math.round(intens * 30).toString(16).padStart(2,'0')}`}/>
+                          <circle cx={p.x} cy={p.y} r={dr} fill={color} fillOpacity={0.5 + intens * 0.5}/>
+                        </g>);
+                      })}
+                      {/* Hour label at key position */}
+                      {pk && pkHour && (() => {
+                        const lp = _ptAt(pk.position, irisR + 8);
+                        return <text x={lp.x} y={lp.y + 3} textAnchor="middle"
+                          fill="#4ade80" fontSize="7" fontFamily="var(--font-mono)"
+                          fontWeight="700">{pkHour}</text>;
+                      })()}
+                      {/* "combined" label */}
+                      <text x={ecx} y={svgH - 3} textAnchor="middle"
+                        fill="#555" fontSize="7" fontFamily="var(--font-mono)">L+R combined</text>
+
+                      {/* Legend */}
+                      <circle cx={lineX1 + 2} cy={svgH - 10} r={3} fill="#4ade80" fillOpacity="0.9"/>
+                      <text x={lineX1 + 8} y={svgH - 7} fill="#4ade8080" fontSize="6"
+                        fontFamily="var(--font-mono)">key</text>
+                      <circle cx={lineX1 + 30} cy={svgH - 10} r={3} fill="#60a5fa" fillOpacity="0.9"/>
+                      <text x={lineX1 + 36} y={svgH - 7} fill="#60a5fa80" fontSize="6"
+                        fontFamily="var(--font-mono)">fill</text>
+                    </svg>
+                  </div>
+
+                  {/* ── Right: L / R bilateral key stats ── */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {(() => {
+                      const cls = intel.catchlights || [];
+                      const top = (role, eye) => [...cls]
+                        .filter(c => c.role === role && c.eye === eye)
+                        .sort((a, b) => (b.intensity ?? 0) - (a.intensity ?? 0))[0] || null;
+
+                      const lk = top('key', 'left')  || (pk?.eye === 'left'  ? pk : null);
+                      const rk = top('key', 'right') || (pk?.eye === 'right' ? pk : null);
+
+                      const _shapeIcon = (shape) => {
+                        const sh = (shape || '').toLowerCase();
+                        const W = 40, H = 26, ocx = W/2, ocy = H/2, f = '#e2e8f0';
+                        let g = null;
+                        if (sh.includes('ring'))        g = <circle cx={ocx} cy={ocy} r={10} fill="none" stroke={f} strokeWidth={4}/>;
+                        else if (sh.includes('strip'))  g = <rect x={ocx-4} y={2} width={8} height={H-4} rx={2} fill={f}/>;
+                        else if (sh.includes('square')) g = <rect x={ocx-9} y={ocy-9} width={18} height={18} rx={1} fill={f}/>;
+                        else if (sh.includes('rect'))   g = <rect x={3} y={ocy-7} width={W-6} height={14} rx={2} fill={f}/>;
+                        else if (sh.includes('oct')) {
+                          const r=9, pts=Array.from({length:8},(_,i)=>{const a=Math.PI/4*i-Math.PI/8;return `${(ocx+r*Math.cos(a)).toFixed(1)},${(ocy+r*Math.sin(a)).toFixed(1)}`;}).join(' ');
+                          g = <polygon points={pts} fill={f}/>;
+                        } else if (sh.includes('oval') || sh.includes('ellip')) g = <ellipse cx={ocx} cy={ocy} rx={14} ry={9} fill={f}/>;
+                        else if (sh.includes('point') || sh.includes('dot'))   g = <circle cx={ocx} cy={ocy} r={3} fill={f}/>;
+                        else g = <circle cx={ocx} cy={ocy} r={10} fill={f}/>;
+                        return <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{display:'block'}}>
+                          <rect width={W} height={H} rx={3} fill="#0d1520"/>{g}
+                        </svg>;
+                      };
+
+                      const _intensBar = (iv) => {
+                        const barW = 60;
+                        const tickX = Math.max(2, Math.min(barW-2, iv*barW));
+                        const tc = iv > 0.65 ? '#ffffff' : iv > 0.35 ? '#93c5fd' : '#475569';
+                        return <div>
+                          <div style={{fontSize:11,fontWeight:700,fontFamily:'var(--font-mono)',color:C.text,marginBottom:3}}>
+                            {Math.round(iv*100)}%
+                          </div>
+                          <div style={{position:'relative',width:barW,height:7,borderRadius:4,
+                            background:'linear-gradient(to right,#0f1520 0%,#1e3a5f 25%,#475569 55%,#cbd5e1 78%,#ffffff 100%)'}}>
+                            <div style={{position:'absolute',top:-2,width:2,height:11,borderRadius:1,
+                              left:`${tickX-1}px`,background:tc}}/>
+                          </div>
+                          <div style={{display:'flex',justifyContent:'space-between',fontSize:7,color:C.muted,width:barW,marginTop:1}}>
+                            <span>faint</span><span>hot</span>
+                          </div>
+                        </div>;
+                      };
+
+                      const EyeCol = ({ cl, label }) => (
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: C.green,
+                            marginBottom: 10, letterSpacing: '0.06em' }}>
+                            {label}
+                          </div>
+                          {!cl
+                            ? <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic' }}>not detected</div>
+                            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                <div>
+                                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 1 }}>Position</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{cl.position || '—'}</div>
+                                  {cl.quad && <div style={{ fontSize: 10, color: C.textSec, marginTop: 1 }}>{cl.quad.replace(/_/g,' ')}</div>}
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 3 }}>Shape</div>
+                                  {_shapeIcon(cl.shape)}
+                                  <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>{cl.shape || '—'}</div>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 1 }}>Size (ir)</div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: C.text }}>
+                                    {cl.size_ratio != null ? cl.size_ratio.toFixed(3) : '—'}
+                                  </div>
+                                </div>
+                                {cl.intensity != null && (
+                                  <div>
+                                    <div style={{ fontSize: 9, color: C.muted, marginBottom: 3 }}>Brightness</div>
+                                    {_intensBar(cl.intensity)}
+                                  </div>
+                                )}
+                              </div>
+                          }
+                        </div>
+                      );
+
+                      return (
+                        <div style={{ display: 'flex', gap: 0 }}>
+                          <EyeCol cl={lk} label="L EYE · KEY" />
+                          <div style={{ width: 1, background: C.border, margin: '0 16px', flexShrink: 0 }} />
+                          <EyeCol cl={rk} label="R EYE · KEY" />
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                </div>
+              </div>
+            )}
+            {/* Fill card */}
+            {(() => {
+              const fillCls = (intel.catchlights || []).filter(c => c.role === 'fill');
+              if (!fillCls.length) return null;
+              const lf = fillCls.find(c => c.eye === 'left')  || null;
+              const rf = fillCls.find(c => c.eye === 'right') || null;
+              const bilateral = lf && rf;
+              return (
+                <div style={{
+                  background: '#1e3a5f18', border: '1px solid #60a5fa40',
+                  borderRadius: 6, padding: '12px 14px',
+                }}>
+                  <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+
+                    {/* ── Left: fill summary label ── */}
+                    <div style={{ flexShrink: 0, width: 180, paddingTop: 4 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa',
+                        letterSpacing: '0.08em', marginBottom: 8 }}>
+                        FILL LIGHT
+                      </div>
+                      <div style={{ fontSize: 12, color: C.textSec, lineHeight: 1.5 }}>
+                        {intel.fill_source_label || (bilateral ? 'Bilateral fill' : 'Fill detected')}
+                      </div>
+                      {bilateral && (
+                        <div style={{
+                          marginTop: 8, padding: '3px 8px', borderRadius: 4,
+                          background: '#60a5fa20', display: 'inline-block',
+                          fontSize: 10, fontWeight: 700, color: '#60a5fa',
+                        }}>bilateral</div>
+                      )}
+                      {intel.fill_intensity_pct != null && (
+                        <div style={{ marginTop: 10 }}>
+                          <div style={{ fontSize: 9, color: C.muted, marginBottom: 2 }}>Intensity</div>
+                          <div style={{ fontSize: 14, fontWeight: 700,
+                            fontFamily: 'var(--font-mono)', color: '#60a5fa' }}>
+                            {intel.fill_intensity_pct}%
+                          </div>
+                        </div>
+                      )}
+                      {intel.stops_down != null && (
+                        <div style={{ marginTop: 6 }}>
+                          <div style={{ fontSize: 9, color: C.muted, marginBottom: 2 }}>Stops down</div>
+                          <div style={{ fontSize: 13, fontWeight: 700,
+                            fontFamily: 'var(--font-mono)', color: C.text }}>
+                            {intel.stops_down > 0 ? `−${intel.stops_down}` : intel.stops_down}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ── Right: per-eye fill catchlight detail ── */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', gap: 0 }}>
+                        {[{ cl: lf, label: 'L EYE · FILL' }, { cl: rf, label: 'R EYE · FILL' }].map(({ cl, label }, idx) => (
+                          <React.Fragment key={label}>
+                            {idx > 0 && <div style={{ width: 1, background: C.border, margin: '0 16px', flexShrink: 0 }} />}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: '#60a5fa',
+                                marginBottom: 10, letterSpacing: '0.06em' }}>{label}</div>
+                              {!cl
+                                ? <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic' }}>not detected</div>
+                                : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <div>
+                                      <div style={{ fontSize: 9, color: C.muted, marginBottom: 1 }}>Position</div>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{cl.position || '—'}</div>
+                                      {cl.quad && <div style={{ fontSize: 10, color: C.textSec }}>{cl.quad.replace(/_/g,' ')}</div>}
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 9, color: C.muted, marginBottom: 1 }}>Shape</div>
+                                      <div style={{ fontSize: 11, color: C.text }}>{cl.shape || '—'}</div>
+                                    </div>
+                                    {cl.intensity != null && (
+                                      <div>
+                                        <div style={{ fontSize: 9, color: C.muted, marginBottom: 1 }}>Brightness</div>
+                                        <div style={{ fontSize: 12, fontWeight: 700,
+                                          fontFamily: 'var(--font-mono)', color: '#60a5fa' }}>
+                                          {Math.round(cl.intensity * 100)}%
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                              }
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Modifier card */}
+            {mod && (
+              <div style={{
+                background: `${C.amber}10`, border: `1px solid ${C.amber}40`,
+                borderRadius: 6, padding: '10px 14px',
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 8 }}>
+
+                  {/* Col 1: Modifier identity */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Modifier</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: C.amber }}>{mod.label}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Likely Size Range</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                        {mod.size_estimate || mod.size_class}
+                      </div>
+                      {mod.size_confidence && (
+                        <div style={{
+                          fontSize: 9, fontWeight: 700, marginTop: 3, padding: '1px 5px',
+                          borderRadius: 3, display: 'inline-block',
+                          background: mod.size_confidence === 'high' ? `${C.green}20`
+                            : mod.size_confidence === 'low' ? '#f8717120' : `${C.amber}20`,
+                          color: mod.size_confidence === 'high' ? C.green
+                            : mod.size_confidence === 'low' ? '#f87171' : C.amber,
+                        }}>
+                          {mod.size_confidence} conf
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Col 2: Measurements */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Working Distance</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: C.amber }}>
+                          {mod.distance_est_ft || '—'}
+                        </div>
+                        {mod.distance_quality && (
+                          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>
+                            {mod.distance_quality}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Angular Area</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: C.text }}>
+                          {mod.total_relative_area?.toFixed(4)}
+                          <span style={{ fontSize: 10, fontWeight: 400, color: C.muted, marginLeft: 3 }}>ir²</span>
+                        </div>
+                        <div style={{ fontSize: 8, color: C.muted, marginTop: 1 }}>Σ(enc_r/iris_r)²</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Used</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: C.text }}>
+                          {mod.contributing_count} of {intel.count ?? mod.contributing_count}
+                        </div>
+                        <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>reflections</div>
+                      </div>
+                    </div>
+                    {(intel.key_intensity_pct != null || intel.fill_intensity_pct != null || intel.lighting_ratio || intel.fill_bilateral) && (
+                      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', paddingTop: 6,
+                        borderTop: `1px solid ${C.amber}20` }}>
+                        {intel.key_intensity_pct != null && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Key %</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: C.green }}>
+                              {intel.key_intensity_pct}%
+                            </div>
+                          </div>
+                        )}
+                        {intel.fill_intensity_pct != null && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Fill %</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#60a5fa' }}>
+                              {intel.fill_intensity_pct}%
+                            </div>
+                          </div>
+                        )}
+                        {intel.lighting_ratio && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Ratio</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, fontFamily: 'var(--font-mono)', color: C.amber }}>
+                              {intel.lighting_ratio}
+                            </div>
+                            {intel.stops_down != null && (
+                              <div style={{ fontSize: 10, color: C.muted }}>{intel.stops_down} stops</div>
+                            )}
+                          </div>
+                        )}
+                        {intel.fill_bilateral && (
+                          <div>
+                            <div style={{ fontSize: 10, color: C.textSec, marginBottom: 2 }}>Fill</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: C.green }}>bilateral</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+                <div style={{ fontSize: 11, color: C.textSec, fontStyle: 'italic', lineHeight: 1.5,
+                  paddingTop: 8, borderTop: `1px solid ${C.amber}20` }}>
+                  {mod.physical_meaning}
+                </div>
+                {mod.size_caveat && (
+                  <div style={{
+                    fontSize: 11, color: '#f87171', marginTop: 6, lineHeight: 1.5,
+                    display: 'flex', gap: 6, alignItems: 'flex-start',
+                  }}>
+                    <span style={{ flexShrink: 0 }}>⚠</span>
+                    <span>{mod.size_caveat}</span>
+                  </div>
+                )}
+                {mod.cluster_meaning && (
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 6, lineHeight: 1.5,
+                    paddingTop: 6, borderTop: `1px solid ${C.amber}20` }}>
+                    {mod.cluster_meaning}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* Intelligence notes */}
+            {intel.notes?.length > 0 && (
+              <div style={{ fontSize: 11, color: C.muted }}>
+                {intel.notes.map((n, i) => <div key={i}>{n}</div>)}
+              </div>
+            )}
+          </div>
+        ));
+      })()}
+
+      {/* ── Catchlight Clock Positions (deduped) ── */}
+      {section(
+        (() => {
+          const base = clSummary.raw_count
+            ? `Catchlights (${clSummary.displayed_count ?? catchlights.length} sources from ${clSummary.raw_count} raw)`
+            : `Catchlights (${catchlights.length} detected)`;
+          const pe = clSummary.per_eye;
+          const eyeStr = pe
+            ? `  ·  L: ${pe.left ?? 0}  R: ${pe.right ?? 0}`
+            : '';
+          return base + eyeStr;
+        })(),
+        (
         catchlights.length === 0
           ? <p style={{ fontSize: 12, color: C.muted }}>No catchlights detected.</p>
-          : (
-            <table style={{ width: '100%', borderCollapse: 'collapse',
-              border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
-              <thead>
-                <tr>
-                  {['Eye', 'Position', 'Hour', 'Quad → Direction', 'Shape', 'Size'].map(h => (
-                    <th key={h} style={_th}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {catchlights.map((cl, i) => {
-                  const isProblematic = cl.quad === 'hard_left' || cl.quad === 'hard_right';
-                  return (
-                    <tr key={i} style={{ background: isProblematic ? '#7c2d1220' : 'transparent' }}>
-                      <td style={_td}>{cl.eye || '—'}</td>
-                      <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 700,
-                        color: isProblematic ? C.amber : C.text }}>
-                        {cl.position || '—'}
-                      </td>
-                      <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>{cl.hour ?? '—'}</td>
-                      <td style={{ ..._td, color: isProblematic ? C.amber : C.text }}>
-                        {quadLabel[cl.quad] || cl.quad || '—'}
-                        {isProblematic && (
-                          <span style={{ fontSize: 10, color: C.amber, marginLeft: 6 }}>
-                            ⚠ jewellery / reflection risk
-                          </span>
-                        )}
-                      </td>
-                      <td style={_td}>{cl.shape || '—'}</td>
-                      <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>
-                        {cl.size_ratio != null ? _toSimpleFraction(cl.size_ratio) : '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )
+          : (<>
+            {clSummary.dedup_note && (
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 8,
+                padding: '4px 8px', background: `${C.border}40`, borderRadius: 4,
+                fontFamily: 'var(--font-mono)' }}>
+                {clSummary.dedup_note}
+                {clSummary.filtered && (
+                  <span style={{ marginLeft: 8, opacity: 0.7 }}>
+                    Filtered: {clSummary.filtered.join(', ')}
+                  </span>
+                )}
+              </div>
+            )}
+            {/* Use intelligence-classified catchlights (key+fill only) when available */}
+            {(() => {
+              const intel = lightInf.catchlight_intelligence;
+              const rows = intel?.catchlights?.length > 0
+                ? intel.catchlights
+                : catchlights;
+              const hasRole = rows.some(r => r.role);
+              const cols = hasRole
+                ? ['Eye', 'Position', 'Role', 'Direction', 'Shape', 'Size (ir)', 'Intensity']
+                : ['Eye', 'Position', 'Hour', 'Direction', 'Shape', 'Size (ir)'];
+              const roleColor = { key: C.green, fill: '#60a5fa', modifier_edge: C.amber };
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse',
+                  border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
+                  <thead>
+                    <tr>{cols.map(h => <th key={h} style={_th}>{h}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((cl, i) => {
+                      const isProblematic = cl.quad === 'hard_left' || cl.quad === 'hard_right';
+                      return (
+                        <tr key={i} style={{ background: isProblematic ? '#7c2d1220' : 'transparent' }}>
+                          <td style={_td}>{cl.eye || '—'}</td>
+                          <td style={{ ..._td, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                            color: isProblematic ? C.amber : C.text }}>
+                            {cl.position || '—'}
+                          </td>
+                          {hasRole
+                            ? <td style={{ ..._td, fontWeight: 700, color: roleColor[cl.role] || C.text, textTransform: 'capitalize' }}>
+                                {cl.role || '—'}
+                              </td>
+                            : <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>{cl.hour ?? '—'}</td>
+                          }
+                          <td style={{ ..._td, color: isProblematic ? C.amber : C.text }}>
+                            {quadLabel[cl.quad] || cl.quad || '—'}
+                            {isProblematic && (
+                              <span style={{ fontSize: 10, color: C.amber, marginLeft: 6 }}>
+                                ⚠ jewellery / reflection risk
+                              </span>
+                            )}
+                          </td>
+                          <td style={_td}>{cl.shape || '—'}</td>
+                          <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>
+                            {cl.size_ratio != null ? cl.size_ratio.toFixed(3) : '—'}
+                          </td>
+                          {hasRole && (
+                            <td style={{ ..._td, fontFamily: 'var(--font-mono)' }}>
+                              {cl.intensity != null ? `${(cl.intensity * 100).toFixed(0)}%` : '—'}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </>)
       ))}
 
       {/* ── Key Signals ── */}
@@ -3104,6 +4394,182 @@ function AcceptablePatternsDropdown({ value, onChange, excludePattern }) {
 }
 
 
+/* ── Observability Panel — L1 signal coverage + decision diagnostics ── */
+function ObservabilityPanel({ data }) {
+  const [open, setOpen] = useState(false);
+  const obs = data?.observability;
+  if (!obs) return null;
+
+  const cov  = obs.signal_coverage || {};
+  const avail = cov.signals_available ?? 0;
+  const total = cov.signals_total ?? 24;
+  const strength = cov.overall_strength ?? 0;
+  const pct = total > 0 ? Math.round((avail / total) * 100) : 0;
+  const weakSig  = cov.weak_signals   || [];
+  const missingSig = cov.missing_signals || [];
+  const edgeCases  = obs.active_edge_cases  || [];
+  const paradoxes  = obs.active_paradoxes   || [];
+  const contradictions = obs.contradictions || [];
+  const ambiguity  = obs.ambiguity_flags    || [];
+  const needsReview = obs.needs_review;
+
+  const hasIssues = needsReview || edgeCases.length > 0 || paradoxes.length > 0 || contradictions.length > 0;
+  const headerColor = hasIssues ? '#FBBF24' : strength >= 0.7 ? '#4ade80' : '#60a5fa';
+
+  const Pill = ({ label, color }) => (
+    <span style={{
+      display: 'inline-block', fontSize: 10, fontWeight: 600,
+      padding: '1px 7px', borderRadius: 4, margin: '2px 3px 2px 0',
+      background: `color-mix(in srgb, ${color} 18%, transparent)`,
+      color,
+    }}>{label}</span>
+  );
+
+  const SectionLabel = ({ children }) => (
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--color-text-dim)', textTransform: 'uppercase', marginTop: 10, marginBottom: 4 }}>
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{
+      marginTop: 8, borderRadius: 8,
+      border: '1px solid var(--color-border)',
+      background: 'var(--color-surface)',
+      overflow: 'hidden',
+    }}>
+      <button
+        onClick={() => setOpen(!open)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '8px 12px', border: 'none', background: 'transparent', cursor: 'pointer',
+          color: 'var(--color-text)', fontSize: 12, fontWeight: 600,
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 13 }}>🔬</span>
+          Analysis Diagnostics
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+            background: `color-mix(in srgb, ${headerColor} 18%, transparent)`,
+            color: headerColor, marginLeft: 4,
+          }}>
+            {avail}/{total} signals · {Math.round(strength * 100)}% strength
+          </span>
+          {needsReview && (
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+              background: 'color-mix(in srgb, #f87171 18%, transparent)', color: '#f87171',
+            }}>
+              needs review
+            </span>
+          )}
+        </span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '4px 12px 12px', fontSize: 12 }}>
+
+          {/* Signal coverage bar */}
+          <SectionLabel>Signal Coverage</SectionLabel>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, height: 8, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{
+                width: `${pct}%`, height: '100%',
+                background: strength >= 0.7 ? '#4ade80' : strength >= 0.4 ? '#FBBF24' : '#f87171',
+                borderRadius: 4, transition: 'width 0.3s ease',
+              }} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
+              {pct}%
+            </span>
+          </div>
+
+          {/* Source + confidence */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+            <span>Pattern: <strong style={{ color: 'var(--color-text)' }}>{obs.pattern}</strong></span>
+            <span>Source: <strong style={{ color: 'var(--color-text)' }}>{obs.source}</strong></span>
+            <span>Confidence: <strong style={{ color: 'var(--color-text)' }}>{Math.round((obs.confidence ?? 0) * 100)}% ({obs.confidence_label})</strong></span>
+          </div>
+
+          {/* Weak signals */}
+          {weakSig.length > 0 && (
+            <>
+              <SectionLabel>Weak Signals</SectionLabel>
+              <div>{weakSig.map(s => <Pill key={s} label={s} color="#FBBF24" />)}</div>
+            </>
+          )}
+
+          {/* Missing signals */}
+          {missingSig.length > 0 && (
+            <>
+              <SectionLabel>Missing Signals</SectionLabel>
+              <div>{missingSig.map(s => <Pill key={s} label={s} color="#f87171" />)}</div>
+            </>
+          )}
+
+          {/* Active edge cases */}
+          {edgeCases.length > 0 && (
+            <>
+              <SectionLabel>Edge Cases</SectionLabel>
+              <div>{edgeCases.map(e => <Pill key={e} label={e.replace(/_/g, ' ')} color="#FBBF24" />)}</div>
+            </>
+          )}
+
+          {/* Paradoxes */}
+          {paradoxes.length > 0 && (
+            <>
+              <SectionLabel>Signal Paradoxes</SectionLabel>
+              <div>{paradoxes.map(p => <Pill key={p} label={p} color="#f87171" />)}</div>
+            </>
+          )}
+
+          {/* Contradictions */}
+          {contradictions.length > 0 && (
+            <>
+              <SectionLabel>Contradictions</SectionLabel>
+              <div>{contradictions.map(c => <Pill key={c} label={c} color="#f87171" />)}</div>
+            </>
+          )}
+
+          {/* Ambiguity flags */}
+          {ambiguity.length > 0 && (
+            <>
+              <SectionLabel>Ambiguity Flags</SectionLabel>
+              <div>{ambiguity.map(a => <Pill key={a} label={a.replace(/_/g, ' ')} color="#60a5fa" />)}</div>
+            </>
+          )}
+
+          {/* Scene mode (Layer 0 pre-read output) */}
+          {obs.mode_flags && (
+            <>
+              <SectionLabel>Scene Mode (Layer 0)</SectionLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {obs.mode_flags.scene_type || 'unknown'}
+                </span>
+                {obs.mode_flags.no_face    && <Pill label="no face"  color="#f87171" />}
+                {obs.mode_flags.is_bw      && <Pill label="B&W"      color="#94a3b8" />}
+                {obs.mode_flags.is_hcg     && <Pill label="HCG"      color="#FBBF24" />}
+                {obs.definitive_pattern    && <Pill label={`stage1: ${obs.definitive_pattern}`} color="#a78bfa" />}
+              </div>
+            </>
+          )}
+
+          {/* All-clear message */}
+          {!hasIssues && weakSig.length === 0 && missingSig.length === 0 && ambiguity.length === 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: '#4ade80' }}>
+              All signals clean — no edge cases, paradoxes, or contradictions detected.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 /* ── Pipeline Timing Panel — collapsible performance breakdown ──────── */
 function PipelineTimingPanel({ data }) {
   const [open, setOpen] = useState(false);
@@ -3202,107 +4668,186 @@ function PipelineTimingPanel({ data }) {
 
 
 function WorkbenchFormatted({ data }) {
+  const li  = data.lighting_inference || {};
+  const intel = li.catchlight_intelligence || null;
+  const mod   = intel?.modifier || null;
+  const pk    = intel?.primary_key || null;
+  const pattern     = data.authoritative_pattern || li.pattern || '—';
+  const confidence  = data.authoritative_confidence ?? li.pattern_confidence;
+  const confLabel   = data.authoritative_confidence_label || '';
+  const confPct     = confidence != null ? `${(confidence * 100).toFixed(0)}%` : '—';
   const desc = data.description || {};
-  const analysis = data.reference_analysis || data.analysis || {};
-  const imageRead = analysis.image_read || desc.referenceAnalysis?.image_read || {};
-  const lightingRead = analysis.lighting_read || desc.referenceAnalysis?.lighting_read || {};
-  const recreationSetup = analysis.recreation_setup || desc.referenceAnalysis?.recreation_setup || {};
+
+  // ── helpers ──
+  const fmt = (v) => !v || v === 'unknown' ? null : v;
+  const fmtPat = (p) => (p || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const C = {
+    green: '#4ade80', amber: '#FBBF24', blue: '#60a5fa',
+    muted: 'var(--color-text-dim)', border: 'var(--color-border)',
+    text: 'var(--color-text)', textSec: 'var(--color-text-secondary)',
+    surface: 'var(--color-surface)',
+  };
+
+  const Row = ({ label, value, mono, color }) => value ? (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+      padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 11, color: C.textSec, flexShrink: 0, marginRight: 12 }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: color || C.text,
+        fontFamily: mono ? 'var(--font-mono)' : undefined, textAlign: 'right' }}>{value}</span>
+    </div>
+  ) : null;
+
+  const Block = ({ title, children, accent }) => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+        color: accent || C.muted, marginBottom: 8 }}>{title}</div>
+      {children}
+    </div>
+  );
 
   return (
-    <div className="lab-formatted">
-      {/* Description */}
-      {desc.subject && (
-        <div className="lab-section">
-          <h4 className="lab-section__title">Description</h4>
-          {typeof desc.subject === 'string' ? (
-            <p className="lab-section__text">{desc.subject}</p>
-          ) : (
-            <div className="ref-analysis">
-              {desc.subject.framing && <AnalysisRow label="Framing" value={desc.subject.framing} />}
-              {desc.subject.pose && <AnalysisRow label="Pose" value={desc.subject.pose} />}
+    <div style={{ padding: '12px 4px', display: 'grid', gap: 4 }}>
+
+      {/* ── Layer 0 photographer read ── */}
+      {(intel?.key_read || intel?.fill_read) && (
+        <div style={{
+          background: '#0d1520', border: '1px solid #1e2e40',
+          borderRadius: 8, padding: '12px 14px', marginBottom: 12,
+        }}>
+          {intel.key_read && (
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0',
+              lineHeight: 1.6, marginBottom: intel.fill_read ? 6 : 0 }}>
+              {intel.key_read}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Narrative */}
-      {imageRead.narrative && (
-        <div className="lab-section">
-          <h4 className="lab-section__title">Narrative</h4>
-          <p className="lab-section__text">{imageRead.narrative}</p>
-        </div>
-      )}
-
-      {/* Lighting */}
-      {Object.keys(lightingRead).length > 0 && (
-        <div className="lab-section">
-          <h4 className="lab-section__title">Lighting</h4>
-          <div className="ref-analysis">
-            {lightingRead.lighting_family && lightingRead.lighting_family !== 'unknown' && (
-              <AnalysisRow label="Family" value={lightingRead.lighting_family.replace(/[-_]/g, ' ')} />
-            )}
-            {lightingRead.source_quality && lightingRead.source_quality !== 'unknown' && (
-              <AnalysisRow label="Quality" value={lightingRead.source_quality} capitalize />
-            )}
-            {lightingRead.source_direction && lightingRead.source_direction !== 'unknown' && (
-              <AnalysisRow label="Direction" value={lightingRead.source_direction} />
-            )}
-            {lightingRead.shadow_pattern && lightingRead.shadow_pattern !== 'unknown' && (
-              <AnalysisRow label="Shadow" value={lightingRead.shadow_pattern} capitalize />
-            )}
-            {lightingRead.fill_presence && lightingRead.fill_presence !== 'unknown' && (
-              <AnalysisRow label="Fill" value={lightingRead.fill_presence} capitalize />
-            )}
-            {lightingRead.rim_presence && lightingRead.rim_presence !== 'unknown' && (
-              <AnalysisRow label="Rim" value={lightingRead.rim_presence} capitalize />
-            )}
-            {typeof lightingRead.light_count === 'number' && lightingRead.light_count > 0 && (
-              <AnalysisRow label="Lights" value={String(lightingRead.light_count)} />
-            )}
-          </div>
-          {lightingRead.key_observations?.length > 0 && (
-            <ul className="lab-section__notes">
-              {lightingRead.key_observations.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
+          {intel.fill_read && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 13, color: '#7dd3fc' }}>{intel.fill_read}</div>
+              {intel.lighting_ratio && (
+                <div style={{
+                  background: '#0c2340', border: '1px solid #1d4ed8',
+                  borderRadius: 4, padding: '2px 10px',
+                  fontSize: 15, fontWeight: 800, color: C.blue,
+                  fontFamily: 'var(--font-mono)',
+                }}>{intel.lighting_ratio}</div>
+              )}
+            </div>
           )}
-        </div>
-      )}
-
-      {/* Recreation Setup */}
-      {Object.keys(recreationSetup).length > 0 && (
-        <div className="lab-section">
-          <h4 className="lab-section__title">Recreation Setup</h4>
-          <div className="ref-analysis">
-            {recreationSetup.setup_family && recreationSetup.setup_family !== 'unknown' && (
-              <AnalysisRow label="Style" value={recreationSetup.setup_family.replace(/[-_]/g, ' ')} capitalize />
-            )}
-            {recreationSetup.modifier_suggestion && recreationSetup.modifier_suggestion !== 'unknown' && (
-              <AnalysisRow label="Modifier" value={recreationSetup.modifier_suggestion} />
-            )}
-            {recreationSetup.key_placement && (
-              <AnalysisRow label="Key Placement" value={recreationSetup.key_placement} />
-            )}
-            {recreationSetup.fill_strategy && (
-              <AnalysisRow label="Fill Strategy" value={recreationSetup.fill_strategy} />
-            )}
-            {recreationSetup.background_strategy && (
-              <AnalysisRow label="Background" value={recreationSetup.background_strategy} />
-            )}
-          </div>
-          {recreationSetup.setup_notes?.length > 0 && (
-            <ul className="lab-section__notes">
-              {recreationSetup.setup_notes.map((n, i) => <li key={i}>{n}</li>)}
-            </ul>
+          {!intel.fill_read && intel.light_count_from_catchlights === 1 && (
+            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>No fill detected</div>
           )}
+          <div style={{ fontSize: 10, color: '#2a3a4a', marginTop: 8,
+            letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Layer 0 — corneal record
+          </div>
         </div>
       )}
 
-      {/* Full analysis fallback if nothing structured */}
-      {!desc.subject && Object.keys(lightingRead).length === 0 && Object.keys(recreationSetup).length === 0 && (
-        <div className="lab-section">
-          <h4 className="lab-section__title">Analysis Output</h4>
-          <JsonTree data={data} />
-        </div>
+      {/* ── Pattern ── */}
+      <Block title="Pattern" accent={C.green}>
+        <Row label="Detected" value={fmtPat(pattern)} color={C.green} />
+        <Row label="Confidence" value={`${confPct}${confLabel ? '  ' + confLabel : ''}`} mono />
+        {fmt(data.source_context) && (
+          <Row label="Source Context" value={fmtPat(data.source_context)} />
+        )}
+        {fmt(li.key_position_text) && (
+          <Row label="Key Position" value={li.key_position_text.includes('°')
+            ? li.key_position_text
+            : li.key_position_text.replace(/\b(\d+(?:-\d+)?)\b/g, '$1°')} />
+        )}
+        {fmt(li.key_side) && li.key_side !== 'unknown' && (
+          <Row label="Key Side" value={li.key_side} />
+        )}
+      </Block>
+
+      {/* ── Modifier (Layer 0) ── */}
+      {mod && (
+        <Block title="Modifier" accent={C.amber}>
+          <Row label="Type" value={mod.label} color={C.amber} />
+          <Row label="Size" value={mod.size_estimate
+            ? `${mod.size_estimate}${mod.size_confidence ? '  (' + mod.size_confidence + ' conf)' : ''}`
+            : mod.size_class}
+            color={mod.size_confidence === 'low' ? '#f87171' : mod.size_confidence === 'high' ? C.green : undefined}
+          />
+          {mod.size_caveat && (
+            <div style={{ fontSize: 11, color: '#f87171', lineHeight: 1.5,
+              padding: '4px 0 4px 4px', display: 'flex', gap: 5 }}>
+              <span>⚠</span><span>{mod.size_caveat}</span>
+            </div>
+          )}
+          <Row label="Working Distance" value={mod.distance_est_ft} color={C.amber} />
+          {mod.distance_quality && <Row label="Distance Quality" value={mod.distance_quality} />}
+          {intel.key_intensity_pct != null && (
+            <Row label="Key Intensity" value={`${intel.key_intensity_pct}%`} mono color={C.green} />
+          )}
+          {intel.fill_intensity_pct != null && (
+            <Row label="Fill Intensity" value={`${intel.fill_intensity_pct}%`} mono color={C.blue} />
+          )}
+          {intel.stops_down != null && (
+            <Row label="Stops Down" value={`${intel.stops_down} stops`} mono />
+          )}
+          {mod.physical_meaning && (
+            <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic',
+              lineHeight: 1.5, paddingTop: 6, marginTop: 4,
+              borderTop: `1px solid ${C.border}` }}>
+              {mod.physical_meaning}
+            </div>
+          )}
+        </Block>
+      )}
+
+      {/* ── Fill & Light Count ── */}
+      <Block title="Fill & Lights">
+        {fmt(li.fill_method_text) && <Row label="Fill Method" value={li.fill_method_text} />}
+        {intel?.fill_source_label && <Row label="Fill Source" value={intel.fill_source_label} />}
+        {intel?.fill_bilateral != null && (
+          <Row label="Fill Bilateral" value={intel.fill_bilateral ? 'Yes' : 'No'}
+            color={intel.fill_bilateral ? C.green : C.muted} />
+        )}
+        {intel?.lighting_ratio && <Row label="Lighting Ratio" value={intel.lighting_ratio} color={C.amber} mono />}
+        <Row label="Light Count" value={String(
+          intel?.light_count_from_catchlights ?? li.light_count ?? '—'
+        )} mono />
+        {li.background_light_detected && (
+          <Row label="Background Light" value={`Yes (${(li.background_light_confidence * 100).toFixed(0)}% conf)`}
+            color={C.amber} />
+        )}
+      </Block>
+
+      {/* ── Technical ── */}
+      <Block title="Technical">
+        {fmt(li.detected_environment) && <Row label="Environment" value={li.detected_environment} />}
+        {li.detected_cct_kelvin && <Row label="CCT" value={`${li.detected_cct_kelvin}K`} mono />}
+        {fmt(li.detected_mood) && (
+          <Row label="Mood" value={`${li.detected_mood}${li.mood_confidence ? '  ' + (li.mood_confidence * 100).toFixed(0) + '%' : ''}`} />
+        )}
+        {fmt(li.detected_skin_tone) && (
+          <Row label="Skin Tone" value={`${li.detected_skin_tone}${li.skin_tone_confidence ? '  ' + (li.skin_tone_confidence * 100).toFixed(0) + '%' : ''}`} />
+        )}
+        {fmt(li.modifier_family) && li.modifier_family !== li.detected_environment && (
+          <Row label="Modifier Family" value={li.modifier_family} />
+        )}
+        {pk && <Row label="Primary Catchlight" value={`${pk.position}  ${pk.shape || ''}  ${pk.eye || ''}`} mono />}
+      </Block>
+
+      {/* ── Notes ── */}
+      {li.notes?.length > 0 && (
+        <Block title="Notes">
+          <ul style={{ margin: 0, paddingLeft: 16 }}>
+            {li.notes.map((n, i) => (
+              <li key={i} style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 2 }}>{n}</li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
+      {/* ── VLM narrative if present ── */}
+      {(data.vlm?.narrative || data.reference_analysis?.image_read?.narrative) && (
+        <Block title="Narrative">
+          <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6, margin: 0 }}>
+            {data.vlm?.narrative || data.reference_analysis?.image_read?.narrative}
+          </p>
+        </Block>
       )}
     </div>
   );
@@ -3435,40 +4980,45 @@ function VlmCvCompare({ data, onAccept }) {
   if (cvDevices)
     rows.push({ section: 'Background', label: 'Visual Devices', cv: cvDevices, vlm: '', path: 'image_read.notable_visual_devices' });
 
-  // ── Lighting ──
-  const cvLightFamily = fmt(lightingRead.lighting_family);
+  // ── Lighting — single truth: data.lighting_inference (post-resolver engine output) ──
+  const cvPattern = fmt(lightingInf.pattern);
   const vlmLighting = fmt(vlm.lighting_style);
-  if (cvLightFamily || vlmLighting)
-    rows.push({ section: 'Lighting', label: 'Lighting Family', cv: cvLightFamily, vlm: vlmLighting, path: 'lighting_read.lighting_family',
-      options: KNOWN_PATTERNS });
+  if (cvPattern || vlmLighting)
+    rows.push({ section: 'Lighting', label: 'Pattern', cv: cvPattern, vlm: vlmLighting,
+      path: 'lighting_read.lighting_family', options: KNOWN_PATTERNS });
 
-  const cvShadowPattern = fmt(lightingRead.shadow_pattern);
-  if (cvShadowPattern)
-    rows.push({ section: 'Lighting', label: 'Shadow Pattern', cv: cvShadowPattern, vlm: '', path: 'lighting_read.shadow_pattern' });
+  const cvPatternConf = lightingInf.pattern_confidence != null
+    ? `${Math.round(lightingInf.pattern_confidence * 100)}%` : '';
+  if (cvPatternConf)
+    rows.push({ section: 'Lighting', label: 'Confidence', cv: cvPatternConf, vlm: '' });
 
-  const cvSourceQuality = fmt(lightingRead.source_quality);
-  if (cvSourceQuality)
-    rows.push({ section: 'Lighting', label: 'Source Quality', cv: cvSourceQuality, vlm: '', path: 'lighting_read.source_quality' });
+  const cvKeyPos = fmt(lightingInf.key_position_text);
+  if (cvKeyPos)
+    rows.push({ section: 'Lighting', label: 'Key Position', cv: cvKeyPos, vlm: '' });
 
-  const cvSourceDir = fmt(lightingRead.source_direction);
-  if (cvSourceDir)
-    rows.push({ section: 'Lighting', label: 'Source Direction', cv: cvSourceDir, vlm: '', path: 'lighting_read.source_direction' });
+  const cvFillMethod = fmt(lightingInf.fill_method_text);
+  if (cvFillMethod)
+    rows.push({ section: 'Lighting', label: 'Fill', cv: cvFillMethod, vlm: '' });
 
-  const cvFill = fmt(lightingRead.fill_presence);
-  if (cvFill)
-    rows.push({ section: 'Lighting', label: 'Fill Presence', cv: cvFill, vlm: '', path: 'lighting_read.fill_presence' });
+  const cvModifier = fmt(lightingInf.modifier_family);
+  if (cvModifier)
+    rows.push({ section: 'Lighting', label: 'Modifier', cv: cvModifier, vlm: '' });
 
-  const cvRim = fmt(lightingRead.rim_presence);
-  if (cvRim)
-    rows.push({ section: 'Lighting', label: 'Rim Presence', cv: cvRim, vlm: '', path: 'lighting_read.rim_presence' });
-
-  const cvLightCount = fmt(lightingRead.light_count);
+  const cvLightCount = fmt(lightingInf.light_count);
   if (cvLightCount)
-    rows.push({ section: 'Lighting', label: 'Light Count', cv: cvLightCount, vlm: '', path: 'lighting_read.light_count' });
+    rows.push({ section: 'Lighting', label: 'Light Count', cv: cvLightCount, vlm: '' });
 
-  const cvKeyObs = fmt((lightingRead.key_observations || []).join(', '));
-  if (cvKeyObs)
-    rows.push({ section: 'Lighting', label: 'Key Observations', cv: cvKeyObs, vlm: '', path: 'lighting_read.key_observations' });
+  const cvEnvironment = fmt(lightingInf.detected_environment);
+  if (cvEnvironment)
+    rows.push({ section: 'Lighting', label: 'Environment', cv: cvEnvironment, vlm: '' });
+
+  const cvCct = lightingInf.detected_cct_kelvin ? `${lightingInf.detected_cct_kelvin}K` : '';
+  if (cvCct)
+    rows.push({ section: 'Lighting', label: 'Color Temp', cv: cvCct, vlm: '' });
+
+  const cvEngineNotes = fmt((lightingInf.notes || []).join(' · '));
+  if (cvEngineNotes)
+    rows.push({ section: 'Lighting', label: 'Engine Notes', cv: cvEngineNotes, vlm: '' });
 
   // ── Classification ──
   if (classification.confidence)
@@ -4673,6 +6223,40 @@ function GoldSetDetail({ entry, onBack, onStatusChange, onDelete, onUpdated }) {
 
 
 /** Gold Set create form */
+const SETUP_FAMILY_OPTIONS = [
+  { value: '',                   label: '— select shooting context —' },
+  { value: 'portrait_classic',   label: 'Classic Portrait' },
+  { value: 'headshot',           label: 'Headshot' },
+  { value: 'dramatic_portrait',  label: 'Dramatic Portrait' },
+  { value: 'beauty',             label: 'Beauty' },
+  { value: 'corporate',          label: 'Corporate' },
+  { value: 'commercial',         label: 'Commercial' },
+  { value: 'fashion_catalog',    label: 'Fashion Catalog' },
+  { value: 'fashion_editorial',  label: 'Fashion Editorial' },
+  { value: 'editorial',          label: 'Editorial' },
+  { value: 'fine_art',           label: 'Fine Art' },
+  { value: 'product_tabletop',   label: 'Product / Tabletop' },
+  { value: 'product_apparel',    label: 'Product / Apparel' },
+  { value: 'bottle_liquid',      label: 'Bottle / Liquid' },
+  { value: 'athletic',           label: 'Athletic' },
+  { value: 'natural_light',      label: 'Natural Light' },
+  { value: 'lifestyle',          label: 'Lifestyle' },
+  { value: 'shaped_light',       label: 'Shaped Light' },
+  { value: 'unknown',            label: 'Unknown' },
+];
+
+const PROVENANCE_OPTIONS = [
+  { value: '',                       label: '— select provenance —' },
+  { value: 'photographer_original',  label: 'Photographer Original' },
+  { value: 'licensed_stock',         label: 'Licensed Stock' },
+  { value: 'public_domain',          label: 'Public Domain' },
+  { value: 'creative_commons',       label: 'Creative Commons' },
+  { value: 'fair_use_reference',     label: 'Fair Use Reference' },
+  { value: 'internal_test',          label: 'Internal Test Asset' },
+  { value: 'synthetic',              label: 'Synthetic / AI Generated' },
+  { value: 'unknown',                label: 'Unknown' },
+];
+
 function GoldSetForm({ onSave, onCancel, prefill }) {
   const fileRef = useRef(null);
   const [imagePath,       setImagePath]       = useState(prefill?.image_path || '');
@@ -4683,6 +6267,8 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
   );
   const [acceptableRaw,   setAcceptableRaw]   = useState('');  // comma-separated pattern names
   const [difficulty,      setDifficulty]      = useState('standard');
+  const [setupFamily,     setSetupFamily]     = useState(prefill?.setup_family || '');
+  const [provenance,      setProvenance]      = useState(prefill?.provenance || '');
   const [analyzeResult,   setAnalyzeResult]   = useState(null);  // full analysis for JSON preview
   const [saving,          setSaving]          = useState(false);
   const [uploading,       setUploading]       = useState(false);
@@ -4734,10 +6320,12 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
         },
       };
       await onSave({
-        image_path:       imagePath,
+        image_path:        imagePath,
         expected_analysis: expectedAnalysis,
         notes:             notes || undefined,
         status:            'draft',
+        setup_family:      setupFamily || undefined,
+        provenance:        provenance || undefined,
       });
     } catch (err) {
       setError(err.message);
@@ -4850,6 +6438,26 @@ function GoldSetForm({ onSave, onCancel, prefill }) {
           <option value="standard">Standard</option>
           <option value="hard">Hard</option>
           <option value="boundary">Boundary case</option>
+        </select>
+      </div>
+
+      {/* Shooting context — SetupFamily */}
+      <div className="lab-form__label">
+        Shooting Context
+        <select value={setupFamily} onChange={e => setSetupFamily(e.target.value)} style={selectStyle}>
+          {SETUP_FAMILY_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Provenance — rights/source tracking (SP-001) */}
+      <div className="lab-form__label">
+        Provenance
+        <select value={provenance} onChange={e => setProvenance(e.target.value)} style={selectStyle}>
+          {PROVENANCE_OPTIONS.map(o => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
         </select>
       </div>
 
@@ -6104,11 +7712,11 @@ function CandidatesTab({ prefill, onPrefillConsumed }) {
 
 const _PC_PATTERNS = [
   'rembrandt','clamshell','loop','shallow_loop','split','butterfly','broad','short',
-  'triangle','rim_only','high_key','low_key','flat_fashion','window_portrait',
-  'golden_hour','overcast_natural','ring_light','bare_bulb_editorial',
+  'triangle','rim','high_key','low_key','flat','window_portrait',
+  'ring_light','bare_bulb_editorial',
   'strip_dramatic','short_fashion_key','soft_editorial_key',
   'editorial_rim_key','tabletop_soft_product','bottle_backlight',
-  'athletic_rim_sculpt','window_negative_fill','gobo_projection','hybrid',
+  'athletic_rim_sculpt','window_negative_fill','projected','silhouette_key','hybrid',
 ];
 
 const _PC_SIGNALS = [
@@ -7082,12 +8690,12 @@ const REF_TIER_FILTERS = ['all', 'gold', 'community', 'synthetic'];
 // Known pattern IDs for the import form dropdown
 const KNOWN_PATTERNS = [
   'rembrandt', 'clamshell', 'loop', 'shallow_loop', 'split', 'butterfly', 'broad', 'short',
-  'triangle', 'rim_only', 'high_key', 'low_key', 'flat_fashion', 'window_portrait',
-  'golden_hour', 'overcast_natural', 'ring_light', 'bare_bulb_editorial',
+  'triangle', 'rim', 'high_key', 'low_key', 'flat', 'window_portrait',
+  'ring_light', 'silhouette_key', 'bare_bulb_editorial',
   'strip_dramatic', 'short_fashion_key', 'soft_editorial_key',
   'window_negative_fill', 'athletic_rim_sculpt',
   'bottle_backlight', 'tabletop_soft_product', 'editorial_rim_key',
-  'gobo_projection', 'hybrid',
+  'projected', 'hybrid',
 ];
 
 function ReferenceDatasetTab() {

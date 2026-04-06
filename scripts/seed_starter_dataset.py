@@ -278,9 +278,9 @@ def build_manifest() -> Dict[str, Any]:
     # Also include core enum patterns
     core_patterns = {
         "clamshell", "loop", "rembrandt", "split", "butterfly", "triangle",
-        "broad", "short", "rim_only", "high_key", "low_key", "flat_fashion",
-        "window_portrait", "golden_hour", "overcast_natural", "ring_light",
-        "gobo", "unknown",
+        "broad", "short", "rim", "high_key", "low_key", "flat",
+        "window_portrait", "ring_light", "silhouette_key", "projected",
+        "unknown",
     }
     all_target = all_canonical | core_patterns
     covered = set(pattern_coverage.keys())
