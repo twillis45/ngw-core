@@ -15,6 +15,7 @@ import OutcomeFeedback from '../components/OutcomeFeedback';
 import ResultCTAGroup from '../components/results/ResultCTAGroup';
 import { BLUEPRINT_BULLETS, CAMERA_BULLETS } from '../data/paywallBullets';
 import { getSessionId } from '../data/flagsStore';
+import { getToken } from '../data/authApi';
 
 // Gate / upgrade components
 import PaywallGate from '../components/PaywallGate';
@@ -1117,7 +1118,7 @@ export default function ResultsScreenV2({ onShare } = {}) {
             // Attribute NAILED_IT to experiment variants
             fetch('/api/paywall/event', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
               credentials: 'include',
               body: JSON.stringify({
                 session_id: getSessionId(),
@@ -1135,7 +1136,7 @@ export default function ResultsScreenV2({ onShare } = {}) {
               const _sq = typeof _sr.overallSignalStrength === 'number' ? _sr.overallSignalStrength : null;
               fetch('/api/intelligence/nailed-it', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
                 credentials: 'include',
                 body: JSON.stringify({
                   session_id: getSessionId(),
@@ -1163,7 +1164,7 @@ export default function ResultsScreenV2({ onShare } = {}) {
               : null;
             fetch('/api/failures/event', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
               credentials: 'include',
               body: JSON.stringify({
                 session_id: getSessionId(),

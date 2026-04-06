@@ -13,6 +13,7 @@ import { useCallback, useMemo, useRef } from 'react';
 import { detectValueState, getSessionCount } from '../engine/valueState.js';
 import { getAdaptivePricing, getSessionMaxPrice } from '../engine/adaptivePricing.js';
 import { getSessionId } from '../data/flagsStore.js';
+import { getToken } from '../data/authApi.js';
 
 /**
  * @param {object}       params
@@ -52,9 +53,10 @@ export function useAdaptivePaywall({
 
   const recordImpression = useCallback(async () => {
     try {
+      const _tk = getToken();
       const resp = await fetch('/api/paywall/impression', {
         method:      'POST',
-        headers:     { 'Content-Type': 'application/json' },
+        headers:     { 'Content-Type': 'application/json', ...(_tk ? { Authorization: `Bearer ${_tk}` } : {}) },
         credentials: 'include',
         body: JSON.stringify({
           value_state:        valueState,
@@ -77,8 +79,10 @@ export function useAdaptivePaywall({
   const recordConverted = useCallback(async () => {
     if (!impressionIdRef.current) return;
     try {
+      const _tk2 = getToken();
       await fetch(`/api/paywall/impression/${impressionIdRef.current}/converted`, {
         method: 'POST', credentials: 'include',
+        headers: _tk2 ? { Authorization: `Bearer ${_tk2}` } : {},
       });
     } catch {}
   }, []);
@@ -86,8 +90,10 @@ export function useAdaptivePaywall({
   const recordDismissed = useCallback(async () => {
     if (!impressionIdRef.current) return;
     try {
+      const _tk3 = getToken();
       await fetch(`/api/paywall/impression/${impressionIdRef.current}/dismissed`, {
         method: 'POST', credentials: 'include',
+        headers: _tk3 ? { Authorization: `Bearer ${_tk3}` } : {},
       });
     } catch {}
   }, []);

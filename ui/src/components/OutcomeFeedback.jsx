@@ -11,6 +11,7 @@
  * - Appears inline so it doesn't interrupt the results view
  */
 import { useState } from 'react';
+import { getToken } from '../data/authApi';
 
 const REASONS = [
   {
@@ -55,7 +56,7 @@ export default function OutcomeFeedback({ failureEventId, sessionId, onDone }) {
 
     fetch('/api/failures/feedback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}) },
       credentials: 'include',
       body: JSON.stringify({
         failure_event_id: failureEventId,

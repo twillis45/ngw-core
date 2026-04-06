@@ -4,6 +4,7 @@
  */
 
 import { getSessionId as _getSessionId } from './flagsStore';
+import { getToken } from './authApi';
 
 /** Re-exported from flagsStore — single source of truth for session ID. */
 export { _getSessionId as getSessionId };
@@ -33,9 +34,10 @@ export function trackEvent(name, data = {}) {
   // Fire-and-forget to server
   try {
     const session_id = _getSessionId();
+    const _tk = getToken();
     fetch('/api/track', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(_tk ? { Authorization: `Bearer ${_tk}` } : {}) },
       body: JSON.stringify({ name, session_id, data }),
       keepalive: true,
     }).catch(() => {});

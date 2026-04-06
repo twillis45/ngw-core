@@ -12,6 +12,7 @@
 
 import { getSessionId, getAllFlags } from './flagsStore';
 import { trackEvent } from './analytics';
+import { getToken } from './authApi';
 
 const EXPOSED_KEY = 'ngw_exp_exposed';
 
@@ -26,9 +27,10 @@ const _exposed = loadExposed();
 
 function post(body) {
   // Fire-and-forget — never block the UI
+  const _tk = getToken();
   fetch('/api/experiments/event', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(_tk ? { Authorization: `Bearer ${_tk}` } : {}) },
     body: JSON.stringify(body),
   }).catch(() => {});
 }

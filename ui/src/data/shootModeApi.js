@@ -4,8 +4,14 @@
  */
 
 import { apiFetch } from '../lib/apiClient';
+import { getToken } from './authApi';
 
 const BASE = '/api';
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 /**
  * Start a shoot mode session — transforms the shoot-match result
@@ -28,7 +34,7 @@ export async function startShootMode(result, ceilingHeight = null, role = 'photo
   }
   const res = await apiFetch(`${BASE}/shoot-mode/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) {
@@ -48,7 +54,7 @@ export async function startShootMode(result, ceilingHeight = null, role = 'photo
 export async function evaluateTestShot(testShotPath, setupId = null) {
   const res = await apiFetch(`${BASE}/shoot-mode/evaluate-test-shot`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ testShotPath, setupId }),
   });
   if (!res.ok) {

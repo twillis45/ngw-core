@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAppState, useDispatch } from '../context/AppContext';
 import ZoomOverlay from '../cards/ZoomOverlay';
 import usePaywall from '../hooks/usePaywall';
+import { getToken } from '../data/authApi';
 
 /**
  * Shot Match — compare a reference image vs user's attempt.
@@ -85,7 +86,8 @@ export default function ShotMatchScreen() {
   async function uploadAndAnalyze(blob, filename) {
     const fd = new FormData();
     fd.append('file', blob, filename);
-    const res = await fetch('/api/upload-reference', { method: 'POST', body: fd });
+    const token = getToken();
+    const res = await fetch('/api/upload-reference', { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: fd });
     if (!res.ok) throw new Error(`Analysis failed (HTTP ${res.status})`);
     return res.json();
   }

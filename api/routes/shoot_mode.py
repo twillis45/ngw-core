@@ -375,11 +375,14 @@ def _is_authorized(user) -> bool:
     if os.getenv("NGW_DEV_MODE", "").strip().lower() in ("1", "true", "yes"):
         return True
     if not user:
+        logger.warning("[shoot-mode] auth failed — no user (JWT missing or invalid)")
         return False
     email = user.get("email", "")
     if email.lower() in get_internal_emails():
         return True
     sub = get_active_subscription(email)
+    if not sub:
+        logger.info("[shoot-mode] auth denied — no subscription for %s", email)
     return sub is not None
 
 

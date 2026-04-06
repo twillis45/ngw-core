@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { getToken } from '../../data/authApi';
 
 const ACTION_COLOR = {
   PROMOTE: 'var(--color-success, #22c55e)',
@@ -128,9 +129,11 @@ export default function ExperimentsPanel({ days = 30 }) {
 
   useEffect(() => {
     setLoading(true);
+    const token = getToken();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     Promise.all([
-      fetch(`/api/experiments/metrics?days=${days}`).then(r => r.json()),
-      fetch(`/api/experiments/candidates?days=${days}`).then(r => r.json()),
+      fetch(`/api/experiments/metrics?days=${days}`, { headers }).then(r => r.json()),
+      fetch(`/api/experiments/candidates?days=${days}`, { headers }).then(r => r.json()),
     ])
       .then(([metricsData, candidatesData]) => {
         setExperiments(metricsData.experiments || []);

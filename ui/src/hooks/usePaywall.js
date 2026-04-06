@@ -139,7 +139,7 @@ export default function usePaywall(userEmail) {
         const params = new URLSearchParams({ stripe_session: stripeSession });
         if (userEmail) params.set('email', userEmail);
         const res = await fetch(`/api/auth/subscription-status?${params}`, {
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           credentials: 'include',
         });
         if (!res.ok) return;
