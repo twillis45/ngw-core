@@ -232,6 +232,31 @@ def _guess_mime(image_path: str) -> str:
     }.get(ext, "image/jpeg")
 
 
+# ── OpenAI Error Code Reference ──────────────────────────────────────────
+#
+#  Code  Meaning                     Retryable?  Action
+#  ────  ──────────────────────────  ──────────  ──────────────────────────────
+#  400   Bad Request / invalid JSON  No          Fix request payload
+#  401   Invalid API key             No          Check OPENAI_API_KEY env var
+#  403   Forbidden / geo-blocked     No          Check account access / region
+#  404   Model not found             No          Check VLM_MODEL env var
+#  409   Conflict (engine overload)  Yes         Retry with backoff
+#  422   Unprocessable (bad params)  No          Fix request params
+#  429   Rate limited (RPM/TPM)      Yes         Retry with backoff; bump tier
+#  500   Server error                Yes         Retry; check status.openai.com
+#  502   Bad gateway                 Yes         Retry
+#  503   Service unavailable         Yes         Retry; check status.openai.com
+#  529   Server overloaded           Yes         Retry with longer backoff
+#
+#  Rate-limit headers returned on 429:
+#    x-ratelimit-limit-requests      — RPM cap for your tier
+#    x-ratelimit-limit-tokens        — TPM cap for your tier
+#    x-ratelimit-remaining-requests  — requests left this window
+#    x-ratelimit-remaining-tokens    — tokens left this window
+#    x-ratelimit-reset-requests      — when request quota resets
+#    x-ratelimit-reset-tokens        — when token quota resets
+#    retry-after                     — seconds to wait before retrying
+#
 # ── Retry helper ─────────────────────────────────────────────────────────
 
 _RETRY_DELAYS = (2, 5, 15)  # seconds between attempts (3 retries = 4 total attempts)
@@ -263,14 +288,46 @@ def _is_auth_error(exc: Exception) -> bool:
     return "401" in str(exc) and ("api key" in str(exc).lower() or "invalid" in str(exc).lower())
 
 
+def _extract_rate_limit_headers(exc: Exception) -> Dict[str, str]:
+    """Pull rate-limit headers from an SDK error response (best-effort)."""
+    headers: Dict[str, str] = {}
+    # OpenAI / Anthropic SDK errors expose .response.headers
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        raw_headers = getattr(resp, "headers", None) or {}
+        for key in (
+            "retry-after",
+            "x-ratelimit-limit-requests",
+            "x-ratelimit-limit-tokens",
+            "x-ratelimit-remaining-requests",
+            "x-ratelimit-remaining-tokens",
+            "x-ratelimit-reset-requests",
+            "x-ratelimit-reset-tokens",
+        ):
+            val = raw_headers.get(key)
+            if val is not None:
+                headers[key] = str(val)
+    return headers
+
+
 def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
     """Call fn(image_path) with exponential back-off on 429 rate-limit errors."""
     last_exc: Exception = RuntimeError("unreachable")
+    t_start = time.perf_counter()
     for attempt, delay in enumerate((*_RETRY_DELAYS, None), start=1):
+        t_attempt = time.perf_counter()
         try:
-            return fn(image_path)
+            result = fn(image_path)
+            elapsed = round(time.perf_counter() - t_attempt, 2)
+            total_elapsed = round(time.perf_counter() - t_start, 2)
+            logger.info(
+                "%s VLM call succeeded — attempt=%d elapsed=%.2fs total=%.2fs",
+                provider_name, attempt, elapsed, total_elapsed,
+            )
+            return result
         except Exception as exc:
             last_exc = exc
+            elapsed = round(time.perf_counter() - t_attempt, 2)
             if _is_auth_error(exc):
                 # Log 401 to DB for health monitoring, then re-raise immediately
                 try:
@@ -289,9 +346,13 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
                 )
                 raise
             elif _is_rate_limit_error(exc) and delay is not None:
+                rl_headers = _extract_rate_limit_headers(exc)
+                rl_detail = " ".join(f"{k}={v}" for k, v in rl_headers.items()) if rl_headers else "no rate-limit headers"
                 logger.warning(
-                    "%s VLM rate-limited (429) on attempt %d — retrying in %ds",
-                    provider_name, attempt, delay,
+                    "%s VLM rate-limited (429) on attempt %d/4 — "
+                    "waited=%.2fs retrying_in=%ds | %s | error: %s",
+                    provider_name, attempt, elapsed, delay,
+                    rl_detail, str(exc)[:300],
                 )
                 try:
                     import sentry_sdk
@@ -303,9 +364,19 @@ def _call_with_retry(fn, image_path: str, provider_name: str) -> Dict[str, Any]:
                     pass
                 time.sleep(delay)
             else:
+                logger.error(
+                    "%s VLM call failed (non-retryable) — attempt=%d elapsed=%.2fs error: %s",
+                    provider_name, attempt, elapsed, str(exc)[:500],
+                )
                 raise
     # All retries exhausted
-    logger.error("%s VLM still rate-limited after %d attempts", provider_name, len(_RETRY_DELAYS) + 1)
+    total_elapsed = round(time.perf_counter() - t_start, 2)
+    rl_headers = _extract_rate_limit_headers(last_exc)
+    rl_detail = " ".join(f"{k}={v}" for k, v in rl_headers.items()) if rl_headers else "no rate-limit headers"
+    logger.error(
+        "%s VLM still rate-limited after %d attempts — total_wait=%.2fs | %s | last_error: %s",
+        provider_name, len(_RETRY_DELAYS) + 1, total_elapsed, rl_detail, str(last_exc)[:500],
+    )
     raise last_exc
 
 
@@ -394,8 +465,14 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
     client = OpenAI()  # uses OPENAI_API_KEY env var
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
+    img_kb = round(len(b64) * 3 / 4 / 1024, 1)  # approx decoded size
+    logger.info(
+        "[vlm:openai] request — model=%s image=%s size=%.1fKB max_tokens=2200 temp=0.2",
+        _VLM_MODEL, Path(image_path).name, img_kb,
+    )
 
     def _do_call(_image_path: str) -> Dict[str, Any]:
+        t0 = time.perf_counter()
         response = client.chat.completions.create(
             model=_VLM_MODEL,
             messages=[
@@ -419,6 +496,21 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
             response_format={"type": "json_object"},
             timeout=30,
         )
+        elapsed = round(time.perf_counter() - t0, 2)
+        # Extract usage stats
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", "?") if usage else "?"
+        completion_tokens = getattr(usage, "completion_tokens", "?") if usage else "?"
+        total_tokens = getattr(usage, "total_tokens", "?") if usage else "?"
+        finish = response.choices[0].finish_reason if response.choices else "?"
+        resp_id = getattr(response, "id", "?")
+        logger.info(
+            "[vlm:openai] response — id=%s elapsed=%.2fs finish=%s "
+            "tokens(prompt=%s completion=%s total=%s) model=%s",
+            resp_id, elapsed, finish,
+            prompt_tokens, completion_tokens, total_tokens,
+            getattr(response, "model", _VLM_MODEL),
+        )
         raw_text = response.choices[0].message.content or "{}"
         return json.loads(raw_text)
 
@@ -439,8 +531,14 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
     client = Anthropic()  # uses ANTHROPIC_API_KEY env var
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
+    img_kb = round(len(b64) * 3 / 4 / 1024, 1)
+    logger.info(
+        "[vlm:anthropic] request — model=%s image=%s size=%.1fKB max_tokens=2200",
+        _VLM_MODEL, Path(image_path).name, img_kb,
+    )
 
     def _do_call(_image_path: str) -> Dict[str, Any]:
+        t0 = time.perf_counter()
         response = client.messages.create(
             model=_VLM_MODEL,
             max_tokens=2200,
@@ -462,6 +560,19 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
                     ],
                 },
             ],
+        )
+        elapsed = round(time.perf_counter() - t0, 2)
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "input_tokens", "?") if usage else "?"
+        output_tokens = getattr(usage, "output_tokens", "?") if usage else "?"
+        stop_reason = getattr(response, "stop_reason", "?")
+        resp_id = getattr(response, "id", "?")
+        logger.info(
+            "[vlm:anthropic] response — id=%s elapsed=%.2fs stop=%s "
+            "tokens(input=%s output=%s) model=%s",
+            resp_id, elapsed, stop_reason,
+            input_tokens, output_tokens,
+            getattr(response, "model", _VLM_MODEL),
         )
         raw_text = response.content[0].text or "{}"
         # Strip markdown fencing if present
