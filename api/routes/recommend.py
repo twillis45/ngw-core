@@ -13,6 +13,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from engine.request_context import set_request_context, clear_request_context
 
 logger = logging.getLogger(__name__)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -153,6 +154,13 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
                 )
     # ─────────────────────────────────────────────────────────────────────────
 
+    # Set request context for log tracing
+    _session_id = (body.get("metadata") or {}).get("session_id", "")
+    set_request_context(
+        user_id=user.get("id") or user.get("sub") if user else None,
+        user_email=user.get("email") if user else None,
+        session_id=_session_id or None,
+    )
     try:
         req = RecommendRequest.model_validate(body)
     except ValidationError as e:
@@ -198,4 +206,5 @@ def recommend(body: Dict[str, Any], user=Depends(get_optional_user)) -> Dict[str
     if result.needs_review:
         response["needsReview"] = True
 
+    clear_request_context()
     return response

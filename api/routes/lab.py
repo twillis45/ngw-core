@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 
 from auth.dev_guard import get_dev_user
 from auth.rate_limit import check_rate_limit
+from engine.request_context import set_request_context, clear_request_context
 from db.database import (
     DATA_DIR,
     get_db,
@@ -160,6 +161,13 @@ async def lab_analyze(
     try:
         from engine.orchestrator import analyze_image
 
+        # Set request context so all downstream log lines include user/session IDs
+        set_request_context(
+            user_id=user.get("id") or user.get("sub"),
+            user_email=user.get("email"),
+            session_id=None,  # Lab workbench has no session_id
+        )
+
         # Generate analysis_id up-front so the client can cancel by id
         analysis_id = uuid.uuid4().hex
         loop = asyncio.get_event_loop()
@@ -188,6 +196,7 @@ async def lab_analyze(
             with _inflight_lock:
                 _inflight.pop(analysis_id, None)
                 _cancelled.discard(analysis_id)
+            clear_request_context()
 
         if not ar.ok:
             raise HTTPException(status_code=500, detail="; ".join(ar.notes))
@@ -2569,16 +2578,75 @@ async def get_server_logs(
     limit: int = Query(200, ge=1, le=1000),
     level: Optional[str] = Query(None),   # DEBUG | INFO | WARNING | ERROR | CRITICAL
     search: Optional[str] = Query(None, max_length=200),
+    user_email: Optional[str] = Query(None, alias="user_email", max_length=200),
+    session_id: Optional[str] = Query(None, alias="session_id", max_length=200),
+    logger_name: Optional[str] = Query(None, alias="logger", max_length=200),
+    since: Optional[float] = Query(None, description="Unix timestamp lower bound"),
+    until: Optional[float] = Query(None, description="Unix timestamp upper bound"),
     user: Dict = Depends(get_dev_user),
 ):
     """Return recent in-process log records from the memory buffer.
 
     Records are newest-first.  The buffer holds the last 1000 lines emitted
     by any logger in the process (noisy HTTP access logs suppressed).
+
+    New filters: user_email, session_id, logger (prefix match), since/until (Unix ts).
     """
     from engine.log_buffer import get_records
-    records = get_records(limit=limit, level=level or None, search=search or None)
+    records = get_records(
+        limit=limit,
+        level=level or None,
+        search=search or None,
+        user_email=user_email or None,
+        session_id=session_id or None,
+        logger_name=logger_name or None,
+        since=since,
+        until=until,
+    )
     return {"records": records, "count": len(records)}
+
+
+@router.get("/server-logs/export")
+async def export_server_logs(
+    level: Optional[str] = Query(None),
+    search: Optional[str] = Query(None, max_length=200),
+    user_email: Optional[str] = Query(None, max_length=200),
+    session_id: Optional[str] = Query(None, max_length=200),
+    logger_name: Optional[str] = Query(None, alias="logger", max_length=200),
+    since: Optional[float] = Query(None),
+    until: Optional[float] = Query(None),
+    user: Dict = Depends(get_dev_user),
+):
+    """Export full log buffer as downloadable JSON (up to 1000 records)."""
+    from engine.log_buffer import get_records
+    records = get_records(
+        limit=1000,
+        level=level or None,
+        search=search or None,
+        user_email=user_email or None,
+        session_id=session_id or None,
+        logger_name=logger_name or None,
+        since=since,
+        until=until,
+    )
+    import io
+    from datetime import datetime, timezone
+    from fastapi.responses import StreamingResponse
+
+    def _generate():
+        yield "[\n"
+        for i, r in enumerate(records):
+            ts_str = datetime.fromtimestamp(r["ts"], tz=timezone.utc).isoformat()
+            line = json.dumps({**r, "ts_iso": ts_str}, default=str)
+            yield ("  " + line + (",\n" if i < len(records) - 1 else "\n"))
+        yield "]\n"
+
+    ts_label = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return StreamingResponse(
+        _generate(),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="ngw_logs_{ts_label}.json"'},
+    )
 
 
 # ── API Metrics ────────────────────────────────────────────────────────────────

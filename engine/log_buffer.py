@@ -39,12 +39,18 @@ class _MemHandler(logging.Handler):
         if record.name in _SUPPRESS:
             return
         try:
+            # Pull request-scoped identifiers from contextvars (if set)
+            from engine.request_context import get_request_context
+            ctx = get_request_context()
             entry = {
                 "ts": record.created,
                 "level": record.levelname,
                 "name": record.name,
                 "msg": record.getMessage(),
                 "exc": self.formatException(record.exc_info) if record.exc_info else None,
+                "user_id": ctx.get("user_id"),
+                "user_email": ctx.get("user_email"),
+                "session_id": ctx.get("session_id"),
             }
             with _lock:
                 _buffer.append(entry)
@@ -70,8 +76,23 @@ def get_records(
     limit: int = 200,
     level: Optional[str] = None,
     search: Optional[str] = None,
+    user_email: Optional[str] = None,
+    session_id: Optional[str] = None,
+    logger_name: Optional[str] = None,
+    since: Optional[float] = None,
+    until: Optional[float] = None,
 ) -> List[dict]:
-    """Return recent log records, newest first."""
+    """Return recent log records, newest first.
+
+    Filters (all optional, combined with AND):
+        level       — exact match (e.g. "ERROR")
+        search      — case-insensitive substring in msg or logger name
+        user_email  — exact match on request context user_email
+        session_id  — exact match on request context session_id
+        logger_name — prefix match (e.g. "engine.vlm" matches "engine.vlm.retry")
+        since       — Unix timestamp lower bound (inclusive)
+        until       — Unix timestamp upper bound (inclusive)
+    """
     with _lock:
         records = list(_buffer)
 
@@ -84,5 +105,20 @@ def get_records(
     if search:
         sl = search.lower()
         records = [r for r in records if sl in r["msg"].lower() or sl in r["name"].lower()]
+
+    if user_email:
+        records = [r for r in records if r.get("user_email") == user_email]
+
+    if session_id:
+        records = [r for r in records if r.get("session_id") == session_id]
+
+    if logger_name:
+        records = [r for r in records if r.get("name", "").startswith(logger_name)]
+
+    if since is not None:
+        records = [r for r in records if r["ts"] >= since]
+
+    if until is not None:
+        records = [r for r in records if r["ts"] <= until]
 
     return records[:limit]

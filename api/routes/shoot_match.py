@@ -22,6 +22,7 @@ from api.utils.upload_naming import canonical_upload_name
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from auth.security import get_current_user
 from auth.rate_limit import check_rate_limit
+from engine.request_context import set_request_context, clear_request_context
 from pydantic import BaseModel, Field
 
 # Service layer — all business logic
@@ -113,6 +114,12 @@ async def upload_reference(
     dest = UPLOAD_DIR / filename
     with open(dest, "wb") as f:
         f.write(content)
+
+    # Set request context for log tracing
+    set_request_context(
+        user_id=user.get("id") or user.get("sub") if user else None,
+        user_email=user.get("email") if user else None,
+    )
 
     analysis = None
     lighting_intel = None
@@ -262,6 +269,8 @@ async def upload_reference(
                     }
     except Exception:
         logger.exception("Reference image analysis failed")
+    finally:
+        clear_request_context()
 
     return {"path": str(dest), "original_filename": original_filename, "analysis": analysis}
 

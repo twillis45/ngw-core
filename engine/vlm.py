@@ -466,14 +466,17 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
     img_kb = round(len(b64) * 3 / 4 / 1024, 1)  # approx decoded size
+    from engine.request_context import get_request_context
+    _ctx = get_request_context()
+    _ctx_tag = "user=%s session=%s" % (_ctx.get("user_email") or "anon", _ctx.get("session_id") or "none")
     logger.info(
-        "[vlm:openai] request — model=%s image=%s size=%.1fKB max_tokens=2200 temp=0.2",
-        _VLM_MODEL, Path(image_path).name, img_kb,
+        "[vlm:openai] request — model=%s image=%s size=%.1fKB max_tokens=2200 temp=0.2 | %s",
+        _VLM_MODEL, Path(image_path).name, img_kb, _ctx_tag,
     )
 
     def _do_call(_image_path: str) -> Dict[str, Any]:
         t0 = time.perf_counter()
-        response = client.chat.completions.create(
+        response = client.chat.completions.create(  # noqa: E501
             model=_VLM_MODEL,
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
@@ -532,9 +535,12 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
     b64 = _encode_image_base64(image_path)
     mime = _guess_mime(image_path)
     img_kb = round(len(b64) * 3 / 4 / 1024, 1)
+    from engine.request_context import get_request_context
+    _ctx = get_request_context()
+    _ctx_tag = "user=%s session=%s" % (_ctx.get("user_email") or "anon", _ctx.get("session_id") or "none")
     logger.info(
-        "[vlm:anthropic] request — model=%s image=%s size=%.1fKB max_tokens=2200",
-        _VLM_MODEL, Path(image_path).name, img_kb,
+        "[vlm:anthropic] request — model=%s image=%s size=%.1fKB max_tokens=2200 | %s",
+        _VLM_MODEL, Path(image_path).name, img_kb, _ctx_tag,
     )
 
     def _do_call(_image_path: str) -> Dict[str, Any]:
