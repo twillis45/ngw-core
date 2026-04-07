@@ -133,7 +133,7 @@ class TestPoseCorrectedReconstruction:
         assert result["key_light_angle_deg_raw"] == result["key_light_angle_deg_pose_corrected"]
 
     def test_pose_correction_shifts_angle(self):
-        """With head rotation, corrected angle should differ from raw."""
+        """Face-relative angle: raw == corrected (face is the reference frame)."""
         pose = _mock_pose_solver(head_rotation=25.0, torso_rotation=15.0)
         result = reconstruction_pass(
             shadow=_mock_shadow(vector_deg=90.0),
@@ -142,8 +142,8 @@ class TestPoseCorrectedReconstruction:
         )
         raw = result["key_light_angle_deg_raw"]
         corrected = result["key_light_angle_deg_pose_corrected"]
-        # With head_rot=25, torso_rot=15 → correction ~19.5°
-        assert abs(raw - corrected) > 5.0
+        # Face-surface measurements are already face-relative — no correction
+        assert raw == corrected
         assert result["key_light_angle_deg"] == corrected
 
     def test_no_rotation_no_shift(self):
@@ -226,14 +226,14 @@ class TestPoseCorrectedReconstruction:
         assert result["pose_complexity_score"] == 0.65
 
     def test_highlight_interference_upweights_rolloff(self):
-        """When pose distorts highlights, notes mention upweighting."""
+        """When pose distorts highlights, notes mention interference."""
         pose = _mock_pose_solver(highlight_interference=True)
         result = reconstruction_pass(
             shadow=_mock_shadow(),
             highlight=_mock_highlight(),
             pose_solver=pose,
         )
-        assert any("upweighting" in n for n in result["notes"])
+        assert any("highlight_interference" in n for n in result["notes"])
 
 
 # ═══════════════════════════════════════════════════════════════════════════

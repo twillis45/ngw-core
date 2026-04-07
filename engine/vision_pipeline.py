@@ -521,7 +521,32 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
 
     h, w = img_bgr.shape[:2]
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
-    mp_image = _make_mp_image(img_rgb)
+
+    # ── Face crop strategy ───────────────────────────────────────────────
+    # When a face_box is available from the prior face_detector.tflite run,
+    # crop to the face region before running FaceLandmarker.  Face mesh
+    # models perform better when the face fills more of the input — cropping
+    # removes distracting backgrounds and strong lighting gradients that can
+    # prevent the model from finding landmarks on the full image.
+    # If the crop-based run also fails, fall back to the full image, then to
+    # a face_box geometric estimate (last resort).
+    _lm_crop_x0, _lm_crop_y0 = 0, 0
+    _lm_cw, _lm_ch = w, h
+
+    if face_box is not None:
+        _pad = 0.20                          # 20% padding on each side
+        _fb_x0, _fb_y0, _fb_x1, _fb_y1 = face_box
+        _fb_w = _fb_x1 - _fb_x0
+        _fb_h = _fb_y1 - _fb_y0
+        _lm_crop_x0 = max(0, _fb_x0 - int(_fb_w * _pad))
+        _lm_crop_y0 = max(0, _fb_y0 - int(_fb_h * _pad))
+        _lm_crop_x1 = min(w, _fb_x1 + int(_fb_w * _pad))
+        _lm_crop_y1 = min(h, _fb_y1 + int(_fb_h * _pad))
+        _img_for_lm = img_rgb[_lm_crop_y0:_lm_crop_y1, _lm_crop_x0:_lm_crop_x1]
+        _lm_cw = _lm_crop_x1 - _lm_crop_x0
+        _lm_ch = _lm_crop_y1 - _lm_crop_y0
+    else:
+        _img_for_lm = img_rgb
 
     opts = mp.tasks.vision.FaceLandmarkerOptions(
         base_options=mp.tasks.BaseOptions(
@@ -530,58 +555,97 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         ),
         running_mode=mp.tasks.vision.RunningMode.IMAGE,
         num_faces=1,
+        # Lower threshold so strong frontal lighting (e.g. Hurley triangle)
+        # doesn't wash out face gradients below the default 0.5 cutoff.
+        min_face_detection_confidence=0.3,
     )
-    landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(opts)
-    try:
-        res = landmarker.detect(mp_image)
-    finally:
-        landmarker.close()
 
+    def _run_landmarker(mp_img) -> Any:
+        lmk = mp.tasks.vision.FaceLandmarker.create_from_options(opts)
+        try:
+            return lmk.detect(mp_img)
+        finally:
+            lmk.close()
+
+    res = _run_landmarker(_make_mp_image(_img_for_lm))
+
+    # If the face-crop run failed and we used a crop, try the full image
+    if not res.face_landmarks and face_box is not None:
+        _vp_logger.info(
+            "[catchlights] FaceLandmarker failed on face crop — retrying full image"
+        )
+        res = _run_landmarker(_make_mp_image(img_rgb))
+        _lm_crop_x0, _lm_crop_y0 = 0, 0
+        _lm_cw, _lm_ch = w, h
+
+    _estimated_geometry = False
     if not res.face_landmarks:
-        return {"ok": False, "reason": "no_face_mesh_detected"}
+        # Both attempts failed.  If we have a face_box, use anthropometric
+        # proportions to estimate iris centers so analyze_eye() can still run.
+        if face_box is None:
+            return {"ok": False, "reason": "no_face_mesh_detected"}
+        fb_x0, fb_y0, fb_x1, fb_y1 = face_box
+        fb_w = max(fb_x1 - fb_x0, 1)
+        fb_h = max(fb_y1 - fb_y0, 1)
+        _est_r        = max(fb_w * 0.075, 8.0)
+        _est_eye_y    = float(fb_y0 + fb_h * 0.40)
+        left_center   = (float(fb_x0 + fb_w * 0.30), _est_eye_y)
+        right_center  = (float(fb_x0 + fb_w * 0.70), _est_eye_y)
+        left_r        = _est_r
+        right_r       = _est_r
+        _left_open    = True
+        _right_open   = True
+        _face_yaw     = 0.0
+        _estimated_geometry = True
+        _vp_logger.info(
+            "[catchlights] FaceLandmarker found no landmarks (both attempts) — "
+            "falling back to face_box iris estimation (fb=%s)", face_box
+        )
+    else:
+        lm = res.face_landmarks[0]
 
-    lm = res.face_landmarks[0]
+        def px(idx: int) -> Tuple[float, float]:
+            # Remap from crop-relative normalized coords to full-image pixels.
+            return (lm[idx].x * _lm_cw + _lm_crop_x0,
+                    lm[idx].y * _lm_ch + _lm_crop_y0)
 
-    def px(idx: int) -> Tuple[float, float]:
-        return lm[idx].x * w, lm[idx].y * h
+        # Iris landmarks: left 468-472 (468=center), right 473-477 (473=center)
+        left_center = px(468)
+        right_center = px(473)
 
-    # Iris landmarks: left 468-472 (468=center), right 473-477 (473=center)
-    left_center = px(468)
-    right_center = px(473)
+        # Estimate iris radius from ring landmarks
+        def iris_radius(center_idx: int, ring_indices: list) -> float:
+            cx, cy = px(center_idx)
+            dists = [math.hypot(px(i)[0] - cx, px(i)[1] - cy) for i in ring_indices]
+            return max(np.mean(dists), 3.0)
 
-    # Estimate iris radius from ring landmarks
-    def iris_radius(center_idx: int, ring_indices: list) -> float:
-        cx, cy = px(center_idx)
-        dists = [math.hypot(px(i)[0] - cx, px(i)[1] - cy) for i in ring_indices]
-        return max(np.mean(dists), 3.0)
+        left_r = iris_radius(468, [469, 470, 471, 472])
+        right_r = iris_radius(473, [474, 475, 476, 477])
 
-    left_r = iris_radius(468, [469, 470, 471, 472])
-    right_r = iris_radius(473, [474, 475, 476, 477])
+        # ── Eye-open check ─────────────────────────────────────────────────
+        # MediaPipe places iris landmarks even for CLOSED eyes. When eyes are
+        # closed, the eyelid skin and makeup create specular highlights in the
+        # iris crop region that the algorithm incorrectly registers as catchlights.
+        #
+        # Detect eye-open state by measuring the vertical aperture between upper
+        # and lower eyelid landmarks relative to iris radius:
+        #   Left eye:  upper mid=159, lower mid=145
+        #   Right eye: upper mid=386, lower mid=374
+        # If aperture < EYE_OPEN_RATIO × iris_radius, skip that eye.
+        #
+        # Threshold: 0.35 × iris_radius. Open iris aperture is typically
+        # 0.8–1.2 × iris_radius; squinting is 0.4–0.6; closed is <0.3.
+        _EYE_OPEN_RATIO = 0.35
 
-    # ── Eye-open check ───────────────────────────────────────────────────
-    # MediaPipe places iris landmarks even for CLOSED eyes. When eyes are
-    # closed, the eyelid skin and makeup create specular highlights in the
-    # iris crop region that the algorithm incorrectly registers as catchlights.
-    #
-    # Detect eye-open state by measuring the vertical aperture between upper
-    # and lower eyelid landmarks relative to iris radius:
-    #   Left eye:  upper mid=159, lower mid=145
-    #   Right eye: upper mid=386, lower mid=374
-    # If aperture < EYE_OPEN_RATIO × iris_radius, skip that eye.
-    #
-    # Threshold: 0.35 × iris_radius. Open iris aperture is typically
-    # 0.8–1.2 × iris_radius; squinting is 0.4–0.6; closed is <0.3.
-    _EYE_OPEN_RATIO = 0.35
+        def _eye_is_open(upper_idx: int, lower_idx: int, iris_r: float) -> bool:
+            """Return True if the eye aperture suggests the eye is open."""
+            _, uy = px(upper_idx)
+            _, ly = px(lower_idx)
+            aperture = abs(ly - uy)
+            return aperture >= _EYE_OPEN_RATIO * iris_r
 
-    def _eye_is_open(upper_idx: int, lower_idx: int, iris_r: float) -> bool:
-        """Return True if the eye aperture suggests the eye is open."""
-        _, uy = px(upper_idx)
-        _, ly = px(lower_idx)
-        aperture = abs(ly - uy)
-        return aperture >= _EYE_OPEN_RATIO * iris_r
-
-    _left_open = _eye_is_open(159, 145, left_r)
-    _right_open = _eye_is_open(386, 374, right_r)
+        _left_open = _eye_is_open(159, 145, left_r)
+        _right_open = _eye_is_open(386, 374, right_r)
 
     def clock_position(dx: float, dy: float) -> str:
         angle_rad = math.atan2(-dy, dx)  # negate dy (image y-axis inverted)
@@ -781,11 +845,13 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     if _upper_cls and _lower_cls:
         # Keep lower catchlights that look like fill lights (5-7 o'clock).
         # Drop everything at 4 and 8 o'clock — these are costume/eyelash artifacts.
-        _max_upper_int = max((c.get("intensity", 0) for c in _upper_cls), default=0)
         _kept_lower = []
         for c in _lower_cls:
-            c_int = c.get("intensity", 0)
-            if _is_fill_candidate(c) and (_max_upper_int == 0 or c_int >= _max_upper_int * 0.35):
+            # 5-7 o'clock fill zone: always keep when upper catchlights are present.
+            # A horizontal tube/strip below the face produces a legitimate lower
+            # catchlight (Hurley triangle fill) — the fill is intentionally dimmer
+            # than the key lights, so an intensity gate would filter it out.
+            if _is_fill_candidate(c):
                 c["fill_candidate"] = True
                 _kept_lower.append(c)
         all_catchlights = _upper_cls + _kept_lower
@@ -799,39 +865,41 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         left_catchlights  = []
         right_catchlights = []
 
-    # ── Face yaw estimation from landmark geometry ────────────────────
-    # Compare the distance from nose tip to left vs right face edges.
-    # A face turned right (nose toward camera-right) shows more of the
-    # left face → nose-to-left-edge > nose-to-right-edge → positive yaw.
-    # Yaw is in [-1, 1]: negative = turned left, positive = turned right,
-    # ~0 = facing camera.
-    _nose_tip = px(1)          # nose tip
-    _left_edge = px(234)       # left face contour
-    _right_edge = px(454)      # right face contour
-    _nose_to_left = math.hypot(_nose_tip[0] - _left_edge[0], _nose_tip[1] - _left_edge[1])
-    _nose_to_right = math.hypot(_nose_tip[0] - _right_edge[0], _nose_tip[1] - _right_edge[1])
-    _face_width = math.hypot(_left_edge[0] - _right_edge[0], _left_edge[1] - _right_edge[1])
-    if _face_width > 0:
-        # Asymmetry ratio: >0 = turned right, <0 = turned left
-        _face_yaw = round((_nose_to_left - _nose_to_right) / _face_width, 3)
-    else:
-        _face_yaw = 0.0
+    # ── Face yaw + geometry ───────────────────────────────────────────
+    if not _estimated_geometry:
+        # Full landmark path — precise yaw from nose/edge geometry.
+        _nose_tip = px(1)          # nose tip
+        _left_edge = px(234)       # left face contour
+        _right_edge = px(454)      # right face contour
+        _nose_to_left = math.hypot(_nose_tip[0] - _left_edge[0], _nose_tip[1] - _left_edge[1])
+        _nose_to_right = math.hypot(_nose_tip[0] - _right_edge[0], _nose_tip[1] - _right_edge[1])
+        _face_width = math.hypot(_left_edge[0] - _right_edge[0], _left_edge[1] - _right_edge[1])
+        if _face_width > 0:
+            _face_yaw = round((_nose_to_left - _nose_to_right) / _face_width, 3)
+        else:
+            _face_yaw = 0.0
 
-    # ── Extract key face mesh landmarks for camera geometry estimation ──
-    # These are cheap to read (already loaded) and consumed downstream by
-    # camera_geometry_pass in vision_passes.py.
-    _face_geometry = {
-        "forehead_top": px(10),      # top of nose bridge / between eyebrows
-        "nose_bridge": px(6),        # middle of nose bridge
-        "nose_tip": px(1),           # tip of nose
-        "chin": px(152),             # bottom of chin
-        "left_eye_center": left_center,
-        "right_eye_center": right_center,
-        "left_face_edge": px(234),
-        "right_face_edge": px(454),
-        "face_yaw": _face_yaw,
-        "image_size": (w, h),
-    }
+        _face_geometry = {
+            "forehead_top": px(10),
+            "nose_bridge": px(6),
+            "nose_tip": px(1),
+            "chin": px(152),
+            "left_eye_center": left_center,
+            "right_eye_center": right_center,
+            "left_face_edge": px(234),
+            "right_face_edge": px(454),
+            "face_yaw": _face_yaw,
+            "image_size": (w, h),
+        }
+    else:
+        # Estimated from face_box — yaw unknown, geometry approximate.
+        _face_geometry = {
+            "left_eye_center": left_center,
+            "right_eye_center": right_center,
+            "face_yaw": 0.0,
+            "image_size": (w, h),
+            "estimated_from_face_box": True,
+        }
 
     if not all_catchlights:
         return {"ok": True, "count": 0, "catchlights": [], "face_yaw": _face_yaw,

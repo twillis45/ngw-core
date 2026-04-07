@@ -99,10 +99,11 @@ class TestNormalizePatternRescue:
         pc = resolve_pattern_candidates(ar)
         assert pc.authoritative_pattern == "unknown"
 
-    def test_flat_fashion_descriptor_rescues_flat_fashion(self):
-        ar = _make_ar(ref_pattern="editorial flat_fashion with fill", ref_conf=0.65)
+    def test_flat_fashion_descriptor_rescues_flat(self):
+        """flat_fashion is now aliased to 'flat' in _ALIAS_REMAP."""
+        ar = _make_ar(ref_pattern="editorial flat with fill", ref_conf=0.65)
         pc = resolve_pattern_candidates(ar)
-        assert pc.authoritative_pattern == "flat_fashion"
+        assert pc.authoritative_pattern == "flat"
 
     def test_canonical_exact_match_unchanged(self):
         """Exact canonical names must never be mangled."""
@@ -208,15 +209,24 @@ class TestClamshellGuardFromUnknown:
         ar.lighting_intel = intel
 
         # cue_report with highlight_symmetry and light_structure
+        # Use spec lists so getattr(..., default) falls through for unlisted attrs
         cr = MagicMock(spec=["highlight_symmetry", "light_structure"])
         hs = MagicMock()
         hs.vertical_symmetry = vert_sym
+        # _detect_signal_paradoxes reads symmetry_score from highlight_symmetry
+        hs.symmetry_score = 0.5
         cr.highlight_symmetry = hs
 
         ls = MagicMock()
         ls.shadow_density = shadow_density
         ls.left_right_asymmetry = lr_asym
         ls.pattern_name = None
+        # Attributes read by _detect_signal_paradoxes and _apply_signal_confidence
+        ls.triangle_isolation = 0.0
+        ls.nose_shadow_centroid_distance = 0.0
+        ls.nose_shadow_centroid_angle_deg = 0.0
+        ls.highlight_width_ratio = 0.0
+        ls.top_bottom_ratio = 0.0
         cr.light_structure = ls
 
         ar.cue_report = cr

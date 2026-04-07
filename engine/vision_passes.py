@@ -6075,7 +6075,7 @@ def reconstruction_pass(
     #   lr_asym ≈ 0.10–0.18 → loop range (~25–40°)
     #   lr_asym ≈ 0.20–0.35 → broad/short range (~40–55°)
     #   lr_asym ≈ 0.40+     → split territory (~60°+)
-    _ls_for_angle = getattr(getattr(result, "cue_report", None), "light_structure", None) if hasattr(result, "cue_report") else None
+    _ls_for_angle = getattr(getattr(existing_catchlights, "cue_report", None), "light_structure", None) if existing_catchlights is not None and hasattr(existing_catchlights, "cue_report") else None
     _lr_asym_angle = None
     if _ls_for_angle is not None:
         _lra = getattr(_ls_for_angle, "left_right_asymmetry", None)

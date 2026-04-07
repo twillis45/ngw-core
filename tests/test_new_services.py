@@ -289,14 +289,14 @@ class TestBlueprintService:
         result = build_lighting_blueprint(None)
         assert "error" in result or "lights" in result  # either error or valid
 
-    def test_ring_flash_blueprint(self):
-        # No inferred modifier — template default (ring_flash) should be used
+    def test_ring_light_blueprint(self):
+        # No inferred modifier — template default (ring_light) should be used
         li = _StubLightingIntel(pattern="ring", modifier_family=None, modifier_confidence=0.0)
         ar = _StubAnalysisResult(pattern="ring", lighting_intel=li)
         result = build_lighting_blueprint(ar)
         assert result["pattern"] == "ring"
         key = next(l for l in result["lights"] if l["role"] == "key")
-        assert key["modifier"] == "ring_flash"
+        assert key["modifier"] == "ring_light"
 
     def test_window_portrait_blueprint(self):
         # No inferred modifier — template default (window_natural) should be used

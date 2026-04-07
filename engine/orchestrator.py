@@ -401,9 +401,15 @@ def _apply_signal_confidence(
             # upper_right/upper_left is physically consistent with loop (30–45° off-axis)
             # and rules out frontal/on-axis sources.  Not sufficient alone, but a clean
             # non-CV corroboration that doesn't require shadow geometry analysis.
-            if _pk_quad in ("upper_right", "upper_left"):
+            if _pk_quad in ("upper_right", "upper_left") and _has_catchlights:
                 adj += 0.08
                 cues.append("catchlight_off_axis")
+            elif _pk_quad == "top_center" and _has_catchlights:
+                # Loop requires an off-axis key (30–45°). A top_center catchlight means
+                # the key is directly overhead — that's butterfly/clamshell territory.
+                # Loop cannot physically produce a 12 o'clock catchlight.
+                adj -= 0.18
+                cues.append("catchlight_on_axis_blocks_loop")
             # Unilateral cheek shadow: key at 30–45° casts a secondary shadow on
             # the fill-side cheek — physically impossible from a frontal source.
             # The strongest anatomical loop-vs-butterfly discriminator.
@@ -428,7 +434,11 @@ def _apply_signal_confidence(
                     adj += 0.08   # on-axis key confirmed
                     cues.append("catchlight_on_axis")
                 elif _pk_quad in ("upper_right", "upper_left"):
-                    adj -= 0.12   # off-axis key directly contradicts on-axis pattern
+                    # Off-axis catchlight is physically impossible for butterfly/clamshell.
+                    # These patterns require the key directly overhead (12 o'clock).
+                    # A 1-2 or 10-11 o'clock catchlight means the key is off-axis —
+                    # that is the definition of loop/rembrandt, not butterfly.
+                    adj -= 0.25   # hard physical contradiction (was -0.12)
                     cues.append("catchlight_off_axis")
         # Butterfly/clamshell shadow zone check (outside has_catchlights gate — shadow
         # data is always available, independent of catchlight detection).
@@ -801,9 +811,24 @@ def _signal_contradiction_score(
         # Measured: butterfly benchmark ls.pattern_name="butterfly"; weak_catchlight
         # (Rembrandt, key upper-right) ls.pattern_name="loop" (diagonal nose shadow).
         _ls_pat_bfly = getattr(ls, "pattern_name", None)
+        _ci_bfly = getattr(getattr(result, "lighting_intel", None), "catchlight_intelligence", None) or {}
+        _pk_bfly  = (_ci_bfly.get("primary_key") or {}).get("quad", "")
+        _has_cl_bfly = bool(_ci_bfly.get("primary_key"))
         if _ls_pat_bfly in ("loop", "rembrandt", "split"):
-            score += 0.65  # CV shadow geometry explicitly shows directional → not butterfly
-            cues.append("pattern_name")
+            # Guard: if catchlight is confirmed top_center the loop shadow geometry is
+            # likely a low-res artefact — the overhead key is direct evidence of
+            # butterfly/clamshell, not loop.  Suppress the contradiction so we don't
+            # wrongly demote butterfly when the catchlight is on-axis.
+            if not (_has_cl_bfly and _pk_bfly == "top_center"):
+                score += 0.65  # CV shadow geometry explicitly shows directional → not butterfly
+                cues.append("pattern_name")
+        # Off-axis catchlight physically contradicts butterfly.
+        # Butterfly requires a key at 12 o'clock (top_center).  If the primary
+        # catchlight is upper_right or upper_left, the key is clearly off-axis
+        # and cannot produce a butterfly nose shadow.
+        if _has_cl_bfly and _pk_bfly in ("upper_right", "upper_left"):
+            score += 0.25
+            cues.append("catchlight_off_axis_contradiction")
         # Deep shadows (sd > 0.45) combined with a confirmed Rembrandt triangle
         # is a strong contradiction for butterfly: true butterfly images have
         # near-zero shadow density and no directional triangle.
@@ -948,6 +973,18 @@ def _signal_contradiction_score(
             score += 0.35  # whole-face in shadow, symmetric → no key-lit side → not loop
             cues.append("shadow_density")
             cues.append("left_right_asymmetry")
+        # Top-center catchlight physically contradicts loop.
+        # Loop requires an off-axis key (upper-right or upper-left); a confirmed
+        # top_center catchlight means the key is at 12 o'clock — that is butterfly
+        # or clamshell geometry, not loop.  Low-res images can produce noisy
+        # light_structure readings (centroid_diagonal artefact) that label an
+        # overhead-key setup as "loop"; the catchlight position is the ground truth.
+        _ci_loop = getattr(getattr(result, "lighting_intel", None), "catchlight_intelligence", None) or {}
+        _pk_q_loop = (_ci_loop.get("primary_key") or {}).get("quad", "")
+        _has_cl_loop = bool(_ci_loop.get("primary_key"))
+        if _has_cl_loop and _pk_q_loop == "top_center":
+            score += 0.65  # overhead key confirmed → key cannot produce loop nose shadow
+            cues.append("catchlight_on_axis_contradiction")
 
     elif pattern == "broad":
         # Broad = camera-side highlight, wide lit area.
@@ -1409,7 +1446,7 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
         # Canonical rescue: check if any canonical pattern name appears as a
         # whole word in the free-text description.  Catches phrases like
         # "directional rembrandt", "soft clamshell setup", "contrasty loop".
-        # Sort by length descending so "flat_fashion" wins before "flat".
+        # Sort by length descending so longer names win before substrings.
         _padded = f" {low} "
         for _canon in sorted(_CANONICAL - {"unknown"}, key=len, reverse=True):
             _canon_space = _canon.replace("_", " ")
@@ -3012,6 +3049,74 @@ def _stage1_definitive_signatures(result: "AnalysisResult") -> Optional[str]:
         logger.info("[stage1] ring_light — bilateral donut catchlights confirmed")
         return "ring_light"
 
+    # ── Hurley triangle: bilateral upper-left + upper-right + lower catchlights ─
+    # The Hurley triangle setup uses two upper lights (one left, one right of
+    # centre) plus a lower reflector or third light.  Each source leaves its own
+    # distinct catchlight reflection, producing a recognisable 3-point geometry:
+    # upper-left zone (~10-11 o'clock), upper-right zone (~1-2 o'clock), and
+    # lower zone (~5-7 o'clock).
+    #
+    # No single-key setup produces all three zones simultaneously:
+    #  - butterfly/clamshell: upper centre + lower only — no bilateral upper split
+    #  - loop/rembrandt:      one upper lateral + no symmetrical upper opposite
+    #  - ring_light:          donut shape, handled above
+    #
+    # Guard: must see all three zones across the combined bilateral catchlight
+    # data.  A single-eye check is insufficient — one eye may be partially
+    # occluded or angled away.  We check the union of both eyes' clock positions.
+    if result.vision_data:
+        _vd_cl_tri = result.vision_data.get("catchlights", {})
+        _raw_cls_tri = (
+            _vd_cl_tri.get("catchlights") or []
+            if isinstance(_vd_cl_tri, dict) else []
+        )
+        _UPPER_LEFT  = {10, 11}
+        _UPPER_RIGHT = {1, 2}
+        _LOWER_TRI   = {5, 6, 7}
+        _left_hrs, _right_hrs = [], []
+        for _c in _raw_cls_tri:
+            if not isinstance(_c, dict):
+                continue
+            try:
+                _h = int(str(_c.get("position", "")).split()[0])
+            except (ValueError, IndexError):
+                continue
+            if _c.get("eye") == "left":
+                _left_hrs.append(_h)
+            elif _c.get("eye") == "right":
+                _right_hrs.append(_h)
+        _all_hrs = _left_hrs + _right_hrs
+        _has_ul = any(h in _UPPER_LEFT  for h in _all_hrs)
+        _has_ur = any(h in _UPPER_RIGHT for h in _all_hrs)
+        _has_lo = any(h in _LOWER_TRI   for h in _all_hrs)
+        # Both eyes must individually show upper+lower (bilateral confirmation)
+        _left_upper  = any(h in (_UPPER_LEFT | _UPPER_RIGHT | {12}) for h in _left_hrs)
+        _left_lower  = any(h in _LOWER_TRI for h in _left_hrs)
+        _right_upper = any(h in (_UPPER_LEFT | _UPPER_RIGHT | {12}) for h in _right_hrs)
+        _right_lower = any(h in _LOWER_TRI for h in _right_hrs)
+        _bilateral_ok = (_left_upper and _left_lower and _right_upper and _right_lower)
+
+        # Handedness check: in a real Hurley triangle the upper-left key (10-11)
+        # reflects PRIMARILY in the left eye, the upper-right key (1-2) PRIMARILY
+        # in the right eye — they come from two physically separate sources.
+        # A single large loop/butterfly source spanning both zones shows UL
+        # catchlights equally in BOTH eyes (same physical source angle).
+        # Require strict dominance: more UL hits in left than right, and more
+        # UR hits in right than left.
+        _left_ul_n  = sum(1 for h in _left_hrs  if h in _UPPER_LEFT)
+        _right_ul_n = sum(1 for h in _right_hrs if h in _UPPER_LEFT)
+        _left_ur_n  = sum(1 for h in _left_hrs  if h in _UPPER_RIGHT)
+        _right_ur_n = sum(1 for h in _right_hrs if h in _UPPER_RIGHT)
+        _handedness_ok = (_left_ul_n > _right_ul_n) and (_right_ur_n > _left_ur_n)
+
+        if _has_ul and _has_ur and _has_lo and _bilateral_ok and _handedness_ok:
+            logger.info(
+                "[stage1] triangle — bilateral Hurley triangle catchlights: "
+                "UL=%s UR=%s LO=%s left=%s right=%s",
+                _has_ul, _has_ur, _has_lo, _left_hrs, _right_hrs,
+            )
+            return "triangle"
+
     # ── Silhouette key: hard backlight + no catchlights + full face shadow ──
     # Subject positioned between camera and bright background.  Signature:
     # bright background + zero catchlights + shadow_density ≈ 1.0.
@@ -3278,6 +3383,24 @@ def analyze_image(
     except Exception as exc:
         logger.warning("Lighting inference failed: %s", exc)
         result.notes.append(f"lighting_inference skipped: {exc}")
+
+    # ── Definitive-pattern light_count override ───────────────────────
+    # When Stage 1 fired a definitive signature, the authoritative light count
+    # is known from the physical setup, not from catchlight deduplication.
+    # Apply now so all downstream stages see the correct count.
+    _DEFINITIVE_LIGHT_COUNTS = {
+        "ring_light":     1,  # single annular source
+        "silhouette_key": 1,  # single backlight
+        "triangle":       3,  # two upper keys + one lower fill/reflector
+    }
+    if result.definitive_pattern and result.definitive_pattern in _DEFINITIVE_LIGHT_COUNTS:
+        _def_lc = _DEFINITIVE_LIGHT_COUNTS[result.definitive_pattern]
+        if result.lighting_intel is not None:
+            result.lighting_intel.light_count = _def_lc
+        logger.info(
+            "[stage1] light_count forced to %d for definitive pattern '%s'",
+            _def_lc, result.definitive_pattern,
+        )
 
     # ── Layer 2 / Step 4: Cue inference (shadow geometry) ────────────
     # Face-shadow geometry: nose shadow position, direction, shape →
@@ -3600,8 +3723,8 @@ def analyze_image(
         if _corr_pat == "butterfly" and _corr_sd < 0.02 and _corr_lr < 0.02 and _corr_lc > 1:
             result.lighting_intel.light_count = 1
 
-    # ── High-key / flat_fashion catchlight-based light_count floor ────
-    # High-key and flat_fashion setups inherently use multiple lights
+    # ── High-key / flat catchlight-based light_count floor ─────────────
+    # High-key and flat setups inherently use multiple lights
     # (key + fill + background minimum).  When catchlights confirm
     # symmetric multi-source illumination (≥2 per eye), ensure the
     # light_count reflects this even if the lighting_inference under-counted.

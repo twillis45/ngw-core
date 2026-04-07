@@ -795,11 +795,21 @@ export async function getL1Stream(limit = 100, filters = {}) {
 }
 
 /** Fetch recent in-process server log records from the memory buffer. */
-export async function getServerLogs({ limit = 200, level = '', search = '' } = {}) {
+export async function getServerLogs({ limit = 200, level = '', search = '', user_email = '', session_id = '', logger = '', since = '', until = '' } = {}) {
   const qs = new URLSearchParams({ limit });
-  if (level)  qs.set('level',  level);
-  if (search) qs.set('search', search);
+  if (level)        qs.set('level',      level);
+  if (search)       qs.set('search',     search);
+  if (user_email)   qs.set('user_email', user_email);
+  if (session_id)   qs.set('session_id', session_id);
+  if (logger)       qs.set('logger',     logger);
+  if (since)        qs.set('since',      since);
+  if (until)        qs.set('until',      until);
   return labFetch(`/server-logs?${qs}`);
+}
+
+/** Export full server log buffer as downloadable JSON. */
+export async function exportServerLogs() {
+  return labFetch('/server-logs/export');
 }
 
 /** Fetch all diagnostic failure entries, optionally filtered by pattern. */

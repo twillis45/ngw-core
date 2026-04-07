@@ -3425,13 +3425,12 @@ def build_recreation_setup(
                 family = "projected_shadow_pattern"
 
     # Override family when dramatic hard light is inferred.
-    # Only set gobo_projection when the shadow_pattern unambiguously names
-    # gobo as the primary device (starts with "gobo" or "slit").
-    # "gobo" appearing elsewhere in the description (e.g. "no gobo detected")
-    # must not trigger this branch — use a prefix match instead.
+    # Set gobo_projection when shadow_pattern is the canonical "projected"
+    # (normalized from gobo/slit variants) or still carries a descriptive
+    # gobo/slit prefix (pre-normalization paths).
     elif inferred_dramatic_hard and family == "unknown":
         _sp = (getattr(lighting_read, "shadow_pattern", "") or "").lower().strip()
-        if _sp.startswith("gobo") or _sp.startswith("slit"):
+        if _sp == "projected" or _sp.startswith("gobo") or _sp.startswith("slit"):
             family = "gobo_projection"
         else:
             family = "dramatic_chiaroscuro"

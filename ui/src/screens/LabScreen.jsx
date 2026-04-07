@@ -54,6 +54,7 @@ import {
   getL1Stream,
   getDiagnostics,
   getServerLogs,
+  exportServerLogs,
   getAutonomyLog,
   getAutonomyQueue,
   probeApiKey,
@@ -1516,18 +1517,59 @@ function ServerLogsPanel() {
   const [loading, setLoading]   = useState(true);
   const [level, setLevel]       = useState('');
   const [search, setSearch]     = useState('');
+  const [logger, setLogger]     = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [sessionId, setSessionId] = useState('');
+  const [sinceMin, setSinceMin] = useState('');  // minutes ago
+  const [sortAsc, setSortAsc]   = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  function fetch_(opts = { level, search }) {
+  function buildParams() {
+    const p = { level, search, logger, user_email: userEmail, session_id: sessionId };
+    if (sinceMin && !isNaN(Number(sinceMin))) {
+      p.since = String(Date.now() / 1000 - Number(sinceMin) * 60);
+    }
+    return p;
+  }
+
+  function fetch_(override) {
     setLoading(true);
-    getServerLogs({ limit: 300, level: opts.level, search: opts.search })
+    const p = override || buildParams();
+    getServerLogs({ limit: 500, ...p })
       .then(d => { setRecords(d.records || []); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
   }
 
+  function handleExport() {
+    setExporting(true);
+    exportServerLogs()
+      .then(data => {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ngw-server-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      })
+      .catch(e => setError(`Export failed: ${e.message}`))
+      .finally(() => setExporting(false));
+  }
+
+  function handleClear() {
+    setLevel(''); setSearch(''); setLogger(''); setUserEmail(''); setSessionId(''); setSinceMin('');
+    fetch_({ level: '', search: '', logger: '', user_email: '', session_id: '' });
+  }
+
+  const hasFilters = level || search || logger || userEmail || sessionId || sinceMin;
+
   useEffect(() => { fetch_(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { const id = setInterval(() => fetch_(), 10_000); return () => clearInterval(id); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const displayed = sortAsc && records ? [...records].reverse() : records;
   const errorCount = records ? records.filter(r => r.level === 'ERROR' || r.level === 'CRITICAL').length : 0;
+  const warnCount  = records ? records.filter(r => r.level === 'WARNING').length : 0;
 
   return (
     <>
@@ -1535,17 +1577,21 @@ function ServerLogsPanel() {
         <LogSectionLabel>
           Server Logs{records != null ? ` — ${records.length} records` : ''}
           {errorCount > 0 && <LogPill label={`${errorCount} errors`} variant="red" />}
+          {warnCount > 0 && <LogPill label={`${warnCount} warn`} variant="amber" />}
         </LogSectionLabel>
-        <div className="lab-log__header-actions">
+        <div className="lab-log__header-actions" style={{ display: 'flex', gap: 'var(--space-xs)' }}>
+          <ActionBtn label={showFilters ? '▲ Filters' : '▼ Filters'} onClick={() => setShowFilters(!showFilters)} variant={hasFilters ? 'amber' : 'muted'} />
+          <ActionBtn label={sortAsc ? '↑ Oldest' : '↓ Newest'} onClick={() => setSortAsc(!sortAsc)} variant="muted" />
+          <ActionBtn label={exporting ? 'Exporting…' : '⬇ Export'} onClick={handleExport} variant="muted" disabled={exporting} />
           <ActionBtn label="↻ Refresh" onClick={() => fetch_()} variant="blue" />
         </div>
       </div>
 
-      {/* Filter bar */}
-      <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
+      {/* Primary filter bar — always visible */}
+      <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginBottom: 'var(--space-xs)', alignItems: 'center' }}>
         <select
           value={level}
-          onChange={e => { setLevel(e.target.value); fetch_({ level: e.target.value, search }); }}
+          onChange={e => { setLevel(e.target.value); }}
           style={_filterSelectStyle}
         >
           <option value="">All levels</option>
@@ -1560,21 +1606,64 @@ function ServerLogsPanel() {
           placeholder="Search message or logger…"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') fetch_({ level, search: e.target.value }); }}
+          onKeyDown={e => { if (e.key === 'Enter') fetch_(); }}
           style={{ ..._filterInputStyle, flex: '1 1 220px' }}
         />
-        <ActionBtn label="Apply" onClick={() => fetch_({ level, search })} variant="blue" />
-        {(level || search) && <ActionBtn label="Clear" onClick={() => { setLevel(''); setSearch(''); fetch_({ level: '', search: '' }); }} variant="muted" />}
+        <ActionBtn label="Apply" onClick={() => fetch_()} variant="blue" />
+        {hasFilters && <ActionBtn label="Clear" onClick={handleClear} variant="muted" />}
       </div>
 
-      {loading && <LogEmpty msg="Loading…" />}
+      {/* Advanced filters — toggled */}
+      {showFilters && (
+        <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginBottom: 'var(--space-sm)', alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Logger prefix (e.g. engine.vlm)"
+            value={logger}
+            onChange={e => setLogger(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') fetch_(); }}
+            style={{ ..._filterInputStyle, flex: '1 1 160px' }}
+          />
+          <input
+            type="text"
+            placeholder="User email"
+            value={userEmail}
+            onChange={e => setUserEmail(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') fetch_(); }}
+            style={{ ..._filterInputStyle, flex: '1 1 160px' }}
+          />
+          <input
+            type="text"
+            placeholder="Session ID"
+            value={sessionId}
+            onChange={e => setSessionId(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') fetch_(); }}
+            style={{ ..._filterInputStyle, flex: '1 1 140px' }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>Last</span>
+            <input
+              type="number"
+              placeholder="∞"
+              value={sinceMin}
+              onChange={e => setSinceMin(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') fetch_(); }}
+              style={{ ..._filterInputStyle, width: 60, minWidth: 50, flex: '0 0 auto', textAlign: 'center' }}
+            />
+            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>min</span>
+          </div>
+        </div>
+      )}
+
+      {loading && <LogEmpty msg="Loading��" />}
       {!loading && error && <LogEmpty msg={`Error: ${error}`} />}
       {!loading && !error && !records?.length && <LogEmpty msg="No log records in buffer yet — logs accumulate at runtime." />}
-      {!loading && !error && records?.length > 0 && (
+      {!loading && !error && displayed?.length > 0 && (
         <LogCard flush>
-          {records.map((r, i) => {
+          {displayed.map((r, i) => {
             const col = _LEVEL_COLORS[r.level] || 'var(--color-text-secondary)';
             const dt = new Date(r.ts * 1000).toLocaleTimeString(undefined, { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const hasCtx = r.user_email || r.session_id;
             return (
               <div key={i} className="lab-log__row" style={{ alignItems: 'flex-start', padding: '3px var(--space-md)', gap: 'var(--space-sm)', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-2xs)', lineHeight: 1.5 }}>
                 <span style={{ color: 'var(--color-text-dim)', flexShrink: 0, userSelect: 'none' }}>{dt}</span>
@@ -1583,6 +1672,13 @@ function ServerLogsPanel() {
                 <span style={{ color: 'var(--color-text)', wordBreak: 'break-all', flex: 1 }}>
                   {r.msg}
                   {r.exc && <span style={{ display: 'block', color: 'var(--color-status-red)', marginTop: 2, whiteSpace: 'pre-wrap' }}>{r.exc}</span>}
+                  {hasCtx && (
+                    <span style={{ display: 'block', fontSize: 'var(--text-2xs)', color: 'var(--color-text-dim)', marginTop: 1 }}>
+                      {r.user_email && <span title="User">{r.user_email}</span>}
+                      {r.user_email && r.session_id && ' �� '}
+                      {r.session_id && <span title="Session">{r.session_id.slice(0, 12)}</span>}
+                    </span>
+                  )}
                 </span>
               </div>
             );
@@ -3613,16 +3709,16 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                       </div>
                     )}
                     {intel.stops_down != null && (
-                      <div style={{ fontSize: 11, color: C.muted }}>
+                      <div style={{ fontSize: 12, color: C.textSec }}>
                         ({intel.stops_down} stops)
                       </div>
                     )}
                   </div>
                 )}
                 {!intel.fill_read && intel.light_count_from_catchlights === 1 && (
-                  <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>No fill detected</div>
+                  <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>No fill detected</div>
                 )}
-                <div style={{ fontSize: 10, color: '#2a3a4a', marginTop: 8,
+                <div style={{ fontSize: 10, color: '#5a7a9a', marginTop: 8,
                   letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                   Layer 0 — corneal record
                 </div>
@@ -4634,7 +4730,7 @@ function PipelineTimingPanel({ data }) {
             const barColor = t > total * 0.5 ? '#f87171' : t > total * 0.25 ? '#FBBF24' : '#4ade80';
             return (
               <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ width: 130, fontSize: 11, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
+                <span style={{ width: 130, fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                   {icon} {label}
                 </span>
                 <div style={{ flex: 1, height: 10, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 4, overflow: 'hidden' }}>
@@ -4690,8 +4786,8 @@ function WorkbenchFormatted({ data }) {
 
   const Row = ({ label, value, mono, color }) => value ? (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-      padding: '5px 0', borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: 11, color: C.textSec, flexShrink: 0, marginRight: 12 }}>{label}</span>
+      padding: '6px 0', borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 12, color: C.textSec, flexShrink: 0, marginRight: 12 }}>{label}</span>
       <span style={{ fontSize: 13, fontWeight: 600, color: color || C.text,
         fontFamily: mono ? 'var(--font-mono)' : undefined, textAlign: 'right' }}>{value}</span>
     </div>
@@ -4699,8 +4795,8 @@ function WorkbenchFormatted({ data }) {
 
   const Block = ({ title, children, accent }) => (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
-        color: accent || C.muted, marginBottom: 8 }}>{title}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+        color: accent || C.textSec, marginBottom: 8 }}>{title}</div>
       {children}
     </div>
   );
@@ -4734,9 +4830,9 @@ function WorkbenchFormatted({ data }) {
             </div>
           )}
           {!intel.fill_read && intel.light_count_from_catchlights === 1 && (
-            <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>No fill detected</div>
+            <div style={{ fontSize: 12, color: C.textSec, marginTop: 4 }}>No fill detected</div>
           )}
-          <div style={{ fontSize: 10, color: '#2a3a4a', marginTop: 8,
+          <div style={{ fontSize: 10, color: '#5a7a9a', marginTop: 8,
             letterSpacing: '0.06em', textTransform: 'uppercase' }}>
             Layer 0 — corneal record
           </div>
@@ -4770,7 +4866,7 @@ function WorkbenchFormatted({ data }) {
             color={mod.size_confidence === 'low' ? '#f87171' : mod.size_confidence === 'high' ? C.green : undefined}
           />
           {mod.size_caveat && (
-            <div style={{ fontSize: 11, color: '#f87171', lineHeight: 1.5,
+            <div style={{ fontSize: 12, color: '#fca5a5', lineHeight: 1.5,
               padding: '4px 0 4px 4px', display: 'flex', gap: 5 }}>
               <span>⚠</span><span>{mod.size_caveat}</span>
             </div>
@@ -4787,7 +4883,7 @@ function WorkbenchFormatted({ data }) {
             <Row label="Stops Down" value={`${intel.stops_down} stops`} mono />
           )}
           {mod.physical_meaning && (
-            <div style={{ fontSize: 11, color: C.muted, fontStyle: 'italic',
+            <div style={{ fontSize: 12, color: C.textSec, fontStyle: 'italic',
               lineHeight: 1.5, paddingTop: 6, marginTop: 4,
               borderTop: `1px solid ${C.border}` }}>
               {mod.physical_meaning}
@@ -4835,7 +4931,7 @@ function WorkbenchFormatted({ data }) {
         <Block title="Notes">
           <ul style={{ margin: 0, paddingLeft: 16 }}>
             {li.notes.map((n, i) => (
-              <li key={i} style={{ fontSize: 11, color: C.muted, lineHeight: 1.6, marginBottom: 2 }}>{n}</li>
+              <li key={i} style={{ fontSize: 12, color: C.textSec, lineHeight: 1.6, marginBottom: 2 }}>{n}</li>
             ))}
           </ul>
         </Block>
@@ -4844,7 +4940,7 @@ function WorkbenchFormatted({ data }) {
       {/* ── VLM narrative if present ── */}
       {(data.vlm?.narrative || data.reference_analysis?.image_read?.narrative) && (
         <Block title="Narrative">
-          <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6, margin: 0 }}>
+          <p style={{ fontSize: 13, color: C.text, lineHeight: 1.6, margin: 0 }}>
             {data.vlm?.narrative || data.reference_analysis?.image_read?.narrative}
           </p>
         </Block>
