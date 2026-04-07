@@ -318,50 +318,37 @@ def infer_geometry(cue_report: VisualCueReport) -> GeometryInference:
     )
 
 
-# ── HURLEY CATCHLIGHT FUNCTIONS — commented out pending pipeline cleanup ──────
-# These functions rely on 3+ catchlights forming specific geometric patterns,
-# which requires the catchlight pipeline to be clean and reliable.  Re-enable
-# after catchlight consolidation is validated on real images.
-#
-# def _has_triangle_catchlights(cue_report: VisualCueReport) -> bool:
-#     cp = cue_report.catchlight_position
-#     if not cp:
-#         return False
-#     def _is_triangle(positions: list) -> bool:
-#         hours = []
-#         for pos in positions:
-#             try:
-#                 h = int(str(pos).split()[0])
-#                 hours.append(h)
-#             except (ValueError, IndexError):
-#                 continue
-#         upper = [h for h in hours if h in (10, 11, 12, 1, 2)]
-#         lower = [h for h in hours if h in (4, 5, 6, 7, 8)]
-#         return len(set(upper)) >= 2 and len(lower) >= 1
-#     left_ok = _is_triangle(cp.left_eye) if cp.left_eye else False
-#     right_ok = _is_triangle(cp.right_eye) if cp.right_eye else False
-#     return left_ok or right_ok
-#
-# def _has_bilateral_symmetric_catchlights(cue_report: VisualCueReport) -> bool:
-#     cp = cue_report.catchlight_position
-#     if not cp or not cp.left_eye or not cp.right_eye:
-#         return False
-#     def _is_bilateral(positions: list) -> bool:
-#         hours = []
-#         for pos in positions:
-#             try:
-#                 h = int(str(pos).split()[0])
-#                 hours.append(h)
-#             except (ValueError, IndexError):
-#                 continue
-#         if len(hours) < 2:
-#             return False
-#         has_upper_left = any(h in (10, 11) for h in hours)
-#         has_upper_right = any(h in (1, 2) for h in hours)
-#         has_lower = any(h in (4, 5, 6, 7, 8) for h in hours)
-#         return has_upper_left and has_upper_right and not has_lower
-#     return _is_bilateral(cp.left_eye) and _is_bilateral(cp.right_eye)
-# ─────────────────────────────────────────────────────────────────────────────
+def _has_triangle_catchlights(cue_report: VisualCueReport) -> bool:
+    """Return True if catchlight positions show classic triangle formation.
+
+    Classic triangle: ≥2 upper catchlights (10–2 o'clock) AND ≥1 lower
+    catchlight (4–8 o'clock) in at least one eye.
+    """
+    cp = cue_report.catchlight_position
+    if not cp:
+        return False
+
+    def _is_triangle(positions: list) -> bool:
+        hours = []
+        for pos in positions:
+            try:
+                h = int(str(pos).split()[0])
+                hours.append(h)
+            except (ValueError, IndexError):
+                continue
+        # Bilateral requirement: separate flanking keys at upper-left (10-11)
+        # AND upper-right (1-2), plus a lower fill (4-8).  This prevents false
+        # positives from a single soft modifier creating adjacent catchlights
+        # at 10 and 11 o'clock, or a loop+fill combination (single 10 o'clock
+        # key with fill at 6).
+        upper_left  = [h for h in hours if h in (10, 11)]
+        upper_right = [h for h in hours if h in (1, 2)]
+        lower       = [h for h in hours if h in (4, 5, 6, 7, 8)]
+        return len(upper_left) >= 1 and len(upper_right) >= 1 and len(lower) >= 1
+
+    left_ok  = _is_triangle(cp.left_eye)  if cp.left_eye  else False
+    right_ok = _is_triangle(cp.right_eye) if cp.right_eye else False
+    return left_ok or right_ok
 
 
 def _has_clamshell_catchlights(cue_report: VisualCueReport) -> bool:
@@ -432,11 +419,14 @@ def _infer_shadow_pattern(
             face_cr_label = getattr(cr, "face_label", None) if cr else None
             cr_label = (face_cr_label or (cr.label if cr else "unknown")).lower()
             if cr_label in ("low", "medium"):
-                # Triangle geometry gate via catchlights commented out pending
-                # catchlight pipeline consolidation — re-enable once clean.
-                # if _has_triangle_catchlights(cue_report):
-                #     return "triangle"
-                pass
+                # B&W guard: B&W processing compresses tonal range, making
+                # high-contrast portraits appear to have "low" or "medium"
+                # contrast.  Under B&W, the contrast measurement is unreliable
+                # as a triangle gate — skip triangle detection on B&W images.
+                _tp_tri = getattr(cue_report, "tonal_processing_estimation", None)
+                _is_bw_tri = getattr(_tp_tri, "is_bw", False)
+                if not _is_bw_tri and _has_triangle_catchlights(cue_report):
+                    return "triangle"
             # High/extreme contrast with 3+ catchlights per eye →
             # NOT triangle.  Extra catchlights are reflections from
             # glasses, jewellery, or specular skin surfaces.
@@ -788,6 +778,13 @@ def _infer_shadow_pattern(
         if not _is_hcg and sc and sc.confidence > 0.3 and sc.triangle_connected:
             # Shadow continuity confirms triangle — rembrandt even without
             # strong light_structure confidence.
+            return "rembrandt"
+        # High-elevation single-source: prefer rembrandt over loop.
+        # At high key elevation, the nose shadow reaches the cheek even without
+        # explicit shadow_continuity confirmation.  Loop is a shallower-angle
+        # pattern — if the vertical angle is confirmed high and there is only
+        # one light source, rembrandt is the more specific default.
+        if key_height == "high" and light_count <= 1:
             return "rembrandt"
         # No triangle evidence → default to loop (qualified by P6).
         return _p6_qualify_loop(key_direction)

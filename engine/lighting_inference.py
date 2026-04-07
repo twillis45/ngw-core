@@ -116,36 +116,46 @@ def _infer_pattern_from_catchlights(
     left_quads = [_classify_clock(h) for h in left_hours]
     right_quads = [_classify_clock(h) for h in right_hours]
 
-    # ── Triangle: 3 per eye — classic formation only ──
-    # Classic: two upper (10+2 o'clock) + one lower fill (5-7 o'clock)
-    # ── Triangle detection — commented out pending Hurley pipeline cleanup ──────
-    # The "triangle" pattern is Hurley-specific (lateral strip geometry).
-    # A generic 2-upper + 1-lower config is NOT triangle — it's loop/rembrandt
-    # with a fill catchlight.  All triangle detection is gated until the
-    # catchlight pipeline is consolidated and Hurley geometry is re-validated.
-    #
-    # _TRI_VARIANT_CLASSIC = "classic"    # 2 upper + 1 lower (disabled)
-    # _TRI_VARIANT_HURLEY  = "hurley"     # 1 top + 2 lateral (disabled)
-    # _TRI_VARIANT_NONE    = None
-    #
-    # def _triangle_variant(hours, quads): ...  # disabled
-    # left_tri_var  = _triangle_variant(left_hours,  left_quads)
-    # right_tri_var = _triangle_variant(right_hours, right_quads)
-    # if left_tri_var and right_tri_var: return { "pattern": "triangle", ... }
-    # if left_tri_var or  right_tri_var: return { "pattern": "triangle", ... }
+    # ── Triangle: 3 per eye — classic formation (two upper + one lower) ──────
+    # Classic Hurley/triangle: ≥2 upper catchlights (hours 10–2) AND ≥1 lower
+    # catchlight (hours 4–8) per eye.  Requires ≥3 catchlights per eye total.
+    # Both eyes matching → high confidence (0.85); one eye only → reduced (0.60).
+    def _is_triangle_eye(hours: List[int]) -> bool:
+        if len(hours) < 3:
+            return False
+        # Bilateral requirement: one catchlight in the upper-LEFT zone (10-11)
+        # AND one in the upper-RIGHT zone (1-2).  This separates true three-light
+        # triangle geometry (two flanking keys) from a single soft modifier that
+        # creates adjacent catchlights at 10-11 o'clock, or loop+fill combos
+        # with one key at 10 and a lower fill at 6.
+        upper_left  = [h for h in hours if h in (10, 11)]
+        upper_right = [h for h in hours if h in (1, 2)]
+        lower       = [h for h in hours if h in (4, 5, 6, 7, 8)]
+        return len(upper_left) >= 1 and len(upper_right) >= 1 and len(lower) >= 1
 
-    # ── Bilateral symmetric upper keys (classic twin-key, no lower fill resolved) ──
-    # ── Bilateral symmetric upper → triangle — commented out pending Hurley cleanup ──
-    # This path returned "triangle" for twin flanking keys at 10+2 o'clock.
-    # Disabled with the rest of the Hurley detection stack.
-    #
-    # def _is_bilateral_symmetric(quads): ...
-    # _any_lower = any(q == "lower" for q in left_quads + right_quads)
-    # if not _any_lower and max_per_eye >= 2:
-    #     left_bil = len(left_quads) >= 2 and _is_bilateral_symmetric(left_quads)
-    #     right_bil = len(right_quads) >= 2 and _is_bilateral_symmetric(right_quads)
-    #     if left_bil and right_bil: return { "pattern": "triangle", ... }
-    #     if left_lat and right_lat: return { ... }  # Hurley lateral
+    left_tri  = _is_triangle_eye(left_hours)
+    right_tri = _is_triangle_eye(right_hours)
+
+    if left_tri and right_tri:
+        return {
+            "pattern":             "triangle",
+            "pattern_confidence":  0.85,
+            "key_position_text":   "triangle",
+            "fill_method_text":    "Three-source wrap (two upper + lower fill)",
+            "light_count":         3,
+            "unrecognized_details": [],
+            "notes":               ["Triangle catchlight formation confirmed in both eyes."],
+        }
+    if left_tri or right_tri:
+        return {
+            "pattern":             "triangle",
+            "pattern_confidence":  0.60,
+            "key_position_text":   "triangle",
+            "fill_method_text":    "Three-source wrap (two upper + lower fill)",
+            "light_count":         3,
+            "unrecognized_details": [],
+            "notes":               ["Triangle catchlight formation confirmed in one eye."],
+        }
 
     # ── Clamshell: 2 per eye — one upper, one lower (vertically aligned) ──
     # Floor-bounce filter: lower catchlights that are significantly dimmer
@@ -1218,23 +1228,42 @@ def infer_lighting_from_vision(
     pattern_result = _infer_pattern_from_catchlights(catchlight_list)
     modifier_result = _infer_modifier_from_catchlights(catchlight_list)
 
-    # Triangle contrast gate: real triangle lighting wraps from 3 directions
-    # producing low-to-moderate contrast.  Very high contrast weakens the
-    # 3-light theory — extra catchlights may be reflections.
-    # Soft gate: penalise confidence instead of hard-vetoing to "unknown",
-    # so triangle can still win if other classifiers agree.
+    # Triangle gates — applied when cue_report is available.
     if pattern_result.get("pattern") == "triangle" and cue_report is not None:
-        _cr = getattr(cue_report, "contrast_ratio", None)
-        _cr_label = (getattr(_cr, "label", "") if _cr else "").lower()
-        if _cr_label in ("high", "extreme"):
-            pattern_result = dict(pattern_result)  # don't mutate original
-            _orig_conf = pattern_result.get("pattern_confidence", 0.5)
-            _penalty = 0.5 if _cr_label == "extreme" else 0.35
-            pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
-            pattern_result["notes"] = pattern_result.get("notes", []) + [
-                f"Triangle confidence penalised (−{_penalty:.2f}): {_cr_label} contrast "
-                "weakens 3-light theory. Extra catchlights may be reflections."
-            ]
+        # Gate 1 — B&W guard: B&W processing compresses tonal range and can
+        # create positional artifacts in catchlight detection.  Triangle
+        # detection from catchlight clock positions is unreliable on B&W images.
+        # Hard-veto: suppress triangle and fall through to direction-based analysis.
+        _tp_li = getattr(cue_report, "tonal_processing_estimation", None)
+        _is_bw_li = getattr(_tp_li, "is_bw", False)
+        if _is_bw_li:
+            pattern_result = {
+                "pattern":             "unknown",
+                "pattern_confidence":  0.0,
+                "key_position_text":   "",
+                "fill_method_text":    "",
+                "light_count":         1,
+                "unrecognized_details": [],
+                "notes":               [
+                    "Triangle detection suppressed: B&W image — catchlight positions unreliable."
+                ],
+            }
+        else:
+            # Gate 2 — Contrast gate: real triangle lighting wraps from 3 directions
+            # producing low-to-moderate contrast.  Very high contrast weakens the
+            # 3-light theory — extra catchlights may be reflections.
+            # Soft gate: penalise confidence instead of hard-vetoing to "unknown".
+            _cr = getattr(cue_report, "contrast_ratio", None)
+            _cr_label = (getattr(_cr, "label", "") if _cr else "").lower()
+            if _cr_label in ("high", "extreme"):
+                pattern_result = dict(pattern_result)  # don't mutate original
+                _orig_conf = pattern_result.get("pattern_confidence", 0.5)
+                _penalty = 0.5 if _cr_label == "extreme" else 0.35
+                pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
+                pattern_result["notes"] = pattern_result.get("notes", []) + [
+                    f"Triangle confidence penalised (−{_penalty:.2f}): {_cr_label} contrast "
+                    "weakens 3-light theory. Extra catchlights may be reflections."
+                ]
 
     # Split asymmetry gate: a genuine 90° side key produces left-right
     # facial shadow asymmetry.  Low asymmetry weakens the split hypothesis.
