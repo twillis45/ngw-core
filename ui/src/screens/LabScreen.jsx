@@ -219,7 +219,7 @@ function ZoomableLightbox({ onClose, children, src, alt = '' }) {
           {/* Prefer direct src prop (from ZoomImg) for reliable rendering in portal.
               Fall back to children for backwards-compat (debug overlay lightbox). */}
           {src
-            ? <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block', userSelect: 'none' }} draggable={false} />
+            ? <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block', userSelect: 'none' }} draggable={false} />
             : children
           }
         </div>
@@ -3458,7 +3458,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                   <div key={id} style={{
                     background: isFlagged ? '#7c2d1220' : C.surface,
                     border: `1px solid ${isFlagged ? C.amber : C.border}`,
-                    borderRadius: 6, padding: '8px 12px', minWidth: 90,
+                    borderRadius: 'var(--radius-sm)', padding: '8px 12px', minWidth: 90,
                   }}>
                     <div style={{ fontSize: 10, color: C.textSec, marginBottom: 3 }}>{label}</div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: isFlagged ? C.amber : C.text }}>
@@ -3469,7 +3469,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                       style={{
                         marginTop: 6, fontSize: 10, padding: '2px 6px',
                         background: 'transparent', border: `1px solid ${isFlagged ? C.amber : C.border}`,
-                        borderRadius: 4, color: isFlagged ? C.amber : C.textSec, cursor: 'pointer',
+                        borderRadius: 'var(--radius-xs)', color: isFlagged ? C.amber : C.textSec, cursor: 'pointer',
                       }}
                       onClick={() => setCorrection(
                         isFlagged
@@ -3490,7 +3490,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
               return (
                 <div style={{
                   background: '#7c2d1210',
-                  border: `1px solid ${C.amber}`, borderRadius: 8, padding: '14px 16px',
+                  border: `1px solid ${C.amber}`, borderRadius: 'var(--radius-sm)', padding: '14px 16px',
                 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.amber, marginBottom: 10 }}>
                     ⚑ Correcting: <strong>{flaggedParam?.label}</strong>
@@ -3511,7 +3511,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                           style={{
                             display: 'block', marginTop: 4, width: '100%',
                             background: 'var(--color-surface)', border: `1px solid ${C.border}`,
-                            borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                            borderRadius: 'var(--radius-xs)', padding: '4px 8px', fontSize: 12,
                             color: 'var(--color-text)',
                           }}
                         >
@@ -3530,7 +3530,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                           style={{
                             display: 'block', marginTop: 4, width: '100%',
                             background: 'var(--color-surface)', border: `1px solid ${C.border}`,
-                            borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                            borderRadius: 'var(--radius-xs)', padding: '4px 8px', fontSize: 12,
                             color: 'var(--color-text)', boxSizing: 'border-box',
                           }}
                         />
@@ -3548,7 +3548,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                         background: 'transparent',
                         color: correction.correctValue === String(correction.detectedValue) ? C.green : C.textSec,
                         border: `1px solid ${correction.correctValue === String(correction.detectedValue) ? C.green : C.border}`,
-                        borderRadius: 4, cursor: 'pointer', alignSelf: 'flex-start',
+                        borderRadius: 'var(--radius-xs)', cursor: 'pointer', alignSelf: 'flex-start',
                       }}
                     >
                       ✓ Keep engine suggestion ({fmtPattern(String(correction.detectedValue))})
@@ -3563,7 +3563,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                         style={{
                           display: 'block', marginTop: 4, width: '100%',
                           background: 'var(--color-surface)', border: `1px solid ${C.border}`,
-                          borderRadius: 4, padding: '4px 8px', fontSize: 12,
+                          borderRadius: 'var(--radius-xs)', padding: '4px 8px', fontSize: 12,
                           color: 'var(--color-text)', boxSizing: 'border-box',
                         }}
                       />
@@ -3587,7 +3587,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                         background: correction.correctValue ? C.amber : 'transparent',
                         color: correction.correctValue ? '#000' : C.muted,
                         border: `1px solid ${correction.correctValue ? C.amber : C.border}`,
-                        borderRadius: 6, cursor: correction.correctValue ? 'pointer' : 'default',
+                        borderRadius: 'var(--radius-sm)', cursor: correction.correctValue ? 'pointer' : 'default',
                         transition: 'all 0.15s',
                       }}
                     >
@@ -3685,7 +3685,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
             {(intel.key_read || intel.fill_read) && (
               <div style={{
                 background: '#0d1520', border: '1px solid #1e2e40',
-                borderRadius: 8, padding: '12px 16px',
+                borderRadius: 'var(--radius-sm)', padding: '12px 16px',
               }}>
                 {intel.key_read && (
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0', lineHeight: 1.6,
@@ -3701,7 +3701,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                     {intel.lighting_ratio && (
                       <div style={{
                         background: '#0c2340', border: '1px solid #1d4ed8',
-                        borderRadius: 4, padding: '2px 10px',
+                        borderRadius: 'var(--radius-xs)', padding: '2px 10px',
                         fontSize: 15, fontWeight: 800, color: '#60a5fa',
                         fontFamily: 'var(--font-mono)', letterSpacing: '0.04em',
                       }}>
@@ -3729,7 +3729,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
             {pk && (
               <div style={{
                 background: `${C.green}12`, border: `1px solid ${C.green}40`,
-                borderRadius: 6, padding: '12px 14px',
+                borderRadius: 'var(--radius-sm)', padding: '12px 14px',
               }}>
                 <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
@@ -3848,7 +3848,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                           <div style={{fontSize:11,fontWeight:700,fontFamily:'var(--font-mono)',color:C.text,marginBottom:3}}>
                             {Math.round(iv*100)}%
                           </div>
-                          <div style={{position:'relative',width:barW,height:7,borderRadius:4,
+                          <div style={{position:'relative',width:barW,height:7,borderRadius:'var(--radius-xs)',
                             background:'linear-gradient(to right,#0f1520 0%,#1e3a5f 25%,#475569 55%,#cbd5e1 78%,#ffffff 100%)'}}>
                             <div style={{position:'absolute',top:-2,width:2,height:11,borderRadius:1,
                               left:`${tickX-1}px`,background:tc}}/>
@@ -3918,7 +3918,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
               return (
                 <div style={{
                   background: '#1e3a5f18', border: '1px solid #60a5fa40',
-                  borderRadius: 6, padding: '12px 14px',
+                  borderRadius: 'var(--radius-sm)', padding: '12px 14px',
                 }}>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
 
@@ -3933,7 +3933,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                       </div>
                       {bilateral && (
                         <div style={{
-                          marginTop: 8, padding: '3px 8px', borderRadius: 4,
+                          marginTop: 8, padding: '3px 8px', borderRadius: 'var(--radius-xs)',
                           background: '#60a5fa20', display: 'inline-block',
                           fontSize: 10, fontWeight: 700, color: '#60a5fa',
                         }}>bilateral</div>
@@ -4005,7 +4005,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
             {mod && (
               <div style={{
                 background: `${C.amber}10`, border: `1px solid ${C.amber}40`,
-                borderRadius: 6, padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)', padding: '10px 14px',
               }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 8 }}>
 
@@ -4023,7 +4023,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
                       {mod.size_confidence && (
                         <div style={{
                           fontSize: 9, fontWeight: 700, marginTop: 3, padding: '1px 5px',
-                          borderRadius: 3, display: 'inline-block',
+                          borderRadius: 'var(--radius-xs)', display: 'inline-block',
                           background: mod.size_confidence === 'high' ? `${C.green}20`
                             : mod.size_confidence === 'low' ? '#f8717120' : `${C.amber}20`,
                           color: mod.size_confidence === 'high' ? C.green
@@ -4155,7 +4155,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
           : (<>
             {clSummary.dedup_note && (
               <div style={{ fontSize: 11, color: C.muted, marginBottom: 8,
-                padding: '4px 8px', background: `${C.border}40`, borderRadius: 4,
+                padding: '4px 8px', background: `${C.border}40`, borderRadius: 'var(--radius-xs)',
                 fontFamily: 'var(--font-mono)' }}>
                 {clSummary.dedup_note}
                 {clSummary.filtered && (
@@ -4178,7 +4178,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
               const roleColor = { key: C.green, fill: '#60a5fa', modifier_edge: C.amber };
               return (
                 <table style={{ width: '100%', borderCollapse: 'collapse',
-                  border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden' }}>
+                  border: `1px solid ${C.border}`, borderRadius: 'var(--radius-xs)', overflow: 'hidden' }}>
                   <thead>
                     <tr>{cols.map(h => <th key={h} style={_th}>{h}</th>)}</tr>
                   </thead>
@@ -4348,7 +4348,7 @@ function SignalDiagnosticsPanel({ data, onPropose }) {
             : gates.map((g, i) => (
               <div key={i} style={{
                 background: C.surface, border: `1px solid ${g.triggered ? C.amber : C.border}`,
-                borderRadius: 6, padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)', padding: '10px 14px',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontSize: 16 }}>{g.triggered ? '⚡' : '✓'}</span>
@@ -4443,7 +4443,7 @@ function AcceptablePatternsDropdown({ value, onChange, excludePattern }) {
           maxHeight: 240, overflowY: 'auto',
           background: 'var(--color-surface-raised, #1e293b)',
           border: '1px solid var(--color-border)',
-          borderRadius: 6, marginTop: 2, padding: '4px 0',
+          borderRadius: 'var(--radius-sm)', marginTop: 2, padding: '4px 0',
           boxShadow: '0 4px 12px rgba(0,0,0,.4)',
         }}>
           {selected.length > 0 && (
@@ -4515,7 +4515,7 @@ function ObservabilityPanel({ data }) {
   const Pill = ({ label, color }) => (
     <span style={{
       display: 'inline-block', fontSize: 10, fontWeight: 600,
-      padding: '1px 7px', borderRadius: 4, margin: '2px 3px 2px 0',
+      padding: '1px 7px', borderRadius: 'var(--radius-xs)', margin: '2px 3px 2px 0',
       background: `color-mix(in srgb, ${color} 18%, transparent)`,
       color,
     }}>{label}</span>
@@ -4529,7 +4529,7 @@ function ObservabilityPanel({ data }) {
 
   return (
     <div style={{
-      marginTop: 8, borderRadius: 8,
+      marginTop: 8, borderRadius: 'var(--radius-sm)',
       border: '1px solid var(--color-border)',
       background: 'var(--color-surface)',
       overflow: 'hidden',
@@ -4546,7 +4546,7 @@ function ObservabilityPanel({ data }) {
           <span style={{ fontSize: 13 }}>🔬</span>
           Analysis Diagnostics
           <span style={{
-            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--radius-xs)',
             background: `color-mix(in srgb, ${headerColor} 18%, transparent)`,
             color: headerColor, marginLeft: 4,
           }}>
@@ -4554,7 +4554,7 @@ function ObservabilityPanel({ data }) {
           </span>
           {needsReview && (
             <span style={{
-              fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+              fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--radius-xs)',
               background: 'color-mix(in srgb, #f87171 18%, transparent)', color: '#f87171',
             }}>
               needs review
@@ -4570,11 +4570,11 @@ function ObservabilityPanel({ data }) {
           {/* Signal coverage bar */}
           <SectionLabel>Signal Coverage</SectionLabel>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ flex: 1, height: 8, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 8, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 'var(--radius-xs)', overflow: 'hidden' }}>
               <div style={{
                 width: `${pct}%`, height: '100%',
                 background: strength >= 0.7 ? '#4ade80' : strength >= 0.4 ? '#FBBF24' : '#f87171',
-                borderRadius: 4, transition: 'width 0.3s ease',
+                borderRadius: 'var(--radius-xs)', transition: 'width 0.3s ease',
               }} />
             </div>
             <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
@@ -4649,6 +4649,12 @@ function ObservabilityPanel({ data }) {
                 {obs.mode_flags.is_bw      && <Pill label="B&W"      color="#94a3b8" />}
                 {obs.mode_flags.is_hcg     && <Pill label="HCG"      color="#FBBF24" />}
                 {obs.definitive_pattern    && <Pill label={`stage1: ${obs.definitive_pattern}`} color="#a78bfa" />}
+                {'face_detected' in obs && (
+                  <Pill
+                    label={obs.face_detected ? 'face detected' : 'no face detected'}
+                    color={obs.face_detected ? '#4ade80' : '#f87171'}
+                  />
+                )}
               </div>
             </>
           )}
@@ -4688,7 +4694,7 @@ function PipelineTimingPanel({ data }) {
 
   return (
     <div style={{
-      marginTop: 12, borderRadius: 8,
+      marginTop: 12, borderRadius: 'var(--radius-sm)',
       border: '1px solid var(--color-border)',
       background: 'var(--color-surface)',
       overflow: 'hidden',
@@ -4705,7 +4711,7 @@ function PipelineTimingPanel({ data }) {
           <span style={{ fontSize: 13 }}>⏱</span>
           Pipeline Performance
           <span style={{
-            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+            fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 'var(--radius-xs)',
             background: `color-mix(in srgb, ${tierColor} 18%, transparent)`,
             color: tierColor, marginLeft: 4,
           }}>
@@ -4733,10 +4739,10 @@ function PipelineTimingPanel({ data }) {
                 <span style={{ width: 130, fontSize: 12, color: 'var(--color-text-secondary)', whiteSpace: 'nowrap' }}>
                   {icon} {label}
                 </span>
-                <div style={{ flex: 1, height: 10, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ flex: 1, height: 10, background: 'var(--color-surface-raised, #1e293b)', borderRadius: 'var(--radius-xs)', overflow: 'hidden' }}>
                   <div style={{
                     width: `${Math.max(pct, 2)}%`, height: '100%',
-                    background: barColor, borderRadius: 4,
+                    background: barColor, borderRadius: 'var(--radius-xs)',
                     transition: 'width 0.3s ease',
                   }} />
                 </div>
@@ -4808,7 +4814,7 @@ function WorkbenchFormatted({ data }) {
       {(intel?.key_read || intel?.fill_read) && (
         <div style={{
           background: '#0d1520', border: '1px solid #1e2e40',
-          borderRadius: 8, padding: '12px 14px', marginBottom: 12,
+          borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 12,
         }}>
           {intel.key_read && (
             <div style={{ fontSize: 14, fontWeight: 600, color: '#e2e8f0',
@@ -4822,7 +4828,7 @@ function WorkbenchFormatted({ data }) {
               {intel.lighting_ratio && (
                 <div style={{
                   background: '#0c2340', border: '1px solid #1d4ed8',
-                  borderRadius: 4, padding: '2px 10px',
+                  borderRadius: 'var(--radius-xs)', padding: '2px 10px',
                   fontSize: 15, fontWeight: 800, color: C.blue,
                   fontFamily: 'var(--font-mono)',
                 }}>{intel.lighting_ratio}</div>
@@ -8406,7 +8412,7 @@ function CandidateDetailView({ selected, onBack, onStatusChange, onDelete, onUpd
               alt="Source image for this rule candidate"
               style={{
                 width: '100%', maxHeight: 320, objectFit: 'contain',
-                borderRadius: 6, border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)',
                 background: 'var(--color-bg)', display: 'block',
               }}
               onError={e => { e.target.style.display = 'none'; }}
@@ -8658,7 +8664,7 @@ function CandidateForm({ onSave, onCancel, prefill }) {
               alt="Source image for this rule candidate"
               style={{
                 width: '100%', maxHeight: 320, objectFit: 'contain',
-                borderRadius: 6, border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)', border: '1px solid var(--color-border)',
                 background: 'var(--color-bg)', display: 'block',
               }}
             />
@@ -8675,7 +8681,7 @@ function CandidateForm({ onSave, onCancel, prefill }) {
                 style={{
                   marginTop: 6, fontSize: 11, padding: '2px 8px',
                   background: 'transparent', border: '1px solid var(--color-border)',
-                  borderRadius: 4, color: 'var(--color-text-secondary)', cursor: 'pointer',
+                  borderRadius: 'var(--radius-xs)', color: 'var(--color-text-secondary)', cursor: 'pointer',
                 }}
               >
                 × Remove
@@ -8686,7 +8692,7 @@ function CandidateForm({ onSave, onCancel, prefill }) {
           <label style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 8, padding: '20px 16px', cursor: 'pointer',
-            border: '1px dashed var(--color-border)', borderRadius: 6,
+            border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-sm)',
             background: 'var(--color-surface)', color: 'var(--color-text-secondary)',
             fontSize: 12,
           }}>

@@ -985,6 +985,36 @@ def _signal_contradiction_score(
         if _has_cl_loop and _pk_q_loop == "top_center":
             score += 0.65  # overhead key confirmed → key cannot produce loop nose shadow
             cues.append("catchlight_on_axis_contradiction")
+        # Extreme low-key darkness: loop requires a lit key side.  When brightness
+        # is "low" AND shadow density is heavy (>0.65), the entire face is in deep
+        # shadow — consistent with rim/backlight or low_key, NOT loop.
+        # Unlike the symmetric check above (requires lr_asym < 0.05), this fires
+        # regardless of asymmetry: even a somewhat asymmetric rim sculpt has no
+        # properly lit key side and must not be called loop.
+        # Guard: _sc_triangle_fired excluded to avoid double-counting with the
+        # rembrandt disambiguation path (triangle fires on lit cheek, not on dark face).
+        # Measured on loop_standard: shadow_den=0.114 → does NOT fire.
+        # Measured on extreme_low_key images: shadow_den≥0.70+ → fires.
+        _cls_ek = getattr(result, "classification", None) or {}
+        _brightness_ek = (_cls_ek.get("brightness") or "").lower()
+        if _brightness_ek == "low" and shadow_den > 0.65 and not _sc_triangle_fired:
+            score += 0.40  # extreme darkness → no lit key side → not loop
+            cues.append("extreme_low_key_shadow")
+        # Unknown direction + minimal shadows: loop requires a detectable off-axis
+        # key that produces a directional nose shadow.  When geometry reports no
+        # key direction AND shadow density is near zero (overfill / flat setup),
+        # the "loop" label has no evidence base — the minimal shadows cannot
+        # establish the diagonal nose shadow that defines loop.
+        # Guard: _ls_directional_loop excluded so a confirmed directional CV read
+        # suppresses this (shadow geometry is more reliable than direction alone).
+        # Safe for genuine loop: shadow_den is typically 0.05–0.40 for loop → < 0.20
+        # fires only if ls is also directional (suppressed by guard).
+        _cue_inf_lp = getattr(result, "cue_inference_result", {}) or {}
+        _geo_lp = _cue_inf_lp.get("geometry") if isinstance(_cue_inf_lp, dict) else None
+        _key_dir_lp = (getattr(_geo_lp, "key_light_direction", "unknown") if _geo_lp else "unknown") or "unknown"
+        if _key_dir_lp in ("unknown", "") and shadow_den < 0.20 and not _ls_directional_loop:
+            score += 0.30  # no directional evidence + minimal shadows → not loop
+            cues.append("direction_unknown_flat_shadow")
 
     elif pattern == "broad":
         # Broad = camera-side highlight, wide lit area.
@@ -2340,13 +2370,22 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         if cct and cct < 4000 and env_type == "outdoor_sun" and _face_detected:
             # Golden hour is a source context, not a geometry.
             # Return the detected geometry base; fall back to loop (warm directional default).
-            return base if base and base not in ("unknown", "") else "loop"
+            if base and base not in ("unknown", ""):
+                return base
+            # Geometry was not resolved — fall back to warm directional default.
+            # Flag this so observability can surface it as an ambiguity.
+            result.notes.append("golden_hour_geometry_fallback")
+            return "loop"
         # Fallback: warm color convergence without explicit CCT
         if env_type in ("outdoor_sun", "outdoor_shade") and bg_bright and _face_detected:
             _esc = getattr(cr, "environmental_shadow_continuity", None)
             _env_hints = getattr(_esc, "environment_hints", []) if _esc else []
             if "warm_overall" in _env_hints and "warm_background" in _env_hints:
-                return base if base and base not in ("unknown", "") else "loop"
+                if base and base not in ("unknown", ""):
+                    return base
+                # Geometry was not resolved — fall back to warm directional default.
+                result.notes.append("golden_hour_geometry_fallback")
+                return "loop"
 
     # ── Golden hour env-agnostic fallback ─────────────────────────────
     # When the env classifier misidentifies warm natural backlight as
@@ -2860,6 +2899,8 @@ def _compute_perception_explanation(
             flags.append("bw_limits_color_cues")
     if sr.signals_available < 10:
         flags.append("low_signal_count")
+    if "golden_hour_geometry_fallback" in (result.notes or []):
+        flags.append("golden_hour_geometry_fallback")
 
     pe.ambiguity_flags = flags
 
@@ -3175,7 +3216,7 @@ def analyze_image(
                  light_count)
       Layer 3 — Heuristic reconciliation (multi-light upgrades, soft-key
                  correction, B&W / pose clamshell guards)
-      Layer 4 — Corrective / context layer (pose-relative broad/short,
+      Layer 4 — Context / specialty layer (pose-relative broad/short,
                  source context annotation, specialty pattern upgrades)
       Layer 5 — Semantic hint layer (VLM — never overrides Layer 2 geometry)
       Layer 6 — Resolver (reference_read > lighting_inference > cue_inference

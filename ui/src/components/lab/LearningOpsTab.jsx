@@ -88,7 +88,7 @@ const Card = forwardRef(function Card({ children, style }, ref) {
     <div ref={ref} style={{
       background: 'var(--color-surface)',
       border: '0.5px solid var(--color-border)',
-      borderRadius: 12,
+      borderRadius: 'var(--radius-sm)',
       padding: 14,
       marginBottom: 10,
       ...style,
@@ -357,7 +357,7 @@ function PanelDesc({ text }) {
       color: 'var(--color-text-secondary)',
       background: 'var(--color-surface)',
       border: '0.5px solid var(--color-border)',
-      borderRadius: 10,
+      borderRadius: 'var(--radius-sm)',
       padding: '8px 12px',
       lineHeight: 1.5,
       margin: '0 0 12px',
@@ -450,7 +450,7 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
                 ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))'
                 : 'var(--color-surface-elevated)',
               border: s.urgent ? `0.5px solid ${C.redBorder}` : '0.5px solid var(--color-border)',
-              borderRadius: 10,
+              borderRadius: 'var(--radius-sm)',
               padding: '10px 6px',
               cursor: s.nav ? 'pointer' : 'default',
               transition: 'border-color 0.15s, background 0.15s',
@@ -482,7 +482,7 @@ function OverviewBody({ ops, onRefresh, onIngest, ingesting, devMode, onDevModeC
               textAlign: 'center', cursor: 'pointer',
               background: s.urgent ? 'color-mix(in srgb, var(--color-error) 8%, var(--color-surface-elevated))' : 'var(--color-surface-elevated)',
               border: s.urgent ? `0.5px solid ${C.redBorder}` : '0.5px solid var(--color-border)',
-              borderRadius: 10, padding: '10px 6px', marginBottom: 12,
+              borderRadius: 'var(--radius-sm)', padding: '10px 6px', marginBottom: 12,
             }}
           >
             <div style={{ fontSize: 22, fontWeight: 900, color: s.color, fontFamily: 'var(--font-mono, monospace)' }}>{s.value}</div>
@@ -740,7 +740,7 @@ function EvidStat({ label, value, sub, color }) {
       padding: '7px 12px',
       background: color ? `color-mix(in srgb, ${color} 8%, var(--color-surface))` : 'var(--color-surface)',
       border: `0.5px solid ${color ? color + '33' : 'var(--color-border)'}`,
-      borderRadius: 10, minWidth: 0, flex: '1 0 auto',
+      borderRadius: 'var(--radius-sm)', minWidth: 0, flex: '1 0 auto',
     }}>
       <span style={{ fontSize: 18, fontWeight: 800, color: color ?? 'var(--color-text)', lineHeight: 1, fontFamily: 'var(--font-mono, monospace)' }}>{value ?? '—'}</span>
       <span style={{ fontSize: 9, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{label}</span>
@@ -789,7 +789,7 @@ function EvidenceBreakdown({ evidence, failureMode }) {
           {/* CVR vs threshold bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', width: 28, textAlign: 'right', flexShrink: 0 }}>CVR</span>
-            <div style={{ flex: 1, height: 7, background: 'var(--color-border)', borderRadius: 4, overflow: 'visible', position: 'relative' }}>
+            <div style={{ flex: 1, height: 7, background: 'var(--color-border)', borderRadius: 'var(--radius-xs)',overflow: 'visible', position: 'relative' }}>
               {/* Threshold marker */}
               <div style={{
                 position: 'absolute', top: -3, bottom: -3,
@@ -800,7 +800,7 @@ function EvidenceBreakdown({ evidence, failureMode }) {
               {/* CVR fill */}
               <div style={{
                 width: `${Math.min(conversion_rate_pct * 10, 100)}%`,
-                height: '100%', background: cvrColor, borderRadius: 4,
+                height: '100%', background: cvrColor, borderRadius: 'var(--radius-xs)',
                 transition: 'width 0.4s',
                 minWidth: conversion_rate_pct > 0 ? 3 : 0,
               }} />
@@ -914,7 +914,7 @@ function PatternThumb({ patternId, size = 44 }) {
     return (
       <div style={{
         width: size, height: size, flexShrink: 0,
-        borderRadius: 4, background: 'var(--color-surface-elevated)',
+        borderRadius: 'var(--radius-xs)',background: 'var(--color-surface-elevated)',
         border: '1px solid var(--color-border)',
       }} />
     );
@@ -933,7 +933,7 @@ function PatternThumbZoom({ src, alt, size }) {
         alt={alt}
         style={{
           width: size, height: size, flexShrink: 0,
-          borderRadius: 4, objectFit: 'cover',
+          borderRadius: 'var(--radius-xs)',objectFit: 'cover',
           border: '1px solid var(--color-border)',
           cursor: 'zoom-in',
         }}
@@ -945,7 +945,7 @@ function PatternThumbZoom({ src, alt, size }) {
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setZoomed(false)}
         >
-          <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <img src={src} alt={alt} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block' }} />
           <button
             onClick={e => { e.stopPropagation(); setZoomed(false); }}
             style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
@@ -2201,7 +2201,7 @@ function MonitoringLiveHealth({ onNavigate }) {
                     key={hours}
                     onClick={() => setWindowHours(hours)}
                     style={{
-                      fontSize: 9, padding: '2px 7px', borderRadius: 4,
+                      fontSize: 9, padding: '2px 7px', borderRadius: 'var(--radius-xs)',
                       cursor: 'pointer', fontWeight: 600, lineHeight: 1.4,
                       background: windowHours === hours ? 'var(--color-accent)' : 'var(--color-surface)',
                       color:      windowHours === hours ? '#fff' : 'var(--color-text-secondary)',
@@ -2239,7 +2239,7 @@ function MonitoringLiveHealth({ onNavigate }) {
                         : `${bucket.hours_ago}h ago — ${total} calls (${bucket.ok} ok, ${bucket.err} err)`}
                       style={{
                         flex: 1, height, background: barColor,
-                        borderRadius: '2px 2px 0 0', minWidth: 3,
+                        borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0', minWidth: 3,
                         opacity: 0.7 + (i / n) * 0.3,
                         position: 'relative',
                         alignSelf: 'flex-end',
@@ -2254,7 +2254,7 @@ function MonitoringLiveHealth({ onNavigate }) {
                           fontFamily: 'var(--font-mono)',
                           color: barColor,
                           background: 'var(--color-bg)',
-                          padding: '0 2px', borderRadius: 2,
+                          padding: '0 2px', borderRadius: 'var(--radius-xs)',
                           pointerEvents: 'none',
                         }}>
                           {lastBucketTotal}
@@ -2791,8 +2791,8 @@ function LearningReadinessCard() {
           <div key={r.label}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
               <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text)', fontWeight: 600, width: 160, flexShrink: 0 }}>{r.label}</span>
-              <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${Math.round(r.bar * 100)}%`, height: '100%', background: r.color, borderRadius: 3, transition: 'width 0.4s' }} />
+              <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+                <div style={{ width: `${Math.round(r.bar * 100)}%`, height: '100%', background: r.color, borderRadius: 'var(--radius-xs)',transition: 'width 0.4s' }} />
               </div>
               <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: r.color, minWidth: 60, textAlign: 'right', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>
                 {r.value} {r.unit}
@@ -2848,7 +2848,7 @@ function PatternSwatch({ patternId, size = 48 }) {
     .join('');
   return (
     <div style={{
-      width: size, height: size, borderRadius: 8, flexShrink: 0,
+      width: size, height: size, borderRadius: 'var(--radius-sm)', flexShrink: 0,
       background: `hsl(${hue}, 45%, 22%)`,
       border: `1.5px solid hsl(${hue}, 55%, 35%)`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2905,13 +2905,13 @@ function GoldSetSuggestionsPanel() {
                 padding: '10px 12px',
                 background: 'var(--color-surface)',
                 border: '0.5px solid var(--color-border)',
-                borderRadius: 10,
+                borderRadius: 'var(--radius-sm)',
               }}>
                 {s.image_path ? (
                   <AuthImage
                     path={`/api/lab/signals/${s.signal_id}/thumbnail`}
                     alt={s.pattern_id}
-                    style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+                    style={{ width: 44, height: 44, borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0 }}
                   />
                 ) : (
                   <PatternSwatch patternId={s.pattern_id} size={44} />
@@ -2937,7 +2937,7 @@ function GoldSetSuggestionsPanel() {
                   fontSize: 10, color: 'var(--color-text-dim)',
                   background: 'var(--color-surface-elevated)',
                   border: '0.5px solid var(--color-border)',
-                  borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0,
+                  borderRadius: 'var(--radius-xs)',padding: '2px 6px', whiteSpace: 'nowrap', flexShrink: 0,
                 }}
                   title={s.reason}
                 >
@@ -3034,11 +3034,11 @@ function SignalGauge({ value, max, color = C.blue }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 120 }}>
       <div style={{
         flex: 1, height: 5, background: 'var(--color-border)',
-        borderRadius: 3, overflow: 'hidden',
+        borderRadius: 'var(--radius-xs)',overflow: 'hidden',
       }}>
         <div style={{
           width: `${(pct * 100).toFixed(1)}%`, height: '100%',
-          background: color, borderRadius: 3,
+          background: color, borderRadius: 'var(--radius-xs)',
           transition: 'width 0.4s ease',
         }} />
       </div>
@@ -3075,8 +3075,8 @@ function SignalReadinessBar({ sig, minSig }) {
       {/* Signal count gauge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', width: 90 }}>Signal fill</span>
-        <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ width: `${(pct * 100).toFixed(1)}%`, height: '100%', background: readyColor, borderRadius: 4, transition: 'width 0.4s' }} />
+        <div style={{ flex: 1, height: 6, background: 'var(--color-border)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+          <div style={{ width: `${(pct * 100).toFixed(1)}%`, height: '100%', background: readyColor, borderRadius: 'var(--radius-xs)',transition: 'width 0.4s' }} />
         </div>
         <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: readyColor, minWidth: 50, textAlign: 'right' }}>
           {raw} / {minSig}
@@ -3086,8 +3086,8 @@ function SignalReadinessBar({ sig, minSig }) {
       {/* Success / fail rate bars */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', width: 90 }}>Win rate</span>
-        <div style={{ flex: 1, height: 5, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${(success * 100).toFixed(1)}%`, height: '100%', background: C.green, borderRadius: 3, transition: 'width 0.4s' }} />
+        <div style={{ flex: 1, height: 5, background: 'var(--color-border)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+          <div style={{ width: `${(success * 100).toFixed(1)}%`, height: '100%', background: C.green, borderRadius: 'var(--radius-xs)',transition: 'width 0.4s' }} />
         </div>
         <span style={{ fontSize: 'var(--text-xs)', color: C.green, minWidth: 36, textAlign: 'right' }}>
           {(success * 100).toFixed(0)}%
@@ -3095,8 +3095,8 @@ function SignalReadinessBar({ sig, minSig }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', width: 90 }}>Fail rate</span>
-        <div style={{ flex: 1, height: 5, background: 'var(--color-border)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ width: `${(fail * 100).toFixed(1)}%`, height: '100%', background: C.red, borderRadius: 3, transition: 'width 0.4s' }} />
+        <div style={{ flex: 1, height: 5, background: 'var(--color-border)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+          <div style={{ width: `${(fail * 100).toFixed(1)}%`, height: '100%', background: C.red, borderRadius: 'var(--radius-xs)',transition: 'width 0.4s' }} />
         </div>
         <span style={{ fontSize: 'var(--text-xs)', color: C.red, minWidth: 36, textAlign: 'right' }}>
           {(fail * 100).toFixed(0)}%

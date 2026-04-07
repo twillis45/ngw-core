@@ -1559,8 +1559,8 @@ function IntelligenceSection({ user, onNavigateTo }) {
                                 </span>
                               </div>
                               {barPct != null && (
-                                <div style={{ height: 4, background: 'var(--color-surface-elevated)', borderRadius: 2, overflow: 'hidden' }}>
-                                  <div style={{ width: `${barPct}%`, height: '100%', background: barColor, borderRadius: 2, transition: 'width 0.3s' }} />
+                                <div style={{ height: 4, background: 'var(--color-surface-elevated)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+                                  <div style={{ width: `${barPct}%`, height: '100%', background: barColor, borderRadius: 'var(--radius-xs)',transition: 'width 0.3s' }} />
                                 </div>
                               )}
                             </div>
@@ -1830,8 +1830,8 @@ function IntelligenceSection({ user, onNavigateTo }) {
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--color-text-dim)', marginBottom: 2 }}>
                               <span>Severity</span><span>{typeof c.severity === 'number' ? c.severity.toFixed(2) : c.severity}</span>
                             </div>
-                            <div style={{ height: 3, background: 'var(--color-surface)', borderRadius: 2, overflow: 'hidden' }}>
-                              <div style={{ width: `${sevPct}%`, height: '100%', background: sevPct >= 60 ? C.red : sevPct >= 30 ? C.amber : C.green, borderRadius: 2 }} />
+                            <div style={{ height: 3, background: 'var(--color-surface)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+                              <div style={{ width: `${sevPct}%`, height: '100%', background: sevPct >= 60 ? C.red : sevPct >= 30 ? C.amber : C.green, borderRadius: 'var(--radius-xs)' }} />
                             </div>
                           </div>
                         )}
@@ -1939,8 +1939,8 @@ function IntelligenceSection({ user, onNavigateTo }) {
                               <td style={{ padding: '5px 8px', minWidth: 100 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   <span style={{ color, fontWeight: 'var(--weight-bold)', minWidth: 30 }}>{sc.toFixed(1)}</span>
-                                  <div style={{ flex: 1, height: 4, background: 'var(--color-surface-elevated)', borderRadius: 2, overflow: 'hidden' }}>
-                                    <div style={{ width: `${Math.min(100, sc)}%`, height: '100%', background: color, borderRadius: 2 }} />
+                                  <div style={{ flex: 1, height: 4, background: 'var(--color-surface-elevated)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
+                                    <div style={{ width: `${Math.min(100, sc)}%`, height: '100%', background: color, borderRadius: 'var(--radius-xs)' }} />
                                   </div>
                                 </div>
                               </td>
@@ -3377,7 +3377,7 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
                   title={`${label}: ${bucket.ok} ok, ${bucket.err} err`}
                   style={{
                     flex: 1, minWidth: 3, height: h,
-                    borderRadius: '2px 2px 0 0',
+                    borderRadius: 'var(--radius-xs) var(--radius-xs) 0 0',
                     background: errPct > 0.5 ? C.red
                                : errPct > 0   ? C.amber
                                : C.green,
@@ -3393,7 +3393,7 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
         <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 10, color: 'var(--color-text-dim)' }}>
           {[['All OK', C.green], ['Some errors', C.amber], ['>50% errors', C.red]].map(([label, color]) => (
             <span key={label} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: color, opacity: 0.85 }} />
+              <span style={{ width: 8, height: 8, borderRadius: 'var(--radius-xs)',background: color, opacity: 0.85 }} />
               {label}
             </span>
           ))}
@@ -3454,12 +3454,12 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
                   <span>{step.label}</span>
                   <span style={{ color: step.color }}>{step.value ?? 0}</span>
                 </div>
-                <div style={{ height: 6, background: 'var(--color-surface-elevated)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: 6, background: 'var(--color-surface-elevated)', borderRadius: 'var(--radius-xs)',overflow: 'hidden' }}>
                   <div style={{
                     height: '100%',
                     width: `${Math.round(((step.value ?? 0) / funnelMax) * 100)}%`,
                     background: step.color,
-                    borderRadius: 3,
+                    borderRadius: 'var(--radius-xs)',
                     transition: 'width 0.4s ease',
                   }} />
                 </div>
@@ -3679,7 +3679,7 @@ function DistillationImageCell({ selected }) {
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setZoomed(false)}
         >
-          <img src={src} alt={selected.expected_pattern} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <img src={src} alt={selected.expected_pattern} style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block' }} />
           <button
             onClick={e => { e.stopPropagation(); setZoomed(false); }}
             style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}
@@ -3825,7 +3825,7 @@ function DistillationReviewSection() {
                 ['Reviewer',    selected.reviewer || '—'],
                 ['Reviewed at', selected.reviewed_at ? new Date(parseFloat(selected.reviewed_at) * 1000).toLocaleString() : '—'],
               ].map(([label, val]) => (
-                <div key={label} style={{ background: 'var(--color-surface-elevated)', borderRadius: 4, padding: '6px 10px' }}>
+                <div key={label} style={{ background: 'var(--color-surface-elevated)', borderRadius: 'var(--radius-xs)',padding: '6px 10px' }}>
                   <div style={{ fontSize: 'var(--text-xxs, 10px)', color: 'var(--color-text-dim)', marginBottom: 2 }}>{label}</div>
                   <div style={{ fontSize: 'var(--text-xs)', fontFamily: typeof val === 'number' || /^\d/.test(String(val)) ? 'var(--font-mono)' : undefined, wordBreak: 'break-all' }}>{String(val)}</div>
                 </div>
@@ -3858,7 +3858,7 @@ function DistillationReviewSection() {
                 onChange={e => setEditRationale(e.target.value)}
                 rows={2}
                 placeholder="Why this status? Required for rejected / gold_set_issue."
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 4, padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xs)',padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
               />
             </div>
 
@@ -3869,7 +3869,7 @@ function DistillationReviewSection() {
                 onChange={e => setEditNotes(e.target.value)}
                 rows={2}
                 placeholder="Optional follow-up notes."
-                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 4, padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--text-xs)', background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-xs)',padding: '6px 8px', color: 'var(--color-text)', resize: 'vertical', fontFamily: 'inherit' }}
               />
             </div>
 

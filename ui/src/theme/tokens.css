@@ -1,3 +1,6 @@
+/* ── Inter variable font — self-hosted via @fontsource-variable/inter ── */
+@import '@fontsource-variable/inter';
+
 /* ── Geist font — self-hosted via npm package ──────── */
 @font-face {
   font-family: 'Geist';
@@ -32,21 +35,24 @@
   --space-7xl: 120px;
 
   /* ── Radius ─────────────────────────── */
-  --radius-xs:   2px;
-  --radius-sm:   4px;
-  --radius-md:   7px;
-  --radius-lg:   10px;
+  --radius-xs:   4px;
+  --radius-sm:   12px;
+  --radius-md:   16px;
+  --radius-lg:   20px;
   --radius-full: 999px;
 
   /* ── Typography ─────────────────────────── */
-  --font-family: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display",
-                 "Segoe UI", Roboto, sans-serif;
+  /* Inter Variable = bundled @fontsource; plain "Inter" = system-installed fallback.
+     Geist is next in stack as installed npm fallback. */
+  --font-family: "Inter Variable", "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+                 "Geist", "Segoe UI", Roboto, sans-serif;
   --font-mono:   "Geist Mono", "SF Mono", "Fira Code", monospace;
 
   /* Type scale — fluid, mobile-first.
      Gaps are intentionally large enough to create clear visual hierarchy:
      micro=data-readout, 2xs=section-label, xs=caption, sm=label, base=body,
      md=body-lead, lg=card-heading, xl=section-heading, 2xl=screen-title, 3xl=display */
+  --text-eyebrow:  0.6875rem;                                     /* 11px — overline labels, section eyebrows */
   --text-micro: 0.5625rem;                                        /*  9px  — LAB section headers, KPI sub-labels */
   --text-2xs:   clamp(0.625rem,  0.6rem   + 0.1vw,  0.6875rem);  /* 10–11px — LAB data labels, mono readouts  */
   --text-xs:   clamp(0.75rem,   0.72rem  + 0.12vw, 0.8125rem); /* 12–13px — captions, metadata  */
@@ -67,10 +73,11 @@
   --leading-relaxed: 1.7;
 
   /* Letter-spacing helpers */
-  --tracking-tight:  -0.025em;
-  --tracking-normal:  0;
-  --tracking-wide:    0.05em;
-  --tracking-wider:   0.08em;
+  --tracking-tight:   -0.025em;
+  --tracking-normal:   0;
+  --tracking-wide:     0.05em;
+  --tracking-wider:    0.08em;
+  --tracking-eyebrow:  0.08em;  /* overline / eyebrow label tracking */
 
   /* Weights */
   --weight-normal:   400;
@@ -79,14 +86,22 @@
   --weight-bold:     700;
   --weight-black:    800;
 
+  /* ── Breakpoints ───────────────────── */
+  /* Reference-only: JS/media queries read these as fixed px values.
+     CSS container queries and @media queries should reference these values. */
+  --bp-sm: 430px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+
   /* ── Safe areas ─────────────────────── */
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top:    env(safe-area-inset-top, 0px);
 
   /* ── Motion ─────────────────────────── */
   --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring:      cubic-bezier(0.22, 1.7, 0.36, 1);
-  --ease-spring-heavy: cubic-bezier(0.12, 1.9, 0.32, 1);
+  --ease-spring:      cubic-bezier(0.25, 0, 0.10, 1);
+  --ease-spring-heavy: cubic-bezier(0.20, 0, 0.05, 1);
   --duration-fast:    0.15s;
   --duration-normal:  0.25s;
 
@@ -132,9 +147,9 @@
 
   --color-icon:            #A89060;  /* warm brass — instrument panel, not SaaS blue */
 
-  /* CTA — slightly darker than --color-accent (#C8A96E) so glass reads on top */
-  --color-cta:             #A8884A;
-  --color-cta-hover:       #987840;
+  /* CTA — unified to canonical NGW gold #C8A96E (matches accent, premium, logos) */
+  --color-cta:             #C8A96E;
+  --color-cta-hover:       #B89558;
   /* Paid / commerce badge — always a recognisable gold-amber */
   --color-paid:            #f59e0b;
   --color-paid-subtle:     rgba(245, 158, 11, 0.12);
@@ -168,7 +183,7 @@
   --lcd-hint-c:      rgba(0,0,0,0.18);          /* dark theme: near-invisible on dark screen */
   --lcd-hint-shadow: 0 1px 0 rgba(255,255,255,0.06); /* subtle rim light below = deboss on dark */
   --lcd-row-lbl-c:   rgba(160,200,255,0.35);
-  --lcd-row-val-c:   rgba(220,235,255,0.82);
+  --lcd-row-val-c:   rgba(220,235,255,1);
   --lcd-row-tip-c:   rgba(160,200,255,0.55);
   --lcd-row-warn-c:  #f59e0b;
   --lcd-shadow:
@@ -206,10 +221,17 @@
   --scan-glow-soft:  color-mix(in srgb, var(--color-accent) 18%, transparent);
   --scan-trail:      color-mix(in srgb, var(--color-accent) 14%, transparent);
 
+  /* ── Instrument panel surfaces (Carbon Black tier) ── */
+  --color-bg-instrument:      #0B0B0C;  /* deepest carbon black — ShootMode cockpit, LAB panels */
+  --color-surface-instrument: #131416;  /* raised instrument surface — spec rows, readout cells */
+
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg:   0 8px 24px rgba(0,0,0,0.5);
   --shadow-card: 0 1px 4px rgba(0,0,0,0.28);
+  --shadow-cockpit:
+    0 1px 0 rgba(255,255,255,0.04),
+    0 2px 8px rgba(0,0,0,0.6);  /* inner edge highlight + deep drop — Profoto panel look */
 }
 
 /* ── Light Theme ───────────────────────────────────── */
@@ -280,7 +302,7 @@
   --lcd-hint-c:      rgba(30,18,6,0.45);           /* light theme: more contrast for readable deboss */
   --lcd-hint-shadow: 0 1px 2px rgba(255,255,255,0.90), 0 -1px 1px rgba(0,0,0,0.28); /* stronger deboss on warm grey */
   --lcd-row-lbl-c:   rgba(60,45,30,0.55);
-  --lcd-row-val-c:   rgba(30,20,10,0.78);
+  --lcd-row-val-c:   rgba(30,20,10,1);
   --lcd-row-tip-c:   rgba(60,45,30,0.50);
   --lcd-row-warn-c:  #B45309;
   --lcd-shadow:
@@ -401,9 +423,9 @@
   --space-2xl: 20px;
   --space-3xl: 24px;
   --space-4xl: 32px;
-  --radius-sm: 3px;
-  --radius-md: 5px;
-  --radius-lg: 7px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
 }
 
 [data-density="spacious"] {
@@ -415,9 +437,9 @@
   --space-2xl: 32px;
   --space-3xl: 40px;
   --space-4xl: 48px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-sm: 16px;
+  --radius-md: 20px;
+  --radius-lg: 24px;
 }
 
 /* ── Font Family Scale ───────────────────────────────── */
@@ -433,7 +455,7 @@
 
 /* Inter — clean geometric sans, great for UI dashboards */
 [data-font-family="inter"] {
-  --font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
+  --font-family: "Inter Variable", "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont,
                  "Segoe UI", Roboto, sans-serif;
 }
 

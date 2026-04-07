@@ -9,6 +9,7 @@ import { applySettings } from './data/settingsStore';
 import { setFlag } from './modes/featureFlags';
 import './theme/tokens.css';
 import './styles/app.css';
+import './components/shared/shared-components.css';
 
 /* ── Sentry browser SDK ─────────────────────────────────────────── */
 Sentry.init({

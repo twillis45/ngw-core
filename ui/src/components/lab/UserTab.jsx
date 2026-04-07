@@ -70,7 +70,7 @@ function Card({ title, subtitle, action, children }) {
     <div style={{
       background: 'var(--color-surface)',
       border: '1px solid var(--color-border)',
-      borderRadius: 8,
+      borderRadius: 'var(--radius-sm)',
       padding: 'var(--space-sm) var(--space-md)',
       marginBottom: 'var(--space-md)',
     }}>
@@ -102,7 +102,7 @@ function Row({ label, value, mono, badge, badgeColor, action, actionLabel, actio
       }}>
         {badge ? (
           <span style={{
-            display: 'inline-block', padding: '0 6px', borderRadius: 3,
+            display: 'inline-block', padding: '0 6px', borderRadius: 'var(--radius-xs)',
             background: badgeColor || C.muted, color: '#fff',
             fontWeight: 600, fontSize: '0.7rem',
           }}>{badge}</span>
@@ -112,7 +112,7 @@ function Row({ label, value, mono, badge, badgeColor, action, actionLabel, actio
         <button onClick={action} title={actionTitle} style={{
           flexShrink: 0, fontSize: '0.65rem', padding: '1px 6px',
           background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)',
-          borderRadius: 3, cursor: 'pointer', color: 'var(--color-text-secondary)',
+          borderRadius: 'var(--radius-xs)', cursor: 'pointer', color: 'var(--color-text-secondary)',
         }}>{actionLabel || 'Clear'}</button>
       )}
     </div>
@@ -124,7 +124,7 @@ function SmallBtn({ onClick, title, children }) {
     <button onClick={onClick} title={title} style={{
       fontSize: '0.65rem', padding: '2px 8px',
       background: 'var(--color-surface-elevated)', border: '1px solid var(--color-border)',
-      borderRadius: 3, cursor: 'pointer', color: 'var(--color-text-secondary)',
+      borderRadius: 'var(--radius-xs)', cursor: 'pointer', color: 'var(--color-text-secondary)',
     }}>{children}</button>
   );
 }
