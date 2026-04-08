@@ -66,6 +66,38 @@ const METALLIC_CHEVRON = {
   filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.6)) drop-shadow(0px -1px 0px rgba(255,255,255,0.10)) drop-shadow(0px 0px 2px rgba(95,124,150,0.12))',
 };
 
+// ─── Viewfinder layer styles — kept in sync with HomeScreen ─────────────────
+const VIEWFINDER_INNER_SHADOW = [
+  'inset 0px 1px 1px 0px rgba(0,0,0,0.05)',
+  'inset 0px 0px 24px 0px rgba(95,124,150,0.09)',
+  'inset 0px 0px 14px 0px rgba(95,124,150,0.11)',
+].join(', ');
+
+const GLASS_REFLECTION = [
+  'linear-gradient(141.71deg,',
+  'rgba(255,255,255,0.36) 0%,',
+  'rgba(255,255,255,0.30) 2%,',
+  'rgba(255,255,255,0.24) 4%,',
+  'rgba(255,255,255,0.19) 6.5%,',
+  'rgba(255,255,255,0.15) 9%,',
+  'rgba(255,255,255,0.12) 12%,',
+  'rgba(255,255,255,0.095) 16%,',
+  'rgba(255,255,255,0.075) 20%,',
+  'rgba(255,255,255,0.058) 25%,',
+  'rgba(255,255,255,0.044) 30%,',
+  'rgba(255,255,255,0.034) 36%,',
+  'rgba(255,255,255,0.025) 42%,',
+  'rgba(255,255,255,0.018) 48%,',
+  'rgba(255,255,255,0.013) 54%,',
+  'rgba(255,255,255,0.015) 62%,',
+  'rgba(255,255,255,0.020) 68%,',
+  'rgba(255,255,255,0.015) 74%,',
+  'rgba(255,255,255,0.006) 80%,',
+  'rgba(255,255,255,0) 86%)',
+].join(' ');
+
+const LENS_VIGNETTE = 'radial-gradient(ellipse 100% 90% at center, transparent 52%, rgba(0,0,0,0.08) 76%, rgba(0,0,0,0.22) 100%)';
+
 // ─── Shadow + gradient constants ────────────────────────────────────────────
 // CTA button — exact from Figma 1494:12
 const CTA_BG     = `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`;
@@ -298,20 +330,16 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             opacity: infoVisible ? 1 : 0.3,
             transition: 'opacity 0.35s ease',
           }} />
-          {/* Top-left glass sheen */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(141.71deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.10) 8%, rgba(255,255,255,0.03) 18%, transparent 28%)',
-          }} />
-          {/* Inner bevel */}
+          {/* Glass panel — lens vignette + upper-left key light reflection (matches HomeScreen) */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, zIndex: 2, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, opacity: 0.48 }} />
+          </div>
+          {/* Inner shadow — Figma-exact bevel (matches HomeScreen) */}
           <div style={{
             position: 'absolute', inset: 0, borderRadius: 14,
-            pointerEvents: 'none',
-            boxShadow: [
-              'inset 0px 1px 0px 0px rgba(255,255,255,0.09)',
-              'inset 0px -1px 3px 0px rgba(0,0,0,0.35)',
-              'inset 0px 0px 20px 0px rgba(95,124,150,0.04)',
-            ].join(', '),
+            pointerEvents: 'none', zIndex: 3,
+            boxShadow: VIEWFINDER_INNER_SHADOW,
           }} />
         </div>
 

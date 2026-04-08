@@ -140,11 +140,27 @@ function mapApiResult(data) {
   };
 }
 
+const MOCK_RESULT = {
+  pattern: 'Rembrandt',
+  confidence: 87,
+  meta: ['FRONT LEFT', 'LARGE SOFTBOX', '1 LIGHT', 'STUDIO'],
+  sections: {
+    patternCandidates: [
+      { name: 'Rembrandt', score: 87 },
+      { name: 'Loop', score: 61 },
+      { name: 'Split', score: 44 },
+    ],
+    shadowAnalysis: 'Strong shadow side with nose shadow touching corner of mouth. Classic 45° key placement confirmed. High shadow contrast ratio indicates single dominant source.',
+    catchlightModifier: 'Large softbox — upper left key at 10 o\'clock. Secondary fill catchlight at 4 o\'clock.',
+  },
+};
+
 export default function Day1DemoApp() {
-  const [screen, setScreen] = useState('home');
+  const _params = new URLSearchParams(window.location.search);
+  const [screen, setScreen] = useState(_params.get('result') === 'mock' ? 'result' : 'home');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [result, setResult] = useState(null);
+  const [imagePreview, setImagePreview] = useState(_params.get('result') === 'mock' ? '/static/ui/test-benchmark.jpg' : null);
+  const [result, setResult] = useState(_params.get('result') === 'mock' ? MOCK_RESULT : null);
   const [analysisError, setAnalysisError] = useState(null);
   const [analysisReady, setAnalysisReady] = useState(false);
   const [user, setUser] = useState(() => getUser());
