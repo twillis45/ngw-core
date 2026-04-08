@@ -18,17 +18,19 @@ async function labFetch(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
   const res = await apiFetch(`/api/lab${path}`, { headers, ...options });
-  const data = await res.json();
+  const raw = await res.text().catch(() => '');
+  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
   if (!res.ok) {
     // FastAPI validation errors return detail as an array of {loc, msg, type} objects
     let msg;
-    if (Array.isArray(data.detail)) {
+    if (data && Array.isArray(data.detail)) {
       msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
     } else {
-      msg = data.detail || `Lab API error (${res.status})`;
+      msg = data?.detail || `Lab API error (${res.status})`;
     }
     throw new Error(`[${res.status}] ${msg}`);
   }
+  if (data === null) throw new Error(`Server returned empty response (${res.status})`);
   return data;
 }
 
@@ -39,13 +41,14 @@ async function coreFetch(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
   const res = await apiFetch(`/api${path}`, { headers, ...options });
-  const data = await res.json();
+  const raw = await res.text().catch(() => '');
+  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
   if (!res.ok) {
     let msg;
-    if (Array.isArray(data.detail)) {
+    if (data && Array.isArray(data.detail)) {
       msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
     } else {
-      msg = data.detail || `API error (${res.status})`;
+      msg = data?.detail || `API error (${res.status})`;
     }
     throw new Error(`[${res.status}] ${msg}`);
   }
