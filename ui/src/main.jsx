@@ -98,6 +98,13 @@ try {
     dirty = true;
   }
 
+  // Day 1 demo app — ?day1=1 navigates to day1_demo screen on mount
+  if (params.get('day1') === '1') {
+    try { sessionStorage.setItem('ngw_goto_day1_demo', '1'); } catch { /* ignore */ }
+    params.delete('day1');
+    dirty = true;
+  }
+
   // Stripe checkout return — set paid flag before React mounts so usePaywall
   // initialises with isPaid=true without needing a re-render or extra state sync.
   // Also stash the session_id so usePaywall can verify server-side on first render.

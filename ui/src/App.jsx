@@ -27,6 +27,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import AnalyticsDashboard from './screens/AnalyticsDashboard';
 import ExecDashboard from './screens/ExecDashboard';
 import SymptomPage from './screens/SymptomPage';
+import Day1DemoApp from './screens/Day1DemoApp';
 
 const SCREENS = {
   home:    HomeScreen,
@@ -48,6 +49,7 @@ const SCREENS = {
   analytics: AnalyticsDashboard,
   exec: ExecDashboard,
   symptom: SymptomPage,
+  day1_demo: Day1DemoApp,
 };
 
 function buildShareText(result) {
@@ -144,6 +146,17 @@ export default function App() {
     } catch { /* ignore — sessionStorage unavailable */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally runs once on mount only
+
+  // Day 1 demo app deep-link — ?day1=1 navigates to day1_demo screen on mount
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('ngw_goto_day1_demo') === '1') {
+        sessionStorage.removeItem('ngw_goto_day1_demo');
+        dispatch({ type: 'NAVIGATE', screen: 'day1_demo' });
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleShare() {
     if (!result) return;
