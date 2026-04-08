@@ -281,11 +281,12 @@ def _infer_pattern_from_catchlights(
         if dominant_quad == "upper_left" or dominant_hour in (10, 11):
             # Catchlight side indicates KEY POSITION (camera-left, elevated), not pattern.
             # Both Loop and Rembrandt produce upper-left catchlights — the nose shadow
-            # is the only reliable discriminator.  Default to loop (more common) with
-            # low confidence; orchestrator should override with nose-shadow result.
+            # is the only reliable discriminator.  Default to loop (more common); raised
+            # from 0.35 → 0.45 because the off-axis quad is a direct angular measurement
+            # of the key position and rules out frontal/on-axis sources.
             return {
                 "pattern": "loop",
-                "pattern_confidence": 0.35 + conf_boost,
+                "pattern_confidence": 0.45 + conf_boost,
                 "key_position_text": "30-45 off-axis left",
                 "fill_method_text": "",
                 "light_count": 1,
@@ -299,7 +300,7 @@ def _infer_pattern_from_catchlights(
         if dominant_quad == "upper_right" or dominant_hour in (1, 2):
             return {
                 "pattern": "loop",
-                "pattern_confidence": 0.35 + conf_boost,
+                "pattern_confidence": 0.45 + conf_boost,
                 "key_position_text": "30-45 off-axis right",
                 "fill_method_text": "",
                 "light_count": 1,

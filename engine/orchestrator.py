@@ -393,7 +393,7 @@ def _apply_signal_confidence(
                 # diagonal centroid; this is a second independent measurement of
                 # the same geometry.  Slightly smaller boost than the lr_asym path
                 # since fill has erased one of the two discriminating signals.
-                adj += 0.05
+                adj += 0.10  # raised 0.05→0.10: centroid angle is still a clean geometric signal
                 cues.append("fill_heavy_loop_centroid")
             # Off-axis catchlight confirmation: primary key at upper_right or upper_left
             # means the light source is geometrically off-axis — the iris is a direct
@@ -402,7 +402,7 @@ def _apply_signal_confidence(
             # and rules out frontal/on-axis sources.  Not sufficient alone, but a clean
             # non-CV corroboration that doesn't require shadow geometry analysis.
             if _pk_quad in ("upper_right", "upper_left") and _has_catchlights:
-                adj += 0.08
+                adj += 0.16  # raised 0.08→0.16: iris is a direct angular sensor of key position
                 cues.append("catchlight_off_axis")
             elif _pk_quad == "top_center" and _has_catchlights:
                 # Loop requires an off-axis key (30–45°). A top_center catchlight means
@@ -1341,7 +1341,9 @@ def _load_confidence_overrides() -> Dict[str, Any]:
 # from 0 to 2) and its confidence is halved.  This allows competing
 # candidates from other sources — including the signal-derived
 # light_structure_pass — to win.
-_CONTRADICTION_DEMOTION_THRESHOLD = 0.6
+# Raised 0.60→0.65: normal measurement noise (face ROI variance, centroid
+# rounding) was crossing the 0.60 boundary and triggering spurious demotions.
+_CONTRADICTION_DEMOTION_THRESHOLD = 0.65
 
 
 def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
