@@ -176,6 +176,134 @@ function PatternBars({ candidates, isHighConf }) {
   );
 }
 
+// ─── Bottom action row with tactile press states ─────────────────────────────
+function BottomActions({ onRetry, onSetup, infoVisible, isDragging }) {
+  const [retakePressed, setRetakePressed] = useState(false);
+  const [savePressed, setSavePressed]     = useState(false);
+
+  // Trough: deep inset moat the buttons sit in
+  const TROUGH_SHADOW = [
+    'inset 0px 3px 6px 0px rgba(0,0,0,0.7)',
+    'inset 0px 1px 3px 0px rgba(0,0,0,0.5)',
+    'inset 1px 0px 2px 0px rgba(0,0,0,0.3)',
+    'inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+    '0px 1px 0px 0px rgba(255,255,255,0.025)',
+  ].join(', ');
+
+  // Save: raised metallic tile — heavy drop shadow + top-edge highlight
+  const SAVE_UP = [
+    '0px 6px 16px 0px rgba(0,0,0,0.8)',
+    '0px 3px 6px 0px rgba(0,0,0,0.6)',
+    '0px 1px 2px 0px rgba(0,0,0,0.4)',
+    'inset 0px 1.5px 0px 0px rgba(255,255,255,0.18)',
+    'inset 0px -1.5px 0px 0px rgba(0,0,0,0.45)',
+    `inset 0px 0px 16px 0px ${steel(0.07)}`,
+    '0px 0px 0px 0.5px rgba(0,0,0,0.5)',
+  ].join(', ');
+  const SAVE_DOWN = [
+    '0px 0px 2px 0px rgba(0,0,0,0.5)',
+    'inset 0px 2px 4px 0px rgba(0,0,0,0.6)',
+    'inset 0px 1px 2px 0px rgba(0,0,0,0.4)',
+    'inset 0px -0.5px 0px 0px rgba(255,255,255,0.04)',
+  ].join(', ');
+
+  // Retake: recessed into trough — pressed state slightly less recessed
+  const RETAKE_UP   = 'none';
+  const RETAKE_DOWN = [
+    'inset 0px 1px 3px 0px rgba(0,0,0,0.5)',
+    'inset 0px 0.5px 1px 0px rgba(0,0,0,0.3)',
+  ].join(', ');
+
+  return (
+    <div style={{
+      display: 'flex', justifyContent: 'center',
+      padding: '16px 25px 20px',
+      opacity: infoVisible ? 1 : 0,
+      transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
+      transition: isDragging ? 'none' : 'opacity 0.25s ease 0.1s, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
+      pointerEvents: infoVisible ? 'auto' : 'none',
+    }}>
+      {/* Deep trough */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        height: 52, borderRadius: 16,
+        backgroundColor: '#060608',
+        boxShadow: TROUGH_SHADOW,
+        padding: 4,
+        gap: 0,
+        minWidth: 240,
+      }}>
+
+        {/* RETAKE */}
+        <button
+          onPointerDown={() => setRetakePressed(true)}
+          onPointerUp={() => { setRetakePressed(false); segmentPressSound(); navHaptic(); onRetry(); }}
+          onPointerLeave={() => setRetakePressed(false)}
+          style={{
+            flex: 1, height: 44,
+            borderRadius: 12,
+            backgroundColor: retakePressed ? 'rgba(255,255,255,0.02)' : 'transparent',
+            boxShadow: retakePressed ? RETAKE_DOWN : RETAKE_UP,
+            border: 'none', cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            transition: 'box-shadow 0.1s ease, background-color 0.1s ease',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <span style={{
+            fontSize: 13, fontWeight: 500, letterSpacing: '0.4px',
+            color: retakePressed ? 'rgba(167,173,183,0.55)' : 'rgba(167,173,183,0.65)',
+            transition: 'color 0.1s ease',
+            ...FONT_SMOOTH,
+          }}>Retake</span>
+        </button>
+
+        {/* Separator — engraved groove */}
+        <div style={{
+          width: 1, height: 24, flexShrink: 0,
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.5) 100%)',
+          boxShadow: '1px 0px 0px 0px rgba(255,255,255,0.04)',
+        }} />
+
+        {/* SAVE — raised metallic tile */}
+        <button
+          onPointerDown={() => setSavePressed(true)}
+          onPointerUp={() => { setSavePressed(false); segmentPressSound(); tapHaptic(); onSetup(); }}
+          onPointerLeave={() => setSavePressed(false)}
+          style={{
+            flex: 1, height: 44,
+            borderRadius: 12,
+            background: savePressed
+              ? 'linear-gradient(141.71deg, #242730 0%, #1d1f28 50%, #181a22 100%)'
+              : 'linear-gradient(141.71deg, #383c4a 0%, #2c303c 40%, #222535 100%)',
+            boxShadow: savePressed ? SAVE_DOWN : SAVE_UP,
+            border: 'none', cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            transform: savePressed ? 'translateY(1px)' : 'translateY(-2px)',
+            transition: 'box-shadow 0.1s ease, transform 0.1s ease, background 0.1s ease',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <span style={{
+            fontSize: 13, fontWeight: 700, letterSpacing: '0.5px',
+            color: savePressed ? 'rgba(245,247,250,0.75)' : 'rgba(245,247,250,0.95)',
+            transition: 'color 0.1s ease',
+            textShadow: savePressed ? 'none' : '0px 1px 2px rgba(0,0,0,0.5)',
+            ...FONT_SMOOTH,
+          }}>Save</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared font smoothing shorthand ─────────────────────────────────────────
+const FONT_SMOOTH = {
+  WebkitFontSmoothing: 'antialiased',
+  MozOsxFontSmoothing: 'grayscale',
+  textRendering: 'geometricPrecision',
+};
+
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
   const [expandedSection, setExpandedSection] = useState(() =>
     result && result.confidence < 70 ? 'patterns' : null
@@ -241,7 +369,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const { pattern, confidence, meta, sections } = result;
   const isHighConf  = confidence >= 70;
   const confColor   = isHighConf ? C.confHigh : C.confLow;
-  const panelTop    = isHighConf ? 473 : 478;
+  const panelTop    = isHighConf ? 497 : 502;
   const leadMargin  = confidence - (sections.patternCandidates[1]?.score ?? 0);
 
   const toggle = (key) => { setExpandedSection(prev => prev === key ? null : key); panelToggleSound(); tapHaptic(); };
@@ -395,7 +523,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         <button
           onClick={() => { segmentPressSound(); tapHaptic(); (isHighConf ? onSetup : onRetry)(); }}
           style={{
-            position: 'absolute', top: 391, left: 25, right: 25,
+            position: 'absolute', top: 415, left: 25, right: 25,
             height: 48,
             borderRadius: 24,
             background: CTA_BG,
@@ -426,7 +554,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           <button
             onClick={() => { softClickSound(); tapHaptic(); onSetup(); }}
             style={{
-              position: 'absolute', top: 447, left: '50%', transform: `translateX(-50%)${infoVisible ? '' : ' translateY(40px)'}`,
+              position: 'absolute', top: 471, left: '50%', transform: `translateX(-50%)${infoVisible ? '' : ' translateY(40px)'}`,
               background: 'none', border: 'none', cursor: 'pointer',
               fontSize: 12, fontWeight: 500, color: C.textMeta,
               WebkitTapHighlightColor: 'transparent',
@@ -441,7 +569,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         {/* High confidence: scroll affordance */}
         {isHighConf && (
           <div style={{
-            position: 'absolute', top: 455, left: '50%', transform: 'translateX(-50%)', width: 100, height: 0,
+            position: 'absolute', top: 479, left: '50%', transform: 'translateX(-50%)', width: 100, height: 0,
             opacity: infoVisible ? 1 : 0,
             transition: 'opacity 0.3s ease',
           }}>
@@ -571,76 +699,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         </button>
       </div>
 
-      {/* ─── Bottom row: segmented pill — Retake | Save (high confidence only) ─── */}
+      {/* ─── Bottom row: Retake | Save (high confidence only) ─── */}
       {isHighConf && (
-        <div style={{
-          display: 'flex', justifyContent: 'center',
-          padding: '16px 25px 20px',
-          opacity: infoVisible ? 1 : 0,
-          transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
-          transition: isDragging ? 'none' : 'opacity 0.25s ease 0.1s, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
-          pointerEvents: infoVisible ? 'auto' : 'none',
-        }}>
-          {/* Pill track — dark inset trough */}
-          <div style={{
-            display: 'flex', alignItems: 'center',
-            height: 44, borderRadius: 12,
-            backgroundColor: '#0a0a0e',
-            boxShadow: [
-              'inset 1px 2px 4px 0px rgba(0,0,0,0.5)',
-              'inset 0px 1px 2px 0px rgba(0,0,0,0.3)',
-              'inset -1px -1px 0px 0px rgba(255,255,255,0.03)',
-              '0px 0.5px 0px 0px rgba(255,255,255,0.02)',
-            ].join(', '),
-            padding: 3,
-            gap: 1,
-          }}>
-            {/* RETAKE — flush/recessed segment */}
-            <button
-              onClick={() => { segmentPressSound(); navHaptic(); onRetry(); }}
-              style={{
-                height: 38, paddingLeft: 28, paddingRight: 28,
-                borderRadius: 10,
-                backgroundColor: 'transparent',
-                border: 'none', cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <span style={{
-                fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
-                color: 'rgba(167,173,183,0.7)',
-                WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-              }}>Retake</span>
-            </button>
-
-            {/* Subtle divider */}
-            <div style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
-
-            {/* SAVE — raised/active segment */}
-            <button
-              onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
-              style={{
-                height: 38, paddingLeft: 32, paddingRight: 32,
-                borderRadius: 10,
-                backgroundColor: '#1a1b20',
-                boxShadow: [
-                  '0px 1px 3px 0px rgba(0,0,0,0.4)',
-                  '0px 0.5px 1px 0px rgba(0,0,0,0.3)',
-                  'inset 0px 1px 0px 0px rgba(255,255,255,0.06)',
-                  'inset 0px -0.5px 0px 0px rgba(0,0,0,0.2)',
-                ].join(', '),
-                border: 'none', cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <span style={{
-                fontSize: 13, fontWeight: 600, letterSpacing: '0.3px',
-                color: 'rgba(245,247,250,0.9)',
-                WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-              }}>Save</span>
-            </button>
-          </div>
-        </div>
+        <BottomActions onRetry={onRetry} onSetup={onSetup} infoVisible={infoVisible} isDragging={isDragging} />
       )}
 
       {/* ─── Low confidence: spacer ─── */}

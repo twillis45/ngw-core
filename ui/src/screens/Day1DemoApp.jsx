@@ -127,6 +127,35 @@ function mapApiResult(data) {
     catchlightModifier = 'Modifier analysis complete.';
   }
 
+  // Structured modifier data — size range + distance guidance derived from size class
+  const SIZE_RANGES = {
+    'small':  { oct: '24"–36"',  rect: '12"×16" – 24"×36"', dist: '3–6 ft',  optimal: '4–5 ft' },
+    'medium': { oct: '36"–48"',  rect: '24"×30" – 36"×48"', dist: '4–8 ft',  optimal: '5–7 ft' },
+    'large':  { oct: '48"–60"',  rect: '36"×48" – 36"×60"', dist: '5–10 ft', optimal: '6–8 ft' },
+    'xl':     { oct: '60"–80"',  rect: '36"×72" – 48"×72"', dist: '6–12 ft', optimal: '8–10 ft' },
+    'xxl':    { oct: '60"–80"+', rect: '48"×80" – 60"×84"', dist: '8–14 ft', optimal: '10–12 ft' },
+  };
+  let modifierData = null;
+  const modFamily = (ci?.modifier?.family || li.modifier_family || '').toLowerCase();
+  const modSizeRaw = (ci?.modifier?.size_label || '').toLowerCase().replace(/\s+/g, '');
+  const sizeKey = ['xxl','xl','large','medium','small'].find(k => modSizeRaw.includes(k)) || null;
+  if (modFamily || sizeKey) {
+    const isOct = modFamily.includes('oct');
+    const ranges = sizeKey ? SIZE_RANGES[sizeKey] : null;
+    modifierData = {
+      family:     (ci?.modifier?.family || li.modifier_family || 'Unknown modifier').replace(/_/g, ' '),
+      sizeLabel:  ci?.modifier?.size_label || null,
+      sizeRange:  ranges ? (isOct ? ranges.oct : ranges.rect) : null,
+      position:   ci?.primary_key?.position || null,
+      shape:      ci?.primary_key?.shape || ci?.modifier?.shape || null,
+      distRange:  ranges?.dist || null,
+      optDist:    ranges?.optimal || null,
+      lightCount: li.light_count || null,
+      angularArea: ci?.modifier?.angular_area_ir2 != null
+        ? `${ci.modifier.angular_area_ir2.toFixed(3)} ir²` : null,
+    };
+  }
+
   return {
     pattern,
     confidence,
@@ -135,6 +164,7 @@ function mapApiResult(data) {
       patternCandidates: candidates,
       shadowAnalysis,
       catchlightModifier,
+      modifier: modifierData,
     },
     _raw: data,
   };
@@ -143,7 +173,7 @@ function mapApiResult(data) {
 const MOCK_RESULT = {
   pattern: 'Rembrandt',
   confidence: 87,
-  meta: ['FRONT LEFT', 'LARGE SOFTBOX', '1 LIGHT', 'STUDIO'],
+  meta: ['FRONT LEFT', 'LARGE SOFTBOX', '2 LIGHTS', 'STUDIO', 'GRID', 'FILL RATIO 4:1'],
   sections: {
     patternCandidates: [
       { name: 'Rembrandt', score: 87 },
@@ -152,15 +182,54 @@ const MOCK_RESULT = {
     ],
     shadowAnalysis: 'Strong shadow side with nose shadow touching corner of mouth. Classic 45° key placement confirmed. High shadow contrast ratio indicates single dominant source.',
     catchlightModifier: 'Large softbox — upper left key at 10 o\'clock. Secondary fill catchlight at 4 o\'clock.',
+    modifier: {
+      family: 'Rectangular Softbox',
+      sizeLabel: 'Large',
+      sizeRange: '36"×48" – 36"×60"',
+      position: '10 o\'clock',
+      shape: 'rectangular',
+      distRange: '5–10 ft',
+      optDist: '6–8 ft',
+      lightCount: 2,
+      angularArea: '0.241 ir²',
+    },
+  },
+};
+
+const MOCK_RESULT_LC = {
+  pattern: 'Loop',
+  confidence: 54,
+  meta: ['SIDE LEFT', 'UNKNOWN MODIFIER', '1 LIGHT'],
+  sections: {
+    patternCandidates: [
+      { name: 'Loop', score: 54 },
+      { name: 'Rembrandt', score: 51 },
+      { name: 'Split', score: 48 },
+    ],
+    shadowAnalysis: 'Ambiguous shadow pattern. Nose shadow direction suggests left key but angle is inconclusive. Multiple patterns score within margin of error.',
+    catchlightModifier: 'Modifier unclear — catchlight shape partially obscured. Estimated medium source, left side.',
+    modifier: {
+      family: 'Unknown modifier',
+      sizeLabel: 'Medium',
+      sizeRange: '36"–48" (est.)',
+      position: 'Left side',
+      shape: 'unclear',
+      distRange: '4–8 ft',
+      optDist: '5–7 ft',
+      lightCount: 1,
+      angularArea: null,
+    },
   },
 };
 
 export default function Day1DemoApp() {
   const _params = new URLSearchParams(window.location.search);
-  const [screen, setScreen] = useState(_params.get('result') === 'mock' ? 'result' : 'home');
+  const _mockParam = _params.get('result');
+  const _mockResult = _mockParam === 'mock' ? MOCK_RESULT : _mockParam === 'mock-lc' ? MOCK_RESULT_LC : null;
+  const [screen, setScreen] = useState(_mockResult ? 'result' : 'home');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(_params.get('result') === 'mock' ? '/static/ui/test-benchmark.jpg' : null);
-  const [result, setResult] = useState(_params.get('result') === 'mock' ? MOCK_RESULT : null);
+  const [imagePreview, setImagePreview] = useState(_mockResult ? '/static/ui/test-benchmark.jpg' : null);
+  const [result, setResult] = useState(_mockResult ?? null);
   const [analysisError, setAnalysisError] = useState(null);
   const [analysisReady, setAnalysisReady] = useState(false);
   const [user, setUser] = useState(() => getUser());
@@ -297,6 +366,7 @@ export default function Day1DemoApp() {
       return (
         <SetupScreen
           result={result}
+          imagePreview={imagePreview}
           onSave={handleSetupSave}
           onCancel={handleSetupCancel}
         />
