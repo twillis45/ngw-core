@@ -31,3 +31,19 @@ export function useIsDesktop() {
 
   return isDesktop;
 }
+
+/**
+ * useViewportWidth — live viewport width in px. Used for fluid sizing on
+ * wide screens (e.g. scaling the Result hero column above 1180px). Returns 0
+ * during SSR.
+ */
+export function useViewportWidth() {
+  const [w, setW] = useState(() => (typeof window === 'undefined' ? 0 : window.innerWidth));
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => setW(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return w;
+}
