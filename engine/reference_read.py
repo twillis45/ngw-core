@@ -3546,6 +3546,57 @@ def build_recreation_setup(
                     "no artificial source needed for primary key"
                 )
 
+        # ── CV catchlight size_class enrichment ─────────────────────
+        # cue_report.catchlight_shape.size_class is computed directly from
+        # pixel area ratio (point/small/medium/large/very_large) with confidence.
+        # This is pure CV geometry — fires BEFORE the VLM fallback below so we
+        # prefer measured catchlight size over VLM description when both are
+        # available.  Threshold: confidence ≥0.35 and suggestion still unknown.
+        if modifier_suggestion in ("unknown", ""):
+            _cs_sz = getattr(cue_report, "catchlight_shape", None) if cue_report else None
+            _cv_size_cls = (getattr(_cs_sz, "size_class", "") or "").lower() \
+                if _cs_sz else ""
+            _cv_size_conf = getattr(_cs_sz, "confidence", 0.0) if _cs_sz else 0.0
+            if _cv_size_cls and _cv_size_cls not in ("unknown", "point") \
+                    and _cv_size_conf >= 0.35:
+                _CV_SIZE_TO_SUGGESTION = {
+                    "small":      "beauty dish (~16\") or small softbox with grid",
+                    "medium":     "medium softbox (2x3) or beauty dish",
+                    "large":      "large softbox (3x4 or larger) or umbrella",
+                    "very_large": "large softbox (4x6 or larger), scrim, or window",
+                }
+                _cv_mod_rec = _CV_SIZE_TO_SUGGESTION.get(_cv_size_cls)
+                if _cv_mod_rec:
+                    modifier_suggestion = _cv_mod_rec
+
+        # ── VLM modifier size class enrichment ─────────────────────
+        # CV derives modifier type from catchlight shape and source quality.
+        # When CV modifier confidence is low (unknown family → unknown or
+        # empty suggestion), VLM's modifier_size_class provides direct size
+        # evidence that CV cannot measure from catchlight pixels alone.
+        # Four size classes map to real modifier families.  Only fires when
+        # the CV suggestion is still unresolved ("unknown" or "").
+        if vlm_description is not None and getattr(vlm_description, "ok", False):
+            _vlm_sigs_mod = getattr(vlm_description, "signals", None)
+            _vlm_recon_mod = getattr(_vlm_sigs_mod, "reconstruction", None) \
+                if _vlm_sigs_mod else None
+            _vlm_size_cls = (
+                getattr(_vlm_recon_mod, "modifier_size_class", "") or ""
+            ).lower() if _vlm_recon_mod else ""
+            _mod_conf_vlm = getattr(lighting_intel, "modifier_confidence", 1.0) \
+                if lighting_intel else 1.0
+            if _vlm_size_cls and _mod_conf_vlm < 0.5 \
+                    and modifier_suggestion in ("unknown", ""):
+                _VLM_SIZE_TO_SUGGESTION = {
+                    "small":      "bare bulb, fresnel, or small reflector with grid",
+                    "medium":     "beauty dish or small softbox (24\" – 2x3)",
+                    "large":      "medium-to-large softbox (2x3 to 3x4) or umbrella",
+                    "very_large": "large softbox (4x6 or larger), scrim, or window",
+                }
+                _vlm_mod_rec = _VLM_SIZE_TO_SUGGESTION.get(_vlm_size_cls)
+                if _vlm_mod_rec:
+                    modifier_suggestion = _vlm_mod_rec
+
         # P1d: When a known modifier was found from catchlights (e.g. softbox)
         # but fill is present → the wrap is broader than a bare medium box.
         # Recommend at least medium-to-large to account for fill.
@@ -3934,6 +3985,34 @@ def build_recreation_setup(
         _vlm_skin_tones = getattr(_vlm, "apparent_skin_tones", []) or []
         _vlm_skin_mixed = getattr(_vlm, "skin_tone_mixed", False) or False
         _vlm_bg = (getattr(_vlm, "background_context", "") or "").lower()
+
+        # ── Warm/cool split annotation ───────────────────────────────
+        # Primary signal: cue_report.warm_cool_split set by the CV
+        # color_temperature_pass (key <4500K, shadow >5500K, gap >1500K).
+        # VLM temperature strings are used as optional label enrichment only
+        # when both CV and VLM agree on the split.
+        _cv_wcs = getattr(cue_report, "warm_cool_split", False) \
+            if cue_report else False
+        _vlm_palette = getattr(_vlm, "signals", None)
+        _vlm_palette = getattr(_vlm_palette, "color_palette", None) \
+            if _vlm_palette else None
+        _vlm_wcs = getattr(_vlm_palette, "warm_cool_split", False) \
+            if _vlm_palette else False
+        if _cv_wcs or _vlm_wcs:
+            _vlm_ct_key = (getattr(_vlm_palette, "color_temperature_key", "") or "").lower() \
+                if _vlm_palette else ""
+            _vlm_ct_shad = (getattr(_vlm_palette, "color_temperature_shadows", "") or "").lower() \
+                if _vlm_palette else ""
+            _wcs_note = (
+                "Warm key / cool shadow split detected — "
+                "gel key light warm (CTO or ~3200K tungsten) and "
+                "leave fill/ambient cool (daylight ~5500K) or add CTB gel. "
+            )
+            if _vlm_ct_key and _vlm_ct_shad:
+                _wcs_note += f"VLM reads key as {_vlm_ct_key}, shadows as {_vlm_ct_shad}."
+            if not any("warm" in n.lower() and "cool" in n.lower()
+                       for n in setup_notes):
+                setup_notes.append(_wcs_note)
 
         # ── Multi-subject corrections ──
         # Groups, couples, threesomes need wider light spread + different

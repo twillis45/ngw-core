@@ -1208,11 +1208,17 @@ def _dedup_catchlights_per_eye(
                 continue  # 3+ catchlights = floor bounce very likely
         filtered.append(c)
 
-    # Pass 2: group by proximity — within ±2 clock positions = same source.
-    # Soft modifiers (softboxes, umbrellas) create elongated catchlight
-    # reflections that can span 2 clock positions; different parts of the
-    # same modifier reflect at slightly different angles.
-    # Sort by clock position, keep brightest in each group.
+    # Pass 2: group by proximity — within ±1 clock position = same source.
+    # Soft modifiers (softboxes, umbrellas) can span adjacent clock positions;
+    # different parts of the same modifier reflect at slightly different angles.
+    #
+    # Proximity threshold is ±1, not ±2: a ±2 window collapses 11, 12, and 1
+    # o'clock into one cluster, discarding genuine off-axis key catchlights
+    # (e.g. loop key at 1 o'clock merged with a brighter strip at 12 o'clock).
+    #
+    # Shape-agreement guard: different shapes at adjacent positions are likely
+    # different sources (e.g. rectangular softbox at 1 o'clock vs strip at 12).
+    # Only merge if shapes match OR one shape is unknown.
     def _clock_key(c):
         ck = _parse_clock(c.get("position", ""))
         return ck if ck is not None else 99
@@ -1224,13 +1230,17 @@ def _dedup_catchlights_per_eye(
         if ck is None:
             deduped.append(c)
             continue
-        # Check if any existing deduped catchlight is within ±2
+        c_shape = (c.get("shape") or "").lower()
+        # Check if any existing deduped catchlight is within ±1
         merged = False
         for i, d in enumerate(deduped):
             dk = _parse_clock(d.get("position", ""))
             if dk is not None:
                 diff = min(abs(ck - dk), 12 - abs(ck - dk))  # circular
-                if diff <= 2:
+                d_shape = (d.get("shape") or "").lower()
+                # Only merge if within ±1 AND shapes agree (or one is unknown)
+                shape_agree = (not c_shape or not d_shape or c_shape == d_shape)
+                if diff <= 1 and shape_agree:
                     # Keep the brighter one
                     if c.get("intensity", 0) > d.get("intensity", 0):
                         deduped[i] = c

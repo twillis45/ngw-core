@@ -20,6 +20,7 @@ const PROFILES = {
     drop:      [15, 15, 20],
     longPress: [12, 8, 35],
     nav:       15,
+    grain:     [3, 5, 3, 5, 3],   // 5-pulse stutter — coarse grain crunch
   },
   B: {
     tap:       22,
@@ -30,6 +31,7 @@ const PROFILES = {
     drop:      [30, 20, 15],
     longPress: 45,
     nav:       18,
+    grain:     [4, 6, 4, 6, 4, 6, 4],   // 7-pulse stutter — fine grain
   },
   C: {
     tap:       20,
@@ -40,30 +42,50 @@ const PROFILES = {
     drop:      [25, 40, 12],
     longPress: [8, 10, 40],
     nav:       14,
+    grain:     [2, 3, 2, 3, 2, 3, 2, 3, 2],   // 9-pulse rapid micro-texture
   },
 };
 
+// Cache the enabled flag + selected profile.  Reading localStorage twice on
+// every haptic call (once for enabled, once for profile) was adding a few ms
+// of jitter relative to the simultaneous sound call — enough to feel a
+// "stagger" between the click sound and the buzz on rapid taps.  Cache stays
+// fresh via the storage event so settings toggles still take effect live.
+let _hapticEnabledCache = null;
+let _hapticProfileCache = null;
+
 function enabled() {
+  if (_hapticEnabledCache !== null) return _hapticEnabledCache;
   try {
     const raw = localStorage.getItem('ngw_settings');
-    if (!raw) return true;
+    if (!raw) return (_hapticEnabledCache = true);
     const s = JSON.parse(raw);
-    return s.hapticFeedback !== false;
+    _hapticEnabledCache = s.hapticFeedback !== false;
+    return _hapticEnabledCache;
   } catch {
-    return true;
+    return (_hapticEnabledCache = true);
   }
 }
 
 function getProfile() {
+  if (_hapticProfileCache) return _hapticProfileCache;
   try {
     const raw = localStorage.getItem('ngw_settings');
-    if (!raw) return PROFILES.A;
+    if (!raw) return (_hapticProfileCache = PROFILES.A);
     const s = JSON.parse(raw);
     const key = s.hapticProfile || 'A';
-    return PROFILES[key] || PROFILES.A;
+    _hapticProfileCache = PROFILES[key] || PROFILES.A;
+    return _hapticProfileCache;
   } catch {
-    return PROFILES.A;
+    return (_hapticProfileCache = PROFILES.A);
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', () => {
+    _hapticEnabledCache = null;
+    _hapticProfileCache = null;
+  });
 }
 
 /** Returns current profile letter (A, B, or C) */
@@ -110,3 +132,19 @@ export function longPressHaptic() { vibrate('longPress'); }
 
 /** Screen navigation — subtle tick */
 export function navHaptic()       { vibrate('nav'); }
+
+/**
+ * Background grain — very short pulse meant to feel like the matte surface
+ * has texture under your finger.  Throttled to once every ~120ms so dragging
+ * across the screen produces a stuttering grain feel rather than a single
+ * continuous buzz.  Android Chrome supports this via navigator.vibrate;
+ * iOS Safari silently no-ops.
+ */
+let _grainLastTs = 0;
+const GRAIN_THROTTLE_MS = 60;  // tight throttle so dragging crunches
+export function grainHaptic() {
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (now - _grainLastTs < GRAIN_THROTTLE_MS) return;
+  _grainLastTs = now;
+  vibrate('grain');
+}

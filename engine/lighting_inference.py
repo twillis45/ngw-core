@@ -118,8 +118,17 @@ def _infer_pattern_from_catchlights(
 
     # ── Triangle: 3 per eye — classic formation (two upper + one lower) ──────
     # Classic Hurley/triangle: ≥2 upper catchlights (hours 10–2) AND ≥1 lower
-    # catchlight (hours 4–8) per eye.  Requires ≥3 catchlights per eye total.
-    # Both eyes matching → high confidence (0.85); one eye only → reduced (0.60).
+    # catchlight (hours 4–8) per eye.  Requires ≥3 INDEPENDENT sources per eye.
+    # Exclude fill_candidate catchlights — they are reflector fills (lower fills)
+    # that look like triangle lower sources but aren't independent lights.
+    # A loop+reflector combo (key + 6 o'clock fill) would otherwise match triangle.
+    def _non_fill_hours(eye_catchlights: List[Dict], hours: List[int]) -> List[int]:
+        """Return hours excluding fill_candidate catchlights."""
+        return [
+            h for c, h in zip(eye_catchlights, hours)
+            if not c.get("fill_candidate", False)
+        ]
+
     def _is_triangle_eye(hours: List[int]) -> bool:
         if len(hours) < 3:
             return False
@@ -133,8 +142,13 @@ def _infer_pattern_from_catchlights(
         lower       = [h for h in hours if h in (4, 5, 6, 7, 8)]
         return len(upper_left) >= 1 and len(upper_right) >= 1 and len(lower) >= 1
 
-    left_tri  = _is_triangle_eye(left_hours)
-    right_tri = _is_triangle_eye(right_hours)
+    # Use non-fill hours for triangle detection (fill_candidate reflectors are
+    # not independent sources and would cause false triangle detections).
+    left_tri_hours  = _non_fill_hours(left,  left_hours)
+    right_tri_hours = _non_fill_hours(right, right_hours)
+
+    left_tri  = _is_triangle_eye(left_tri_hours)
+    right_tri = _is_triangle_eye(right_tri_hours)
 
     if left_tri and right_tri:
         return {
@@ -346,27 +360,69 @@ def _infer_pattern_from_catchlights(
         }
 
     # ── Multi-catchlight fallback (>1 per eye, not clamshell) ──
-    # Multiple catchlights per eye typically come from a large soft modifier
-    # (softbox edge reflections, multiple panel edges) or a key + reflector combo.
-    # Infer the key light position from the brightest upper catchlight.
+    # Multiple catchlights per eye come from a large soft modifier (edge reflections)
+    # or a key + reflector combo.
+    #
+    # Key position = hottest upper catchlight PER EYE, then reconcile.
+    # A large modifier off-axis can appear at 12 o'clock in one eye (face-center)
+    # but at 1 or 11 o'clock in the other (true angular position).  The off-axis
+    # reading is more diagnostic: if one eye says top_center and the other says
+    # upper_right/upper_left, use the off-axis reading (it reveals the actual
+    # key angle; the on-axis eye is seeing a wide-face center reflection that
+    # compresses the perceived angle toward 12).
     _upper_quads = ("top_center", "upper_left", "upper_right")
-    _all_upper = [
-        c for c in (left + right)
-        if _classify_clock(_clock_num(c.get("position", "")) or 12) in _upper_quads
-    ]
+    _left_upper  = [c for c in left  if _classify_clock(_clock_num(c.get("position", "")) or 12) in _upper_quads]
+    _right_upper = [c for c in right if _classify_clock(_clock_num(c.get("position", "")) or 12) in _upper_quads]
+    _all_upper = _left_upper + _right_upper
+
     if _all_upper:
-        _primary_c = max(_all_upper, key=lambda c: c.get("intensity", 0.0))
-        _ph = _clock_num(_primary_c.get("position", ""))
-        _pq = _classify_clock(_ph) if _ph else "top_center"
+        # Per-eye hottest upper catchlight
+        _left_hot  = max(_left_upper,  key=lambda c: c.get("intensity", 0.0)) if _left_upper  else None
+        _right_hot = max(_right_upper, key=lambda c: c.get("intensity", 0.0)) if _right_upper else None
+        _left_pq   = _classify_clock(_clock_num(_left_hot.get("position",  "")) or 12) if _left_hot  else None
+        _right_pq  = _classify_clock(_clock_num(_right_hot.get("position", "")) or 12) if _right_hot else None
+
+        if _left_pq and _right_pq:
+            if _left_pq == _right_pq:
+                _pq = _left_pq  # both eyes agree
+            elif _left_pq == "top_center":
+                _pq = _right_pq  # right eye's off-axis reading overrides center
+            elif _right_pq == "top_center":
+                _pq = _left_pq   # left eye's off-axis reading overrides center
+            else:
+                # Both off-axis but different sides — use brighter eye
+                _pq = _left_pq if (_left_hot.get("intensity", 0) >= _right_hot.get("intensity", 0)) else _right_pq
+        elif _left_pq:
+            _pq = _left_pq
+        else:
+            _pq = _right_pq or "top_center"
+
+        _primary_c = _left_hot if _pq in (_left_pq,) else _right_hot
+        _ph = _clock_num((_primary_c or _all_upper[0]).get("position", ""))
         _has_lower_l = any(_classify_clock(h) == "lower" for h in left_hours)
         _has_lower_r = any(_classify_clock(h) == "lower" for h in right_hours)
         _bilateral_fill = _has_lower_l and _has_lower_r
-        if _pq == "top_center":
-            _pat = "butterfly"
-            _key_text = "on-axis (elevated)"
+        # Pattern from catchlight position ALONE is insufficient to claim
+        # butterfly — butterfly requires a symmetric sub-nasal shadow under
+        # BOTH nostrils, which is a nose-shadow property, not a catchlight
+        # property.  At this layer we only know where the key is, so we emit
+        # a conservative "loop" (the more common default) and let downstream
+        # arbitration (shadow pass + orchestrator) upgrade to butterfly if
+        # the shadow geometry actually supports it.  This prevents a 12
+        # o'clock catchlight from unilaterally forcing butterfly when the
+        # nose shadow is clearly diagonal.
+        if _ph == 12:
+            _pat = "loop"  # conservative — upgraded to butterfly only by shadow geometry
+            _key_text = "at or near 12 o'clock (on-axis — pattern resolved by nose shadow)"
+        elif _pq == "upper_left":
+            _pat = "loop"
+            _key_text = "30-45 off-axis left"
+        elif _pq == "upper_right":
+            _pat = "loop"
+            _key_text = "30-45 off-axis right"
         else:
             _pat = "loop"
-            _key_text = "30-45 off-axis left" if _pq == "upper_left" else "30-45 off-axis right"
+            _key_text = f"clock hour {_ph}" if _ph else "off-axis"
         return {
             "pattern": _pat,
             "pattern_confidence": 0.30,
@@ -376,7 +432,8 @@ def _infer_pattern_from_catchlights(
             "unrecognized_details": [],
             "notes": [
                 f"Multiple catchlights ({len(left)}L/{len(right)}R): "
-                f"primary at {_ph} o'clock → {_pat} inferred from key position."
+                f"per-eye hottest L={_left_pq} R={_right_pq} → hour={_ph} → {_pat} "
+                f"(pattern defer to nose shadow geometry)."
             ],
         }
     return {
@@ -741,15 +798,42 @@ def _build_catchlight_intelligence(
     upper = [c for c in credible if _quad(c) in _UPPER_QUADS]
     lower = [c for c in credible if _quad(c) == "lower"]
 
-    # ── Identify primary key: brightest upper catchlight ──
+    # ── Identify primary key: hottest upper catchlight ──
+    # The key light creates the brightest specular in the eye.  The dedup pass
+    # (±1 clock window in cue_extraction) has already separated the key
+    # catchlight from modifier-edge secondaries, so the genuine key is the
+    # brightest upper catchlight.  Pattern (loop vs butterfly) is determined
+    # separately by _infer_pattern_from_catchlights using per-eye reconciliation.
+
     primary_key: Optional[Dict[str, Any]] = None
     primary_key_obj: Optional[Dict] = None  # reference to the raw dict for identity checks
+
     if upper:
-        primary_key_obj = max(upper, key=lambda c: c.get("intensity", 0.0))
+        primary_key_obj = max(upper, key=lambda c: c.get("intensity") or 0.0)
         pk_quad = _quad(primary_key_obj)
+
+        # ── Per-eye position reconciliation ──────────────────────────────
+        # A large modifier near on-axis can appear at 12 o'clock in the
+        # near eye but at 1 or 11 in the far eye.  The off-axis reading is
+        # more diagnostic (reveals the true angle); the on-axis eye sees
+        # a compressed center reflection.  When the primary key is at
+        # top_center and the other eye's hottest upper is off-axis, adopt
+        # the off-axis position and quad.
+        _pk_position = primary_key_obj.get("position")
+        _pk_eye = primary_key_obj.get("eye")
+        if pk_quad == "top_center" and _pk_eye:
+            _other_upper = [c for c in upper if c.get("eye") != _pk_eye]
+            if _other_upper:
+                _other_hot = max(_other_upper, key=lambda c: c.get("intensity") or 0.0)
+                _other_quad = _quad(_other_hot)
+                if _other_quad in ("upper_left", "upper_right"):
+                    # Off-axis eye reveals actual key angle
+                    _pk_position = _other_hot.get("position")
+                    pk_quad = _other_quad
+
         primary_key = {
-            "eye":        primary_key_obj.get("eye"),
-            "position":   primary_key_obj.get("position"),
+            "eye":        _pk_eye,
+            "position":   _pk_position,
             "quad":       pk_quad,
             "intensity":  primary_key_obj.get("intensity"),
             "size_ratio": primary_key_obj.get("size_ratio"),
@@ -1230,41 +1314,24 @@ def infer_lighting_from_vision(
     modifier_result = _infer_modifier_from_catchlights(catchlight_list)
 
     # Triangle gates — applied when cue_report is available.
+    # Note: B&W detection does NOT suppress triangle. Catchlight clock positions
+    # are pure geometry — readable from B&W images exactly as from colour ones.
     if pattern_result.get("pattern") == "triangle" and cue_report is not None:
-        # Gate 1 — B&W guard: B&W processing compresses tonal range and can
-        # create positional artifacts in catchlight detection.  Triangle
-        # detection from catchlight clock positions is unreliable on B&W images.
-        # Hard-veto: suppress triangle and fall through to direction-based analysis.
-        _tp_li = getattr(cue_report, "tonal_processing_estimation", None)
-        _is_bw_li = getattr(_tp_li, "is_bw", False)
-        if _is_bw_li:
-            pattern_result = {
-                "pattern":             "unknown",
-                "pattern_confidence":  0.0,
-                "key_position_text":   "",
-                "fill_method_text":    "",
-                "light_count":         1,
-                "unrecognized_details": [],
-                "notes":               [
-                    "Triangle detection suppressed: B&W image — catchlight positions unreliable."
-                ],
-            }
-        else:
-            # Gate 2 — Contrast gate: real triangle lighting wraps from 3 directions
-            # producing low-to-moderate contrast.  Very high contrast weakens the
-            # 3-light theory — extra catchlights may be reflections.
-            # Soft gate: penalise confidence instead of hard-vetoing to "unknown".
-            _cr = getattr(cue_report, "contrast_ratio", None)
-            _cr_label = (getattr(_cr, "label", "") if _cr else "").lower()
-            if _cr_label in ("high", "extreme"):
-                pattern_result = dict(pattern_result)  # don't mutate original
-                _orig_conf = pattern_result.get("pattern_confidence", 0.5)
-                _penalty = 0.5 if _cr_label == "extreme" else 0.35
-                pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
-                pattern_result["notes"] = pattern_result.get("notes", []) + [
-                    f"Triangle confidence penalised (−{_penalty:.2f}): {_cr_label} contrast "
-                    "weakens 3-light theory. Extra catchlights may be reflections."
-                ]
+        # Contrast gate: real triangle lighting wraps from 3 directions
+        # producing low-to-moderate contrast.  Very high contrast weakens the
+        # 3-light theory — extra catchlights may be reflections (jewellery, glasses).
+        # Soft gate: penalise confidence instead of hard-vetoing to "unknown".
+        _cr = getattr(cue_report, "contrast_ratio", None)
+        _cr_label = (getattr(_cr, "label", "") if _cr else "").lower()
+        if _cr_label in ("high", "extreme"):
+            pattern_result = dict(pattern_result)  # don't mutate original
+            _orig_conf = pattern_result.get("pattern_confidence", 0.5)
+            _penalty = 0.5 if _cr_label == "extreme" else 0.35
+            pattern_result["pattern_confidence"] = max(0.15, _orig_conf - _penalty)
+            pattern_result["notes"] = pattern_result.get("notes", []) + [
+                f"Triangle confidence penalised (−{_penalty:.2f}): {_cr_label} contrast "
+                "weakens 3-light theory. Extra catchlights may be reflections."
+            ]
 
     # Split asymmetry gate: a genuine 90° side key produces left-right
     # facial shadow asymmetry.  Low asymmetry weakens the split hypothesis.
@@ -1334,13 +1401,56 @@ def infer_lighting_from_vision(
                     f"('{cue_pattern}') — confidence boosted by {boost:.2f}."
                 )
             elif pattern_result["pattern"] == "unknown" and cue_pattern != "unknown":
-                # Catchlights inconclusive but cues suggest a pattern
+                # Catchlights inconclusive but cues suggest a pattern.
+                #
+                # Default behaviour: apply a 0.6× haircut because the cue
+                # inference is operating without the corroborating catchlight
+                # signal.
+                #
+                # Exception — strong-shadow override for lateral-key patterns
+                # (loop / rembrandt / split / broad / short).  These patterns
+                # are *defined* by nose-shadow geometry, not catchlights:
+                # loop is a small downward shadow under the nostril opposite
+                # the key, and the dedicated primary_shadow_direction cue
+                # gives us a high-confidence clock angle (1–12).  When the
+                # shadow direction is strong AND lateral, the cue analysis
+                # is operating on its own native evidence — no haircut, and
+                # a small boost.  Reasoning in clock hours like a lighting
+                # tech: hours {2,3,4,8,9,10} are clearly off-axis lateral.
+                _LATERAL_KEY_PATTERNS = {"loop", "rembrandt", "split", "broad", "short"}
+                _LATERAL_HOURS = frozenset({2, 3, 4, 8, 9, 10})
+                _psd_boost = cue_report.primary_shadow_direction
+                _strong_lateral_shadow = False
+                if (
+                    cue_pattern in _LATERAL_KEY_PATTERNS
+                    and _psd_boost is not None
+                    and getattr(_psd_boost, "confidence", 0.0) >= 0.7
+                ):
+                    _psd_clock_b = getattr(_psd_boost, "clock_angle", None)
+                    if _psd_clock_b is not None and _psd_clock_b in _LATERAL_HOURS:
+                        _strong_lateral_shadow = True
+
                 pattern_result["pattern"] = cue_pattern
-                pattern_result["pattern_confidence"] = setup_family.primary_confidence * 0.6
-                all_notes.append(
-                    f"Catchlights inconclusive; cue-based analysis suggests "
-                    f"'{cue_pattern}' (confidence {setup_family.primary_confidence:.2f})."
-                )
+                if _strong_lateral_shadow:
+                    # Native evidence for the pattern — keep full cue
+                    # confidence and add a small directional-shadow boost.
+                    pattern_result["pattern_confidence"] = min(
+                        0.90,
+                        setup_family.primary_confidence + 0.10,
+                    )
+                    all_notes.append(
+                        f"Catchlights absent but nose-shadow direction is strong "
+                        f"({_psd_boost.direction} @ clock {_psd_boost.clock_angle}, "
+                        f"confidence {_psd_boost.confidence:.2f}) — '{cue_pattern}' "
+                        f"confidence held at "
+                        f"{pattern_result['pattern_confidence']:.2f} (no haircut)."
+                    )
+                else:
+                    pattern_result["pattern_confidence"] = setup_family.primary_confidence * 0.6
+                    all_notes.append(
+                        f"Catchlights inconclusive; cue-based analysis suggests "
+                        f"'{cue_pattern}' (confidence {setup_family.primary_confidence:.2f})."
+                    )
             elif cue_pattern != "unknown" and cue_pattern != pattern_result["pattern"]:
                 # Disagreement — keep catchlight result, record alternative
                 all_notes.append(
@@ -1501,6 +1611,28 @@ def infer_lighting_from_vision(
                         side_votes[mapped_side] += 1
                 best_side = max(side_votes, key=side_votes.get)
                 if side_votes[best_side] > 0:
+                    # ── Tie-break: per-eye off-axis reconciliation ────────
+                    # When votes are tied (e.g. center=2, right=2, left=2),
+                    # the raw majority vote is arbitrary.  Apply the same
+                    # off-axis principle used in pattern inference: find
+                    # each eye's hottest upper catchlight; if one is
+                    # top_center and the other off-axis, the off-axis
+                    # reading reveals the true key side.
+                    _tied = [s for s, v in side_votes.items() if v == side_votes[best_side]]
+                    if len(_tied) > 1:
+                        _l_upper = [c for c in (left_eye or [])
+                                    if _classify_clock(_clock_num(c.get("position","")) or 12) in ("top_center","upper_left","upper_right")]
+                        _r_upper = [c for c in (right_eye or [])
+                                    if _classify_clock(_clock_num(c.get("position","")) or 12) in ("top_center","upper_left","upper_right")]
+                        _l_hot = max(_l_upper, key=lambda c: c.get("intensity",0)) if _l_upper else None
+                        _r_hot = max(_r_upper, key=lambda c: c.get("intensity",0)) if _r_upper else None
+                        _l_q = _classify_clock(_clock_num(_l_hot.get("position","")) or 12) if _l_hot else None
+                        _r_q = _classify_clock(_clock_num(_r_hot.get("position","")) or 12) if _r_hot else None
+                        if _l_q and _r_q:
+                            if _l_q == "top_center" and _r_q != "top_center":
+                                best_side = _CLOCK_TO_SIDE.get(_r_q, best_side)
+                            elif _r_q == "top_center" and _l_q != "top_center":
+                                best_side = _CLOCK_TO_SIDE.get(_l_q, best_side)
                     key_side = best_side
 
     # From cue-based geometry (may override or fill gap)

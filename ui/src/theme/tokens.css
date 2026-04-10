@@ -225,6 +225,37 @@
   --color-bg-instrument:      #0B0B0C;  /* deepest carbon black — ShootMode cockpit, LAB panels */
   --color-surface-instrument: #131416;  /* raised instrument surface — spec rows, readout cells */
 
+  /* ── Studio Matte — Day1DemoApp design language ────── */
+  /* Pixel-exact from Figma YQgGd8KZyZoXzZwJV7p4b6 / Studio Matte Theme */
+  --sm-bg:            #000001;                      /* main background */
+  --sm-surface:       #0f1013;                      /* analytical panel / card */
+  --sm-surface-slot:  #08080a;                      /* viewfinder well */
+  --sm-surface-pill:  #070709;                      /* meta pill */
+  --sm-surface-cta-from: #3d404d;                   /* CTA gradient top */
+  --sm-surface-cta-to:   #1c1d24;                   /* CTA gradient bottom */
+  /* Steel-blue tint — base RGB separated for alpha compositing */
+  --sm-steel-r:       95;
+  --sm-steel-g:       124;
+  --sm-steel-b:       150;
+  --sm-steel:         rgb(95, 124, 150);            /* solid reference */
+  /* Typography */
+  --sm-text-primary:  rgba(245, 247, 250, 0.95);
+  --sm-text-sub:      rgba(184, 191, 199, 0.65);
+  --sm-text-sub-bold: rgba(184, 191, 199, 0.85);
+  --sm-text-meta:     #a7adb7;
+  --sm-text-dim:      rgba(184, 191, 199, 0.5);
+  /* Structural */
+  --sm-divider:       rgba(255, 255, 255, 0.04);
+  --sm-bar-track:     rgba(184, 191, 199, 0.08);
+  /* Confidence — mapped to global tokens */
+  --sm-conf-high:     rgba(72, 186, 136, 0.95);     /* = --color-success @ 95% */
+  --sm-conf-low:      rgba(245, 190, 72, 0.9);      /* amber, distinct from --color-warning */
+  /* Panel shadow + bevel (exact Figma 1515:2) */
+  --sm-panel-shadow:  1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4);
+  --sm-panel-bevel:   inset -1px -1px 2px 0px rgba(0,0,0,0.12), inset 1px 1px 0px 0px rgba(255,255,255,0.05);
+  /* Engraved / inset label treatment — dark top-edge shadow + faint bottom reflection */
+  --sm-text-shadow-engraved: 0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 2px rgba(0,0,0,0.35);
+
   --shadow-sm:   0 1px 2px rgba(0,0,0,0.3);
   --shadow-md:   0 4px 12px rgba(0,0,0,0.4);
   --shadow-lg:   0 8px 24px rgba(0,0,0,0.5);

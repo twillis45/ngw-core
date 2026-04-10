@@ -419,13 +419,7 @@ def _infer_shadow_pattern(
             face_cr_label = getattr(cr, "face_label", None) if cr else None
             cr_label = (face_cr_label or (cr.label if cr else "unknown")).lower()
             if cr_label in ("low", "medium"):
-                # B&W guard: B&W processing compresses tonal range, making
-                # high-contrast portraits appear to have "low" or "medium"
-                # contrast.  Under B&W, the contrast measurement is unreliable
-                # as a triangle gate — skip triangle detection on B&W images.
-                _tp_tri = getattr(cue_report, "tonal_processing_estimation", None)
-                _is_bw_tri = getattr(_tp_tri, "is_bw", False)
-                if not _is_bw_tri and _has_triangle_catchlights(cue_report):
+                if _has_triangle_catchlights(cue_report):
                     return "triangle"
             # High/extreme contrast with 3+ catchlights per eye →
             # NOT triangle.  Extra catchlights are reflections from
@@ -467,16 +461,7 @@ def _infer_shadow_pattern(
                 and _fo_clam.confidence >= 0.65
                 and getattr(_fo_clam, "broad_side", "unknown") not in ("unknown", "")
             )
-            # BW guard: in B&W images, shadow-direction extraction loses color
-            # signal, so key_direction frequently falls to "unknown".  Treating
-            # an unknown direction as on-axis (clamshell) is a false assumption —
-            # the key could equally be lateral (broad/short territory).
-            # Suppress clamshell when both conditions hold; fall through so
-            # direction-based patterns handle the result instead.
-            _tp_clam = getattr(cue_report, "tonal_processing_estimation", None)
-            _is_bw_img = getattr(_tp_clam, "is_bw", False)
-            _bw_dir_unknown = _is_bw_img and key_direction == "unknown"
-            if not _face_turned and not _bw_dir_unknown and _has_clamshell_catchlights(cue_report):
+            if not _face_turned and _has_clamshell_catchlights(cue_report):
                 return "clamshell"
         # else: fall through to direction-based patterns
 
@@ -580,6 +565,42 @@ def _infer_shadow_pattern(
         and getattr(_fr, "fill_label", "") == "flat"
     )
 
+    # ── Butterfly hard-block: high-confidence lateral shadow direction ────
+    # Butterfly requires the nose shadow to drop straight down (centered)
+    # from a key at 12 o'clock.  Reasoning in clock hours like a lighting
+    # technician — the dedicated shadow-direction extractor reports a
+    # clock_angle (1–12) describing where the shadow falls:
+    #   • 8, 9, 10  → key from camera-right, clearly lateral
+    #   • 2, 3, 4   → key from camera-left, clearly lateral
+    #   • 11, 12, 1 → near top, butterfly possible
+    #   • 5, 6, 7   → below the face (clamshell fill or underlight)
+    # When clock_angle lands in the lateral hours {8, 9, 10, 2, 3, 4} with
+    # confidence ≥ 0.7, the key has a directional component that is
+    # geometrically incompatible with butterfly.  No combination of
+    # high_symmetry, flat fill, nsl shadow_label, or light_structure
+    # secondary signal may override this — they are softer cues that
+    # misfire on B&W low-key full-body portraits where reduced tonal range
+    # can confuse fill_ratio and symmetry estimators.  The
+    # primary_shadow_direction extractor cross-validates two independent
+    # methods (nose-shadow position + half-face brightness), so a 0.7+
+    # confidence reading already represents agreement of two physics signals.
+    # Direction-label fallback is kept for callers that produce a direction
+    # without populating clock_angle.
+    _LATERAL_CLOCK_HOURS = frozenset({2, 3, 4, 8, 9, 10})
+    _LATERAL_DIR_LABELS = frozenset({
+        "upper_left", "upper_right", "left", "right",
+        "lower_left", "lower_right",
+    })
+    _psd_for_block = cue_report.primary_shadow_direction
+    _high_conf_lateral_shadow = False
+    if _psd_for_block is not None and getattr(_psd_for_block, "confidence", 0.0) >= 0.7:
+        _psd_clock = getattr(_psd_for_block, "clock_angle", None)
+        _psd_dir = getattr(_psd_for_block, "direction", "unknown")
+        if _psd_clock is not None:
+            _high_conf_lateral_shadow = _psd_clock in _LATERAL_CLOCK_HOURS
+        else:
+            _high_conf_lateral_shadow = _psd_dir in _LATERAL_DIR_LABELS
+
     if key_height == "high":
         # Strong path: shadow detector says centered (unknown direction).
         # Clamshell escape: clamshell also has key-high + on-axis, but
@@ -595,7 +616,9 @@ def _infer_shadow_pattern(
         # handles this by preferring lighting_inference when it says "loop"
         # and is not heavily contradicted (see LI demotion threshold).
         if high_symmetry and key_direction in ("upper_left", "upper_right"):
-            if not _ls_says_clamshell and not _nsl_blocks_butterfly:
+            if (not _ls_says_clamshell
+                and not _nsl_blocks_butterfly
+                and not _high_conf_lateral_shadow):
                 return "butterfly"
         # P2c: Flat fill + high key + slightly off-axis → soft butterfly.
         # fill_ratio.fill_label=="flat" means the shadow side is nearly as
@@ -605,7 +628,9 @@ def _infer_shadow_pattern(
         # upper_left / upper_right but produces flat fill is a soft butterfly
         # where the shadow detector picked up a minor lateral bias.
         if _flat_fill and key_direction in ("upper_left", "upper_right"):
-            if not _ls_says_clamshell and not _nsl_blocks_butterfly:
+            if (not _ls_says_clamshell
+                and not _nsl_blocks_butterfly
+                and not _high_conf_lateral_shadow):
                 return "butterfly"
 
     # ── P3: Nose shadow length → butterfly / loop disambiguation ──────────
@@ -618,16 +643,23 @@ def _infer_shadow_pattern(
     # scoring provides the necessary disambiguation.
     nsl = cue_report.nose_shadow_length
     if nsl and nsl.confidence > 0.4 and nsl.shadow_label == "butterfly":
-        if key_direction in ("unknown", "top_center") or high_symmetry:
-            if not _ls_says_clamshell:
-                return "butterfly"
+        # Domain rule: butterfly requires a symmetric sub-nasal shadow under
+        # BOTH nostrils.  "top_center" / "unknown" direction labels bucket too
+        # much noise to drive the call alone — require an independent
+        # corroboration (high_symmetry from highlight analysis OR
+        # light_structure explicit butterfly).  Bare top_center direction no
+        # longer shortcuts to butterfly.
+        if ((high_symmetry or _ls_says_butterfly)
+            and not _ls_says_clamshell
+            and not _high_conf_lateral_shadow):
+            return "butterfly"
     # P3-ext: light_structure explicitly identifies butterfly geometry on a
     # barely-off-axis key (upper_left / upper_right, key high).  This covers
     # soft butterfly setups where the shadow direction detector sees a slight
     # lateral bias but the nose-shadow-shape analysis confirms centered geometry.
     # Requires ls.confidence ≥ 0.6 — ls is the more reliable CV signal here.
     if _ls_says_butterfly and key_direction in ("upper_left", "upper_right") and key_height == "high":
-        if not _ls_says_clamshell:
+        if not _ls_says_clamshell and not _high_conf_lateral_shadow:
             return "butterfly"
 
     # ── P4: Shadow continuity → Rembrandt triangle confirmation ──────────
@@ -901,7 +933,7 @@ def infer_source_quality(cue_report: VisualCueReport) -> SourceQualityInference:
     # Gated: not added under high-contrast grade (HCG inflates apparent
     # penumbra width from tone-curve contrast, not actual source size).
     pen = cue_report.shadow_penumbra
-    if pen and pen.confidence > 0.3:
+    if pen and pen.confidence >= 0.3:
         tp_check = cue_report.tonal_processing_estimation
         _pen_is_hcg = tp_check is not None and (
             tp_check.is_high_contrast_grade or tp_check.is_bw

@@ -3,8 +3,15 @@ import HomeScreen from './HomeScreen';
 import ProcessingScreen from './ProcessingScreen';
 import ResultScreen from './ResultScreen';
 import SetupScreen from './SetupScreen';
+import Day1ShootScreen from './Day1ShootScreen';
+import StudioLoginScreen from './StudioLoginScreen';
+import Day1SettingsScreen from './Day1SettingsScreen';
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
+import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
+import { Panel, CtaButton, HomeIndicator } from '../components/day1';
+import { tapHaptic, warnHaptic } from '../utils/haptics';
+import { softClickSound } from '../utils/sounds';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -56,10 +63,59 @@ function downsampleImage(file, maxBytes) {
  * Wired to real analysis engine: POST /api/lab/analyze
  */
 
-/** Convert snake_case canonical pattern → display name (e.g. "ring_light" → "RING LIGHT") */
+/**
+ * Display rule for lighting patterns + modifiers: capital first letter on
+ * each word, no underscores (Title Case — e.g. "ring_light" → "Ring Light",
+ * "beauty_dish" → "Beauty Dish", "softbox_rect" → "Softbox Rect").
+ */
+function toTitleCase(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Engine modifier slugs → photographer-friendly display names.
+// Used so result UIs never show raw tokens like "softbox_rect" or
+// the awkward title-cased "Softbox Rect".
+const MODIFIER_DISPLAY = {
+  softbox_rect:    'Rectangular Softbox',
+  softbox_oct:     'Octa Softbox',
+  octabox:         'Octa Softbox',
+  beauty_dish:     'Beauty Dish',
+  ring_light:      'Ring Light',
+  strip_box:       'Strip Box',
+  stripbox:        'Strip Box',
+  umbrella:        'Umbrella',
+  umbrella_shoot:  'Shoot-Through Umbrella',
+  umbrella_bounce: 'Bounce Umbrella',
+  parabolic:       'Parabolic Reflector',
+  hard_source:     'Bare Hard Source',
+  bare_bulb:       'Bare Bulb',
+  bare_strobe:     'Bare Strobe',
+  reflector:       'Reflector',
+  scrim:           'Scrim / Diffuser',
+  window:          'Window Light',
+};
+
+function prettyModifierLabel(raw) {
+  if (!raw) return '';
+  const key = String(raw).toLowerCase().trim().replace(/\s+/g, '_');
+  if (MODIFIER_DISPLAY[key]) return MODIFIER_DISPLAY[key];
+  // Fallback: cleanup engine slug heuristically.
+  // "softbox rect" / "rect softbox" → "Rectangular Softbox"
+  const lc = String(raw).toLowerCase();
+  if (lc.includes('softbox') && lc.includes('rect')) return 'Rectangular Softbox';
+  if (lc.includes('softbox') && (lc.includes('oct') || lc.includes('octa'))) return 'Octa Softbox';
+  if (lc.includes('softbox') && lc.includes('strip')) return 'Strip Box';
+  return toTitleCase(raw);
+}
+
 function displayPattern(name) {
-  if (!name) return 'UNKNOWN';
-  return name.replace(/_/g, ' ').toUpperCase();
+  if (!name) return 'Unknown';
+  return toTitleCase(name);
 }
 
 /** Map API response → ResultScreen prop shape */
@@ -73,169 +129,390 @@ function mapApiResult(data) {
   const confidence = Math.round((data.authoritative_confidence || 0) * 100);
   const pattern = displayPattern(data.authoritative_pattern);
 
-  // Meta pills — short descriptors from lighting inference (display as uppercase)
+  // Meta pills — short descriptors from lighting inference.  Pattern/modifier
+  // display rule: Title Case, no underscores.
+  const fillPill = (() => {
+    const f = li.fill_method_text || '';
+    if (!f || f === 'none') return null;
+    const label = f === 'bilateral' ? 'Bilateral Fill'
+      : f === 'unilateral' ? 'Unilateral Fill'
+      : f === 'bounce'     ? 'Bounce Fill'
+      : null;
+    return label;
+  })();
   const meta = [
-    li.key_position_text,
-    li.modifier_family,
+    li.key_position_text ? toTitleCase(li.key_position_text) : null,
+    li.modifier_family   ? prettyModifierLabel(li.modifier_family) : null,
     li.light_count ? `${li.light_count} light${li.light_count !== 1 ? 's' : ''}` : null,
-    li.detected_environment,
-  ].filter(Boolean).map(s => s.replace(/_/g, ' ').toUpperCase());
+    fillPill,
+    // Environment only if non-studio (studio is assumed, not informative as a pill)
+    li.detected_environment && li.detected_environment !== 'studio'
+      ? toTitleCase(li.detected_environment) : null,
+  ].filter(Boolean);
 
-  // Pattern candidates — primary + construct alternates from available data
+  // Pattern candidates — use real resolver output from engine.
+  // API returns data.pattern_candidates with primary_candidate + alternate_candidates,
+  // each carrying an actual confidence value from the resolver stack.
+  // Fall back to legacy signal_diagnostics proxies only when resolver data is absent.
+  const pc = data.pattern_candidates || {};
+  const pcAlternates = pc.alternate_candidates || [];
   const candidates = [{ name: pattern, score: confidence }];
-  const sdFinal = sd.final_pattern || '';
-  if (sdFinal && sdFinal !== data.authoritative_pattern) {
-    candidates.push({ name: displayPattern(sdFinal), score: Math.round(confidence * 0.7) });
-  }
-  // Shadow-pass pattern as a weaker alternate
-  const shadowPassPattern = signals.shadow_pass_pattern || '';
-  const existingNames = candidates.map(c => c.name.toLowerCase());
-  if (shadowPassPattern && !existingNames.includes(displayPattern(shadowPassPattern).toLowerCase())) {
-    candidates.push({ name: displayPattern(shadowPassPattern), score: Math.round(confidence * 0.5) });
+
+  for (const alt of pcAlternates.slice(0, 2)) {
+    const altName = displayPattern(alt.pattern);
+    if (!altName) continue;
+    if (altName.toLowerCase() === candidates[0].name.toLowerCase()) continue;
+    const altScore = Math.round((alt.confidence || 0) * 100);
+    // Only show alternate if it has a meaningfully different score (avoid near-dupes)
+    if (altScore > 0 && altScore < confidence) {
+      candidates.push({ name: altName, score: altScore });
+    }
   }
 
-  // Shadow analysis — build readable sentence from signal diagnostics
+  // Legacy fallbacks if resolver gave no alternates
+  if (candidates.length < 2) {
+    const sdFinal = sd.final_pattern || '';
+    if (sdFinal && sdFinal !== data.authoritative_pattern) {
+      candidates.push({ name: displayPattern(sdFinal), score: Math.round(confidence * 0.65) });
+    }
+  }
+  if (candidates.length < 2) {
+    const shadowPassPattern = signals.shadow_pass_pattern || '';
+    const existingNames = candidates.map(c => c.name.toLowerCase());
+    if (shadowPassPattern && !existingNames.includes(displayPattern(shadowPassPattern).toLowerCase())) {
+      candidates.push({ name: displayPattern(shadowPassPattern), score: Math.round(confidence * 0.5) });
+    }
+  }
+
+  // Shadow analysis — build from reference_analysis.lighting_read which carries structured
+  // human-readable fields: source_quality, shadow_pattern, fill_presence, rim_presence,
+  // key_observations.  This is the authoritative physical read of the light.
+  // Fall back to li.notes (engine debug notes) then to raw signal metrics.
+  const lightingRead = data.reference_analysis?.lighting_read || {};
   let shadowAnalysis = '';
-  if (li.notes && li.notes.length > 0) {
-    shadowAnalysis = li.notes.join('. ');
-  } else {
+
+  if (lightingRead.shadow_pattern || lightingRead.source_quality) {
     const parts = [];
-    if (signals.shadow_pass_pattern) parts.push(`Shadow pass: ${signals.shadow_pass_pattern}`);
-    if (signals.nose_shadow_angle_deg) parts.push(`nose shadow at ${signals.nose_shadow_angle_deg}°`);
-    if (signals.left_right_asymmetry) parts.push(`L/R asymmetry: ${(signals.left_right_asymmetry * 100).toFixed(1)}%`);
-    if (signals.triangle_isolation > 0) parts.push(`triangle isolation: ${(signals.triangle_isolation * 100).toFixed(1)}%`);
+    if (lightingRead.source_quality && lightingRead.shadow_pattern) {
+      const src = toTitleCase(lightingRead.source_quality);
+      const pat = toTitleCase(lightingRead.shadow_pattern);
+      parts.push(`${src} source with ${pat} shadow pattern`);
+    } else if (lightingRead.shadow_pattern) {
+      parts.push(`${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`);
+    } else if (lightingRead.source_quality) {
+      parts.push(`${toTitleCase(lightingRead.source_quality)} source`);
+    }
+    if (lightingRead.fill_presence && !['none','unknown'].includes(lightingRead.fill_presence)) {
+      parts.push(`${lightingRead.fill_presence} fill`);
+    }
+    if (lightingRead.rim_presence && !['none','unknown'].includes(lightingRead.rim_presence)) {
+      parts.push(`${lightingRead.rim_presence} rim light`);
+    }
+    if (lightingRead.shadow_pattern_detail) {
+      parts.push(lightingRead.shadow_pattern_detail);
+    }
+    // Key observations — take up to 3, skip purely diagnostic notes
+    const obs = (lightingRead.key_observations || []).filter(o => o && o.length < 140);
+    parts.push(...obs.slice(0, 3));
+    // Ambiguity notes — surface uncertainty when present
+    const amb = (lightingRead.ambiguity_notes || []).filter(o => o && !o.startsWith('[VLW'));
+    if (amb.length > 0 && parts.length < 3) parts.push(amb[0]);
+    shadowAnalysis = parts.join('. ').trim();
+    if (shadowAnalysis && !shadowAnalysis.endsWith('.')) shadowAnalysis += '.';
+  }
+
+  if (!shadowAnalysis && li.notes && li.notes.length > 0) {
+    shadowAnalysis = li.notes.join('. ');
+  }
+
+  if (!shadowAnalysis) {
+    const parts = [];
+    if (signals.shadow_pass_pattern) parts.push(`Shadow: ${toTitleCase(signals.shadow_pass_pattern)}`);
+    if (signals.nose_shadow_angle_deg != null) parts.push(`nose shadow at ${signals.nose_shadow_angle_deg}°`);
+    if (signals.left_right_asymmetry != null) parts.push(`L/R asymmetry ${(signals.left_right_asymmetry * 100).toFixed(0)}%`);
     shadowAnalysis = parts.join('. ') || 'Shadow analysis complete.';
   }
 
-  // Catchlight & modifier — build from catchlight intelligence
+  // Catchlight & modifier — build from catchlight intelligence.  Modifier
+  // family/shape names follow the Title Case display rule.
   let catchlightModifier = '';
   if (ci && ci.modifier) {
     const mod = ci.modifier;
-    catchlightModifier = `${mod.family || li.modifier_family || 'Unknown'} ${mod.size_label || ''}`.trim();
+    const modName = prettyModifierLabel(mod.type || mod.family || li.modifier_family || mod.label || 'Unknown');
+    catchlightModifier = `${modName} ${mod.size_estimate || mod.size_label || ''}`.trim();
     if (ci.primary_key) {
       const pk = ci.primary_key;
-      catchlightModifier += `. Key catchlight at ${pk.position || 'unknown'}, ${pk.shape || ''} shape`;
+      catchlightModifier += `. Key catchlight at ${pk.position || 'unknown'}, ${toTitleCase(pk.shape || '') || 'unknown'} shape`;
     }
   } else if (li.modifier_family) {
-    catchlightModifier = li.modifier_family;
+    catchlightModifier = prettyModifierLabel(li.modifier_family);
     if (sd.catchlights && sd.catchlights.length > 0) {
       const first = sd.catchlights[0];
       if (first.position) catchlightModifier += ` — catchlight at ${first.position}`;
-      if (first.shape) catchlightModifier += `, ${first.shape} shape`;
+      if (first.shape) catchlightModifier += `, ${toTitleCase(first.shape)} shape`;
     }
   } else {
     catchlightModifier = 'Modifier analysis complete.';
   }
 
-  // Structured modifier data — size range + distance guidance derived from size class
+  // Structured modifier data — size range + distance guidance derived from size class.
+  // Columns: oct (octabox), rect (rectangular softbox), strip (strip box), bd (beauty dish).
+  // Distances are shared across modifier types at a given size class.
   const SIZE_RANGES = {
-    'small':  { oct: '24"–36"',  rect: '12"×16" – 24"×36"', dist: '3–6 ft',  optimal: '4–5 ft' },
-    'medium': { oct: '36"–48"',  rect: '24"×30" – 36"×48"', dist: '4–8 ft',  optimal: '5–7 ft' },
-    'large':  { oct: '48"–60"',  rect: '36"×48" – 36"×60"', dist: '5–10 ft', optimal: '6–8 ft' },
-    'xl':     { oct: '60"–80"',  rect: '36"×72" – 48"×72"', dist: '6–12 ft', optimal: '8–10 ft' },
-    'xxl':    { oct: '60"–80"+', rect: '48"×80" – 60"×84"', dist: '8–14 ft', optimal: '10–12 ft' },
+    'small':  { oct: '24"–36"',   rect: '12"×16" – 16"×22"', strip: '9"×24" – 12"×36"', bd: '16"–18"',  dist: '3–6 ft',  optimal: '4–5 ft' },
+    'medium': { oct: '36"–48"',   rect: '24"×30" – 24"×36"', strip: '12"×48" – 16"×60"', bd: '20"–22"', dist: '4–8 ft',  optimal: '5–7 ft' },
+    'large':  { oct: '48"–60"',   rect: '36"×48" – 36"×60"', strip: '20"×60" – 36"×90"', bd: '27"–32"', dist: '5–10 ft', optimal: '6–8 ft' },
+    'xl':     { oct: '60"–80"',   rect: '36"×72" – 48"×72"', strip: '36"×90"+',            bd: '32"+',    dist: '6–12 ft', optimal: '8–10 ft' },
+    'xxl':    { oct: '60"–80"+',  rect: '48"×80" – 60"×84"', strip: '36"×90"+',            bd: null,      dist: '8–14 ft', optimal: '10–12 ft' },
   };
+
+  // Resolve which SIZE_RANGES column to use based on modifier family slug.
+  function modSizeCol(slug) {
+    const s = (slug || '').toLowerCase();
+    if (s.includes('strip'))           return 'strip';
+    if (s.includes('beauty') || s.includes('beauty_dish')) return 'bd';
+    if (s.includes('oct'))             return 'oct';
+    return 'rect'; // softbox, umbrella, parabolic, unknown → rect as best proxy
+  }
+
   let modifierData = null;
-  const modFamily = (ci?.modifier?.family || li.modifier_family || '').toLowerCase();
-  const modSizeRaw = (ci?.modifier?.size_label || '').toLowerCase().replace(/\s+/g, '');
-  const sizeKey = ['xxl','xl','large','medium','small'].find(k => modSizeRaw.includes(k)) || null;
+  const ciMod = ci?.modifier || {};
+  // API returns: type, label, size_class, size_estimate, distance_est_ft, distance_class
+  // Also check legacy field names: family, size_label
+  const modFamily = (ciMod.type || ciMod.family || li.modifier_family || '').toLowerCase();
+  const modSizeClass = (ciMod.size_class || '').toLowerCase();
+  const modSizeRaw = (ciMod.size_label || ciMod.label || '').toLowerCase().replace(/\s+/g, '');
+  // Penumbra apparent source size — fallback when no catchlight size info.
+  // Maps shadow-edge width to modifier size class (independent of eye visibility).
+  const PENUMBRA_SIZE_MAP = { small: 'small', medium: 'medium', large: 'large', very_large: 'xl' };
+  const penumbraSize = li.penumbra_source_size ? PENUMBRA_SIZE_MAP[li.penumbra_source_size] || null : null;
+  const sizeKey = modSizeClass || ['xxl','xl','large','medium','small'].find(k => modSizeRaw.includes(k)) || penumbraSize || null;
   if (modFamily || sizeKey) {
-    const isOct = modFamily.includes('oct');
+    const col    = modSizeCol(modFamily);
     const ranges = sizeKey ? SIZE_RANGES[sizeKey] : null;
+    // Prefer engine-computed distance over lookup table
+    const engineDist = ciMod.distance_est_ft || null;
+    // family  = human-readable label ("Small Softbox") — shown as hero text
+    // sizeRange = dimensional estimate shown as sub-line; pick type-specific column
+    const _slug  = ciMod.type || ciMod.family || li.modifier_family || '';
+    const _label = _slug
+      ? prettyModifierLabel(_slug)
+      : (ciMod.label ? toTitleCase(ciMod.label) : 'Unknown Modifier');
+    const _pk = ci?.primary_key || {};
     modifierData = {
-      family:     (ci?.modifier?.family || li.modifier_family || 'Unknown modifier').replace(/_/g, ' '),
-      sizeLabel:  ci?.modifier?.size_label || null,
-      sizeRange:  ranges ? (isOct ? ranges.oct : ranges.rect) : null,
-      position:   ci?.primary_key?.position || null,
-      shape:      ci?.primary_key?.shape || ci?.modifier?.shape || null,
-      distRange:  ranges?.dist || null,
+      family:     _label,
+      sizeLabel:  null,
+      sizeRange:  ciMod.size_estimate || (ranges ? (ranges[col] ?? ranges.rect) : null),
+      position:   _pk.position || null,
+      positionQuad: _pk.quad ? _pk.quad.replace(/_/g, ' ') : null,
+      positionIntensity: _pk.intensity != null ? `${Math.round(_pk.intensity * 100)}% intensity` : null,
+      shape:      toTitleCase(_pk.shape || ciMod.shape || '') || null,
+      catchlightSize: _pk.size_ratio != null ? `${(_pk.size_ratio * 100).toFixed(1)}% iris` : null,
+      distRange:  engineDist || ranges?.dist || null,
       optDist:    ranges?.optimal || null,
+      distQuality: ciMod.distance_quality || null,
       lightCount: li.light_count || null,
-      angularArea: ci?.modifier?.angular_area_ir2 != null
-        ? `${ci.modifier.angular_area_ir2.toFixed(3)} ir²` : null,
+      angularArea: ciMod.total_relative_area != null
+        ? `${ciMod.total_relative_area.toFixed(3)} ir²` : null,
+      physicalMeaning: ciMod.physical_meaning || null,
     };
+  }
+
+  // Modifier fallback — when catchlight intelligence is absent (e.g. closed eyes,
+  // obscured face) but lighting inference has useful data, build a partial block
+  // so the modifier panel always shows something actionable.
+  if (!modifierData) {
+    const hasLiData = li.light_count || li.key_position_text || li.modifier_family || li.source_quality;
+    if (hasLiData) {
+      const fallbackSlug = li.modifier_family || '';
+      const fallbackSizeKey = penumbraSize;
+      const fallbackRanges = fallbackSizeKey ? SIZE_RANGES[fallbackSizeKey] : null;
+      const fallbackCol = modSizeCol(fallbackSlug);
+      modifierData = {
+        family:          fallbackSlug ? prettyModifierLabel(fallbackSlug) : 'Modifier Unresolved',
+        sizeLabel:       null,
+        sizeRange:       fallbackRanges ? (fallbackRanges[fallbackCol] ?? fallbackRanges.rect) : null,
+        position:        li.key_position_text ? toTitleCase(li.key_position_text) : null,
+        shape:           null,
+        distRange:       fallbackRanges?.dist || null,
+        optDist:         fallbackRanges?.optimal || null,
+        distQuality:     null,
+        lightCount:      li.light_count || null,
+        angularArea:     null,
+        physicalMeaning: 'Catchlight obscured — modifier estimated from shadow and source analysis only.',
+      };
+    }
+  }
+
+  // Scene description — from reference_analysis.image_read.
+  // Prefer a pre-composed narrative.  If absent, compose from structured fields
+  // so the SCENE panel always has something meaningful.
+  const imageRead = data.reference_analysis?.image_read || {};
+  let sceneDescription = (
+    imageRead.narrative ||
+    imageRead.scene_description ||
+    ''
+  ).trim();
+
+  if (!sceneDescription) {
+    const parts = [];
+    if (imageRead.subject_type) parts.push(toTitleCase(imageRead.subject_type));
+    if (imageRead.genre && imageRead.genre !== imageRead.subject_type)
+      parts.push(toTitleCase(imageRead.genre));
+    if (imageRead.mood) parts.push(`${imageRead.mood} mood`);
+    if (imageRead.contrast_shadow_feel) parts.push(imageRead.contrast_shadow_feel);
+    if (imageRead.pose_notes) parts.push(imageRead.pose_notes);
+    sceneDescription = parts.join(', ').trim();
+  }
+
+  // ── Pattern source attribution ──────────────────────────────────────────────
+  // Tells the photographer how the authoritative pattern was resolved —
+  // i.e. which layer of the engine stack "won".
+  const SOURCE_LABELS = {
+    reference_read:     'Reference Read',
+    lighting_inference: 'Lighting Inference',
+    definitive_sig:     'Definitive Signal',
+    cue_inference:      'Cue Analysis',
+    light_structure:    'Light Structure',
+  };
+  const patternSource    = SOURCE_LABELS[data.authoritative_pattern_source] || null;
+  const confidenceLabel  = data.authoritative_confidence_label || null; // "strong" | "partial" | "weak"
+
+  // ── Edge case warnings ───────────────────────────────────────────────────────
+  // Surfaces analysis caveats before the photographer commits to "Set Up This Light".
+  const EDGE_FLAGS = {
+    blown_highlights:               { label: 'Blown Highlights',    sev: 'warn' },
+    mixed_color_temperature:        { label: 'Mixed CCT',           sev: 'info' },
+    outdoor_foliage_shadows:        { label: 'Foliage Shadows',     sev: 'info' },
+    window_light_gradient:          { label: 'Window Gradient',     sev: 'info' },
+    extreme_low_key:                { label: 'Extreme Low Key',     sev: 'info' },
+    bw_processing:                  { label: 'B&W Detected',        sev: 'info' },
+    earring_catchlight_contamination: { label: 'Catchlight Noise',  sev: 'warn' },
+  };
+  const edgeCaseWarnings = [];
+  const rawFlags = data.edge_case_flags || {};
+  Object.entries(EDGE_FLAGS).forEach(([k, v]) => {
+    if (rawFlags[k]) edgeCaseWarnings.push(v);
+  });
+
+  // ── Color palette ────────────────────────────────────────────────────────────
+  // Dominant colors, harmony, warm/cool CCT split from reference_analysis.
+  const cpRaw = data.reference_analysis?.color_palette || null;
+  const colorPalette = cpRaw ? {
+    colors:       (cpRaw.dominant_colors   || []).slice(0, 5),
+    hexes:        (cpRaw.dominant_color_hexes || []).slice(0, 5),
+    harmony:      cpRaw.color_harmony     || null,
+    warmCool:     !!cpRaw.warm_cool_split,
+    cctKey:       cpRaw.color_temperature_key    || null,
+    cctShadows:   cpRaw.color_temperature_shadows || null,
+    character:    cpRaw.palette_character  || null,
+  } : null;
+
+  // ── Signal quality / confidence detail ──────────────────────────────────────
+  // signal_coverage lives at data.observability.signal_coverage in the real API.
+  // perception_explanation / signal_reliability are legacy top-level keys kept for compat.
+  const sc = data.observability?.signal_coverage || data.signal_reliability || {};
+  const pe = data.perception_explanation || {};
+  const passSummaries = data.solver?.signal_reliability?.pass_summaries || null;
+  const signalQuality = (sc.signals_available != null || pe.pattern_reasoning) ? {
+    strength:      sc.overall_strength ?? sc.overall_signal_strength ?? null,
+    available:     sc.signals_available ?? null,
+    total:         sc.signals_total ?? null,
+    supporting:    (pe.supporting_signals    || sc.weak_signals || []).slice(0, 4),
+    contradicting: (pe.contradicting_signals || []).slice(0, 3),
+    reasoning:     pe.pattern_reasoning || null,
+    passSummaries: passSummaries || null,
+  } : null;
+
+  const lightQuality = (data.classification?.lightQuality || '').toLowerCase() || null;
+
+  const mood = (imageRead.mood || '').trim() || null;
+
+  // ── VLM Narrative — structured VLM description fields ────────────────────────
+  // data.vlm is a VLMDescription: lighting_style, overall_mood, pose, expression,
+  // framing, likely_photographer, derivation (reasoning dict), etc.
+  const vlmRaw = data.vlm || null;
+  let vlmNarrative = null;
+  if (vlmRaw && vlmRaw.ok !== false) {
+    const fields = [];
+    if (vlmRaw.lighting_style) fields.push({ label: 'Lighting', value: vlmRaw.lighting_style });
+    if (vlmRaw.overall_mood)   fields.push({ label: 'Mood',     value: vlmRaw.overall_mood });
+    if (vlmRaw.framing)        fields.push({ label: 'Framing',  value: vlmRaw.framing });
+    if (vlmRaw.pose)           fields.push({ label: 'Pose',     value: vlmRaw.pose });
+    if (vlmRaw.expression)     fields.push({ label: 'Expression', value: vlmRaw.expression });
+    if (vlmRaw.likely_photographer && vlmRaw.likely_photographer !== 'unknown')
+      fields.push({ label: 'Style reference', value: vlmRaw.likely_photographer });
+    // Derivation — VLM reasoning per conclusion
+    const derivEntries = Object.entries(vlmRaw.derivation || {}).filter(([, v]) => v);
+    if (fields.length > 0 || derivEntries.length > 0) {
+      vlmNarrative = {
+        fields,
+        derivation: derivEntries.slice(0, 6),
+        summary: vlmRaw.lighting_style || vlmRaw.overall_mood || null,
+      };
+    }
   }
 
   return {
     pattern,
     confidence,
     meta,
+    mood,
     sections: {
       patternCandidates: candidates,
+      patternSource,
+      confidenceLabel,
+      edgeCaseWarnings,
       shadowAnalysis,
+      lightQuality,
       catchlightModifier,
       modifier: modifierData,
+      sceneDescription,
+      colorPalette,
+      signalQuality,
+      vlmNarrative,
     },
     _raw: data,
   };
 }
 
-const MOCK_RESULT = {
-  pattern: 'Rembrandt',
-  confidence: 87,
-  meta: ['FRONT LEFT', 'LARGE SOFTBOX', '2 LIGHTS', 'STUDIO', 'GRID', 'FILL RATIO 4:1'],
-  sections: {
-    patternCandidates: [
-      { name: 'Rembrandt', score: 87 },
-      { name: 'Loop', score: 61 },
-      { name: 'Split', score: 44 },
-    ],
-    shadowAnalysis: 'Strong shadow side with nose shadow touching corner of mouth. Classic 45° key placement confirmed. High shadow contrast ratio indicates single dominant source.',
-    catchlightModifier: 'Large softbox — upper left key at 10 o\'clock. Secondary fill catchlight at 4 o\'clock.',
-    modifier: {
-      family: 'Rectangular Softbox',
-      sizeLabel: 'Large',
-      sizeRange: '36"×48" – 36"×60"',
-      position: '10 o\'clock',
-      shape: 'rectangular',
-      distRange: '5–10 ft',
-      optDist: '6–8 ft',
-      lightCount: 2,
-      angularArea: '0.241 ir²',
-    },
-  },
-};
-
-const MOCK_RESULT_LC = {
-  pattern: 'Loop',
-  confidence: 54,
-  meta: ['SIDE LEFT', 'UNKNOWN MODIFIER', '1 LIGHT'],
-  sections: {
-    patternCandidates: [
-      { name: 'Loop', score: 54 },
-      { name: 'Rembrandt', score: 51 },
-      { name: 'Split', score: 48 },
-    ],
-    shadowAnalysis: 'Ambiguous shadow pattern. Nose shadow direction suggests left key but angle is inconclusive. Multiple patterns score within margin of error.',
-    catchlightModifier: 'Modifier unclear — catchlight shape partially obscured. Estimated medium source, left side.',
-    modifier: {
-      family: 'Unknown modifier',
-      sizeLabel: 'Medium',
-      sizeRange: '36"–48" (est.)',
-      position: 'Left side',
-      shape: 'unclear',
-      distRange: '4–8 ft',
-      optDist: '5–7 ft',
-      lightCount: 1,
-      angularArea: null,
-    },
-  },
-};
+// Dev hook — lets browser testing call the real mapApiResult after a background fetch
+if (typeof window !== 'undefined') window.__ngwMapResult = mapApiResult;
 
 export default function Day1DemoApp() {
-  const _params = new URLSearchParams(window.location.search);
-  const _mockParam = _params.get('result');
-  const _mockResult = _mockParam === 'mock' ? MOCK_RESULT : _mockParam === 'mock-lc' ? MOCK_RESULT_LC : null;
-  const [screen, setScreen] = useState(_mockResult ? 'result' : 'home');
+  const [screen, setScreen] = useState('home');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(_mockResult ? '/static/ui/test-benchmark.jpg' : null);
-  const [result, setResult] = useState(_mockResult ?? null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [result, setResult] = useState(null);
   const [analysisError, setAnalysisError] = useState(null);
   const [analysisReady, setAnalysisReady] = useState(false);
   const [user, setUser] = useState(() => getUser());
   const [lastAnalysisTime, setLastAnalysisTime] = useState(null);
+  const [shootMode, setShootMode] = useState('photographer');
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
+
+  // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
+  // canned message so each scenario can be reviewed without going through
+  // the full analyze flow.  Harmless in prod (no-op without the param).
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const key = params.get('day1_error');
+      if (!key) return;
+      const canned = {
+        noface:  'No face detected in the image',
+        quota:   'API quota exceeded (429)',
+        timeout: 'Request timeout — server took too long',
+        offline: 'Failed to fetch — network unreachable',
+        server:  'Server returned 503',
+        upload:  'Upload failed — file rejected',
+        unknown: 'Unexpected internal error',
+      };
+      setAnalysisError(canned[key] || canned.unknown);
+      setScreen('error');
+    } catch { /* ignore */ }
+  }, []);
 
   // Keep screen awake while app is active
   useEffect(() => {
@@ -283,6 +560,20 @@ export default function Day1DemoApp() {
       });
   };
 
+  // Dev hook: window.__ngwLoadImage('/test-benchmark.jpg') drives the full analyze flow
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.__ngwLoadImage = async (url) => {
+      const resp = await fetch(url);
+      const blob = await resp.blob();
+      const file = new File([blob], url.split('/').pop(), { type: blob.type || 'image/jpeg' });
+      const preview = URL.createObjectURL(blob);
+      handleAnalyze(file, preview);
+    };
+    return () => { delete window.__ngwLoadImage; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Persist last result for quick recall from home screen
   const [lastResult, setLastResult] = useState(() => {
     try { const r = sessionStorage.getItem('ngw_last_result'); return r ? JSON.parse(r) : null; } catch { return null; }
@@ -300,11 +591,23 @@ export default function Day1DemoApp() {
         setLastAnalysisTime(Date.now());
         try {
           sessionStorage.setItem('ngw_last_result', JSON.stringify(result));
-          if (imagePreview) sessionStorage.setItem('ngw_last_preview', imagePreview);
+          // Convert blob URL to data URL so it survives page reloads
+          if (imagePreview && imagePreview.startsWith('blob:')) {
+            fetch(imagePreview).then(r => r.blob()).then(blob => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const dataUrl = reader.result;
+                sessionStorage.setItem('ngw_last_preview', dataUrl);
+                setLastPreview(dataUrl);
+              };
+              reader.readAsDataURL(blob);
+            }).catch(() => {});
+          } else if (imagePreview) {
+            sessionStorage.setItem('ngw_last_preview', imagePreview);
+          }
         } catch { /* quota */ }
       } else if (analysisError) {
-        alert(`Analysis failed: ${analysisError}`);
-        setScreen('home');
+        setScreen('error');
       }
     }
   }, [screen, analysisReady, result, analysisError, imagePreview]);
@@ -318,8 +621,20 @@ export default function Day1DemoApp() {
   };
 
   const handleSetup = () => setScreen('setup');
+  const handleSettings = () => setScreen('settings');
+  const handleSettingsBack = () => setScreen('home');
 
   const handleSetupSave = () => {
+    // Persistence happens inside SetupScreen; stay on setup so the user can
+    // see the "Saved" confirmation before deciding to Start Cockpit.
+  };
+
+  const handleStartCockpit = (mode) => {
+    setShootMode(mode || 'photographer');
+    setScreen('shoot');
+  };
+
+  const handleExitShoot = () => {
     setScreen('home');
     setImageFile(null);
     setImagePreview(null);
@@ -339,6 +654,11 @@ export default function Day1DemoApp() {
     setAnalysisReady(false);
   };
 
+  // Login gate — show Studio Matte sign-in when no user session
+  if (!user) {
+    return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
+  }
+
   switch (screen) {
     case 'home':
       return (
@@ -348,6 +668,7 @@ export default function Day1DemoApp() {
           onViewLastResult={handleViewLastResult}
           user={user}
           onLogout={() => { clearAuth(); setUser(null); }}
+          onSettings={handleSettings}
           lastAnalysisTime={lastAnalysisTime}
         />
       );
@@ -369,6 +690,32 @@ export default function Day1DemoApp() {
           imagePreview={imagePreview}
           onSave={handleSetupSave}
           onCancel={handleSetupCancel}
+          onStartCockpit={handleStartCockpit}
+        />
+      );
+    case 'shoot':
+      return (
+        <Day1ShootScreen
+          result={result}
+          imagePreview={imagePreview}
+          mode={shootMode}
+          onExit={handleExitShoot}
+        />
+      );
+    case 'settings':
+      return (
+        <Day1SettingsScreen
+          user={user}
+          onBack={handleSettingsBack}
+          onLogout={() => { clearAuth(); setUser(null); }}
+        />
+      );
+    case 'error':
+      return (
+        <FallbackReveal
+          message={analysisError}
+          onRetry={handleRetry}
+          onHome={handleRetry}
         />
       );
     default:
@@ -379,8 +726,299 @@ export default function Day1DemoApp() {
           onViewLastResult={handleViewLastResult}
           user={user}
           onLogout={() => { clearAuth(); setUser(null); }}
+          onSettings={handleSettings}
           lastAnalysisTime={lastAnalysisTime}
         />
       );
   }
+}
+
+// ─── Fallback Reveal ─────────────────────────────────────────────────────────
+/**
+ * Shown when analysis errors out.
+ * Pixel-matched to Figma node 1317:2 (Studio Matte → Analysis Failed).
+ *
+ * Layout mirrors HomeScreen so the user stays in the same shell:
+ *   • Wordmark top-left + sensor well top-right
+ *   • Glass viewfinder showing the failure label / headline / subtext
+ *   • Recessed indicator well + "TRY AGAIN" label as the retry affordance
+ */
+function FallbackReveal({ message, onRetry }) {
+  // Run mount sound + warn haptic so the user feels something landed
+  useEffect(() => { warnHaptic(); }, []);
+
+  // Parse the error and pick the right framing for each scenario.
+  // Each error type has its own small-caps label, headline, and detail copy
+  // — the layout stays the same but the content adapts to the failure mode.
+  const lc = (message || '').toLowerCase();
+  const isNoFace  = lc.includes('face') || lc.includes('no_face') || lc.includes('not detect');
+  const isQuota   = lc.includes('quota') || lc.includes('429') || lc.includes('rate');
+  const isTimeout = lc.includes('timeout') || lc.includes('econnreset') || lc.includes('aborted');
+  // "Failed to fetch" = network layer error but NOT necessarily offline.
+  // Check navigator.onLine: if the device is online, it's a CORS/access/blocked-URL issue, not offline.
+  const isFetchFailed = lc.includes('failed to fetch') || lc.includes('networkerror') || lc.includes('network request failed');
+  const isActuallyOffline = isFetchFailed && (typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const isAccessBlocked   = isFetchFailed && !isActuallyOffline;
+  const isNetwork = isActuallyOffline || lc.includes('offline');
+  const isAccess  = isAccessBlocked || lc.includes('cors') || lc.includes('couldn\'t fetch') || lc.includes('could not fetch');
+  const isServer  = lc.includes('500') || lc.includes('502') || lc.includes('503') || lc.includes('server');
+  const isUpload  = lc.includes('upload') || lc.includes('file') || lc.includes('image');
+
+  // ── Studio Matte signal palette — three "tones" the design system uses
+  // for status colors.  Each scenario picks one based on the failure mode
+  // so the kicker, sensor LED, retry indicator, and glow all sing the same
+  // color story without breaking the language. ────────────────────────
+  const TONE = {
+    danger: {
+      // Engine/analysis problems — coral/red.  Matches confLow on results.
+      kicker:    'rgba(225,95,95,0.92)',
+      kickerGlow:'rgba(225,95,95,0.20)',
+      ledHi:     'rgba(235,100,100,0.98)',
+      ledMid:    'rgba(170,55,55,0.85)',
+      ledLo:     'rgba(85,22,22,0.6)',
+      ledHalo1:  'rgba(225,90,90,0.50)',
+      ledHalo2:  'rgba(225,90,90,0.18)',
+      sensorBg:  'rgba(225,90,90,0.85)',
+      sensorMid: 'rgba(140,40,40,0.65)',
+      sensorLo:  'rgba(70,18,18,0.5)',
+      sensorHalo:'rgba(180,60,60,0.30)',
+    },
+    caution: {
+      // Quota / timeout / upload — amber.  Matches confLow on results.
+      kicker:    'rgba(245,190,72,0.92)',
+      kickerGlow:'rgba(245,190,72,0.22)',
+      ledHi:     'rgba(255,215,120,0.98)',
+      ledMid:    'rgba(200,150,55,0.85)',
+      ledLo:     'rgba(115,80,28,0.6)',
+      ledHalo1:  'rgba(245,190,72,0.50)',
+      ledHalo2:  'rgba(245,190,72,0.18)',
+      sensorBg:  'rgba(245,190,72,0.80)',
+      sensorMid: 'rgba(160,115,40,0.65)',
+      sensorLo:  'rgba(80,55,18,0.5)',
+      sensorHalo:'rgba(200,150,55,0.30)',
+    },
+    info: {
+      // Network / server — steel-blue.  Reads as "infrastructure", not user.
+      kicker:    'rgba(150,180,210,0.92)',
+      kickerGlow:`${steel(0.22)}`,
+      ledHi:     'rgba(180,210,235,0.98)',
+      ledMid:    'rgba(95,124,150,0.85)',
+      ledLo:     'rgba(40,60,80,0.6)',
+      ledHalo1:  `${steel(0.45)}`,
+      ledHalo2:  `${steel(0.16)}`,
+      sensorBg:  'rgba(150,180,210,0.80)',
+      sensorMid: `${steel(0.55)}`,
+      sensorLo:  'rgba(40,60,80,0.5)',
+      sensorHalo:`${steel(0.30)}`,
+    },
+  };
+
+  // Each scenario gets: kicker text, headline, detail, retry label, and a tone.
+  // The tone drives every color signal in the layout — kicker, sensor LED,
+  // retry indicator dot, glows.  Layout stays consistent; signaling adapts.
+  const scenario =
+    isNoFace  ? { kicker: 'Analysis Failed', headline: 'No face detected',       detail: "Make sure the subject's face is visible.",                                       retry: 'Try Again', tone: TONE.danger }
+  : isQuota   ? { kicker: 'Limit Reached',   headline: 'Daily quota exceeded',   detail: 'Usage limit reached. Try again in a moment.',                                    retry: 'Retry',     tone: TONE.caution }
+  : isTimeout ? { kicker: 'Timed Out',       headline: 'Server is slow',         detail: 'The analysis took too long. Check your connection and try again.',               retry: 'Retry',     tone: TONE.caution }
+  : isNetwork ? { kicker: 'No Connection',   headline: 'Offline',                detail: "Can't reach the server. Check your connection.",                                  retry: 'Retry',     tone: TONE.danger }
+  : isAccess  ? { kicker: 'Connection Refused', headline: "Request blocked",       detail: "The connection was blocked. If you loaded from a cloud link, save to your device first.", retry: 'New Photo', tone: TONE.caution }
+  : isServer  ? { kicker: 'Server Error',    headline: 'Engine unavailable',     detail: 'The analysis engine is temporarily down. Please try again.',                     retry: 'Retry',     tone: TONE.danger }
+  : isUpload  ? { kicker: 'Upload Failed',   headline: 'Image not accepted',     detail: 'The photo could not be processed. Try a different shot.',                        retry: 'New Photo', tone: TONE.caution }
+  :             { kicker: 'Analysis Failed', headline: 'Something went wrong',   detail: message || 'An unexpected error occurred.',                                       retry: 'Try Again', tone: TONE.danger };
+
+  const { kicker, headline, detail, retry: retryLabel, tone } = scenario;
+
+  const handleRetryClick = () => {
+    softClickSound();
+    tapHaptic();
+    onRetry?.();
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+      <div style={{
+        position: 'relative',
+        width: '100%', maxWidth: 430, height: '100%', minHeight: 600,
+        margin: '0 auto', backgroundColor: C.bg,
+        boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
+        overflow: 'hidden',
+        fontFamily: 'Inter, system-ui, sans-serif',
+      }}>
+        {/* Matte metal surface — same ambient/vignette/grain stack as HomeScreen */}
+        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(95,124,150,0.010) 40%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 40%, transparent 80%)' }} />
+          <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
+        </div>
+
+        {/* ── Wordmark (top-left) — static, not interactive on this screen ── */}
+        <div style={{ position: 'absolute', top: 24, left: 22, padding: 6, zIndex: 15, userSelect: 'none' }}>
+          <p style={{
+            margin: 0, fontWeight: 800, fontSize: 18, lineHeight: '22px',
+            color: C.textPrimary, letterSpacing: '-0.3px',
+            textShadow: '0 0 1px rgba(245,247,250,0.12)',
+            ...FS,
+          }}>No Guesswork</p>
+          <p style={{
+            margin: '2px 0 0 1px', fontWeight: 800, fontSize: 9.5, lineHeight: '12px',
+            color: 'rgba(145,168,190,0.95)', letterSpacing: '3.2px',
+            textShadow: `0 0 3px ${steel(0.15)}`,
+            ...FS,
+          }}>LIGHTING</p>
+        </div>
+
+        {/* ── Sensor well (top-right) — quiet, dim red dot ── */}
+        <div style={{
+          position: 'absolute', top: 30, right: 24, width: 40, height: 40,
+          borderRadius: 20, backgroundColor: C.slotBg,
+          boxShadow: [
+            'inset 2px 3px 6px 0px rgba(0,0,0,0.85)',
+            'inset 1px 2px 3px 0px rgba(0,0,0,0.65)',
+            'inset -0.5px -0.5px 1px 0px rgba(255,255,255,0.04)',
+            `inset 0px 0px 8px 0px ${steel(0.05)}`,
+          ].join(', '),
+        }}>
+          <div style={{
+            position: 'absolute', top: 17, left: 17, width: 6, height: 6, borderRadius: '50%',
+            background: `radial-gradient(circle at 50% 55%, ${tone.sensorBg} 0%, ${tone.sensorMid} 65%, ${tone.sensorLo} 100%)`,
+            boxShadow: [
+              'inset 0 1px 1.5px rgba(0,0,0,0.9)',
+              'inset 1px 0 1px rgba(0,0,0,0.55)',
+              'inset -0.5px -0.5px 0.6px rgba(255,255,255,0.10)',
+              `0 0 1.5px ${tone.sensorHalo}`,
+            ].join(', '),
+          }} />
+        </div>
+
+        {/* ── Glass viewfinder — error message lives inside ── */}
+        <div style={{
+          position: 'absolute', top: 140, left: 24, right: 24, height: 360,
+          borderRadius: 8, overflow: 'hidden',
+          backgroundColor: C.slotBg,
+          border: '0.5px solid rgba(0,0,0,0.45)',
+          boxShadow: '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
+        }}>
+          {/* Centered error copy */}
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 7,
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: '0 32px', textAlign: 'center',
+          }}>
+            <p style={{
+              margin: '0 0 14px',
+              fontSize: 11, fontWeight: 700,
+              color: tone.kicker, letterSpacing: '2.2px',
+              textTransform: 'uppercase',
+              textShadow: `0 0 8px ${tone.kickerGlow}`,
+              ...FS,
+            }}>
+              {kicker}
+            </p>
+            <p style={{
+              margin: '0 0 10px',
+              fontSize: 22, fontWeight: 700,
+              color: C.textPrimary, letterSpacing: '-0.4px',
+              lineHeight: 1.2,
+              ...FS,
+            }}>
+              {headline}
+            </p>
+            <p style={{
+              margin: 0,
+              fontSize: 14, fontWeight: 400,
+              color: steel(0.6), lineHeight: 1.5,
+              ...FS,
+            }}>
+              {detail}
+            </p>
+          </div>
+
+          {/* Glass overlay: lens vignette + upper-left key reflection */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 9 }}>
+            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 8, opacity: 0.48 }} />
+          </div>
+
+          {/* Inner shadow — matches HomeScreen viewfinder bevel */}
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: 8,
+            pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+          }} />
+        </div>
+
+        {/* ── Retry indicator — recessed well with red dot ── */}
+        <div
+          role="button"
+          aria-label="Try again"
+          onClick={handleRetryClick}
+          style={{
+            position: 'absolute',
+            left: '50%', top: 580,
+            transform: 'translateX(-50%)',
+            width: 100, height: 100, borderRadius: 50,
+            backgroundColor: C.slotBg,
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+            boxShadow: [
+              'inset 4px 5px 14px 0px rgba(0,0,0,0.88)',
+              'inset 2px 3px 7px 0px rgba(0,0,0,0.68)',
+              'inset 1px 1px 3px 0px rgba(0,0,0,0.55)',
+              'inset -1px -1px 1.5px 0px rgba(255,255,255,0.05)',
+              `inset -2px -2px 6px 0px ${steel(0.07)}`,
+              `inset 0px 0px 22px 0px ${steel(0.05)}`,
+            ].join(', '),
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          {/* Center indicator dot — recessed-LED treatment, tone-adaptive */}
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            background: `radial-gradient(circle at 50% 55%, ${tone.ledHi} 0%, ${tone.ledMid} 60%, ${tone.ledLo} 100%)`,
+            boxShadow: [
+              'inset 0 1.2px 2.2px rgba(0,0,0,0.95)',
+              'inset 1px 0 1.4px rgba(0,0,0,0.7)',
+              'inset -0.6px -0.6px 1px rgba(255,255,255,0.14)',
+              `0 0 2.2px ${tone.ledHalo1}`,
+              `0 0 6px ${tone.ledHalo2}`,
+            ].join(', '),
+          }} />
+        </div>
+
+        {/* ── TRY AGAIN label ── */}
+        <button
+          type="button"
+          onClick={handleRetryClick}
+          style={{
+            position: 'absolute',
+            left: '50%', top: 700,
+            transform: 'translateX(-50%)',
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '6px 14px',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            color: steel(0.75), letterSpacing: '3.2px',
+            textShadow: `0 0 6px ${steel(0.18)}`,
+            ...FS,
+          }}>
+            {retryLabel.toUpperCase()}
+          </span>
+        </button>
+
+        {/* ── Home indicator ── */}
+        <div style={{
+          position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+          width: 134, height: 5, borderRadius: 3,
+          backgroundColor: 'rgba(89,94,107,0.55)',
+          boxShadow: 'inset 0px 1px 1px 0px rgba(255,255,255,0.12), inset 0px -0.5px 0.5px 0px rgba(0,0,0,0.2)',
+          zIndex: 50, pointerEvents: 'none',
+        }} />
+      </div>
+    </div>
+  );
 }

@@ -97,6 +97,25 @@ export async function probeAndEnableLab() {
 
 // ── Workbench ────────────────────────────────────────────
 
+/**
+ * Fetch a remote image URL server-side to bypass CORS (Dropbox, Google Drive, etc).
+ * Returns a Blob the caller can turn into a File for the analyze flow.
+ */
+export async function fetchImageFromUrl(url) {
+  const form = new FormData();
+  form.append('url', url);
+  const res = await apiFetch('/api/lab/fetch-image-url', {
+    method: 'POST',
+    body: form,
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail || `Couldn't fetch image (${res.status})`);
+  }
+  return res.blob();
+}
+
 export async function analyzeImage(file, { debug = false, signal } = {}) {
   const form = new FormData();
   form.append('image', file);

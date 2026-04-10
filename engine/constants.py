@@ -206,11 +206,18 @@ class CATCHLIGHT:
     # True catchlights land on the iris surface (0–1.0×); lash-line shimmer from
     # mascara or specular makeup sits at the lash edge (~1.3–2.0×).
     # COLOR: 1.25 — tight enough to reject lid/lash shimmer in colour images.
-    # B&W:   1.60 — heavy lash mass in B&W beauty portraits partially occludes the
-    #         iris, causing MediaPipe to report a smaller radius; real catchlights
-    #         (beauty dish ring, soft octabox) then appear to sit at 1.3–1.5×.
+    # B&W:   1.35 — tight for B&W; looser than color only for iris underestimation,
+    #         not permissive enough to let in skin/cornea speculars at 1.6×.
     IRIS_PROXIMITY_MAX_MULT    = 1.25   # colour images
-    IRIS_PROXIMITY_MAX_MULT_BW = 1.60   # B&W / dramatic low-saturation images
+    IRIS_PROXIMITY_MAX_MULT_BW = 1.35   # B&W / dramatic low-saturation images
+
+    # ── Size ratio filter ──
+    # Catchlight enclosing-circle radius / iris radius must be below this cap.
+    # Real softbox/modifier catchlights: 0.05–0.30×.  Anything ≥ 0.50× is
+    # a skin specular, cornea reflection, or hair highlight — not a modifier.
+    # B&W images are noisier; use a slightly tighter cap than color.
+    SIZE_RATIO_MAX_COLOR = 0.50   # colour images
+    SIZE_RATIO_MAX_BW    = 0.45   # B&W images — tighter to reject skin speculars
 
     # ── Topology pass minimum blob area ──
     # Raised from 3 to 6 px²: mascara flecks on B&W images survive the P90

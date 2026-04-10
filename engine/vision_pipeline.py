@@ -650,9 +650,12 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     def clock_position(dx: float, dy: float) -> str:
         angle_rad = math.atan2(-dy, dx)  # negate dy (image y-axis inverted)
         angle_deg = math.degrees(angle_rad)
-        clock = round(((90 - angle_deg) % 360) / 30) % 12
+        raw_clock_30 = ((90 - angle_deg) % 360) / 30
+        clock = round(raw_clock_30) % 12
         if clock == 0:
             clock = 12
+        _vp_logger.debug("[catchlight-pos] dx=%.2f dy=%.2f angle=%.1f raw_30=%.2f → %d o'clock",
+                         dx, dy, angle_deg, raw_clock_30, clock)
         return f"{clock} o'clock"
 
     # Detect B&W-like images: low saturation across the frame.
@@ -728,8 +731,19 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             if _dist > _prox_limit * radius:
                 continue
 
+            # ── Size ratio filter ─────────────────────────────────────────
+            # Reject blobs whose enclosing circle approaches the iris size —
+            # these are skin speculars, cornea reflections, or hair highlights,
+            # not modifier catchlights.
+            (_, enc_r_pre) = cv2.minEnclosingCircle(cnt)
+            _size_ratio_pre = enc_r_pre / radius if radius > 0 else 999
+            _size_cap = (CATCHLIGHT.SIZE_RATIO_MAX_BW if _is_bw_like
+                         else CATCHLIGHT.SIZE_RATIO_MAX_COLOR)
+            if _size_ratio_pre > _size_cap:
+                continue
+
             # Shape classification: ring, round, octagonal, strip, square, rectangular
-            (_, enc_r) = cv2.minEnclosingCircle(cnt)
+            enc_r = enc_r_pre  # reuse from size ratio filter above
             enc_area = math.pi * enc_r * enc_r
             circularity = area / enc_area if enc_area > 0 else 0
 
@@ -788,9 +802,14 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             cnt_mask = cnt_mask_shape  # reuse the mask we already drew
             intensity = float(np.mean(v_chan[cnt_mask > 0]) / 255.0)
 
+            _pos_str = clock_position(dx, dy)
+            _sr = round(enc_r / radius, 3) if radius > 0 else None
+            _vp_logger.debug("[catchlight-detail] eye=%s pos=%s int=%.3f shape=%s size_ratio=%s area=%.0f",
+                             eye_label, _pos_str, intensity, shape, _sr, area)
+
             results.append({
                 "eye": eye_label,
-                "position": clock_position(dx, dy),
+                "position": _pos_str,
                 "intensity": round(intensity, 2),
                 "shape": shape,
                 # size_ratio: catchlight enclosing-circle radius / iris radius (0–1+)

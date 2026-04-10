@@ -5,9 +5,11 @@
  * All colors and pixel positions from Figma Token Palette — Studio Matte
  */
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPressHaptic, getProfileKey } from '../utils/haptics';
+import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPressHaptic, grainHaptic, getProfileKey } from '../utils/haptics';
 import { analyzeClickSound, softClickSound, imageDropSound, powerOnSound, navSlideSound, panelToggleSound } from '../utils/sounds';
 import { saveSetting, loadSettings } from '../data/settingsStore';
+import { fetchImageFromUrl } from '../data/labApi';
+import { steel, C as SM_C, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../theme/studioMatte';
 
 // ─── Figma-exported assets (downloaded to project, valid indefinitely) ─────────
 import analyzeTrackIdle    from '../assets/day1/analyze-track-idle.svg';
@@ -27,54 +29,16 @@ import ledOn  from '../assets/day1/led-on.svg';
 import ellipseDot from '../assets/day1/ellipse-dot.svg';
 import ellipseBg  from '../assets/day1/ellipse-bg.svg';
 
-// ─── Design tokens (exact from Figma Token Palette — Studio Matte) ───────────
-const steel = (a) => `rgba(95,124,150,${a})`;
+// ─── Design tokens — studioMatte.js is single source of truth ────────────────
+// HomeScreen-specific C extensions (textPrimary slightly more transparent than panel screens)
 const C = {
-  bg:           '#000001',
-  slotBg:       '#08080a',
-  textPrimary:  'rgba(245,247,250,0.88)',
-  border:       'rgba(167,173,183,0.06)',
-  glassSheen:   'rgba(178,191,209,0.07)',
-  homeBar:      'rgba(245,247,250,0.06)',
+  ...SM_C,
+  textPrimary: 'rgba(245,247,250,0.88)',
+  border:      'rgba(167,173,183,0.06)',
+  glassSheen:  'rgba(178,191,209,0.07)',
 };
 
-// ─── Viewfinder layer styles (replicated from Figma layer stack) ─────────────
-const VIEWFINDER_INNER_SHADOW = [
-  // Minimal shadow — upper-left is bright from key light
-  'inset 0px 1px 1px 0px rgba(0,0,0,0.05)',    // Tiny bottom-right edge only
-  // Ambient steel glow inside the well (fill light dominates)
-  'inset 0px 0px 24px 0px rgba(95,124,150,0.09)',
-  'inset 0px 0px 14px 0px rgba(95,124,150,0.11)',
-].join(', ');
-
-// Glass reflection from upper-left (141.71° = upper-left to lower-right diagonal)
-const GLASS_REFLECTION = [
-  'linear-gradient(141.71deg,',
-  'rgba(255,255,255,0.36) 0%,',
-  'rgba(255,255,255,0.30) 2%,',
-  'rgba(255,255,255,0.24) 4%,',
-  'rgba(255,255,255,0.19) 6.5%,',
-  'rgba(255,255,255,0.15) 9%,',
-  'rgba(255,255,255,0.12) 12%,',
-  'rgba(255,255,255,0.095) 16%,',
-  'rgba(255,255,255,0.075) 20%,',
-  'rgba(255,255,255,0.058) 25%,',
-  'rgba(255,255,255,0.044) 30%,',
-  'rgba(255,255,255,0.034) 36%,',
-  'rgba(255,255,255,0.025) 42%,',
-  'rgba(255,255,255,0.018) 48%,',
-  'rgba(255,255,255,0.013) 54%,',
-  'rgba(255,255,255,0.015) 62%,',
-  'rgba(255,255,255,0.020) 68%,',
-  'rgba(255,255,255,0.015) 74%,',
-  'rgba(255,255,255,0.006) 80%,',
-  'rgba(255,255,255,0) 86%)',
-].join(' ');
-// Single natural lens vignette — applied ONCE inside the glass overlay only.
-// Ellipse falloff matches real lens physics: transparent center, soft edge darkening.
-const LENS_VIGNETTE = 'radial-gradient(ellipse 100% 90% at center, transparent 52%, rgba(0,0,0,0.08) 76%, rgba(0,0,0,0.22) 100%)';
-
-export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, lastAnalysisTime }) {
+export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, lastAnalysisTime }) {
   const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isPressed,    setIsPressed]    = useState(false);
@@ -82,6 +46,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   const [isDragOver,   setIsDragOver]   = useState(false);
   const [showPrompt,   setShowPrompt]   = useState(true);
   const [viewfinderShake, setViewfinderShake] = useState(false);
+  const [isUrlFetching,  setIsUrlFetching]  = useState(false);
+  const [urlLoadError,   setUrlLoadError]   = useState(null);
   const [muted, setMuted] = useState(() => {
     try { const s = JSON.parse(localStorage.getItem('ngw_settings') || '{}'); return s.hapticFeedback === false; } catch { return false; }
   });
@@ -104,6 +70,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   const wordmarkLPRef = useRef(null);
   const homeBarLPRef = useRef(null);
   const wellLastTap = useRef(0);
+  const bgLongPressRef = useRef(null);
+  const bgLpFired = useRef(false);
 
   // Power-on sound on first mount
   useEffect(() => { powerOnSound(); }, []);
@@ -280,6 +248,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
     setShowPrompt(false);
   }, [rejectFile]);
 
+  // Ref keeps loadFromUrl's closure stable across Fast Refresh re-mounts
+  // without forming a useCallback circular dependency on loadFile.
+  const loadFileRef = useRef(loadFile);
+  loadFileRef.current = loadFile;
+
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -287,14 +260,58 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
     e.target.value = '';
   };
 
+  // Load an image from a remote URL (Dropbox, Google Drive, etc) via server proxy
+  const loadFromUrl = useCallback(async (url) => {
+    setIsUrlFetching(true);
+    try {
+      const blob = await fetchImageFromUrl(url);
+      const filename = url.split('/').pop().split('?')[0] || 'image.jpg';
+      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' });
+      loadFileRef.current(file);
+    } catch (err) {
+      console.warn('[HomeScreen] URL fetch failed:', err.message);
+      rejectFile();
+      setUrlLoadError("Couldn't load that link — save the photo to your device and load it from there.");
+      setTimeout(() => setUrlLoadError(null), 5000);
+    } finally {
+      setIsUrlFetching(false);
+    }
+  }, [rejectFile]);
+
+  // Clipboard paste — Cmd+V image workaround for private cloud images
+  useEffect(() => {
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) loadFile(file);
+          return;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [loadFile]);
+
   // Drag & drop handlers
   const handleDragOver = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); }, []);
   const handleDragLeave = useCallback((e) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); }, []);
   const handleDrop = useCallback((e) => {
     e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+    // Prefer an actual File (local drag)
     const file = e.dataTransfer?.files?.[0];
-    if (file) loadFile(file);
-  }, [loadFile]);
+    if (file) { loadFile(file); return; }
+    // Fall back to URL (Dropbox web, Google Drive, image drag from browser)
+    const url = e.dataTransfer?.getData('text/uri-list') || e.dataTransfer?.getData('text/plain') || '';
+    if (url.startsWith('http')) { loadFromUrl(url); return; }
+    // Check for img src in dragged HTML (some cloud apps pass text/html)
+    const html = e.dataTransfer?.getData('text/html') || '';
+    const srcMatch = html.match(/src=["']([^"']+)["']/i);
+    if (srcMatch?.[1]?.startsWith('http')) loadFromUrl(srcMatch[1]);
+  }, [loadFile, loadFromUrl]);
 
   const handleAnalyze = () => {
     if (imageFile && onAnalyze) { analyzeClickSound(); successHaptic(); onAnalyze(imageFile, imagePreview); }
@@ -305,19 +322,43 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
   const analyzeText = steel(hasImage ? 0.95 : 0.75);
   const analyzeGlow = hasImage
-    ? `0 0 6px ${steel(0.4)}, 0 0 14px ${steel(0.15)}`
-    : `0 0 8px ${steel(0.3)}, 0 0 18px ${steel(0.10)}`;
+    ? `${TEXT_SHADOW_ENGRAVED}, 0 0 6px ${steel(0.4)}, 0 0 14px ${steel(0.15)}`
+    : `${TEXT_SHADOW_ENGRAVED}, 0 0 8px ${steel(0.3)}, 0 0 18px ${steel(0.10)}`;
+
+  const startBgLongPress = useCallback((e) => {
+    if (e.target !== e.currentTarget) return;
+    bgLpFired.current = false;
+    bgLongPressRef.current = setTimeout(() => {
+      bgLongPressRef.current = null;
+      bgLpFired.current = true;
+      setLcdOn(v => !v);
+      selectHaptic();
+      softClickSound();
+    }, 500);
+  }, []);
+
+  const endBgLongPress = useCallback(() => {
+    if (bgLongPressRef.current) { clearTimeout(bgLongPressRef.current); bgLongPressRef.current = null; }
+  }, []);
 
   const handleBodyTap = (e) => {
     if (e.target === e.currentTarget) {
-      if (closePanels()) return;
-      setLcdOn(v => !v); selectHaptic(); softClickSound();
+      if (bgLpFired.current) { bgLpFired.current = false; return; }
+      closePanels();
     }
   };
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
-    <div onClick={handleBodyTap} style={{
+    <div
+      onClick={handleBodyTap}
+      onPointerDown={startBgLongPress}
+      onPointerUp={endBgLongPress}
+      onPointerLeave={endBgLongPress}
+      onPointerCancel={endBgLongPress}
+      onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
+      onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
+      style={{
         position: 'relative',
         width: '100%',
         maxWidth: 430,
@@ -325,16 +366,23 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         minHeight: 600,
         margin: '0 auto',
         backgroundColor: C.bg,
-        backgroundImage: 'radial-gradient(ellipse 80% 60% at 50% 30%, rgba(95,124,150,0.012) 0%, transparent 70%)',
         boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
         overflow: 'hidden',
         fontFamily: 'Inter, system-ui, sans-serif',
       }}
     >
-      {/* ── Matte surface: top highlight + noise grain ── */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+      {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
+      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        {/* Cool ambient key wash — soft overhead studio light */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(95,124,150,0.010) 40%, transparent 72%)' }} />
+        {/* Warm mid-frame lift — breaks up pure black core */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
+        {/* Edge vignette — anchors the frame */}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
+        {/* Top specular edge — ceiling light hit */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 40%, transparent 80%)' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.18, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='3.5' numOctaves='6' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
+        {/* Grain — tactile metal texture */}
+        <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
       </div>
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: 'none' }} />
@@ -366,7 +414,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
           textRendering: 'geometricPrecision',
-          textShadow: `0 0 3px ${steel(0.15)}`,
+          textShadow: TEXT_SHADOW_ENGRAVED,
         }}>LIGHTING</p>
       </div>
 
@@ -392,6 +440,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               </p>
             )}
             <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '12px 0' }} />
+            <button onClick={() => { onSettings?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
+              style={{
+                backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(184,191,199,0.75)', letterSpacing: '0.3px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>Settings</span>
+              <span style={{ fontSize: 13, color: steel(0.35), lineHeight: 1 }}>›</span>
+            </button>
+            <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '8px 0' }} />
             <button onClick={() => { onLogout?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
               style={{
                 backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
@@ -456,23 +514,33 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             userSelect: 'none',
           }} />
         </div>
-        {/* LED dot — green (alive), amber (last result), red (muted), steel (idle) */}
+        {/* LED dot — INSET well, green (alive) / amber (last result) / red (muted) / steel (idle) */}
         <div style={{
           position: 'absolute', top: 17, left: 17, width: 6, height: 6,
           borderRadius: '50%',
-          backgroundColor: muted
-            ? 'rgba(180,60,60,0.75)'
-            : hasImage ? 'rgba(72,186,136,0.95)'
-            : hasLastResult ? 'rgba(245,190,72,0.85)'
-            : 'rgba(89,94,107,0.55)',
-          boxShadow: muted
-            ? '0 0 3px rgba(180,60,60,0.5), 0 0 6px rgba(180,60,60,0.2)'
+          // Radial gradient: bright center, darker rim — looks lit from inside the well.
+          background: muted
+            ? 'radial-gradient(circle at 50% 55%, rgba(225,90,90,0.98) 0%, rgba(140,40,40,0.78) 65%, rgba(70,18,18,0.55) 100%)'
             : hasImage
-              ? '0 0 4px rgba(72,186,136,0.8), 0 0 10px rgba(72,186,136,0.4)'
+              ? 'radial-gradient(circle at 50% 55%, rgba(140,235,180,1) 0%, rgba(60,180,130,0.88) 60%, rgba(28,105,75,0.55) 100%)'
               : hasLastResult
-                ? '0 0 3px rgba(245,190,72,0.6), 0 0 8px rgba(245,190,72,0.25)'
-                : 'none',
-          transition: 'background-color 0.4s ease, box-shadow 0.4s ease',
+                ? 'radial-gradient(circle at 50% 55%, rgba(255,215,120,0.98) 0%, rgba(200,150,55,0.78) 60%, rgba(115,80,28,0.55) 100%)'
+                : 'radial-gradient(circle at 50% 55%, rgba(80,86,98,0.6) 0%, rgba(40,44,52,0.7) 100%)',
+          // Recessed well: dark top rim (shadow cast from the upper-left light),
+          // tiny bright catch on the lower-right lip, faint spill above.
+          boxShadow: [
+            'inset 0 1px 1.5px rgba(0,0,0,0.9)',
+            'inset 1px 0 1px rgba(0,0,0,0.55)',
+            'inset -0.5px -0.5px 0.6px rgba(255,255,255,0.10)',
+            muted
+              ? '0 0 1.5px rgba(180,60,60,0.35)'
+              : hasImage
+                ? '0 0 2px rgba(72,186,136,0.45)'
+                : hasLastResult
+                  ? '0 0 1.5px rgba(245,190,72,0.30)'
+                  : 'none',
+          ].join(', '),
+          transition: 'background 0.4s ease, box-shadow 0.4s ease',
         }} />
       </div>
 
@@ -495,13 +563,15 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           right: 24,
           height: 360,
           borderRadius: 8,
-          border: `0.5px solid ${isDragOver ? 'rgba(95,124,150,0.35)' : 'rgba(167,173,183,0.10)'}`,
+          border: `0.5px solid ${isDragOver ? 'rgba(95,124,150,0.35)' : 'rgba(0,0,0,0.45)'}`,
           overflow: 'hidden',
           cursor: 'pointer',
           backgroundColor: C.slotBg,
+          // Outer rim bevel — the edge of a hole carved into the matte surface.
+          // Light from 141.71° (upper-left) catches the lower-right lip.
           boxShadow: isDragOver
-            ? '0 2px 12px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.03), inset 0 0 30px rgba(95,124,150,0.08)'
-            : '0 2px 12px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.03)',
+            ? '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05), inset 0 0 30px rgba(95,124,150,0.08)'
+            : '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
           WebkitTapHighlightColor: 'transparent',
           transition: 'border-color 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease',
           transform: viewfinderShake ? 'translateX(4px)' : 'translateX(0)',
@@ -572,18 +642,30 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           <p style={{ position: 'absolute', left: '55.5%',  top: 5.5, margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.85), lineHeight: 1, whiteSpace: 'nowrap', textShadow: `0 0 4px ${steel(0.25)}`, WebkitFontSmoothing: 'antialiased' }}>5600K</p>
         </div>
 
-        {/* 7b — Tap prompt — fades after first interaction or 7s */}
+        {/* 7b — Tap prompt / URL fetching / URL error indicator */}
         {!hasImage && (
-          <p style={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: '3px',
-            color: steel(0.90),
-            opacity: showPrompt ? 1 : 0,
-            transition: 'opacity 1.2s ease',
-            pointerEvents: 'none', zIndex: 7,
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-          }}>TAP TO LOAD</p>
+          urlLoadError ? (
+            <p style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              margin: 0, width: '75%', textAlign: 'center',
+              fontSize: 11, fontWeight: 600, letterSpacing: '0.2px', lineHeight: '15px',
+              color: 'rgba(245,190,72,0.85)',
+              pointerEvents: 'none', zIndex: 7,
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+            }}>{urlLoadError}</p>
+          ) : (
+            <p style={{
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%, -50%)',
+              margin: 0, fontSize: 15, fontWeight: 800, letterSpacing: '3px',
+              color: isUrlFetching ? steel(0.55) : steel(0.90),
+              opacity: (showPrompt || isUrlFetching) ? 1 : 0,
+              transition: 'opacity 1.2s ease, color 0.3s ease',
+              pointerEvents: 'none', zIndex: 7,
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
+            }}>{isUrlFetching ? 'LOADING…' : 'TAP TO LOAD'}</p>
+          )
         )}
 
         {/* 7c — Drag-over state overlay */}
@@ -597,9 +679,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
         {/* 8 — Image preview (when selected) — sits under glass overlay */}
         {imagePreview && (
-          <img src={imagePreview} alt="Selected" style={{
+          <img key={imagePreview} src={imagePreview} alt="Selected" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', opacity: 0.85, zIndex: 8,
+            objectFit: 'cover', objectPosition: '50% 25%', opacity: 0.85, zIndex: 8,
+            animation: 'heroZoomIn 1.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+            transformOrigin: 'center 25%',
           }} />
         )}
 
@@ -759,7 +843,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }} />
       </div>
 
-      {/* ── Analyze Button ── */}
+      {/* ── Analyze Button (CSS-rendered, lit from 141.71° top-left to match app) ── */}
       <div
         role="button"
         onClick={hasImage ? handleAnalyze : () => fileRef.current?.click()}
@@ -771,28 +855,42 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         style={{
           position: 'absolute', left: '50%', top: 548, width: 80, height: 80, transform: 'translateX(-50%)',
           cursor: 'pointer', WebkitTapHighlightColor: 'transparent', userSelect: 'none',
-          overflow: 'visible',
+          borderRadius: '50%',
+          // Neumorphic body — gradient aligned to app 141.71° (light top-left → dark bottom-right).
+          // idle: flatter matte; alive: subtle warmth; pressed: shadows invert for press-in feel.
+          background: buttonState === 'pressed'
+            ? 'linear-gradient(141.71deg, #060709 0%, #0A0B0E 50%, #0F1014 100%)'
+            : 'linear-gradient(141.71deg, #14161b 0%, #0D0E12 50%, #07080a 100%)',
+          // Drop shadow cast to bottom-right (light from top-left); soft + subtle, not popping
+          boxShadow: buttonState === 'pressed'
+            ? 'inset 2px 2px 4px rgba(0,0,0,0.65), inset -1px -1px 2px rgba(255,255,255,0.02), 1px 1px 3px rgba(0,0,0,0.3)'
+            : buttonState === 'alive'
+              ? '3px 3px 10px rgba(0,0,0,0.55), 1px 1px 3px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.5)'
+              : '3px 3px 8px rgba(0,0,0,0.45), inset 1px 1px 0 rgba(255,255,255,0.04), inset -1px -1px 0 rgba(0,0,0,0.45)',
+          transition: buttonState === 'alive' ? 'none' : 'background 0.25s ease, box-shadow 0.2s ease',
+          animation: buttonState === 'alive' ? 'btnBreath 1.6s ease-in-out infinite' : 'none',
         }}
-      >
-        {/* Inset: -10% -15% -20% -15% per Figma */}
-        <div style={{ position: 'absolute', top: '-10%', left: '-15%', right: '-15%', bottom: '-20%' }}>
-          <img src={btnSrc} alt="" style={{ width: '100%', height: '100%' }} />
-        </div>
-        {/* Upper-left light direction overlay */}
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-          background: 'linear-gradient(141.71deg, rgba(255,255,255,0.09) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.13) 100%)',
-        }} />
-      </div>
+      />
 
-      {/* ── Activity Indicator (LED in button center) ── */}
+      {/* ── Activity Indicator (LED inset into button center) ── */}
       <div style={{
         position: 'absolute', left: '50%', top: 584, width: 8, height: 8,
         transform: 'translateX(-50%)', pointerEvents: 'none',
         borderRadius: '50%',
-        backgroundColor: hasImage ? 'rgba(72,186,136,0.95)' : 'rgba(89,94,107,0.55)',
-        boxShadow: hasImage ? '0 0 4px rgba(72,186,136,0.8), 0 0 10px rgba(72,186,136,0.4)' : 'none',
-        transition: 'background-color 0.4s ease, box-shadow 0.4s ease',
+        // Inset green well: bright center → darker rim, lit from below the surface.
+        background: hasImage
+          ? 'radial-gradient(circle at 50% 55%, rgba(140,235,180,1) 0%, rgba(60,180,130,0.9) 55%, rgba(28,105,75,0.6) 100%)'
+          : 'radial-gradient(circle at 50% 55%, rgba(80,86,98,0.6) 0%, rgba(40,44,52,0.75) 100%)',
+        boxShadow: [
+          // Recessed well rim — dark cast from upper-left light
+          'inset 0 1px 1.8px rgba(0,0,0,0.9)',
+          'inset 1px 0 1.2px rgba(0,0,0,0.6)',
+          // Lower-right lip catches the light
+          'inset -0.5px -0.5px 0.8px rgba(255,255,255,0.12)',
+          // Faint green spill out of the hole
+          hasImage ? '0 0 2.5px rgba(72,186,136,0.5)' : 'none',
+        ].join(', '),
+        transition: 'background 0.4s ease, box-shadow 0.4s ease',
       }} />
 
       {/* ── ANALYZE label ── */}
@@ -820,14 +918,21 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       }} />
 
       {/* Shake keyframes for invalid file rejection */}
-      <style>{`@keyframes vfShake {
-        0%,100% { transform: translateX(0); }
-        15% { transform: translateX(4px); }
-        30% { transform: translateX(-4px); }
-        45% { transform: translateX(3px); }
-        60% { transform: translateX(-2px); }
-        75% { transform: translateX(1px); }
-      }`}</style>
+      {/* Button breath pulse — alive state */}
+      <style>{`
+        @keyframes vfShake {
+          0%,100% { transform: translateX(0); }
+          15% { transform: translateX(4px); }
+          30% { transform: translateX(-4px); }
+          45% { transform: translateX(3px); }
+          60% { transform: translateX(-2px); }
+          75% { transform: translateX(1px); }
+        }
+        @keyframes btnBreath {
+          0%,100% { transform: translateX(-50%) scale(1);    box-shadow: 3px 3px 10px rgba(0,0,0,0.55), 1px 1px 3px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.5); }
+          50%      { transform: translateX(-50%) scale(1.04); box-shadow: 4px 4px 16px rgba(0,0,0,0.65), 2px 2px 6px rgba(0,0,0,0.4), 0 0 14px rgba(95,124,150,0.18), inset 1px 1px 0 rgba(255,255,255,0.08), inset -1px -1px 0 rgba(0,0,0,0.55); }
+        }
+      `}</style>
     </div>
     </div>
   );
