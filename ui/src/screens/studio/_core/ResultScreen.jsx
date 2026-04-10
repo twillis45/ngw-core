@@ -11,7 +11,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
-import { useIsDesktop, useViewportWidth } from '../../../utils/useIsDesktop';
+import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
 import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
 import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
@@ -426,25 +426,11 @@ function ModifierDetail({ modifier }) {
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
   const isDesktop = useIsDesktop();
-  const viewportW = useViewportWidth();
-  // Fluid hero scale on wide screens. The hero column was authored at 430px
-  // with absolutely-positioned children; instead of rewriting those layouts,
-  // we scale the entire container. The scale is derived from how much
-  // horizontal room the two-column grid has after accounting for the panel
-  // (capped ~620) + gap + outer padding, then clamped so the hero grows from
-  // 1.0× at ≤1440 up to ~1.6× on 2560+.
-  //   available hero width ≈ (viewportW * 0.92) - 620 - 36 - 80
-  // We then cap at HERO_MAX_SCALE and floor at 1.
-  const heroScale = (() => {
-    if (!isDesktop) return 1;
-    const HERO_BASE = 430;
-    const HERO_MAX_SCALE = 1.6;
-    const shellMax = Math.min(viewportW * 0.94, 2400);
-    const avail = shellMax - 620 - 36 - 80; // panel + gap + outer padding
-    const raw = avail / HERO_BASE;
-    return Math.max(1, Math.min(HERO_MAX_SCALE, raw));
-  })();
-  const heroWidth = 430 * heroScale;
+  // Hero column is fixed 430 at the design level — FitToViewport handles
+  // the uniform scale on wide screens at the app shell, so internal layout
+  // stays pixel-authored.
+  const heroWidth = 430;
+  const heroScale = 1;
   const [drawers, setDrawers] = useState(() =>
     result && result.confidence < 70 ? { patterns: true } : {}
   );
@@ -696,7 +682,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
       width: '100%',
-      maxWidth: isDesktop ? Math.round(heroWidth + 36 + 620 + 80) : 430,
+      maxWidth: isDesktop ? 1180 : 430,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',

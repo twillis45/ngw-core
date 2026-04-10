@@ -5,6 +5,7 @@ import ResultScreen from './studio/_core/ResultScreen';
 import SetupScreen from './studio/_core/SetupScreen';
 import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
 import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
+import FitToViewport from './studio/_shared/FitToViewport';
 // Day1SettingsScreen (Bucket C) removed from shell in Checkpoint 3 — deferred.
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
@@ -694,45 +695,57 @@ export default function Day1DemoApp() {
   switch (screen) {
     case 'home':
       return (
-        <HomeScreen
-          onAnalyze={handleAnalyze}
-          hasLastResult={!!lastResult}
-          onViewLastResult={handleViewLastResult}
-          user={user}
-          onLogout={() => { clearAuth(); setUser(null); }}
-          onSettings={handleSettings}
-          lastAnalysisTime={lastAnalysisTime}
-        />
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+          <HomeScreen
+            onAnalyze={handleAnalyze}
+            hasLastResult={!!lastResult}
+            onViewLastResult={handleViewLastResult}
+            user={user}
+            onLogout={() => { clearAuth(); setUser(null); }}
+            onSettings={handleSettings}
+            lastAnalysisTime={lastAnalysisTime}
+          />
+        </FitToViewport>
       );
     case 'processing':
-      return <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} />;
+      return (
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+          <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} />
+        </FitToViewport>
+      );
     case 'result':
       return (
-        <ResultScreen
-          result={result}
-          imagePreview={imagePreview}
-          onSetup={handleSetup}
-          onRetry={handleRetry}
-        />
+        <FitToViewport designWidth={1180} designHeight={1100} maxScale={1.7}>
+          <ResultScreen
+            result={result}
+            imagePreview={imagePreview}
+            onSetup={handleSetup}
+            onRetry={handleRetry}
+          />
+        </FitToViewport>
       );
     case 'setup':
       return (
-        <SetupScreen
-          result={result}
-          imagePreview={imagePreview}
-          onSave={handleSetupSave}
-          onCancel={handleSetupCancel}
-          onStartCockpit={handleStartCockpit}
-        />
+        <FitToViewport designWidth={1180} designHeight={1100} maxScale={1.7}>
+          <SetupScreen
+            result={result}
+            imagePreview={imagePreview}
+            onSave={handleSetupSave}
+            onCancel={handleSetupCancel}
+            onStartCockpit={handleStartCockpit}
+          />
+        </FitToViewport>
       );
     case 'shoot':
       return (
-        <Day1ShootScreen
-          result={result}
-          imagePreview={imagePreview}
-          mode={shootMode}
-          onExit={handleExitShoot}
-        />
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+          <Day1ShootScreen
+            result={result}
+            imagePreview={imagePreview}
+            mode={shootMode}
+            onExit={handleExitShoot}
+          />
+        </FitToViewport>
       );
     // case 'settings': removed in Checkpoint 3 — Day1SettingsScreen is Bucket C.
     case 'error':
@@ -745,15 +758,17 @@ export default function Day1DemoApp() {
       );
     default:
       return (
-        <HomeScreen
-          onAnalyze={handleAnalyze}
-          hasLastResult={!!lastResult}
-          onViewLastResult={handleViewLastResult}
-          user={user}
-          onLogout={() => { clearAuth(); setUser(null); }}
-          onSettings={handleSettings}
-          lastAnalysisTime={lastAnalysisTime}
-        />
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+          <HomeScreen
+            onAnalyze={handleAnalyze}
+            hasLastResult={!!lastResult}
+            onViewLastResult={handleViewLastResult}
+            user={user}
+            onLogout={() => { clearAuth(); setUser(null); }}
+            onSettings={handleSettings}
+            lastAnalysisTime={lastAnalysisTime}
+          />
+        </FitToViewport>
       );
   }
 }
