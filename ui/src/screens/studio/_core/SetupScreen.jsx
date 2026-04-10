@@ -19,6 +19,7 @@ import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
          VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
 import LightingDiagram from './components/LightingDiagram';
+import Chip, { sevToVariant } from '../_shared/Chip';
 import { saveSetup as persistSetup } from '../../../data/setupStore';
 import { saveShootRole } from '../../../data/shootModeStore';
 import { trackEvent } from '../../../data/analytics';
@@ -54,13 +55,8 @@ const ROLE_LABELS = {
 };
 
 // ─── Warning tokens ──────────────────────────────────────────────────────────
-const WARN_BG       = 'rgba(245,190,72,0.08)';
-const WARN_BEVEL    = 'inset 1px 1px 2px 0px rgba(0,0,0,0.3), inset -0.5px -0.5px 0.5px 0px rgba(255,255,255,0.03)';
-const DANGER_BG     = 'rgba(200,70,70,0.10)';
-const DANGER_BORDER = 'rgba(200,70,70,0.25)';
-const WARN_BORDER   = 'rgba(245,190,72,0.22)';
-const INFO_BG       = 'rgba(95,124,150,0.08)';
-const INFO_BORDER   = 'rgba(95,124,150,0.22)';
+// Chip styling now lives in _shared/Chip.jsx (variant palette). Only the
+// edge-case label map remains below.
 
 // Edge-case flag → label + severity ('danger' | 'warn' | 'info')
 const EDGE_CASE_LABELS = {
@@ -285,29 +281,11 @@ function LightRoleStrip({ roles }) {
   );
 }
 
-// ─── Warning chip + strip ────────────────────────────────────────────────────
+// ─── Warning strip ───────────────────────────────────────────────────────────
+// Chip itself now lives in _shared/Chip.jsx. Keep a thin WarningChip alias so
+// the existing call sites read naturally.
 function WarningChip({ label, sev }) {
-  const bg     = sev === 'danger' ? DANGER_BG : sev === 'info' ? INFO_BG : WARN_BG;
-  const border = sev === 'danger' ? DANGER_BORDER : sev === 'info' ? INFO_BORDER : WARN_BORDER;
-  const color  = sev === 'danger' ? 'rgba(240,140,140,0.95)'
-                : sev === 'info' ? steel(0.8)
-                : 'rgba(245,200,110,0.95)';
-  const dot    = sev === 'danger' ? 'rgba(240,120,120,0.95)'
-                : sev === 'info' ? steel(0.55)
-                : 'rgba(245,190,72,0.95)';
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0,
-      padding: '5px 10px 5px 8px', borderRadius: 6,
-      backgroundColor: bg,
-      boxShadow: `${WARN_BEVEL}, 0 0 0 0.5px ${border}`,
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: dot, boxShadow: `0 0 4px ${dot}` }} />
-      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', color, whiteSpace: 'nowrap', ...FONT_SMOOTH }}>
-        {label}
-      </span>
-    </div>
-  );
+  return <Chip label={label} variant={sevToVariant(sev)} size="sm" />;
 }
 
 function WarningStrip({ warnings }) {
@@ -326,6 +304,35 @@ function WarningStrip({ warnings }) {
           <WarningChip key={i} label={w.label} sev={w.sev} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Desktop spec cell ───────────────────────────────────────────────────────
+// Engraved inset pill used exclusively by the desktop KEY LIGHT hero panel.
+// Larger typography and generous padding compared with mobile LongPressSpec
+// because desktop readers sit further from the screen and nothing here needs
+// to be tappable. No long-press / hover reveals — all values are primary.
+function DesktopSpec({ label, value, hint, hintColor }) {
+  return (
+    <div style={{
+      padding: '12px 14px',
+      borderRadius: 10,
+      backgroundColor: '#08090c',
+      boxShadow: 'inset 1px 1px 3px 0px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px 0px rgba(255,255,255,0.035)',
+      minWidth: 0,
+    }}>
+      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1.1px', ...FONT_SMOOTH }}>
+        {label}
+      </p>
+      <p style={{ margin: '5px 0 0', fontSize: 15, fontWeight: 700, color: SM_C.textPrimary, lineHeight: 1.2, textShadow: '0 1px 0 rgba(0,0,0,0.5)', ...FONT_SMOOTH }}>
+        {value}
+      </p>
+      {hint && (
+        <p style={{ margin: '3px 0 0', fontSize: 10, fontWeight: 500, color: hintColor || steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -603,9 +610,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <div style={{
             borderRadius: 14, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: '14px 20px',
-            display: 'flex', alignItems: 'center', gap: 14,
+            padding: isDesktop ? '18px 28px' : '14px 20px',
+            display: 'flex', alignItems: 'center', gap: isDesktop ? 20 : 14,
             position: 'relative',
+            width: '100%',
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
             {imagePreview && (
@@ -649,13 +657,33 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </div>
         )}
 
+        {/* ── Desktop two-column wrapper ─────────────────────────────
+            On desktop the flip-card hero sits in a fixed 540px left column
+            while the supporting panels (roles, camera, chips, checklist,
+            drawers) fill a flexible right column. On mobile both wrappers
+            use `display: contents` so their children flatten back into the
+            single flex column and mobile rendering is byte-identical. */}
+        <div style={isDesktop ? {
+          display: 'grid',
+          gridTemplateColumns: '540px minmax(0, 1fr)',
+          gap: 20,
+          alignItems: 'start',
+        } : { display: 'contents' }}>
+        <div style={isDesktop ? {
+          display: 'flex', flexDirection: 'column', gap: 16,
+        } : { display: 'contents' }}>
+
         {/* ── Warning strip — blocking only (Result owns the full set) ── */}
         {warnings && warnings.length > 0 && (
           <WarningStrip warnings={warnings} />
         )}
 
-        {/* ── Key Light hero — flip card (specs ↔ diagram) ── */}
-        {result && (modName || positionDisplay || result._raw) && (
+        {/* ── Key Light hero — flip card (specs ↔ diagram) — MOBILE ONLY ──
+            Desktop renders a static hero panel below instead, so specs and
+            diagram are visible simultaneously. The flip metaphor exists to
+            compress both faces into phone-sized real estate; on desktop
+            that compression is a handicap, not a feature. */}
+        {result && !isDesktop && (modName || positionDisplay || result._raw) && (
           <div style={{ perspective: 1200 }} onClick={flipHero}>
             <div style={{
               transformStyle: 'preserve-3d',
@@ -814,6 +842,100 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </div>
         )}
 
+        {/* ── Key Light hero — DESKTOP static panel ──
+            Replaces the flip card on wide viewports with a single tall
+            panel that shows the modifier identity, the full-size lighting
+            diagram, and the complete spec grid simultaneously. Typography
+            and padding are intentionally heavier than mobile — 15px spec
+            values, 28px modifier title, 24px internal padding — so the
+            panel reads natively at desktop viewing distances rather than
+            looking like a stretched phone card. */}
+        {result && isDesktop && (modName || positionDisplay || result._raw) && (
+          <div style={{
+            borderRadius: 16,
+            backgroundColor: C.panelBg,
+            boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+            padding: '22px 26px 24px',
+            position: 'relative',
+            overflow: 'hidden',
+          }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 16, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+            <div style={{ position: 'absolute', left: 0, top: 12, bottom: 12, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
+
+            {/* Header row — label left, size-range right */}
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.5px', ...FONT_SMOOTH }}>
+                KEY LIGHT
+              </p>
+              {mod?.sizeRange && (
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: C.textDim, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                  {mod.sizeRange}
+                </p>
+              )}
+            </div>
+
+            {/* Modifier title or fallback catchlight description */}
+            {modName ? (
+              <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
+                {modName}
+              </p>
+            ) : result.sections?.catchlightModifier ? (
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
+                {result.sections.catchlightModifier}
+              </p>
+            ) : null}
+
+            {/* Full-size diagram in an engraved well */}
+            {result._raw && (
+              <div style={{
+                marginTop: 18,
+                padding: '14px 10px 10px',
+                borderRadius: 12,
+                backgroundColor: '#070709',
+                boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+                display: 'flex', justifyContent: 'center', alignItems: 'center',
+              }}>
+                <LightingDiagram result={result} />
+              </div>
+            )}
+
+            {/* Spec grid — 2-column, engraved inset cells */}
+            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {mod?.distRange && (
+                <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `optimal ${mod.optDist}` : null} hintColor={C.confHigh} />
+              )}
+              {positionDisplay && (
+                <DesktopSpec label="POSITION" value={positionDisplay} />
+              )}
+              {directionDisplay && (
+                <DesktopSpec label="DIRECTION" value={directionDisplay} hint={keyAngleDisplay} hintColor={KEY_ACCENT} />
+              )}
+              {keyHeightDisplay && (
+                <DesktopSpec label="HEIGHT" value={keyHeightDisplay} hint={keyHeightMeasurement} hintColor={C.confHigh} />
+              )}
+              {rsPlacement && (
+                <DesktopSpec label="PLACEMENT" value={rsPlacement} />
+              )}
+              {rsFill && (
+                <DesktopSpec label="FILL" value={rsFill} />
+              )}
+            </div>
+
+            {/* Tip line — faint tail text */}
+            {mod?.distRange && (
+              <p style={{ margin: '14px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.40), lineHeight: 1.5, letterSpacing: '0.1px', ...FONT_SMOOTH }}>
+                Closer = softer wrap · Farther = harder, more directional
+              </p>
+            )}
+          </div>
+        )}
+
+        </div>
+        {/* ── Right column (desktop) — secondary panels ── */}
+        <div style={isDesktop ? {
+          display: 'flex', flexDirection: 'column', gap: 16,
+        } : { display: 'contents' }}>
+
         {/* ── Multi-light roles strip ── */}
         {presentRoles && presentRoles.length > 0 && (
           <LightRoleStrip roles={presentRoles} />
@@ -874,14 +996,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 scrollbarWidth: 'none', msOverflowStyle: 'none',
               }}>
                 {chips.map((m, i) => (
-                  <span key={i} style={{
-                    fontSize: 9, fontWeight: 700, color: steel(0.7),
-                    backgroundColor: 'rgba(95,124,150,0.06)',
-                    padding: '5px 10px', borderRadius: 5,
-                    boxShadow: 'inset 1px 1px 2px 0px rgba(0,0,0,0.25), inset 0px 2px 4px 0px rgba(0,0,0,0.3)',
-                    letterSpacing: '0.5px', whiteSpace: 'nowrap', flexShrink: 0,
-                    ...FONT_SMOOTH,
-                  }}>{m}</span>
+                  <Chip key={i} label={m} variant="neutral" size="sm" />
                 ))}
               </div>
             </div>
@@ -950,6 +1065,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <InsetField label="NOTES" value={notes} onChange={setNotes} placeholder="Any details about this setup…" multiline />
         </PullTabDrawer>
 
+        </div>{/* end rightCol */}
+        </div>{/* end middleWrap */}
+
         <div style={{ flex: 1 }} />
 
         {/* ── Start Cockpit CTA (primary) ── */}
@@ -959,7 +1077,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           onPointerUp={() => setSavePressed(false)}
           onPointerLeave={() => setSavePressed(false)}
           style={{
-            width: '100%', height: 52, borderRadius: 24,
+            width: '100%', maxWidth: isDesktop ? 540 : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            height: isDesktop ? 58 : 52, borderRadius: isDesktop ? 29 : 24,
             background: CTA_BG,
             boxShadow: savePressed ? 'inset 0px 2px 4px rgba(0,0,0,0.5)' : `${CTA_SHADOW}, ${CTA_BEVEL}`,
             border: 'none', cursor: 'pointer',
@@ -969,7 +1089,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             transition: 'transform 0.1s ease, box-shadow 0.1s ease',
           }}
         >
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(245,247,250,0.9)', letterSpacing: '0.5px', pointerEvents: 'none', ...FONT_SMOOTH }}>
+          <span style={{ fontSize: isDesktop ? 15 : 13, fontWeight: 600, color: 'rgba(245,247,250,0.9)', letterSpacing: '0.5px', pointerEvents: 'none', ...FONT_SMOOTH }}>
             Start Cockpit
           </span>
         </button>
@@ -978,6 +1098,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 4px 0',
+          width: '100%', maxWidth: isDesktop ? 540 : undefined,
+          alignSelf: isDesktop ? 'center' : undefined,
         }}>
           <button onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',

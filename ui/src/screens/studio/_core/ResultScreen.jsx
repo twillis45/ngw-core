@@ -19,6 +19,7 @@ import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_
          TEXT_SHADOW_ENGRAVED,
          BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../../../theme/studioMatte';
 import LightingDiagram from './components/LightingDiagram';
+import Chip, { sevToVariant } from '../_shared/Chip';
 
 // Pill inset shadow — exact from Figma pill nodes
 const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0px rgba(0,0,0,0.4)';
@@ -675,13 +676,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     return parts.join(' · ');
   })();
 
-  // Warning severity colors
-  const SEV_COLOR = { warn: C.confLow, info: steel(0.55), danger: C.textDanger };
-  const SEV_BG    = {
-    warn:   'rgba(245,190,72,0.08)',
-    info:   'rgba(95,124,150,0.07)',
-    danger: 'rgba(200,70,70,0.08)',
-  };
+  // Warning chip styling now lives in _shared/Chip.jsx.
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
@@ -992,19 +987,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             display: 'flex', flexWrap: 'wrap', gap: 6,
           }}>
             {sections.edgeCaseWarnings.map((w, i) => (
-              <div key={i} style={{
-                height: 24, paddingLeft: 8, paddingRight: 8,
-                borderRadius: 5, display: 'flex', alignItems: 'center',
-                backgroundColor: SEV_BG[w.sev] || SEV_BG.info,
-                boxShadow: 'inset 1px 1px 2px 0px rgba(0,0,0,0.2)',
-              }}>
-                <span style={{
-                  fontSize: 10, fontWeight: 600,
-                  color: SEV_COLOR[w.sev] || steel(0.55),
-                  letterSpacing: '0.4px',
-                  WebkitFontSmoothing: 'antialiased',
-                }}>{w.label}</span>
-              </div>
+              <Chip key={i} label={w.label} variant={sevToVariant(w.sev)} size="md" />
             ))}
           </div>
         )}
