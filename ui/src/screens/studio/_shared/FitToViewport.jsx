@@ -29,6 +29,8 @@ export default function FitToViewport({
   minScale = 1,
   maxScale = 1.8,
   tightness = 0.96,    // leave ~4% breathing room
+  fitMode = 'both',    // 'both' = aspect-preserving contain; 'width' = fill
+                       // horizontally and let content scroll vertically
   children,
   background = C.bg,
 }) {
@@ -46,7 +48,10 @@ export default function FitToViewport({
 
   const scaleX = vp.w / designWidth;
   const scaleY = designHeight ? vp.h / designHeight : Infinity;
-  const raw = Math.min(scaleX, scaleY) * tightness;
+  // 'both' = aspect-preserving contain (smaller of X and Y).
+  // 'width' = fill horizontally. Content may be taller than the viewport,
+  //           which the outer overflow:auto container handles via scroll.
+  const raw = (fitMode === 'width' ? scaleX : Math.min(scaleX, scaleY)) * tightness;
   const scale = Math.max(minScale, Math.min(maxScale, raw));
 
   // When viewport matches design width exactly, skip the transform.
@@ -62,10 +67,32 @@ export default function FitToViewport({
   // new containing context. Without an explicit height the fixed child
   // collapses to 0×0.
   //
-  // The inner box is absolutely centered in the viewport-filling outer
-  // container. The transform scales around that center so the content
-  // fills as much of the viewport as possible without clipping.
+  // In 'both' mode the box is absolutely centered and the transform
+  // scales around its center. In 'width' mode we anchor at top and
+  // scale from top-center so taller-than-viewport content can scroll
+  // down naturally in the outer container.
   const innerH = designHeight || Math.round(vp.h / scale);
+  if (fitMode === 'width') {
+    return (
+      <div style={{
+        position: 'fixed',
+        inset: 0,
+        overflow: 'auto',
+        background,
+      }}>
+        <div style={{
+          width: designWidth,
+          height: innerH,
+          margin: '0 auto',
+          transform: `scale(${scale})`,
+          transformOrigin: 'top center',
+        }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       position: 'fixed',

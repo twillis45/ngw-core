@@ -426,11 +426,11 @@ function ModifierDetail({ modifier }) {
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
   const isDesktop = useIsDesktop();
-  // Hero column is fixed 430 at the design level — FitToViewport handles
-  // the uniform scale on wide screens at the app shell, so internal layout
-  // stays pixel-authored.
-  const heroWidth = 430;
-  const heroScale = 1;
+  // Hero column: 430 on mobile, 540 on desktop — the wider column lets the
+  // photo breathe (less aggressive face crop) and makes room for a taller
+  // hero block alongside the analytical panel. FitToViewport handles the
+  // uniform scale on wide screens at the app shell.
+  const heroWidth = isDesktop ? 540 : 430;
   const [drawers, setDrawers] = useState(() =>
     result && result.confidence < 70 ? { patterns: true } : {}
   );
@@ -633,8 +633,17 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const faceCrop = getFaceCropPosition(result?._raw);
   const isHighConf  = confidence >= 70;
   const confColor   = isHighConf ? C.confHigh : C.confLow;
-  const panelTop    = isHighConf ? 497 : 478;
+  // Desktop uses a taller hero block so the photo can show its full aspect
+  // (object-fit: contain) and a LightingDiagram can sit inline below the CTA.
+  const panelTop    = isDesktop ? 920 : (isHighConf ? 497 : 478);
   const leadMargin  = confidence - (sections.patternCandidates[1]?.score ?? 0);
+  // Desktop hero position constants — photo + info overlay + CTA + diagram
+  // stack further down to give the photo more room.
+  const D_PHOTO_TOP    = 100;
+  const D_PHOTO_HEIGHT = 420;   // generous portrait-capable box
+  const D_INFO_TOP     = 540;   // photo bottom + 20 gap
+  const D_CTA_TOP      = 660;   // info (pattern+pills) ~ 80 tall + 40 gap
+  const D_DIAGRAM_TOP  = 730;   // CTA (48) + 22 gap
 
   const toggle = (key) => { setDrawers(prev => ({ ...prev, [key]: !prev[key] })); panelToggleSound(); tapHaptic(); };
 
@@ -682,7 +691,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
       width: '100%',
-      maxWidth: isDesktop ? 1180 : 430,
+      maxWidth: isDesktop ? 1300 : 430,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
@@ -719,19 +728,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
       <div style={{
         position: 'relative',
-        // Grid track reserves the scaled width/height; the inner wrapper
-        // below does the actual transform so the 430×panelTop authored
-        // coordinate system stays untouched.
         width: isDesktop ? heroWidth : undefined,
-        height: isDesktop ? panelTop * heroScale : panelTop,
+        height: panelTop,
         ...(isDesktop ? { gridArea: 'hero' } : null),
       }}>
-      <div style={isDesktop && heroScale !== 1 ? {
-        position: 'absolute', top: 0, left: 0,
-        width: 430, height: panelTop,
-        transform: `scale(${heroScale})`,
-        transformOrigin: 'top left',
-      } : { position: 'relative', width: '100%', height: '100%' }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
 
         {/* Back nav */}
         <button
@@ -775,10 +776,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           }}
           style={{
             position: 'absolute',
-            top: isZoomed ? 0 : (infoVisible ? 100 : 60),
+            top: isZoomed ? 0 : (isDesktop ? D_PHOTO_TOP : (infoVisible ? 100 : 60)),
             left: isZoomed ? 0 : 25,
             right: isZoomed ? 0 : 25,
-            height: isZoomed ? '100dvh' : (infoVisible ? 180 : 340),
+            height: isZoomed ? '100dvh' : (isDesktop ? D_PHOTO_HEIGHT : (infoVisible ? 180 : 340)),
             borderRadius: isZoomed ? 0 : 14,
             overflow: 'hidden',
             backgroundColor: '#000',
@@ -794,8 +795,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           {imagePreview && (
             <img key={imagePreview} src={imagePreview} alt="Result" style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: isZoomed ? 'contain' : 'cover',
-              objectPosition: isZoomed ? '50% 50%' : faceCrop,
+              // Desktop shows the whole photo (contain) since we have room;
+              // mobile stays on the tight face-crop (cover).
+              objectFit: isZoomed ? 'contain' : (isDesktop ? 'contain' : 'cover'),
+              objectPosition: isZoomed ? '50% 50%' : (isDesktop ? '50% 50%' : faceCrop),
               opacity: infoVisible ? 0.8 : 1,
               transition: isZoomed ? 'none' : 'opacity 0.35s ease',
               animation: isZoomed ? 'none' : 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
@@ -831,7 +834,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           onTouchEnd={onTouchEnd}
           onMouseDown={onMouseDown}
           style={{
-            position: 'absolute', top: 290, left: 0, right: 0,
+            position: 'absolute', top: isDesktop ? D_INFO_TOP : 290, left: 0, right: 0,
             transform: infoVisible
               ? `translateY(${isDragging ? dragOffset : 0}px)`
               : `translateY(${isDragging ? 120 + dragOffset : 120}px)`,
@@ -898,7 +901,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         <button
           onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
           style={{
-            position: 'absolute', top: 415, left: 25, right: 25,
+            position: 'absolute', top: isDesktop ? D_CTA_TOP : 415, left: 25, right: 25,
             display: isHighConf ? 'flex' : 'none',
             alignItems: 'center', justifyContent: 'center',
             height: 48,
@@ -936,8 +939,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           />
         )}
 
-        {/* High confidence: scroll affordance */}
-        {isHighConf && (
+        {/* High confidence: scroll affordance (mobile only — desktop has the
+            drawers visible alongside the hero, no scroll cue needed) */}
+        {isHighConf && !isDesktop && (
           <div style={{
             position: 'absolute', top: 479, left: '50%', transform: 'translateX(-50%)', width: 100, height: 0,
             opacity: infoVisible ? 1 : 0,
@@ -946,6 +950,20 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <div style={{ position: 'absolute', top: -1, left: 0, right: 0, bottom: 0 }}>
               <img src={scrollAffordance} alt="" style={{ display: 'block', width: '100%' }} />
             </div>
+          </div>
+        )}
+
+        {/* Desktop-only: LightingDiagram as an accompanying hero graphic —
+            pulled out of the SHADOW drawer so the hero image no longer
+            stands alone on wide viewports. */}
+        {isDesktop && (
+          <div style={{
+            position: 'absolute', top: D_DIAGRAM_TOP, left: 25, right: 25,
+            opacity: infoVisible ? 1 : 0,
+            transition: 'opacity 0.3s ease',
+            display: 'flex', justifyContent: 'center',
+          }}>
+            <LightingDiagram result={result} />
           </div>
         )}
       </div>
@@ -957,7 +975,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
         marginTop: isDesktop ? 96 : 0,
-        maxWidth: isDesktop ? 620 : undefined,
+        maxWidth: isDesktop ? 680 : undefined,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -996,10 +1014,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           <PatternBars candidates={sections.patternCandidates} isHighConf={isHighConf} />
         </PullTabDrawer>
 
-        {/* SHADOW ANALYSIS */}
+        {/* SHADOW ANALYSIS — LightingDiagram moved to the hero column on
+            desktop so the analysis narrative shows unaccompanied here.
+            Mobile still renders the diagram inline below the text. */}
         <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={800}>
-          <LightingDiagram result={result} />
-          <p style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+          {!isDesktop && <LightingDiagram result={result} />}
+          <p style={{ margin: isDesktop ? 0 : '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
             {sections.shadowAnalysis}
           </p>
         </PullTabDrawer>

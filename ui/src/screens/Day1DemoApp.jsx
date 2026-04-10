@@ -715,7 +715,7 @@ export default function Day1DemoApp() {
       );
     case 'result':
       return (
-        <FitToViewport designWidth={1180} designHeight={1100} maxScale={1.7}>
+        <FitToViewport designWidth={1300} designHeight={1040} maxScale={2.0}>
           <ResultScreen
             result={result}
             imagePreview={imagePreview}
@@ -726,7 +726,7 @@ export default function Day1DemoApp() {
       );
     case 'setup':
       return (
-        <FitToViewport designWidth={1180} designHeight={1100} maxScale={1.7}>
+        <FitToViewport designWidth={1180} designHeight={920} maxScale={2.0}>
           <SetupScreen
             result={result}
             imagePreview={imagePreview}
