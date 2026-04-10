@@ -868,7 +868,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               ? '3px 3px 10px rgba(0,0,0,0.55), 1px 1px 3px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.5)'
               : '3px 3px 8px rgba(0,0,0,0.45), inset 1px 1px 0 rgba(255,255,255,0.04), inset -1px -1px 0 rgba(0,0,0,0.45)',
           transition: buttonState === 'alive' ? 'none' : 'background 0.25s ease, box-shadow 0.2s ease',
-          animation: buttonState === 'alive' ? 'btnBreath 1.6s ease-in-out infinite' : 'none',
+          animation: buttonState === 'alive' ? 'btnBreath 1.05s ease-in-out infinite' : 'none',
         }}
       />
 
