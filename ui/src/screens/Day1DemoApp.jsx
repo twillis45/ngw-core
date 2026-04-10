@@ -5,7 +5,7 @@ import ResultScreen from './studio/_core/ResultScreen';
 import SetupScreen from './studio/_core/SetupScreen';
 import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
 import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
-import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
+// Day1SettingsScreen (Bucket C) removed from shell in Checkpoint 3 — deferred.
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
@@ -621,15 +621,29 @@ export default function Day1DemoApp() {
   };
 
   const handleSetup = () => setScreen('setup');
-  const handleSettings = () => setScreen('settings');
-  const handleSettingsBack = () => setScreen('home');
+  // Bucket C (Day1SettingsScreen) is not registered in this build — no-op.
+  // HomeScreen still receives onSettings; clicking the gear is a silent no-op.
+  const handleSettings = () => { /* Bucket C deferred */ };
 
   const handleSetupSave = () => {
     // Persistence happens inside SetupScreen; stay on setup so the user can
     // see the "Saved" confirmation before deciding to Start Cockpit.
   };
 
+  // Bucket B runtime gate — cockpit unlock comes from ?studio=1&cockpit=1
+  // (Checkpoint 2 flag plumbing). Without it, all nav paths into Day1ShootScreen
+  // redirect cleanly to Studio Home.
+  const isCockpitUnlocked = () => {
+    try { return sessionStorage.getItem('ngw_studio_cockpit') === '1'; }
+    catch { return false; }
+  };
+
   const handleStartCockpit = (mode) => {
+    if (!isCockpitUnlocked()) {
+      // Bucket B locked in this build — return to Home cleanly.
+      setScreen('home');
+      return;
+    }
     setShootMode(mode || 'photographer');
     setScreen('shoot');
   };
@@ -654,8 +668,20 @@ export default function Day1DemoApp() {
     setAnalysisReady(false);
   };
 
-  // Login gate — show Studio Matte sign-in when no user session
+  // Login gate — StudioLoginScreen is Bucket B, gated behind cockpit unlock.
+  // Without cockpit, an unauthenticated tester exits studio cleanly to prod auth
+  // (clears studio session flags so they don't yo-yo back before authenticating).
   if (!user) {
+    if (!isCockpitUnlocked()) {
+      try {
+        sessionStorage.removeItem('ngw_studio_active');
+        sessionStorage.removeItem('ngw_goto_day1_demo');
+      } catch { /* ignore */ }
+      if (typeof window !== 'undefined') {
+        window.location.replace('/?login=1');
+      }
+      return null;
+    }
     return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
   }
 
@@ -702,14 +728,7 @@ export default function Day1DemoApp() {
           onExit={handleExitShoot}
         />
       );
-    case 'settings':
-      return (
-        <Day1SettingsScreen
-          user={user}
-          onBack={handleSettingsBack}
-          onLogout={() => { clearAuth(); setUser(null); }}
-        />
-      );
+    // case 'settings': removed in Checkpoint 3 — Day1SettingsScreen is Bucket C.
     case 'error':
       return (
         <FallbackReveal
