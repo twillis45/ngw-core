@@ -163,7 +163,11 @@ export default function LightingDiagram({ result, compact = false }) {
   const keyLabelSide = kX > subX + 6 ? 'start' : 'end';
   const keyLabelX    = kX > subX + 6 ? kX + (compact ? 14 : 20) : kX - (compact ? 14 : 20);
 
-  const st = (a) => `rgba(95,124,150,${a})`;
+  // Steel alias — every alpha is bumped by ~0.18 with a floor at 0.42 so
+  // the diagram reads on bright displays. The original dim 0.15–0.30 stops
+  // disappeared on calibrated monitors; lifting them keeps the matte
+  // hierarchy intact while making every glyph legible.
+  const st = (a) => `rgba(95,124,150,${Math.min(1, Math.max(0.42, a + 0.18))})`;
 
   // Modifier label for full mode
   const modLabel = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${mod.family || ''}`.trim() : null;

@@ -20,12 +20,22 @@ import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
 import LightingDiagram from './components/LightingDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
+import ModifierSilhouette from '../_shared/ModifierSilhouette';
 import { saveSetup as persistSetup } from '../../../data/setupStore';
 import { saveShootRole } from '../../../data/shootModeStore';
 import { trackEvent } from '../../../data/analytics';
 
 // ─── Tokens ──────────────────────────────────────────────────────────────────
-const C = { ...SM_C, fieldBg: '#0a0b0d' };
+// `textDim` is intentionally lifted from the global 0.5 alpha to 0.66 here
+// so the SetupScreen's secondary metadata reads on bright/calibrated
+// displays. Anywhere this screen wants whisper-quiet text it can still
+// reach for steel(0.42) directly.
+const C = {
+  ...SM_C,
+  fieldBg: '#0a0b0d',
+  textDim:  'rgba(184,191,199,0.66)',
+  textMeta: '#b8bec7',
+};
 
 const FIELD_SHADOW       = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 8px 0px rgba(0,0,0,0.3), inset 1px 1px 2px 0px rgba(0,0,0,0.4)';
 const FIELD_SHADOW_FOCUS = `inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 8px 0px rgba(0,0,0,0.3), inset 1px 1px 2px 0px rgba(0,0,0,0.4), 0px 0px 0px 1px ${steel(0.35)}`;
@@ -215,7 +225,7 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
         </p>
       )}
       {interactive && !revealed && (
-        <p style={{ margin: '3px 0 0', fontSize: 8, fontWeight: 500, color: steel(0.2), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+        <p style={{ margin: '3px 0 0', fontSize: 8, fontWeight: 500, color: steel(0.50), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
           HOLD
         </p>
       )}
@@ -687,11 +697,18 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           alignItems: 'start',
         } : { display: 'contents' }}>
         <div style={isDesktop ? {
-          // Hero column cap: 920 (designHeight) − 110 (title/header area)
-          // − 120 (CTA + cancel footer) = 690 usable. Content scrolls if
-          // taller so the CTA stays in view.
-          display: 'flex', flexDirection: 'column', gap: 16,
-          maxHeight: 690,
+          // Hero column cap — computed from the 920 design viewport:
+          //   920 − 80 (nav)
+          //       − 60 (content padding top+bottom)
+          //       − 84 (result header)
+          //       − 16 (gap above 2-col row)
+          //       − 16 (gap below)
+          //       − 58 (Start Cockpit CTA)
+          //       − 34 (cancel row)
+          //   = 572 of breathing room.
+          // Use 540 to leave a small cushion for panel bevels + scrollbar.
+          display: 'flex', flexDirection: 'column', gap: 14,
+          maxHeight: 540,
           overflowY: 'auto',
           paddingRight: 6,
         } : { display: 'contents' }}>
@@ -808,7 +825,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
                 {mod?.distRange && (
                   <div style={{ padding: '10px 20px 14px' }}>
-                    <p style={{ margin: 0, fontSize: 10, fontWeight: 400, color: steel(0.35), lineHeight: 1.5, ...FONT_SMOOTH }}>
+                    <p style={{ margin: 0, fontSize: 10, fontWeight: 400, color: steel(0.55), lineHeight: 1.5, ...FONT_SMOOTH }}>
                       Closer = softer wrap · Farther = harder, more directional
                     </p>
                   </div>
@@ -819,7 +836,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{
                   padding: '0 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 }}>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.25), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR DIAGRAM
                   </span>
                 </div>
@@ -856,7 +873,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 )}
 
                 <div style={{ padding: '6px 20px 10px' }}>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.25), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR SPECS
                   </span>
                 </div>
@@ -878,54 +895,78 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             borderRadius: 16,
             backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: '22px 26px 24px',
+            padding: '16px 22px 18px',
             position: 'relative',
             overflow: 'hidden',
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 16, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-            <div style={{ position: 'absolute', left: 0, top: 12, bottom: 12, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
+            <div style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
             {/* Header row — label left, size-range right */}
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
-              <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.5px', ...FONT_SMOOTH }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                 KEY LIGHT
               </p>
               {mod?.sizeRange && (
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: C.textDim, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: C.textDim, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
                   {mod.sizeRange}
                 </p>
               )}
             </div>
 
-            {/* Modifier title or fallback catchlight description */}
-            {modName ? (
-              <p style={{ margin: 0, fontSize: 26, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
-                {modName}
-              </p>
-            ) : result.sections?.catchlightModifier ? (
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
-                {result.sections.catchlightModifier}
-              </p>
-            ) : null}
+            {/* Title row — modifier silhouette graphic sits alongside the
+                name so the reader identifies the shaper visually at a
+                glance before scanning the diagram + spec grid below. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              {mod?.family && (
+                <div style={{
+                  flexShrink: 0,
+                  width: 56, height: 56,
+                  borderRadius: 10,
+                  backgroundColor: '#070709',
+                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <ModifierSilhouette family={mod.family} size={48} />
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {modName ? (
+                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
+                    {modName}
+                  </p>
+                ) : result.sections?.catchlightModifier ? (
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
+                    {result.sections.catchlightModifier}
+                  </p>
+                ) : null}
+                {mod?.distRange && (
+                  <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.55), lineHeight: 1.35, ...FONT_SMOOTH }}>
+                    The closer you place it, the softer the wrap. Pull it back for harder, more directional light.
+                  </p>
+                )}
+              </div>
+            </div>
 
-            {/* Full-size diagram in an engraved well */}
+            {/* Compact diagram in an engraved well */}
             {result._raw && (
               <div style={{
-                marginTop: 18,
-                padding: '14px 10px 10px',
+                marginTop: 12,
+                padding: '10px 8px 8px',
                 borderRadius: 12,
                 backgroundColor: '#070709',
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
                 display: 'flex', justifyContent: 'center', alignItems: 'center',
+                maxHeight: 180, overflow: 'hidden',
               }}>
-                <LightingDiagram result={result} />
+                <LightingDiagram result={result} compact />
               </div>
             )}
 
             {/* Spec grid — 2-column, engraved inset cells */}
-            <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {mod?.distRange && (
-                <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `optimal ${mod.optDist}` : null} hintColor={C.confHigh} />
+                <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `sweet spot ${mod.optDist}` : null} hintColor={C.confHigh} />
               )}
               {positionDisplay && (
                 <DesktopSpec label="POSITION" value={positionDisplay} />
@@ -943,13 +984,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <DesktopSpec label="FILL" value={rsFill} />
               )}
             </div>
-
-            {/* Tip line — faint tail text */}
-            {mod?.distRange && (
-              <p style={{ margin: '14px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.40), lineHeight: 1.5, letterSpacing: '0.1px', ...FONT_SMOOTH }}>
-                Closer = softer wrap · Farther = harder, more directional
-              </p>
-            )}
           </div>
         )}
 
@@ -958,8 +992,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         <div style={isDesktop ? {
           // Same cap as the hero column so the two columns align and the
           // bottom CTA never gets pushed below the 920 design viewport.
-          display: 'flex', flexDirection: 'column', gap: 16,
-          maxHeight: 690,
+          display: 'flex', flexDirection: 'column', gap: 14,
+          maxHeight: 540,
           overflowY: 'auto',
           paddingRight: 6,
         } : { display: 'contents' }}>
@@ -1007,9 +1041,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
         {/* ── Inset chip-strip — meta + CCT + fill + bg ── */}
         {(() => {
-          const chips = [...(result?.meta || [])];
+          const chips = [...(result?.meta || [])].map(m => prettify(m));
           if (cctDisplay) chips.push(cctMixed ? `${cctDisplay} · MIXED` : cctDisplay);
-          if (fillMethod)  chips.push(fillMethod.toUpperCase());
+          if (fillMethod)  chips.push(prettify(fillMethod, { upper: true }));
           if (bgDetected)  chips.push(bgDistance ? `BG LIGHT ${bgDistance}FT` : 'BG LIGHT');
           if (chips.length === 0) return null;
           return (
@@ -1046,7 +1080,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {items.map((item, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${steel(0.3)}` }} />
+                      <div style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${steel(0.50)}` }} />
                       <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, ...FONT_SMOOTH }}>{item}</span>
                     </div>
                   ))}
@@ -1221,19 +1255,19 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
             {modName && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.45), letterSpacing: '0.6px', ...FONT_SMOOTH }}>MODIFIER</p>
+                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>MODIFIER</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{modName}</p>
               </div>
             )}
             {positionDisplay && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.45), letterSpacing: '0.6px', ...FONT_SMOOTH }}>POSITION</p>
+                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>POSITION</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{positionDisplay}</p>
               </div>
             )}
             {mod?.distRange && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.45), letterSpacing: '0.6px', ...FONT_SMOOTH }}>DISTANCE</p>
+                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>DISTANCE</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{mod.distRange}</p>
               </div>
             )}
