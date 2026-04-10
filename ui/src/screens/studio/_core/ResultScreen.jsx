@@ -9,15 +9,15 @@
  * All data from props — no hardcoded sample values.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../utils/haptics';
-import { getFaceCropPosition } from '../utils/faceCrop';
-import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../utils/sounds';
-import scrollAffordance from '../assets/day1/scroll-affordance.svg';
+import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../../../utils/haptics';
+import { getFaceCropPosition } from '../../../utils/faceCrop';
+import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
+import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
 import { steel, C, FONT_SMOOTH, METALLIC_CHEVRON, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, PANEL_SHADOW, PANEL_BEVEL,
          TEXT_SHADOW_ENGRAVED,
-         BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../theme/studioMatte';
-import LightingDiagram from '../components/day1/LightingDiagram';
+         BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../../../theme/studioMatte';
+import LightingDiagram from './components/LightingDiagram';
 
 // Pill inset shadow — exact from Figma pill nodes
 const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0px rgba(0,0,0,0.4)';

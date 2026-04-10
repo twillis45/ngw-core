@@ -11,16 +11,16 @@
  *   6. Viewfinder overlay — glass panel with diagram + specs (nav icon)
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { tapHaptic, successHaptic, navHaptic, longPressHaptic, grainHaptic } from '../utils/haptics';
-import { getFaceCropPosition } from '../utils/faceCrop';
-import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../utils/sounds';
+import { tapHaptic, successHaptic, navHaptic, longPressHaptic, grainHaptic } from '../../../utils/haptics';
+import { getFaceCropPosition } from '../../../utils/faceCrop';
+import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
-         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
-import LightingDiagram from '../components/day1/LightingDiagram';
-import { saveSetup as persistSetup } from '../data/setupStore';
-import { saveShootRole } from '../data/shootModeStore';
-import { trackEvent } from '../data/analytics';
+         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
+import LightingDiagram from './components/LightingDiagram';
+import { saveSetup as persistSetup } from '../../../data/setupStore';
+import { saveShootRole } from '../../../data/shootModeStore';
+import { trackEvent } from '../../../data/analytics';
 
 // ─── Tokens ──────────────────────────────────────────────────────────────────
 const C = { ...SM_C, fieldBg: '#0a0b0d' };

@@ -1,15 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import HomeScreen from './HomeScreen';
-import ProcessingScreen from './ProcessingScreen';
-import ResultScreen from './ResultScreen';
-import SetupScreen from './SetupScreen';
-import Day1ShootScreen from './Day1ShootScreen';
-import StudioLoginScreen from './StudioLoginScreen';
-import Day1SettingsScreen from './Day1SettingsScreen';
+import HomeScreen from './studio/_core/HomeScreen';
+import ProcessingScreen from './studio/_core/ProcessingScreen';
+import ResultScreen from './studio/_core/ResultScreen';
+import SetupScreen from './studio/_core/SetupScreen';
+import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
+import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
+import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
-import { Panel, CtaButton, HomeIndicator } from '../components/day1';
+import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
 import { softClickSound } from '../utils/sounds';
 

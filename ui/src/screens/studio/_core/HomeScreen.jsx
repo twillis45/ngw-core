@@ -5,29 +5,29 @@
  * All colors and pixel positions from Figma Token Palette — Studio Matte
  */
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPressHaptic, grainHaptic, getProfileKey } from '../utils/haptics';
-import { analyzeClickSound, softClickSound, imageDropSound, powerOnSound, navSlideSound, panelToggleSound } from '../utils/sounds';
-import { saveSetting, loadSettings } from '../data/settingsStore';
-import { fetchImageFromUrl } from '../data/labApi';
-import { steel, C as SM_C, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../theme/studioMatte';
+import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPressHaptic, grainHaptic, getProfileKey } from '../../../utils/haptics';
+import { analyzeClickSound, softClickSound, imageDropSound, powerOnSound, navSlideSound, panelToggleSound } from '../../../utils/sounds';
+import { saveSetting, loadSettings } from '../../../data/settingsStore';
+import { fetchImageFromUrl } from '../../../data/labApi';
+import { steel, C as SM_C, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../../../theme/studioMatte';
 
 // ─── Figma-exported assets (downloaded to project, valid indefinitely) ─────────
-import analyzeTrackIdle    from '../assets/day1/analyze-track-idle.svg';
-import analyzeTrackAlive   from '../assets/day1/analyze-track-alive.svg';
-import analyzeTrackPressed from '../assets/day1/analyze-track-pressed.svg';
-import analyzeButtonIdle    from '../assets/day1/analyze-button-idle.svg';
-import analyzeButtonAlive   from '../assets/day1/analyze-button-alive.svg';
-import analyzeButtonPressed from '../assets/day1/analyze-button-pressed.svg';
-import activityIndicatorIdle  from '../assets/day1/activity-indicator-idle.svg';
-import activityIndicatorPulse from '../assets/day1/activity-indicator-pulse.svg';
-import illuminationWellIdle  from '../assets/day1/illumination-well-idle.svg';
-import illuminationWellAlive from '../assets/day1/illumination-well-alive.svg';
-import illuminationLampOff from '../assets/day1/illumination-lamp-off.svg';
-import illuminationLampOn  from '../assets/day1/illumination-lamp-on.svg';
-import ledOff from '../assets/day1/led-off.svg';
-import ledOn  from '../assets/day1/led-on.svg';
-import ellipseDot from '../assets/day1/ellipse-dot.svg';
-import ellipseBg  from '../assets/day1/ellipse-bg.svg';
+import analyzeTrackIdle    from '../../../assets/day1/analyze-track-idle.svg';
+import analyzeTrackAlive   from '../../../assets/day1/analyze-track-alive.svg';
+import analyzeTrackPressed from '../../../assets/day1/analyze-track-pressed.svg';
+import analyzeButtonIdle    from '../../../assets/day1/analyze-button-idle.svg';
+import analyzeButtonAlive   from '../../../assets/day1/analyze-button-alive.svg';
+import analyzeButtonPressed from '../../../assets/day1/analyze-button-pressed.svg';
+import activityIndicatorIdle  from '../../../assets/day1/activity-indicator-idle.svg';
+import activityIndicatorPulse from '../../../assets/day1/activity-indicator-pulse.svg';
+import illuminationWellIdle  from '../../../assets/day1/illumination-well-idle.svg';
+import illuminationWellAlive from '../../../assets/day1/illumination-well-alive.svg';
+import illuminationLampOff from '../../../assets/day1/illumination-lamp-off.svg';
+import illuminationLampOn  from '../../../assets/day1/illumination-lamp-on.svg';
+import ledOff from '../../../assets/day1/led-off.svg';
+import ledOn  from '../../../assets/day1/led-on.svg';
+import ellipseDot from '../../../assets/day1/ellipse-dot.svg';
+import ellipseBg  from '../../../assets/day1/ellipse-bg.svg';
 
 // ─── Design tokens — studioMatte.js is single source of truth ────────────────
 // HomeScreen-specific C extensions (textPrimary slightly more transparent than panel screens)

@@ -3,15 +3,15 @@
  * Pixel-exact match to Figma: YQgGd8KZyZoXzZwJV7p4b6 / Studio Matte Theme / Processing → HC (1441:2)
  */
 import { useState, useEffect, useRef } from 'react';
-import { tapHaptic, grainHaptic }          from '../utils/haptics';
-import { processingPulseSound } from '../utils/sounds';
-import analyzeTrackAlive      from '../assets/day1/analyze-track-alive.svg';
-import analyzeButtonAlive     from '../assets/day1/analyze-button-alive.svg';
+import { tapHaptic, grainHaptic }          from '../../../utils/haptics';
+import { processingPulseSound } from '../../../utils/sounds';
+import analyzeTrackAlive      from '../../../assets/day1/analyze-track-alive.svg';
+import analyzeButtonAlive     from '../../../assets/day1/analyze-button-alive.svg';
 
-import illuminationWellAlive  from '../assets/day1/illumination-well-alive.svg';
-import illuminationLampOn     from '../assets/day1/illumination-lamp-on.svg';
+import illuminationWellAlive  from '../../../assets/day1/illumination-well-alive.svg';
+import illuminationLampOn     from '../../../assets/day1/illumination-lamp-on.svg';
 
-import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../theme/studioMatte';
+import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../../../theme/studioMatte';
 
 // ─── Screen-local token extensions ───────────────────────────────────────────
 const C = { ...SM_C, border: 'rgba(167,173,183,0.06)' };
