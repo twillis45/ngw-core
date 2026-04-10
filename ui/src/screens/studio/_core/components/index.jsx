@@ -74,7 +74,7 @@ export function NavRow({ label, value, onClick, danger = false, chevron = true }
       </span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {value && <span style={{ fontSize: 13, color: steel(0.55), ...FS }}>{value}</span>}
-        {chevron && !danger && <span style={{ fontSize: 16, color: steel(0.35), lineHeight: 1 }}>›</span>}
+        {chevron && !danger && <span style={{ fontSize: 16, color: steel(0.58), lineHeight: 1 }}>›</span>}
       </div>
     </button>
   );
@@ -87,7 +87,7 @@ export function ToggleRow({ label, sub, value, onChange }) {
     <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: C.textPrimary, ...FS }}>{label}</p>
-        {sub && <p style={{ margin: '2px 0 0', fontSize: 11, color: steel(0.45), ...FS }}>{sub}</p>}
+        {sub && <p style={{ margin: '2px 0 0', fontSize: 11, color: steel(0.62), ...FS }}>{sub}</p>}
       </div>
       <div
         onClick={() => { softClickSound(); selectHaptic(); onChange(!value); }}

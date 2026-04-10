@@ -89,12 +89,21 @@ function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
 function ShadowSignature({ angleDeg, density }) {
   if (angleDeg == null && density == null) return null;
 
-  const clampedAngle = angleDeg != null ? Math.max(-60, Math.min(60, angleDeg)) : null;
-  const rad = clampedAngle != null ? (clampedAngle * Math.PI) / 180 : 0;
+  // Engine convention: 0°=up, 90°=right, 180°=straight down, 270°=left.
+  // The dial reads as a "how far does the shadow swing from straight down"
+  // bias, so we subtract 180° to re-center on down, then normalize into
+  // (-180, 180] and clamp to the visible ±60° sweep.
+  let bias = null;
+  if (angleDeg != null) {
+    let b = angleDeg - 180;
+    if (b > 180) b -= 360;
+    if (b < -180) b += 360;
+    bias = Math.max(-60, Math.min(60, b));
+  }
+  const rad = bias != null ? (bias * Math.PI) / 180 : 0;
   // Needle tail pivots at (50, 14) — just above face/nose — and extends 46px
-  // down and sideways. Positive angle → needle swings right, matching the
-  // convention "nose shadow leans to subject's right when key light is to
-  // subject's left".
+  // down and sideways. Positive bias → needle swings right (shadow leans to
+  // subject's right → key light from subject's upper-left).
   const needleX = 50 + 46 * Math.sin(rad);
   const needleY = 14 + 46 * Math.cos(rad);
 
@@ -178,8 +187,8 @@ function ShadowSignature({ angleDeg, density }) {
             }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.5px', ...FONT_SMOOTH }}>OPEN</span>
-            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.5px', ...FONT_SMOOTH }}>DEEP</span>
+            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>OPEN</span>
+            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>DEEP</span>
           </div>
         </div>
       )}
@@ -373,19 +382,54 @@ function ModifierSilhouette({ family }) {
 }
 
 // ─── CatchlightEye ──────────────────────────────────────────────────────────
-// Stylized eye outline with a catchlight dot positioned at the clock hour
-// implied by nose shadow angle. Positive nose-shadow angle (shadow leans to
-// subject's right → light from subject's upper-left) maps to a catchlight on
-// the subject's upper-left side of the iris. The shape is intentionally
-// schematic, not anatomical, so it reads at ~90px wide.
-function CatchlightEye({ angleDeg }) {
-  const clamped = angleDeg != null ? Math.max(-60, Math.min(60, angleDeg)) : 0;
-  // Catchlight sits on the opposite side of the iris from the shadow direction.
-  // Map angle to clock position around an ellipse of radius rx=18, ry=14.
-  const rad = ((-clamped - 90) * Math.PI) / 180; // -90 = top; rotate by -angle
-  const cx = 50 + 18 * Math.cos(rad);
-  const cy = 44 + 14 * Math.sin(rad);
-  const stroke = steel(0.55);
+// Stylized eye outline with one or more catchlight dots positioned at clock
+// hours.  Accepts either `clockHours` (array of clock-hour strings/ints — one
+// per detected catchlight, used when the engine reports multi-light setups)
+// OR a single `clockHour` for backward-compat, OR falls back to mapping the
+// nose-shadow angle.  Clock convention is from the VIEWER's perspective:
+// 12=top, 3=right (subject's LEFT cheek), 6=bottom, 9=left (subject's RIGHT).
+function parseClockHour(str) {
+  if (str == null) return null;
+  if (typeof str === 'number') {
+    if (isNaN(str) || str < 1 || str > 12) return null;
+    return Math.round(str);
+  }
+  const m = String(str).match(/(\d+)\s*o.?clock/i);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  if (isNaN(h) || h < 1 || h > 12) return null;
+  return h;
+}
+function CatchlightEye({ clockHour, clockHours, angleDeg }) {
+  // Resolve the dot-list:  clockHours[] → array, else clockHour → [hour], else
+  // angleDeg fallback → synthetic single entry.
+  let hours = null;
+  if (Array.isArray(clockHours) && clockHours.length > 0) {
+    hours = clockHours.map(parseClockHour).filter(h => h != null);
+  } else if (clockHour != null) {
+    const h = parseClockHour(clockHour);
+    if (h != null) hours = [h];
+  }
+
+  // Deduplicate and count so repeated positions read as a brighter/larger dot.
+  const counts = new Map();
+  if (hours && hours.length > 0) {
+    for (const h of hours) counts.set(h, (counts.get(h) || 0) + 1);
+  }
+
+  // Angle fallback — only when we have no clock data at all.
+  let fallbackPos = null;
+  if ((!hours || hours.length === 0) && angleDeg != null) {
+    const clamped = Math.max(-60, Math.min(60, angleDeg));
+    const clockDeg = -clamped;
+    fallbackPos = {
+      cx: 50 + 18 * Math.sin((clockDeg * Math.PI) / 180),
+      cy: 44 - 14 * Math.cos((clockDeg * Math.PI) / 180),
+    };
+  }
+
+  const stroke = steel(0.58);
+  const maxCount = Math.max(1, ...Array.from(counts.values()));
 
   return (
     <svg viewBox="0 0 100 90" width="90" height="80" style={{ display: 'block' }}>
@@ -395,16 +439,175 @@ function CatchlightEye({ angleDeg }) {
       <circle cx={50} cy={44} r={20} fill="rgba(60,70,85,0.55)" stroke={stroke} strokeWidth={1} />
       {/* pupil */}
       <circle cx={50} cy={44} r={8} fill="#05060a" />
-      {/* catchlight — only if we had a valid angle */}
-      {angleDeg != null && (
+      {/* Multi-dot catchlights — one per reported clock hour.  Dots on the
+          same clock position stack into a single brighter dot whose radius
+          grows with the count, so repeated hits read as "strongest light". */}
+      {Array.from(counts.entries()).map(([h, n]) => {
+        const clockDeg = (h % 12) * 30;
+        const cx = 50 + 18 * Math.sin((clockDeg * Math.PI) / 180);
+        const cy = 44 - 14 * Math.cos((clockDeg * Math.PI) / 180);
+        const r = 3.2 + 1.4 * (n / maxCount);
+        const alpha = 0.55 + 0.4 * (n / maxCount);
+        return (
+          <g key={`${h}-${n}`}>
+            <circle cx={cx} cy={cy} r={r + 1.6} fill="rgba(255,255,255,0.10)" />
+            <circle cx={cx} cy={cy} r={r} fill={`rgba(255,255,255,${alpha})`} />
+            <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.38)} fill="#ffffff" />
+          </g>
+        );
+      })}
+      {/* Fallback single dot from nose-shadow angle */}
+      {fallbackPos && (
         <>
-          <circle cx={cx} cy={cy} r={4.5} fill="rgba(255,255,255,0.92)" />
-          <circle cx={cx - 1.2} cy={cy - 1.2} r={1.8} fill="#ffffff" />
+          <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={4.5} fill="rgba(255,255,255,0.92)" />
+          <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="#ffffff" />
         </>
       )}
       {/* subtle upper lash line */}
       <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
     </svg>
+  );
+}
+
+// ─── LightComponentChips ────────────────────────────────────────────────────
+// Key / Fill / Rim / Source quality presented as a tactile 3-4 cell strip
+// so the components — which previously lived as raw "subtle fill. subtle rim
+// light." prose inside the shadow narrative — get a proper visual anchor.
+// Each cell shows a colored dot whose opacity encodes presence strength.
+function LightComponentChips({ components }) {
+  if (!components) return null;
+  const { source, fill, rim } = components;
+  if (!source && !fill && !rim) return null;
+
+  const strengthAlpha = (s) => {
+    const v = String(s || '').toLowerCase();
+    if (v === 'strong' || v === 'heavy' || v === 'dominant') return 0.95;
+    if (v === 'moderate' || v === 'medium') return 0.75;
+    if (v === 'subtle' || v === 'soft' || v === 'light') return 0.5;
+    return 0.8;
+  };
+
+  const Cell = ({ label, value, color }) => (
+    <div style={{
+      flex: 1, minWidth: 0,
+      padding: '8px 10px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{
+          width: 6, height: 6, borderRadius: 3,
+          backgroundColor: color,
+          boxShadow: `0 0 5px ${color}`,
+          flexShrink: 0,
+        }} />
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          {label}
+        </p>
+      </div>
+      <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: C.textSubBold, textTransform: 'capitalize', lineHeight: 1.2, ...FONT_SMOOTH }}>
+        {value || '—'}
+      </p>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      {source && (
+        <Cell label="SOURCE" value={source} color={`rgba(245,190,72,${strengthAlpha(source)})`} />
+      )}
+      <Cell label="FILL" value={fill || 'None'} color={`rgba(130,170,220,${fill ? strengthAlpha(fill) : 0.2})`} />
+      <Cell label="RIM" value={rim || 'None'} color={`rgba(200,160,240,${rim ? strengthAlpha(rim) : 0.2})`} />
+    </div>
+  );
+}
+
+// ─── DirectionalCompass ─────────────────────────────────────────────────────
+// Pull "Shadow falls upper_left → key light at upper_right (0.90)" out of the
+// narrative and render it as a 3×3 compass grid with glowing cells for the
+// key-light quadrant and the shadow quadrant.  The intensity number renders
+// as a sub-line below the grid so the directional relationship is instantly
+// readable without parsing prose.
+function DirectionalCompass({ direction }) {
+  if (!direction) return null;
+  const { shadowQuadrant, keyQuadrant, keyIntensity } = direction;
+  if (!shadowQuadrant && !keyQuadrant) return null;
+
+  // Map a quadrant label ("upper left", "right", etc.) onto a 3×3 grid index.
+  const quadToCell = (q) => {
+    if (!q) return null;
+    const s = String(q).toLowerCase();
+    const row = s.includes('upper') || s.includes('top') || s.includes('above') ? 0
+              : s.includes('lower') || s.includes('bottom') || s.includes('below') ? 2
+              : 1;
+    const col = s.includes('left') ? 0
+              : s.includes('right') ? 2
+              : 1;
+    return row * 3 + col;
+  };
+
+  const keyCell    = quadToCell(keyQuadrant);
+  const shadowCell = quadToCell(shadowQuadrant);
+
+  const cells = Array.from({ length: 9 }, (_, i) => {
+    const isKey    = i === keyCell;
+    const isShadow = i === shadowCell;
+    return (
+      <div key={i} style={{
+        aspectRatio: '1 / 1',
+        borderRadius: 4,
+        backgroundColor: isKey
+          ? 'rgba(245,190,72,0.85)'
+          : isShadow
+            ? 'rgba(60,70,85,0.85)'
+            : 'rgba(255,255,255,0.03)',
+        boxShadow: isKey
+          ? '0 0 8px rgba(245,190,72,0.55), inset 0 1px 0 rgba(255,255,255,0.25)'
+          : isShadow
+            ? 'inset 0 1px 2px rgba(0,0,0,0.7)'
+            : 'inset 0 0.5px 1px rgba(0,0,0,0.4)',
+      }} />
+    );
+  });
+
+  const title = (s) => String(s || '').replace(/\b\w/g, c => c.toUpperCase());
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '10px 12px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+      marginBottom: 12,
+    }}>
+      <div style={{
+        width: 62, height: 62,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 3, flexShrink: 0,
+      }}>
+        {cells}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          LIGHT DIRECTION
+        </p>
+        {keyQuadrant && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 600, color: C.textSubBold, lineHeight: 1.3, ...FONT_SMOOTH }}>
+            <span style={{ color: 'rgba(245,190,72,0.95)' }}>Key</span> {title(keyQuadrant)}
+            {keyIntensity != null && (
+              <span style={{ color: steel(0.62), fontWeight: 500 }}> · {(keyIntensity * 100).toFixed(0)}%</span>
+            )}
+          </p>
+        )}
+        {shadowQuadrant && (
+          <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.62), lineHeight: 1.3, ...FONT_SMOOTH }}>
+            Shadow falls {title(shadowQuadrant)}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -442,7 +645,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
         <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           COLOR TEMPERATURE
         </p>
-        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.40), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
           KELVIN
         </span>
       </div>
@@ -454,7 +657,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
           background: 'linear-gradient(90deg, #ff9c3a 0%, #ffb56a 18%, #fff0d8 38%, #ffffff 50%, #d8ecff 62%, #a8c8f0 82%, #6f9bd6 100%)',
           boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.1)',
         }} />
-        {/* Key marker */}
+        {/* Key marker with Kelvin label above */}
         {keyK != null && (
           <div style={{
             position: 'absolute', top: 0, left: pct(keyK), transform: 'translateX(-50%)',
@@ -465,25 +668,38 @@ function CCTAxis({ keyKStr, shadowKStr }) {
               backgroundColor: 'rgba(245,190,72,0.95)',
               boxShadow: '0 0 8px rgba(245,190,72,0.65), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 1px rgba(0,0,0,0.4)',
             }} />
+            <span style={{
+              position: 'absolute', top: -13, fontSize: 9, fontWeight: 700,
+              color: 'rgba(245,190,72,0.95)', letterSpacing: '0.2px',
+              textShadow: '0 0 4px rgba(0,0,0,0.8)',
+              whiteSpace: 'nowrap', ...FONT_SMOOTH,
+            }}>{keyK}K</span>
           </div>
         )}
-        {/* Shadow marker (smaller, cooler accent) */}
+        {/* Shadow marker with Kelvin label below */}
         {shadowK != null && (
           <div style={{
             position: 'absolute', top: 4, left: pct(shadowK), transform: 'translateX(-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
           }}>
             <div style={{
               width: 7, height: 14, borderRadius: 2,
               backgroundColor: 'rgba(168,200,240,0.9)',
               boxShadow: '0 0 4px rgba(168,200,240,0.55), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.4)',
             }} />
+            <span style={{
+              position: 'absolute', top: 15, fontSize: 9, fontWeight: 700,
+              color: 'rgba(168,200,240,0.95)', letterSpacing: '0.2px',
+              textShadow: '0 0 4px rgba(0,0,0,0.8)',
+              whiteSpace: 'nowrap', ...FONT_SMOOTH,
+            }}>{shadowK}K</span>
           </div>
         )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>2500K · TUNGSTEN</span>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>5500K · DAYLIGHT</span>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>8500K · SHADE</span>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>2500K · TUNGSTEN</span>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>5500K · DAYLIGHT</span>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>8500K · SHADE</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 8 }}>
         {keyK != null && (
@@ -665,109 +881,10 @@ function LCBottomActions({ onRetry, onSetup, infoVisible, isDragging, top }) {
   );
 }
 
-// ─── Bottom action row with tactile press states ─────────────────────────────
-function BottomActions({ onRetry, onSetup, infoVisible, isDragging }) {
-  const [retakePressed, setRetakePressed] = useState(false);
-  const [savePressed, setSavePressed]     = useState(false);
-
-  // Trough: deep inset moat the buttons sit in
-  const TROUGH_SHADOW = [
-    'inset 0px 3px 6px 0px rgba(0,0,0,0.7)',
-    'inset 0px 1px 3px 0px rgba(0,0,0,0.5)',
-    'inset 1px 0px 2px 0px rgba(0,0,0,0.3)',
-    'inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-    '0px 1px 0px 0px rgba(255,255,255,0.025)',
-  ].join(', ');
-
-  // New Photo: inset secondary — recessed into trough
-  const RETAKE_UP   = BTN_RECESSED_UP;
-  const RETAKE_DOWN = BTN_RECESSED_DOWN;
-
-  // Save: raised primary CTA — pops off the surface
-  const SAVE_UP   = BTN_RAISED_UP;
-  const SAVE_DOWN = BTN_RAISED_DOWN;
-
-  return (
-    <div style={{
-      display: 'flex', justifyContent: 'center',
-      padding: '16px 25px 20px',
-      opacity: infoVisible ? 1 : 0,
-      transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
-      transition: isDragging ? 'none' : 'opacity 0.25s ease 0.1s, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
-      pointerEvents: infoVisible ? 'auto' : 'none',
-    }}>
-      {/* Deep trough */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        height: 52, borderRadius: 16,
-        backgroundColor: '#060608',
-        boxShadow: TROUGH_SHADOW,
-        padding: 4,
-        gap: 0,
-        minWidth: 240,
-      }}>
-
-        {/* NEW PHOTO — inset secondary */}
-        <button
-          onPointerDown={() => setRetakePressed(true)}
-          onPointerUp={() => { setRetakePressed(false); segmentPressSound(); navHaptic(); onRetry(); }}
-          onPointerLeave={() => setRetakePressed(false)}
-          style={{
-            flex: 1, height: 44,
-            borderRadius: 12,
-            backgroundColor: retakePressed ? 'rgba(255,255,255,0.02)' : 'transparent',
-            boxShadow: retakePressed ? RETAKE_DOWN : RETAKE_UP,
-            border: 'none', cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'box-shadow 0.1s ease, background-color 0.1s ease',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <span style={{
-            fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
-            color: retakePressed ? 'rgba(167,173,183,0.4)' : 'rgba(167,173,183,0.6)',
-            transition: 'color 0.1s ease',
-            ...FONT_SMOOTH,
-          }}>New Photo</span>
-        </button>
-
-        {/* Separator — engraved groove */}
-        <div style={{
-          width: 1, height: 24, flexShrink: 0,
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.5) 100%)',
-          boxShadow: '1px 0px 0px 0px rgba(255,255,255,0.04)',
-        }} />
-
-        {/* SAVE — raised primary CTA */}
-        <button
-          onPointerDown={() => setSavePressed(true)}
-          onPointerUp={() => { setSavePressed(false); segmentPressSound(); tapHaptic(); onSetup(); }}
-          onPointerLeave={() => setSavePressed(false)}
-          style={{
-            flex: 1, height: 44,
-            borderRadius: 12,
-            background: savePressed
-              ? 'linear-gradient(141.71deg, #242730 0%, #1d1f28 50%, #181a22 100%)'
-              : 'linear-gradient(141.71deg, #383c4a 0%, #2c303c 40%, #222535 100%)',
-            boxShadow: savePressed ? SAVE_DOWN : SAVE_UP,
-            border: 'none', cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'box-shadow 0.1s ease, background 0.1s ease',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <span style={{
-            fontSize: 13, fontWeight: 700, letterSpacing: '0.5px',
-            color: savePressed ? 'rgba(245,247,250,0.75)' : 'rgba(245,247,250,0.95)',
-            textShadow: savePressed ? 'none' : '0px 1px 2px rgba(0,0,0,0.5)',
-            transition: 'color 0.1s ease',
-            ...FONT_SMOOTH,
-          }}>Save</span>
-        </button>
-      </div>
-    </div>
-  );
-}
+// BottomActions (trough with "New Photo | Save") was removed — its "Save"
+// button duplicated the hero "Set Up This Light" CTA (both called onSetup),
+// and "New Photo" duplicated the top-left back chevron (both call onRetry).
+// Keeping the file free of dead code; see ResultScreen bottom row comment.
 
 // FONT_SMOOTH imported from studioMatte
 
@@ -852,7 +969,7 @@ function ModifierDetail({ modifier }) {
             {heroName}
           </p>
           {modifier.sizeRange && (
-            <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.45), ...FONT_SMOOTH }}>
+            <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.62), ...FONT_SMOOTH }}>
               {modifier.sizeRange}
             </p>
           )}
@@ -1070,6 +1187,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const raw = result?._raw || {};
   const signalDiag = raw.signal_diagnostics || {};
   const rawSignals = signalDiag.signals || {};
+  // Catchlight clock position — sourced directly from engine so the eye
+  // graphic and the narrative "at 1 o'clock" text always agree.
+  const catchlightClockStr = raw.lighting_inference?.catchlight_intelligence?.primary_key?.position
+    || sections?.modifier?.position
+    || null;
+  const catchlightClockHour = parseClockHour(catchlightClockStr);
   const hasRawSignals = rawSignals.nose_shadow_angle_deg != null
     || rawSignals.left_right_asymmetry != null
     || rawSignals.shadow_density != null
@@ -1308,7 +1431,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <p style={{
               position: 'absolute', top: 38, left: 25, margin: 0,
               fontSize: 10, fontWeight: 400, fontStyle: 'italic',
-              color: steel(0.45),
+              color: steel(0.62),
               letterSpacing: '0.1px',
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
             }}>{mood}</p>
@@ -1319,7 +1442,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <p style={{
               position: 'absolute', top: 38, right: 25, margin: 0,
               fontSize: 10, fontWeight: 500,
-              color: steel(0.4),
+              color: steel(0.58),
               letterSpacing: '0.2px',
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
             }}>{sourceAttribution}</p>
@@ -1457,9 +1580,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
         {/* SHADOW ANALYSIS — LightingDiagram moved to the hero column on
             desktop, so this drawer shows a compact ShadowSignature (angle
-            dial + density bar) above the narrative so the analysis has a
-            visual anchor. Mobile still renders the full LightingDiagram. */}
-        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={800}>
+            dial + density bar), the structured LightComponentChips, and a
+            DirectionalCompass above the narrative.  Each graphic pulls the
+            matching piece OUT of the raw engine narrative so the paragraph
+            at the bottom stays short and human. */}
+        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={900}>
           {!isDesktop && <LightingDiagram result={result} />}
           {isDesktop && (
             <ShadowSignature
@@ -1467,9 +1592,18 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               density={rawSignals.shadow_density}
             />
           )}
-          <p style={{ margin: isDesktop ? 0 : '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-            {sections.shadowAnalysis}
-          </p>
+          <LightComponentChips components={sections.shadowComponents} />
+          <DirectionalCompass direction={sections.shadowDirection} />
+          {sections.shadowAnalysis && (
+            <p style={{ margin: isDesktop ? 0 : '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+              {sections.shadowAnalysis}
+            </p>
+          )}
+          {sections.shadowEdgeNote && (
+            <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
+              {sections.shadowEdgeNote}
+            </p>
+          )}
         </PullTabDrawer>
 
         {/* SCENE — narrative paragraph + chip-card grid of VLM fields */}
@@ -1526,7 +1660,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
               }}>
-                <CatchlightEye angleDeg={rawSignals.nose_shadow_angle_deg} />
+                <CatchlightEye
+                  clockHour={catchlightClockHour}
+                  clockHours={sections.catchlightPositions}
+                  angleDeg={rawSignals.nose_shadow_angle_deg}
+                />
                 <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
@@ -1546,7 +1684,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           )}
           <ModifierDetail modifier={sections.modifier} />
           {sections.modifier?.physicalMeaning && (
-            <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
+            <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
               {sections.modifier.physicalMeaning}
             </p>
           )}
@@ -1725,7 +1863,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               </div>
             )}
             {sections.signalQuality.reasoning && (
-              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
+              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
                 {sections.signalQuality.reasoning}
               </p>
             )}
@@ -1733,15 +1871,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         )}
       </div>
 
-      {/* ─── Bottom row: Retake | Save (high confidence only) ─── */}
-      {isHighConf && (
-        <div style={isDesktop ? { gridArea: 'actions' } : undefined}>
-          <BottomActions onRetry={onRetry} onSetup={onSetup} infoVisible={infoVisible} isDragging={isDragging} />
-        </div>
-      )}
-
-      {/* ─── Low confidence: spacer ─── */}
-      {!isHighConf && <div style={{ height: 40, ...(isDesktop ? { gridArea: 'actions' } : null) }} />}
+      {/* ─── Bottom row: single spacer ───
+          The BottomActions "New Photo | Save" trough was removed because its
+          Save button called the same `onSetup()` as the hero "Set Up This Light"
+          CTA, and New Photo duplicated the top-left back chevron (which already
+          fires `onRetry`).  A single flat spacer keeps the grid row reserved so
+          the panel column alignment stays put. */}
+      <div style={{ height: 40, ...(isDesktop ? { gridArea: 'actions' } : null) }} />
 
       {/* ─── Home Indicator — pinned to viewport bottom ─── */}
       <div style={{

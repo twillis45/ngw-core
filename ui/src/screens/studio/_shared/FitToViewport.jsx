@@ -93,21 +93,31 @@ export default function FitToViewport({
     );
   }
 
+  // 'both' mode: aspect-preserving contain. We anchor at top-center
+  // (not viewport-center) so content always starts at the top of the
+  // visible area. The original `translate(-50%, -50%)` centering created
+  // a layout-bounding-box that extended above and below the visual box,
+  // which gave the outer container a non-zero scrollTop and caused the
+  // nav bar / CTA to render outside the viewport on first paint.
+  // Vertical centering can come back later via flex on the outer wrapper
+  // when content is shorter than the viewport — that case isn't worth
+  // the scroll-bug risk for our screens.
   return (
     <div style={{
       position: 'fixed',
       inset: 0,
       overflow: 'auto',
       background,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'flex-start',
     }}>
       <div style={{
-        position: 'absolute',
-        left: '50%',
-        top: '50%',
         width: designWidth,
         height: innerH,
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center',
+        flexShrink: 0,
+        transform: `scale(${scale})`,
+        transformOrigin: 'top center',
       }}>
         {children}
       </div>

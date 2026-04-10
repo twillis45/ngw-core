@@ -447,7 +447,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 WebkitTapHighlightColor: 'transparent',
               }}>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(184,191,199,0.75)', letterSpacing: '0.3px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>Settings</span>
-              <span style={{ fontSize: 13, color: steel(0.35), lineHeight: 1 }}>›</span>
+              <span style={{ fontSize: 13, color: steel(0.58), lineHeight: 1 }}>›</span>
             </button>
             <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '8px 0' }} />
             <button onClick={() => { onLogout?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
@@ -461,7 +461,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             </button>
           </>
         ) : (
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: steel(0.45), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: steel(0.62), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
             Not signed in
           </p>
         )}

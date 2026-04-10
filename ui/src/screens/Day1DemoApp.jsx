@@ -197,33 +197,83 @@ function mapApiResult(data) {
   // Fall back to li.notes (engine debug notes) then to raw signal metrics.
   const lightingRead = data.reference_analysis?.lighting_read || {};
   let shadowAnalysis = '';
+  // Structured fields extracted from lighting_read so the ResultScreen can
+  // render them as graphics (component chips, directional compass, multi-dot
+  // catchlight eye) instead of dumping the raw narrative as a wall of text.
+  let shadowComponents = null;   // { source, fill, rim, pattern }
+  let shadowDirection  = null;   // { shadowQuadrant, keyQuadrant, keyIntensity }
+  let catchlightPositions = null; // string[] — clock hours parsed from observations
+  let shadowEdgeNote   = null;    // "Soft shadow edges → large/diffused source"
+
+  // Parse a "key_observations" string to pull directional cues + catchlight
+  // arrays OUT of the narrative so they can be rendered visually.
+  const DIR_QUADRANTS = ['upper_left','upper_right','lower_left','lower_right','left','right','above','below','front','back'];
+  const parseDirectionalObs = (obs) => {
+    const m = /shadow(?:s)?\s+fall[s]?\s+([a-z_]+)\s*(?:→|->|to)\s*key\s*light\s*at\s+([a-z_]+)(?:\s*\(([-\d.]+)\))?/i.exec(obs);
+    if (!m) return null;
+    return {
+      shadowQuadrant: m[1].replace(/_/g,' '),
+      keyQuadrant:    m[2].replace(/_/g,' '),
+      keyIntensity:   m[3] ? parseFloat(m[3]) : null,
+    };
+  };
+  const parseCatchlightObs = (obs) => {
+    const m = /catchlight\s+positions?\s*:?\s*\[([^\]]+)\]/i.exec(obs);
+    if (!m) return null;
+    return m[1].split(',').map(s => s.replace(/['"]/g,'').trim()).filter(Boolean);
+  };
+  const isEdgeObs = (obs) => /shadow\s+edge/i.test(obs);
 
   if (lightingRead.shadow_pattern || lightingRead.source_quality) {
-    const parts = [];
-    if (lightingRead.source_quality && lightingRead.shadow_pattern) {
-      const src = toTitleCase(lightingRead.source_quality);
-      const pat = toTitleCase(lightingRead.shadow_pattern);
-      parts.push(`${src} source with ${pat} shadow pattern`);
-    } else if (lightingRead.shadow_pattern) {
-      parts.push(`${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`);
-    } else if (lightingRead.source_quality) {
-      parts.push(`${toTitleCase(lightingRead.source_quality)} source`);
+    // Lead sentence — the physical headline.
+    const lead = (() => {
+      if (lightingRead.source_quality && lightingRead.shadow_pattern) {
+        return `${toTitleCase(lightingRead.source_quality)} source with ${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`;
+      }
+      if (lightingRead.shadow_pattern) return `${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`;
+      if (lightingRead.source_quality) return `${toTitleCase(lightingRead.source_quality)} source`;
+      return null;
+    })();
+
+    // Structured components — these render as chips so they get pulled OUT of
+    // the narrative string below.
+    shadowComponents = {
+      source:  lightingRead.source_quality ? toTitleCase(lightingRead.source_quality) : null,
+      pattern: lightingRead.shadow_pattern ? toTitleCase(lightingRead.shadow_pattern) : null,
+      fill:    (lightingRead.fill_presence && !['none','unknown'].includes(lightingRead.fill_presence))
+        ? lightingRead.fill_presence : null,
+      rim:     (lightingRead.rim_presence && !['none','unknown'].includes(lightingRead.rim_presence))
+        ? lightingRead.rim_presence : null,
+    };
+
+    // Observations — triage into directional / catchlight / edge / other so
+    // each one lands in the right visual home.
+    const rawObs = (lightingRead.key_observations || []).filter(o => o && o.length < 200);
+    const otherObs = [];
+    for (const o of rawObs) {
+      const dir = parseDirectionalObs(o);
+      if (dir) { shadowDirection = dir; continue; }
+      const cl = parseCatchlightObs(o);
+      if (cl) { catchlightPositions = cl; continue; }
+      if (isEdgeObs(o)) { shadowEdgeNote = o; continue; }
+      if (/shadow_pattern_detail|loop|rembrandt|split/i.test(o) && o.length < 40) continue; // noise
+      otherObs.push(o);
     }
-    if (lightingRead.fill_presence && !['none','unknown'].includes(lightingRead.fill_presence)) {
-      parts.push(`${lightingRead.fill_presence} fill`);
-    }
-    if (lightingRead.rim_presence && !['none','unknown'].includes(lightingRead.rim_presence)) {
-      parts.push(`${lightingRead.rim_presence} rim light`);
-    }
-    if (lightingRead.shadow_pattern_detail) {
-      parts.push(lightingRead.shadow_pattern_detail);
-    }
-    // Key observations — take up to 3, skip purely diagnostic notes
-    const obs = (lightingRead.key_observations || []).filter(o => o && o.length < 140);
-    parts.push(...obs.slice(0, 3));
-    // Ambiguity notes — surface uncertainty when present
+
+    // Detail line — only attach shadow_pattern_detail if it adds information
+    // beyond the lead pattern name.
+    const detailLine = (lightingRead.shadow_pattern_detail && lightingRead.shadow_pattern_detail.toLowerCase() !== (lightingRead.shadow_pattern || '').toLowerCase())
+      ? lightingRead.shadow_pattern_detail : null;
+
+    // Ambiguity — surface uncertainty when present, but cap at one.
     const amb = (lightingRead.ambiguity_notes || []).filter(o => o && !o.startsWith('[VLW'));
+
+    const parts = [];
+    if (lead) parts.push(lead);
+    if (detailLine) parts.push(detailLine);
+    parts.push(...otherObs.slice(0, 2));
     if (amb.length > 0 && parts.length < 3) parts.push(amb[0]);
+
     shadowAnalysis = parts.join('. ').trim();
     if (shadowAnalysis && !shadowAnalysis.endsWith('.')) shadowAnalysis += '.';
   }
@@ -471,6 +521,10 @@ function mapApiResult(data) {
       confidenceLabel,
       edgeCaseWarnings,
       shadowAnalysis,
+      shadowComponents,
+      shadowDirection,
+      shadowEdgeNote,
+      catchlightPositions,
       lightQuality,
       catchlightModifier,
       modifier: modifierData,
@@ -715,7 +769,7 @@ export default function Day1DemoApp() {
       );
     case 'result':
       return (
-        <FitToViewport designWidth={1300} designHeight={1040} maxScale={2.0}>
+        <FitToViewport designWidth={1300} designHeight={1040} minScale={0.5} maxScale={2.0}>
           <ResultScreen
             result={result}
             imagePreview={imagePreview}
@@ -726,7 +780,7 @@ export default function Day1DemoApp() {
       );
     case 'setup':
       return (
-        <FitToViewport designWidth={1180} designHeight={920} maxScale={2.0}>
+        <FitToViewport designWidth={1180} designHeight={1020} minScale={0.5} maxScale={2.0}>
           <SetupScreen
             result={result}
             imagePreview={imagePreview}

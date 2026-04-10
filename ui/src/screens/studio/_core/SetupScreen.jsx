@@ -441,8 +441,11 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const modName = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${prettify(mod.family) || 'Modifier'}` : null;
   const positionDisplay = prettify(mod?.position || li.key_position_text) || null;
   const keySide = li.key_side;
+  // Engine sends keySide as snake_case tokens like "upper_right" — run through
+  // prettify so the UI never shows underscores and each word is Title Cased.
   const directionDisplay = keySide && keySide !== 'unknown'
-    ? keySide.charAt(0).toUpperCase() + keySide.slice(1) : null;
+    ? (keySide || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    : null;
   const elevation = li.key_elevation;
   const elevDisplay = (() => {
     if (!elevation) return null;
@@ -481,7 +484,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const keyHeight = raw.reconstruction?.key_light_height;
   const keyHeightDisplay = keyHeight
     ? (typeof keyHeight === 'string'
-        ? keyHeight.charAt(0).toUpperCase() + keyHeight.slice(1)
+        ? keyHeight.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
         : String(keyHeight))
     : null;
 
@@ -692,23 +695,20 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             single flex column and mobile rendering is byte-identical. */}
         <div style={isDesktop ? {
           display: 'grid',
-          gridTemplateColumns: '540px minmax(0, 1fr)',
+          // Hero column widened from 540 → 620 so the LCD lighting diagram
+          // reads at a real diagnostic size rather than a thumbnail.  The
+          // right column stays fluid (1180 − 620 − 20 gap = 540 min).
+          gridTemplateColumns: '620px minmax(0, 1fr)',
           gap: 20,
           alignItems: 'start',
         } : { display: 'contents' }}>
         <div style={isDesktop ? {
-          // Hero column cap — computed from the 920 design viewport:
-          //   920 − 80 (nav)
-          //       − 60 (content padding top+bottom)
-          //       − 84 (result header)
-          //       − 16 (gap above 2-col row)
-          //       − 16 (gap below)
-          //       − 58 (Start Cockpit CTA)
-          //       − 34 (cancel row)
-          //   = 572 of breathing room.
-          // Use 540 to leave a small cushion for panel bevels + scrollbar.
+          // Hero column cap — raised from 540 → 620 to let the diagram well
+          // breathe.  FitToViewport scales down if the full stack exceeds
+          // the 920 design viewport, so a slightly taller hero panel is
+          // safe and gives us much more room for the zoomed diagram.
           display: 'flex', flexDirection: 'column', gap: 14,
-          maxHeight: 540,
+          maxHeight: 620,
           overflowY: 'auto',
           paddingRight: 6,
         } : { display: 'contents' }}>
@@ -948,18 +948,23 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </div>
             </div>
 
-            {/* Compact diagram in an engraved well */}
+            {/* LCD diagram well — zooms with viewport.  The SVG fills the
+                container fluidly via `fluid` prop; the well's aspectRatio
+                matches the diagram's native 200×140 so the light panel
+                grows/shrinks cleanly with the Setup column width. */}
             {result._raw && (
               <div style={{
                 marginTop: 12,
-                padding: '10px 8px 8px',
+                padding: '14px 16px 14px',
                 borderRadius: 12,
                 backgroundColor: '#070709',
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-                display: 'flex', justifyContent: 'center', alignItems: 'center',
-                maxHeight: 180, overflow: 'hidden',
+                display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+                width: '100%',
+                aspectRatio: '220 / 150',
+                overflow: 'hidden',
               }}>
-                <LightingDiagram result={result} compact />
+                <LightingDiagram result={result} compact fluid />
               </div>
             )}
 

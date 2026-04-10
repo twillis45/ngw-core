@@ -9,6 +9,8 @@
  * Props:
  *   result    — analysis result (needs ._raw.lighting_inference + .sections.modifier)
  *   compact   — boolean, smaller variant for inline use (default false)
+ *   fluid     — boolean, render the SVG at 100% of its container so the
+ *               diagram zooms with the viewport (default false)
  */
 import { steel } from '../../../../theme/studioMatte';
 
@@ -34,7 +36,7 @@ function sideToAngle(side, elevation) {
   return base + elevAdj;
 }
 
-export default function LightingDiagram({ result, compact = false }) {
+export default function LightingDiagram({ result, compact = false, fluid = false }) {
   if (!result) return null;
 
   const raw = result._raw || {};
@@ -84,25 +86,28 @@ export default function LightingDiagram({ result, compact = false }) {
   }
 
   // ─── Canvas dimensions ───────────────────────────────────────────────────
-  const W = compact ? 200 : 300;
-  const H = compact ? 140 : 220;
+  // Compact mode uses a slightly wider aspect (220×150) so that at fluid
+  // sizes the key light + distance annotations reach the canvas edges
+  // instead of floating in dead space.  Full mode is unchanged.
+  const W = compact ? 220 : 300;
+  const H = compact ? 150 : 220;
 
-  // Subject center — sits in the upper-middle of the canvas so the camera
-  // sits a believable distance below.  We pulled it down from y=72 so the
-  // viewer doesn't read the layout as "camera shooting at a far-away target."
+  // Subject center — pulled up to leave room for the camera at the bottom
+  // and the BG strip at the top.  Larger subR fills more of the canvas.
   const subX = W / 2;
-  const subY = compact ? 60 : 90;
-  const subR = compact ? 16 : 22;
+  const subY = compact ? 58 : 90;
+  const subR = compact ? 20 : 22;
 
   // Camera — at the bottom of the canvas, looking UP at the subject (top-down
   // POV: camera is "in front of" the subject's face).
-  const camY = H - (compact ? 14 : 22);
+  const camY = H - (compact ? 16 : 22);
 
   // Background indicator — behind the subject (top of canvas).
-  const bgY  = compact ? 10 : 16;
+  const bgY  = compact ? 12 : 16;
 
-  // Key light position — placed at angle relative to subject
-  const kDist = compact ? 50 : 72;
+  // Key light position — pushed farther from the subject in compact so the
+  // key marker + rays land near the canvas edge instead of floating mid-way.
+  const kDist = compact ? 66 : 72;
   const kRad  = (kAngleDeg * Math.PI) / 180;
   const kX    = subX + kDist * Math.sin(kRad);
   const kY    = subY + kDist * Math.cos(kRad);
@@ -188,23 +193,36 @@ export default function LightingDiagram({ result, compact = false }) {
 
   return (
     <svg
-      width={W}
-      height={H}
+      {...(fluid
+        ? { width: '100%', height: '100%', preserveAspectRatio: 'xMidYMid meet' }
+        : { width: W, height: H })}
       viewBox={`0 0 ${W} ${H}`}
-      style={{ display: 'block', margin: compact ? '12px auto 4px' : '0 auto', overflow: 'visible' }}
+      style={{
+        display: 'block',
+        margin: fluid ? 0 : (compact ? '12px auto 4px' : '0 auto'),
+        overflow: 'visible',
+        ...(fluid ? { width: '100%', height: '100%' } : null),
+      }}
     >
-      {/* Background indicator */}
-      {!compact && (
-        <>
-          <rect
-            x={subX - 60} y={bgY - 5} width={120} height={10} rx={3}
-            fill="none" stroke={st(0.18)} strokeWidth={0.75}
-          />
-          <text x={subX} y={bgY + 3} textAnchor="middle"
-            fill={st(0.35)} fontSize={7} fontWeight="600" letterSpacing="0.8"
-            fontFamily="Inter, system-ui, sans-serif">BG</text>
-        </>
-      )}
+      {/* Background indicator — rendered in both modes so the top-down
+          scene reads as subject-between-background-and-camera.  Width is
+          a canvas-relative constant so it visually anchors the top edge. */}
+      {(() => {
+        const bgHalf = compact ? 70 : 60;
+        const bgH    = compact ? 8  : 10;
+        const fontSz = compact ? 6  : 7;
+        return (
+          <>
+            <rect
+              x={subX - bgHalf} y={bgY - bgH / 2} width={bgHalf * 2} height={bgH} rx={3}
+              fill="none" stroke={st(0.22)} strokeWidth={0.75}
+            />
+            <text x={subX} y={bgY + 2.5} textAnchor="middle"
+              fill={st(0.38)} fontSize={fontSz} fontWeight="600" letterSpacing="0.8"
+              fontFamily="Inter, system-ui, sans-serif">BG</text>
+          </>
+        );
+      })()}
 
       {/* Camera → subject axis (dashed) */}
       <line
@@ -225,15 +243,44 @@ export default function LightingDiagram({ result, compact = false }) {
         stroke={SHADOW_COLOR} strokeWidth={1.25} strokeLinecap="round"
         strokeDasharray="2,2" />
       <polygon points={arrowPts} fill={SHADOW_COLOR} />
-      {/* SHADOW label — small, near the arrow tip */}
-      <text
-        x={sTipX + (Math.sin(sRad) >= 0 ? 5 : -5)}
-        y={sTipY + 3}
-        textAnchor={Math.sin(sRad) >= 0 ? 'start' : 'end'}
-        fill={st(0.40)} fontSize={compact ? 5.5 : 6} fontWeight="600"
-        letterSpacing="0.4"
-        fontFamily="Inter, system-ui, sans-serif"
-      >SHADOW</text>
+      {/* SHADOW label — merged with angle readout so the two annotations
+          can never overlap or collide with the KEY marker.  The label sits
+          past the arrow tip along the shadow direction so it stays clear
+          of the subject head and the key light cluster. */}
+      {(() => {
+        const dx = Math.sin(sRad);
+        const dy = -Math.cos(sRad);
+        // Base position: past the arrow tip along shadow direction.
+        let lx = sTipX + dx * 10;
+        let ly = sTipY + dy * 10 + 2;
+        // Collision avoidance — if the label would land near the KEY
+        // marker, push it perpendicular away from the key so the two
+        // annotations can never stack on top of one another.
+        const distToKey = Math.hypot(lx - kX, ly - kY);
+        if (distToKey < (compact ? 22 : 28)) {
+          // Perpendicular to shadow direction — choose the side further
+          // from the key light.
+          const px = -dy;
+          const py = dx;
+          const dot = px * (lx - kX) + py * (ly - kY);
+          const sign = dot >= 0 ? 1 : -1;
+          const off = compact ? 16 : 20;
+          lx += sign * px * off;
+          ly += sign * py * off;
+        }
+        const anchor = dx >= 0.2 ? 'start' : dx <= -0.2 ? 'end' : 'middle';
+        const labelText = shadowDeg != null
+          ? `SHADOW ${Math.round(shadowDeg)}°`
+          : 'SHADOW';
+        return (
+          <text
+            x={lx} y={ly} textAnchor={anchor}
+            fill={st(0.42)} fontSize={compact ? 5.5 : 6} fontWeight="600"
+            letterSpacing="0.4"
+            fontFamily="Inter, system-ui, sans-serif"
+          >{labelText}</text>
+        );
+      })()}
 
       {/* Sun rays */}
       {rays.map((r, i) => (
@@ -285,16 +332,8 @@ export default function LightingDiagram({ result, compact = false }) {
           fontFamily="Inter, system-ui, sans-serif">{camHeightLabel}</text>
       )}
 
-      {/* Shadow angle annotation */}
-      {shadowDeg != null && (
-        <text
-          x={sTipX + (keySide === 'left' ? 6 : -6)}
-          y={sTipY - 3}
-          textAnchor={keySide === 'left' ? 'start' : 'end'}
-          fill={st(0.35)} fontSize={6}
-          fontFamily="Inter, system-ui, sans-serif"
-        >{Math.round(shadowDeg)}°</text>
-      )}
+      {/* Angle readout is now merged into the SHADOW label above so the
+          two never stack on top of each other. */}
 
       {/* ─── Full-mode annotations ─── */}
       {!compact && (
