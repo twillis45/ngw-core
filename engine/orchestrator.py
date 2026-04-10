@@ -2839,9 +2839,12 @@ def _compute_edge_case_flags(
     if tpe and getattr(tpe, "is_bw", False):
         ecf.bw_processing = True
 
-    # Blown highlights — high contrast ratio as proxy
-    ctr = getattr(cr, "contrast_ratio", None)
-    if ctr and getattr(ctr, "ratio", 0.0) > 8.0:
+    # Blown highlights — use actual pixel-level clipping detection from the
+    # tonal processing pass (histogram p99 pegged at white with p99-p95 < 3).
+    # The previous contrast_ratio > 8.0 proxy false-fired on any dramatic
+    # Rembrandt/Loop portrait: deep shadows + bright skin naturally push
+    # the p95/p5 ratio above 8 without a single clipped highlight pixel.
+    if tpe is not None and getattr(tpe, "highlights_clipped", False):
         ecf.blown_highlights = True
 
     # Environment hints

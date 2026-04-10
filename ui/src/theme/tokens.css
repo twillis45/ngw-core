@@ -233,11 +233,13 @@
   --sm-surface-pill:  #070709;                      /* meta pill */
   --sm-surface-cta-from: #3d404d;                   /* CTA gradient top */
   --sm-surface-cta-to:   #1c1d24;                   /* CTA gradient bottom */
-  /* Steel-blue tint — base RGB separated for alpha compositing */
-  --sm-steel-r:       95;
-  --sm-steel-g:       124;
-  --sm-steel-b:       150;
-  --sm-steel:         rgb(95, 124, 150);            /* solid reference */
+  /* Steel-blue tint — base RGB separated for alpha compositing.
+     Brighter value (132, 158, 184) bumped 2026-04-10 for calibrated-display
+     legibility; previously 95, 124, 150 which read washed-out. */
+  --sm-steel-r:       132;
+  --sm-steel-g:       158;
+  --sm-steel-b:       184;
+  --sm-steel:         rgb(132, 158, 184);           /* solid reference */
   /* Typography */
   --sm-text-primary:  rgba(245, 247, 250, 0.95);
   --sm-text-sub:      rgba(184, 191, 199, 0.65);

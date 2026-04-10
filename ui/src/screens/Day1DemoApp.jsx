@@ -250,9 +250,46 @@ function mapApiResult(data) {
     // each one lands in the right visual home.
     const rawObs = (lightingRead.key_observations || []).filter(o => o && o.length < 200);
     const otherObs = [];
+    // The engine emits a vertical prefix on shadow direction by comparing
+    // upper-vs-lower face brightness, but that test only fires when the
+    // bottom of the face is dramatically brighter (>25 luma diff).  In every
+    // other case it defaults to "upper_*" — which is misleading because the
+    // shadow physically falls on the LOWER side of the face whenever the
+    // key is above the subject (which is the dominant case).  We post-fix
+    // the parsed quadrant against the engine's `key_elevation` so the
+    // DirectionalCompass shows the physically correct cell.
+    // Determine whether the key sits ABOVE or BELOW the subject.  Prefer the
+    // engine's explicit key_elevation; when it's absent (common — the engine
+    // frequently leaves it blank), assume "above" because ~95% of real-world
+    // lighting setups put the key at or above eye level.  The only case this
+    // assumption is wrong is intentional uplighting / horror lighting, which
+    // the engine normally flags via the shadow_pattern narrative anyway.
+    const _keyElevRaw = (li.key_elevation || li.key_height || '').toLowerCase();
+    const _keyAbove =
+      _keyElevRaw === 'high' || _keyElevRaw === 'medium' || _keyElevRaw === ''
+        ? true
+        : _keyElevRaw === 'low' ? false : true;
     for (const o of rawObs) {
       const dir = parseDirectionalObs(o);
-      if (dir) { shadowDirection = dir; continue; }
+      if (dir) {
+        // Physics rule: the shadow's vertical band is OPPOSITE the key's
+        // vertical band — high key → shadow falls low, low key → shadow
+        // falls high.  The horizontal axis is unchanged.  The engine often
+        // emits "shadow falls upper_* → key light at upper_*" for a
+        // loop-standard test image because its vertical inference only
+        // flips when the bottom of the face is dramatically brighter
+        // (>25 luma diff).  Post-fix here so the DirectionalCompass cell
+        // lands in the physically correct quadrant.
+        if (_keyAbove) {
+          dir.shadowQuadrant = (dir.shadowQuadrant || '').replace(/^upper /, 'lower ');
+          dir.keyQuadrant    = (dir.keyQuadrant    || '').replace(/^lower /, 'upper ');
+        } else {
+          dir.shadowQuadrant = (dir.shadowQuadrant || '').replace(/^lower /, 'upper ');
+          dir.keyQuadrant    = (dir.keyQuadrant    || '').replace(/^upper /, 'lower ');
+        }
+        shadowDirection = dir;
+        continue;
+      }
       const cl = parseCatchlightObs(o);
       if (cl) { catchlightPositions = cl; continue; }
       if (isEdgeObs(o)) { shadowEdgeNote = o; continue; }
@@ -438,13 +475,20 @@ function mapApiResult(data) {
   // ── Edge case warnings ───────────────────────────────────────────────────────
   // Surfaces analysis caveats before the photographer commits to "Set Up This Light".
   const EDGE_FLAGS = {
-    blown_highlights:               { label: 'Blown Highlights',    sev: 'warn' },
-    mixed_color_temperature:        { label: 'Mixed CCT',           sev: 'info' },
-    outdoor_foliage_shadows:        { label: 'Foliage Shadows',     sev: 'info' },
-    window_light_gradient:          { label: 'Window Gradient',     sev: 'info' },
-    extreme_low_key:                { label: 'Extreme Low Key',     sev: 'info' },
-    bw_processing:                  { label: 'B&W Detected',        sev: 'info' },
-    earring_catchlight_contamination: { label: 'Catchlight Noise',  sev: 'warn' },
+    blown_highlights:               { label: 'Blown Highlights',    sev: 'warn',
+      detail: 'Specular highlights are clipped to pure white. The engine cannot recover catchlight position or modifier shape from those pixels — diagram angles are estimated from shadows alone.' },
+    mixed_color_temperature:        { label: 'Mixed CCT',           sev: 'info',
+      detail: 'Key and fill (or ambient) light have different color temperatures. Pattern detection is unaffected, but white balance and palette readouts will reflect the dominant source.' },
+    outdoor_foliage_shadows:        { label: 'Foliage Shadows',     sev: 'info',
+      detail: 'Dappled light from tree cover creates broken shadow edges that are not from the key light. The shadow analyzer compensates, but density readouts may run high.' },
+    window_light_gradient:          { label: 'Window Gradient',     sev: 'info',
+      detail: 'Light falls off across the subject because the source is large and close. Treat the diagram distance as a guide, not literal — the inverse-square slope is steep here.' },
+    extreme_low_key:                { label: 'Extreme Low Key',     sev: 'info',
+      detail: 'Most of the frame sits in deep shadow. Pattern confidence is lower because the engine has fewer mid-tone pixels to triangulate the key direction from.' },
+    bw_processing:                  { label: 'B&W Detected',        sev: 'info',
+      detail: 'Image is monochrome, so the color palette panel is suppressed. Shadow density and direction still read normally.' },
+    earring_catchlight_contamination: { label: 'Catchlight Noise',  sev: 'warn',
+      detail: 'Reflective jewelry near the eye is producing false catchlights that confuse modifier detection. Trust the shadow-derived light angle over the catchlight-derived one.' },
   };
   const edgeCaseWarnings = [];
   const rawFlags = data.edge_case_flags || {};
@@ -896,7 +940,7 @@ function FallbackReveal({ message, onRetry }) {
       kicker:    'rgba(150,180,210,0.92)',
       kickerGlow:`${steel(0.22)}`,
       ledHi:     'rgba(180,210,235,0.98)',
-      ledMid:    'rgba(95,124,150,0.85)',
+      ledMid:    'rgba(132, 158, 184,0.85)',
       ledLo:     'rgba(40,60,80,0.6)',
       ledHalo1:  `${steel(0.45)}`,
       ledHalo2:  `${steel(0.16)}`,
@@ -940,7 +984,7 @@ function FallbackReveal({ message, onRetry }) {
       }}>
         {/* Matte metal surface — same ambient/vignette/grain stack as HomeScreen */}
         <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(95,124,150,0.010) 40%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(132, 158, 184,0.010) 40%, transparent 72%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 40%, transparent 80%)' }} />

@@ -18453,3 +18453,7 @@ body {
   from { transform: scale(1.12); }
   to   { transform: scale(1.0);  }
 }
+@keyframes chipDetailIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}

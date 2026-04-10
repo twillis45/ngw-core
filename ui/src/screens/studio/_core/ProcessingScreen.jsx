@@ -24,9 +24,9 @@ const VIEWFINDER_INNER_SHADOW = [
   'inset 2px 3px 5px 0px rgba(0,0,0,0.58)',
   'inset 1px 1px 2px 0px rgba(0,0,0,0.50)',
   'inset -1px -1px 1px 0px rgba(255,255,255,0.05)',
-  'inset -2px -2px 5px 0px rgba(95,124,150,0.07)',
-  'inset 0px 0px 24px 0px rgba(95,124,150,0.05)',
-  'inset 0px 0px 12px 0px rgba(95,124,150,0.07)',
+  'inset -2px -2px 5px 0px rgba(132, 158, 184,0.07)',
+  'inset 0px 0px 24px 0px rgba(132, 158, 184,0.05)',
+  'inset 0px 0px 12px 0px rgba(132, 158, 184,0.07)',
 ].join(', ');
 
 export default function ProcessingScreen({ imagePreview, analysisComplete }) {
@@ -76,7 +76,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete }) {
     }}>
       {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(95,124,150,0.008) 40%, transparent 72%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />

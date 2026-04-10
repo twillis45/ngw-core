@@ -21,6 +21,7 @@ import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
 import LightingDiagram from './components/LightingDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import ModifierSilhouette from '../_shared/ModifierSilhouette';
+import PullTabDrawer from '../_shared/PullTabDrawer';
 import { saveSetup as persistSetup } from '../../../data/setupStore';
 import { saveShootRole } from '../../../data/shootModeStore';
 import { trackEvent } from '../../../data/analytics';
@@ -45,7 +46,8 @@ const KEY_ACCENT = '#c89b45';
 const RING_TRACK_SHADOW  = 'inset 0px 2px 5px 0px rgba(0,0,0,0.7), inset 0px 1px 2px 0px rgba(0,0,0,0.5), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)';
 const RING_ACTIVE_SHADOW = '0px 2px 6px 0px rgba(0,0,0,0.6), 0px 1px 2px 0px rgba(0,0,0,0.4), inset 0px 0.5px 0px 0px rgba(255,255,255,0.08), inset 0px -0.5px 0px 0px rgba(0,0,0,0.3)';
 
-const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
+// Drawer handle shadow now lives in theme/studioMatte and is consumed by the
+// shared PullTabDrawer component imported above.
 
 // Display-string normalizer — Studio Matte rule: never show raw engine
 // snake_case / kebab-case keys in the UI. Swap _ and - for spaces and
@@ -356,39 +358,9 @@ function DesktopSpec({ label, value, hint, hintColor }) {
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// ─── Pull-tab drawer ────────────────────────────────────────────────────────
-function PullTabDrawer({ label, open, onToggle, children, maxH = 300 }) {
-  return (
-    <div style={{
-      borderRadius: 14, backgroundColor: C.panelBg,
-      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-      overflow: 'hidden', position: 'relative',
-    }}>
-      <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-      <div onClick={onToggle} style={{
-        padding: '10px 20px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-      }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.75), letterSpacing: '1px', ...FONT_SMOOTH }}>
-          {open ? 'CLOSE' : label}
-        </span>
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
-      </div>
-      <div style={{
-        maxHeight: open ? maxH : 0,
-        opacity: open ? 1 : 0,
-        overflow: 'hidden',
-        transition: 'max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
-      }}>
-        <div style={{ padding: '4px 20px 14px' }}>
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-}
+// PullTabDrawer is imported from `_shared/PullTabDrawer` so SetupScreen +
+// ResultScreen share the same tactile pullout vocabulary.  Tokens live in
+// theme/studioMatte under the DRAWER_* exports.
 
 export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit }) {
   const isDesktop = useIsDesktop();
@@ -591,7 +563,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
       {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(95,124,150,0.008) 40%, transparent 72%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
@@ -927,7 +899,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <ModifierSilhouette family={mod.family} size={48} />
+                  <ModifierSilhouette family={mod.family} size={48} dimensions={mod.sizeRange} />
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -948,23 +920,48 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </div>
             </div>
 
-            {/* LCD diagram well — zooms with viewport.  The SVG fills the
-                container fluidly via `fluid` prop; the well's aspectRatio
-                matches the diagram's native 200×140 so the light panel
-                grows/shrinks cleanly with the Setup column width. */}
+            {/* Viewfinder diagram well — matches the HomeScreen / ResultScreen
+                glass viewfinder treatment so the Setup screen reads as the
+                same instrument family.  Layered stack:
+                  • inset LCD well (engraved into matte surface)
+                  • diagram SVG (zIndex 1)
+                  • lens vignette + upper-left glass reflection (zIndex 9)
+                  • Figma-exact inner-shadow bevel (zIndex 10)
+                Capped at maxWidth so the diagram cannot grow large enough
+                to push the DIRECTION / HEIGHT spec cells off the column on
+                wide desktop layouts. */}
             {result._raw && (
               <div style={{
                 marginTop: 12,
-                padding: '14px 16px 14px',
+                position: 'relative',
+                width: '100%',
+                maxWidth: 360,
+                marginLeft: 'auto', marginRight: 'auto',
+                aspectRatio: '220 / 150',
                 borderRadius: 12,
                 backgroundColor: '#070709',
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-                display: 'flex', justifyContent: 'center', alignItems: 'stretch',
-                width: '100%',
-                aspectRatio: '220 / 150',
                 overflow: 'hidden',
               }}>
-                <LightingDiagram result={result} compact fluid />
+                {/* Diagram SVG fills the well */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  padding: '14px 16px',
+                  display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+                  zIndex: 1,
+                }}>
+                  <LightingDiagram result={result} compact fluid />
+                </div>
+                {/* Glass panel — lens vignette + upper-left key reflection */}
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
+                  <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
+                </div>
+                {/* Inner shadow bevel — Figma-exact, always top of stack */}
+                <div style={{
+                  position: 'absolute', inset: 0, borderRadius: 12,
+                  pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+                }} />
               </div>
             )}
 
@@ -1278,7 +1275,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             )}
           </div>
 
-          <div style={{ height: 1, backgroundColor: 'rgba(95,124,150,0.1)', marginBottom: 8 }} />
+          <div style={{ height: 1, backgroundColor: 'rgba(132, 158, 184,0.1)', marginBottom: 8 }} />
 
           {result?._raw && (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 8px' }}>

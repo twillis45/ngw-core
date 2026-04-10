@@ -9,6 +9,7 @@
  * All data from props — no hardcoded sample values.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
@@ -17,59 +18,180 @@ import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
 import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, PANEL_SHADOW, PANEL_BEVEL,
          TEXT_SHADOW_ENGRAVED,
+         READOUT_FG, READOUT_GLOW, READOUT_LABEL,
          BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../../../theme/studioMatte';
 import LightingDiagram from './components/LightingDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
+import PullTabDrawer from '../_shared/PullTabDrawer';
+import ModifierSilhouette from '../_shared/ModifierSilhouette';
 
 // Pill inset shadow — exact from Figma pill nodes
 const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0px rgba(0,0,0,0.4)';
-
-// Drawer handle shadow — matches SetupScreen
-const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
 
 // Display-string normalizer. Engine keys like "soft_key_dominant" or
 // "split-complementary" must never leak into the UI as-is — Studio Matte
 // rules forbid underscores/hyphens in visible text. `prettify` swaps them
 // for spaces and (optionally) uppercases the result so chip pills, labels,
 // and headings read as clean caps display copy.
-function prettify(str, { upper = false } = {}) {
+function prettify(str, { upper = false, title = false } = {}) {
   if (str == null) return '';
   const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
-  return upper ? cleaned.toUpperCase() : cleaned;
+  if (upper) return cleaned.toUpperCase();
+  if (title) {
+    // Sentence-style title case: capitalize the first letter of every word
+    // unless it's a small connector (a, an, the, of, in, with, on, to, by,
+    // and, but, or, for).  Words already SCREAMING (e.g. "RGB", "VLM") are
+    // left untouched so abbreviations don't get watered down.
+    const SMALLS = new Set(['a','an','the','of','in','with','on','to','by','and','but','or','for','from','at','as']);
+    return cleaned.split(/\s+/).map((w, i) => {
+      if (i > 0 && SMALLS.has(w.toLowerCase())) return w.toLowerCase();
+      if (/^[A-Z0-9]{2,}$/.test(w)) return w; // keep abbreviations
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).join(' ');
+  }
+  return cleaned;
 }
 
-// ─── Pull-tab drawer (mirrors SetupScreen's PullTabDrawer) ───────────────────
-function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
+// ─── SubLabel ───────────────────────────────────────────────────────────────
+// 9px engraved uppercase label used to demarcate sub-sections inside a pull-
+// out drawer. Sits flush-left with a hairline of letter-spacing so multiple
+// blocks of content (signal · components · direction · read) read as
+// discrete groups instead of a soup of widgets stacked together.
+function SubLabel({ children }) {
+  return (
+    <p style={{
+      margin: '14px 0 6px',
+      fontSize: 9, fontWeight: 700,
+      color: 'rgba(132, 158, 184,0.55)',
+      letterSpacing: '1.4px',
+      textTransform: 'uppercase',
+      ...FONT_SMOOTH,
+    }}>
+      {children}
+    </p>
+  );
+}
+
+// ─── BlownHighlightsCanvas ──────────────────────────────────────────────────
+// Client-side luminance scanner. When the Blown Highlights chip is tapped,
+// this canvas overlays the hero photo and tints any pixel whose RGB exceeds
+// the clipping threshold so the user can see exactly WHERE the engine flagged
+// the blown regions. No engine roundtrip required — the analysis runs on the
+// already-loaded image bitmap. We sample at quarter resolution for speed and
+// render two passes: a hot red core for fully-clipped pixels and a softer
+// orange wash for near-clipped (warning) pixels. The canvas mirrors the same
+// objectFit / objectPosition the hero <img> uses so the overlay tracks the
+// visible photo area exactly.
+function BlownHighlightsCanvas({ src, objectFit, objectPosition }) {
+  const canvasRef = useRef(null);
+  const [stats, setStats] = useState(null); // { clippedPct, warnPct } | null
+
+  useEffect(() => {
+    if (!src) return;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (cancelled) return;
+      const cvs = canvasRef.current;
+      if (!cvs) return;
+      const rect = cvs.getBoundingClientRect();
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      cvs.width  = Math.max(1, Math.floor(rect.width  * dpr));
+      cvs.height = Math.max(1, Math.floor(rect.height * dpr));
+      const ctx = cvs.getContext('2d');
+      ctx.scale(dpr, dpr);
+      // Mirror objectFit math: object-fit:contain → letterbox; cover → crop.
+      const cw = rect.width, ch = rect.height;
+      const ir = img.naturalWidth / img.naturalHeight;
+      const cr = cw / ch;
+      let dx, dy, dw, dh;
+      if (objectFit === 'contain') {
+        if (ir > cr) { dw = cw; dh = cw / ir; dx = 0; dy = (ch - dh) / 2; }
+        else         { dh = ch; dw = ch * ir; dx = (cw - dw) / 2; dy = 0; }
+      } else { // cover
+        if (ir > cr) { dh = ch; dw = ch * ir; dx = (cw - dw) / 2; dy = 0; }
+        else         { dw = cw; dh = cw / ir; dx = 0; dy = (ch - dh) / 2; }
+        // Honor objectPosition string like "50% 30%" for cover mode.
+        if (typeof objectPosition === 'string') {
+          const m = objectPosition.match(/(-?\d+(?:\.\d+)?)%\s+(-?\d+(?:\.\d+)?)%/);
+          if (m) {
+            const px = parseFloat(m[1]) / 100;
+            const py = parseFloat(m[2]) / 100;
+            dx = (cw - dw) * px;
+            dy = (ch - dh) * py;
+          }
+        }
+      }
+      ctx.drawImage(img, dx, dy, dw, dh);
+      // Read back, threshold, paint highlight tint.
+      try {
+        const data = ctx.getImageData(0, 0, Math.floor(cw), Math.floor(ch));
+        const px = data.data;
+        let clipped = 0, warn = 0, total = 0;
+        const HOT  = [255, 64, 64, 200];
+        const WARN = [255, 180, 60, 130];
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
+          if (a < 8) continue;
+          total++;
+          const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          if (r >= 252 && g >= 252 && b >= 252) {
+            px[i]=HOT[0]; px[i+1]=HOT[1]; px[i+2]=HOT[2]; px[i+3]=HOT[3];
+            clipped++;
+          } else if (lum >= 240) {
+            px[i]=WARN[0]; px[i+1]=WARN[1]; px[i+2]=WARN[2]; px[i+3]=WARN[3];
+            warn++;
+          } else {
+            px[i+3] = 0;
+          }
+        }
+        ctx.putImageData(data, 0, 0);
+        setStats({
+          clippedPct: total ? (clipped / total) * 100 : 0,
+          warnPct:    total ? (warn    / total) * 100 : 0,
+        });
+      } catch (e) {
+        // Likely a tainted canvas (CORS) — give a soft fallback message.
+        console.warn('BlownHighlightsCanvas: unable to read pixels', e);
+        setStats({ error: true });
+      }
+    };
+    img.src = src;
+    return () => { cancelled = true; };
+  }, [src, objectFit, objectPosition]);
+
   return (
     <div style={{
-      borderRadius: 14, backgroundColor: C.panelBg,
-      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-      overflow: 'hidden', position: 'relative',
+      position: 'absolute', inset: 0, pointerEvents: 'none',
+      mixBlendMode: 'screen',
     }}>
-      <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-      <div onClick={onToggle} style={{
-        padding: '10px 20px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-      }}>
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.75), letterSpacing: '1px', ...FONT_SMOOTH }}>
-          {open ? 'CLOSE' : label}
-        </span>
-        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
-      </div>
-      <div style={{
-        maxHeight: open ? maxH : 0,
-        opacity: open ? 1 : 0,
-        overflow: 'hidden',
-        transition: 'max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
-      }}>
-        <div style={{ padding: '4px 20px 14px' }}>
-          {children}
+      <canvas
+        ref={canvasRef}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+      />
+      {stats && !stats.error && (
+        <div style={{
+          position: 'absolute', top: 10, left: 10,
+          padding: '6px 10px', borderRadius: 8,
+          backgroundColor: 'rgba(8,9,12,0.78)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.06)',
+          fontSize: 10, fontWeight: 700,
+          color: 'rgba(245,180,90,0.95)',
+          letterSpacing: '0.6px',
+          mixBlendMode: 'normal',
+          ...FONT_SMOOTH,
+        }}>
+          {stats.clippedPct.toFixed(1)}% CLIPPED · {stats.warnPct.toFixed(1)}% NEAR
         </div>
-      </div>
+      )}
     </div>
   );
 }
+
+// PullTabDrawer is now imported from `_shared/PullTabDrawer` so any future
+// styling tweak (handle, glow, animation) lands in both ResultScreen and
+// SetupScreen at the same time.
 
 // ─── ShadowSignature ─────────────────────────────────────────────────────────
 // Tiny dashboard sitting inside the SHADOW ANALYSIS drawer on desktop. Turns
@@ -87,6 +209,7 @@ function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
 // Studio Matte surface rather than stamped on top. If neither signal is
 // present the component renders null.
 function ShadowSignature({ angleDeg, density }) {
+  const [zoomed, setZoomed] = useState(false);
   if (angleDeg == null && density == null) return null;
 
   // Engine convention: 0°=up, 90°=right, 180°=straight down, 270°=left.
@@ -111,19 +234,26 @@ function ShadowSignature({ angleDeg, density }) {
     <div style={{
       display: 'flex', gap: 10, marginBottom: 14, alignItems: 'stretch',
     }}>
-      {/* Angle dial card */}
+      {/* Angle dial card — click anywhere on the well to zoom into a
+          fullscreen overlay (portaled to document.body so it escapes
+          FitToViewport's transform ancestor on desktop). */}
       {angleDeg != null && (
-        <div style={{
-          flex: '0 0 auto', width: 116,
-          padding: '10px 10px 8px',
-          borderRadius: 10,
-          backgroundColor: '#070709',
-          boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-        }}>
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <div
+          onClick={() => { tapHaptic(); setZoomed(true); }}
+          title="Tap to zoom"
+          style={{
+            flex: '0 0 auto', width: 140,
+            padding: '10px 10px 8px',
+            borderRadius: 10,
+            backgroundColor: '#070709',
+            boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+            cursor: 'zoom-in',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
             NOSE SHADOW
           </p>
-          <svg viewBox="0 0 100 72" width="96" height="72" style={{ display: 'block', margin: '2px auto 0' }}>
+          <svg viewBox="0 0 100 72" width="120" height="86" style={{ display: 'block', margin: '2px auto 0' }}>
             {/* ±60° arc */}
             <path
               d={`M ${50 - 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)} A 50 50 0 0 1 ${50 + 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)}`}
@@ -147,7 +277,16 @@ function ShadowSignature({ angleDeg, density }) {
             />
             <circle cx={needleX} cy={needleY} r={1.8} fill="rgba(245,190,72,1)" />
           </svg>
-          <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: C.textSub, textAlign: 'center', ...FONT_SMOOTH }}>
+          <p style={{
+            margin: '2px 0 0',
+            fontSize: 18,
+            fontWeight: 800,
+            color: READOUT_FG,
+            textAlign: 'center',
+            letterSpacing: '0.4px',
+            textShadow: READOUT_GLOW,
+            ...FONT_SMOOTH,
+          }}>
             {angleDeg > 0 ? '+' : ''}{angleDeg.toFixed(0)}°
           </p>
         </div>
@@ -164,10 +303,18 @@ function ShadowSignature({ angleDeg, density }) {
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
               SHADOW DENSITY
             </p>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>
+            <p style={{
+              margin: 0,
+              fontSize: 18,
+              fontWeight: 800,
+              color: READOUT_FG,
+              letterSpacing: '0.4px',
+              textShadow: READOUT_GLOW,
+              ...FONT_SMOOTH,
+            }}>
               {(density * 100).toFixed(0)}%
             </p>
           </div>
@@ -192,6 +339,74 @@ function ShadowSignature({ angleDeg, density }) {
           </div>
         </div>
       )}
+
+      {/* Fullscreen NOSE SHADOW overlay — portaled to document.body so it
+          escapes FitToViewport's transform ancestor on desktop. The dial
+          here is rendered at viewport scale so the angle reads at a glance
+          and the numeric label is enormous. */}
+      {zoomed && angleDeg != null && createPortal(
+        <div
+          onClick={() => setZoomed(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            zIndex: 99,
+            cursor: 'zoom-out',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+            NOSE SHADOW ANGLE
+          </p>
+          <svg viewBox="0 0 100 72" width="min(80vw, 540px)" height="min(60vh, 380px)" style={{ display: 'block', margin: '12px auto' }}>
+            {/* arc */}
+            <path
+              d={`M ${50 - 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)} A 50 50 0 0 1 ${50 + 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)}`}
+              fill="none" stroke="rgba(184,191,199,0.22)" strokeWidth="0.8"
+            />
+            {/* ticks */}
+            {[-60, -30, 0, 30, 60].map((deg) => {
+              const r = (deg * Math.PI) / 180;
+              const x1 = 50 + 44 * Math.sin(r);
+              const y1 = 14 + 44 * Math.cos(r);
+              const x2 = 50 + 50 * Math.sin(r);
+              const y2 = 14 + 50 * Math.cos(r);
+              return (
+                <g key={deg}>
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(184,191,199,0.5)" strokeWidth="0.8" />
+                  <text x={50 + 56 * Math.sin(r)} y={14 + 56 * Math.cos(r) + 2} textAnchor="middle"
+                    fontSize="4.2" fill="rgba(184,191,199,0.65)" fontFamily="Inter, system-ui, sans-serif">
+                    {deg > 0 ? `+${deg}°` : `${deg}°`}
+                  </text>
+                </g>
+              );
+            })}
+            {/* pivot */}
+            <circle cx={50} cy={14} r={2.6} fill="rgba(184,191,199,0.7)" />
+            {/* needle */}
+            <line x1={50} y1={14} x2={needleX} y2={needleY}
+              stroke="rgba(245,190,72,1)" strokeWidth="1.8" strokeLinecap="round" />
+            <circle cx={needleX} cy={needleY} r={2.4} fill="rgba(245,190,72,1)" />
+          </svg>
+          <p style={{
+            margin: '8px 0 0',
+            fontSize: 56,
+            fontWeight: 800,
+            color: 'rgba(245,210,140,0.95)',
+            letterSpacing: '1px',
+            textShadow: '0 1px 0 rgba(0,0,0,0.7)',
+            ...FONT_SMOOTH,
+          }}>
+            {angleDeg > 0 ? '+' : ''}{angleDeg.toFixed(0)}°
+          </p>
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+            TAP TO CLOSE
+          </p>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -214,7 +429,7 @@ function SceneField({ label, value }) {
         {prettify(label, { upper: true })}
       </p>
       <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 500, color: C.textSubBold, lineHeight: '16px', textShadow: '0 1px 0 rgba(0,0,0,0.45)', ...FONT_SMOOTH }}>
-        {prettify(value)}
+        {prettify(value, { title: true })}
       </p>
     </div>
   );
@@ -281,105 +496,10 @@ function SignalGauge({ label, value, display, mode, accentColor }) {
   );
 }
 
-// ─── ModifierSilhouette ─────────────────────────────────────────────────────
-// Tiny SVG silhouette of the classified modifier shape (rectangular softbox,
-// octabox, strip, beauty dish, ring, umbrella, parabolic, or generic). Sits
-// at the top of the CATCHLIGHT & MODIFIER drawer so the reader sees WHAT the
-// gear looks like alongside the spec grid. The actual physical dimensions
-// live in the ModifierDetail spec cells below.
-function ModifierSilhouette({ family }) {
-  const f = (family || '').toLowerCase();
-  const shape = f.includes('ring')     ? 'ring'
-              : f.includes('strip')    ? 'strip'
-              : f.includes('oct')      ? 'oct'
-              : f.includes('beauty')   ? 'beauty'
-              : f.includes('umbrella') ? 'umbrella'
-              : f.includes('parabolic')? 'parabolic'
-              : 'rect';
+// ModifierSilhouette is now imported from `_shared/ModifierSilhouette`. The
+// shared component supports an optional `dimensions` engraving so the
+// silhouette doubles as the size readout — used by both Result + Setup.
 
-  const stroke = steel(0.55);
-  const glow   = 'rgba(245,190,72,0.18)';
-  const hi     = 'rgba(245,190,72,0.55)';
-
-  return (
-    <svg viewBox="0 0 100 100" width="90" height="90" style={{ display: 'block' }}>
-      {/* front glow behind everything to suggest the modifier is emitting */}
-      <defs>
-        <radialGradient id="mod-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={glow} />
-          <stop offset="70%" stopColor="rgba(245,190,72,0)" />
-        </radialGradient>
-      </defs>
-      <rect x={0} y={0} width={100} height={100} fill="url(#mod-glow)" />
-      {shape === 'rect' && (
-        <>
-          <rect x={22} y={26} width={56} height={42} rx={3} fill="none" stroke={stroke} strokeWidth={1.5} />
-          <rect x={26} y={30} width={48} height={34} rx={2} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
-          <line x1={26} y1={47} x2={74} y2={47} stroke={stroke} strokeWidth={0.6} />
-          <line x1={50} y1={30} x2={50} y2={64} stroke={stroke} strokeWidth={0.6} />
-          <line x1={78} y1={68} x2={92} y2={82} stroke={stroke} strokeWidth={1.2} />
-          <circle cx={92} cy={82} r={2.2} fill={stroke} />
-        </>
-      )}
-      {shape === 'strip' && (
-        <>
-          <rect x={38} y={16} width={24} height={70} rx={3} fill="none" stroke={stroke} strokeWidth={1.5} />
-          <rect x={41} y={19} width={18} height={64} rx={2} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
-          <line x1={41} y1={50} x2={59} y2={50} stroke={stroke} strokeWidth={0.5} />
-          <line x1={62} y1={84} x2={76} y2={92} stroke={stroke} strokeWidth={1.2} />
-        </>
-      )}
-      {shape === 'oct' && (
-        <>
-          <polygon points="36,22 64,22 80,38 80,62 64,78 36,78 20,62 20,38"
-                   fill="none" stroke={stroke} strokeWidth={1.5} />
-          <polygon points="39,26 61,26 74,39 74,61 61,74 39,74 26,61 26,39"
-                   fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
-          <circle cx={50} cy={50} r={3} fill={hi} opacity={0.6} />
-          <line x1={74} y1={74} x2={86} y2={86} stroke={stroke} strokeWidth={1.2} />
-        </>
-      )}
-      {shape === 'beauty' && (
-        <>
-          <ellipse cx={50} cy={48} rx={32} ry={12} fill="none" stroke={stroke} strokeWidth={1.5} />
-          <ellipse cx={50} cy={48} rx={28} ry={10} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.7} />
-          {/* deflector */}
-          <circle cx={50} cy={48} r={6} fill="#0a0b0d" stroke={stroke} strokeWidth={0.8} />
-          {/* depth */}
-          <path d="M18 48 L30 72 L70 72 L82 48" fill="none" stroke={stroke} strokeWidth={1} />
-          <line x1={72} y1={72} x2={84} y2={84} stroke={stroke} strokeWidth={1.2} />
-        </>
-      )}
-      {shape === 'ring' && (
-        <>
-          <circle cx={50} cy={50} r={30} fill="none" stroke={stroke} strokeWidth={1.5} />
-          <circle cx={50} cy={50} r={26} fill="rgba(245,190,72,0.08)" stroke={hi} strokeWidth={0.8} />
-          <circle cx={50} cy={50} r={13} fill="#0a0b0d" stroke={stroke} strokeWidth={1} />
-        </>
-      )}
-      {shape === 'umbrella' && (
-        <>
-          <path d="M18 56 Q50 14 82 56 Z" fill="rgba(245,190,72,0.10)" stroke={stroke} strokeWidth={1.4} />
-          <path d="M18 56 Q50 14 82 56" fill="none" stroke={hi} strokeWidth={0.8} />
-          {/* ribs */}
-          <line x1={50} y1={14} x2={50} y2={56} stroke={stroke} strokeWidth={0.6} />
-          <line x1={34} y1={20} x2={50} y2={56} stroke={stroke} strokeWidth={0.5} />
-          <line x1={66} y1={20} x2={50} y2={56} stroke={stroke} strokeWidth={0.5} />
-          {/* shaft */}
-          <line x1={50} y1={56} x2={50} y2={88} stroke={stroke} strokeWidth={1.2} />
-        </>
-      )}
-      {shape === 'parabolic' && (
-        <>
-          <path d="M14 72 Q50 8 86 72" fill="none" stroke={stroke} strokeWidth={1.6} />
-          <path d="M20 70 Q50 18 80 70" fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
-          {/* subject line */}
-          <circle cx={50} cy={72} r={2} fill={stroke} />
-        </>
-      )}
-    </svg>
-  );
-}
 
 // ─── CatchlightEye ──────────────────────────────────────────────────────────
 // Stylized eye outline with one or more catchlight dots positioned at clock
@@ -431,41 +551,102 @@ function CatchlightEye({ clockHour, clockHours, angleDeg }) {
   const stroke = steel(0.58);
   const maxCount = Math.max(1, ...Array.from(counts.values()));
 
+  // Resolve a primary hour for the readout label so the user sees the
+  // engine's clock position spelled out (e.g. "10 o'clock") in addition to
+  // the dot. The most-frequent hour wins; ties prefer the smaller hour so
+  // the readout is deterministic.
+  let primaryHour = null;
+  if (counts.size > 0) {
+    let bestN = -1;
+    for (const [h, n] of counts.entries()) {
+      if (n > bestN) { bestN = n; primaryHour = h; }
+    }
+  }
+
+  // Tick mark geometry — 12 spokes around the iris ring so the clock face
+  // is implied without overpowering the catchlight dots.  The hour-marks at
+  // 12 / 3 / 6 / 9 are drawn slightly longer.
+  const ticks = Array.from({ length: 12 }, (_, i) => {
+    const deg = i * 30;
+    const r = (deg * Math.PI) / 180;
+    const inner = (i % 3 === 0) ? 22 : 22.5;
+    const outer = (i % 3 === 0) ? 26 : 24.5;
+    return {
+      hour: i === 0 ? 12 : i,
+      x1: 50 + inner * Math.sin(r),
+      y1: 44 - inner * Math.cos(r),
+      x2: 50 + outer * Math.sin(r),
+      y2: 44 - outer * Math.cos(r),
+    };
+  });
+
   return (
-    <svg viewBox="0 0 100 90" width="90" height="80" style={{ display: 'block' }}>
-      {/* almond eye shape */}
-      <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
-      {/* iris */}
-      <circle cx={50} cy={44} r={20} fill="rgba(60,70,85,0.55)" stroke={stroke} strokeWidth={1} />
-      {/* pupil */}
-      <circle cx={50} cy={44} r={8} fill="#05060a" />
-      {/* Multi-dot catchlights — one per reported clock hour.  Dots on the
-          same clock position stack into a single brighter dot whose radius
-          grows with the count, so repeated hits read as "strongest light". */}
-      {Array.from(counts.entries()).map(([h, n]) => {
-        const clockDeg = (h % 12) * 30;
-        const cx = 50 + 18 * Math.sin((clockDeg * Math.PI) / 180);
-        const cy = 44 - 14 * Math.cos((clockDeg * Math.PI) / 180);
-        const r = 3.2 + 1.4 * (n / maxCount);
-        const alpha = 0.55 + 0.4 * (n / maxCount);
-        return (
-          <g key={`${h}-${n}`}>
-            <circle cx={cx} cy={cy} r={r + 1.6} fill="rgba(255,255,255,0.10)" />
-            <circle cx={cx} cy={cy} r={r} fill={`rgba(255,255,255,${alpha})`} />
-            <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.38)} fill="#ffffff" />
-          </g>
-        );
-      })}
-      {/* Fallback single dot from nose-shadow angle */}
-      {fallbackPos && (
-        <>
-          <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={4.5} fill="rgba(255,255,255,0.92)" />
-          <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="#ffffff" />
-        </>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <svg viewBox="0 0 100 100" width="92" height="92" style={{ display: 'block' }}>
+        {/* almond eye shape */}
+        <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
+        {/* clock-face tick ring around the iris — engraved guide so the
+            user reads the dot position as a clock hour, not a free angle. */}
+        {ticks.map((t) => (
+          <line
+            key={t.hour}
+            x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
+            stroke={stroke}
+            strokeWidth={t.hour % 3 === 0 ? 1.1 : 0.6}
+            opacity={t.hour % 3 === 0 ? 0.85 : 0.5}
+            strokeLinecap="round"
+          />
+        ))}
+        {/* iris */}
+        <circle cx={50} cy={44} r={20} fill="rgba(60,70,85,0.55)" stroke={stroke} strokeWidth={1} />
+        {/* pupil */}
+        <circle cx={50} cy={44} r={8} fill="#05060a" />
+        {/* Multi-dot catchlights — one per reported clock hour.  Dots on the
+            same clock position stack into a single brighter dot whose radius
+            grows with the count, so repeated hits read as "strongest light". */}
+        {Array.from(counts.entries()).map(([h, n]) => {
+          const clockDeg = (h % 12) * 30;
+          const cx = 50 + 16 * Math.sin((clockDeg * Math.PI) / 180);
+          const cy = 44 - 16 * Math.cos((clockDeg * Math.PI) / 180);
+          const r = 3.4 + 1.5 * (n / maxCount);
+          const alpha = 0.6 + 0.4 * (n / maxCount);
+          const isPrimary = h === primaryHour;
+          return (
+            <g key={`${h}-${n}`}>
+              {/* outer halo — bigger + warmer for the primary dot */}
+              <circle cx={cx} cy={cy} r={r + (isPrimary ? 4 : 2)}
+                fill={isPrimary ? 'rgba(255,210,140,0.18)' : 'rgba(255,255,255,0.10)'} />
+              <circle cx={cx} cy={cy} r={r + (isPrimary ? 2 : 1)}
+                fill={isPrimary ? 'rgba(255,225,170,0.32)' : 'rgba(255,255,255,0.18)'} />
+              <circle cx={cx} cy={cy} r={r} fill={`rgba(255,255,255,${alpha})`} />
+              <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.4)} fill="#ffffff" />
+            </g>
+          );
+        })}
+        {/* Fallback single dot from nose-shadow angle */}
+        {fallbackPos && (
+          <>
+            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={6.5} fill="rgba(255,210,140,0.18)" />
+            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={4.5} fill="rgba(255,255,255,0.92)" />
+            <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="#ffffff" />
+          </>
+        )}
+        {/* subtle upper lash line */}
+        <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
+      </svg>
+      {/* Position readout — explicit "10 O'CLOCK" label so the dot's clock
+          hour is spelled out in copy as well as plotted in the eye. */}
+      {primaryHour != null && (
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          color: 'rgba(245,210,140,0.92)',
+          letterSpacing: '1px',
+          ...FONT_SMOOTH,
+        }}>
+          {primaryHour} O&apos;CLOCK
+        </span>
       )}
-      {/* subtle upper lash line */}
-      <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
-    </svg>
+    </div>
   );
 }
 
@@ -486,6 +667,21 @@ function LightComponentChips({ components }) {
     if (v === 'subtle' || v === 'soft' || v === 'light') return 0.5;
     return 0.8;
   };
+
+  // Match the diagram's presence gate (LightingDiagram presenceAlpha):
+  // subtle/soft/none/unknown are NOT plotted as fill/rim markers, so they
+  // shouldn't show up as cells here either — otherwise the panel claims
+  // contributors the diagram silently dropped.
+  const qualifies = (p) => {
+    const v = String(p || '').toLowerCase();
+    if (!v || v === 'none' || v === 'unknown' || v === 'subtle' || v === 'soft' || v === 'light') return false;
+    return true;
+  };
+  const fillQualifies = qualifies(fill);
+  const rimQualifies  = qualifies(rim);
+  // If neither secondary contributor qualifies, suppress the entire row —
+  // SOURCE alone (always "key") is redundant with the rest of the panel.
+  if (!fillQualifies && !rimQualifies) return null;
 
   const Cell = ({ label, value, color }) => (
     <div style={{
@@ -735,50 +931,260 @@ function Pill({ label }) {
   );
 }
 
-function PatternBars({ candidates, isHighConf }) {
+// ─── Pattern definitions + face silhouettes ─────────────────────────────────
+// One-line shadow definitions for each canonical portrait pattern.  These are
+// pure presentation (no engine plumbing required) so the pattern candidate
+// rows give the user the *what* alongside the score.
+const PATTERN_DEFINITIONS = {
+  loop:       'Small triangular shadow off the nose, just touching the cheek.',
+  rembrandt:  'Triangle of light on the shadow-side cheek, isolated under the eye.',
+  butterfly:  'Symmetric shadow under the nose — light dead-center, slightly above.',
+  paramount:  'Symmetric shadow under the nose — light dead-center, slightly above.',
+  split:      'Vertical hard split — half the face fully lit, half in shadow.',
+  broad:      'Lit side of the face is the side turned toward camera.',
+  short:      'Lit side of the face is the side turned away from camera.',
+  rim:        'Backlight wraps the contour, separating subject from background.',
+  flat:       'Even, near-shadowless illumination across the whole face.',
+};
+
+// Stylized portrait silhouette per pattern.  Drawn at viewBox 100×100 so the
+// shading geometry has room to read at small sizes without going mushy.  The
+// face oval is the same in every variant; the SHADING path is what changes —
+// that's the visual cue for the pattern shape.
+function PatternFaceIcon({ name, size = 64, lit, shadowSide }) {
+  const key = String(name || '').toLowerCase().split(/\s+/)[0]; // "loop" from "Loop"
+  const skin    = lit ? 'rgba(245,210,140,0.26)' : 'rgba(184,191,199,0.14)';
+  const stroke  = lit ? 'rgba(245,210,140,0.95)' : 'rgba(184,191,199,0.55)';
+  const shadow  = 'rgba(0,0,0,0.88)';
+  const hi      = lit ? 'rgba(245,210,140,0.70)' : 'rgba(184,191,199,0.40)';
+  const noseCol = lit ? 'rgba(245,210,140,0.85)' : 'rgba(184,191,199,0.50)';
+
+  // Default artwork has the shadow on the RIGHT side of the face for loop,
+  // rembrandt, broad; on the LEFT for split, short. When the caller tells us
+  // which side the shadow actually falls in THIS photo, we flip the whole
+  // glyph horizontally so every candidate mirrors the real result.
+  // `shadowSide` = 'left' | 'right' | undefined (undefined = no flip).
+  const defaultRightSide = new Set(['loop', 'rembrandt', 'broad']);
+  const defaultLeftSide  = new Set(['split', 'short']);
+  let flip = false;
+  if (shadowSide === 'left'  && defaultRightSide.has(key)) flip = true;
+  if (shadowSide === 'right' && defaultLeftSide.has(key))  flip = true;
+
+  return (
+    <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block', flexShrink: 0 }}>
+      <g transform={flip ? 'translate(100,0) scale(-1,1)' : undefined}>
+      {/* Face oval — anchor for every pattern */}
+      <ellipse cx={50} cy={52} rx={28} ry={34} fill={skin} stroke={stroke} strokeWidth={2} />
+
+      {/* Shading per pattern */}
+      {key === 'loop' && (
+        // small triangular nose-shadow cast from the nose toward the shadow cheek
+        <path d="M50 52 L62 58 L60 66 L52 60 Z" fill={shadow} />
+      )}
+      {key === 'rembrandt' && (
+        <>
+          {/* shadow-side cheek fills dark, leaving a small triangle of light isolated under the eye */}
+          <path d="M50 18 Q78 22 80 52 Q78 82 50 86 L50 18 Z" fill={shadow} opacity={0.68} />
+          <polygon points="54,42 64,46 58,54" fill={hi} />
+        </>
+      )}
+      {(key === 'butterfly' || key === 'paramount') && (
+        // symmetric ellipse shadow directly under the nose
+        <ellipse cx={50} cy={62} rx={8} ry={4} fill={shadow} />
+      )}
+      {key === 'split' && (
+        // hard vertical split — half the face in total shadow
+        <path d="M50 18 Q22 22 22 52 Q22 82 50 86 L50 18 Z" fill={shadow} opacity={0.82} />
+      )}
+      {key === 'broad' && (
+        // shadow on the FAR (turned-away) side — face turned camera-right
+        <path d="M68 26 Q84 52 68 78 Q60 82 56 76 L56 30 Q60 22 68 26 Z" fill={shadow} opacity={0.68} />
+      )}
+      {key === 'short' && (
+        // shadow on the NEAR (turned-toward) side — face turned camera-right
+        <path d="M32 26 Q16 52 32 78 Q40 82 44 76 L44 30 Q40 22 32 26 Z" fill={shadow} opacity={0.68} />
+      )}
+      {key === 'rim' && (
+        // face fully dark, bright outline wraps the contour
+        <>
+          <ellipse cx={50} cy={52} rx={28} ry={34} fill="rgba(0,0,0,0.72)" />
+          <ellipse cx={50} cy={52} rx={28} ry={34} fill="none" stroke={hi} strokeWidth={4} />
+        </>
+      )}
+      {/* 'flat' draws nothing extra — even illumination */}
+
+      {/* Nose dot for orientation (omit on rim/flat where it adds clutter) */}
+      {key !== 'rim' && key !== 'flat' && (
+        <circle cx={50} cy={56} r={2} fill={noseCol} />
+      )}
+      </g>
+    </svg>
+  );
+}
+
+function PatternBars({ candidates, isHighConf, shadowSide }) {
   const scoreColor  = isHighConf ? C.confHigh     : C.confLowScore;
   const barFill     = isHighConf ? C.confHighBar  : C.confLowBar;
-  const TRACK_W     = 270;
+
+  // Tapping a pattern silhouette portals a fullscreen overlay showing the
+  // same drawing at ~240px along with the pattern name + definition, so the
+  // photographer can actually READ the shape (36-px inline icon is too small
+  // to resolve the loop triangle / rembrandt cheek).
+  const [zoomedPattern, setZoomedPattern] = useState(null); // { name, score, def, lit } | null
+
+  // `shadowSide` is 'left' or 'right' meaning "which side of the face the
+  // shadow actually falls on in THIS photo".  We mirror asymmetric pattern
+  // glyphs (loop, rembrandt, broad, short, split) so the candidate drawings
+  // match the real DirectionalCompass read instead of defaulting to a
+  // cast-right nose shadow on every photo.
+
+  const defFor = (name) => {
+    const key = String(name || '').toLowerCase().split(/\s+/)[0];
+    return PATTERN_DEFINITIONS[key] || null;
+  };
 
   return (
     <div style={{ padding: '0 20px 16px' }}>
-      {candidates.map((c, i) => (
-        <div key={c.name} style={{ marginTop: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+      {candidates.map((c, i) => {
+        const def = defFor(c.name);
+        const isLeader = i === 0;
+        return (
+          <div key={c.name} style={{
+            marginTop: i === 0 ? 4 : 18,
+            display: 'grid',
+            gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+            columnGap: 14,
+            alignItems: 'center',
+          }}>
+            {/* Silhouette card — clickable; opens fullscreen portal.  Wrapped
+                in a tactile inset well so the icon has a machined frame and
+                the tap target is obvious. */}
+            <div
+              onClick={() => { tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: isLeader }); }}
+              title="Tap to zoom"
+              style={{
+                width: 72, height: 72,
+                borderRadius: 12,
+                backgroundColor: '#070709',
+                boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'zoom-in',
+                WebkitTapHighlightColor: 'transparent',
+                flexShrink: 0,
+              }}
+            >
+              <PatternFaceIcon name={c.name} size={60} lit={isLeader} shadowSide={shadowSide} />
+            </div>
+
+            {/* Name + definition + bar */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{
+                  fontSize: 14,
+                  fontWeight: isLeader ? 700 : 500,
+                  color: isLeader ? C.textSubBold : C.textSub,
+                  ...FONT_SMOOTH,
+                }}>{c.name}</span>
+              </div>
+              {def && (
+                <p style={{
+                  margin: '2px 0 6px', fontSize: 11, lineHeight: 1.4,
+                  color: isLeader ? steel(0.78) : steel(0.60),
+                  fontWeight: 400,
+                  ...FONT_SMOOTH,
+                }}>{def}</p>
+              )}
+              {/* Bar track + fill */}
+              <div style={{
+                width: '100%', height: 3, borderRadius: 1.5,
+                backgroundColor: C.barTrack,
+                position: 'relative',
+              }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0,
+                  width: `${c.score}%`, height: '100%',
+                  borderRadius: 1.5,
+                  backgroundColor: isLeader ? barFill : C.barAlt,
+                  transition: 'width 0.4s ease',
+                }} />
+              </div>
+            </div>
+
+            {/* Score */}
             <span style={{
-              fontSize: 13,
-              fontWeight: i === 0 ? 600 : 500,
-              color: i === 0 ? C.textSubBold : C.textSub,
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            }}>{c.name}</span>
-            <span style={{
-              fontSize: 13, fontWeight: 600,
-              color: i === 0 ? scoreColor : C.textSub,
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
+              fontSize: 14, fontWeight: 700,
+              color: isLeader ? scoreColor : C.textSub,
+              alignSelf: 'center',
+              ...FONT_SMOOTH,
             }}>{c.score}%</span>
           </div>
-          {/* Bar track + fill */}
-          <div style={{
-            width: TRACK_W, height: 3, borderRadius: 1.5,
-            backgroundColor: C.barTrack,
-            position: 'relative',
-          }}>
-            <div style={{
-              position: 'absolute', left: 0, top: 0,
-              width: `${(c.score / 100) * TRACK_W}px`, height: '100%',
-              borderRadius: 1.5,
-              backgroundColor: i === 0 ? barFill : C.barAlt,
-              transition: 'width 0.4s ease',
-            }} />
-          </div>
-        </div>
-      ))}
+        );
+      })}
       {!isHighConf && (
         <p style={{
-          margin: '12px 0 0', fontSize: 11,
+          margin: '14px 0 0', fontSize: 11,
           color: C.textWarn, lineHeight: 1.4,
-          WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
+          ...FONT_SMOOTH,
         }}>Close match — try a sharper photo for higher confidence</p>
+      )}
+
+      {/* Fullscreen zoom portal — large silhouette + name + score + definition.
+          Click anywhere to dismiss (matches the diagram zoom convention).
+          PORTALED to document.body so it escapes the FitToViewport scale. */}
+      {zoomedPattern && createPortal(
+        <div
+          onClick={() => setZoomedPattern(null)}
+          style={{
+            position: 'fixed', inset: 0,
+            backgroundColor: 'rgba(4,5,7,0.94)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            zIndex: 100,
+            cursor: 'zoom-out',
+            padding: 32,
+            gap: 18,
+          }}
+        >
+          <p style={{
+            margin: 0, fontSize: 10, fontWeight: 700,
+            letterSpacing: '2px', color: steel(0.6), ...FONT_SMOOTH,
+          }}>PATTERN · {zoomedPattern.score}% MATCH</p>
+
+          {/* Large silhouette in a viewfinder-style well */}
+          <div style={{
+            width: 'min(72vw, 320px)', height: 'min(72vw, 320px)',
+            borderRadius: 24,
+            backgroundColor: '#070709',
+            boxShadow: 'inset 0px 3px 10px 0px rgba(0,0,0,0.7), inset 0px 1px 3px 0px rgba(0,0,0,0.5), 0 18px 60px rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}>
+            <PatternFaceIcon name={zoomedPattern.name} size={260} lit={zoomedPattern.lit} shadowSide={shadowSide} />
+          </div>
+
+          <p style={{
+            margin: 0, fontSize: 24, fontWeight: 800,
+            color: 'rgba(245,247,250,0.95)', letterSpacing: '0.5px',
+            ...FONT_SMOOTH,
+          }}>{zoomedPattern.name}</p>
+
+          {zoomedPattern.def && (
+            <p style={{
+              margin: 0, maxWidth: 420,
+              fontSize: 14, lineHeight: 1.5,
+              color: steel(0.78), textAlign: 'center',
+              ...FONT_SMOOTH,
+            }}>{zoomedPattern.def}</p>
+          )}
+
+          <p style={{
+            margin: '6px 0 0', fontSize: 9, fontWeight: 700,
+            letterSpacing: '1.5px', color: steel(0.45), ...FONT_SMOOTH,
+          }}>TAP TO CLOSE</p>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -912,6 +1318,116 @@ function SpecCell({ label, value, secondary, secondaryColor }) {
 }
 
 // ─── Modifier detail card — Studio Matte hero + spec grid ─────────────────
+// ─── IrisCoverageScale ──────────────────────────────────────────────────────
+// Visual scale showing where the catchlight lands on the small→XL spectrum,
+// expressed as % iris diameter (the engine's native unit for catchlight
+// size).  Reads as a banded ruler with a glowing marker so the modifier's
+// apparent source size has spatial context, not just a raw number.
+//
+// Bands (Apparent source size relative to iris diameter):
+//   < 25%   tiny    (bare bulb / hard light)
+//   25–50%  small   (small softbox / strip)
+//   50–100% medium  (mid softbox / oct)
+//   100–200% large  (large oct / parabolic / window)
+//   > 200%  huge    (sky / large diffuser overhead)
+function IrisCoverageScale({ catchlightSize, angularArea }) {
+  // Parse "12.3% iris" → 12.3
+  let pct = null;
+  if (catchlightSize) {
+    const m = String(catchlightSize).match(/([\d.]+)\s*%/);
+    if (m) pct = parseFloat(m[1]);
+  }
+  if (pct == null) return null;
+
+  // Map % iris (0–250+) to a 0–1 ruler position with a soft compress at top
+  const RULER_MAX = 250;
+  const ruler = Math.max(0, Math.min(1, pct / RULER_MAX));
+
+  const bands = [
+    { label: 'TINY',   start: 0,   end: 25,  color: 'rgba(245,190,72,0.20)' },
+    { label: 'SMALL',  start: 25,  end: 50,  color: 'rgba(245,190,72,0.32)' },
+    { label: 'MEDIUM', start: 50,  end: 100, color: 'rgba(245,190,72,0.48)' },
+    { label: 'LARGE',  start: 100, end: 200, color: 'rgba(245,190,72,0.65)' },
+    { label: 'HUGE',   start: 200, end: 250, color: 'rgba(245,190,72,0.82)' },
+  ];
+
+  const bandFor = (v) => bands.find((b) => v >= b.start && v < b.end) || bands[bands.length - 1];
+  const activeBand = bandFor(pct);
+
+  return (
+    <div style={{
+      marginTop: 10, marginBottom: 10,
+      padding: '10px 12px 8px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          IRIS COVERAGE
+        </p>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+          {activeBand.label}
+        </span>
+      </div>
+
+      {/* Banded ruler */}
+      <div style={{ position: 'relative', height: 18 }}>
+        <div style={{
+          position: 'absolute', left: 0, right: 0, top: 6, height: 8,
+          borderRadius: 4,
+          display: 'flex',
+          overflow: 'hidden',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.65), inset 0 -0.5px 0 rgba(255,255,255,0.06)',
+        }}>
+          {bands.map((b) => (
+            <div key={b.label} style={{
+              flex: (b.end - b.start),
+              backgroundColor: b.color,
+              borderRight: '1px solid rgba(0,0,0,0.45)',
+            }} />
+          ))}
+        </div>
+        {/* Marker — vertical pin with engraved % readout */}
+        <div style={{
+          position: 'absolute', top: 0, left: `${ruler * 100}%`,
+          transform: 'translateX(-50%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+        }}>
+          <div style={{
+            width: 9, height: 18, borderRadius: 2,
+            backgroundColor: 'rgba(245,210,140,0.95)',
+            boxShadow: '0 0 6px rgba(245,190,72,0.7), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 1px rgba(0,0,0,0.45)',
+          }} />
+        </div>
+      </div>
+
+      {/* Band ticks below the ruler */}
+      <div style={{ display: 'flex', marginTop: 4 }}>
+        {bands.map((b) => (
+          <div key={b.label} style={{
+            flex: (b.end - b.start),
+            fontSize: 7.5, fontWeight: 700, letterSpacing: '0.4px',
+            color: steel(0.55), textAlign: 'center', ...FONT_SMOOTH,
+          }}>{b.label}</div>
+        ))}
+      </div>
+
+      {/* Numeric readout */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
+        <span style={{ fontSize: 16, fontWeight: 800, color: READOUT_FG, textShadow: READOUT_GLOW, letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+          {pct.toFixed(1)}<span style={{ fontSize: 11, fontWeight: 700, color: steel(0.62), marginLeft: 3 }}>% iris</span>
+        </span>
+        {angularArea && (
+          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+            {angularArea}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ModifierDetail({ modifier }) {
   if (!modifier) return null;
 
@@ -937,19 +1453,12 @@ function ModifierDetail({ modifier }) {
         secondary={[modifier.positionQuad, modifier.positionIntensity].filter(Boolean).join(' · ') || null}
       />
     ),
-    modifier.shape && (
-      <SpecCell
-        key="shape"
-        label="SHAPE"
-        value={modifier.shape}
-        secondary={modifier.catchlightSize || null}
-      />
-    ),
+    // SHAPE and COVERAGE moved into the CATCHLIGHT half of the combined
+    // CATCHLIGHT & MODIFIER drawer — they describe what's *reflected in
+    // the eye*, not the modifier itself, so they belong with the catchlight
+    // chips alongside the iris coverage scale.
     modifier.lightCount && (
       <SpecCell key="lights" label="LIGHTS" value={String(modifier.lightCount)} />
-    ),
-    modifier.angularArea && (
-      <SpecCell key="cov" label="COVERAGE" value={modifier.angularArea} />
     ),
   ].filter(Boolean);
 
@@ -1002,6 +1511,33 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const dragThreshold = 40; // px to commit show/hide
   const longPressTimer = useRef(null);
   const longPressFired = useRef(false);
+  // Tracks whether the in-flight hero gesture moved enough to count as a
+  // drag (info-panel toggle).  Set in moveDrag past the 8px slop, reset on
+  // every fresh handleHeroStart.  Used by the hero onClick to distinguish
+  // a real tap (→ enter zoom) from the synthesized click that follows a
+  // vertical info-panel drag.
+  const heroDidDrag = useRef(false);
+  // Diagram fullscreen modal — click any LightingDiagram instance to open
+  // a viewport-filling overlay with the same graphic.
+  const [diagramFullscreen, setDiagramFullscreen] = useState(false);
+  useEffect(() => {
+    if (!diagramFullscreen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setDiagramFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [diagramFullscreen]);
+
+  // Chip detail overlay — clicking a warning chip opens a translucent card
+  // pinned over the hero photo with the chip label, severity, and detail
+  // explanation. Tapping the photo or pressing Escape dismisses it.
+  const [chipDetail, setChipDetail] = useState(null); // { label, sev, detail } | null
+  useEffect(() => {
+    if (!chipDetail) return;
+    const onKey = (e) => { if (e.key === 'Escape') setChipDetail(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chipDetail]);
+
   const [isZoomed, setIsZoomed] = useState(false);
 
   // Zoom pan + pinch state
@@ -1035,10 +1571,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const moveDrag = useCallback((clientY) => {
     if (dragStartY.current === null) return;
     const dy = clientY - dragStartY.current;
-    // Cancel long press if user is dragging
-    if (Math.abs(dy) > 8 && longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
+    // Cancel long press if user is dragging — and remember that this gesture
+    // turned into a real drag so the trailing click doesn't fire fullscreen.
+    if (Math.abs(dy) > 8) {
+      heroDidDrag.current = true;
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
     }
     if (infoVisible) {
       setDragOffset(Math.max(0, dy));
@@ -1067,6 +1607,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     // timer that would re-zoom.
     if (recentlyExitedZoom.current) return;
     longPressFired.current = false;
+    heroDidDrag.current = false;
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
     startDrag(clientY);
     longPressTimer.current = setTimeout(() => {
@@ -1186,11 +1727,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const { pattern, confidence, meta, mood, sections } = result;
   const raw = result?._raw || {};
   const signalDiag = raw.signal_diagnostics || {};
-  const rawSignals = signalDiag.signals || {};
-  // Catchlight clock position — sourced directly from engine so the eye
-  // graphic and the narrative "at 1 o'clock" text always agree.
-  const catchlightClockStr = raw.lighting_inference?.catchlight_intelligence?.primary_key?.position
-    || sections?.modifier?.position
+  // Convention conversion — see LightingDiagram.jsx for the long comment.
+  // The engine emits `nose_shadow_angle_deg` in CENTROID convention
+  //   (0° = shadow centroid below nose, 90° = right, 180° = above, 270° = left)
+  // but every UI consumer (ShadowSignature, CatchlightEye, LightingDiagram,
+  // raw-signal chips) was written against SHADOW_PASS convention
+  //   (0° = up/back-of-head, 90° = right, 180° = down, 270° = left).
+  // The two are 180° apart, so we normalize once at the source so every
+  // downstream widget shows the physically-correct direction.  When the
+  // engine standardizes its convention this is the only line to revert.
+  const _rawSignalsRaw = signalDiag.signals || {};
+  const rawSignals = _rawSignalsRaw.nose_shadow_angle_deg != null
+    ? { ..._rawSignalsRaw, nose_shadow_angle_deg: ((_rawSignalsRaw.nose_shadow_angle_deg + 180) % 360) }
+    : _rawSignalsRaw;
+  // Catchlight clock position — prefer the same value the modifier spec-cell
+  // displays (sections.modifier.position) so the eye graphic and the visible
+  // POSITION readout never disagree.  Only fall back to the deeper engine
+  // field when the surface section omits it.
+  const catchlightClockStr = sections?.modifier?.position
+    || raw.lighting_inference?.catchlight_intelligence?.primary_key?.position
     || null;
   const catchlightClockHour = parseClockHour(catchlightClockStr);
   const hasRawSignals = rawSignals.nose_shadow_angle_deg != null
@@ -1202,17 +1757,31 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const confColor   = isHighConf ? C.confHigh : C.confLow;
   // Desktop uses a taller hero block so the photo can show its full aspect
   // (object-fit: contain) and a LightingDiagram can sit inline below the CTA.
-  const panelTop    = isDesktop ? 920 : (isHighConf ? 497 : 478);
+  // Desktop hero column height — bumped from 920 → 980 so the LightingDiagram
+  // well at the bottom has a usable >250px instead of being clipped at 165px.
+  // The actions row still fits within the 1040 design viewport (980 + 60 ≈ 1040).
+  const panelTop    = isDesktop ? 980 : (isHighConf ? 497 : 478);
   const leadMargin  = confidence - (sections.patternCandidates[1]?.score ?? 0);
-  // Desktop hero position constants — photo + info overlay + CTA + diagram
-  // stack further down to give the photo more room.
+  // Desktop hero position constants — photo / info / CTA / diagram stacked
+  // top-to-bottom inside the 980px hero column. Photo height shaved 40px and
+  // every downstream constant lifted 40px to give the diagram its own real
+  // estate (well height = 980 − 680 − 25 = 275px, padded = 247px).
   const D_PHOTO_TOP    = 100;
-  const D_PHOTO_HEIGHT = 420;   // generous portrait-capable box
-  const D_INFO_TOP     = 540;   // photo bottom + 20 gap
-  const D_CTA_TOP      = 660;   // info (pattern+pills) ~ 80 tall + 40 gap
-  const D_DIAGRAM_TOP  = 730;   // CTA (48) + 22 gap
+  const D_PHOTO_HEIGHT = 380;   // portrait-capable box (was 420)
+  const D_INFO_TOP     = 500;   // photo bottom + 20 gap
+  const D_CTA_TOP      = 620;   // info (pattern+pills) ~ 80 tall + 40 gap
+  const D_DIAGRAM_TOP  = 680;   // CTA (48) + 12 gap → diagram well
 
   const toggle = (key) => { setDrawers(prev => ({ ...prev, [key]: !prev[key] })); panelToggleSound(); tapHaptic(); };
+
+  // Drawer sharing — when more than one drawer is open in the right column we
+  // divide the available content height (column max 872 minus ~46px header per
+  // drawer × 6 drawers minus inter-drawer gaps) so opened drawers fit instead
+  // of pushing each other off-screen. Mobile lets the page scroll naturally.
+  const openDrawerCount = Object.values(drawers).filter(Boolean).length;
+  const sharedDrawerMaxH = isDesktop && openDrawerCount > 1
+    ? Math.max(180, Math.floor((872 - 6 * 46 - 5 * 12) / openDrawerCount))
+    : null;
 
   // Summary lines for collapsed rows
   const summaries = {
@@ -1279,7 +1848,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     }}>
       {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(95,124,150,0.008) 40%, transparent 72%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
@@ -1324,33 +1893,50 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           onClick={() => {
             // Lockout window after exiting zoom — swallow the synthesized
             // click that fires after the tap-to-exit touch sequence so it
-            // can't toggle infoVisible or re-arm the long-press timer.
+            // can't re-enter zoom or re-arm the long-press timer.
             if (recentlyExitedZoom.current) return;
             if (longPressFired.current) { longPressFired.current = false; return; }
+            // If a chip-detail overlay is showing on the hero, a click should
+            // dismiss it instead of toggling fullscreen.
+            if (chipDetail) { setChipDetail(null); return; }
             if (isZoomed) {
-              // Single click on zoomed hero (desktop) → exit zoom.  Touch path
-              // already handled in handleZoomTouchEnd via zoomTapCandidate.
+              // Single click on zoomed hero → exit fullscreen.
               exitZoom();
               return;
             }
-            if (!isDragging) { setInfoVisible(v => !v); tapHaptic(); }
+            // If the gesture turned into a vertical info-panel drag, this
+            // trailing click is not a tap — bail out and reset the flag.
+            if (heroDidDrag.current) { heroDidDrag.current = false; return; }
+            // Plain click → fill viewport.  Cancel any pending long-press
+            // timer so it doesn't toggle us back out 500ms later.
+            if (longPressTimer.current) {
+              clearTimeout(longPressTimer.current);
+              longPressTimer.current = null;
+            }
+            tapHaptic();
+            setIsZoomed(true);
           }}
           style={{
+            // When zoomed we hide the inline hero and let the portaled
+            // fullscreen overlay (rendered below, escapes FitToViewport)
+            // own the visual.  Keeping the inline node mounted preserves
+            // the position/size CSS so exit transitions still feel right.
             position: 'absolute',
-            top: isZoomed ? 0 : (isDesktop ? D_PHOTO_TOP : (infoVisible ? 100 : 60)),
-            left: isZoomed ? 0 : 25,
-            right: isZoomed ? 0 : 25,
-            height: isZoomed ? '100dvh' : (isDesktop ? D_PHOTO_HEIGHT : (infoVisible ? 180 : 340)),
-            borderRadius: isZoomed ? 0 : 14,
+            top: (isDesktop ? D_PHOTO_TOP : (infoVisible ? 100 : 60)),
+            left: 25,
+            right: 25,
+            height: (isDesktop ? D_PHOTO_HEIGHT : (infoVisible ? 180 : 340)),
+            borderRadius: 14,
+            visibility: isZoomed ? 'hidden' : 'visible',
             overflow: 'hidden',
             backgroundColor: '#000',
             // Outer rim bevel — sunken well carved into the matte surface
-            boxShadow: isZoomed ? 'none' : '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
-            cursor: isZoomed ? 'grab' : 'pointer',
+            boxShadow: '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
+            cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            transition: isDragging ? 'none' : 'height 0.35s cubic-bezier(0.4, 0, 0.2, 1), top 0.35s cubic-bezier(0.4, 0, 0.2, 1), left 0.35s cubic-bezier(0.4, 0, 0.2, 1), right 0.35s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: isDragging ? 'none' : 'height 0.35s cubic-bezier(0.4, 0, 0.2, 1), top 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
             touchAction: 'none',
-            zIndex: isZoomed ? 20 : 1,
+            zIndex: 1,
           }}
         >
           {imagePreview && (
@@ -1358,15 +1944,24 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               position: 'absolute', inset: 0, width: '100%', height: '100%',
               // Desktop shows the whole photo (contain) since we have room;
               // mobile stays on the tight face-crop (cover).
-              objectFit: isZoomed ? 'contain' : (isDesktop ? 'contain' : 'cover'),
-              objectPosition: isZoomed ? '50% 50%' : (isDesktop ? '50% 50%' : faceCrop),
+              objectFit: isDesktop ? 'contain' : 'cover',
+              objectPosition: isDesktop ? '50% 50%' : faceCrop,
               opacity: infoVisible ? 0.8 : 1,
-              transition: isZoomed ? 'none' : 'opacity 0.35s ease',
-              animation: isZoomed ? 'none' : 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+              transition: 'opacity 0.35s ease',
+              animation: 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
               transformOrigin: 'center center',
-              transform: isZoomed ? `translate(${zoomPan.x}px, ${zoomPan.y}px) scale(${zoomScale})` : undefined,
-              willChange: isZoomed ? 'transform' : undefined,
             }} />
+          )}
+          {/* Blown-highlights region overlay — appears only when the user
+              taps the Blown Highlights warning chip. Sampled client-side from
+              the loaded hero bitmap; tints clipped pixels red and near-clipped
+              pixels orange so the user can see WHERE the engine flagged. */}
+          {imagePreview && chipDetail?.label === 'Blown Highlights' && (
+            <BlownHighlightsCanvas
+              src={imagePreview}
+              objectFit={isDesktop ? 'contain' : 'cover'}
+              objectPosition={isDesktop ? '50% 50%' : faceCrop}
+            />
           )}
           {/* Bottom vignette — fades photo into dark bg */}
           <div style={{
@@ -1386,6 +1981,74 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             pointerEvents: 'none', zIndex: 3,
             boxShadow: VIEWFINDER_INNER_SHADOW,
           }} />
+          {/* Chip detail overlay — slides up over the hero when a warning chip
+              is tapped. Sits above the inner-shadow bevel so the rim still
+              reads behind it. */}
+          {chipDetail && (
+            <div
+              onClick={(e) => { e.stopPropagation(); setChipDetail(null); }}
+              style={{
+                position: 'absolute', inset: 0, zIndex: 4,
+                // Blown Highlights leaves the backdrop transparent so the
+                // tinted-pixel overlay underneath stays visible.  Other chip
+                // details still wash the photo so the explanation reads.
+                background: chipDetail.label === 'Blown Highlights'
+                  ? 'transparent'
+                  : 'linear-gradient(180deg, rgba(4,5,7,0.35) 0%, rgba(4,5,7,0.78) 55%, rgba(4,5,7,0.92) 100%)',
+                backdropFilter: chipDetail.label === 'Blown Highlights' ? undefined : 'blur(4px)',
+                WebkitBackdropFilter: chipDetail.label === 'Blown Highlights' ? undefined : 'blur(4px)',
+                display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+                padding: 22,
+                cursor: 'pointer',
+                animation: 'chipDetailIn 0.28s cubic-bezier(0.4,0,0.2,1)',
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  width: '100%', maxWidth: 460,
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(14,16,20,0.92)',
+                  boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+                  padding: '16px 18px 14px',
+                  cursor: 'default',
+                  position: 'relative',
+                }}
+              >
+                <button
+                  onClick={() => setChipDetail(null)}
+                  aria-label="Close"
+                  style={{
+                    position: 'absolute', top: 8, right: 10,
+                    width: 26, height: 26, borderRadius: 13,
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: 'rgba(245,247,250,0.7)',
+                    fontSize: 16, lineHeight: '22px',
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >×</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Chip label={chipDetail.label} variant={sevToVariant(chipDetail.sev)} size="md" />
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, color: steel(0.5),
+                    letterSpacing: '1px', textTransform: 'uppercase', ...FONT_SMOOTH,
+                  }}>
+                    {chipDetail.sev === 'danger' ? 'Critical' : chipDetail.sev === 'warn' ? 'Warning' : 'Note'}
+                  </span>
+                </div>
+                <p style={{
+                  margin: 0,
+                  fontSize: 13, lineHeight: '19px',
+                  color: 'rgba(225,228,234,0.92)',
+                  ...FONT_SMOOTH,
+                }}>
+                  {chipDetail.detail || 'No additional detail available for this flag.'}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Info overlay — drag to dismiss, drag up to restore ── */}
@@ -1516,15 +2179,49 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
         {/* Desktop-only: LightingDiagram as an accompanying hero graphic —
             pulled out of the SHADOW drawer so the hero image no longer
-            stands alone on wide viewports. */}
+            stands alone on wide viewports.  Wrapped in the canonical glass
+            viewfinder treatment (well + vignette + reflection + bevel) so
+            it reads as the same machined viewport as the home screen and
+            the hero photo above it.  The diagram itself fills the well
+            fluidly so it zooms with the hero column width instead of
+            sitting at a fixed 300px in an oversized area. */}
         {isDesktop && (
-          <div style={{
-            position: 'absolute', top: D_DIAGRAM_TOP, left: 25, right: 25,
-            opacity: infoVisible ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-            display: 'flex', justifyContent: 'center',
-          }}>
-            <LightingDiagram result={result} />
+          <div
+            onClick={() => { tapHaptic(); setDiagramFullscreen(true); }}
+            style={{
+              position: 'absolute',
+              top: D_DIAGRAM_TOP,
+              left: 25, right: 25,
+              bottom: 25,
+              opacity: infoVisible ? 1 : 0,
+              transition: 'opacity 0.3s ease',
+              cursor: 'zoom-in',
+              borderRadius: 14,
+              backgroundColor: '#070709',
+              boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+              overflow: 'hidden',
+            }}
+            title="Click to expand diagram"
+          >
+            {/* Diagram fills the viewfinder well */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              padding: '18px 20px',
+              display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+              zIndex: 1,
+            }}>
+              <LightingDiagram result={result} fluid />
+            </div>
+            {/* Glass reflection + lens vignette overlay */}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
+              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+              <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.42 }} />
+            </div>
+            {/* Inner-shadow bevel ring */}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: 14,
+              pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+            }} />
           </div>
         )}
       </div>
@@ -1568,14 +2265,30 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             display: 'flex', flexWrap: 'wrap', gap: 6,
           }}>
             {sections.edgeCaseWarnings.map((w, i) => (
-              <Chip key={i} label={w.label} variant={sevToVariant(w.sev)} size="md" />
+              <Chip
+                key={i}
+                label={w.label}
+                variant={sevToVariant(w.sev)}
+                size="md"
+                onClick={() => { tapHaptic(); setChipDetail(w); }}
+                title={w.detail || 'Tap for details'}
+              />
             ))}
           </div>
         )}
 
         {/* PATTERN CANDIDATES */}
-        <PullTabDrawer label="PATTERN CANDIDATES" open={!!drawers.patterns} onToggle={() => toggle('patterns')} maxH={600}>
-          <PatternBars candidates={sections.patternCandidates} isHighConf={isHighConf} />
+        <PullTabDrawer label="PATTERN CANDIDATES" open={!!drawers.patterns} onToggle={() => toggle('patterns')} maxH={600} sharedMaxH={sharedDrawerMaxH}>
+          <PatternBars
+            candidates={sections.patternCandidates}
+            isHighConf={isHighConf}
+            shadowSide={(() => {
+              const q = (sections.shadowDirection && sections.shadowDirection.shadowQuadrant) || '';
+              if (/left$/.test(q)) return 'left';
+              if (/right$/.test(q)) return 'right';
+              return undefined;
+            })()}
+          />
         </PullTabDrawer>
 
         {/* SHADOW ANALYSIS — LightingDiagram moved to the hero column on
@@ -1584,31 +2297,95 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             DirectionalCompass above the narrative.  Each graphic pulls the
             matching piece OUT of the raw engine narrative so the paragraph
             at the bottom stays short and human. */}
-        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={900}>
-          {!isDesktop && <LightingDiagram result={result} />}
-          {isDesktop && (
+        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={900} sharedMaxH={sharedDrawerMaxH}>
+          {/* ── SIGNAL row ────────────────────────────────────────────────
+              Compact dashboard of the two raw shadow signals (angle dial +
+              density bar on desktop; full LightingDiagram on mobile so the
+              top-down map stays accessible without leaving the drawer). */}
+          <SubLabel>Signal</SubLabel>
+          {!isDesktop ? (
+            <div
+              onClick={() => { tapHaptic(); setDiagramFullscreen(true); }}
+              style={{
+                cursor: 'zoom-in',
+                marginBottom: 8,
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '300 / 220',
+                borderRadius: 12,
+                backgroundColor: '#070709',
+                boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+                overflow: 'hidden',
+              }}
+              title="Tap to expand diagram"
+            >
+              <div style={{
+                position: 'absolute', inset: 0,
+                padding: '14px 16px',
+                display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+                zIndex: 1,
+              }}>
+                <LightingDiagram result={result} fluid compact />
+              </div>
+              <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
+                <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
+              </div>
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: 12,
+                pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+              }} />
+            </div>
+          ) : (
             <ShadowSignature
               angleDeg={rawSignals.nose_shadow_angle_deg}
               density={rawSignals.shadow_density}
             />
           )}
-          <LightComponentChips components={sections.shadowComponents} />
-          <DirectionalCompass direction={sections.shadowDirection} />
-          {sections.shadowAnalysis && (
-            <p style={{ margin: isDesktop ? 0 : '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-              {sections.shadowAnalysis}
-            </p>
+
+          {/* ── COMPONENTS row ────────────────────────────────────────────
+              Key/Fill/Ambient breakdown chips, isolated under their own
+              header so the shadow contributors read as a discrete group. */}
+          {sections.shadowComponents && (
+            <>
+              <SubLabel>Components</SubLabel>
+              <LightComponentChips components={sections.shadowComponents} />
+            </>
           )}
-          {sections.shadowEdgeNote && (
-            <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
-              {sections.shadowEdgeNote}
-            </p>
+
+          {/* ── DIRECTION row ─────────────────────────────────────────────
+              Compass widget with engraved label so the directional read is
+              the most prominent secondary signal. */}
+          {sections.shadowDirection && (
+            <>
+              <SubLabel>Direction</SubLabel>
+              <DirectionalCompass direction={sections.shadowDirection} />
+            </>
+          )}
+
+          {/* ── NARRATIVE block ───────────────────────────────────────────
+              Engine paragraph + optional edge-case italic note grouped
+              under a single subhead so the read flows top-to-bottom. */}
+          {(sections.shadowAnalysis || sections.shadowEdgeNote) && (
+            <>
+              <SubLabel>Read</SubLabel>
+              {sections.shadowAnalysis && (
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+                  {sections.shadowAnalysis}
+                </p>
+              )}
+              {sections.shadowEdgeNote && (
+                <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                  {sections.shadowEdgeNote}
+                </p>
+              )}
+            </>
           )}
         </PullTabDrawer>
 
         {/* SCENE — narrative paragraph + chip-card grid of VLM fields */}
         {(sections.sceneDescription || sections.vlmNarrative) && (
-          <PullTabDrawer label="SCENE" open={!!drawers.scene} onToggle={() => toggle('scene')} maxH={800}>
+          <PullTabDrawer label="SCENE" open={!!drawers.scene} onToggle={() => toggle('scene')} maxH={800} sharedMaxH={sharedDrawerMaxH}>
             {sections.sceneDescription && (
               <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
                 {sections.sceneDescription}
@@ -1629,31 +2406,23 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           </PullTabDrawer>
         )}
 
-        {/* CATCHLIGHT & MODIFIER — silhouette + catchlight eye header row,
-            then narrative, then spec grid, then physical-meaning italic. */}
-        <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={800}>
-          {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null) && (
+        {/* CATCHLIGHT & MODIFIER — combined drawer.  Catchlight context (eye
+            widget + position chips + iris coverage scale) reads on top so
+            the *what's reflected in the eye* story comes first; a hairline
+            divider separates that from the modifier silhouette + spec grid
+            + physical meaning below.  The iris coverage scale gives the
+            modifier numbers spatial context — small/medium/large/huge band
+            with a glowing marker on the actual % iris. */}
+        {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
+          <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={900} sharedMaxH={sharedDrawerMaxH}>
+            {/* ── CATCHLIGHT row ───────────────────────────────────────── */}
             <div style={{
-              display: 'flex', gap: 12, alignItems: 'stretch',
-              marginBottom: 12,
+              display: 'grid',
+              gridTemplateColumns: 'auto minmax(0, 1fr)',
+              gap: 12,
+              alignItems: 'stretch',
             }}>
-              {sections.modifier?.family && (
-                <div style={{
-                  flex: '0 0 auto',
-                  padding: '8px 10px 6px',
-                  borderRadius: 10,
-                  backgroundColor: '#070709',
-                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                }}>
-                  <ModifierSilhouette family={sections.modifier.family} />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
-                    MODIFIER
-                  </span>
-                </div>
-              )}
               <div style={{
-                flex: '0 0 auto',
                 padding: '8px 10px 6px',
                 borderRadius: 10,
                 backgroundColor: '#070709',
@@ -1662,38 +2431,105 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               }}>
                 <CatchlightEye
                   clockHour={catchlightClockHour}
-                  clockHours={sections.catchlightPositions}
                   angleDeg={rawSignals.nose_shadow_angle_deg}
                 />
                 <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
               </div>
-              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 400, lineHeight: '18px', color: C.textSub, ...FONT_SMOOTH }}>
-                  {sections.catchlightModifier}
-                </p>
+              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
+                {catchlightClockStr && (
+                  <Chip label={`POSITION · ${prettify(catchlightClockStr, { upper: true })}`} variant="warn" size="sm" />
+                )}
+                {sections.modifier?.shape && (
+                  <Chip label={`SHAPE · ${String(sections.modifier.shape).toUpperCase()}`} variant="warn" size="sm" />
+                )}
+                {sections.modifier?.angularArea && (
+                  <Chip label={`COVERAGE · ${sections.modifier.angularArea.toUpperCase()}`} variant="info" size="sm" />
+                )}
+                {rawSignals.nose_shadow_angle_deg != null && (
+                  <Chip label={`SHADOW ${rawSignals.nose_shadow_angle_deg.toFixed(0)}°`} variant="info" size="sm" />
+                )}
               </div>
             </div>
-          )}
-          {/* Fallback narrative when neither silhouette nor eye rendered */}
-          {!(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null) && (
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-              {sections.catchlightModifier}
-            </p>
-          )}
-          <ModifierDetail modifier={sections.modifier} />
-          {sections.modifier?.physicalMeaning && (
-            <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
-              {sections.modifier.physicalMeaning}
-            </p>
-          )}
-        </PullTabDrawer>
+
+            {/* Iris coverage scale — sits between catchlight context and the
+                modifier spec grid so the % iris number lands with size-band
+                context (tiny/small/medium/large/huge). */}
+            {sections.modifier?.catchlightSize && (
+              <IrisCoverageScale
+                catchlightSize={sections.modifier.catchlightSize}
+                angularArea={sections.modifier.angularArea}
+              />
+            )}
+
+            {/* Hairline divider */}
+            {sections.modifier?.family && (
+              <div style={{
+                margin: sections.modifier?.catchlightSize ? '4px 0 12px' : '14px 0 12px',
+                height: 1,
+                background: 'linear-gradient(to right, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)',
+                boxShadow: '0 0.5px 0 rgba(0,0,0,0.5)',
+              }} />
+            )}
+
+            {/* ── MODIFIER row ─────────────────────────────────────────── */}
+            {sections.modifier?.family && (
+              <>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto minmax(0, 1fr)',
+                  gap: 14,
+                  alignItems: 'start',
+                  marginBottom: 10,
+                }}>
+                  <div style={{
+                    padding: '8px 10px 6px',
+                    borderRadius: 10,
+                    backgroundColor: '#070709',
+                    boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  }}>
+                    <ModifierSilhouette family={sections.modifier.family} dimensions={sections.modifier.sizeRange} />
+                    <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                      MODIFIER
+                    </span>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <ModifierDetail modifier={sections.modifier} />
+                  </div>
+                </div>
+                {sections.modifier?.physicalMeaning && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                    {sections.modifier.physicalMeaning}
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* Combined narrative — engine writes this from the catchlight
+                intelligence pass; lives at the bottom so it summarizes both
+                halves of the panel. */}
+            {sections.catchlightModifier && !sections.modifier?.family && (
+              <p style={{
+                margin: '10px 0 0',
+                fontSize: 12,
+                fontWeight: 400,
+                lineHeight: '18px',
+                color: C.textSub,
+                overflowWrap: 'anywhere',
+                ...FONT_SMOOTH,
+              }}>
+                {sections.catchlightModifier}
+              </p>
+            )}
+          </PullTabDrawer>
+        )}
 
         {/* COLOR PALETTE — wider swatches, CCTAxis under, harmony chip,
             then italic character note. */}
         {sections.colorPalette && (
-          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={700}>
+          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={700} sharedMaxH={sharedDrawerMaxH}>
             {sections.colorPalette.hexes.length > 0 && (
               <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
                 {sections.colorPalette.hexes.map((hex, i) => (
@@ -1738,7 +2574,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
         {/* CONFIDENCE */}
         {sections.signalQuality && (
-          <PullTabDrawer label="CONFIDENCE" open={!!drawers.confidence} onToggle={() => toggle('confidence')} maxH={1200}>
+          <PullTabDrawer label="CONFIDENCE" open={!!drawers.confidence} onToggle={() => toggle('confidence')} maxH={1200} sharedMaxH={sharedDrawerMaxH}>
             {sections.signalQuality.strength != null && (
               <div style={{ marginBottom: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -1892,6 +2728,145 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         ].join(', '),
         zIndex: 50,
       }} />
+
+      {/* ─── Hero fullscreen overlay ───
+          PORTALED to document.body — same reason as the diagram modal: the
+          FitToViewport transform creates a new containing block for any
+          fixed-position descendant, so without the portal a "fullscreen"
+          overlay only fills the design viewport, not the real screen.  This
+          overlay owns the zoom/pinch/pan handlers while it's active; the
+          inline hero stays mounted but visibility-hidden so info-panel
+          state is preserved across the round trip. */}
+      {isZoomed && imagePreview && createPortal(
+        <div
+          onClick={() => exitZoom()}
+          onTouchStart={handleZoomTouchStart}
+          onTouchMove={handleZoomTouchMove}
+          onTouchEnd={handleZoomTouchEnd}
+          style={{
+            position: 'fixed', inset: 0,
+            backgroundColor: '#000',
+            zIndex: 99,
+            cursor: 'zoom-out',
+            touchAction: 'none',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          <img
+            src={imagePreview}
+            alt="Result fullscreen"
+            style={{
+              maxWidth: '100vw',
+              maxHeight: '100dvh',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              transform: `translate(${zoomPan.x}px, ${zoomPan.y}px) scale(${zoomScale})`,
+              transformOrigin: 'center center',
+              willChange: 'transform',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          />
+          <button
+            onClick={(e) => { e.stopPropagation(); exitZoom(); }}
+            aria-label="Close"
+            style={{
+              position: 'absolute', top: 24, right: 28,
+              width: 44, height: 44, borderRadius: 22,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              color: 'rgba(245,247,250,0.85)',
+              fontSize: 22, fontWeight: 400, lineHeight: 1,
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              ...FONT_SMOOTH,
+            }}
+          >×</button>
+        </div>,
+        document.body
+      )}
+
+      {/* ─── Diagram fullscreen modal ───
+          Renders the LightingDiagram filling the viewport with a backdrop.
+          Click the backdrop or the × to dismiss; Escape also closes.
+          PORTALED to document.body so it escapes the FitToViewport
+          `transform: scale()` ancestor — without the portal, `position:
+          fixed` resolves to the scaled design viewport (1180-wide), not the
+          actual screen, and the modal renders inside the design column
+          instead of filling the visual viewport. */}
+      {diagramFullscreen && createPortal(
+        <div
+          onClick={() => setDiagramFullscreen(false)}
+          style={{
+            position: 'fixed', inset: 0,
+            backgroundColor: 'rgba(4,5,7,0.92)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 100,
+            cursor: 'zoom-out',
+          }}
+        >
+          {/* Close chevron */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setDiagramFullscreen(false); }}
+            style={{
+              position: 'absolute', top: 24, right: 28,
+              width: 44, height: 44, borderRadius: 22,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.08)',
+              color: 'rgba(245,247,250,0.85)',
+              fontSize: 22, fontWeight: 400, lineHeight: 1,
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              ...FONT_SMOOTH,
+            }}
+            aria-label="Close diagram"
+          >×</button>
+          {/* Fluid diagram — claims up to 92vw × 88vh preserving aspect.
+              Wrapped in the canonical glass viewfinder layered stack (well +
+              vignette + reflection + bevel) so the fullscreen zoom reads as
+              the same machined viewport as the inline hero diagram, just at
+              max scale.  Clicks on the viewfinder itself dismiss the zoom
+              (no stopPropagation) so tapping anywhere minimizes. */}
+          <div
+            style={{
+              position: 'relative',
+              width: 'min(92vw, calc(88vh * 300/220))',
+              height: 'min(88vh, calc(92vw * 220/300))',
+              borderRadius: 20,
+              backgroundColor: '#070709',
+              boxShadow: 'inset 0px 3px 10px 0px rgba(0,0,0,0.7), inset 0px 1px 3px 0px rgba(0,0,0,0.5), inset 1px 0px 3px 0px rgba(0,0,0,0.4), inset -1px 0px 3px 0px rgba(0,0,0,0.4), 0 24px 80px rgba(0,0,0,0.7)',
+              overflow: 'hidden',
+              cursor: 'zoom-out',
+            }}
+          >
+            <div style={{
+              position: 'absolute', inset: 0,
+              padding: '32px 36px',
+              display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+              zIndex: 1,
+            }}>
+              <LightingDiagram result={result} fluid />
+            </div>
+            {/* Glass reflection + lens vignette overlay */}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none', zIndex: 9 }}>
+              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+              <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.42 }} />
+            </div>
+            {/* Inner-shadow bevel ring */}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: 20,
+              pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+            }} />
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
     </div>

@@ -95,6 +95,7 @@ export default function Chip({
   showDot = true,
   icon = null,       // optional leading glyph; replaces dot when provided
   title,             // optional tooltip
+  onClick = null,    // optional click handler — chip becomes a tactile button
   style,
 }) {
   const v = VARIANTS[variant] || VARIANTS.neutral;
@@ -103,6 +104,9 @@ export default function Chip({
   return (
     <div
       title={title}
+      onClick={onClick || undefined}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -115,6 +119,8 @@ export default function Chip({
         background: `linear-gradient(180deg, ${v.bg1} 0%, ${v.bg2} 100%)`,
         boxShadow: `${CHIP_BEVEL}, 0 0 0 0.5px ${v.rim}`,
         whiteSpace: 'nowrap',
+        cursor: onClick ? 'pointer' : 'default',
+        WebkitTapHighlightColor: 'transparent',
         ...style,
       }}
     >

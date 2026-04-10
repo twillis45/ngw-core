@@ -7,13 +7,22 @@
  * reader can instantly see WHAT the light shaper looks like next to the
  * spec numbers. Deliberately not photoreal — reads as an icon at 60–90px.
  *
+ * Optional `dimensions` (e.g. "36×48 in", "60 cm Ø") is engraved on the
+ * silhouette face so the visual token doubles as the size readout — no
+ * separate label row needed. Pass `showDimensions={false}` to suppress.
+ *
  * Used by ResultScreen (CATCHLIGHT & MODIFIER drawer) and SetupScreen
  * (KEY LIGHT desktop hero header). Size prop controls the rendered px;
  * viewBox stays at 100×100 so every shape scales uniformly.
  */
 import { steel } from '../../../theme/studioMatte';
 
-export default function ModifierSilhouette({ family, size = 90 }) {
+export default function ModifierSilhouette({
+  family,
+  size = 90,
+  dimensions = null,
+  showDimensions = true,
+}) {
   const f = (family || '').toLowerCase();
   const shape = f.includes('ring')     ? 'ring'
               : f.includes('strip')    ? 'strip'
@@ -27,7 +36,19 @@ export default function ModifierSilhouette({ family, size = 90 }) {
   const glow   = 'rgba(245,190,72,0.18)';
   const hi     = 'rgba(245,190,72,0.55)';
 
+  // Dimensions text — rendered as a dimension pill BELOW the silhouette
+  // (never overlaid on the icon face) so the modifier graphic stays
+  // un-cluttered and the spec reads at a glance.  Caller can suppress with
+  // showDimensions={false}.
+  const dimText = (showDimensions && dimensions) ? String(dimensions).trim() : null;
+
   return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 4,
+    }}>
     <svg viewBox="0 0 100 100" width={size} height={size} style={{ display: 'block' }}>
       <defs>
         <radialGradient id={`mod-glow-${shape}`} cx="50%" cy="50%" r="50%">
@@ -97,6 +118,27 @@ export default function ModifierSilhouette({ family, size = 90 }) {
           <circle cx={50} cy={72} r={2} fill={stroke} />
         </>
       )}
+
     </svg>
+    {dimText && (
+      <div style={{
+        // Tactile dimension pill — engraved well + amber engraving so the
+        // modifier size lands on its own readable surface instead of fighting
+        // with the silhouette graphic.
+        padding: '2px 8px',
+        borderRadius: 999,
+        backgroundColor: '#070709',
+        boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.6), inset 0px 0px 4px rgba(0,0,0,0.35), 0 0.5px 0 rgba(255,255,255,0.04)',
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: '0.4px',
+        color: 'rgba(245,210,140,0.95)',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        textShadow: '0 1px 0 rgba(0,0,0,0.6)',
+        WebkitFontSmoothing: 'antialiased',
+        whiteSpace: 'nowrap',
+      }}>{dimText}</div>
+    )}
+    </div>
   );
 }

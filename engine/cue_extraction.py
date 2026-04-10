@@ -1674,6 +1674,7 @@ def extract_tonal_processing_estimation(
         is_bw=is_bw,
         is_high_contrast_grade=is_high_contrast,
         is_desaturated=is_desaturated,
+        highlights_clipped=bool(highlight_clip),
         estimated_processing=processing,
         mean_saturation=round(mean_sat, 1),
         confidence=confidence,

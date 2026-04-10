@@ -353,7 +353,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
         >
           <div style={{
             width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            backgroundColor: 'rgba(95,124,150,0.12)',
+            backgroundColor: 'rgba(132, 158, 184,0.12)',
             boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>

@@ -377,6 +377,12 @@ class TonalProcessingEstimation(BaseModel):
     is_bw: bool = False
     is_high_contrast_grade: bool = False
     is_desaturated: bool = False
+    # True only when histogram shows actual pixel-level highlight clipping
+    # (p99 ≥ CLIP_P99_MIN AND p99-p95 < CLIP_P99_DELTA). Distinct from
+    # is_high_contrast_grade, which also fires on crushed-shadow scenes that
+    # have no clipped highlights at all. Source of truth for the
+    # blown_highlights edge-case flag.
+    highlights_clipped: bool = False
     estimated_processing: str = "none"  # none | bw | high_contrast | film_emulation | heavy_grade | unknown
     mean_saturation: float = 0.0  # HSV mean saturation (0-255), used to detect warm toning in B&W
     confidence: float = 0.0

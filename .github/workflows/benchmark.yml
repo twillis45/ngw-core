@@ -74,7 +74,15 @@ jobs:
       - name: Promote baseline on merge to main
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark.outcome == 'success'
         run: |
-          curl -s -X POST "${NGW_BASE_URL}/api/lab/benchmarks/update-baseline" \
+          # Mirror the same guards as the benchmark step — when the benchmark
+          # was skipped (no secret or localhost fallback), it still exits 0,
+          # so this step would otherwise try to curl http://localhost:8000
+          # from the GH runner and fail with exit 7 (connection refused).
+          if [[ -z "${CI_BENCHMARK_SECRET}" ]] || [[ "${NGW_BASE_URL}" == "http://localhost:8000" ]]; then
+            echo "⚠️  Skipping baseline promotion — CI_BENCHMARK_SECRET or NGW_BASE_URL not configured."
+            exit 0
+          fi
+          curl -sS --fail -X POST "${NGW_BASE_URL}/api/lab/benchmarks/update-baseline" \
             -H "X-CI-Secret: ${CI_BENCHMARK_SECRET}" \
             -H "Content-Type: application/json" \
             -d "{\"notes\": \"Auto-promoted after merge to main — ${CI_COMMIT_SHA}\"}"

@@ -374,7 +374,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
         {/* Cool ambient key wash — soft overhead studio light */}
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(95,124,150,0.010) 40%, transparent 72%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(132, 158, 184,0.010) 40%, transparent 72%)' }} />
         {/* Warm mid-frame lift — breaks up pure black core */}
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
         {/* Edge vignette — anchors the frame */}
@@ -563,14 +563,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           right: 24,
           height: 360,
           borderRadius: 8,
-          border: `0.5px solid ${isDragOver ? 'rgba(95,124,150,0.35)' : 'rgba(0,0,0,0.45)'}`,
+          border: `0.5px solid ${isDragOver ? 'rgba(132, 158, 184,0.35)' : 'rgba(0,0,0,0.45)'}`,
           overflow: 'hidden',
           cursor: 'pointer',
           backgroundColor: C.slotBg,
           // Outer rim bevel — the edge of a hole carved into the matte surface.
           // Light from 141.71° (upper-left) catches the lower-right lip.
           boxShadow: isDragOver
-            ? '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05), inset 0 0 30px rgba(95,124,150,0.08)'
+            ? '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05), inset 0 0 30px rgba(132, 158, 184,0.08)'
             : '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
           WebkitTapHighlightColor: 'transparent',
           transition: 'border-color 0.2s ease, box-shadow 0.2s ease, transform 0.08s ease',
@@ -672,7 +672,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         {isDragOver && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 7,
-            background: 'radial-gradient(ellipse 70% 60% at center, rgba(95,124,150,0.06) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse 70% 60% at center, rgba(132, 158, 184,0.06) 0%, transparent 70%)',
             pointerEvents: 'none',
           }} />
         )}
@@ -930,7 +930,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }
         @keyframes btnBreath {
           0%,100% { transform: translateX(-50%) scale(1);    box-shadow: 3px 3px 10px rgba(0,0,0,0.55), 1px 1px 3px rgba(0,0,0,0.3), inset 1px 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.5); }
-          50%      { transform: translateX(-50%) scale(1.04); box-shadow: 4px 4px 16px rgba(0,0,0,0.65), 2px 2px 6px rgba(0,0,0,0.4), 0 0 14px rgba(95,124,150,0.18), inset 1px 1px 0 rgba(255,255,255,0.08), inset -1px -1px 0 rgba(0,0,0,0.55); }
+          50%      { transform: translateX(-50%) scale(1.04); box-shadow: 4px 4px 16px rgba(0,0,0,0.65), 2px 2px 6px rgba(0,0,0,0.4), 0 0 14px rgba(132, 158, 184,0.18), inset 1px 1px 0 rgba(255,255,255,0.08), inset -1px -1px 0 rgba(0,0,0,0.55); }
         }
       `}</style>
     </div>

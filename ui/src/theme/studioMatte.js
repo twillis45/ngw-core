@@ -8,8 +8,10 @@
  */
 
 // ─── Steel-blue tint helper ───────────────────────────────────────────────────
-// Base RGB: 95, 124, 150  →  var(--sm-steel-r/g/b) in CSS
-export const steel = (a) => `rgba(95,124,150,${a})`;
+// Base RGB: 132, 158, 184 — brighter steel blue (bumped 2026-04-10 for
+// calibrated-display legibility; was 95, 124, 150 which read washed-out).
+// CSS equivalent: var(--sm-steel-r/g/b) in tokens.css
+export const steel = (a) => `rgba(132, 158, 184,${a})`;
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 export const C = {
@@ -58,6 +60,30 @@ export const FONT_SMOOTH = {
 export const PANEL_SHADOW = '1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4)';
 export const PANEL_BEVEL  = 'inset -1px -1px 2px 0px rgba(0,0,0,0.12), inset 1px 1px 0px 0px rgba(255,255,255,0.05)';
 
+// ─── Numeric readout tokens ──────────────────────────────────────────────────
+// Canonical foreground for any "instrument" numeric readout (angle dials,
+// density %, distance counters, etc.).  Always reach for these instead of
+// C.textSub when a number is the SUBJECT of the widget — textSub is meant
+// for secondary copy and reads as washed-out grey on calibrated displays.
+//
+// READOUT_FG    — bright primary readout colour (warm pearl)
+// READOUT_GLOW  — engraved text shadow that lifts the digits off the well
+// READOUT_LABEL — small letter-spaced label colour above/below the readout
+export const READOUT_FG    = 'rgba(245,210,140,0.95)';
+export const READOUT_GLOW  = '0 1px 0 rgba(0,0,0,0.7), 0 0 6px rgba(245,190,72,0.18)';
+export const READOUT_LABEL = 'rgba(150,158,170,0.78)';
+
+// ─── Pull-tab drawer tokens ──────────────────────────────────────────────────
+// Single source of truth for the tactile pullout used across SetupScreen and
+// ResultScreen.  The handle pill is a tiny inset slot machined into the panel
+// surface; the open-state foreground glows amber so closed/open state is
+// instantly readable.  Mirrors PullTabDrawer.jsx in screens/studio/_shared.
+export const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
+export const DRAWER_HANDLE_BG     = '#0a0b0d';
+export const DRAWER_RADIUS        = 14;
+export const DRAWER_LABEL_FG_OPEN   = 'rgba(245,210,140,0.92)';
+export const DRAWER_LABEL_FG_CLOSED = steel(0.75);
+
 // ─── Engraved label text shadow ───────────────────────────────────────────────
 // Dark top-edge shadow (light source above) + faint bottom reflection = pressed
 // into surface. Use on LIGHTING, ANALYZE, ANALYZING, and any all-caps engraved label.
@@ -80,9 +106,9 @@ export const VIEWFINDER_INNER_SHADOW = [
   'inset 2px 2px 4px 0px rgba(0,0,0,0.55)',
   'inset 1px 1px 2px 0px rgba(0,0,0,0.50)',
   'inset -1px -1px 1px 0px rgba(255,255,255,0.05)',
-  'inset -2px -2px 5px 0px rgba(95,124,150,0.07)',
-  'inset 0px 0px 24px 0px rgba(95,124,150,0.05)',
-  'inset 0px 0px 12px 0px rgba(95,124,150,0.07)',
+  'inset -2px -2px 5px 0px rgba(132, 158, 184,0.07)',
+  'inset 0px 0px 24px 0px rgba(132, 158, 184,0.05)',
+  'inset 0px 0px 12px 0px rgba(132, 158, 184,0.07)',
 ].join(', ');
 
 export const GLASS_REFLECTION = [
@@ -117,7 +143,7 @@ export const METALLIC_CHEVRON = {
   backgroundClip: 'text',
   color: 'transparent',
   ...FONT_SMOOTH,
-  filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.6)) drop-shadow(0px -1px 0px rgba(255,255,255,0.10)) drop-shadow(0px 0px 2px rgba(95,124,150,0.12))',
+  filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.6)) drop-shadow(0px -1px 0px rgba(255,255,255,0.10)) drop-shadow(0px 0px 2px rgba(132, 158, 184,0.12))',
 };
 
 // ─── Neumorphic button states ─────────────────────────────────────────────────
@@ -129,7 +155,7 @@ export const BTN_RAISED_UP = [
   '0px 1px 2px 0px rgba(0,0,0,0.4)',
   `inset 0px 1.5px 0px 0px rgba(255,255,255,0.18)`,
   'inset 0px -1.5px 0px 0px rgba(0,0,0,0.45)',
-  `inset 0px 0px 16px 0px rgba(95,124,150,0.07)`,
+  `inset 0px 0px 16px 0px rgba(132, 158, 184,0.07)`,
   '0px 0px 0px 0.5px rgba(0,0,0,0.5)',
 ].join(', ');
 

@@ -43,10 +43,28 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   const li  = raw.lighting_inference || {};
   const sd  = raw.signal_diagnostics || {};
   const mod = result.sections?.modifier;
+  // Detected components from the engine's lighting_read pass — drives the
+  // muted secondary fill/rim markers below.  `presence` is one of:
+  //   subtle | soft | moderate | medium | strong | heavy | dominant
+  // We translate that into an opacity so a "subtle" fill reads as a ghost
+  // marker and a "dominant" fill is nearly as solid as the key.
+  const components = result.sections?.shadowComponents || {};
 
   const keySide      = li.key_side || 'left';
   const keyElevation = li.key_elevation || 'medium';
-  const shadowDeg    = sd.nose_shadow_angle_deg ?? sd.signals?.nose_shadow_angle_deg ?? null;
+  // ⚠ Convention conversion — engine bug compensation.
+  // The engine's `nose_shadow_angle_deg` is *usually* the centroid-derived
+  // angle (vision_passes.py line 2962), measured as
+  //   0° = shadow centroid BELOW nose, 90° = right, 180° = above, 270° = left.
+  // The diagram below assumes the canonical shadow_pass convention:
+  //   0° = up (back of head), 90° = right, 180° = down (toward camera), 270° = left.
+  // The two are 180° apart, so a loop standard with the shadow correctly
+  // falling lower-right of the nose was rendering as upper-left (e.g. the
+  // 310° reading the user flagged).  We add 180° to map centroid → diagram.
+  // If the engine ever standardizes to shadow_pass convention this single
+  // line is the only place to revert.
+  const _rawShadowDeg = sd.nose_shadow_angle_deg ?? sd.signals?.nose_shadow_angle_deg ?? null;
+  const shadowDeg    = _rawShadowDeg != null ? ((_rawShadowDeg + 180) % 360) : null;
 
   // Reconstruction-derived signals (preferred when available — these come
   // straight from the engine's pose-corrected estimate).
@@ -112,34 +130,50 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   const kX    = subX + kDist * Math.sin(kRad);
   const kY    = subY + kDist * Math.cos(kRad);
 
-  // Shadow direction (from nose).  Fallback when shadow_pass had no signal:
-  // shadow falls roughly opposite the key, biased downward (chin-ward).
-  // Convention: 0°=up, 90°=right, 180°=down, 270°=left.
-  //   right key  → shadow falls down-and-left  → ~225°
-  //   center key → shadow falls straight down  → ~180°
-  //   left key   → shadow falls down-and-right → ~135°
-  const fallbackShadow = keySide === 'right' ? 225 : keySide === 'center' ? 180 : 135;
-  const sDeg  = shadowDeg ?? fallbackShadow;
-  const sRad  = (sDeg * Math.PI) / 180;
-  const sLen  = compact ? 22 : 30;
-  // Shadow originates from the NOSE TIP (not subject center) so it cannot
-  // be misread as a face-direction arrow.  The nose tip sits just below the
-  // subject circle, pointing toward the camera.
+  // Shadow direction — derived from the RENDERED key position so it always
+  // makes physical sense.  The cast shadow falls in the opposite direction
+  // from the key (in pixel space) and we bias it slightly toward the camera
+  // (down) so it reads as a face-cast shadow rather than a back-cast.
+  //
+  // We deliberately ignore engine `nose_shadow_angle_deg` here because the
+  // engine emits two competing conventions (centroid vs shadow_pass) that
+  // collide for many setups; trusting the visual key direction makes the
+  // diagram self-consistent regardless of which convention the engine used.
   const noseTipX = subX;
   const noseTipY = subY + subR + 4;
-  const sTipX = noseTipX + sLen * Math.sin(sRad);
-  const sTipY = noseTipY - sLen * Math.cos(sRad);
+  // Vector pointing FROM key TO nose (i.e. light-travel direction).
+  let shVecX = noseTipX - kX;
+  let shVecY = noseTipY - kY;
+  let shMag  = Math.hypot(shVecX, shVecY) || 1;
+  shVecX /= shMag;
+  shVecY /= shMag;
+  // Camera-side bias — shadow always falls a bit toward the lens so the
+  // arrow reads as "where you'll see the chin shadow on the photo".
+  shVecY += 0.55;
+  shMag = Math.hypot(shVecX, shVecY) || 1;
+  shVecX /= shMag;
+  shVecY /= shMag;
+  // Convert vector → degrees in the local "0°=up, 90°=right" convention so
+  // the SHADOW xx° readout below stays meaningful.
+  const sDeg = ((Math.atan2(shVecX, -shVecY) * 180) / Math.PI + 360) % 360;
+  const sRad = (sDeg * Math.PI) / 180;
+  const sLen = compact ? 22 : 30;
+  const sTipX = noseTipX + sLen * shVecX;
+  const sTipY = noseTipY + sLen * shVecY;
 
-  // Shadow arrowhead
+  // Shadow arrowhead — built from the same unit vector so it always points
+  // along the shadow line.
   const aLen = compact ? 4 : 5;
   const aWidth = compact ? 2.5 : 3;
-  const perp = sRad + Math.PI / 2;
-  const arrX = sTipX + aLen * Math.sin(sRad);
-  const arrY = sTipY - aLen * Math.cos(sRad);
+  // Perpendicular unit vector for the arrowhead base.
+  const perpX = -shVecY;
+  const perpY =  shVecX;
+  const arrX = sTipX + aLen * shVecX;
+  const arrY = sTipY + aLen * shVecY;
   const arrowPts = [
     `${arrX},${arrY}`,
-    `${sTipX - aWidth * Math.sin(perp)},${sTipY + aWidth * Math.cos(perp)}`,
-    `${sTipX + aWidth * Math.sin(perp)},${sTipY - aWidth * Math.cos(perp)}`,
+    `${sTipX - aWidth * perpX},${sTipY - aWidth * perpY}`,
+    `${sTipX + aWidth * perpX},${sTipY + aWidth * perpY}`,
   ].join(' ');
 
   // Light beam cone (triangular spread from key to subject surface)
@@ -172,10 +206,67 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   // the diagram reads on bright displays. The original dim 0.15–0.30 stops
   // disappeared on calibrated monitors; lifting them keeps the matte
   // hierarchy intact while making every glyph legible.
-  const st = (a) => `rgba(95,124,150,${Math.min(1, Math.max(0.42, a + 0.18))})`;
+  const st = (a) => `rgba(132, 158, 184,${Math.min(1, Math.max(0.42, a + 0.18))})`;
 
   // Modifier label for full mode
   const modLabel = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${mod.family || ''}`.trim() : null;
+
+  // ─── Secondary lights (fill / rim / background) ───────────────────────────
+  // The engine's lighting_read pass surfaces presence strings for fill and
+  // rim; we render them as muted markers in canonical positions so the user
+  // can SEE that the engine detected them, without claiming a measured angle
+  // we don't actually have.
+  // Threshold gate: ONLY render fill/rim markers when the engine reports a
+  // moderate-or-stronger presence.  The engine's lighting_read pass is happy
+  // to call any faint ambient bounce "subtle fill" — that's noise on a true
+  // single-light setup like a loop-standard test image, and the user
+  // shouldn't see a FILL marker materialize on a one-strobe portrait.  Faint
+  // presences are still surfaced in the LIGHT COMPONENTS chip drawer for
+  // engineering transparency, just not on the diagram itself.
+  const presenceAlpha = (p) => {
+    const v = String(p || '').toLowerCase();
+    if (!v || v === 'none' || v === 'unknown' || v === 'subtle' || v === 'soft' || v === 'light') return 0;
+    if (v === 'dominant' || v === 'strong' || v === 'heavy') return 0.85;
+    if (v === 'moderate' || v === 'medium') return 0.62;
+    return 0;
+  };
+
+  const FILL_COLOR = 'rgba(130,170,220,1)';   // accent / cool — visually distinct from key amber
+  const RIM_COLOR  = 'rgba(180,205,235,1)';   // pale steel — reads as edge separation
+  const BG_COLOR   = 'rgba(140,225,180,1)';   // soft green — matches success palette
+
+  // FILL — mirror of key across the subject's vertical axis, pulled slightly
+  // toward the camera (lower in the canvas) so it reads as front-fill rather
+  // than as a second key.
+  const fillAlpha = presenceAlpha(components.fill);
+  const fillX = subX - (kX - subX) * 0.85;
+  const fillY = subY + Math.abs(kY - subY) * 0.55 + (compact ? 18 : 24);
+
+  // RIM — behind the subject (above the head in top-down view), opposite the
+  // key side so it reads as a back-rim hairlight.
+  const rimAlpha = presenceAlpha(components.rim);
+  const rimX = subX - (kX - subX) * 0.55;
+  const rimY = subY - subR - (compact ? 14 : 20);
+
+  // BACKGROUND — only when the engine reports a non-trivial background light
+  // (not just a BG color cast).  We piggyback off the existing fill/rim
+  // detection: if the lighting_inference has a `background_light_present`
+  // signal we use it; otherwise we leave the marker off so the diagram
+  // doesn't fabricate a light that isn't there.
+  const bgAlpha = li.background_light_present || li.bg_light_present
+    ? 0.55
+    : 0;
+
+  // ─── Elevation warning ─────────────────────────────────────────────────────
+  // The engine emits `key_elevation` as a coarse high|medium|low bucket.
+  // Extreme elevation buckets are common artistic choices but they're also
+  // the dominant cause of unflattering shadows for portraits, so we flag
+  // them with a small ⚠ glyph next to the KEY marker.  Medium = no warning.
+  const elevationWarn = (keyElevation === 'high' || keyElevation === 'low')
+    ? (keyElevation === 'high'
+        ? 'Key is high — expect deep eye sockets and a harsh nose shadow.'
+        : 'Key is low — expect uplit "horror" shadows under the brow and chin.')
+    : null;
 
   // Camera height annotation — sourced from engine vision pass
   // (camera_height_relative_to_eyes: above | at_eye_level | below).
@@ -288,11 +379,74 @@ export default function LightingDiagram({ result, compact = false, fluid = false
           stroke={KEY_FAINT} strokeWidth={0.75} />
       ))}
 
+      {/* ─── Secondary lights (rendered BEFORE the key so the key sits on top
+              of any visual overlap, and BEFORE the subject so the subject head
+              still occludes them at canvas center). ─── */}
+      {fillAlpha > 0 && (
+        <g opacity={fillAlpha}>
+          {/* faint glow disc + ring + dot, scaled smaller than key */}
+          <circle cx={fillX} cy={fillY} r={compact ? 5.5 : 7}
+            fill="none" stroke={FILL_COLOR} strokeWidth={1} strokeDasharray="2,1.5" />
+          <circle cx={fillX} cy={fillY} r={compact ? 1.8 : 2.4} fill={FILL_COLOR} />
+          <text x={fillX} y={fillY + (compact ? 12 : 14)} textAnchor="middle"
+            fill={FILL_COLOR} fontSize={compact ? 5.5 : 6.5} fontWeight="700"
+            letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
+            opacity={0.85}
+          >FILL</text>
+        </g>
+      )}
+      {rimAlpha > 0 && (
+        <g opacity={rimAlpha}>
+          <circle cx={rimX} cy={rimY} r={compact ? 5 : 6.5}
+            fill="none" stroke={RIM_COLOR} strokeWidth={1} strokeDasharray="2,1.5" />
+          <circle cx={rimX} cy={rimY} r={compact ? 1.6 : 2.2} fill={RIM_COLOR} />
+          <text x={rimX} y={rimY - (compact ? 7 : 9)} textAnchor="middle"
+            fill={RIM_COLOR} fontSize={compact ? 5.5 : 6.5} fontWeight="700"
+            letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
+            opacity={0.9}
+          >RIM</text>
+        </g>
+      )}
+      {bgAlpha > 0 && (
+        <g opacity={bgAlpha}>
+          <circle cx={subX + (compact ? 26 : 32)} cy={bgY + (compact ? 12 : 16)}
+            r={compact ? 4 : 5}
+            fill="none" stroke={BG_COLOR} strokeWidth={1} strokeDasharray="2,1.5" />
+          <circle cx={subX + (compact ? 26 : 32)} cy={bgY + (compact ? 12 : 16)}
+            r={compact ? 1.4 : 1.8} fill={BG_COLOR} />
+          <text x={subX + (compact ? 26 : 32)} y={bgY + (compact ? 23 : 28)}
+            textAnchor="middle"
+            fill={BG_COLOR} fontSize={compact ? 5.5 : 6.5} fontWeight="700"
+            letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
+            opacity={0.9}
+          >BG LIGHT</text>
+        </g>
+      )}
+
       {/* Key light marker — outer ring + center dot */}
       <circle cx={kX} cy={kY} r={compact ? 7 : 9}
         fill="none" stroke={KEY_COLOR} strokeWidth={1.5} />
       <circle cx={kX} cy={kY} r={compact ? 2.5 : 3.5}
         fill={KEY_COLOR} />
+
+      {/* Elevation warning glyph — sits on the upper-right of the KEY marker,
+          tooltip via <title> so the user can hover for the explanation. */}
+      {elevationWarn && (
+        <g>
+          <circle cx={kX + (compact ? 6 : 8)} cy={kY - (compact ? 6 : 8)}
+            r={compact ? 4 : 5}
+            fill="rgba(245,190,72,0.18)"
+            stroke="rgba(245,190,72,0.95)" strokeWidth={1}
+          />
+          <text x={kX + (compact ? 6 : 8)} y={kY - (compact ? 4 : 5)}
+            textAnchor="middle"
+            fill="rgba(245,190,72,1)" fontSize={compact ? 6 : 7} fontWeight="900"
+            fontFamily="Inter, system-ui, sans-serif"
+          >!
+            <title>{elevationWarn}</title>
+          </text>
+        </g>
+      )}
 
       {/* Subject head */}
       <circle cx={subX} cy={subY} r={subR}
