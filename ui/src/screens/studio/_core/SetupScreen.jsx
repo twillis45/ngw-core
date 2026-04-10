@@ -362,6 +362,116 @@ function DesktopSpec({ label, value, hint, hintColor }) {
 // ResultScreen share the same tactile pullout vocabulary.  Tokens live in
 // theme/studioMatte under the DRAWER_* exports.
 
+// ─── IrisCoverageScale ──────────────────────────────────────────────────────────
+// Visual scale showing where the catchlight lands on the small→XL spectrum,
+// expressed as % iris diameter (the engine's native unit for catchlight
+// size).  Reads as a banded ruler with a glowing marker so the modifier's
+// apparent source size has spatial context, not just a raw number.
+//
+// Bands (Apparent source size relative to iris diameter):
+//   < 25%   tiny    (bare bulb / hard light)
+//   25–50%  small   (small softbox / strip)
+//   50–100% medium  (mid softbox / oct)
+//   100–200% large  (large oct / parabolic / window)
+//   > 200%  huge    (sky / large diffuser overhead)
+function IrisCoverageScale({ catchlightSize, angularArea }) {
+  // Parse "12.3% iris" → 12.3
+  let pct = null;
+  if (catchlightSize) {
+    const m = String(catchlightSize).match(/([\d.]+)\s*%/);
+    if (m) pct = parseFloat(m[1]);
+  }
+  if (pct == null) return null;
+
+  // Map % iris (0–250+) to a 0–1 ruler position with a soft compress at top
+  const RULER_MAX = 250;
+  const ruler = Math.max(0, Math.min(1, pct / RULER_MAX));
+
+  const bands = [
+    { label: 'TINY',   start: 0,   end: 25,  color: 'rgba(245,190,72,0.20)' },
+    { label: 'SMALL',  start: 25,  end: 50,  color: 'rgba(245,190,72,0.32)' },
+    { label: 'MEDIUM', start: 50,  end: 100, color: 'rgba(245,190,72,0.48)' },
+    { label: 'LARGE',  start: 100, end: 200, color: 'rgba(245,190,72,0.65)' },
+    { label: 'HUGE',   start: 200, end: 250, color: 'rgba(245,190,72,0.82)' },
+  ];
+
+  const bandFor = (v) => bands.find((b) => v >= b.start && v < b.end) || bands[bands.length - 1];
+  const activeBand = bandFor(pct);
+
+  return (
+    <div style={{
+      marginTop: 10, marginBottom: 10,
+      padding: '10px 12px 8px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          IRIS COVERAGE
+        </p>
+        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+          {activeBand.label}
+        </span>
+      </div>
+
+      {/* Banded ruler */}
+      <div style={{ position: 'relative', height: 18 }}>
+        <div style={{
+          position: 'absolute', left: 0, right: 0, top: 6, height: 8,
+          borderRadius: 4,
+          display: 'flex',
+          overflow: 'hidden',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.65), inset 0 -0.5px 0 rgba(255,255,255,0.06)',
+        }}>
+          {bands.map((b) => (
+            <div key={b.label} style={{
+              flex: (b.end - b.start),
+              backgroundColor: b.color,
+              borderRight: '1px solid rgba(0,0,0,0.45)',
+            }} />
+          ))}
+        </div>
+        {/* Marker — vertical pin with engraved % readout */}
+        <div style={{
+          position: 'absolute', top: 0, left: `${ruler * 100}%`,
+          transform: 'translateX(-50%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+        }}>
+          <div style={{
+            width: 9, height: 18, borderRadius: 2,
+            backgroundColor: 'rgba(245,210,140,0.95)',
+            boxShadow: '0 0 6px rgba(245,190,72,0.7), inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -1px 1px rgba(0,0,0,0.45)',
+          }} />
+        </div>
+      </div>
+
+      {/* Band ticks below the ruler */}
+      <div style={{ display: 'flex', marginTop: 4 }}>
+        {bands.map((b) => (
+          <div key={b.label} style={{
+            flex: (b.end - b.start),
+            fontSize: 7.5, fontWeight: 700, letterSpacing: '0.4px',
+            color: steel(0.55), textAlign: 'center', ...FONT_SMOOTH,
+          }}>{b.label}</div>
+        ))}
+      </div>
+
+      {/* Numeric readout */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 6 }}>
+        <span style={{ fontSize: 16, fontWeight: 800, color: 'rgba(245,210,140,0.95)', textShadow: '0 1px 3px rgba(0,0,0,0.6)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+          {pct.toFixed(1)}<span style={{ fontSize: 11, fontWeight: 700, color: steel(0.62), marginLeft: 3 }}>% iris</span>
+        </span>
+        {angularArea && (
+          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+            {angularArea}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit }) {
   const isDesktop = useIsDesktop();
   const [setupName, setSetupName] = useState('');
@@ -734,6 +844,16 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   </div>
                 ) : null}
 
+                {/* Iris coverage scale */}
+                {mod?.catchlightSize && (
+                  <div style={{ padding: '0 20px' }}>
+                    <IrisCoverageScale
+                      catchlightSize={mod.catchlightSize}
+                      angularArea={mod.angularArea}
+                    />
+                  </div>
+                )}
+
                 {/* Spec grid — critical values (distance optimal, off-axis
                     angle, estimated height) are always visible. Remaining
                     specs still use the long-press reveal pattern. */}
@@ -919,6 +1039,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 )}
               </div>
             </div>
+
+            {/* Iris coverage scale */}
+            {mod?.catchlightSize && (
+              <IrisCoverageScale
+                catchlightSize={mod.catchlightSize}
+                angularArea={mod.angularArea}
+              />
+            )}
 
             {/* Viewfinder diagram well — matches the HomeScreen / ResultScreen
                 glass viewfinder treatment so the Setup screen reads as the
