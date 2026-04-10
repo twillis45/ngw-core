@@ -169,17 +169,23 @@ function mapApiResult(data) {
     }
   }
 
-  // Legacy fallbacks if resolver gave no alternates
+  // Legacy fallbacks if resolver gave no alternates.
+  // Guard against junk placeholders (empty / "unknown" / "none") — we'd rather
+  // show a single real candidate than a fake alternate labelled "Unknown".
+  const isJunkPattern = (p) => {
+    const s = (p || '').toLowerCase().trim();
+    return !s || s === 'unknown' || s === 'none' || s === 'n/a';
+  };
   if (candidates.length < 2) {
     const sdFinal = sd.final_pattern || '';
-    if (sdFinal && sdFinal !== data.authoritative_pattern) {
+    if (!isJunkPattern(sdFinal) && sdFinal !== data.authoritative_pattern) {
       candidates.push({ name: displayPattern(sdFinal), score: Math.round(confidence * 0.65) });
     }
   }
   if (candidates.length < 2) {
     const shadowPassPattern = signals.shadow_pass_pattern || '';
     const existingNames = candidates.map(c => c.name.toLowerCase());
-    if (shadowPassPattern && !existingNames.includes(displayPattern(shadowPassPattern).toLowerCase())) {
+    if (!isJunkPattern(shadowPassPattern) && !existingNames.includes(displayPattern(shadowPassPattern).toLowerCase())) {
       candidates.push({ name: displayPattern(shadowPassPattern), score: Math.round(confidence * 0.5) });
     }
   }
