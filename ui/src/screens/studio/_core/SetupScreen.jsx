@@ -369,7 +369,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);
-  const [ringSection, setRingSection] = useState('pattern');
   const [drawers, setDrawers] = useState({});
   const [viewfinderOpen, setViewfinderOpen] = useState(false);
   const [heroFlipped, setHeroFlipped] = useState(false);
@@ -381,7 +380,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const flipHero = () => { setHeroFlipped(p => !p); softClickSound(); tapHaptic(); };
   const openThumb = () => { setThumbZoomed(true); panelToggleSound(); tapHaptic(); };
   const closeThumb = () => { setThumbZoomed(false); softClickSound(); };
-  const selectRing = (k) => { if (k !== ringSection) { setRingSection(k); segmentPressSound(); tapHaptic(); } };
   const toggleDrawer = (id) => { setDrawers(p => ({ ...p, [id]: !p[id] })); panelToggleSound(); tapHaptic(); };
   const openViewfinder = () => { setViewfinderOpen(true); panelToggleSound(); tapHaptic(); };
   const closeViewfinder = () => { setViewfinderOpen(false); softClickSound(); };
@@ -427,12 +425,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
     return null;
   })();
 
-  const ringSections = [];
-  if (result?.sections?.patternCandidates?.length > 0) ringSections.push({ key: 'pattern', label: 'PATTERN' });
-  if (result?.sections?.shadowAnalysis) ringSections.push({ key: 'shadow', label: 'SHADOW' });
-  if (result?.sections?.sceneDescription) ringSections.push({ key: 'scene', label: 'SCENE' });
-  if (result?.sections?.catchlightModifier) ringSections.push({ key: 'catchlight', label: 'MODIFIER' });
-  const activeRing = ringSections.some(s => s.key === ringSection) ? ringSection : ringSections[0]?.key;
 
   const compactSummary = [modName, positionDisplay, mod?.distRange].filter(Boolean).join(' · ');
 
@@ -501,10 +493,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         if (text) out.push({ label: `REVIEW: ${String(text).toUpperCase().slice(0, 22)}`, sev: 'warn' });
       });
     }
-    // Sort: danger first, then warn, then info
-    const order = { danger: 0, warn: 1, info: 2 };
-    out.sort((a, b) => (order[a.sev] ?? 3) - (order[b.sev] ?? 3));
-    return out;
+    // Setup only surfaces blocking warnings — Result owns the full set.
+    // Filter to danger severity only so Setup stays focused on actionable issues.
+    return out.filter(w => w.sev === 'danger');
   })();
 
   const handleSave = useCallback(() => {
@@ -602,20 +593,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       <div style={{
         padding: isDesktop ? '20px 40px 40px' : '20px 25px 40px',
         flex: 1,
-        display: isDesktop ? 'grid' : 'flex',
-        flexDirection: isDesktop ? undefined : 'column',
+        display: 'flex', flexDirection: 'column',
         gap: 16,
-        // Desktop: two-column grid. Full-width banner rows (result header,
-        // warnings, CTA/save row). Left column = "what is the setup" (hero
-        // flip card, roles, camera, chips, lens ring, pre-shoot check).
-        // Right column = "secondary detail drawers" (pull-tabs).
-        ...(isDesktop ? {
-          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-          gridAutoFlow: 'row dense',
-          columnGap: 20,
-          rowGap: 16,
-          alignContent: 'start',
-        } : null),
         position: 'relative', zIndex: 1,
       }}>
 
@@ -627,7 +606,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             padding: '14px 20px',
             display: 'flex', alignItems: 'center', gap: 14,
             position: 'relative',
-            ...(isDesktop ? { gridColumn: '1 / -1' } : null),
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
             {imagePreview && (
@@ -671,16 +649,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </div>
         )}
 
-        {/* ── Warning strip — edge cases + physics violations ── */}
+        {/* ── Warning strip — blocking only (Result owns the full set) ── */}
         {warnings && warnings.length > 0 && (
-          <div style={isDesktop ? { gridColumn: '1 / -1' } : undefined}>
-            <WarningStrip warnings={warnings} />
-          </div>
+          <WarningStrip warnings={warnings} />
         )}
 
         {/* ── Key Light hero — flip card (specs ↔ diagram) ── */}
         {result && (modName || positionDisplay || result._raw) && (
-          <div style={{ perspective: 1200, ...(isDesktop ? { gridColumn: 1 } : null) }} onClick={flipHero}>
+          <div style={{ perspective: 1200 }} onClick={flipHero}>
             <div style={{
               transformStyle: 'preserve-3d',
               transform: heroFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
@@ -840,9 +816,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
         {/* ── Multi-light roles strip ── */}
         {presentRoles && presentRoles.length > 0 && (
-          <div style={isDesktop ? { gridColumn: 1 } : undefined}>
-            <LightRoleStrip roles={presentRoles} />
-          </div>
+          <LightRoleStrip roles={presentRoles} />
         )}
 
         {/* Camera guidance from recreation_setup — focal_length, aperture, subject guidance */}
@@ -851,7 +825,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             borderRadius: 10, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
             padding: '10px 16px', position: 'relative',
-            ...(isDesktop ? { gridColumn: 1 } : null),
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 10, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
             <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
@@ -894,7 +867,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               borderRadius: 8, backgroundColor: '#050507',
               boxShadow: RING_TRACK_SHADOW, padding: '6px 4px',
               overflow: 'hidden',
-              ...(isDesktop ? { gridColumn: 1 } : null),
             }}>
               <div style={{
                 display: 'flex', gap: 6,
@@ -916,85 +888,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           );
         })()}
 
-        {/* ── Lens ring ── */}
-        {ringSections.length > 0 && (
-          <div style={{
-            borderRadius: 14, backgroundColor: C.panelBg,
-            boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            overflow: 'hidden', position: 'relative',
-            ...(isDesktop ? { gridColumn: 1 } : null),
-          }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-
-            <div style={{
-              margin: '12px 14px 0', display: 'flex', borderRadius: 8,
-              backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW, padding: 3,
-            }}>
-              {ringSections.flatMap((s, i) => {
-                const active = activeRing === s.key;
-                const prevActive = i > 0 && activeRing === ringSections[i - 1].key;
-                const els = [];
-                if (i > 0) {
-                  els.push(
-                    <div key={`n-${s.key}`} style={{
-                      width: 1, alignSelf: 'stretch', margin: '5px 0', flexShrink: 0,
-                      background: active || prevActive ? 'transparent'
-                        : 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(255,255,255,0.04) 50%, rgba(0,0,0,0.6) 100%)',
-                    }} />
-                  );
-                }
-                els.push(
-                  <button key={s.key} onClick={() => selectRing(s.key)}
-                    style={{
-                      flex: 1, height: 30, borderRadius: 6,
-                      backgroundColor: active ? 'rgba(95,124,150,0.10)' : 'transparent',
-                      boxShadow: active ? RING_ACTIVE_SHADOW : 'none',
-                      border: 'none', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                      transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-                    }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
-                      color: active ? steel(0.85) : steel(0.35),
-                      transition: 'color 0.15s ease', ...FONT_SMOOTH,
-                    }}>{s.label}</span>
-                  </button>
-                );
-                return els;
-              })}
-            </div>
-
-            <div style={{ padding: '14px 20px', minHeight: 60 }}>
-              {activeRing === 'pattern' && result?.sections?.patternCandidates && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {result.sections.patternCandidates.map((c, i) => (
-                    <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? C.textPrimary : C.textDim, width: 80, flexShrink: 0, ...FONT_SMOOTH }}>{c.name}</span>
-                      <div style={{ flex: 1, height: 3, borderRadius: 1.5, backgroundColor: C.barTrack, position: 'relative' }}>
-                        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${c.score}%`, borderRadius: 1.5,
-                          backgroundColor: i === 0 ? (isHighConf ? C.confHighBar : C.confLowBar) : 'rgba(184,191,199,0.15)' }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {activeRing === 'shadow' && result?.sections?.shadowAnalysis && (
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>{result.sections.shadowAnalysis}</p>
-              )}
-              {activeRing === 'scene' && result?.sections?.sceneDescription && (
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>{result.sections.sceneDescription}</p>
-              )}
-              {activeRing === 'catchlight' && result?.sections?.catchlightModifier && (
-                <div>
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>{result.sections.catchlightModifier}</p>
-                  {mod?.distQuality && (
-                    <p style={{ margin: '8px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.4), lineHeight: 1.5, fontStyle: 'italic', ...FONT_SMOOTH }}>{mod.distQuality}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Pre-shoot checklist stub */}
         {result?._raw?.shoot_checklist && (() => {
           const items = result._raw.shoot_checklist;
@@ -1003,7 +896,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               borderRadius: 14, backgroundColor: C.panelBg,
               boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
               overflow: 'hidden', position: 'relative',
-              ...(isDesktop ? { gridColumn: 2 } : null),
             }}>
               <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
               <div style={{ padding: '14px 20px' }}>
@@ -1021,41 +913,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           );
         })()}
 
-        {/* ── Pull-tab: Catchlight & Modifier detail ── */}
-        {result?.sections?.catchlightModifier && (
-          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
-          <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.modifier} onToggle={() => toggleDrawer('modifier')}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.textSubBold, lineHeight: 1.6, ...FONT_SMOOTH }}>
-              {result.sections.catchlightModifier}
-            </p>
-            {mod?.angularArea && (
-              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 600, color: C.textSub, ...FONT_SMOOTH }}>
-                Angular area: <span style={{ color: C.textPrimary }}>{mod.angularArea}</span>
-              </p>
-            )}
-            {mod?.distQuality && (
-              <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 400, color: C.textSub, fontStyle: 'italic', lineHeight: 1.5, ...FONT_SMOOTH }}>
-                {mod.distQuality}
-              </p>
-            )}
-          </PullTabDrawer>
-          </div>
-        )}
-
-        {/* ── Pull-tab: Shadow Analysis ── */}
-        {result?.sections?.shadowAnalysis && (
-          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
-          <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggleDrawer('shadow')} maxH={400}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.textSubBold, lineHeight: 1.7, ...FONT_SMOOTH }}>
-              {result.sections.shadowAnalysis}
-            </p>
-          </PullTabDrawer>
-          </div>
-        )}
-
         {/* ── Pull-tab: Setup Guide — recreation_setup notes + bg strategy ── */}
         {(rsNotes.length > 0 || rsBg) && (
-          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
           <PullTabDrawer label="SETUP GUIDE" open={!!drawers.setupGuide} onToggle={() => toggleDrawer('setupGuide')} maxH={400}>
             {rsBg && (
               <div style={{ marginBottom: rsNotes.length > 0 ? 10 : 0 }}>
@@ -1083,69 +942,15 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </div>
             )}
           </PullTabDrawer>
-          </div>
         )}
 
-        {/* ── Pull-tab: Signal Diagnostics ── */}
-        {(() => {
-          const sd = raw.signal_diagnostics || {};
-          const signals = sd.signals || {};
-          const hasSignals = signals.nose_shadow_angle_deg != null || signals.left_right_asymmetry != null || signals.triangle_isolation != null;
-          if (!hasSignals) return null;
-          const wrap = (node) => isDesktop ? <div style={{ gridColumn: 2 }}>{node}</div> : node;
-          const cellStyle = {
-            flex: '1 1 45%', minWidth: 120, padding: '10px 12px', borderRadius: 10,
-            backgroundColor: C.fieldBg,
-            boxShadow: FIELD_SHADOW,
-          };
-          const cellLabel = { margin: 0, fontSize: 10, fontWeight: 700, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH };
-          const cellValue = { margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH };
-          return wrap(
-            <PullTabDrawer label="SIGNAL DIAGNOSTICS" open={!!drawers.signals} onToggle={() => toggleDrawer('signals')}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                {signals.nose_shadow_angle_deg != null && (
-                  <div style={cellStyle}>
-                    <p style={cellLabel}>NOSE SHADOW</p>
-                    <p style={cellValue}>{signals.nose_shadow_angle_deg.toFixed(0)}°</p>
-                  </div>
-                )}
-                {signals.left_right_asymmetry != null && (
-                  <div style={cellStyle}>
-                    <p style={cellLabel}>L/R ASYMMETRY</p>
-                    <p style={cellValue}>{(signals.left_right_asymmetry * 100).toFixed(1)}%</p>
-                  </div>
-                )}
-                {signals.shadow_density != null && (
-                  <div style={cellStyle}>
-                    <p style={cellLabel}>SHADOW DENSITY</p>
-                    <p style={cellValue}>{(signals.shadow_density * 100).toFixed(1)}%</p>
-                  </div>
-                )}
-                {signals.highlight_width_ratio != null && (
-                  <div style={cellStyle}>
-                    <p style={cellLabel}>HIGHLIGHT WIDTH</p>
-                    <p style={cellValue}>{(signals.highlight_width_ratio * 100).toFixed(0)}%</p>
-                  </div>
-                )}
-              </div>
-              {sd.final_pattern && (
-                <p style={{ margin: '12px 0 0', fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
-                  Final signal pattern: <span style={{ color: C.textPrimary, fontWeight: 700 }}>{sd.final_pattern.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                </p>
-              )}
-            </PullTabDrawer>
-          );
-        })()}
-
         {/* ── Pull-tab: Save Details ── */}
-        <div style={isDesktop ? { gridColumn: 2 } : undefined}>
         <PullTabDrawer label="SAVE DETAILS" open={!!drawers.save} onToggle={() => toggleDrawer('save')}>
           <InsetField label="SETUP NAME" value={setupName} onChange={setSetupName} placeholder={defaultName} />
           <InsetField label="NOTES" value={notes} onChange={setNotes} placeholder="Any details about this setup…" multiline />
         </PullTabDrawer>
-        </div>
 
-        {!isDesktop && <div style={{ flex: 1 }} />}
+        <div style={{ flex: 1 }} />
 
         {/* ── Start Cockpit CTA (primary) ── */}
         <button
@@ -1162,7 +967,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             WebkitTapHighlightColor: 'transparent',
             transform: savePressed ? 'scale(0.98)' : 'scale(1)',
             transition: 'transform 0.1s ease, box-shadow 0.1s ease',
-            ...(isDesktop ? { gridColumn: '1 / -1', marginTop: 8, maxWidth: 520, justifySelf: 'center' } : null),
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(245,247,250,0.9)', letterSpacing: '0.5px', pointerEvents: 'none', ...FONT_SMOOTH }}>
@@ -1174,7 +978,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 4px 0',
-          ...(isDesktop ? { gridColumn: '1 / -1', maxWidth: 520, width: '100%', justifySelf: 'center' } : null),
         }}>
           <button onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',

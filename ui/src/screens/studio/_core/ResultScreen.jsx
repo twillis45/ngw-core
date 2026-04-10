@@ -618,6 +618,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   if (!result) return null;
 
   const { pattern, confidence, meta, mood, sections } = result;
+  const raw = result?._raw || {};
+  const signalDiag = raw.signal_diagnostics || {};
+  const rawSignals = signalDiag.signals || {};
+  const hasRawSignals = rawSignals.nose_shadow_angle_deg != null
+    || rawSignals.left_right_asymmetry != null
+    || rawSignals.shadow_density != null
+    || rawSignals.highlight_width_ratio != null;
   const faceCrop = getFaceCropPosition(result?._raw);
   const isHighConf  = confidence >= 70;
   const confColor   = isHighConf ? C.confHigh : C.confLow;
@@ -1087,6 +1094,44 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                     transition: 'width 0.4s ease',
                   }} />
                 </div>
+              </div>
+            )}
+            {hasRawSignals && (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                  RAW SIGNALS
+                </p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {rawSignals.nose_shadow_angle_deg != null && (
+                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>NOSE SHADOW</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{rawSignals.nose_shadow_angle_deg.toFixed(0)}°</p>
+                    </div>
+                  )}
+                  {rawSignals.left_right_asymmetry != null && (
+                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>L/R ASYMMETRY</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.left_right_asymmetry * 100).toFixed(1)}%</p>
+                    </div>
+                  )}
+                  {rawSignals.shadow_density != null && (
+                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>SHADOW DENSITY</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.shadow_density * 100).toFixed(1)}%</p>
+                    </div>
+                  )}
+                  {rawSignals.highlight_width_ratio != null && (
+                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
+                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>HIGHLIGHT WIDTH</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.highlight_width_ratio * 100).toFixed(0)}%</p>
+                    </div>
+                  )}
+                </div>
+                {signalDiag.final_pattern && (
+                  <p style={{ margin: '8px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.55), ...FONT_SMOOTH }}>
+                    Final signal pattern: <span style={{ color: C.textSub, fontWeight: 700 }}>{signalDiag.final_pattern.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                  </p>
+                )}
               </div>
             )}
             {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
