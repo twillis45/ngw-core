@@ -265,6 +265,35 @@ def _apply_signal_confidence(
     _ci = getattr(_li, "catchlight_intelligence", None) or {}
     _ci = _ci if isinstance(_ci, dict) else {}
     _pk_quad = (_ci.get("primary_key") or {}).get("quad", "")
+    # ── Clock-hour as authoritative catchlight position ──────────────────────
+    # Quad labels (top_center / upper_left / upper_right) bucket multiple clock
+    # hours into a single category, which is too coarse to drive pattern
+    # arbitration.  The clock hour (or angle) is the authoritative geometric
+    # reading; quads are a display convenience.  Extract the hour from the
+    # primary_key position string ("12 o'clock" → 12, "11 o'clock" → 11) and
+    # use it everywhere a physics decision is being made.
+    def _parse_clock_hour(pos_str: str) -> Optional[int]:
+        try:
+            return int(str(pos_str or "").split()[0])
+        except (ValueError, IndexError):
+            return None
+    _pk_hour = _parse_clock_hour((_ci.get("primary_key") or {}).get("position", ""))
+    # Angular distance from 12 o'clock, in clock hours (0 = exactly at 12,
+    # 1 = at 11 or 1, 2 = at 10 or 2, ...).  The circular distance means a
+    # catchlight at 1 o'clock and 11 o'clock are both "1 hour off-axis".
+    def _hours_from_12(h: Optional[int]) -> Optional[int]:
+        if h is None:
+            return None
+        return min((h - 12) % 12, (12 - h) % 12)
+    _pk_hours_off_12 = _hours_from_12(_pk_hour)
+    # Graduated on-axis / off-axis gates.  A single hour of slack around 12
+    # absorbs the ±1-hour noise in iris-based catchlight detection so that
+    # borderline cases (11, 12, 1) aren't forced into a hard butterfly/loop
+    # contradiction either way.
+    _pk_on_axis_strict = _pk_hours_off_12 == 0                    # exactly 12
+    _pk_near_on_axis   = _pk_hours_off_12 is not None and _pk_hours_off_12 <= 1  # 11, 12, 1
+    _pk_off_axis       = _pk_hours_off_12 is not None and _pk_hours_off_12 >= 2  # ≤10 or ≥2
+    _pk_hard_lateral   = _pk_hours_off_12 is not None and _pk_hours_off_12 >= 3  # ≤9 or ≥3
     # Ring light: morphological hardware signal — ring shape is physically unmistakable.
     # Only a ring flash / ring light creates a donut-shaped annular specular in the cornea.
     # _has_catchlights: True when catchlights were present (ring_light_detected=False is meaningful)
@@ -393,17 +422,23 @@ def _apply_signal_confidence(
                 # diagonal centroid; this is a second independent measurement of
                 # the same geometry.  Slightly smaller boost than the lr_asym path
                 # since fill has erased one of the two discriminating signals.
-                adj += 0.05
+                adj += 0.10  # raised 0.05→0.10: centroid angle is still a clean geometric signal
                 cues.append("fill_heavy_loop_centroid")
             # Off-axis catchlight confirmation: primary key at upper_right or upper_left
             # means the light source is geometrically off-axis — the iris is a direct
-            # angular sensor.  On-axis patterns (butterfly, clamshell) require top_center.
-            # upper_right/upper_left is physically consistent with loop (30–45° off-axis)
-            # and rules out frontal/on-axis sources.  Not sufficient alone, but a clean
-            # non-CV corroboration that doesn't require shadow geometry analysis.
-            if _pk_quad in ("upper_right", "upper_left"):
-                adj += 0.08
+            # angular sensor.  Off-axis (≥ 2 clock hours from 12) is physically
+            # consistent with loop (30–45°).  Near-on-axis (11, 12, 1) is
+            # ambiguous — iris-based detection has ±1-hour noise, so we do not
+            # treat 11 or 1 as a hard contradiction either way.
+            if _pk_off_axis and _has_catchlights:
+                adj += 0.16  # ≥ 2 clock hours off 12 — iris directly senses off-axis key
                 cues.append("catchlight_off_axis")
+            elif _pk_on_axis_strict and _has_catchlights:
+                # Loop requires an off-axis key (30–45°).  Exactly-at-12 catchlight
+                # means the key is directly overhead — butterfly/clamshell territory.
+                # 11 or 1 is intentionally NOT penalized (detection noise band).
+                adj -= 0.18
+                cues.append("catchlight_on_axis_blocks_loop")
             # Unilateral cheek shadow: key at 30–45° casts a secondary shadow on
             # the fill-side cheek — physically impossible from a frontal source.
             # The strongest anatomical loop-vs-butterfly discriminator.
@@ -423,13 +458,17 @@ def _apply_signal_confidence(
         # Gated on _has_catchlights so absent catchlights never penalize.
         if _has_catchlights:
             if p in ("butterfly", "clamshell"):
-                # On-axis patterns require top_center key catchlight.
-                if _pk_quad == "top_center":
-                    adj += 0.08   # on-axis key confirmed
+                # On-axis patterns require the key at or very near 12 o'clock.
+                if _pk_on_axis_strict:
+                    adj += 0.08   # exactly at 12 — on-axis key confirmed
                     cues.append("catchlight_on_axis")
-                elif _pk_quad in ("upper_right", "upper_left"):
-                    adj -= 0.12   # off-axis key directly contradicts on-axis pattern
+                elif _pk_off_axis:
+                    # ≥ 2 clock hours from 12 → off-axis key → physically
+                    # impossible for butterfly/clamshell.  Hard contradiction.
+                    adj -= 0.25
                     cues.append("catchlight_off_axis")
+                # 11 or 1 (_pk_near_on_axis && not strict) → no adjustment:
+                # detection noise band; neither reward nor penalize.
         # Butterfly/clamshell shadow zone check (outside has_catchlights gate — shadow
         # data is always available, independent of catchlight detection).
         if p in ("butterfly", "clamshell"):
@@ -441,15 +480,14 @@ def _apply_signal_confidence(
                 cues.append("shadow_visible_on_cheek")
 
             elif p == "split":
-                # Split requires a 90° lateral key — catchlight at far upper_right
-                # or upper_left (2-3 or 9-10 o'clock range).  top_center means the
-                # key is frontal/on-axis, which cannot produce the full-face shadow
-                # split requires.  off-axis upper_right/upper_left is consistent.
-                if _pk_quad == "top_center":
+                # Split requires a hard lateral key (90° off-axis, ≥ 3 clock
+                # hours from 12).  A strictly-on-axis catchlight cannot produce
+                # a split shadow; a far-lateral one corroborates it.
+                if _pk_on_axis_strict:
                     adj -= 0.10   # frontal key cannot produce a split shadow
                     cues.append("catchlight_on_axis")
-                elif _pk_quad in ("upper_right", "upper_left"):
-                    adj += 0.05   # lateral key consistent with split geometry
+                elif _pk_hard_lateral:
+                    adj += 0.05   # ≥ 3 clock hours from 12 — lateral key
                     cues.append("catchlight_off_axis")
 
         # ── Shadow density signal ────────────────────────────────
@@ -664,6 +702,25 @@ def _signal_contradiction_score(
     hl_width = getattr(ls, "highlight_width_ratio", 0.0)
     tb_ratio = getattr(ls, "top_bottom_ratio", 0.0)
 
+    # Clock-hour catchlight geometry (same logic as _apply_signal_confidence)
+    def _parse_clock_hour_cs(pos_str: str) -> Optional[int]:
+        try:
+            return int(str(pos_str or "").split()[0])
+        except (ValueError, IndexError):
+            return None
+    def _hours_from_12_cs(h: Optional[int]) -> Optional[int]:
+        if h is None:
+            return None
+        return min((h - 12) % 12, (12 - h) % 12)
+    _ci_cs = getattr(getattr(result, "lighting_intel", None), "catchlight_intelligence", None) or {}
+    _ci_cs = _ci_cs if isinstance(_ci_cs, dict) else {}
+    _pk_hour_cs = _parse_clock_hour_cs((_ci_cs.get("primary_key") or {}).get("position", ""))
+    _pk_hours_off_12_cs = _hours_from_12_cs(_pk_hour_cs)
+    _pk_on_axis_strict = _pk_hours_off_12_cs == 0
+    _pk_near_on_axis   = _pk_hours_off_12_cs is not None and _pk_hours_off_12_cs <= 1
+    _pk_off_axis       = _pk_hours_off_12_cs is not None and _pk_hours_off_12_cs >= 2
+    _pk_hard_lateral   = _pk_hours_off_12_cs is not None and _pk_hours_off_12_cs >= 3
+
     score = 0.0
     cues: List[str] = []
 
@@ -746,6 +803,17 @@ def _signal_contradiction_score(
         if lr_asym > 0.20:
             score += 0.3  # too asymmetric for centered source
             cues.append("left_right_asymmetry")
+        elif lr_asym > 0.08 and _centroid_diagonal:
+            # Domain rule: butterfly = shadow under BOTH nostrils; loop = shadow
+            # under ONE nostril.  Moderate L/R asymmetry (0.08–0.20) combined
+            # with a diagonal nose-shadow centroid is the single-nostril comma
+            # shadow signature.  Butterfly cannot produce a diagonal centroid —
+            # it requires a key directly overhead.  Fires independently of the
+            # higher-asymmetry branch so borderline one-sided loop portraits are
+            # still caught.
+            score += 0.35
+            cues.append("left_right_asymmetry")
+            cues.append("nose_shadow_centroid_distance")
         # Low fill_ratio: butterfly requires near-bilateral illumination so the
         # nose shadow appears on a lit background.  A dark shadow side (low fill)
         # means a directional key (loop/rembrandt/split), not on-axis butterfly.
@@ -801,9 +869,60 @@ def _signal_contradiction_score(
         # Measured: butterfly benchmark ls.pattern_name="butterfly"; weak_catchlight
         # (Rembrandt, key upper-right) ls.pattern_name="loop" (diagonal nose shadow).
         _ls_pat_bfly = getattr(ls, "pattern_name", None)
+        _ci_bfly = getattr(getattr(result, "lighting_intel", None), "catchlight_intelligence", None) or {}
+        _has_cl_bfly = bool(_ci_bfly.get("primary_key"))
         if _ls_pat_bfly in ("loop", "rembrandt", "split"):
-            score += 0.65  # CV shadow geometry explicitly shows directional → not butterfly
-            cues.append("pattern_name")
+            # Guard: suppress the loop/rembrandt/split contradiction ONLY when
+            # the catchlight is strictly at 12 o'clock (unambiguous overhead
+            # key).  11 or 1 is inside the detection noise band and is not a
+            # strong enough signal to override CV shadow geometry.
+            if not (_has_cl_bfly and _pk_on_axis_strict):
+                score += 0.65  # CV shadow geometry explicitly shows directional → not butterfly
+                cues.append("pattern_name")
+        # Off-axis catchlight (≥ 2 clock hours from 12) physically contradicts
+        # butterfly.  Butterfly requires a key near 12 o'clock; a catchlight at
+        # 10, 2, or further is geometrically inconsistent.
+        if _has_cl_bfly and _pk_off_axis:
+            score += 0.25
+            cues.append("catchlight_off_axis_contradiction")
+        # Primary shadow direction (clock-angle gate): butterfly requires the
+        # nose shadow to drop straight down from a centered key at 12 o'clock.
+        # Reasoning in clock hours like a lighting tech, the dedicated
+        # shadow-direction extractor reports a clock_angle (1–12) describing
+        # where the shadow falls:
+        #   • 8, 9, 10  → key from camera-right, clearly lateral
+        #   • 2, 3, 4   → key from camera-left, clearly lateral
+        #   • 11, 12, 1 → near top (butterfly possible — no contradiction)
+        #   • 5, 6, 7   → below the face (clamshell fill or underlight)
+        # When clock_angle lands in the lateral hours {8,9,10,2,3,4} with
+        # confidence ≥ 0.7, butterfly is geometrically impossible.  This cue
+        # is the first-class signal that handles cases where catchlights are
+        # missing entirely (full-body B&W portraits, dark eyes), which can
+        # leave the catchlight-based butterfly contradictions silent and let
+        # reference_read's butterfly call slip through unchallenged.
+        # Score is set high enough (0.65) to single-handedly trip the
+        # reference_read demotion threshold (0.60), since this cue cross-
+        # validates two independent CV methods (nose-shadow position +
+        # half-face brightness) before reaching 0.7 confidence.
+        # Direction-label fallback is kept for callers that produce a
+        # direction without populating clock_angle.
+        _LATERAL_BFLY_HOURS = frozenset({2, 3, 4, 8, 9, 10})
+        _LATERAL_BFLY_LABELS = frozenset({
+            "upper_left", "upper_right", "left", "right",
+            "lower_left", "lower_right",
+        })
+        _psd_bfly = getattr(cr, "primary_shadow_direction", None)
+        if _psd_bfly is not None and getattr(_psd_bfly, "confidence", 0.0) >= 0.7:
+            _psd_clock_bfly = getattr(_psd_bfly, "clock_angle", None)
+            _psd_dir_bfly = getattr(_psd_bfly, "direction", "unknown")
+            _is_lateral_bfly = (
+                _psd_clock_bfly in _LATERAL_BFLY_HOURS
+                if _psd_clock_bfly is not None
+                else _psd_dir_bfly in _LATERAL_BFLY_LABELS
+            )
+            if _is_lateral_bfly:
+                score += 0.65
+                cues.append("primary_shadow_direction")
         # Deep shadows (sd > 0.45) combined with a confirmed Rembrandt triangle
         # is a strong contradiction for butterfly: true butterfly images have
         # near-zero shadow density and no directional triangle.
@@ -948,6 +1067,47 @@ def _signal_contradiction_score(
             score += 0.35  # whole-face in shadow, symmetric → no key-lit side → not loop
             cues.append("shadow_density")
             cues.append("left_right_asymmetry")
+        # Strictly-at-12 catchlight physically contradicts loop.
+        # Loop requires an off-axis key.  A catchlight EXACTLY at 12 o'clock
+        # (not 11, not 1 — those fall inside the iris-detection noise band)
+        # means the key is directly overhead — butterfly/clamshell geometry,
+        # not loop.  Using _pk_on_axis_strict instead of the old quad bucket
+        # prevents 11 and 1 from falsely firing this hard physics contradiction.
+        _ci_loop = getattr(getattr(result, "lighting_intel", None), "catchlight_intelligence", None) or {}
+        _has_cl_loop = bool(_ci_loop.get("primary_key"))
+        if _has_cl_loop and _pk_on_axis_strict:
+            score += 0.65  # overhead key confirmed → key cannot produce loop nose shadow
+            cues.append("catchlight_on_axis_contradiction")
+        # Extreme low-key darkness: loop requires a lit key side.  When brightness
+        # is "low" AND shadow density is heavy (>0.65), the entire face is in deep
+        # shadow — consistent with rim/backlight or low_key, NOT loop.
+        # Unlike the symmetric check above (requires lr_asym < 0.05), this fires
+        # regardless of asymmetry: even a somewhat asymmetric rim sculpt has no
+        # properly lit key side and must not be called loop.
+        # Guard: _sc_triangle_fired excluded to avoid double-counting with the
+        # rembrandt disambiguation path (triangle fires on lit cheek, not on dark face).
+        # Measured on loop_standard: shadow_den=0.114 → does NOT fire.
+        # Measured on extreme_low_key images: shadow_den≥0.70+ → fires.
+        _cls_ek = getattr(result, "classification", None) or {}
+        _brightness_ek = (_cls_ek.get("brightness") or "").lower()
+        if _brightness_ek == "low" and shadow_den > 0.65 and not _sc_triangle_fired:
+            score += 0.40  # extreme darkness → no lit key side → not loop
+            cues.append("extreme_low_key_shadow")
+        # Unknown direction + minimal shadows: loop requires a detectable off-axis
+        # key that produces a directional nose shadow.  When geometry reports no
+        # key direction AND shadow density is near zero (overfill / flat setup),
+        # the "loop" label has no evidence base — the minimal shadows cannot
+        # establish the diagonal nose shadow that defines loop.
+        # Guard: _ls_directional_loop excluded so a confirmed directional CV read
+        # suppresses this (shadow geometry is more reliable than direction alone).
+        # Safe for genuine loop: shadow_den is typically 0.05–0.40 for loop → < 0.20
+        # fires only if ls is also directional (suppressed by guard).
+        _cue_inf_lp = getattr(result, "cue_inference_result", {}) or {}
+        _geo_lp = _cue_inf_lp.get("geometry") if isinstance(_cue_inf_lp, dict) else None
+        _key_dir_lp = (getattr(_geo_lp, "key_light_direction", "unknown") if _geo_lp else "unknown") or "unknown"
+        if _key_dir_lp in ("unknown", "") and shadow_den < 0.20 and not _ls_directional_loop:
+            score += 0.30  # no directional evidence + minimal shadows → not loop
+            cues.append("direction_unknown_flat_shadow")
 
     elif pattern == "broad":
         # Broad = camera-side highlight, wide lit area.
@@ -1274,7 +1434,9 @@ def _load_confidence_overrides() -> Dict[str, Any]:
 # from 0 to 2) and its confidence is halved.  This allows competing
 # candidates from other sources — including the signal-derived
 # light_structure_pass — to win.
-_CONTRADICTION_DEMOTION_THRESHOLD = 0.6
+# Raised 0.60→0.65: normal measurement noise (face ROI variance, centroid
+# rounding) was crossing the 0.60 boundary and triggering spurious demotions.
+_CONTRADICTION_DEMOTION_THRESHOLD = 0.65
 
 
 def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
@@ -1409,7 +1571,7 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
         # Canonical rescue: check if any canonical pattern name appears as a
         # whole word in the free-text description.  Catches phrases like
         # "directional rembrandt", "soft clamshell setup", "contrasty loop".
-        # Sort by length descending so "flat_fashion" wins before "flat".
+        # Sort by length descending so longer names win before substrings.
         _padded = f" {low} "
         for _canon in sorted(_CANONICAL - {"unknown"}, key=len, reverse=True):
             _canon_space = _canon.replace("_", " ")
@@ -1489,22 +1651,15 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                 confidence=_ls_conf,
             ))
 
-    # Source 5: vlm_hint — SEMANTIC HINTS LAST (priority 4)
-    # Analysis-order doctrine (Stage 13): VLM output is semantic hinting only,
-    # not final truth.  vlm_hint wins only when ALL physical classifiers
-    # (reference_read, lighting_inference, cue_inference, light_structure) are
-    # unavailable or demoted below it.  Priority 4 = last resort.
-    # Treat VLM output as semantic hinting only, never as geometry evidence.
-    # Only appended when the mapped pattern is a named canonical pattern.
-    # Confidence is pre-capped at build_vlm_semantic_hint() time.
+    # Source 5: vlm_hint — NOT added to pattern candidates.
+    # VLM output is semantic enrichment only; it must never elect a pattern.
+    # CV physics signals (reference_read, lighting_inference, cue_inference,
+    # light_structure) are the only authoritative sources.  When all CV signals
+    # are demoted or absent the result falls back to the best remaining CV
+    # candidate or "unknown" — never to VLM interpretation.
+    # _vlm_hint is still available below for convergence boost (when CV primary
+    # agrees with VLM it adds confidence, but VLM cannot win alone).
     _vlm_hint = getattr(result, "vlm_semantic_hint", None)
-    if _vlm_hint is not None and _vlm_hint.pattern is not None:
-        _vlm_pat = _vlm_hint.pattern.value
-        if _vlm_pat and _vlm_pat != "unknown":
-            candidates.append(PatternCandidate(
-                pattern=_vlm_pat, source="vlm_hint",
-                confidence=float(_vlm_hint.pattern.confidence),
-            ))
 
     # Detect contradictions between top classifiers
     if ref_pattern and li_pattern and ref_pattern != li_pattern:
@@ -1548,7 +1703,7 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     SOURCE_PRIORITY = {
         "reference_read": 0, "lighting_inference": 1,
         "cue_inference": 2, "light_structure": 3,
-        "vlm_hint": 4,
+        # vlm_hint is not a pattern candidate; it is never in this dict.
     }
     ref_candidates = [c for c in candidates if c.source == "reference_read"]
     if ref_candidates:
@@ -1566,10 +1721,8 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
             )
             SOURCE_PRIORITY["reference_read_demoted"] = 2
             SOURCE_PRIORITY["lighting_inference_demoted"] = 3
-            # Push cascade-demoted cue_inference to priority 4 (same tier as
-            # vlm_hint) so that a correct vlm_hint candidate — which reflects
-            # the visual model's direct interpretation — can win over a
-            # demoted cue_inference on confidence alone.
+            # Push cascade-demoted cue_inference to priority 4 — below
+            # light_structure (priority 3) so light_structure can win.
             SOURCE_PRIORITY["cue_inference_demoted"] = 4
 
             # ── Cascade demotion ──────────────────────────────────────────
@@ -1603,20 +1756,15 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                     _any_cascade = True
             if _any_cascade:
                 # Multiple sources unanimously agreed on a contradicted pattern.
-                # Push ALL demoted sources (reference_read_demoted and
-                # cue_inference_demoted) to priority 4 — same tier as vlm_hint —
-                # so that an uncontradicted vlm_hint or light_structure candidate
-                # wins on confidence alone regardless of source.
-                # Priority 4 means: reference_read_demoted (previously at 2→3)
-                # and cue_inference_demoted (set at 4 in the initial block above)
-                # are both below light_structure (priority 3) and equal to vlm_hint.
+                # Push ALL demoted sources to priority 4, below light_structure
+                # (priority 3), so an uncontradicted light_structure candidate
+                # wins on confidence alone.
                 SOURCE_PRIORITY["reference_read_demoted"] = 4
-                # When cascade fires, all three top classifiers concurred on a
-                # pattern that CV signals contradict.  The confidence has already
-                # been halved once (at initial demotion above).  Apply a second
-                # halving so that an uncontradicted light_structure or vlm_hint
-                # candidate — which represents actual CV geometry — wins on
-                # confidence at the same priority tier.
+                # When cascade fires, all top classifiers concurred on a
+                # contradicted pattern.  The confidence has already been halved
+                # once (at initial demotion above).  Apply a second halving so
+                # that an uncontradicted light_structure candidate — which
+                # represents actual CV geometry — wins on confidence.
                 # Signal basis: shadow_continuity, triangle_isolation, fill_ratio,
                 # highlight_symmetry, and light_structure all independently point
                 # away from the agreed-upon wrong pattern; the CV geometry should
@@ -1650,9 +1798,8 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                 f"signal contradiction ({_cic_score:.2f}) demoted "
                 f"{_cic_orig} '{_cic.pattern}'"
             )
-            # Push to priority 4 — same tier as vlm_hint and other demoted
-            # sources — so that an uncontradicted vlm_hint or light_structure
-            # candidate can win on confidence alone.
+            # Push to priority 4 — below light_structure (priority 3) —
+            # so that an uncontradicted light_structure candidate wins.
             SOURCE_PRIORITY["cue_inference_demoted"] = 4
 
     # ── Lighting inference contradiction check ──────────────────────
@@ -1682,12 +1829,9 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
                 f"signal contradiction ({_lic_score:.2f}) demoted "
                 f"{_lic_orig} '{_lic.pattern}'"
             )
-            # Push to priority 4 — same tier as vlm_hint.  A demoted
-            # lighting_inference (score ≥ 0.80) has strong CV evidence against
-            # its pattern; the VLM semantic hint (vlm_hint, priority 4) should
-            # win on confidence.  Priority 4 ensures tie-breaking by confidence
-            # only, and vlm_hint typically has higher confidence than the
-            # halved lighting_inference_demoted confidence.
+            # Push to priority 4 — below light_structure (priority 3).
+            # A demoted lighting_inference (score ≥ 0.80) has strong CV
+            # evidence against its pattern; light_structure should win.
             SOURCE_PRIORITY["lighting_inference_demoted"] = 4
 
     # ── Light_structure contradiction check ──────────────────────────────
@@ -1750,11 +1894,11 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     # +0.06 per agreeing independent source, capped at +0.15.
     #
     # Rationale: priority ordering picks the most trusted source; this boost
-    # acknowledges that unanimous agreement across independent detectors
-    # (catchlight topology + CV geometry + VLM semantics) is stronger
+    # acknowledges that unanimous agreement across independent CV detectors
+    # (catchlight topology + shadow geometry + nose-shadow CV) is stronger
     # evidence than any single source in isolation.
-    # Example: lighting_inference(0.58) + light_structure(0.664) + vlm_hint(0.730)
-    # all agree on loop → 2 extra agreeing sources → +0.12 → 0.70.
+    # Example: lighting_inference(0.58) + light_structure(0.664) both agree
+    # on loop → 1 extra agreeing source → +0.06 → 0.64.
     #
     # Guard: only fires when primary is not in the demoted set.
     _CONV_DEMOTED = {
@@ -1855,16 +1999,16 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
         )
         needs_review = True
 
-    # VL-002: Log explicitly when VLM wins after any demotion (cascade or direct).
-    # This creates a traceable audit trail for cases where CV classifiers were
-    # overridden by the semantic VLM hint — a known blind spot during triage.
-    if primary.source == "vlm_hint" and contradictions:
+    # VL-002: Log when cascade fired — all top classifiers demoted — and
+    # the winning source is still a demoted or unknown source.
+    if contradictions and any("cascade" in c for c in contradictions):
         _cascade_hits = [c for c in contradictions if c.startswith("cascade")]
         _demotion_hits = [c for c in contradictions if "demoted" in c]
         logger.info(
-            "VL-002 | vlm_hint won pattern resolution | "
-            "pattern=%r conf=%.3f | cascade_demotions=%d total_demotions=%d | %s",
+            "VL-002 | cascade demotion fired | winner=%r source=%r "
+            "conf=%.3f | cascade=%d demotions=%d | %s",
             primary.pattern,
+            primary.source,
             primary.confidence,
             len(_cascade_hits),
             len(_demotion_hits),
@@ -2303,13 +2447,22 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         if cct and cct < 4000 and env_type == "outdoor_sun" and _face_detected:
             # Golden hour is a source context, not a geometry.
             # Return the detected geometry base; fall back to loop (warm directional default).
-            return base if base and base not in ("unknown", "") else "loop"
+            if base and base not in ("unknown", ""):
+                return base
+            # Geometry was not resolved — fall back to warm directional default.
+            # Flag this so observability can surface it as an ambiguity.
+            result.notes.append("golden_hour_geometry_fallback")
+            return "loop"
         # Fallback: warm color convergence without explicit CCT
         if env_type in ("outdoor_sun", "outdoor_shade") and bg_bright and _face_detected:
             _esc = getattr(cr, "environmental_shadow_continuity", None)
             _env_hints = getattr(_esc, "environment_hints", []) if _esc else []
             if "warm_overall" in _env_hints and "warm_background" in _env_hints:
-                return base if base and base not in ("unknown", "") else "loop"
+                if base and base not in ("unknown", ""):
+                    return base
+                # Geometry was not resolved — fall back to warm directional default.
+                result.notes.append("golden_hour_geometry_fallback")
+                return "loop"
 
     # ── Golden hour env-agnostic fallback ─────────────────────────────
     # When the env classifier misidentifies warm natural backlight as
@@ -2823,6 +2976,8 @@ def _compute_perception_explanation(
             flags.append("bw_limits_color_cues")
     if sr.signals_available < 10:
         flags.append("low_signal_count")
+    if "golden_hour_geometry_fallback" in (result.notes or []):
+        flags.append("golden_hour_geometry_fallback")
 
     pe.ambiguity_flags = flags
 
@@ -3012,6 +3167,74 @@ def _stage1_definitive_signatures(result: "AnalysisResult") -> Optional[str]:
         logger.info("[stage1] ring_light — bilateral donut catchlights confirmed")
         return "ring_light"
 
+    # ── Hurley triangle: bilateral upper-left + upper-right + lower catchlights ─
+    # The Hurley triangle setup uses two upper lights (one left, one right of
+    # centre) plus a lower reflector or third light.  Each source leaves its own
+    # distinct catchlight reflection, producing a recognisable 3-point geometry:
+    # upper-left zone (~10-11 o'clock), upper-right zone (~1-2 o'clock), and
+    # lower zone (~5-7 o'clock).
+    #
+    # No single-key setup produces all three zones simultaneously:
+    #  - butterfly/clamshell: upper centre + lower only — no bilateral upper split
+    #  - loop/rembrandt:      one upper lateral + no symmetrical upper opposite
+    #  - ring_light:          donut shape, handled above
+    #
+    # Guard: must see all three zones across the combined bilateral catchlight
+    # data.  A single-eye check is insufficient — one eye may be partially
+    # occluded or angled away.  We check the union of both eyes' clock positions.
+    if result.vision_data:
+        _vd_cl_tri = result.vision_data.get("catchlights", {})
+        _raw_cls_tri = (
+            _vd_cl_tri.get("catchlights") or []
+            if isinstance(_vd_cl_tri, dict) else []
+        )
+        _UPPER_LEFT  = {10, 11}
+        _UPPER_RIGHT = {1, 2}
+        _LOWER_TRI   = {5, 6, 7}
+        _left_hrs, _right_hrs = [], []
+        for _c in _raw_cls_tri:
+            if not isinstance(_c, dict):
+                continue
+            try:
+                _h = int(str(_c.get("position", "")).split()[0])
+            except (ValueError, IndexError):
+                continue
+            if _c.get("eye") == "left":
+                _left_hrs.append(_h)
+            elif _c.get("eye") == "right":
+                _right_hrs.append(_h)
+        _all_hrs = _left_hrs + _right_hrs
+        _has_ul = any(h in _UPPER_LEFT  for h in _all_hrs)
+        _has_ur = any(h in _UPPER_RIGHT for h in _all_hrs)
+        _has_lo = any(h in _LOWER_TRI   for h in _all_hrs)
+        # Both eyes must individually show upper+lower (bilateral confirmation)
+        _left_upper  = any(h in (_UPPER_LEFT | _UPPER_RIGHT | {12}) for h in _left_hrs)
+        _left_lower  = any(h in _LOWER_TRI for h in _left_hrs)
+        _right_upper = any(h in (_UPPER_LEFT | _UPPER_RIGHT | {12}) for h in _right_hrs)
+        _right_lower = any(h in _LOWER_TRI for h in _right_hrs)
+        _bilateral_ok = (_left_upper and _left_lower and _right_upper and _right_lower)
+
+        # Handedness check: in a real Hurley triangle the upper-left key (10-11)
+        # reflects PRIMARILY in the left eye, the upper-right key (1-2) PRIMARILY
+        # in the right eye — they come from two physically separate sources.
+        # A single large loop/butterfly source spanning both zones shows UL
+        # catchlights equally in BOTH eyes (same physical source angle).
+        # Require strict dominance: more UL hits in left than right, and more
+        # UR hits in right than left.
+        _left_ul_n  = sum(1 for h in _left_hrs  if h in _UPPER_LEFT)
+        _right_ul_n = sum(1 for h in _right_hrs if h in _UPPER_LEFT)
+        _left_ur_n  = sum(1 for h in _left_hrs  if h in _UPPER_RIGHT)
+        _right_ur_n = sum(1 for h in _right_hrs if h in _UPPER_RIGHT)
+        _handedness_ok = (_left_ul_n > _right_ul_n) and (_right_ur_n > _left_ur_n)
+
+        if _has_ul and _has_ur and _has_lo and _bilateral_ok and _handedness_ok:
+            logger.info(
+                "[stage1] triangle — bilateral Hurley triangle catchlights: "
+                "UL=%s UR=%s LO=%s left=%s right=%s",
+                _has_ul, _has_ur, _has_lo, _left_hrs, _right_hrs,
+            )
+            return "triangle"
+
     # ── Silhouette key: hard backlight + no catchlights + full face shadow ──
     # Subject positioned between camera and bright background.  Signature:
     # bright background + zero catchlights + shadow_density ≈ 1.0.
@@ -3070,11 +3293,11 @@ def analyze_image(
                  light_count)
       Layer 3 — Heuristic reconciliation (multi-light upgrades, soft-key
                  correction, B&W / pose clamshell guards)
-      Layer 4 — Corrective / context layer (pose-relative broad/short,
+      Layer 4 — Context / specialty layer (pose-relative broad/short,
                  source context annotation, specialty pattern upgrades)
-      Layer 5 — Semantic hint layer (VLM — never overrides Layer 2 geometry)
+      Layer 5 — Semantic hint layer (VLM — enrichment only, never a pattern candidate)
       Layer 6 — Resolver (reference_read > lighting_inference > cue_inference
-                 > light_structure > vlm_hint, priority-weighted)
+                 > light_structure, priority-weighted; VLM is not a candidate)
       Layer 7 — Blueprint synthesis (setup_family, recreation_setup)
 
     Rule: geometry stays ahead of setup/source/style.  Face-shadow geometry
@@ -3214,6 +3437,36 @@ def analyze_image(
                         f"circularity={_cl_circ}"
                     ]
 
+            # ── VLM catchlight shape enrichment ──────────────────────
+            # CV circularity collapses all non-round shapes to "rectangular".
+            # VLM can distinguish octagonal (beauty dish) and strip, which
+            # are modifier-identifying shapes CV cannot resolve at small
+            # catchlight scales.  Only applies when CV shape is low-precision
+            # (unknown or rectangular) — never overwrites a CV round detection.
+            if result.vlm_description is not None \
+                    and result.cue_report \
+                    and result.cue_report.catchlight_shape is not None:
+                _vlm_sigs_cl = getattr(result.vlm_description, "signals", None)
+                _vlm_cl_sig = getattr(_vlm_sigs_cl, "catchlights", None) \
+                    if _vlm_sigs_cl else None
+                _vlm_cl_shape = (
+                    getattr(_vlm_cl_sig, "catchlight_shape", "") or ""
+                ).lower() if _vlm_cl_sig else ""
+                _cv_dom_shape = (
+                    result.cue_report.catchlight_shape.dominant_shape or ""
+                ).lower()
+                if _vlm_cl_shape in ("octagonal", "strip") \
+                        and _cv_dom_shape in ("", "unknown", "rectangular"):
+                    result.cue_report.catchlight_shape.dominant_shape = _vlm_cl_shape
+                    _seen = result.cue_report.catchlight_shape.shapes_seen or []
+                    if _vlm_cl_shape not in _seen:
+                        _seen.append(_vlm_cl_shape)
+                        result.cue_report.catchlight_shape.shapes_seen = _seen
+                    logger.debug(
+                        "[vlm_cl_shape] VLM refined catchlight shape %r → %r",
+                        _cv_dom_shape or "unknown", _vlm_cl_shape,
+                    )
+
         # ── Full cue-report enrichment from extended pipeline ───────
         # enrich_cue_report_from_pipeline wires topology, highlight axis,
         # highlight symmetry, continuous source, bounce, separation,
@@ -3237,6 +3490,41 @@ def analyze_image(
                 )
             except Exception as _enrich_exc:
                 logger.warning("enrich_cue_report_from_pipeline failed: %s", _enrich_exc)
+
+        # ── CV warm/cool split detection ──────────────────────────────────────
+        # Compare highlight CCT (key region, P85 luminance) against shadow CCT
+        # (shadow region, P30).  A gap >1500K with key warm (<4500K) and shadow
+        # cool (>5500K) is a deliberate creative split — not noise.  We set
+        # cue_report.warm_cool_split so reference_read can annotate gel notes
+        # without relying on VLM.
+        if result.pipeline_results and result.cue_report:
+            _ct_data = result.pipeline_results.get("color_temp") or {}
+            if isinstance(_ct_data, dict) and _ct_data.get("ok"):
+                _cct_sources = _ct_data.get("cct_sources") or []
+                _key_cct: Optional[float] = None
+                _shad_cct: Optional[float] = None
+                for _src in _cct_sources:
+                    if not isinstance(_src, dict):
+                        continue
+                    _region = (_src.get("region") or "").lower()
+                    _cct_val = _src.get("cct_kelvin")
+                    if _cct_val is None:
+                        continue
+                    if "highlight" in _region or "key" in _region:
+                        _key_cct = float(_cct_val)
+                    elif "shadow" in _region or "fill" in _region:
+                        _shad_cct = float(_cct_val)
+                if (
+                    _key_cct is not None and _shad_cct is not None
+                    and _key_cct < 4500
+                    and _shad_cct > 5500
+                    and (_shad_cct - _key_cct) > 1500
+                ):
+                    result.cue_report.warm_cool_split = True
+                    logger.info(
+                        "[orchestrator] CV warm/cool split: key=%.0fK shadow=%.0fK gap=%.0fK",
+                        _key_cct, _shad_cct, _shad_cct - _key_cct,
+                    )
 
         # When debug=False, free heavy image data now that the pipeline is done.
         if not debug:
@@ -3278,6 +3566,24 @@ def analyze_image(
     except Exception as exc:
         logger.warning("Lighting inference failed: %s", exc)
         result.notes.append(f"lighting_inference skipped: {exc}")
+
+    # ── Definitive-pattern light_count override ───────────────────────
+    # When Stage 1 fired a definitive signature, the authoritative light count
+    # is known from the physical setup, not from catchlight deduplication.
+    # Apply now so all downstream stages see the correct count.
+    _DEFINITIVE_LIGHT_COUNTS = {
+        "ring_light":     1,  # single annular source
+        "silhouette_key": 1,  # single backlight
+        "triangle":       3,  # two upper keys + one lower fill/reflector
+    }
+    if result.definitive_pattern and result.definitive_pattern in _DEFINITIVE_LIGHT_COUNTS:
+        _def_lc = _DEFINITIVE_LIGHT_COUNTS[result.definitive_pattern]
+        if result.lighting_intel is not None:
+            result.lighting_intel.light_count = _def_lc
+        logger.info(
+            "[stage1] light_count forced to %d for definitive pattern '%s'",
+            _def_lc, result.definitive_pattern,
+        )
 
     # ── Layer 2 / Step 4: Cue inference (shadow geometry) ────────────
     # Face-shadow geometry: nose shadow position, direction, shape →
@@ -3345,16 +3651,16 @@ def analyze_image(
         result.vlm_reconstruction = result.pipeline_results.get("vlm_reconstruction")
 
     # ── Layer 5: VLM semantic hint ───────────────────────────────────
-    # Built AFTER Layer 2 geometry is settled.  VLM hints enter the
-    # resolver at priority 4 (lowest) — they confirm or add context but
-    # never override face-shadow geometry (spec §5).
+    # Built AFTER Layer 2 geometry is settled.  VLM enriches the result
+    # (environment, source_quality hints, reconstruction) but is NOT a
+    # pattern candidate — it never participates in pattern election.
     result.vlm_semantic_hint = build_vlm_semantic_hint(result.vlm_description)
 
     # ── Layer 6: Resolver ────────────────────────────────────────────
     # Priority: definitive_signature(-1) > reference_read(0) >
-    # lighting_inference(1) > cue_inference(2) > light_structure(3) >
-    # vlm_hint(4).  Contradiction demotion can shift reference_read from
-    # 0→2 when CV signals strongly contradict it.
+    # lighting_inference(1) > cue_inference(2) > light_structure(3).
+    # VLM is not a candidate.  Contradiction demotion can shift
+    # reference_read from 0→2 when CV signals strongly contradict it.
     with _span("pipeline.resolver", "Layer 6: resolve_pattern_candidates"):
         pc = resolve_pattern_candidates(result)
     result.pattern_candidates = pc
@@ -3600,8 +3906,8 @@ def analyze_image(
         if _corr_pat == "butterfly" and _corr_sd < 0.02 and _corr_lr < 0.02 and _corr_lc > 1:
             result.lighting_intel.light_count = 1
 
-    # ── High-key / flat_fashion catchlight-based light_count floor ────
-    # High-key and flat_fashion setups inherently use multiple lights
+    # ── High-key / flat catchlight-based light_count floor ─────────────
+    # High-key and flat setups inherently use multiple lights
     # (key + fill + background minimum).  When catchlights confirm
     # symmetric multi-source illumination (≥2 per eye), ensure the
     # light_count reflects this even if the lighting_inference under-counted.
@@ -3687,6 +3993,27 @@ def analyze_image(
                 _cur_lc = getattr(result.lighting_intel, "light_count", 0)
                 if _cl_inferred_count > _cur_lc >= 2:
                     result.lighting_intel.light_count = _cl_inferred_count
+
+    # ── VLM background light floor ───────────────────────────────────
+    # CV has no signal for deliberate background lights — they cast no
+    # face shadows and their catchlights are behind or outside the iris.
+    # When VLM explicitly confirms a background light, raise light_count
+    # by 1.  Guards: only raises (never lowers); exempt ring_light (single
+    # source by physics); cap at 4 (applied by sanity cap below).
+    if result.lighting_intel is not None and result.vlm_description is not None:
+        _vlm_bg_sigs = getattr(result.vlm_description, "signals", None)
+        _vlm_recon_bg = getattr(_vlm_bg_sigs, "reconstruction", None) \
+            if _vlm_bg_sigs else None
+        _vlm_bg_light = getattr(_vlm_recon_bg, "background_light_present", None) \
+            if _vlm_recon_bg else None
+        if _vlm_bg_light is True and result.authoritative_pattern != "ring_light":
+            _cur_lc_bg = getattr(result.lighting_intel, "light_count", 0)
+            if 0 < _cur_lc_bg < 4:
+                result.lighting_intel.light_count = _cur_lc_bg + 1
+                logger.debug(
+                    "[vlm_bg_light] background_light_present → light_count %d → %d",
+                    _cur_lc_bg, result.lighting_intel.light_count,
+                )
 
     # ── General light_count sanity cap ─────────────────────────────────
     # No common portrait setup uses more than 4 distinct light sources.

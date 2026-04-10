@@ -590,6 +590,8 @@ class VisualCueReport(BaseModel):
     face_orientation: Optional[FaceOrientation] = None
     eye_socket_shadow: Optional[EyeSocketShadow] = None
 
+    warm_cool_split: bool = False  # CV-derived: key warm, shadow cool, gap >1500K
+
     cues_computed: int = 0
     ok: bool = True
     notes: List[str] = Field(default_factory=list)

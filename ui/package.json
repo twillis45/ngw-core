@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.26.0",
+    "@fontsource-variable/inter": "^5.2.8",
     "@sentry/react": "^10.47.0",
     "geist": "^1.7.0",
     "react": "^18.2.0",
@@ -20,6 +21,7 @@
     "vite": "^4.5.5"
   },
   "optionalDependencies": {
-    "@esbuild/darwin-arm64": "^0.28.0"
+    "@esbuild/darwin-arm64": "^0.18.20",
+    "@esbuild/darwin-x64": "^0.18.20"
   }
 }

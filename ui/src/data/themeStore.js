@@ -1,11 +1,11 @@
 const STORAGE_KEY = 'ngw_theme';
 
 /** All available themes in toggle-cycle order. */
-export const THEMES = ['dark', 'light', 'photoshop', 'daynote'];
+export const THEMES = ['dark', 'light', 'studio'];
 
 export function loadTheme() {
   try {
-    return localStorage.getItem(STORAGE_KEY); // 'light' | 'dark' | 'photoshop' | null
+    return localStorage.getItem(STORAGE_KEY); // 'light' | 'dark' | null
   } catch {
     return null;
   }
@@ -27,7 +27,7 @@ export function getSystemTheme() {
 
 export function applyTheme(theme) {
   // Migrate removed themes to their nearest replacement
-  const REMOVED = { lightroom: 'photoshop' };
+  const REMOVED = { lightroom: 'dark', photoshop: 'dark', daynote: 'light' };
   const resolved = REMOVED[theme] || theme || getSystemTheme();
   document.documentElement.setAttribute('data-theme', resolved);
 }

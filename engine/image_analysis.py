@@ -418,11 +418,11 @@ def describe_image(path: str, describe_mode: str = "basic", *, debug: bool = Fal
         elif _vlm_future is not None:
             try:
                 vlm_desc = _vlm_future.result(timeout=60)
-                if vlm_desc is not None:
+                if vlm_desc is not None and getattr(vlm_desc, "ok", False):
                     _save_vlm_cache(_img_hash, vlm_desc.model_dump())
             except Exception as _vlm_exc:
                 import logging as _log
-                _log.getLogger(__name__).warning("VLM call failed: %s", _vlm_exc)
+                _log.getLogger(__name__).error("VLM call failed: %s", _vlm_exc)
                 _vlm_error = str(_vlm_exc)
         else:
             # _vlm_future was never submitted — vlm_available() returned False or import failed

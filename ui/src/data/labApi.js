@@ -18,17 +18,19 @@ async function labFetch(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
   const res = await apiFetch(`/api/lab${path}`, { headers, ...options });
-  const data = await res.json();
+  const raw = await res.text().catch(() => '');
+  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
   if (!res.ok) {
     // FastAPI validation errors return detail as an array of {loc, msg, type} objects
     let msg;
-    if (Array.isArray(data.detail)) {
+    if (data && Array.isArray(data.detail)) {
       msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
     } else {
-      msg = data.detail || `Lab API error (${res.status})`;
+      msg = data?.detail || `Lab API error (${res.status})`;
     }
     throw new Error(`[${res.status}] ${msg}`);
   }
+  if (data === null) throw new Error(`Server returned empty response (${res.status})`);
   return data;
 }
 
@@ -39,13 +41,14 @@ async function coreFetch(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
   const res = await apiFetch(`/api${path}`, { headers, ...options });
-  const data = await res.json();
+  const raw = await res.text().catch(() => '');
+  const data = raw ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : null;
   if (!res.ok) {
     let msg;
-    if (Array.isArray(data.detail)) {
+    if (data && Array.isArray(data.detail)) {
       msg = data.detail.map(e => `${e.loc?.slice(-1)[0] ?? 'field'}: ${e.msg}`).join('; ');
     } else {
-      msg = data.detail || `API error (${res.status})`;
+      msg = data?.detail || `API error (${res.status})`;
     }
     throw new Error(`[${res.status}] ${msg}`);
   }
@@ -93,6 +96,25 @@ export async function probeAndEnableLab() {
 
 
 // ── Workbench ────────────────────────────────────────────
+
+/**
+ * Fetch a remote image URL server-side to bypass CORS (Dropbox, Google Drive, etc).
+ * Returns a Blob the caller can turn into a File for the analyze flow.
+ */
+export async function fetchImageFromUrl(url) {
+  const form = new FormData();
+  form.append('url', url);
+  const res = await apiFetch('/api/lab/fetch-image-url', {
+    method: 'POST',
+    body: form,
+    headers: authHeaders(),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.detail || `Couldn't fetch image (${res.status})`);
+  }
+  return res.blob();
+}
 
 export async function analyzeImage(file, { debug = false, signal } = {}) {
   const form = new FormData();
@@ -795,11 +817,21 @@ export async function getL1Stream(limit = 100, filters = {}) {
 }
 
 /** Fetch recent in-process server log records from the memory buffer. */
-export async function getServerLogs({ limit = 200, level = '', search = '' } = {}) {
+export async function getServerLogs({ limit = 200, level = '', search = '', user_email = '', session_id = '', logger = '', since = '', until = '' } = {}) {
   const qs = new URLSearchParams({ limit });
-  if (level)  qs.set('level',  level);
-  if (search) qs.set('search', search);
+  if (level)        qs.set('level',      level);
+  if (search)       qs.set('search',     search);
+  if (user_email)   qs.set('user_email', user_email);
+  if (session_id)   qs.set('session_id', session_id);
+  if (logger)       qs.set('logger',     logger);
+  if (since)        qs.set('since',      since);
+  if (until)        qs.set('until',      until);
   return labFetch(`/server-logs?${qs}`);
+}
+
+/** Export full server log buffer as downloadable JSON. */
+export async function exportServerLogs() {
+  return labFetch('/server-logs/export');
 }
 
 /** Fetch all diagnostic failure entries, optionally filtered by pattern. */

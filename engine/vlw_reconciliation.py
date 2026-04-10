@@ -425,27 +425,6 @@ def _reconcile_source_quality(
         result.recommended_value = cv_quality
         result.recommendation_source = "cv"
         result.explanation = f"VLM ({vlm_str}) agrees with CV ({cv_quality})."
-    elif (
-        cv_lower == "hard"
-        and "soft" in vlm_lowers
-        and (is_bw or is_high_contrast_grade)
-    ):
-        # Known false-positive pattern: heavy contrast grade or B&W processing
-        # makes shadow edges appear hard to CV even when the actual modifier
-        # was soft (octabox, large softbox, etc.).  VLM looks at catchlight
-        # shape and overall lighting character — trust it here.
-        result.agreement = "vlm_override"
-        result.recommended_value = "soft"
-        result.recommendation_source = "vlm_high_contrast_override"
-        result.explanation = (
-            f"CV measured {cv_quality} but VLM expects {vlm_str}. "
-            f"{'High-contrast grade' if is_high_contrast_grade else 'B&W processing'} "
-            "is a known cause of false-hard CV readings — applying VLM value."
-        )
-        result.notes.append(
-            "Auto-resolved: contrast grade inflates shadow edge hardness in CV; "
-            "VLM catchlight/modifier analysis is more reliable here."
-        )
     else:
         result.agreement = "conflicting"
         result.recommended_value = cv_quality
@@ -755,45 +734,13 @@ def apply_vlm_overrides(
     lighting_read: LightingRead,
     reconciliation: VLWReconciliation,
 ) -> LightingRead:
-    """Apply VLM values for dimensions where CV has a known systematic false positive.
+    """VLM overrides are disabled — VLM is not authoritative over CV measurements.
 
-    Currently handles:
-    - source_quality: CV=hard + VLM=soft + (high_contrast_grade or B&W)
-      → auto-resolved to VLM's soft reading.
-
-    This is the single-decider path: when CV has a predictable failure mode and
-    VLM is the more reliable signal, we apply VLM directly rather than leaving
-    the wrong CV value in the blueprint.
+    CV physics-based signals (shadow edge hardness, gradient falloff) are the
+    authoritative source for source_quality.  VLM is enrichment only.
+    Returns lighting_read unchanged.
     """
-    overrides_applied: List[str] = []
-    updated = deepcopy(lighting_read)
-
-    for d in reconciliation.dimensions:
-        if d.agreement != "vlm_override":
-            continue
-        if d.dimension == "source_quality" and d.recommended_value:
-            old_sq = d.cv_value or ""
-            new_sq = d.recommended_value
-            updated.source_quality = new_sq
-            overrides_applied.append(
-                f"source_quality: {old_sq} → {new_sq} "
-                f"({d.recommendation_source})"
-            )
-            # Propagate to lighting_family — replace the quality token in place
-            # so family strings like "single-hard-key-no-fill" → "single-soft-key-no-fill"
-            if old_sq and new_sq and updated.lighting_family:
-                updated.lighting_family = updated.lighting_family.replace(
-                    f"-{old_sq}-", f"-{new_sq}-"
-                ).replace(
-                    f"{old_sq}-key", f"{new_sq}-key"
-                )
-
-    if overrides_applied:
-        updated.notes.append(
-            "VLW auto-override applied: " + "; ".join(overrides_applied)
-        )
-
-    return updated
+    return lighting_read
 
 
 def apply_confirmed_boosts(

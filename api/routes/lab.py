@@ -23,8 +23,10 @@ from typing import Any, Dict, List, Optional
 
 from api.utils.upload_naming import canonical_upload_name
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse
+import httpx
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, Response as FastAPIResponse
 from pydantic import BaseModel, Field
 
 from auth.dev_guard import get_dev_user
@@ -358,6 +360,12 @@ async def lab_analyze(
                 "detected_environment":          getattr(_li, "detected_environment", None),
                 "notes":                         getattr(_li, "notes", []),
                 "catchlight_intelligence":       getattr(_li, "catchlight_intelligence", None),
+                # Shadow penumbra apparent source size — available even without catchlights.
+                # "point" | "small" | "medium" | "large" | "very_large" | None
+                "penumbra_source_size": (
+                    (ar.pipeline_results or {}).get("penumbra", {}).get("apparent_source_size")
+                    if ar.pipeline_results else None
+                ),
             }
             _li_log.info(
                 "lighting_intel: pattern=%s conf=%.2f key_pos=%r modifier=%s light_count=%s",
@@ -707,6 +715,49 @@ async def lab_analyze(
             status_code=500,
             detail=f"Analysis failed: {str(e)}",
         )
+
+
+def _normalize_cloud_url(url: str) -> str:
+    """Transform cloud storage share URLs into direct-download URLs."""
+    import re
+    # Dropbox: ?dl=0 → ?dl=1  (preview page → raw file)
+    if "dropbox.com" in url or "dropboxusercontent.com" in url:
+        url = re.sub(r'[?&]dl=0', lambda m: m.group(0).replace('dl=0', 'dl=1'), url)
+        if "dl=1" not in url:
+            url += ("&" if "?" in url else "?") + "dl=1"
+        return url
+    # Google Drive: /file/d/{id}/view → uc?export=download&id={id}
+    m = re.search(r"drive\.google\.com/file/d/([^/?#]+)", url)
+    if m:
+        return f"https://drive.google.com/uc?export=download&id={m.group(1)}"
+    m = re.search(r"drive\.google\.com/open\?id=([^&]+)", url)
+    if m:
+        return f"https://drive.google.com/uc?export=download&id={m.group(1)}"
+    return url
+
+
+@router.post("/fetch-image-url")
+async def fetch_image_url_proxy(
+    url: str = Form(...),
+    user: Dict = Depends(get_dev_user),
+):
+    """Server-side proxy to fetch a remote image URL, bypassing browser CORS.
+    Automatically normalizes Dropbox and Google Drive share links to direct downloads.
+    """
+    if not url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="Invalid URL — must start with http:// or https://")
+    fetch_url = _normalize_cloud_url(url)
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+            resp = await client.get(fetch_url, headers={"User-Agent": "Mozilla/5.0 (compatible; NGW/1.0)"})
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"Remote URL returned {resp.status_code}")
+        content_type = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        if not content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="That link doesn't point directly to an image. For Dropbox, use a direct download link.")
+        return FastAPIResponse(content=resp.content, media_type=content_type)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=400, detail=f"Could not reach that URL: {e}")
 
 
 @router.post("/analyze/cancel/{analysis_id}")

@@ -1,3 +1,10 @@
+/* ── Studio Matte utilities ─────────────────────────── */
+/* Engraved label — dark top-edge shadow + faint bottom reflection.
+   Use on LIGHTING / ANALYZE / ANALYZING and any all-caps engraved label. */
+.sm-label-engraved {
+  text-shadow: var(--sm-text-shadow-engraved);
+}
+
 /* ── Reset ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 button, input, select, textarea { color: inherit; font: inherit; }
@@ -17,6 +24,13 @@ body {
   overflow-x: hidden;
 }
 #root { min-height: 100dvh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+/* ── Hide native scrollbars app-wide ───────────────────
+   On desktop the mobile shell (max-width 430px) is centred in the viewport.
+   Any visible scrollbar lands in the middle of the screen, which looks wrong.
+   The app is touch-first; content should scroll without a visible track. */
+#root *::-webkit-scrollbar { display: none; }
+#root * { scrollbar-width: none; -ms-overflow-style: none; }
 
 /* ── Header ───────────────────────────────────────── */
 .app-header {
@@ -18429,3 +18443,13 @@ body {
 }
 
 /* ── End Case Replay Panel ───────────────────────────────── */
+
+/* ── Hero image zoom — slow Ken Burns settle on mount ───────────────── */
+@keyframes heroZoomIn {
+  from { transform: scale(1.08); }
+  to   { transform: scale(1.0);  }
+}
+@keyframes heroZoomInSlow {
+  from { transform: scale(1.12); }
+  to   { transform: scale(1.0);  }
+}

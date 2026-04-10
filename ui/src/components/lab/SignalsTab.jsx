@@ -297,7 +297,7 @@ function PatternTable({ patterns, loading }) {
                           <div style={{ color: 'var(--color-text-dim)', marginBottom: 4, fontWeight: 'var(--weight-semibold)' }}>
                             Outcome Breakdown
                           </div>
-                          <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden', marginBottom: 4 }}>
+                          <div style={{ display: 'flex', height: 18, borderRadius: 'var(--radius-xs)', overflow: 'hidden', marginBottom: 4 }}>
                             <div title={`Nailed It: ${pct(successVal)}`} style={{ width: `${successVal * 100}%`, background: C.green, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 600, cursor: 'default' }}>
                               {successVal > 0.1 && pct(successVal)}
                             </div>
@@ -447,7 +447,7 @@ function CalibrationPanel({ calibration, days }) {
                   padding: '6px 10px', marginBottom: 4,
                   background: 'var(--color-warning-subtle)',
                   border: '1px solid color-mix(in srgb, var(--color-warning) 25%, transparent)',
-                  borderRadius: 6, fontSize: 'var(--text-xs)',
+                  borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-xs)',
                   color: 'var(--color-warning)',
                 }}>
                   → {h.action}

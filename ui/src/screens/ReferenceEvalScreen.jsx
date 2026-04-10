@@ -1262,15 +1262,15 @@ export default function ReferenceEvalScreen() {
                     fontSize: 10,
                     fontWeight: 500,
                     padding: '3px 8px',
-                    borderRadius: 8,
+                    borderRadius: 'var(--radius-sm)',
                   }}>
                     {confidencePct}%
                   </span>
                 )}
               </div>
               {confidencePct != null && (
-                <div style={{ height: 6, borderRadius: 3, background: 'var(--color-surface-elevated)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${confidencePct}%`, background: '#48ba88', borderRadius: 3, transition: 'width 0.4s ease' }} />
+                <div style={{ height: 6, borderRadius: 'var(--radius-xs)', background: 'var(--color-surface-elevated)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${confidencePct}%`, background: '#48ba88', borderRadius: 'var(--radius-xs)', transition: 'width 0.4s ease' }} />
                 </div>
               )}
             </div>
@@ -1381,7 +1381,7 @@ export default function ReferenceEvalScreen() {
               style={{
                 width: '100%',
                 height: 40,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-sm)',
                 background: '#c8a96e',
                 color: '#0a0b0e',
                 fontSize: 14,
@@ -1437,7 +1437,7 @@ export default function ReferenceEvalScreen() {
               style={{
                 width: '100%',
                 height: 40,
-                borderRadius: 8,
+                borderRadius: 'var(--radius-sm)',
                 background: '#c8a96e',
                 color: '#0a0b0e',
                 fontSize: 14,

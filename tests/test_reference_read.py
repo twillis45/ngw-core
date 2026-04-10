@@ -497,10 +497,10 @@ class TestBuildRecreationSetup:
 
         # Lighting read must correct to 1 light
         assert lr.light_count == 1
-        assert "gobo" in lr.lighting_family
+        assert "projected" in lr.lighting_family
         assert "single" in lr.lighting_family
 
-        # Recreation setup must also show 1 light with gobo family
+        # Recreation setup must also show 1 light with projected/gobo family
         rs = build_recreation_setup(ir, lr, cue_inference, intel, None, cue_report)
         assert rs.light_count == 1
         assert rs.setup_family == "gobo_projection"

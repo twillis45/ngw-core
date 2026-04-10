@@ -516,7 +516,7 @@ function BmCaseThumb({ goldSetId, caseId, size = 72 }) {
 
   const style = {
     width: size, height: size, flexShrink: 0,
-    borderRadius: 4, objectFit: 'cover',
+    borderRadius: 'var(--radius-xs)', objectFit: 'cover',
     background: 'var(--color-surface-elevated)',
     border: '1px solid var(--color-border)',
   };
@@ -536,7 +536,7 @@ function CaseThumbImg({ src, style }) {
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setZoomed(false)}
         >
-          <img src={src} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+          <img src={src} alt="" style={{ maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain', borderRadius: 'var(--radius-sm)', display: 'block' }} />
           <button
             onClick={() => setZoomed(false)}
             style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: '50%', width: 36, height: 36, cursor: 'pointer', color: '#fff', fontSize: 18 }}

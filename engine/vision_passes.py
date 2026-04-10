@@ -3049,11 +3049,25 @@ def light_structure_pass(
         nose_shadow_shape = "minimal_centered"
         notes.append(f"very low shadow density ({shadow_ratio:.3f}) + symmetric + near-vertical → clamshell/flat (fill cancels key shadow)")
 
-    # Butterfly: symmetric shadow below nose AND shadow angle near-vertical.
-    elif abs(left_shadow - right_shadow) < 0.15 and bottom_shadow > top_shadow * 1.3 and _angle_near_vertical:
+    # Butterfly: symmetric shadow under BOTH nostrils AND shadow angle near-vertical.
+    # Domain rule (photographer): butterfly = shadow under BOTH nostrils; loop =
+    # shadow under ONE nostril.  A scalar L/R asymmetry check alone is not enough —
+    # a one-sided loop shadow like left=0.12, right=0.01 has abs diff 0.11 and
+    # would falsely pass a < 0.15 threshold.  Require that BOTH halves of the
+    # sub-nasal shadow region carry measurable shadow density (min > 0.04) so
+    # single-nostril loop cases cannot masquerade as butterfly.
+    elif (
+        abs(left_shadow - right_shadow) < 0.08
+        and min(left_shadow, right_shadow) > 0.04
+        and bottom_shadow > top_shadow * 1.3
+        and _angle_near_vertical
+    ):
         pattern_name = "butterfly"
         nose_shadow_shape = "butterfly_below"
-        notes.append("symmetric shadow below nose → butterfly pattern")
+        notes.append(
+            f"symmetric shadow under both nostrils "
+            f"(L={left_shadow:.3f} R={right_shadow:.3f}) → butterfly pattern"
+        )
 
     # Loop: key at 30–45° off-axis creates a diagonal nose shadow that wraps
     # under ONE nostril (not both).  This produces moderate L/R asymmetry —
@@ -6075,7 +6089,7 @@ def reconstruction_pass(
     #   lr_asym ≈ 0.10–0.18 → loop range (~25–40°)
     #   lr_asym ≈ 0.20–0.35 → broad/short range (~40–55°)
     #   lr_asym ≈ 0.40+     → split territory (~60°+)
-    _ls_for_angle = getattr(getattr(result, "cue_report", None), "light_structure", None) if hasattr(result, "cue_report") else None
+    _ls_for_angle = getattr(getattr(existing_catchlights, "cue_report", None), "light_structure", None) if existing_catchlights is not None and hasattr(existing_catchlights, "cue_report") else None
     _lr_asym_angle = None
     if _ls_for_angle is not None:
         _lra = getattr(_ls_for_angle, "left_right_asymmetry", None)

@@ -6,15 +6,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import logging as _logging
+import sys as _sys
 
-# ── Logging — ensure runtime errors are always visible in server output ──
-_log_level = os.environ.get("NGW_LOG_LEVEL", "INFO").upper() if "os" in dir() else "INFO"
+# ── Logging — INFO/WARNING → stdout, ERROR/CRITICAL → stderr ──
 import os as _os_early
 _log_level = _os_early.environ.get("NGW_LOG_LEVEL", "INFO").upper()
+_log_fmt = "%(asctime)s %(levelname)-8s [%(name)s] %(message)s"
+_log_datefmt = "%H:%M:%S"
+
+_stdout_handler = _logging.StreamHandler(_sys.stdout)
+_stdout_handler.setLevel(getattr(_logging, _log_level, _logging.INFO))
+_stdout_handler.addFilter(lambda r: r.levelno < _logging.ERROR)
+_stdout_handler.setFormatter(_logging.Formatter(_log_fmt, datefmt=_log_datefmt))
+
+_stderr_handler = _logging.StreamHandler(_sys.stderr)
+_stderr_handler.setLevel(_logging.ERROR)
+_stderr_handler.setFormatter(_logging.Formatter(_log_fmt, datefmt=_log_datefmt))
+
 _logging.basicConfig(
     level=getattr(_logging, _log_level, _logging.INFO),
-    format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
-    datefmt="%H:%M:%S",
+    handlers=[_stdout_handler, _stderr_handler],
 )
 _startup_logger = _logging.getLogger("ngw.startup")
 

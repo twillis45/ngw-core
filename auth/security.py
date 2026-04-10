@@ -88,7 +88,13 @@ def decode_token(token: str) -> Optional[str]:
             return None
         return payload.get("sub")
     except JWTError as exc:
-        logger.warning("[jwt] decode failed: %s", exc)
+        # "Not enough segments" means the value isn't a JWT at all (stale
+        # localStorage token, magic-link code, etc.) — not a security event.
+        msg = str(exc)
+        if "not enough segments" in msg.lower() or "not a valid jwt" in msg.lower():
+            logger.debug("[jwt] decode skipped — not a JWT: %s", msg)
+        else:
+            logger.warning("[jwt] decode failed: %s", exc)
         return None
 
 

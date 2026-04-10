@@ -9,6 +9,7 @@ import { applySettings } from './data/settingsStore';
 import { setFlag } from './modes/featureFlags';
 import './theme/tokens.css';
 import './styles/app.css';
+import './components/shared/shared-components.css';
 
 /* ── Sentry browser SDK ─────────────────────────────────────────── */
 Sentry.init({
@@ -95,6 +96,58 @@ try {
     try { sessionStorage.setItem('ngw_goto_auth', '1'); } catch { /* ignore */ }
     params.delete('login');
     dirty = true;
+  }
+
+  // Studio Matte parallel rollout — flag plumbing (Checkpoint 2).
+  // Precedence: ?studio=off > ?studio=1 > ?day1=1 (alias) > persisted flag > default.
+  // Storage keys:
+  //   sessionStorage.ngw_studio_active   — session-scoped "studio shell is live"
+  //   sessionStorage.ngw_studio_cockpit  — Bucket B unlock (gating added in Checkpoint 3)
+  //   sessionStorage.ngw_goto_day1_demo  — existing trigger consumed by App.jsx to navigate
+  //   localStorage.ngw_studio_persist    — persistent tester opt-in across sessions
+  const studioParam = params.get('studio');
+  if (studioParam === 'off') {
+    try {
+      sessionStorage.removeItem('ngw_studio_active');
+      sessionStorage.removeItem('ngw_studio_cockpit');
+      sessionStorage.removeItem('ngw_goto_day1_demo');
+      localStorage.removeItem('ngw_studio_persist');
+    } catch { /* ignore */ }
+    params.delete('studio');
+    dirty = true;
+  } else if (studioParam === '1') {
+    try {
+      sessionStorage.setItem('ngw_studio_active', '1');
+      sessionStorage.setItem('ngw_goto_day1_demo', '1');
+      if (params.get('persist') === '1') {
+        localStorage.setItem('ngw_studio_persist', '1');
+      }
+      if (params.get('cockpit') === '1') {
+        sessionStorage.setItem('ngw_studio_cockpit', '1');
+      }
+    } catch { /* ignore */ }
+    params.delete('studio');
+    params.delete('persist');
+    params.delete('cockpit');
+    dirty = true;
+  } else if (params.get('day1') === '1') {
+    // Temporary alias — deprecated. Remove in a later checkpoint.
+    // eslint-disable-next-line no-console
+    console.warn('[studio] ?day1=1 is deprecated — use ?studio=1');
+    try {
+      sessionStorage.setItem('ngw_studio_active', '1');
+      sessionStorage.setItem('ngw_goto_day1_demo', '1');
+    } catch { /* ignore */ }
+    params.delete('day1');
+    dirty = true;
+  } else {
+    // No explicit studio/day1 param — honor persisted tester opt-in.
+    try {
+      if (localStorage.getItem('ngw_studio_persist') === '1') {
+        sessionStorage.setItem('ngw_studio_active', '1');
+        sessionStorage.setItem('ngw_goto_day1_demo', '1');
+      }
+    } catch { /* ignore */ }
   }
 
   // Stripe checkout return — set paid flag before React mounts so usePaywall
