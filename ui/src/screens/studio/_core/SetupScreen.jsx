@@ -37,6 +37,15 @@ const RING_ACTIVE_SHADOW = '0px 2px 6px 0px rgba(0,0,0,0.6), 0px 1px 2px 0px rgb
 
 const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
 
+// Display-string normalizer — Studio Matte rule: never show raw engine
+// snake_case / kebab-case keys in the UI. Swap _ and - for spaces and
+// optionally uppercase for caps display copy.
+function prettify(str, { upper = false } = {}) {
+  if (str == null) return '';
+  const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
+  return upper ? cleaned.toUpperCase() : cleaned;
+}
+
 // ─── Role colors (per-light role accent) ────────────────────────────────────
 const ROLE_COLORS = {
   key:         '#c89b45',  // amber
@@ -403,16 +412,24 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   // Layer 7 blueprint synthesis.  These are the actionable "how to build it"
   // instructions: key placement angle, fill strategy, camera settings.
   const rs           = raw.reference_analysis?.recreation_setup || {};
-  const rsPlacement  = rs.key_placement   || null;  // "45° camera-left, high"
-  const rsFill       = rs.fill_strategy   || null;  // "1:2 ratio unilateral fill"
-  const rsBg         = rs.background_strategy || null;
-  const rsFocal      = rs.focal_length    || null;  // "85-135mm"
-  const rsAperture   = rs.aperture        || null;  // "f/2.8-5.6"
-  const rsCamGuide   = rs.camera_subject_guidance || null;
-  const rsNotes      = Array.isArray(rs.setup_notes) ? rs.setup_notes.filter(Boolean) : [];
+  // Engine values arrive as natural-language phrases but occasionally leak
+  // snake_case tokens (e.g. "camera_left"). Run every display value through
+  // prettify so the UI never shows underscores. Hyphenated ranges like
+  // "85-135mm" and "f/2.8-5.6" stay untouched — those are numeric ranges
+  // that must keep their hyphen, so we apply prettify only to fields that
+  // are narrative strings.
+  const rsPlacement  = prettify(rs.key_placement)     || null;
+  const rsFill       = prettify(rs.fill_strategy)     || null;
+  const rsBg         = prettify(rs.background_strategy) || null;
+  const rsFocal      = rs.focal_length    || null;  // keep "85-135mm"
+  const rsAperture   = rs.aperture        || null;  // keep "f/2.8-5.6"
+  const rsCamGuide   = prettify(rs.camera_subject_guidance) || null;
+  const rsNotes      = Array.isArray(rs.setup_notes)
+    ? rs.setup_notes.map(n => prettify(n)).filter(Boolean)
+    : [];
 
-  const modName = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${mod.family || 'Modifier'}` : null;
-  const positionDisplay = mod?.position || li.key_position_text || null;
+  const modName = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${prettify(mod.family) || 'Modifier'}` : null;
+  const positionDisplay = prettify(mod?.position || li.key_position_text) || null;
   const keySide = li.key_side;
   const directionDisplay = keySide && keySide !== 'unknown'
     ? keySide.charAt(0).toUpperCase() + keySide.slice(1) : null;
@@ -670,7 +687,13 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           alignItems: 'start',
         } : { display: 'contents' }}>
         <div style={isDesktop ? {
+          // Hero column cap: 920 (designHeight) − 110 (title/header area)
+          // − 120 (CTA + cancel footer) = 690 usable. Content scrolls if
+          // taller so the CTA stays in view.
           display: 'flex', flexDirection: 'column', gap: 16,
+          maxHeight: 690,
+          overflowY: 'auto',
+          paddingRight: 6,
         } : { display: 'contents' }}>
 
         {/* ── Warning strip — blocking only (Result owns the full set) ── */}
@@ -933,7 +956,12 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         </div>
         {/* ── Right column (desktop) — secondary panels ── */}
         <div style={isDesktop ? {
+          // Same cap as the hero column so the two columns align and the
+          // bottom CTA never gets pushed below the 920 design viewport.
           display: 'flex', flexDirection: 'column', gap: 16,
+          maxHeight: 690,
+          overflowY: 'auto',
+          paddingRight: 6,
         } : { display: 'contents' }}>
 
         {/* ── Multi-light roles strip ── */}

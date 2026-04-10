@@ -27,6 +27,17 @@ const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0p
 // Drawer handle shadow — matches SetupScreen
 const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
 
+// Display-string normalizer. Engine keys like "soft_key_dominant" or
+// "split-complementary" must never leak into the UI as-is — Studio Matte
+// rules forbid underscores/hyphens in visible text. `prettify` swaps them
+// for spaces and (optionally) uppercases the result so chip pills, labels,
+// and headings read as clean caps display copy.
+function prettify(str, { upper = false } = {}) {
+  if (str == null) return '';
+  const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
+  return upper ? cleaned.toUpperCase() : cleaned;
+}
+
 // ─── Pull-tab drawer (mirrors SetupScreen's PullTabDrawer) ───────────────────
 function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
   return (
@@ -55,6 +66,438 @@ function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
         <div style={{ padding: '4px 20px 14px' }}>
           {children}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ShadowSignature ─────────────────────────────────────────────────────────
+// Tiny dashboard sitting inside the SHADOW ANALYSIS drawer on desktop. Turns
+// the two raw engine values (nose_shadow_angle_deg, shadow_density) into a
+// readable-at-a-glance graphic so the narrative below doesn't feel stranded
+// after the full LightingDiagram was moved up to the hero column.
+//
+//   • Angle dial  — vertical reference + needle rotating from 0° (straight
+//                   down) through ±60°. Reads as "which side is the light
+//                   coming from" in a single image.
+//   • Density bar — horizontal gradient (light → deep shadow) with a tick
+//                   marker at the current density ratio.
+//
+// Both widgets live in engraved inset cards so they feel built into the
+// Studio Matte surface rather than stamped on top. If neither signal is
+// present the component renders null.
+function ShadowSignature({ angleDeg, density }) {
+  if (angleDeg == null && density == null) return null;
+
+  const clampedAngle = angleDeg != null ? Math.max(-60, Math.min(60, angleDeg)) : null;
+  const rad = clampedAngle != null ? (clampedAngle * Math.PI) / 180 : 0;
+  // Needle tail pivots at (50, 14) — just above face/nose — and extends 46px
+  // down and sideways. Positive angle → needle swings right, matching the
+  // convention "nose shadow leans to subject's right when key light is to
+  // subject's left".
+  const needleX = 50 + 46 * Math.sin(rad);
+  const needleY = 14 + 46 * Math.cos(rad);
+
+  return (
+    <div style={{
+      display: 'flex', gap: 10, marginBottom: 14, alignItems: 'stretch',
+    }}>
+      {/* Angle dial card */}
+      {angleDeg != null && (
+        <div style={{
+          flex: '0 0 auto', width: 116,
+          padding: '10px 10px 8px',
+          borderRadius: 10,
+          backgroundColor: '#070709',
+          boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+        }}>
+          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+            NOSE SHADOW
+          </p>
+          <svg viewBox="0 0 100 72" width="96" height="72" style={{ display: 'block', margin: '2px auto 0' }}>
+            {/* ±60° arc */}
+            <path
+              d={`M ${50 - 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)} A 50 50 0 0 1 ${50 + 50 * Math.sin(Math.PI / 3)} ${14 + 50 * Math.cos(Math.PI / 3)}`}
+              fill="none" stroke="rgba(184,191,199,0.12)" strokeWidth="1"
+            />
+            {/* tick marks at -60, -30, 0, 30, 60 */}
+            {[-60, -30, 0, 30, 60].map((deg) => {
+              const r = (deg * Math.PI) / 180;
+              const x1 = 50 + 46 * Math.sin(r);
+              const y1 = 14 + 46 * Math.cos(r);
+              const x2 = 50 + 50 * Math.sin(r);
+              const y2 = 14 + 50 * Math.cos(r);
+              return <line key={deg} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(184,191,199,0.25)" strokeWidth="1" />;
+            })}
+            {/* pivot dot (nose tip) */}
+            <circle cx={50} cy={14} r={2.2} fill="rgba(184,191,199,0.55)" />
+            {/* needle */}
+            <line
+              x1={50} y1={14} x2={needleX} y2={needleY}
+              stroke="rgba(245,190,72,0.95)" strokeWidth="2" strokeLinecap="round"
+            />
+            <circle cx={needleX} cy={needleY} r={1.8} fill="rgba(245,190,72,1)" />
+          </svg>
+          <p style={{ margin: '2px 0 0', fontSize: 13, fontWeight: 700, color: C.textSub, textAlign: 'center', ...FONT_SMOOTH }}>
+            {angleDeg > 0 ? '+' : ''}{angleDeg.toFixed(0)}°
+          </p>
+        </div>
+      )}
+
+      {/* Density bar card */}
+      {density != null && (
+        <div style={{
+          flex: 1, minWidth: 0,
+          padding: '10px 14px 10px',
+          borderRadius: 10,
+          backgroundColor: '#070709',
+          boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+          display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+              SHADOW DENSITY
+            </p>
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>
+              {(density * 100).toFixed(0)}%
+            </p>
+          </div>
+          <div style={{ position: 'relative', marginTop: 14 }}>
+            {/* Gradient track — midtone steel → deep black */}
+            <div style={{
+              height: 6, borderRadius: 3,
+              background: 'linear-gradient(90deg, rgba(184,191,199,0.35) 0%, rgba(184,191,199,0.18) 40%, rgba(0,0,0,0.9) 100%)',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.03)',
+            }} />
+            {/* Marker */}
+            <div style={{
+              position: 'absolute', top: -3, left: `calc(${Math.max(0, Math.min(1, density)) * 100}% - 4px)`,
+              width: 8, height: 12, borderRadius: 2,
+              backgroundColor: 'rgba(245,190,72,0.95)',
+              boxShadow: '0 0 6px rgba(245,190,72,0.6), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 1px rgba(0,0,0,0.4)',
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.5px', ...FONT_SMOOTH }}>OPEN</span>
+            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.5px', ...FONT_SMOOTH }}>DEEP</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SceneField ─────────────────────────────────────────────────────────────
+// Engraved inset tile for VLM narrative fields (Lighting, Mood, Framing,
+// Pose, Expression, Style reference). Used by the SCENE drawer — swaps the
+// previous flat label/value list for proper chip-card personality so the
+// drawer has rhythm and doesn't read like a debug dump.
+function SceneField({ label, value }) {
+  return (
+    <div style={{
+      padding: '10px 12px',
+      borderRadius: 10,
+      backgroundColor: '#08090c',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+      minWidth: 0,
+    }}>
+      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        {prettify(label, { upper: true })}
+      </p>
+      <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 500, color: C.textSubBold, lineHeight: '16px', textShadow: '0 1px 0 rgba(0,0,0,0.45)', ...FONT_SMOOTH }}>
+        {prettify(value)}
+      </p>
+    </div>
+  );
+}
+
+// ─── SignalGauge ────────────────────────────────────────────────────────────
+// One row of the CONFIDENCE drawer's RAW SIGNALS readout. Replaces the old
+// flat numeric pill with: label, big value, and a tactile mini bar that
+// shows the value's position within an expected range. For percentage
+// signals the bar grows from the left; for the signed nose-shadow angle the
+// bar is center-anchored so positive/negative is visually obvious.
+function SignalGauge({ label, value, display, mode, accentColor }) {
+  // mode: 'pct'   → 0..1 normalized, bar grows left→right
+  //       'signed'→ value in degrees, range -60..+60, bar center-anchored
+  let leftPct = 0, widthPct = 0;
+  if (mode === 'pct') {
+    const v = Math.max(0, Math.min(1, value));
+    leftPct = 0;
+    widthPct = v * 100;
+  } else if (mode === 'signed') {
+    const v = Math.max(-60, Math.min(60, value));
+    if (v >= 0) {
+      leftPct = 50;
+      widthPct = (v / 60) * 50;
+    } else {
+      leftPct = 50 + (v / 60) * 50;
+      widthPct = -(v / 60) * 50;
+    }
+  }
+  return (
+    <div style={{
+      flex: '1 1 calc(50% - 5px)', minWidth: 130,
+      padding: '10px 12px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          {label}
+        </p>
+        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>
+          {display}
+        </p>
+      </div>
+      <div style={{
+        position: 'relative', marginTop: 9, height: 5, borderRadius: 2.5,
+        backgroundColor: 'rgba(184,191,199,0.08)',
+        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)',
+      }}>
+        {/* Center tick for signed mode so the zero line is visible */}
+        {mode === 'signed' && (
+          <div style={{ position: 'absolute', left: '50%', top: -1, width: 1, height: 7, backgroundColor: steel(0.35) }} />
+        )}
+        <div style={{
+          position: 'absolute', top: 0, height: '100%', borderRadius: 2.5,
+          left: `${leftPct}%`, width: `${widthPct}%`,
+          backgroundColor: accentColor || 'rgba(245,190,72,0.85)',
+          boxShadow: `0 0 4px ${accentColor || 'rgba(245,190,72,0.6)'}, inset 0 0.5px 0 rgba(255,255,255,0.4)`,
+          transition: 'width 0.4s ease, left 0.4s ease',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── ModifierSilhouette ─────────────────────────────────────────────────────
+// Tiny SVG silhouette of the classified modifier shape (rectangular softbox,
+// octabox, strip, beauty dish, ring, umbrella, parabolic, or generic). Sits
+// at the top of the CATCHLIGHT & MODIFIER drawer so the reader sees WHAT the
+// gear looks like alongside the spec grid. The actual physical dimensions
+// live in the ModifierDetail spec cells below.
+function ModifierSilhouette({ family }) {
+  const f = (family || '').toLowerCase();
+  const shape = f.includes('ring')     ? 'ring'
+              : f.includes('strip')    ? 'strip'
+              : f.includes('oct')      ? 'oct'
+              : f.includes('beauty')   ? 'beauty'
+              : f.includes('umbrella') ? 'umbrella'
+              : f.includes('parabolic')? 'parabolic'
+              : 'rect';
+
+  const stroke = steel(0.55);
+  const glow   = 'rgba(245,190,72,0.18)';
+  const hi     = 'rgba(245,190,72,0.55)';
+
+  return (
+    <svg viewBox="0 0 100 100" width="90" height="90" style={{ display: 'block' }}>
+      {/* front glow behind everything to suggest the modifier is emitting */}
+      <defs>
+        <radialGradient id="mod-glow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={glow} />
+          <stop offset="70%" stopColor="rgba(245,190,72,0)" />
+        </radialGradient>
+      </defs>
+      <rect x={0} y={0} width={100} height={100} fill="url(#mod-glow)" />
+      {shape === 'rect' && (
+        <>
+          <rect x={22} y={26} width={56} height={42} rx={3} fill="none" stroke={stroke} strokeWidth={1.5} />
+          <rect x={26} y={30} width={48} height={34} rx={2} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
+          <line x1={26} y1={47} x2={74} y2={47} stroke={stroke} strokeWidth={0.6} />
+          <line x1={50} y1={30} x2={50} y2={64} stroke={stroke} strokeWidth={0.6} />
+          <line x1={78} y1={68} x2={92} y2={82} stroke={stroke} strokeWidth={1.2} />
+          <circle cx={92} cy={82} r={2.2} fill={stroke} />
+        </>
+      )}
+      {shape === 'strip' && (
+        <>
+          <rect x={38} y={16} width={24} height={70} rx={3} fill="none" stroke={stroke} strokeWidth={1.5} />
+          <rect x={41} y={19} width={18} height={64} rx={2} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
+          <line x1={41} y1={50} x2={59} y2={50} stroke={stroke} strokeWidth={0.5} />
+          <line x1={62} y1={84} x2={76} y2={92} stroke={stroke} strokeWidth={1.2} />
+        </>
+      )}
+      {shape === 'oct' && (
+        <>
+          <polygon points="36,22 64,22 80,38 80,62 64,78 36,78 20,62 20,38"
+                   fill="none" stroke={stroke} strokeWidth={1.5} />
+          <polygon points="39,26 61,26 74,39 74,61 61,74 39,74 26,61 26,39"
+                   fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
+          <circle cx={50} cy={50} r={3} fill={hi} opacity={0.6} />
+          <line x1={74} y1={74} x2={86} y2={86} stroke={stroke} strokeWidth={1.2} />
+        </>
+      )}
+      {shape === 'beauty' && (
+        <>
+          <ellipse cx={50} cy={48} rx={32} ry={12} fill="none" stroke={stroke} strokeWidth={1.5} />
+          <ellipse cx={50} cy={48} rx={28} ry={10} fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.7} />
+          {/* deflector */}
+          <circle cx={50} cy={48} r={6} fill="#0a0b0d" stroke={stroke} strokeWidth={0.8} />
+          {/* depth */}
+          <path d="M18 48 L30 72 L70 72 L82 48" fill="none" stroke={stroke} strokeWidth={1} />
+          <line x1={72} y1={72} x2={84} y2={84} stroke={stroke} strokeWidth={1.2} />
+        </>
+      )}
+      {shape === 'ring' && (
+        <>
+          <circle cx={50} cy={50} r={30} fill="none" stroke={stroke} strokeWidth={1.5} />
+          <circle cx={50} cy={50} r={26} fill="rgba(245,190,72,0.08)" stroke={hi} strokeWidth={0.8} />
+          <circle cx={50} cy={50} r={13} fill="#0a0b0d" stroke={stroke} strokeWidth={1} />
+        </>
+      )}
+      {shape === 'umbrella' && (
+        <>
+          <path d="M18 56 Q50 14 82 56 Z" fill="rgba(245,190,72,0.10)" stroke={stroke} strokeWidth={1.4} />
+          <path d="M18 56 Q50 14 82 56" fill="none" stroke={hi} strokeWidth={0.8} />
+          {/* ribs */}
+          <line x1={50} y1={14} x2={50} y2={56} stroke={stroke} strokeWidth={0.6} />
+          <line x1={34} y1={20} x2={50} y2={56} stroke={stroke} strokeWidth={0.5} />
+          <line x1={66} y1={20} x2={50} y2={56} stroke={stroke} strokeWidth={0.5} />
+          {/* shaft */}
+          <line x1={50} y1={56} x2={50} y2={88} stroke={stroke} strokeWidth={1.2} />
+        </>
+      )}
+      {shape === 'parabolic' && (
+        <>
+          <path d="M14 72 Q50 8 86 72" fill="none" stroke={stroke} strokeWidth={1.6} />
+          <path d="M20 70 Q50 18 80 70" fill="rgba(245,190,72,0.10)" stroke={hi} strokeWidth={0.8} />
+          {/* subject line */}
+          <circle cx={50} cy={72} r={2} fill={stroke} />
+        </>
+      )}
+    </svg>
+  );
+}
+
+// ─── CatchlightEye ──────────────────────────────────────────────────────────
+// Stylized eye outline with a catchlight dot positioned at the clock hour
+// implied by nose shadow angle. Positive nose-shadow angle (shadow leans to
+// subject's right → light from subject's upper-left) maps to a catchlight on
+// the subject's upper-left side of the iris. The shape is intentionally
+// schematic, not anatomical, so it reads at ~90px wide.
+function CatchlightEye({ angleDeg }) {
+  const clamped = angleDeg != null ? Math.max(-60, Math.min(60, angleDeg)) : 0;
+  // Catchlight sits on the opposite side of the iris from the shadow direction.
+  // Map angle to clock position around an ellipse of radius rx=18, ry=14.
+  const rad = ((-clamped - 90) * Math.PI) / 180; // -90 = top; rotate by -angle
+  const cx = 50 + 18 * Math.cos(rad);
+  const cy = 44 + 14 * Math.sin(rad);
+  const stroke = steel(0.55);
+
+  return (
+    <svg viewBox="0 0 100 90" width="90" height="80" style={{ display: 'block' }}>
+      {/* almond eye shape */}
+      <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
+      {/* iris */}
+      <circle cx={50} cy={44} r={20} fill="rgba(60,70,85,0.55)" stroke={stroke} strokeWidth={1} />
+      {/* pupil */}
+      <circle cx={50} cy={44} r={8} fill="#05060a" />
+      {/* catchlight — only if we had a valid angle */}
+      {angleDeg != null && (
+        <>
+          <circle cx={cx} cy={cy} r={4.5} fill="rgba(255,255,255,0.92)" />
+          <circle cx={cx - 1.2} cy={cy - 1.2} r={1.8} fill="#ffffff" />
+        </>
+      )}
+      {/* subtle upper lash line */}
+      <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
+    </svg>
+  );
+}
+
+// ─── CCTAxis ────────────────────────────────────────────────────────────────
+// Horizontal Kelvin axis for the COLOR PALETTE drawer. Maps a 2500K–8500K
+// range onto a tungsten→daylight→shade gradient and plants a glowing marker
+// at the parsed key CCT and a smaller marker at the shadow CCT, so the
+// palette's color story has a graphic anchor instead of two abstract
+// "5400K" rows.
+function parseKelvin(str) {
+  if (!str) return null;
+  const m = String(str).match(/(\d{3,5})/);
+  if (!m) return null;
+  const k = parseInt(m[1], 10);
+  if (isNaN(k) || k < 1500 || k > 12000) return null;
+  return k;
+}
+function CCTAxis({ keyKStr, shadowKStr }) {
+  const keyK = parseKelvin(keyKStr);
+  const shadowK = parseKelvin(shadowKStr);
+  if (keyK == null && shadowK == null) return null;
+
+  const MIN = 2500, MAX = 8500;
+  const pct = (k) => `${Math.max(0, Math.min(1, (k - MIN) / (MAX - MIN))) * 100}%`;
+
+  return (
+    <div style={{
+      marginTop: 6, marginBottom: 14,
+      padding: '12px 14px 10px',
+      borderRadius: 10,
+      backgroundColor: '#070709',
+      boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          COLOR TEMPERATURE
+        </p>
+        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.40), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+          KELVIN
+        </span>
+      </div>
+      <div style={{ position: 'relative', height: 22 }}>
+        {/* Gradient track */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, top: 8, height: 8,
+          borderRadius: 4,
+          background: 'linear-gradient(90deg, #ff9c3a 0%, #ffb56a 18%, #fff0d8 38%, #ffffff 50%, #d8ecff 62%, #a8c8f0 82%, #6f9bd6 100%)',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.6), inset 0 -0.5px 0 rgba(255,255,255,0.1)',
+        }} />
+        {/* Key marker */}
+        {keyK != null && (
+          <div style={{
+            position: 'absolute', top: 0, left: pct(keyK), transform: 'translateX(-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+          }}>
+            <div style={{
+              width: 11, height: 22, borderRadius: 3,
+              backgroundColor: 'rgba(245,190,72,0.95)',
+              boxShadow: '0 0 8px rgba(245,190,72,0.65), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 1px rgba(0,0,0,0.4)',
+            }} />
+          </div>
+        )}
+        {/* Shadow marker (smaller, cooler accent) */}
+        {shadowK != null && (
+          <div style={{
+            position: 'absolute', top: 4, left: pct(shadowK), transform: 'translateX(-50%)',
+          }}>
+            <div style={{
+              width: 7, height: 14, borderRadius: 2,
+              backgroundColor: 'rgba(168,200,240,0.9)',
+              boxShadow: '0 0 4px rgba(168,200,240,0.55), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.4)',
+            }} />
+          </div>
+        )}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>2500K · TUNGSTEN</span>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>5500K · DAYLIGHT</span>
+        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.35), letterSpacing: '0.4px', ...FONT_SMOOTH }}>8500K · SHADE</span>
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+        {keyK != null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 7, height: 10, borderRadius: 2, backgroundColor: 'rgba(245,190,72,0.95)', boxShadow: '0 0 4px rgba(245,190,72,0.5)' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>KEY {keyK}K</span>
+          </div>
+        )}
+        {shadowK != null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 5, height: 8, borderRadius: 2, backgroundColor: 'rgba(168,200,240,0.9)', boxShadow: '0 0 4px rgba(168,200,240,0.5)' }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>SHADOW {shadowK}K</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -965,7 +1408,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       </div>
       {/* ─── end top section ─── */}
 
-      {/* ─── Analytical Panel (pull-tab drawers) ─── */}
+      {/* ─── Analytical Panel (pull-tab drawers) ───
+          Desktop: the panel column lives in the right grid cell. We cap its
+          height to the design viewport (1040) minus top/bottom chrome so
+          opened drawers scroll inside the column instead of pushing the CTA
+          off-screen. FitToViewport handles the outer uniform scale. */}
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
@@ -978,7 +1425,18 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         transform: infoVisible ? 'translateY(0)' : 'translateY(60px)',
         transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s',
         pointerEvents: infoVisible ? 'auto' : 'none',
-        ...(isDesktop ? { gridArea: 'panel', alignSelf: 'start' } : null),
+        ...(isDesktop ? {
+          gridArea: 'panel',
+          alignSelf: 'start',
+          // Hard-capped to fit within the 1040 design viewport:
+          //   1040 (designHeight) − 96 (panel marginTop) − 72 (actions row)
+          // = 872 of usable height. Drawers scroll within this column so
+          // the hero + CTA stay anchored and visible at all times.
+          maxHeight: 872,
+          overflowY: 'auto',
+          paddingRight: 6,
+          paddingBottom: 24,
+        } : null),
       }}>
         {/* Warning chips — compact strip above drawers */}
         {sections.edgeCaseWarnings?.length > 0 && (
@@ -998,45 +1456,94 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         </PullTabDrawer>
 
         {/* SHADOW ANALYSIS — LightingDiagram moved to the hero column on
-            desktop so the analysis narrative shows unaccompanied here.
-            Mobile still renders the diagram inline below the text. */}
+            desktop, so this drawer shows a compact ShadowSignature (angle
+            dial + density bar) above the narrative so the analysis has a
+            visual anchor. Mobile still renders the full LightingDiagram. */}
         <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={800}>
           {!isDesktop && <LightingDiagram result={result} />}
+          {isDesktop && (
+            <ShadowSignature
+              angleDeg={rawSignals.nose_shadow_angle_deg}
+              density={rawSignals.shadow_density}
+            />
+          )}
           <p style={{ margin: isDesktop ? 0 : '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
             {sections.shadowAnalysis}
           </p>
         </PullTabDrawer>
 
-        {/* SCENE */}
+        {/* SCENE — narrative paragraph + chip-card grid of VLM fields */}
         {(sections.sceneDescription || sections.vlmNarrative) && (
           <PullTabDrawer label="SCENE" open={!!drawers.scene} onToggle={() => toggle('scene')} maxH={800}>
             {sections.sceneDescription && (
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '18px', color: C.textSub, ...FONT_SMOOTH }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
                 {sections.sceneDescription}
               </p>
             )}
             {sections.vlmNarrative?.fields?.length > 0 && (
-              <div style={{ marginTop: sections.sceneDescription ? 10 : 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{
+                marginTop: sections.sceneDescription ? 12 : 0,
+                display: 'grid',
+                gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
+                gap: 8,
+              }}>
                 {sections.vlmNarrative.fields.map(({ label, value }) => (
-                  <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.6px', ...FONT_SMOOTH }}>
-                      {label.toUpperCase()}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '17px', color: C.textSub, ...FONT_SMOOTH }}>
-                      {value}
-                    </span>
-                  </div>
+                  <SceneField key={label} label={label} value={value} />
                 ))}
               </div>
             )}
           </PullTabDrawer>
         )}
 
-        {/* CATCHLIGHT & MODIFIER */}
-        <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={700}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-            {sections.catchlightModifier}
-          </p>
+        {/* CATCHLIGHT & MODIFIER — silhouette + catchlight eye header row,
+            then narrative, then spec grid, then physical-meaning italic. */}
+        <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={800}>
+          {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null) && (
+            <div style={{
+              display: 'flex', gap: 12, alignItems: 'stretch',
+              marginBottom: 12,
+            }}>
+              {sections.modifier?.family && (
+                <div style={{
+                  flex: '0 0 auto',
+                  padding: '8px 10px 6px',
+                  borderRadius: 10,
+                  backgroundColor: '#070709',
+                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                }}>
+                  <ModifierSilhouette family={sections.modifier.family} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                    MODIFIER
+                  </span>
+                </div>
+              )}
+              <div style={{
+                flex: '0 0 auto',
+                padding: '8px 10px 6px',
+                borderRadius: 10,
+                backgroundColor: '#070709',
+                boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              }}>
+                <CatchlightEye angleDeg={rawSignals.nose_shadow_angle_deg} />
+                <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  CATCHLIGHT
+                </span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 400, lineHeight: '18px', color: C.textSub, ...FONT_SMOOTH }}>
+                  {sections.catchlightModifier}
+                </p>
+              </div>
+            </div>
+          )}
+          {/* Fallback narrative when neither silhouette nor eye rendered */}
+          {!(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null) && (
+            <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+              {sections.catchlightModifier}
+            </p>
+          )}
           <ModifierDetail modifier={sections.modifier} />
           {sections.modifier?.physicalMeaning && (
             <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
@@ -1045,20 +1552,21 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           )}
         </PullTabDrawer>
 
-        {/* COLOR PALETTE */}
+        {/* COLOR PALETTE — wider swatches, CCTAxis under, harmony chip,
+            then italic character note. */}
         {sections.colorPalette && (
-          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={600}>
+          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={700}>
             {sections.colorPalette.hexes.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
                 {sections.colorPalette.hexes.map((hex, i) => (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
                     <div style={{
-                      width: 32, height: 32, borderRadius: 8,
+                      width: '100%', maxWidth: 56, aspectRatio: '1 / 1', borderRadius: 10,
                       backgroundColor: hex,
-                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.4)',
+                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.5)',
                     }} />
                     {sections.colorPalette.colors[i] && (
-                      <span style={{ fontSize: 9, color: steel(0.45), textAlign: 'center', maxWidth: 40, lineHeight: 1.2, ...FONT_SMOOTH }}>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.55), textAlign: 'center', lineHeight: 1.2, letterSpacing: '0.2px', ...FONT_SMOOTH }}>
                         {sections.colorPalette.colors[i]}
                       </span>
                     )}
@@ -1066,33 +1574,27 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 ))}
               </div>
             )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <CCTAxis keyKStr={sections.colorPalette.cctKey} shadowKStr={sections.colorPalette.cctShadows} />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sections.colorPalette.character ? 8 : 0 }}>
               {sections.colorPalette.harmony && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>HARMONY</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
-                    {sections.colorPalette.harmony}{sections.colorPalette.warmCool ? ' · warm/cool' : ''}
-                  </span>
-                </div>
+                <Chip
+                  label={`HARMONY · ${prettify(sections.colorPalette.harmony, { upper: true })}${sections.colorPalette.warmCool ? ' · WARM/COOL' : ''}`}
+                  variant="accent"
+                  size="sm"
+                />
               )}
               {sections.colorPalette.cctKey && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>KEY CCT</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctKey}</span>
-                </div>
+                <Chip label={`KEY ${prettify(sections.colorPalette.cctKey, { upper: true })}`} variant="warn" size="sm" />
               )}
               {sections.colorPalette.cctShadows && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SHADOW CCT</span>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctShadows}</span>
-                </div>
-              )}
-              {sections.colorPalette.character && (
-                <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                  {sections.colorPalette.character}
-                </p>
+                <Chip label={`SHADOW ${prettify(sections.colorPalette.cctShadows, { upper: true })}`} variant="info" size="sm" />
               )}
             </div>
+            {sections.colorPalette.character && (
+              <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.50), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                {sections.colorPalette.character}
+              </p>
+            )}
           </PullTabDrawer>
         )}
 
@@ -1124,36 +1626,50 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                   RAW SIGNALS
                 </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                   {rawSignals.nose_shadow_angle_deg != null && (
-                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
-                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>NOSE SHADOW</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{rawSignals.nose_shadow_angle_deg.toFixed(0)}°</p>
-                    </div>
+                    <SignalGauge
+                      label="NOSE SHADOW"
+                      value={rawSignals.nose_shadow_angle_deg}
+                      display={`${rawSignals.nose_shadow_angle_deg > 0 ? '+' : ''}${rawSignals.nose_shadow_angle_deg.toFixed(0)}°`}
+                      mode="signed"
+                    />
                   )}
                   {rawSignals.left_right_asymmetry != null && (
-                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
-                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>L/R ASYMMETRY</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.left_right_asymmetry * 100).toFixed(1)}%</p>
-                    </div>
+                    <SignalGauge
+                      label="L/R ASYMMETRY"
+                      value={Math.abs(rawSignals.left_right_asymmetry)}
+                      display={`${(rawSignals.left_right_asymmetry * 100).toFixed(1)}%`}
+                      mode="pct"
+                      accentColor="rgba(130,170,220,0.85)"
+                    />
                   )}
                   {rawSignals.shadow_density != null && (
-                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
-                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>SHADOW DENSITY</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.shadow_density * 100).toFixed(1)}%</p>
-                    </div>
+                    <SignalGauge
+                      label="SHADOW DENSITY"
+                      value={rawSignals.shadow_density}
+                      display={`${(rawSignals.shadow_density * 100).toFixed(1)}%`}
+                      mode="pct"
+                    />
                   )}
                   {rawSignals.highlight_width_ratio != null && (
-                    <div style={{ flex: '1 1 45%', minWidth: 110, padding: '8px 10px', borderRadius: 8, backgroundColor: C.barTrack }}>
-                      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.6), letterSpacing: '0.8px', ...FONT_SMOOTH }}>HIGHLIGHT WIDTH</p>
-                      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>{(rawSignals.highlight_width_ratio * 100).toFixed(0)}%</p>
-                    </div>
+                    <SignalGauge
+                      label="HIGHLIGHT WIDTH"
+                      value={rawSignals.highlight_width_ratio}
+                      display={`${(rawSignals.highlight_width_ratio * 100).toFixed(0)}%`}
+                      mode="pct"
+                      accentColor="rgba(140,225,180,0.85)"
+                    />
                   )}
                 </div>
                 {signalDiag.final_pattern && (
-                  <p style={{ margin: '8px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.55), ...FONT_SMOOTH }}>
-                    Final signal pattern: <span style={{ color: C.textSub, fontWeight: 700 }}>{signalDiag.final_pattern.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                  </p>
+                  <div style={{ marginTop: 10 }}>
+                    <Chip
+                      label={`PATTERN · ${prettify(signalDiag.final_pattern, { upper: true })}`}
+                      variant="accent"
+                      size="sm"
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -1162,15 +1678,17 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                   PASS RELIABILITY
                 </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {Object.entries(sections.signalQuality.passSummaries).map(([pass, level]) => {
-                    const color = level === 'high' ? C.confHigh : level === 'moderate' ? steel(0.6) : C.confLow;
-                    const label = pass.replace(/_pass$/, '').replace(/_/g, ' ');
+                    const variant = level === 'high' ? 'success' : level === 'moderate' ? 'info' : 'warn';
+                    const passLabel = prettify(pass.replace(/_pass$/, ''), { upper: true });
                     return (
-                      <div key={pass} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, fontWeight: 400, color: steel(0.45), ...FONT_SMOOTH }}>{label}</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color, ...FONT_SMOOTH }}>{level}</span>
-                      </div>
+                      <Chip
+                        key={pass}
+                        label={`${passLabel} · ${String(level).toUpperCase()}`}
+                        variant={variant}
+                        size="sm"
+                      />
                     );
                   })}
                 </div>
