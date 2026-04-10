@@ -11,6 +11,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
+import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
 import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
 import { steel, C, FONT_SMOOTH, METALLIC_CHEVRON, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
@@ -388,6 +389,7 @@ function ModifierDetail({ modifier }) {
 }
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
+  const isDesktop = useIsDesktop();
   const [expandedSection, setExpandedSection] = useState(() =>
     result && result.confidence < 70 ? 'patterns' : null
   );
@@ -632,7 +634,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
       width: '100%',
-      maxWidth: 430,
+      maxWidth: isDesktop ? 1180 : 430,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
@@ -642,6 +644,20 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       overflowY: 'auto',
       position: 'relative',
       paddingBottom: 40,
+      // Desktop: two-column grid. Left = hero/pattern/CTA (the 430px instrument
+      // column, untouched internally). Right = analytical panel, moved
+      // alongside the hero so the screen reads native on wide viewports.
+      ...(isDesktop ? {
+        display: 'grid',
+        gridTemplateColumns: '430px minmax(0, 1fr)',
+        gridTemplateRows: 'auto auto',
+        gridTemplateAreas: '"hero panel" "actions panel"',
+        columnGap: 36,
+        rowGap: 0,
+        paddingLeft: 40, paddingRight: 40,
+        alignItems: 'start',
+        justifyContent: 'center',
+      } : null),
     }}>
       {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
       <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
@@ -653,7 +669,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       </div>
 
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
-      <div style={{ position: 'relative', height: panelTop }}>
+      <div style={{ position: 'relative', height: panelTop, width: isDesktop ? 430 : undefined, ...(isDesktop ? { gridArea: 'hero' } : null) }}>
 
         {/* Back nav */}
         <button
@@ -875,7 +891,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
       {/* ─── Analytical Panel ─── */}
       <div style={{
-        marginLeft: 25, marginRight: 25,
+        marginLeft: isDesktop ? 0 : 25,
+        marginRight: isDesktop ? 0 : 25,
+        marginTop: isDesktop ? 96 : 0,
+        maxWidth: isDesktop ? 620 : undefined,
         borderRadius: 14,
         backgroundColor: C.panelBg,
         boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
@@ -885,6 +904,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         transform: infoVisible ? 'translateY(0)' : 'translateY(60px)',
         transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s',
         pointerEvents: infoVisible ? 'auto' : 'none',
+        ...(isDesktop ? { gridArea: 'panel', alignSelf: 'start' } : null),
       }}>
         {/* Inner highlight */}
         <div style={{
@@ -1294,11 +1314,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
       {/* ─── Bottom row: Retake | Save (high confidence only) ─── */}
       {isHighConf && (
-        <BottomActions onRetry={onRetry} onSetup={onSetup} infoVisible={infoVisible} isDragging={isDragging} />
+        <div style={isDesktop ? { gridArea: 'actions' } : undefined}>
+          <BottomActions onRetry={onRetry} onSetup={onSetup} infoVisible={infoVisible} isDragging={isDragging} />
+        </div>
       )}
 
       {/* ─── Low confidence: spacer ─── */}
-      {!isHighConf && <div style={{ height: 40 }} />}
+      {!isHighConf && <div style={{ height: 40, ...(isDesktop ? { gridArea: 'actions' } : null) }} />}
 
       {/* ─── Home Indicator — pinned to viewport bottom ─── */}
       <div style={{

@@ -13,6 +13,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { tapHaptic, successHaptic, navHaptic, longPressHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
+import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
@@ -364,6 +365,7 @@ function PullTabDrawer({ label, open, onToggle, children, maxH = 300 }) {
 }
 
 export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit }) {
+  const isDesktop = useIsDesktop();
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);
@@ -553,7 +555,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
-      width: '100%', maxWidth: 430, height: '100%', margin: '0 auto',
+      width: '100%', maxWidth: isDesktop ? 1180 : 430, height: '100%', margin: '0 auto',
       backgroundColor: C.bg,
       display: 'flex', flexDirection: 'column', overflowY: 'auto',
       position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
@@ -571,7 +573,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       {/* ─── Nav bar ─── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '56px 20px 0', position: 'relative', zIndex: 1,
+        padding: isDesktop ? '56px 40px 0' : '56px 20px 0', position: 'relative', zIndex: 1,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={handleCancel} style={{
@@ -597,7 +599,25 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       </div>
 
       {/* ─── Content ─── */}
-      <div style={{ padding: '20px 25px 40px', flex: 1, display: 'flex', flexDirection: 'column', gap: 16, position: 'relative', zIndex: 1 }}>
+      <div style={{
+        padding: isDesktop ? '20px 40px 40px' : '20px 25px 40px',
+        flex: 1,
+        display: isDesktop ? 'grid' : 'flex',
+        flexDirection: isDesktop ? undefined : 'column',
+        gap: 16,
+        // Desktop: two-column grid. Full-width banner rows (result header,
+        // warnings, CTA/save row). Left column = "what is the setup" (hero
+        // flip card, roles, camera, chips, lens ring, pre-shoot check).
+        // Right column = "secondary detail drawers" (pull-tabs).
+        ...(isDesktop ? {
+          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+          gridAutoFlow: 'row dense',
+          columnGap: 20,
+          rowGap: 16,
+          alignContent: 'start',
+        } : null),
+        position: 'relative', zIndex: 1,
+      }}>
 
         {/* ── Result header — always expanded ── */}
         {result && (
@@ -607,6 +627,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             padding: '14px 20px',
             display: 'flex', alignItems: 'center', gap: 14,
             position: 'relative',
+            ...(isDesktop ? { gridColumn: '1 / -1' } : null),
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
             {imagePreview && (
@@ -651,11 +672,15 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         )}
 
         {/* ── Warning strip — edge cases + physics violations ── */}
-        <WarningStrip warnings={warnings} />
+        {warnings && warnings.length > 0 && (
+          <div style={isDesktop ? { gridColumn: '1 / -1' } : undefined}>
+            <WarningStrip warnings={warnings} />
+          </div>
+        )}
 
         {/* ── Key Light hero — flip card (specs ↔ diagram) ── */}
         {result && (modName || positionDisplay || result._raw) && (
-          <div style={{ perspective: 1200 }} onClick={flipHero}>
+          <div style={{ perspective: 1200, ...(isDesktop ? { gridColumn: 1 } : null) }} onClick={flipHero}>
             <div style={{
               transformStyle: 'preserve-3d',
               transform: heroFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
@@ -814,7 +839,11 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         )}
 
         {/* ── Multi-light roles strip ── */}
-        <LightRoleStrip roles={presentRoles} />
+        {presentRoles && presentRoles.length > 0 && (
+          <div style={isDesktop ? { gridColumn: 1 } : undefined}>
+            <LightRoleStrip roles={presentRoles} />
+          </div>
+        )}
 
         {/* Camera guidance from recreation_setup — focal_length, aperture, subject guidance */}
         {(rsFocal || rsAperture || rsCamGuide) && (
@@ -822,6 +851,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             borderRadius: 10, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
             padding: '10px 16px', position: 'relative',
+            ...(isDesktop ? { gridColumn: 1 } : null),
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 10, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
             <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
@@ -864,6 +894,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               borderRadius: 8, backgroundColor: '#050507',
               boxShadow: RING_TRACK_SHADOW, padding: '6px 4px',
               overflow: 'hidden',
+              ...(isDesktop ? { gridColumn: 1 } : null),
             }}>
               <div style={{
                 display: 'flex', gap: 6,
@@ -891,6 +922,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             borderRadius: 14, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
             overflow: 'hidden', position: 'relative',
+            ...(isDesktop ? { gridColumn: 1 } : null),
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
 
@@ -967,7 +999,12 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         {result?._raw?.shoot_checklist && (() => {
           const items = result._raw.shoot_checklist;
           return (
-            <div style={{ borderRadius: 14, backgroundColor: C.panelBg, boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`, overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              borderRadius: 14, backgroundColor: C.panelBg,
+              boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+              overflow: 'hidden', position: 'relative',
+              ...(isDesktop ? { gridColumn: 2 } : null),
+            }}>
               <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
               <div style={{ padding: '14px 20px' }}>
                 <RowLabel>PRE-SHOOT CHECK</RowLabel>
@@ -986,6 +1023,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
         {/* ── Pull-tab: Catchlight & Modifier detail ── */}
         {result?.sections?.catchlightModifier && (
+          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
           <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.modifier} onToggle={() => toggleDrawer('modifier')}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.textSubBold, lineHeight: 1.6, ...FONT_SMOOTH }}>
               {result.sections.catchlightModifier}
@@ -1001,19 +1039,23 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </p>
             )}
           </PullTabDrawer>
+          </div>
         )}
 
         {/* ── Pull-tab: Shadow Analysis ── */}
         {result?.sections?.shadowAnalysis && (
+          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
           <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggleDrawer('shadow')} maxH={400}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 500, color: C.textSubBold, lineHeight: 1.7, ...FONT_SMOOTH }}>
               {result.sections.shadowAnalysis}
             </p>
           </PullTabDrawer>
+          </div>
         )}
 
         {/* ── Pull-tab: Setup Guide — recreation_setup notes + bg strategy ── */}
         {(rsNotes.length > 0 || rsBg) && (
+          <div style={isDesktop ? { gridColumn: 2 } : undefined}>
           <PullTabDrawer label="SETUP GUIDE" open={!!drawers.setupGuide} onToggle={() => toggleDrawer('setupGuide')} maxH={400}>
             {rsBg && (
               <div style={{ marginBottom: rsNotes.length > 0 ? 10 : 0 }}>
@@ -1041,6 +1083,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </div>
             )}
           </PullTabDrawer>
+          </div>
         )}
 
         {/* ── Pull-tab: Signal Diagnostics ── */}
@@ -1049,6 +1092,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           const signals = sd.signals || {};
           const hasSignals = signals.nose_shadow_angle_deg != null || signals.left_right_asymmetry != null || signals.triangle_isolation != null;
           if (!hasSignals) return null;
+          const wrap = (node) => isDesktop ? <div style={{ gridColumn: 2 }}>{node}</div> : node;
           const cellStyle = {
             flex: '1 1 45%', minWidth: 120, padding: '10px 12px', borderRadius: 10,
             backgroundColor: C.fieldBg,
@@ -1056,7 +1100,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           };
           const cellLabel = { margin: 0, fontSize: 10, fontWeight: 700, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH };
           const cellValue = { margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH };
-          return (
+          return wrap(
             <PullTabDrawer label="SIGNAL DIAGNOSTICS" open={!!drawers.signals} onToggle={() => toggleDrawer('signals')}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                 {signals.nose_shadow_angle_deg != null && (
@@ -1094,12 +1138,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         })()}
 
         {/* ── Pull-tab: Save Details ── */}
+        <div style={isDesktop ? { gridColumn: 2 } : undefined}>
         <PullTabDrawer label="SAVE DETAILS" open={!!drawers.save} onToggle={() => toggleDrawer('save')}>
           <InsetField label="SETUP NAME" value={setupName} onChange={setSetupName} placeholder={defaultName} />
           <InsetField label="NOTES" value={notes} onChange={setNotes} placeholder="Any details about this setup…" multiline />
         </PullTabDrawer>
+        </div>
 
-        <div style={{ flex: 1 }} />
+        {!isDesktop && <div style={{ flex: 1 }} />}
 
         {/* ── Start Cockpit CTA (primary) ── */}
         <button
@@ -1116,6 +1162,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             WebkitTapHighlightColor: 'transparent',
             transform: savePressed ? 'scale(0.98)' : 'scale(1)',
             transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+            ...(isDesktop ? { gridColumn: '1 / -1', marginTop: 8, maxWidth: 520, justifySelf: 'center' } : null),
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(245,247,250,0.9)', letterSpacing: '0.5px', pointerEvents: 'none', ...FONT_SMOOTH }}>
@@ -1127,6 +1174,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '10px 4px 0',
+          ...(isDesktop ? { gridColumn: '1 / -1', maxWidth: 520, width: '100%', justifySelf: 'center' } : null),
         }}>
           <button onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',
