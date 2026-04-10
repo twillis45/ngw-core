@@ -14,7 +14,7 @@ import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
 import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
-import { steel, C, FONT_SMOOTH, METALLIC_CHEVRON, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
+import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, PANEL_SHADOW, PANEL_BEVEL,
          TEXT_SHADOW_ENGRAVED,
          BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../../../theme/studioMatte';
@@ -22,6 +22,42 @@ import LightingDiagram from './components/LightingDiagram';
 
 // Pill inset shadow — exact from Figma pill nodes
 const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0px rgba(0,0,0,0.4)';
+
+// Drawer handle shadow — matches SetupScreen
+const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
+
+// ─── Pull-tab drawer (mirrors SetupScreen's PullTabDrawer) ───────────────────
+function PullTabDrawer({ label, open, onToggle, children, maxH = 600 }) {
+  return (
+    <div style={{
+      borderRadius: 14, backgroundColor: C.panelBg,
+      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+      overflow: 'hidden', position: 'relative',
+    }}>
+      <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+      <div onClick={onToggle} style={{
+        padding: '10px 20px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+      }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.75), letterSpacing: '1px', ...FONT_SMOOTH }}>
+          {open ? 'CLOSE' : label}
+        </span>
+        <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: '#0a0b0d', boxShadow: DRAWER_HANDLE_SHADOW }} />
+      </div>
+      <div style={{
+        maxHeight: open ? maxH : 0,
+        opacity: open ? 1 : 0,
+        overflow: 'hidden',
+        transition: 'max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
+      }}>
+        <div style={{ padding: '4px 20px 14px' }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Pill({ label }) {
   return (
@@ -390,8 +426,8 @@ function ModifierDetail({ modifier }) {
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
   const isDesktop = useIsDesktop();
-  const [expandedSection, setExpandedSection] = useState(() =>
-    result && result.confidence < 70 ? 'patterns' : null
+  const [drawers, setDrawers] = useState(() =>
+    result && result.confidence < 70 ? { patterns: true } : {}
   );
   const [infoVisible, setInfoVisible] = useState(true);
   const [dragOffset, setDragOffset] = useState(0);
@@ -588,7 +624,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const panelTop    = isHighConf ? 497 : 478;
   const leadMargin  = confidence - (sections.patternCandidates[1]?.score ?? 0);
 
-  const toggle = (key) => { setExpandedSection(prev => prev === key ? null : key); panelToggleSound(); tapHaptic(); };
+  const toggle = (key) => { setDrawers(prev => ({ ...prev, [key]: !prev[key] })); panelToggleSound(); tapHaptic(); };
 
   // Summary lines for collapsed rows
   const summaries = {
@@ -889,35 +925,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       </div>
       {/* ─── end top section ─── */}
 
-      {/* ─── Analytical Panel ─── */}
+      {/* ─── Analytical Panel (pull-tab drawers) ─── */}
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
         marginTop: isDesktop ? 96 : 0,
         maxWidth: isDesktop ? 620 : undefined,
-        borderRadius: 14,
-        backgroundColor: C.panelBg,
-        boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-        overflow: 'hidden',
-        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
         opacity: infoVisible ? 1 : 0,
         transform: infoVisible ? 'translateY(0)' : 'translateY(60px)',
         transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s',
         pointerEvents: infoVisible ? 'auto' : 'none',
         ...(isDesktop ? { gridArea: 'panel', alignSelf: 'start' } : null),
       }}>
-        {/* Inner highlight */}
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: 14,
-          pointerEvents: 'none',
-          boxShadow: PANEL_BEVEL,
-          zIndex: 10,
-        }} />
-
-        {/* Warning chips — inside panel, above rows */}
+        {/* Warning chips — compact strip above drawers */}
         {sections.edgeCaseWarnings?.length > 0 && (
           <div style={{
-            padding: '10px 16px 0',
+            padding: '2px 4px',
             display: 'flex', flexWrap: 'wrap', gap: 6,
           }}>
             {sections.edgeCaseWarnings.map((w, i) => (
@@ -938,377 +964,186 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           </div>
         )}
 
-        {/* Row 1 — PATTERN CANDIDATES */}
-        <button
-          onClick={() => toggle('patterns')}
-          style={{
-            width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
-            textAlign: 'left', WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <div style={{ padding: '14px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                PATTERN CANDIDATES
-              </p>
-              {expandedSection !== 'patterns' && (
-                <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 500, color: C.textSub, WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                  {summaries.patterns}
-                </p>
-              )}
-            </div>
-            <span style={{
-              fontSize: 14, fontWeight: 600, marginLeft: 12, flexShrink: 0,
-              marginTop: expandedSection === 'patterns' ? 0 : 5,
-              display: 'inline-block',
-              transform: expandedSection === 'patterns' ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.2s ease',
-              ...METALLIC_CHEVRON,
-            }}>›</span>
-          </div>
-        </button>
-
-        <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'patterns' ? '600px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
+        {/* PATTERN CANDIDATES */}
+        <PullTabDrawer label="PATTERN CANDIDATES" open={!!drawers.patterns} onToggle={() => toggle('patterns')} maxH={600}>
           <PatternBars candidates={sections.patternCandidates} isHighConf={isHighConf} />
-        </div>
+        </PullTabDrawer>
 
-        {/* Divider 1 */}
-        <div style={{ height: 1, backgroundColor: C.divider, marginLeft: 20 }} />
+        {/* SHADOW ANALYSIS */}
+        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={800}>
+          <LightingDiagram result={result} />
+          <p style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+            {sections.shadowAnalysis}
+          </p>
+        </PullTabDrawer>
 
-        {/* Row 2 — SHADOW ANALYSIS */}
-        <button
-          onClick={() => toggle('shadow')}
-          style={{
-            width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
-            textAlign: 'left', WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <div style={{ padding: '14px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, marginRight: 12 }}>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                SHADOW ANALYSIS
-              </p>
-              {expandedSection !== 'shadow' && (
-                <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 500, color: C.textSub, WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                  {summaries.shadow}
-                </p>
-              )}
-            </div>
-            <span style={{
-              fontSize: 14, fontWeight: 600, flexShrink: 0,
-              marginTop: expandedSection === 'shadow' ? 0 : 4,
-              display: 'inline-block',
-              transform: expandedSection === 'shadow' ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.2s ease',
-              ...METALLIC_CHEVRON,
-            }}>›</span>
-          </div>
-        </button>
-        <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'shadow' ? '800px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
-          <div style={{ padding: '0 20px 16px' }}>
-            <LightingDiagram result={result} />
-            <p style={{ margin: '12px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-              {sections.shadowAnalysis}
-            </p>
-          </div>
-        </div>
-
-        {/* Divider 2 */}
-        <div style={{ height: 1, backgroundColor: C.divider, marginLeft: 20 }} />
-
-        {/* Row 2b — SCENE — collapsible */}
-        {(sections.sceneDescription || sections.vlmNarrative) ? (
-          <>
-            <button
-              onClick={() => toggle('scene')}
-              style={{
-                width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
-                textAlign: 'left', WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              <div style={{ padding: '14px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, marginRight: 12 }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>
-                    SCENE
-                  </p>
-                  {expandedSection !== 'scene' && summaries.scene && (
-                    <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 400, color: C.textSub, ...FONT_SMOOTH }}>
-                      {summaries.scene}
-                    </p>
-                  )}
-                </div>
-                <span style={{
-                  fontSize: 14, fontWeight: 600, marginLeft: 12, flexShrink: 0,
-                  marginTop: expandedSection === 'scene' ? 0 : 5,
-                  display: 'inline-block',
-                  transform: expandedSection === 'scene' ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.2s ease',
-                  ...METALLIC_CHEVRON,
-                }}>›</span>
-              </div>
-            </button>
-            <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'scene' ? '800px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
-              <div style={{ padding: '0 20px 14px' }}>
-                {sections.sceneDescription && (
-                  <p style={{ margin: '0 0 0', fontSize: 13, fontWeight: 400, lineHeight: '18px', color: C.textSub, ...FONT_SMOOTH }}>
-                    {sections.sceneDescription}
-                  </p>
-                )}
-                {sections.vlmNarrative?.fields?.length > 0 && (
-                  <div style={{ marginTop: sections.sceneDescription ? 10 : 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {sections.vlmNarrative.fields.map(({ label, value }) => (
-                      <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.6px', ...FONT_SMOOTH }}>
-                          {label.toUpperCase()}
-                        </span>
-                        <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '17px', color: C.textSub, ...FONT_SMOOTH }}>
-                          {value}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div style={{ height: 1, backgroundColor: C.divider, marginLeft: 20 }} />
-          </>
-        ) : null}
-
-        {/* Row 3 — CATCHLIGHT & MODIFIER */}
-        <button
-          onClick={() => toggle('catchlight')}
-          style={{
-            width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
-            textAlign: 'left', WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <div style={{ padding: '14px 20px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, marginRight: 12 }}>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                CATCHLIGHT & MODIFIER
-              </p>
-              {expandedSection !== 'catchlight' && (
-                <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 500, color: C.textSub, WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
-                  {summaries.catchlight}
-                </p>
-              )}
-            </div>
-            <span style={{
-              fontSize: 14, fontWeight: 600, flexShrink: 0,
-              marginTop: expandedSection === 'catchlight' ? 0 : 4,
-              display: 'inline-block',
-              transform: expandedSection === 'catchlight' ? 'rotate(90deg)' : 'none',
-              transition: 'transform 0.2s ease',
-              ...METALLIC_CHEVRON,
-            }}>›</span>
-          </div>
-        </button>
-        <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'catchlight' ? '700px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
-          <div style={{ padding: '0 20px 16px' }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-              {sections.catchlightModifier}
-            </p>
-            <ModifierDetail modifier={sections.modifier} />
-            {sections.modifier?.physicalMeaning && (
-              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                {sections.modifier.physicalMeaning}
+        {/* SCENE */}
+        {(sections.sceneDescription || sections.vlmNarrative) && (
+          <PullTabDrawer label="SCENE" open={!!drawers.scene} onToggle={() => toggle('scene')} maxH={800}>
+            {sections.sceneDescription && (
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '18px', color: C.textSub, ...FONT_SMOOTH }}>
+                {sections.sceneDescription}
               </p>
             )}
-          </div>
-        </div>
-
-        {/* Row 4 — COLOR PALETTE (conditional) */}
-        {sections.colorPalette && (
-          <>
-            <div style={{ height: 1, backgroundColor: C.divider, marginLeft: 20 }} />
-            <button
-              onClick={() => toggle('colors')}
-              style={{ width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', WebkitTapHighlightColor: 'transparent' }}
-            >
-              <div style={{ padding: '14px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, marginRight: 12 }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>COLOR PALETTE</p>
-                  {expandedSection !== 'colors' && (
-                    <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
-                      {summaries.colors}
-                    </p>
-                  )}
-                </div>
-                <span style={{
-                  fontSize: 14, fontWeight: 600, flexShrink: 0,
-                  marginTop: expandedSection === 'colors' ? 0 : 4,
-                  display: 'inline-block',
-                  transform: expandedSection === 'colors' ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.2s ease',
-                  ...METALLIC_CHEVRON,
-                }}>›</span>
-              </div>
-            </button>
-            <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'colors' ? '600px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
-              <div style={{ padding: '0 20px 16px' }}>
-                {/* Swatches row */}
-                {sections.colorPalette.hexes.length > 0 && (
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    {sections.colorPalette.hexes.map((hex, i) => (
-                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                        <div style={{
-                          width: 32, height: 32, borderRadius: 8,
-                          backgroundColor: hex,
-                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.4)',
-                        }} />
-                        {sections.colorPalette.colors[i] && (
-                          <span style={{ fontSize: 9, color: steel(0.45), textAlign: 'center', maxWidth: 40, lineHeight: 1.2, ...FONT_SMOOTH }}>
-                            {sections.colorPalette.colors[i]}
-                          </span>
-                        )}
-                      </div>
-                    ))}
+            {sections.vlmNarrative?.fields?.length > 0 && (
+              <div style={{ marginTop: sections.sceneDescription ? 10 : 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {sections.vlmNarrative.fields.map(({ label, value }) => (
+                  <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.6px', ...FONT_SMOOTH }}>
+                      {label.toUpperCase()}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 400, lineHeight: '17px', color: C.textSub, ...FONT_SMOOTH }}>
+                      {value}
+                    </span>
                   </div>
-                )}
-                {/* Harmony + CCT */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {sections.colorPalette.harmony && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>HARMONY</span>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
-                        {sections.colorPalette.harmony}{sections.colorPalette.warmCool ? ' · warm/cool' : ''}
-                      </span>
-                    </div>
-                  )}
-                  {sections.colorPalette.cctKey && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>KEY CCT</span>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctKey}</span>
-                    </div>
-                  )}
-                  {sections.colorPalette.cctShadows && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SHADOW CCT</span>
-                      <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctShadows}</span>
-                    </div>
-                  )}
-                  {sections.colorPalette.character && (
-                    <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                      {sections.colorPalette.character}
-                    </p>
-                  )}
-                </div>
+                ))}
               </div>
-            </div>
-          </>
+            )}
+          </PullTabDrawer>
         )}
 
-        {/* Row 5 — CONFIDENCE (signal quality, conditional) */}
-        {sections.signalQuality && (
-          <>
-            <div style={{ height: 1, backgroundColor: C.divider, marginLeft: 20 }} />
-            <button
-              onClick={() => toggle('confidence')}
-              style={{ width: '100%', backgroundColor: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left', WebkitTapHighlightColor: 'transparent' }}
-            >
-              <div style={{ padding: '14px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ flex: 1, marginRight: 12 }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>CONFIDENCE</p>
-                  {expandedSection !== 'confidence' && (
-                    <p style={{ margin: '6px 0 0', fontSize: 13, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
-                      {summaries.confidence}
-                    </p>
-                  )}
-                </div>
-                <span style={{
-                  fontSize: 14, fontWeight: 600, flexShrink: 0,
-                  marginTop: expandedSection === 'confidence' ? 0 : 4,
-                  display: 'inline-block',
-                  transform: expandedSection === 'confidence' ? 'rotate(90deg)' : 'none',
-                  transition: 'transform 0.2s ease',
-                  ...METALLIC_CHEVRON,
-                }}>›</span>
-              </div>
-            </button>
-            <div style={{ overflow: 'hidden', maxHeight: expandedSection === 'confidence' ? '1200px' : '0', transition: 'max-height 0.32s cubic-bezier(0.4,0,0.2,1)' }}>
-              <div style={{ padding: '0 20px 16px' }}>
-                {/* Signal strength bar */}
-                {sections.signalQuality.strength != null && (
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SIGNAL STRENGTH</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: isHighConf ? C.confHigh : C.confLow, ...FONT_SMOOTH }}>
-                        {sections.signalQuality.available != null
-                          ? `${sections.signalQuality.available}/${sections.signalQuality.total}`
-                          : `${Math.round(sections.signalQuality.strength * 100)}%`}
+        {/* CATCHLIGHT & MODIFIER */}
+        <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={700}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
+            {sections.catchlightModifier}
+          </p>
+          <ModifierDetail modifier={sections.modifier} />
+          {sections.modifier?.physicalMeaning && (
+            <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
+              {sections.modifier.physicalMeaning}
+            </p>
+          )}
+        </PullTabDrawer>
+
+        {/* COLOR PALETTE */}
+        {sections.colorPalette && (
+          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={600}>
+            {sections.colorPalette.hexes.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {sections.colorPalette.hexes.map((hex, i) => (
+                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8,
+                      backgroundColor: hex,
+                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.2), 0 1px 3px rgba(0,0,0,0.4)',
+                    }} />
+                    {sections.colorPalette.colors[i] && (
+                      <span style={{ fontSize: 9, color: steel(0.45), textAlign: 'center', maxWidth: 40, lineHeight: 1.2, ...FONT_SMOOTH }}>
+                        {sections.colorPalette.colors[i]}
                       </span>
-                    </div>
-                    <div style={{ height: 3, borderRadius: 1.5, backgroundColor: C.barTrack }}>
-                      <div style={{
-                        height: '100%', borderRadius: 1.5,
-                        width: `${Math.round(sections.signalQuality.strength * 100)}%`,
-                        backgroundColor: isHighConf ? C.confHighBar : C.confLowBar,
-                        transition: 'width 0.4s ease',
-                      }} />
-                    </div>
+                    )}
                   </div>
-                )}
-                {/* Pass summaries — per-analysis-pass reliability grid */}
-                {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
-                  <div style={{ marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                      PASS RELIABILITY
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      {Object.entries(sections.signalQuality.passSummaries).map(([pass, level]) => {
-                        const color = level === 'high' ? C.confHigh : level === 'moderate' ? steel(0.6) : C.confLow;
-                        const label = pass.replace(/_pass$/, '').replace(/_/g, ' ');
-                        return (
-                          <div key={pass} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: 11, fontWeight: 400, color: steel(0.45), ...FONT_SMOOTH }}>{label}</span>
-                            <span style={{ fontSize: 11, fontWeight: 600, color, ...FONT_SMOOTH }}>{level}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-                {/* Supporting signals */}
-                {sections.signalQuality.supporting.length > 0 && (
-                  <div style={{ marginBottom: sections.signalQuality.contradicting.length > 0 ? 10 : 0 }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                      SUPPORTING
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {sections.signalQuality.supporting.map((s, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                          <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confHigh, marginTop: 6, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* Contradicting signals */}
-                {sections.signalQuality.contradicting.length > 0 && (
-                  <div>
-                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                      CONTRADICTING
-                    </p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {sections.signalQuality.contradicting.map((s, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                          <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confLow, marginTop: 6, flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {/* Pattern reasoning */}
-                {sections.signalQuality.reasoning && (
-                  <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                    {sections.signalQuality.reasoning}
-                  </p>
-                )}
+                ))}
               </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sections.colorPalette.harmony && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>HARMONY</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>
+                    {sections.colorPalette.harmony}{sections.colorPalette.warmCool ? ' · warm/cool' : ''}
+                  </span>
+                </div>
+              )}
+              {sections.colorPalette.cctKey && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>KEY CCT</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctKey}</span>
+                </div>
+              )}
+              {sections.colorPalette.cctShadows && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SHADOW CCT</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.textSub, ...FONT_SMOOTH }}>{sections.colorPalette.cctShadows}</span>
+                </div>
+              )}
+              {sections.colorPalette.character && (
+                <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                  {sections.colorPalette.character}
+                </p>
+              )}
             </div>
-          </>
+          </PullTabDrawer>
+        )}
+
+        {/* CONFIDENCE */}
+        {sections.signalQuality && (
+          <PullTabDrawer label="CONFIDENCE" open={!!drawers.confidence} onToggle={() => toggle('confidence')} maxH={1200}>
+            {sections.signalQuality.strength != null && (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SIGNAL STRENGTH</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: isHighConf ? C.confHigh : C.confLow, ...FONT_SMOOTH }}>
+                    {sections.signalQuality.available != null
+                      ? `${sections.signalQuality.available}/${sections.signalQuality.total}`
+                      : `${Math.round(sections.signalQuality.strength * 100)}%`}
+                  </span>
+                </div>
+                <div style={{ height: 3, borderRadius: 1.5, backgroundColor: C.barTrack }}>
+                  <div style={{
+                    height: '100%', borderRadius: 1.5,
+                    width: `${Math.round(sections.signalQuality.strength * 100)}%`,
+                    backgroundColor: isHighConf ? C.confHighBar : C.confLowBar,
+                    transition: 'width 0.4s ease',
+                  }} />
+                </div>
+              </div>
+            )}
+            {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
+              <div style={{ marginBottom: 12 }}>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                  PASS RELIABILITY
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {Object.entries(sections.signalQuality.passSummaries).map(([pass, level]) => {
+                    const color = level === 'high' ? C.confHigh : level === 'moderate' ? steel(0.6) : C.confLow;
+                    const label = pass.replace(/_pass$/, '').replace(/_/g, ' ');
+                    return (
+                      <div key={pass} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 400, color: steel(0.45), ...FONT_SMOOTH }}>{label}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color, ...FONT_SMOOTH }}>{level}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {sections.signalQuality.supporting.length > 0 && (
+              <div style={{ marginBottom: sections.signalQuality.contradicting.length > 0 ? 10 : 0 }}>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                  SUPPORTING
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {sections.signalQuality.supporting.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                      <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confHigh, marginTop: 6, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sections.signalQuality.contradicting.length > 0 && (
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                  CONTRADICTING
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {sections.signalQuality.contradicting.map((s, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                      <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confLow, marginTop: 6, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {sections.signalQuality.reasoning && (
+              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.45), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                {sections.signalQuality.reasoning}
+              </p>
+            )}
+          </PullTabDrawer>
         )}
       </div>
 
