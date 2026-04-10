@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'ngw_theme';
 
 /** All available themes in toggle-cycle order. */
-export const THEMES = ['dark', 'light'];
+export const THEMES = ['dark', 'light', 'studio'];
 
 export function loadTheme() {
   try {
