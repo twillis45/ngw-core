@@ -14,6 +14,7 @@ import useMode from '../../../hooks/useMode';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN } from '../../../theme/studioMatte';
 import { Panel, Divider, SectionLabel, NavRow, ToggleRow, InfoRow, ScreenHeader, HomeIndicator }
   from '../_core/components';
+import MatteBackground from '../_shared/MatteBackground';
 
 const SUPPORT_EMAIL = 'hello@noguesswork.com';
 const HELP_URL      = 'https://noguessworksystems.com/help';
@@ -43,8 +44,9 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
 
   return (
     <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+      <MatteBackground variant="subdued" />
       <ScreenHeader title="Preferences" onBack={onBack} />
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
         <SectionLabel label="APPEARANCE" />
         <Panel>
@@ -169,8 +171,9 @@ function AccountScreen({ user, onBack, onLogout }) {
 
   return (
     <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+      <MatteBackground variant="subdued" />
       <ScreenHeader title="Account" onBack={onBack} />
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
         {/* Plan card */}
         <div style={{
@@ -286,9 +289,10 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
 
   return (
     <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+      <MatteBackground variant="subdued" />
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: C.bg, zIndex: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', zIndex: 10 }}>
         <button
           onClick={() => { navSlideSound(); navHaptic(); onBack?.(); }}
           style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: steel(0.65), padding: '4px 0', WebkitTapHighlightColor: 'transparent', minWidth: 64, textAlign: 'left', ...FS }}
@@ -297,7 +301,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
         <div style={{ minWidth: 64 }} />
       </div>
 
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
         {/* ── User card (taps → account) ── */}
         <button
@@ -336,7 +340,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
             }}>
               <span style={{ fontSize: 10, fontWeight: 700, color: GREEN, letterSpacing: '0.8px', ...FS }}>PRO</span>
             </div>
-            <span style={{ fontSize: 16, color: steel(0.3), lineHeight: 1 }}>›</span>
+            <span style={{ fontSize: 16, color: steel(0.45), lineHeight: 1 }}>›</span>
           </div>
         </button>
 
@@ -426,8 +430,8 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
           onClick={handleVersionTap}
           style={{ textAlign: 'center', padding: '28px 0 8px', cursor: 'default' }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: steel(0.28), ...FS }}>No Guesswork Lighting</p>
-          <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.22), ...FS }}>{APP_VERSION}</p>
+          <p style={{ margin: 0, fontSize: 11, color: steel(0.40), ...FS }}>No Guesswork Lighting</p>
+          <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.35), ...FS }}>{APP_VERSION}</p>
         </div>
 
       </div>

@@ -6,13 +6,14 @@ import SetupScreen from './studio/_core/SetupScreen';
 import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
 import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
 import FitToViewport from './studio/_shared/FitToViewport';
-// Day1SettingsScreen (Bucket C) removed from shell in Checkpoint 3 — deferred.
+import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
 import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
 import { softClickSound } from '../utils/sounds';
+import { LAYOUT_DESKTOP_MIN } from '../utils/useIsDesktop';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -463,11 +464,11 @@ function mapApiResult(data) {
   // Tells the photographer how the authoritative pattern was resolved —
   // i.e. which layer of the engine stack "won".
   const SOURCE_LABELS = {
-    reference_read:     'Reference Read',
-    lighting_inference: 'Lighting Inference',
-    definitive_sig:     'Definitive Signal',
-    cue_inference:      'Cue Analysis',
-    light_structure:    'Light Structure',
+    reference_read:     'full analysis',
+    lighting_inference: 'catchlight analysis',
+    definitive_sig:     'definitive signal',
+    cue_inference:      'shadow analysis',
+    light_structure:    'geometry analysis',
   };
   const patternSource    = SOURCE_LABELS[data.authoritative_pattern_source] || null;
   const confidenceLabel  = data.authoritative_confidence_label || null; // "strong" | "partial" | "weak"
@@ -638,9 +639,12 @@ export default function Day1DemoApp() {
     };
   }, []);
 
-  const handleAnalyze = (file, preview) => {
+  const [exifData, setExifData] = useState(null);
+
+  const handleAnalyze = (file, preview, exif) => {
     setImageFile(file);
     setImagePreview(preview);
+    setExifData(exif || null);
     setResult(null);
     setAnalysisError(null);
     setAnalysisReady(false);
@@ -685,18 +689,18 @@ export default function Day1DemoApp() {
   });
   const [lastPreview, setLastPreview] = useState(() => sessionStorage.getItem('ngw_last_preview') || null);
 
-  // Transition to result when analysis finishes (ProcessingScreen stays until ready)
+  // Transition to result when analysis finishes.  A brief 1.2s dwell lets
+  // the pattern tease flash on the ProcessingScreen photo before we switch —
+  // the "reveal moment" that makes the user feel the analysis landed.
   useEffect(() => {
     if (screen === 'processing' && analysisReady) {
       if (result) {
-        setScreen('result');
-        // Cache for last-result recall
+        // Cache immediately (don't wait for the dwell timer)
         setLastResult(result);
         setLastPreview(imagePreview);
         setLastAnalysisTime(Date.now());
         try {
           sessionStorage.setItem('ngw_last_result', JSON.stringify(result));
-          // Convert blob URL to data URL so it survives page reloads
           if (imagePreview && imagePreview.startsWith('blob:')) {
             fetch(imagePreview).then(r => r.blob()).then(blob => {
               const reader = new FileReader();
@@ -711,6 +715,9 @@ export default function Day1DemoApp() {
             sessionStorage.setItem('ngw_last_preview', imagePreview);
           }
         } catch { /* quota */ }
+        // 1.2s dwell — pattern tease shows on the processing photo
+        const timer = setTimeout(() => setScreen('result'), 1200);
+        return () => clearTimeout(timer);
       } else if (analysisError) {
         setScreen('error');
       }
@@ -726,9 +733,7 @@ export default function Day1DemoApp() {
   };
 
   const handleSetup = () => setScreen('setup');
-  // Bucket C (Day1SettingsScreen) is not registered in this build — no-op.
-  // HomeScreen still receives onSettings; clicking the gear is a silent no-op.
-  const handleSettings = () => { /* Bucket C deferred */ };
+  const handleSettings = () => setScreen('settings');
 
   const handleSetupSave = () => {
     // Persistence happens inside SetupScreen; stay on setup so the user can
@@ -790,10 +795,23 @@ export default function Day1DemoApp() {
     return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
   }
 
-  switch (screen) {
-    case 'home':
+  // ── Screen crossfade — each screen fades in on mount (200ms) ──
+  const screenContent = (() => {
+    switch (screen) {
+    case 'home': {
+      // Mobile: 430×932 aspect-preserving contain.
+      // Desktop: 430×designH at tightness=1 so the scaled inner box
+      // exactly matches the viewport height — no clipping. stableVH
+      // (= innerHeight on desktop) will match the inner box height.
+      const homeMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const desktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
-        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+        <FitToViewport
+          designWidth={430}
+          designHeight={homeMobile ? 932 : desktopVH}
+          maxScale={1.9}
+          tightness={homeMobile ? 0.96 : 1}
+        >
           <HomeScreen
             onAnalyze={handleAnalyze}
             hasLastResult={!!lastResult}
@@ -805,15 +823,36 @@ export default function Day1DemoApp() {
           />
         </FitToViewport>
       );
-    case 'processing':
+    }
+    case 'processing': {
+      const procMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const desktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
-        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
-          <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} />
+        <FitToViewport
+          designWidth={430}
+          designHeight={procMobile ? 932 : desktopVH}
+          maxScale={1.9}
+          tightness={procMobile ? 0.96 : 1}
+        >
+          <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />
         </FitToViewport>
       );
-    case 'result':
+    }
+    case 'result': {
+      // Mobile: use 430-wide design with width-only scaling so the result
+      // scrolls vertically at near-native size instead of scaling 1300px
+      // down to 50%. Desktop: use innerHeight so scaled box matches viewport.
+      const resultMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const resultDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
-        <FitToViewport designWidth={1300} designHeight={1040} minScale={0.5} maxScale={2.0}>
+        <FitToViewport
+          designWidth={resultMobile ? 430 : 1300}
+          designHeight={resultMobile ? undefined : resultDesktopVH}
+          fitMode={resultMobile ? 'width' : 'both'}
+          minScale={resultMobile ? 1 : 0.5}
+          maxScale={resultMobile ? 1.3 : 2.0}
+          tightness={resultMobile ? 0.96 : 1}
+        >
           <ResultScreen
             result={result}
             imagePreview={imagePreview}
@@ -822,9 +861,18 @@ export default function Day1DemoApp() {
           />
         </FitToViewport>
       );
-    case 'setup':
+    }
+    case 'setup': {
+      const setupMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const setupDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
-        <FitToViewport designWidth={1180} designHeight={1020} minScale={0.5} maxScale={2.0}>
+        <FitToViewport
+          designWidth={setupMobile ? 430 : 1180}
+          designHeight={setupMobile ? 932 : setupDesktopVH}
+          minScale={setupMobile ? 0.8 : 0.5}
+          maxScale={setupMobile ? 1.9 : 2.0}
+          tightness={setupMobile ? 0.96 : 1}
+        >
           <SetupScreen
             result={result}
             imagePreview={imagePreview}
@@ -834,9 +882,18 @@ export default function Day1DemoApp() {
           />
         </FitToViewport>
       );
-    case 'shoot':
+    }
+    case 'shoot': {
+      const shootMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const shootDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
-        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+        <FitToViewport
+          designWidth={shootMobile ? 430 : 1180}
+          designHeight={shootMobile ? 932 : shootDesktopVH}
+          minScale={shootMobile ? 0.8 : 0.5}
+          maxScale={shootMobile ? 1.9 : 2.0}
+          tightness={shootMobile ? 0.96 : 1}
+        >
           <Day1ShootScreen
             result={result}
             imagePreview={imagePreview}
@@ -845,7 +902,17 @@ export default function Day1DemoApp() {
           />
         </FitToViewport>
       );
-    // case 'settings': removed in Checkpoint 3 — Day1SettingsScreen is Bucket C.
+    }
+    case 'settings':
+      return (
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
+          <Day1SettingsScreen
+            user={user}
+            onBack={() => setScreen('home')}
+            onLogout={() => { clearAuth(); setUser(null); setScreen('home'); }}
+          />
+        </FitToViewport>
+      );
     case 'error':
       return (
         <FallbackReveal
@@ -868,7 +935,15 @@ export default function Day1DemoApp() {
           />
         </FitToViewport>
       );
-  }
+    }
+  })();
+
+  return (
+    <div key={screen} style={{ animation: 'screenFadeIn 0.2s ease both' }}>
+      {screenContent}
+      <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+    </div>
+  );
 }
 
 // ─── Fallback Reveal ─────────────────────────────────────────────────────────

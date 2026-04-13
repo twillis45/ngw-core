@@ -17,13 +17,14 @@ import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
-         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
+         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, VF_DITHER_NOISE } from '../../../theme/studioMatte';
+import MatteBackground from '../_shared/MatteBackground';
 import LightingDiagram from './components/LightingDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
-import ModifierSilhouette from '../_shared/ModifierSilhouette';
+import ModifierEmission from '../_shared/ModifierEmission';
 import PullTabDrawer from '../_shared/PullTabDrawer';
 import { saveSetup as persistSetup } from '../../../data/setupStore';
-import { saveShootRole } from '../../../data/shootModeStore';
+import { saveShootRole, loadShootRole } from '../../../data/shootModeStore';
 import { trackEvent } from '../../../data/analytics';
 
 // ─── Tokens ──────────────────────────────────────────────────────────────────
@@ -99,10 +100,12 @@ const SPEC_DOWN = 'inset 0px 2px 4px rgba(0,0,0,0.5), inset 0px 1px 2px rgba(0,0
 // midpoint in feet. Returns null when no number can be extracted.
 function parseDistanceMid(distRange) {
   if (distRange == null) return null;
-  const s = String(distRange).toLowerCase();
+  // Normalize en-dash/em-dash to hyphen, strip non-numeric/dot/hyphen
+  const s = String(distRange).replace(/[\u2013\u2014]/g, '-').toLowerCase();
   const nums = s.match(/\d+(?:\.\d+)?/g);
   if (!nums || nums.length === 0) return null;
-  const n = nums.map(Number);
+  const n = nums.map(Number).filter(Number.isFinite);
+  if (n.length === 0) return null;
   if (n.length === 1) return n[0];
   return (n[0] + n[1]) / 2;
 }
@@ -123,12 +126,15 @@ const HEIGHT_CLASS_ELEV_DEG = {
 };
 function estimateKeyHeightFt(heightClass, distanceFt) {
   if (!heightClass || distanceFt == null) return null;
+  const d = Number(distanceFt);
+  if (!Number.isFinite(d) || d <= 0) return null;
   const key = String(heightClass).trim().toLowerCase();
   const elev = HEIGHT_CLASS_ELEV_DEG[key];
   if (elev == null) return null;
   const subjectEyeFt = 5.5;
-  const deltaFt = distanceFt * Math.tan(elev * Math.PI / 180);
+  const deltaFt = d * Math.tan(elev * Math.PI / 180);
   const totalFt = subjectEyeFt + deltaFt;
+  if (!Number.isFinite(totalFt)) return null;
   const lo = Math.max(1, totalFt - 0.6);
   const hi = totalFt + 0.6;
   return `~${lo.toFixed(1)}–${hi.toFixed(1)} ft`;
@@ -210,7 +216,7 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
       onContextMenu={interactive ? (e) => e.preventDefault() : undefined}
       style={{
         flex: 1, minWidth: 0, borderRadius: 8,
-        padding: '8px 10px',
+        padding: '10px 14px',
         backgroundColor: pressed ? 'rgba(0,0,0,0.25)' : hasSecret ? 'rgba(0,0,0,0.08)' : 'transparent',
         boxShadow: pressed ? SPEC_DOWN : hasSecret ? SPEC_UP : 'none',
         transition: 'all 0.15s ease',
@@ -219,8 +225,8 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
         WebkitUserSelect: 'none', userSelect: 'none',
       }}
     >
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
-      <p style={{ margin: '4px 0 0', fontSize: 18, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{value}</p>
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{value}</p>
       {showSecondary && (
         <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
           {secondary}
@@ -290,6 +296,7 @@ function LightRoleStrip({ roles }) {
     <div style={{
       borderRadius: 10, padding: '8px 8px',
       backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW,
+      position: 'relative',
     }}>
       <div style={{
         display: 'flex', gap: 8, overflowX: 'auto',
@@ -298,6 +305,7 @@ function LightRoleStrip({ roles }) {
       }}>
         {roles.map(r => <LightRoleCard key={r.roleKey} roleKey={r.roleKey} role={r.role} />)}
       </div>
+      <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 24, borderRadius: '0 10px 10px 0', background: 'linear-gradient(to right, transparent, #050507)', pointerEvents: 'none' }} />
     </div>
   );
 }
@@ -315,6 +323,7 @@ function WarningStrip({ warnings }) {
     <div style={{
       borderRadius: 10, padding: '8px 10px',
       backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW,
+      position: 'relative',
     }}>
       <div style={{
         display: 'flex', gap: 6, overflowX: 'auto',
@@ -325,6 +334,7 @@ function WarningStrip({ warnings }) {
           <WarningChip key={i} label={w.label} sev={w.sev} />
         ))}
       </div>
+      <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 20, borderRadius: '0 10px 10px 0', background: 'linear-gradient(to right, transparent, #050507)', pointerEvents: 'none' }} />
     </div>
   );
 }
@@ -383,8 +393,8 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
   }
   if (pct == null) return null;
 
-  // Map % iris (0–250+) to a 0–1 ruler position with a soft compress at top
-  const RULER_MAX = 250;
+  // Map % iris (0–400+) to a 0–1 ruler position — supports 72"+ XL modifiers
+  const RULER_MAX = 400;
   const ruler = Math.max(0, Math.min(1, pct / RULER_MAX));
 
   const bands = [
@@ -392,7 +402,8 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
     { label: 'SMALL',  start: 25,  end: 50,  color: 'rgba(245,190,72,0.32)' },
     { label: 'MEDIUM', start: 50,  end: 100, color: 'rgba(245,190,72,0.48)' },
     { label: 'LARGE',  start: 100, end: 200, color: 'rgba(245,190,72,0.65)' },
-    { label: 'HUGE',   start: 200, end: 250, color: 'rgba(245,190,72,0.82)' },
+    { label: 'HUGE',   start: 200, end: 350, color: 'rgba(245,190,72,0.82)' },
+    { label: 'XL',     start: 350, end: 400, color: 'rgba(245,190,72,0.92)' },
   ];
 
   const bandFor = (v) => bands.find((b) => v >= b.start && v < b.end) || bands[bands.length - 1];
@@ -477,7 +488,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);
-  const [drawers, setDrawers] = useState({});
+  const [drawers, setDrawers] = useState(() =>
+    isDesktop ? { setupGuide: true, save: true } : {}
+  );
   const [viewfinderOpen, setViewfinderOpen] = useState(false);
   const [heroFlipped, setHeroFlipped] = useState(false);
   const [thumbZoomed, setThumbZoomed] = useState(false);
@@ -614,7 +627,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
     }
     // Setup only surfaces blocking warnings — Result owns the full set.
     // Filter to danger severity only so Setup stays focused on actionable issues.
-    return out.filter(w => w.sev === 'danger');
+    // Normalize 'warning' → 'warn' (engine emits both forms).
+    return out
+      .map(w => w.sev === 'warning' ? { ...w, sev: 'warn' } : w)
+      .filter(w => w.sev === 'danger');
   })();
 
   const handleSave = useCallback(() => {
@@ -636,11 +652,21 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
   const handleStartCockpit = useCallback(() => {
     softClickSound(); tapHaptic();
+    // F-2: Skip mode picker if user has a saved preference — go straight to cockpit
+    const savedRole = loadShootRole();
+    if (savedRole) {
+      setSelectedMode(savedRole);
+      trackEvent('SETUP_START_COCKPIT', {
+        pattern: result?.pattern, mode: savedRole, skippedPicker: true,
+      });
+      onStartCockpit?.(savedRole);
+      return;
+    }
     trackEvent('SETUP_MODE_PICKER_OPENED', {
       pattern: result?.pattern, confidence: result?.confidence,
     });
     setModeSheetOpen(true);
-  }, [result]);
+  }, [result, onStartCockpit]);
 
   const handleConfirmMode = useCallback(() => {
     successHaptic(); softClickSound();
@@ -659,26 +685,63 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
   const handleCancel = useCallback(() => { navHaptic(); navSlideSound(); onCancel(); }, [onCancel]);
 
+  // ── Swipe-back gesture — swipe from left edge navigates back to Results ──
+  // Same pattern as ResultScreen: touch starting within 24px of left edge,
+  // rightward drag > 80px fires onCancel() to go back.
+  const swipeBackStartX = useRef(null);
+  const swipeBackStartY = useRef(null);
+  const [swipeBackProgress, setSwipeBackProgress] = useState(0);
+  const handleSwipeBackStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX < 24) {
+      swipeBackStartX.current = t.clientX;
+      swipeBackStartY.current = t.clientY;
+    }
+  }, []);
+  const handleSwipeBackMove = useCallback((e) => {
+    if (swipeBackStartX.current == null || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - swipeBackStartX.current;
+    const dy = Math.abs(t.clientY - swipeBackStartY.current);
+    if (dy > dx) { swipeBackStartX.current = null; setSwipeBackProgress(0); return; }
+    setSwipeBackProgress(Math.min(1, dx / 100));
+  }, []);
+  const handleSwipeBackEnd = useCallback(() => {
+    if (swipeBackProgress > 0.8) {
+      navHaptic(); navSlideSound();
+      onCancel();
+    }
+    swipeBackStartX.current = null;
+    swipeBackStartY.current = null;
+    setSwipeBackProgress(0);
+  }, [swipeBackProgress, onCancel]);
+
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+    {/* Swipe-back edge hint — left edge glow (matches ResultScreen) */}
+    {swipeBackProgress > 0 && (
+      <div style={{
+        position: 'fixed', top: 0, bottom: 0, left: 0,
+        width: 24,
+        background: `radial-gradient(circle at 0px 50%, rgba(245,247,250,${0.22 * swipeBackProgress}) 0%, rgba(245,247,250,${0.06 * swipeBackProgress}) 120px, transparent 240px)`,
+        zIndex: 200,
+        pointerEvents: 'none',
+        transition: 'opacity 0.1s ease',
+      }} />
+    )}
     <div
-      onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
-      onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
+      onTouchStart={(e) => { handleSwipeBackStart(e); if (e.target === e.currentTarget) grainHaptic(); }}
+      onTouchMove={handleSwipeBackMove}
+      onTouchEnd={handleSwipeBackEnd}
       style={{
-      width: '100%', maxWidth: isDesktop ? 1180 : 430, height: '100%', margin: '0 auto',
+      width: '100%', maxWidth: isDesktop ? 'min(92vw, 1280px)' : 430, height: '100%', margin: '0 auto',
       backgroundColor: C.bg,
       display: 'flex', flexDirection: 'column', overflowY: 'auto',
       position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
     }}>
 
-      {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
-      </div>
+      <MatteBackground variant="subdued" />
 
       {/* ─── Nav bar ─── */}
       <div style={{
@@ -686,10 +749,11 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         padding: isDesktop ? '56px 40px 0' : '56px 20px 0', position: 'relative', zIndex: 1,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button onClick={handleCancel} style={{
+          <button aria-label="Back" onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            padding: 0, display: 'flex', alignItems: 'center',
+            padding: '10px 12px 10px 0', display: 'flex', alignItems: 'center',
             WebkitTapHighlightColor: 'transparent',
+            minWidth: 44, minHeight: 44,
           }}>
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
@@ -698,11 +762,15 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </p>
         </div>
         {result?._raw && (
-          <button onClick={openViewfinder} style={{
+          <button onClick={openViewfinder} aria-label="View original photo" style={{
             background: 'none', border: 'none', cursor: 'pointer',
             padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center',
             WebkitTapHighlightColor: 'transparent',
-          }}>
+            transition: 'background-color 0.15s ease',
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+          >
             <ViewfinderIcon color={steel(0.5)} />
           </button>
         )}
@@ -806,7 +874,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             compress both faces into phone-sized real estate; on desktop
             that compression is a handicap, not a feature. */}
         {result && !isDesktop && (modName || positionDisplay || result._raw) && (
-          <div style={{ perspective: 1200 }} onClick={flipHero}>
+          <div style={{ perspective: 1200 }} role="button" aria-label="Flip card to view diagram" tabIndex={0} onClick={flipHero} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipHero(); } }}>
             <div style={{
               transformStyle: 'preserve-3d',
               transform: heroFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
@@ -829,106 +897,86 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   </p>
                 </div>
 
+                {/* Hero modifier emission face (mobile) — subject-POV glow
+                    from modifier-studio-matte.html Set A, Column A */}
+                {mod?.family && (
+                  <div style={{
+                    display: 'flex', justifyContent: 'center',
+                    margin: '8px 0 4px',
+                  }}>
+                    <div style={{
+                      width: 108, height: 88,
+                      borderRadius: 12,
+                      backgroundColor: '#121316',
+                      boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.12), inset 0 -1px 1px rgba(0,0,0,0.25), inset 0 1px 3px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 30px rgba(95,124,150,0.03), inset 0 0 14px rgba(95,124,150,0.06)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      border: '0.5px solid rgba(167,173,183,0.06)',
+                    }}>
+                      <ModifierEmission family={mod.family} size={108} />
+                    </div>
+                  </div>
+                )}
+
                 {modName ? (
-                  <div style={{ padding: '10px 20px 0' }}>
+                  <div style={{ padding: '6px 20px 0', textAlign: mod?.family ? 'center' : 'left' }}>
                     <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{modName}</p>
                     {mod?.sizeRange && (
                       <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                     )}
                   </div>
                 ) : result.sections?.catchlightModifier ? (
-                  <div style={{ padding: '10px 20px 0' }}>
+                  <div style={{ padding: '6px 20px 0' }}>
                     <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
                       {result.sections.catchlightModifier}
                     </p>
                   </div>
                 ) : null}
 
-                {/* Iris coverage scale */}
-                {mod?.catchlightSize && (
-                  <div style={{ padding: '0 20px' }}>
-                    <IrisCoverageScale
-                      catchlightSize={mod.catchlightSize}
-                      angularArea={mod.angularArea}
-                    />
-                  </div>
-                )}
-
-                {/* Spec grid — critical values (distance optimal, off-axis
-                    angle, estimated height) are always visible. Remaining
-                    specs still use the long-press reveal pattern. */}
-                <div onClick={(e) => e.stopPropagation()}>
-                  {(mod?.distRange || positionDisplay) && (
-                    <div style={{ padding: '12px 16px 0', display: 'flex', gap: 8 }}>
-                      {mod?.distRange && (
-                        <LongPressSpec
-                          label="DISTANCE"
-                          value={mod.distRange}
-                          secondary={mod.optDist ? `optimal ${mod.optDist}` : null}
-                          secondaryColor={C.confHigh}
-                          alwaysRevealed
-                        />
-                      )}
-                      {positionDisplay && (
-                        <LongPressSpec
-                          label="POSITION"
-                          value={positionDisplay}
-                          alwaysRevealed
-                        />
-                      )}
-                    </div>
-                  )}
-
-                  {(directionDisplay || keyHeightDisplay) && (
-                    <div style={{ padding: '8px 16px 0', display: 'flex', gap: 8 }}>
-                      {directionDisplay && (
-                        <LongPressSpec
-                          label="DIRECTION"
-                          value={directionDisplay}
-                          secondary={keyAngleDisplay}
-                          secondaryColor={KEY_ACCENT}
-                          alwaysRevealed
-                        />
-                      )}
-                      {keyHeightDisplay && (
-                        <LongPressSpec
-                          label="HEIGHT"
-                          value={keyHeightDisplay}
-                          secondary={keyHeightMeasurement}
-                          secondaryColor={C.confHigh}
-                          alwaysRevealed
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Key placement + fill strategy from recreation_setup */}
-                {(rsPlacement || rsFill) && (
-                  <div style={{ padding: '8px 16px 0', display: 'flex', gap: 8 }} onClick={(e) => e.stopPropagation()}>
-                    {rsPlacement && (
-                      <LongPressSpec label="PLACEMENT" value={rsPlacement} alwaysRevealed />
+                {/* L-4: Simplified 2×2 recipe grid — Distance, Direction, Height, Fill.
+                    Only the photographer's essential "where to put it" specs.
+                    Everything else (position, placement, iris coverage, guidance)
+                    lives on the back face or SETUP GUIDE drawer. */}
+                <div onClick={(e) => e.stopPropagation()} style={{ padding: '10px 16px 12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    {mod?.distRange && (
+                      <LongPressSpec
+                        label="DISTANCE"
+                        value={mod.distRange}
+                        alwaysRevealed
+                      />
+                    )}
+                    {(directionDisplay || positionDisplay) && (
+                      <LongPressSpec
+                        label="DIRECTION"
+                        value={directionDisplay || positionDisplay}
+                        secondary={keyAngleDisplay}
+                        secondaryColor={KEY_ACCENT}
+                        alwaysRevealed
+                      />
+                    )}
+                    {keyHeightDisplay && (
+                      <LongPressSpec
+                        label="HEIGHT"
+                        value={keyHeightDisplay}
+                        alwaysRevealed
+                      />
                     )}
                     {rsFill && (
-                      <LongPressSpec label="FILL" value={rsFill} alwaysRevealed />
+                      <LongPressSpec
+                        label="FILL"
+                        value={rsFill}
+                        alwaysRevealed
+                      />
                     )}
                   </div>
-                )}
-
-                {mod?.distRange && (
-                  <div style={{ padding: '10px 20px 14px' }}>
-                    <p style={{ margin: 0, fontSize: 10, fontWeight: 400, color: steel(0.55), lineHeight: 1.5, ...FONT_SMOOTH }}>
-                      Closer = softer wrap · Farther = harder, more directional
-                    </p>
-                  </div>
-                )}
-                {!mod?.distRange && <div style={{ height: 14 }} />}
+                </div>
 
                 {/* Flip hint */}
                 <div style={{
-                  padding: '0 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  padding: '0 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                 }}>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 12, opacity: 0.55, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR DIAGRAM
                   </span>
                 </div>
@@ -964,8 +1012,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   </p>
                 )}
 
-                <div style={{ padding: '6px 20px 10px' }}>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.50), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                <div style={{ padding: '6px 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 12, opacity: 0.55, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR SPECS
                   </span>
                 </div>
@@ -1006,47 +1055,76 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               )}
             </div>
 
-            {/* Title row — modifier silhouette graphic sits alongside the
-                name so the reader identifies the shaper visually at a
-                glance before scanning the diagram + spec grid below. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              {mod?.family && (
+            {/* Hero modifier emission face (desktop) — subject-POV glow
+                from modifier-studio-matte.html Set A, Column A */}
+            {mod?.family && (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                margin: '6px 0 8px',
+              }}>
                 <div style={{
-                  flexShrink: 0,
-                  width: 56, height: 56,
-                  borderRadius: 10,
-                  backgroundColor: '#070709',
-                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                  width: 140, height: Math.round(140 * 88 / 108),
+                  borderRadius: 14,
+                  backgroundColor: '#121316',
+                  boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.12), inset 0 -1px 1px rgba(0,0,0,0.25), inset 0 1px 3px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 30px rgba(95,124,150,0.03), inset 0 0 14px rgba(95,124,150,0.06)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '0.5px solid rgba(167,173,183,0.06)',
+                  overflow: 'hidden',
                 }}>
-                  <ModifierSilhouette family={mod.family} size={48} dimensions={mod.sizeRange} />
+                  <ModifierEmission family={mod.family} size={140} />
                 </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {modName ? (
-                  <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
-                    {modName}
-                  </p>
-                ) : result.sections?.catchlightModifier ? (
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
-                    {result.sections.catchlightModifier}
-                  </p>
-                ) : null}
-                {mod?.distRange && (
-                  <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.55), lineHeight: 1.35, ...FONT_SMOOTH }}>
-                    The closer you place it, the softer the wrap. Pull it back for harder, more directional light.
-                  </p>
+                {mod?.sizeRange && (
+                  <div style={{
+                    marginTop: 6,
+                    padding: '2px 10px',
+                    borderRadius: 999,
+                    backgroundColor: '#070709',
+                    boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.6), inset 0px 0px 4px rgba(0,0,0,0.35), 0 0.5px 0 rgba(255,255,255,0.04)',
+                    fontSize: 10, fontWeight: 700, letterSpacing: '0.4px',
+                    color: 'rgba(95,124,150,0.75)',
+                    ...FONT_SMOOTH,
+                  }}>{mod.sizeRange}</div>
                 )}
               </div>
+            )}
+
+            {/* Title row — modifier name + distance guidance */}
+            <div style={{ textAlign: mod?.family ? 'center' : 'left' }}>
+              {modName ? (
+                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
+                  {modName}
+                </p>
+              ) : result.sections?.catchlightModifier ? (
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
+                  {result.sections.catchlightModifier}
+                </p>
+              ) : null}
+              {mod?.distRange && (
+                <p style={{ margin: '5px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.55), lineHeight: 1.35, ...FONT_SMOOTH }}>
+                  The closer you place it, the softer the wrap. Pull it back for harder, more directional light.
+                </p>
+              )}
             </div>
 
-            {/* Iris coverage scale */}
-            {mod?.catchlightSize && (
-              <IrisCoverageScale
-                catchlightSize={mod.catchlightSize}
-                angularArea={mod.angularArea}
-              />
-            )}
+            {/* L-3: Compact apparent source label (back face) */}
+            {mod?.catchlightSize && (() => {
+              const m = String(mod.catchlightSize).match(/([\d.]+)\s*%/);
+              const pct = m ? parseFloat(m[1]) : null;
+              const band = pct == null ? null
+                : pct < 25 ? 'Tiny' : pct < 50 ? 'Small' : pct < 100 ? 'Medium'
+                : pct < 200 ? 'Large' : pct < 350 ? 'Huge' : 'XL';
+              return band ? (
+                <div style={{ margin: '10px 0' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                    APPARENT SOURCE
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.35), letterSpacing: '0.5px', margin: '0 6px', ...FONT_SMOOTH }}>·</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+                    {band}
+                  </span>
+                </div>
+              ) : null;
+            })()}
 
             {/* Viewfinder diagram well — matches the HomeScreen / ResultScreen
                 glass viewfinder treatment so the Setup screen reads as the
@@ -1084,6 +1162,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
                   <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
                   <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
                 </div>
                 {/* Inner shadow bevel — Figma-exact, always top of stack */}
                 <div style={{
@@ -1368,6 +1447,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       }}>
         <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: GLASS_REFLECTION, pointerEvents: 'none', zIndex: 2 }} />
         <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: LENS_VIGNETTE, pointerEvents: 'none', zIndex: 3 }} />
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none', zIndex: 4 }} />
 
         <div style={{ position: 'relative', zIndex: 1, padding: '20px 20px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -1454,16 +1534,21 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           onClick={closeThumb}
           aria-label="Close zoom"
           style={{
-            position: 'absolute', top: 24, right: 24,
+            position: 'absolute', top: 20, right: 20,
+            width: 44, height: 44, borderRadius: 22,
+            background: 'none', border: 'none', padding: 0,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{
             width: 36, height: 36, borderRadius: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             background: 'rgba(15,16,19,0.72)',
             border: '1px solid rgba(255,255,255,0.08)',
             color: steel(0.7), fontSize: 20, lineHeight: 1,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
-          }}
-        >
-          ×
+            ...FONT_SMOOTH,
+          }}>×</span>
         </button>
       </div>
     )}

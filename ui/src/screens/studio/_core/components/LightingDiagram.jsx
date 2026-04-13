@@ -31,7 +31,8 @@ function clockToAngle(position) {
 }
 
 function sideToAngle(side, elevation) {
-  const base = side === 'right' ? 45 : side === 'center' ? 0 : -45;
+  const s = String(side).toLowerCase();
+  const base = s.includes('right') ? 45 : s.includes('center') || s === 'on_axis' ? 0 : s.includes('left') ? -45 : 0;
   const elevAdj = elevation === 'high' ? -8 : elevation === 'low' ? 12 : 0;
   return base + elevAdj;
 }
@@ -87,9 +88,10 @@ export default function LightingDiagram({ result, compact = false, fluid = false
     // in our top-down canvas, so on-axis = 0° in our convention).  Sign comes
     // from key_side: camera-right key = positive (clockwise), camera-left key
     // = negative.  When side is unknown, fall back to nose-shadow polarity.
-    const sign = keySide === 'right'
+    const _ks = String(keySide).toLowerCase();
+    const sign = _ks.includes('right')
       ? 1
-      : keySide === 'left'
+      : _ks.includes('left')
         ? -1
         : (shadowDeg != null && shadowDeg > 180 ? -1 : 1);
     kAngleDeg = sign * reconKeyDeg;
@@ -360,9 +362,9 @@ export default function LightingDiagram({ result, compact = false, fluid = false
           ly += sign * py * off;
         }
         const anchor = dx >= 0.2 ? 'start' : dx <= -0.2 ? 'end' : 'middle';
-        const labelText = shadowDeg != null
-          ? `SHADOW ${Math.round(shadowDeg)}°`
-          : 'SHADOW';
+        // Use the computed visual angle (sDeg) so the label always matches
+        // the rendered arrow direction — never the engine's raw reading.
+        const labelText = `SHADOW ${Math.round(sDeg)}°`;
         return (
           <text
             x={lx} y={ly} textAnchor={anchor}

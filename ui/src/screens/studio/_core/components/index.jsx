@@ -132,7 +132,9 @@ export function ScreenHeader({ title, onBack, backLabel = 'Back' }) {
       display: 'flex', alignItems: 'center',
       padding: '16px 20px 8px',
       position: 'sticky', top: 0,
-      backgroundColor: C.bg,
+      backgroundColor: 'rgba(8,9,12,0.92)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
       zIndex: 10,
     }}>
       <button

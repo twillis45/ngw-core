@@ -10,47 +10,33 @@
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { tapHaptic, selectHaptic, successHaptic, navHaptic, grainHaptic } from '../../../utils/haptics';
+import { tapHaptic, selectHaptic, successHaptic, navHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
-import { resultRevealSound, panelToggleSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
-import scrollAffordance from '../../../assets/day1/scroll-affordance.svg';
+import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
+import prettify from '../../../utils/prettify';
+import useStableViewport from '../../../utils/useStableViewport';
+import { resultRevealSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
+import { loadSettings } from '../../../data/settingsStore';
 import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, PANEL_SHADOW, PANEL_BEVEL,
          TEXT_SHADOW_ENGRAVED,
          READOUT_FG, READOUT_GLOW, READOUT_LABEL,
-         BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN } from '../../../theme/studioMatte';
+         DRAWER_RADIUS,
+         BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN,
+         VF_DITHER_NOISE } from '../../../theme/studioMatte';
+import MatteBackground from '../_shared/MatteBackground';
+import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import PullTabDrawer from '../_shared/PullTabDrawer';
 import ModifierSilhouette from '../_shared/ModifierSilhouette';
+import ModifierEmission from '../_shared/ModifierEmission';
 
 // Pill inset shadow — exact from Figma pill nodes
 const PILL_SHADOW = 'inset 1px 1px 2px 0px rgba(0,0,0,0.2), inset 1px 2px 4px 0px rgba(0,0,0,0.4)';
 
-// Display-string normalizer. Engine keys like "soft_key_dominant" or
-// "split-complementary" must never leak into the UI as-is — Studio Matte
-// rules forbid underscores/hyphens in visible text. `prettify` swaps them
-// for spaces and (optionally) uppercases the result so chip pills, labels,
-// and headings read as clean caps display copy.
-function prettify(str, { upper = false, title = false } = {}) {
-  if (str == null) return '';
-  const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
-  if (upper) return cleaned.toUpperCase();
-  if (title) {
-    // Sentence-style title case: capitalize the first letter of every word
-    // unless it's a small connector (a, an, the, of, in, with, on, to, by,
-    // and, but, or, for).  Words already SCREAMING (e.g. "RGB", "VLM") are
-    // left untouched so abbreviations don't get watered down.
-    const SMALLS = new Set(['a','an','the','of','in','with','on','to','by','and','but','or','for','from','at','as']);
-    return cleaned.split(/\s+/).map((w, i) => {
-      if (i > 0 && SMALLS.has(w.toLowerCase())) return w.toLowerCase();
-      if (/^[A-Z0-9]{2,}$/.test(w)) return w; // keep abbreviations
-      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-    }).join(' ');
-  }
-  return cleaned;
-}
+// prettify imported from utils/prettify.js — single canonical location.
 
 // ─── SubLabel ───────────────────────────────────────────────────────────────
 // 9px engraved uppercase label used to demarcate sub-sections inside a pull-
@@ -61,9 +47,9 @@ function SubLabel({ children }) {
   return (
     <p style={{
       margin: '14px 0 6px',
-      fontSize: 9, fontWeight: 700,
-      color: 'rgba(132, 158, 184,0.55)',
-      letterSpacing: '1.4px',
+      fontSize: 11, fontWeight: 700,
+      color: 'rgba(132, 158, 184,0.62)',
+      letterSpacing: '1.2px',
       textTransform: 'uppercase',
       ...FONT_SMOOTH,
     }}>
@@ -72,13 +58,106 @@ function SubLabel({ children }) {
   );
 }
 
+// ─── DiagnosticsDisclosure ─────────────────────────────────────────────────
+// Collapsed-by-default sub-section for engine diagnostics inside the DETAIL
+// drawer. Keeps raw signals, pass reliability, supporting/contradicting
+// evidence out of the photographer's face while still accessible.
+function DiagnosticsDisclosure({ children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => { setOpen(v => !v); tapHaptic(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(v => !v); tapHaptic(); } }}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 0',
+          cursor: 'pointer',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+      >
+        <span style={{
+          fontSize: 9, fontWeight: 700,
+          color: steel(0.50),
+          letterSpacing: '1px',
+          padding: '3px 8px',
+          borderRadius: 4,
+          backgroundColor: 'rgba(255,255,255,0.02)',
+          ...FONT_SMOOTH,
+        }}>
+          {open ? '▾' : '▸'} ENGINE DIAGNOSTICS
+        </span>
+      </div>
+      {open && (
+        <div style={{ paddingTop: 4 }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SectionPanel ──────────────────────────────────────────────────────────
+// Always-visible analytical panel — same visual chrome as PullTabDrawer
+// (panel bg, bevel, shadow, radius) but no toggle, no collapse.  A quiet
+// engraved section header sits at the top so the information hierarchy reads
+// like a professional spec sheet:  THE LIGHT  |  THE SETUP  |  DETAIL ▸
+function SectionPanel({ label, children }) {
+  return (
+    <div style={{
+      borderRadius: DRAWER_RADIUS,
+      backgroundColor: C.panelBg,
+      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+      overflow: 'hidden',
+      position: 'relative',
+    }}>
+      {/* Bevel overlay */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        borderRadius: DRAWER_RADIUS,
+        pointerEvents: 'none',
+        boxShadow: PANEL_BEVEL,
+        zIndex: 10,
+      }} />
+      {/* Section header — authoritative left-aligned label with hairline rule */}
+      <div style={{
+        padding: '12px 20px 0',
+      }}>
+        <span style={{
+          fontSize: 10,
+          fontWeight: 700,
+          color: steel(0.62),
+          letterSpacing: '1.2px',
+          textShadow: '0 1px 0 rgba(0,0,0,0.5)',
+          ...FONT_SMOOTH,
+        }}>
+          {label}
+        </span>
+        <div style={{
+          marginTop: 8,
+          height: 1,
+          background: 'linear-gradient(to right, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 60%, transparent 100%)',
+          boxShadow: '0 0.5px 0 rgba(0,0,0,0.4)',
+        }} />
+      </div>
+      {/* Content */}
+      <div style={{ padding: '12px 20px 14px' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── BlownHighlightsCanvas ──────────────────────────────────────────────────
 // Client-side luminance scanner. When the Blown Highlights chip is tapped,
 // this canvas overlays the hero photo and tints any pixel whose RGB exceeds
 // the clipping threshold so the user can see exactly WHERE the engine flagged
 // the blown regions. No engine roundtrip required — the analysis runs on the
-// already-loaded image bitmap. We sample at quarter resolution for speed and
-// render two passes: a hot red core for fully-clipped pixels and a softer
+// already-loaded image bitmap. We process at display resolution (bounded by
+// the canvas element size, NOT the source image) and render two passes: a hot
+// red core for fully-clipped pixels and a softer
 // orange wash for near-clipped (warning) pixels. The canvas mirrors the same
 // objectFit / objectPosition the hero <img> uses so the overlay tracks the
 // visible photo area exactly.
@@ -239,7 +318,11 @@ function ShadowSignature({ angleDeg, density }) {
           FitToViewport's transform ancestor on desktop). */}
       {angleDeg != null && (
         <div
+          role="button"
+          aria-label="Zoom shadow angle dial"
+          tabIndex={0}
           onClick={() => { tapHaptic(); setZoomed(true); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setZoomed(true); } }}
           title="Tap to zoom"
           style={{
             flex: '0 0 auto', width: 140,
@@ -428,7 +511,7 @@ function SceneField({ label, value }) {
       <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
         {prettify(label, { upper: true })}
       </p>
-      <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 500, color: C.textSubBold, lineHeight: '16px', textShadow: '0 1px 0 rgba(0,0,0,0.45)', ...FONT_SMOOTH }}>
+      <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 500, color: C.textSubBold, lineHeight: '18px', textShadow: '0 1px 0 rgba(0,0,0,0.45)', ...FONT_SMOOTH }}>
         {prettify(value, { title: true })}
       </p>
     </div>
@@ -581,8 +664,8 @@ function CatchlightEye({ clockHour, clockHours, angleDeg }) {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg viewBox="0 0 100 100" width="92" height="92" style={{ display: 'block' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 48, minHeight: 48 }}>
+      <svg viewBox="0 0 100 100" width="110" height="110" style={{ display: 'block', minWidth: 48, minHeight: 48 }}>
         {/* almond eye shape */}
         <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
         {/* clock-face tick ring around the iris — engraved guide so the
@@ -615,20 +698,20 @@ function CatchlightEye({ clockHour, clockHours, angleDeg }) {
             <g key={`${h}-${n}`}>
               {/* outer halo — bigger + warmer for the primary dot */}
               <circle cx={cx} cy={cy} r={r + (isPrimary ? 4 : 2)}
-                fill={isPrimary ? 'rgba(255,210,140,0.18)' : 'rgba(255,255,255,0.10)'} />
+                fill={isPrimary ? 'rgba(245,210,140,0.22)' : 'rgba(245,210,140,0.08)'} />
               <circle cx={cx} cy={cy} r={r + (isPrimary ? 2 : 1)}
-                fill={isPrimary ? 'rgba(255,225,170,0.32)' : 'rgba(255,255,255,0.18)'} />
-              <circle cx={cx} cy={cy} r={r} fill={`rgba(255,255,255,${alpha})`} />
-              <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.4)} fill="#ffffff" />
+                fill={isPrimary ? 'rgba(245,210,140,0.40)' : 'rgba(245,210,140,0.16)'} />
+              <circle cx={cx} cy={cy} r={r} fill={`rgba(245,210,140,${alpha})`} />
+              <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.4)} fill="rgba(255,240,210,0.95)" />
             </g>
           );
         })}
         {/* Fallback single dot from nose-shadow angle */}
         {fallbackPos && (
           <>
-            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={6.5} fill="rgba(255,210,140,0.18)" />
-            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={4.5} fill="rgba(255,255,255,0.92)" />
-            <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="#ffffff" />
+            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={6.5} fill="rgba(245,210,140,0.22)" />
+            <circle cx={fallbackPos.cx} cy={fallbackPos.cy} r={4.5} fill="rgba(245,210,140,0.92)" />
+            <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="rgba(255,240,210,0.95)" />
           </>
         )}
         {/* subtle upper lash line */}
@@ -1031,6 +1114,9 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
   // photographer can actually READ the shape (36-px inline icon is too small
   // to resolve the loop triangle / rembrandt cheek).
   const [zoomedPattern, setZoomedPattern] = useState(null); // { name, score, def, lit } | null
+  // Apple simplicity: show only the winning pattern by default.
+  // Runner-up candidates are available behind a toggle for the curious.
+  const [showRunners, setShowRunners] = useState(false);
 
   // `shadowSide` is 'left' or 'right' meaning "which side of the face the
   // shadow actually falls on in THIS photo".  We mirror asymmetric pattern
@@ -1043,14 +1129,15 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
     return PATTERN_DEFINITIONS[key] || null;
   };
 
+  const runners = candidates.slice(1);
+
   return (
     <div style={{ padding: '0 20px 16px' }}>
-      {candidates.map((c, i) => {
+      {candidates.slice(0, 1).map((c) => {
         const def = defFor(c.name);
-        const isLeader = i === 0;
         return (
           <div key={c.name} style={{
-            marginTop: i === 0 ? 4 : 18,
+            marginTop: 10,
             display: 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr) auto',
             columnGap: 14,
@@ -1060,7 +1147,11 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                 in a tactile inset well so the icon has a machined frame and
                 the tap target is obvious. */}
             <div
-              onClick={() => { tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: isLeader }); }}
+              role="button"
+              aria-label={`Zoom ${c.name} pattern`}
+              tabIndex={0}
+              onClick={() => { tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: true }); }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: true }); } }}
               title="Tap to zoom"
               style={{
                 width: 72, height: 72,
@@ -1073,7 +1164,7 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                 flexShrink: 0,
               }}
             >
-              <PatternFaceIcon name={c.name} size={60} lit={isLeader} shadowSide={shadowSide} />
+              <PatternFaceIcon name={c.name} size={60} lit shadowSide={shadowSide} />
             </div>
 
             {/* Name + definition + bar */}
@@ -1081,15 +1172,15 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{
                   fontSize: 14,
-                  fontWeight: isLeader ? 700 : 500,
-                  color: isLeader ? C.textSubBold : C.textSub,
+                  fontWeight: 700,
+                  color: C.textSubBold,
                   ...FONT_SMOOTH,
                 }}>{c.name}</span>
               </div>
               {def && (
                 <p style={{
                   margin: '2px 0 6px', fontSize: 11, lineHeight: 1.4,
-                  color: isLeader ? steel(0.78) : steel(0.60),
+                  color: steel(0.78),
                   fontWeight: 400,
                   ...FONT_SMOOTH,
                 }}>{def}</p>
@@ -1104,7 +1195,7 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                   position: 'absolute', left: 0, top: 0,
                   width: `${c.score}%`, height: '100%',
                   borderRadius: 1.5,
-                  backgroundColor: isLeader ? barFill : C.barAlt,
+                  backgroundColor: barFill,
                   transition: 'width 0.4s ease',
                 }} />
               </div>
@@ -1113,13 +1204,107 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
             {/* Score */}
             <span style={{
               fontSize: 14, fontWeight: 700,
-              color: isLeader ? scoreColor : C.textSub,
+              color: scoreColor,
               alignSelf: 'center',
               ...FONT_SMOOTH,
             }}>{c.score}%</span>
           </div>
         );
       })}
+
+      {/* Runner-up candidates — collapsed by default (Apple simplicity).
+          The photographer got THE answer above. These are for the curious. */}
+      {runners.length > 0 && (
+        <>
+          {showRunners && runners.map((c) => {
+            const def = defFor(c.name);
+            return (
+              <div key={c.name} style={{
+                marginTop: 18,
+                display: 'grid',
+                gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                columnGap: 14,
+                alignItems: 'center',
+              }}>
+                <div
+                  role="button"
+                  aria-label={`Zoom ${c.name} pattern`}
+                  tabIndex={0}
+                  onClick={() => { tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: false }); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: false }); } }}
+                  title="Tap to zoom"
+                  style={{
+                    width: 72, height: 72,
+                    borderRadius: 12,
+                    backgroundColor: '#070709',
+                    boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'zoom-in',
+                    WebkitTapHighlightColor: 'transparent',
+                    flexShrink: 0,
+                  }}
+                >
+                  <PatternFaceIcon name={c.name} size={60} lit={false} shadowSide={shadowSide} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: 500,
+                      color: C.textSub,
+                      ...FONT_SMOOTH,
+                    }}>{c.name}</span>
+                  </div>
+                  {def && (
+                    <p style={{
+                      margin: '2px 0 6px', fontSize: 11, lineHeight: 1.4,
+                      color: steel(0.60), fontWeight: 400,
+                      ...FONT_SMOOTH,
+                    }}>{def}</p>
+                  )}
+                  <div style={{
+                    width: '100%', height: 3, borderRadius: 1.5,
+                    backgroundColor: C.barTrack, position: 'relative',
+                  }}>
+                    <div style={{
+                      position: 'absolute', left: 0, top: 0,
+                      width: `${c.score}%`, height: '100%',
+                      borderRadius: 1.5, backgroundColor: C.barAlt,
+                      transition: 'width 0.4s ease',
+                    }} />
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: 14, fontWeight: 700,
+                  color: C.textSub, alignSelf: 'center',
+                  ...FONT_SMOOTH,
+                }}>{c.score}%</span>
+              </div>
+            );
+          })}
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => { setShowRunners(v => !v); tapHaptic(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowRunners(v => !v); tapHaptic(); } }}
+            style={{
+              display: 'flex', justifyContent: 'center', alignItems: 'center',
+              padding: '10px 0 2px',
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            <span style={{
+              fontSize: 10, fontWeight: 700,
+              color: steel(0.48),
+              letterSpacing: '0.8px',
+              ...FONT_SMOOTH,
+            }}>
+              {showRunners ? 'HIDE CANDIDATES' : `${runners.length} OTHER CANDIDATE${runners.length > 1 ? 'S' : ''}`}
+            </span>
+          </div>
+        </>
+      )}
+
       {!isHighConf && (
         <p style={{
           margin: '14px 0 0', fontSize: 11,
@@ -1181,7 +1366,7 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
 
           <p style={{
             margin: '6px 0 0', fontSize: 9, fontWeight: 700,
-            letterSpacing: '1.5px', color: steel(0.45), ...FONT_SMOOTH,
+            letterSpacing: '1.5px', color: steel(0.55), ...FONT_SMOOTH,
           }}>TAP TO CLOSE</p>
         </div>,
         document.body
@@ -1190,107 +1375,9 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
   );
 }
 
-// ─── LC bottom actions: Retake (raised) | Set up anyway (recessed) ───────────
-function LCBottomActions({ onRetry, onSetup, infoVisible, isDragging, top }) {
-  const [retakePressed, setRetakePressed] = useState(false);
-  const [setupPressed, setSetupPressed]   = useState(false);
-
-  const TROUGH_SHADOW = [
-    'inset 0px 3px 6px 0px rgba(0,0,0,0.7)',
-    'inset 0px 1px 3px 0px rgba(0,0,0,0.5)',
-    'inset 1px 0px 2px 0px rgba(0,0,0,0.3)',
-    'inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-    '0px 1px 0px 0px rgba(255,255,255,0.025)',
-  ].join(', ');
-
-  // New Photo — inset/recessed secondary
-  const RETAKE_UP   = BTN_RECESSED_UP;
-  const RETAKE_DOWN = BTN_RECESSED_DOWN;
-
-  // Build Closest Match — raised primary CTA
-  const SETUP_UP   = BTN_RAISED_UP;
-  const SETUP_DOWN = BTN_RAISED_DOWN;
-
-  return (
-    <div style={{
-      position: 'absolute', top, left: '50%',
-      transform: `translateX(-50%)${infoVisible ? '' : ' translateY(40px)'}`,
-      opacity: infoVisible ? 1 : 0,
-      transition: isDragging ? 'none' : 'opacity 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-      pointerEvents: infoVisible ? 'auto' : 'none',
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        height: 52, borderRadius: 16,
-        backgroundColor: '#060608',
-        boxShadow: TROUGH_SHADOW,
-        padding: 4, gap: 0,
-        minWidth: 260,
-      }}>
-        {/* NEW PHOTO — inset secondary */}
-        <button
-          onPointerDown={() => setRetakePressed(true)}
-          onPointerUp={() => { setRetakePressed(false); segmentPressSound(); navHaptic(); onRetry(); }}
-          onPointerLeave={() => setRetakePressed(false)}
-          style={{
-            flex: 1, height: 44, borderRadius: 12,
-            backgroundColor: retakePressed ? 'rgba(255,255,255,0.02)' : 'transparent',
-            boxShadow: retakePressed ? RETAKE_DOWN : RETAKE_UP,
-            border: 'none', cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'box-shadow 0.1s ease, background-color 0.1s ease',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <span style={{
-            fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
-            color: retakePressed ? 'rgba(167,173,183,0.4)' : 'rgba(167,173,183,0.6)',
-            transition: 'color 0.1s ease',
-            ...FONT_SMOOTH,
-          }}>New Photo</span>
-        </button>
-
-        {/* Separator */}
-        <div style={{
-          width: 1, height: 24, flexShrink: 0,
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.5) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.5) 100%)',
-          boxShadow: '1px 0px 0px 0px rgba(255,255,255,0.04)',
-        }} />
-
-        {/* BUILD CLOSEST MATCH — raised primary CTA */}
-        <button
-          onPointerDown={() => setSetupPressed(true)}
-          onPointerUp={() => { setSetupPressed(false); softClickSound(); tapHaptic(); onSetup(); }}
-          onPointerLeave={() => setSetupPressed(false)}
-          style={{
-            flex: 1, height: 44, borderRadius: 12,
-            background: setupPressed
-              ? 'linear-gradient(141.71deg, #242730 0%, #1d1f28 50%, #181a22 100%)'
-              : 'linear-gradient(141.71deg, #383c4a 0%, #2c303c 40%, #222535 100%)',
-            boxShadow: setupPressed ? SETUP_DOWN : SETUP_UP,
-            border: 'none', cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'box-shadow 0.1s ease, background 0.1s ease',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <span style={{
-            fontSize: 12, fontWeight: 700, letterSpacing: '0.3px',
-            color: setupPressed ? 'rgba(245,247,250,0.75)' : 'rgba(245,247,250,0.95)',
-            textShadow: setupPressed ? 'none' : '0px 1px 2px rgba(0,0,0,0.5)',
-            transition: 'color 0.1s ease',
-            ...FONT_SMOOTH,
-          }}>Build Closest Match</span>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// BottomActions (trough with "New Photo | Save") was removed — its "Save"
-// button duplicated the hero "Set Up This Light" CTA (both called onSetup),
-// and "New Photo" duplicated the top-left back chevron (both call onRetry).
-// Keeping the file free of dead code; see ResultScreen bottom row comment.
+// LCBottomActions + BottomActions removed — dead code. The low-confidence
+// "New Photo | Build It Anyway" row is now rendered inline at the bottom of
+// the analytical panel (see ~line 3058).
 
 // FONT_SMOOTH imported from studioMatte
 
@@ -1474,7 +1561,7 @@ function ModifierDetail({ modifier }) {
     <div style={{ marginTop: 12 }}>
       {heroName && (
         <div style={{ marginBottom: 12 }}>
-          <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>
+          <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>
             {heroName}
           </p>
           {modifier.sizeRange && (
@@ -1485,7 +1572,7 @@ function ModifierDetail({ modifier }) {
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} style={{ display: 'flex', gap: 8, marginTop: i === 0 ? 0 : 8 }}>
+        <div key={i} style={{ display: 'flex', gap: 12, marginTop: i === 0 ? 0 : 10 }}>
           {row}
           {row.length === 1 && <div style={{ flex: 1 }} />}
         </div>
@@ -1496,14 +1583,38 @@ function ModifierDetail({ modifier }) {
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
   const isDesktop = useIsDesktop();
+  const tilt = useDeviceTilt();
   // Hero column: 430 on mobile, 540 on desktop — the wider column lets the
   // photo breathe (less aggressive face crop) and makes room for a taller
   // hero block alongside the analytical panel. FitToViewport handles the
   // uniform scale on wide screens at the app shell.
   const heroWidth = isDesktop ? 540 : 430;
-  const [drawers, setDrawers] = useState(() =>
-    result && result.confidence < 70 ? { patterns: true } : {}
-  );
+
+  // ── VF geometry (identical to HomeScreen) ──────────────────────────────────
+  // Compute the same viewfinder height so the result hero matches HomeScreen.
+  // Desktop uses the larger button sizes (168/180) from HomeScreen so the VF
+  // height matches exactly — prevents the "VF doesn't match" drift.
+  // VF sizing always uses mobile button geometry (136/146) so the mobile VF
+  // matches HomeScreen exactly. Desktop layout uses its own D_PHOTO_HEIGHT.
+  const VF_TOP = 100;
+  const VF_GAP = 16;
+  const { stableVH, safeBottom } = useStableViewport();
+  const M_BTN_D = 136;
+  const M_WELL_D = 146;
+  const BTN_OFFSET_FROM_BOTTOM = 48;
+  const M_BTN_CY = stableVH - safeBottom - BTN_OFFSET_FROM_BOTTOM - Math.round(M_BTN_D / 2);
+  const M_WELL_TOP = M_BTN_CY - M_WELL_D / 2;
+  const VF_HEIGHT = Math.max(280, M_WELL_TOP - VF_GAP - VF_TOP);
+  // Single detail drawer — THE LIGHT and THE SETUP are always visible.
+  // Only the DETAIL section (scene + colors + confidence) collapses.
+  const [detailOpen, setDetailOpen] = useState(false);
+  // THE LIGHT section clips at 200px on mobile to prevent scroll fatigue;
+  // tap "Show more" to expand and see the full shadow narrative.
+  const [lightExpanded, setLightExpanded] = useState(false);
+  // Daylight brightness boost — persisted across screens via settings store.
+  const [daylightMode] = useState(() => {
+    try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
+  });
   const [infoVisible, setInfoVisible] = useState(true);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -1531,6 +1642,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // pinned over the hero photo with the chip label, severity, and detail
   // explanation. Tapping the photo or pressing Escape dismisses it.
   const [chipDetail, setChipDetail] = useState(null); // { label, sev, detail } | null
+  const [warningsExpanded, setWarningsExpanded] = useState(false);
   useEffect(() => {
     if (!chipDetail) return;
     const onKey = (e) => { if (e.key === 'Escape') setChipDetail(null); };
@@ -1538,9 +1650,80 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     return () => window.removeEventListener('keydown', onKey);
   }, [chipDetail]);
 
+  // ── Swipe-back gesture — swipe from left edge navigates back ──
+  // Detects a touch starting within 24px of the left screen edge, then
+  // tracks rightward movement. If horizontal distance > 80px and the
+  // angle is shallow (mostly horizontal), fires onRetry() to go back.
+  const swipeStartX = useRef(null);
+  const swipeStartY = useRef(null);
+  const swipeTouchY = useRef(null);
+  const [swipeProgress, setSwipeProgress] = useState(0); // 0-1, for visual hint
+  const [swipeY, setSwipeY] = useState(0); // finger Y for glow tracking
+  const handleSwipeStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX < 24) {
+      swipeStartX.current = t.clientX;
+      swipeStartY.current = t.clientY;
+    }
+  }, []);
+  const handleSwipeMove = useCallback((e) => {
+    if (swipeStartX.current == null || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - swipeStartX.current;
+    const dy = Math.abs(t.clientY - swipeStartY.current);
+    if (dy > dx) { swipeStartX.current = null; setSwipeProgress(0); return; }
+    setSwipeProgress(Math.min(1, dx / 100));
+    setSwipeY(t.clientY);
+  }, []);
+  const handleSwipeEnd = useCallback(() => {
+    if (swipeProgress > 0.8) {
+      navHaptic();
+      onRetry();
+    }
+    swipeStartX.current = null;
+    swipeStartY.current = null;
+    setSwipeProgress(0);
+  }, [swipeProgress, onRetry]);
+
   const [isZoomed, setIsZoomed] = useState(false);
 
-  // Zoom pan + pinch state
+  // ── First-visit teach overlay ─────────────────────────────────────────────
+  const [resultTeachStep, setResultTeachStep] = useState(0);
+  const [resultTeachVisible, setResultTeachVisible] = useState(() => {
+    try { return localStorage.getItem('ngw_result_teach_seen') !== '1'; } catch { return false; }
+  });
+  const advanceResultTeach = useCallback(() => {
+    setResultTeachStep(prev => {
+      if (prev >= 3) {
+        setResultTeachVisible(false);
+        try { localStorage.setItem('ngw_result_teach_seen', '1'); } catch { /* ignore */ }
+        return 4;
+      }
+      return prev + 1;
+    });
+    tapHaptic();
+  }, []);
+  const skipResultTeach = useCallback(() => {
+    setResultTeachVisible(false);
+    setResultTeachStep(4);
+    try { localStorage.setItem('ngw_result_teach_seen', '1'); } catch { /* ignore */ }
+    tapHaptic();
+  }, []);
+
+  // ── Inline hero pinch-zoom + pan state ──
+  // These apply directly to the hero <img> inside the VF (not the fullscreen
+  // portal).  Two-finger pinch scales the image in place; single-finger drag
+  // pans when scale > 1.  The VF's overflow:hidden clips the edges.
+  const [heroScale, setHeroScale] = useState(1);
+  const [heroPan, setHeroPan]   = useState({ x: 0, y: 0 });
+  const heroPinchStartDist  = useRef(null);
+  const heroPinchStartScale = useRef(1);
+  const heroPanStart        = useRef(null);
+  const heroPanStartOffset  = useRef({ x: 0, y: 0 });
+  const heroIsPinching      = useRef(false);
+
+  // Fullscreen portal zoom state (separate from inline)
   const [zoomScale, setZoomScale] = useState(1);
   const [zoomPan, setZoomPan] = useState({ x: 0, y: 0 });
   const pinchStartDist = useRef(null);
@@ -1556,6 +1739,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // fires after touchend from re-triggering long-press logic and bouncing
   // straight back into zoom.  Set true in exitZoom(), cleared after 600ms.
   const recentlyExitedZoom = useRef(false);
+  // Double-tap detector for inline hero — resets zoom
+  const lastTapTime = useRef(0);
 
   // Result reveal sound + haptic on mount
   useEffect(() => {
@@ -1600,35 +1785,83 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     dragStartY.current = null;
   }, [infoVisible, dragOffset]);
 
-  // Long-press zoom handler for hero
-  const handleHeroStart = useCallback((clientY) => {
-    // Lockout window after exiting zoom: ignore the touchstart from the same
-    // gesture that just exited so we don't immediately re-arm a long-press
-    // timer that would re-zoom.
+  // ── Inline hero touch handlers — pinch-to-zoom + pan ──
+  // Two-finger pinch zooms the hero in-place inside the VF (overflow: hidden
+  // clips the edges).  Single-finger pan when heroScale > 1.  When scale is 1
+  // the single-finger gesture falls through to the existing info-panel drag.
+
+  const handleHeroTouchStart = useCallback((e) => {
     if (recentlyExitedZoom.current) return;
     longPressFired.current = false;
     heroDidDrag.current = false;
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    startDrag(clientY);
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null;
-      longPressFired.current = true;
-      setIsZoomed(z => {
-        if (z) {
-          // Exiting zoom — reset pan/scale
-          setZoomScale(1);
-          setZoomPan({ x: 0, y: 0 });
-        }
-        return !z;
-      });
-      tapHaptic();
-      setIsDragging(false);
-      dragStartY.current = null;
-      setDragOffset(0);
-    }, 500);
-  }, [startDrag]);
+    if (e.touches.length === 2) {
+      // ── Pinch start — cancel any pending long-press / drag
+      heroIsPinching.current = true;
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      setIsDragging(false); dragStartY.current = null; setDragOffset(0);
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      heroPinchStartDist.current = Math.hypot(dx, dy);
+      heroPinchStartScale.current = heroScale;
+    } else if (e.touches.length === 1) {
+      heroIsPinching.current = false;
+      if (heroScale > 1.05) {
+        // ── Pan start (hero is zoomed in)
+        heroPanStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        heroPanStartOffset.current = { ...heroPan };
+      } else {
+        // ── Normal drag (info-panel toggle) + long-press → fullscreen
+        startDrag(e.touches[0].clientY);
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+        longPressTimer.current = setTimeout(() => {
+          longPressTimer.current = null;
+          longPressFired.current = true;
+          tapHaptic();
+          setIsZoomed(true);
+          setIsDragging(false); dragStartY.current = null; setDragOffset(0);
+        }, 500);
+      }
+    }
+  }, [heroScale, heroPan, startDrag]);
 
-  // Exit zoom mode + reset all zoom state.
+  const handleHeroTouchMove = useCallback((e) => {
+    if (e.touches.length === 2 && heroPinchStartDist.current) {
+      // ── Pinch move — scale hero inline
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const dist = Math.hypot(dx, dy);
+      const newScale = Math.max(1, Math.min(5, heroPinchStartScale.current * (dist / heroPinchStartDist.current)));
+      setHeroScale(newScale);
+    } else if (e.touches.length === 1 && heroPanStart.current && heroScale > 1.05) {
+      // ── Pan move
+      const dx = e.touches[0].clientX - heroPanStart.current.x;
+      const dy = e.touches[0].clientY - heroPanStart.current.y;
+      setHeroPan({ x: heroPanStartOffset.current.x + dx, y: heroPanStartOffset.current.y + dy });
+      if (Math.hypot(dx, dy) > 8) heroDidDrag.current = true;
+    } else if (e.touches.length === 1 && heroScale <= 1.05) {
+      // ── Normal info-panel drag
+      moveDrag(e.touches[0].clientY);
+    }
+  }, [heroScale, moveDrag]);
+
+  const handleHeroTouchEnd = useCallback((e) => {
+    if (heroIsPinching.current && e.touches.length < 2) {
+      heroPinchStartDist.current = null;
+      heroIsPinching.current = false;
+      // Snap back to 1 if pinch-released below threshold
+      if (heroScale < 1.05) {
+        setHeroScale(1);
+        setHeroPan({ x: 0, y: 0 });
+      }
+      return;
+    }
+    if (heroPanStart.current) { heroPanStart.current = null; return; }
+    // Normal drag end
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    endDrag();
+  }, [heroScale, endDrag]);
+
+  // Exit zoom mode + reset ALL zoom state (both inline and fullscreen).
   // Also restores the info panels — exiting zoom should always bring the
   // analysis cards back into view, regardless of whether the user had toggled
   // them off before zooming.
@@ -1636,6 +1869,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     setIsZoomed(false);
     setZoomScale(1);
     setZoomPan({ x: 0, y: 0 });
+    // Also reset inline hero zoom so re-entering results starts fresh
+    setHeroScale(1);
+    setHeroPan({ x: 0, y: 0 });
     setInfoVisible(true);
     pinchStartDist.current = null;
     panStart.current = null;
@@ -1722,9 +1958,23 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [isDragging, moveDrag, endDrag]);
 
-  if (!result) return null;
+  if (!result) return (
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, sans-serif' }}>
+        <MatteBackground variant="subdued" />
+        <button
+          aria-label="Back"
+          onClick={() => { navHaptic(); onRetry(); }}
+          style={{ position: 'absolute', top: 52, left: 8, width: 44, height: 44, zIndex: 30, background: 'none', border: 'none', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+        >
+          <span style={{ position: 'absolute', left: 14, top: 8, fontSize: 22, fontWeight: 600, color: '#a7adb7', lineHeight: 1 }}>‹</span>
+        </button>
+      </div>
+    </div>
+  );
 
-  const { pattern, confidence, meta, mood, sections } = result;
+  const { pattern, confidence = 0, meta, mood, sections: _sections } = result;
+  const sections = _sections || {};
   const raw = result?._raw || {};
   const signalDiag = raw.signal_diagnostics || {};
   // Convention conversion — see LightingDiagram.jsx for the long comment.
@@ -1760,48 +2010,37 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // Desktop hero column height — bumped from 920 → 980 so the LightingDiagram
   // well at the bottom has a usable >250px instead of being clipped at 165px.
   // The actions row still fits within the 1040 design viewport (980 + 60 ≈ 1040).
-  const panelTop    = isDesktop ? 980 : (isHighConf ? 497 : 478);
-  const leadMargin  = confidence - (sections.patternCandidates[1]?.score ?? 0);
+  // Mobile layout flows from VF bottom — pattern/confidence overlay is ON
+  // the photo (inside VF), so CTA sits directly below VF with minimal gap.
+  // Mobile: CTA moved to the bottom of the scroll content (inside the
+  // analytical panel), so the top section only needs to contain the VF.
+  // Summary strip + diagram + drawers + CTA flow naturally below.
+  const M_TOP_END   = VF_TOP + VF_HEIGHT + 12;
+  const leadMargin  = confidence - (sections.patternCandidates?.[1]?.score ?? 0);
   // Desktop hero position constants — photo / info / CTA / diagram stacked
-  // top-to-bottom inside the 980px hero column. Photo height shaved 40px and
-  // every downstream constant lifted 40px to give the diagram its own real
-  // estate (well height = 980 − 680 − 25 = 275px, padded = 247px).
+  // top-to-bottom inside the hero column. panelTop = D_DIAGRAM_TOP + 300
+  // gives the diagram well ~300px of real estate before the analytical
+  // panel column begins.
   const D_PHOTO_TOP    = 100;
-  const D_PHOTO_HEIGHT = 380;   // portrait-capable box (was 420)
-  const D_INFO_TOP     = 500;   // photo bottom + 20 gap
-  const D_CTA_TOP      = 620;   // info (pattern+pills) ~ 80 tall + 40 gap
-  const D_DIAGRAM_TOP  = 680;   // CTA (48) + 12 gap → diagram well
+  const D_PHOTO_HEIGHT = VF_HEIGHT;   // matches HomeScreen VF exactly
+  const D_PHOTO_BOTTOM = D_PHOTO_TOP + D_PHOTO_HEIGHT;
+  const D_INFO_TOP     = D_PHOTO_BOTTOM + 20;   // photo bottom + 20 gap
+  const D_CTA_TOP      = D_INFO_TOP + 120;       // info (pattern+pills) ~ 80 tall + 40 gap
+  const D_DIAGRAM_TOP  = D_CTA_TOP + 60;         // CTA (48) + 12 gap → diagram well
+  const panelTop    = isDesktop ? (D_DIAGRAM_TOP + 300) : M_TOP_END;
 
-  const toggle = (key) => { setDrawers(prev => ({ ...prev, [key]: !prev[key] })); panelToggleSound(); tapHaptic(); };
+  // Detail drawer toggle — silent.  THE LIGHT and THE SETUP are always
+  // visible; only the DETAIL section collapses.
+  const toggleDetail = () => setDetailOpen(prev => !prev);
 
-  // Drawer sharing — when more than one drawer is open in the right column we
-  // divide the available content height (column max 872 minus ~46px header per
-  // drawer × 6 drawers minus inter-drawer gaps) so opened drawers fit instead
-  // of pushing each other off-screen. Mobile lets the page scroll naturally.
-  const openDrawerCount = Object.values(drawers).filter(Boolean).length;
-  const sharedDrawerMaxH = isDesktop && openDrawerCount > 1
-    ? Math.max(180, Math.floor((872 - 6 * 46 - 5 * 12) / openDrawerCount))
-    : null;
-
-  // Summary lines for collapsed rows
-  const summaries = {
-    patterns: isHighConf
-      ? `${pattern} leads by ${leadMargin} pts`
-      : `${sections.patternCandidates.length} close matches`,
-    shadow:     [(sections.lightQuality ? sections.lightQuality + ' light' : null), (sections.shadowAnalysis || '').split('.')[0]].filter(Boolean).join(' · '),
-    catchlight: (sections.catchlightModifier || '').split(',')[0],
-    colors: sections.colorPalette
-      ? (sections.colorPalette.harmony
-          ? `${sections.colorPalette.harmony}${sections.colorPalette.warmCool ? ' · warm/cool split' : ''}`
-          : sections.colorPalette.colors.slice(0, 2).join(', '))
-      : '',
-    scene: sections.vlmNarrative?.fields?.[0]?.value || sections.sceneDescription?.split('.')[0] || '',
-    confidence: sections.signalQuality
-      ? (sections.signalQuality.available != null
-          ? `${sections.signalQuality.available}/${sections.signalQuality.total} signals`
-          : sections.confidenceLabel || '')
-      : (sections.confidenceLabel || ''),
-  };
+  // Summary for the collapsed DETAIL drawer
+  const detailSummary = [
+    sections.vlmNarrative?.fields?.[0]?.value || sections.sceneDescription?.split('.')[0],
+    sections.colorPalette?.harmony,
+    sections.signalQuality?.available != null
+      ? `${sections.signalQuality.available}/${sections.signalQuality.total} signals`
+      : sections.confidenceLabel,
+  ].filter(Boolean).join(' · ');
 
   // Source + confidence attribution — dim sub-line below pattern/confidence
   const sourceAttribution = (() => {
@@ -1814,14 +2053,27 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // Warning chip styling now lives in _shared/Chip.jsx.
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) tapHaptic(); }}
-      onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
-      onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
+      onTouchStart={!isDesktop ? handleSwipeStart : undefined}
+      onTouchMove={!isDesktop ? handleSwipeMove : undefined}
+      onTouchEnd={!isDesktop ? handleSwipeEnd : undefined}
+      style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}
+    >
+    {/* Swipe-back edge hint — left edge glow that follows finger */}
+    {swipeProgress > 0 && (
+      <div style={{
+        position: 'fixed', top: 0, bottom: 0, left: 0,
+        width: 24,
+        background: `radial-gradient(circle at 0px ${swipeY}px, rgba(245,247,250,${0.22 * swipeProgress}) 0%, rgba(245,247,250,${0.06 * swipeProgress}) 120px, transparent 240px)`,
+        zIndex: 200,
+        pointerEvents: 'none',
+        transition: 'opacity 0.1s ease',
+      }} />
+    )}
+    <div
       style={{
       width: '100%',
-      maxWidth: isDesktop ? 1300 : 430,
+      maxWidth: isDesktop ? 'min(92vw, 1400px)' : 430,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
@@ -1831,6 +2083,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       overflowY: 'auto',
       position: 'relative',
       paddingBottom: 40,
+      filter: daylightMode ? 'brightness(1.15)' : undefined,
+      transition: 'filter 0.4s ease',
       // Desktop: two-column grid. Left = hero/pattern/CTA (the 430px instrument
       // column, untouched internally). Right = analytical panel, moved
       // alongside the hero so the screen reads native on wide viewports.
@@ -1846,14 +2100,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         justifyContent: 'center',
       } : null),
     }}>
-      {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
-      </div>
+      <MatteBackground variant="subdued" />
 
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
       <div style={{
@@ -1866,9 +2113,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
         {/* Back nav */}
         <button
+          aria-label="Back"
           onClick={() => { navSlideSound(); navHaptic(); onRetry(); }}
           style={{
-            position: 'absolute', top: 48, left: 8,
+            position: 'absolute', top: 52, left: 8,
             width: 44, height: 44,
             zIndex: 30,
             background: 'none', border: 'none', cursor: 'pointer',
@@ -1883,30 +2131,48 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           }}>‹</span>
         </button>
 
+        {/* Wordmark removed — Result screen is about the answer, not brand.
+            Back chevron provides navigation; pattern overlay IS the identity. */}
+
         {/* Hero — user's photo with glass treatment (Figma 1493:5) */}
-        {/* Long press = full-screen zoom; in zoom: single-finger pan, two-finger pinch */}
+        {/* Pinch-to-zoom + pan work inline inside the VF.
+            Tap = fullscreen overlay.  Double-tap = reset inline zoom.
+            Long-press (500ms, only when heroScale ≤ 1) = fullscreen. */}
         <div
-          onTouchStart={isZoomed ? handleZoomTouchStart : (e) => handleHeroStart(e.touches[0].clientY)}
-          onTouchMove={isZoomed ? handleZoomTouchMove : (e) => { moveDrag(e.touches[0].clientY); }}
-          onTouchEnd={isZoomed ? handleZoomTouchEnd : () => { if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; } endDrag(); }}
-          onMouseDown={isZoomed ? undefined : (e) => { e.preventDefault(); handleHeroStart(e.clientY); }}
+          onTouchStart={isZoomed ? handleZoomTouchStart : handleHeroTouchStart}
+          onTouchMove={isZoomed ? handleZoomTouchMove : handleHeroTouchMove}
+          onTouchEnd={isZoomed ? handleZoomTouchEnd : handleHeroTouchEnd}
+          onMouseDown={isZoomed ? undefined : (e) => { e.preventDefault(); startDrag(e.clientY); }}
           onClick={() => {
             // Lockout window after exiting zoom — swallow the synthesized
             // click that fires after the tap-to-exit touch sequence so it
             // can't re-enter zoom or re-arm the long-press timer.
             if (recentlyExitedZoom.current) return;
             if (longPressFired.current) { longPressFired.current = false; return; }
+            if (heroIsPinching.current) return;
             // If a chip-detail overlay is showing on the hero, a click should
             // dismiss it instead of toggling fullscreen.
             if (chipDetail) { setChipDetail(null); return; }
             if (isZoomed) {
-              // Single click on zoomed hero → exit fullscreen.
               exitZoom();
               return;
             }
             // If the gesture turned into a vertical info-panel drag, this
             // trailing click is not a tap — bail out and reset the flag.
             if (heroDidDrag.current) { heroDidDrag.current = false; return; }
+            // Double-tap → reset inline hero zoom (if zoomed in)
+            const now = Date.now();
+            if (heroScale > 1.05 && (now - lastTapTime.current) < 350) {
+              setHeroScale(1);
+              setHeroPan({ x: 0, y: 0 });
+              tapHaptic();
+              lastTapTime.current = 0;
+              return;
+            }
+            lastTapTime.current = now;
+            // If hero is zoomed inline, single tap is a no-op (user is
+            // exploring the image). Only go fullscreen from default scale.
+            if (heroScale > 1.05) return;
             // Plain click → fill viewport.  Cancel any pending long-press
             // timer so it doesn't toggle us back out 500ms later.
             if (longPressTimer.current) {
@@ -1922,19 +2188,17 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             // own the visual.  Keeping the inline node mounted preserves
             // the position/size CSS so exit transitions still feel right.
             position: 'absolute',
-            top: (isDesktop ? D_PHOTO_TOP : (infoVisible ? 100 : 60)),
-            left: 25,
-            right: 25,
-            height: (isDesktop ? D_PHOTO_HEIGHT : (infoVisible ? 180 : 340)),
-            borderRadius: 14,
+            top: (isDesktop ? D_PHOTO_TOP : VF_TOP),
+            left: 0,
+            right: 0,
+            height: (isDesktop ? D_PHOTO_HEIGHT : VF_HEIGHT),
+            borderRadius: 0,
             visibility: isZoomed ? 'hidden' : 'visible',
             overflow: 'hidden',
             backgroundColor: '#000',
-            // Outer rim bevel — sunken well carved into the matte surface
-            boxShadow: '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
-            transition: isDragging ? 'none' : 'height 0.35s cubic-bezier(0.4, 0, 0.2, 1), top 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+            transition: 'none',
             touchAction: 'none',
             zIndex: 1,
           }}
@@ -1946,12 +2210,97 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               // mobile stays on the tight face-crop (cover).
               objectFit: isDesktop ? 'contain' : 'cover',
               objectPosition: isDesktop ? '50% 50%' : faceCrop,
-              opacity: infoVisible ? 0.8 : 1,
-              transition: 'opacity 0.35s ease',
-              animation: 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+              opacity: 1,
+              // Inline pinch-zoom + pan — transform applied directly so the
+              // image scales inside the VF with overflow: hidden clipping.
+              transform: heroScale > 1.01
+                ? `translate(${heroPan.x}px, ${heroPan.y}px) scale(${heroScale})`
+                : undefined,
+              transition: heroScale <= 1.01 ? 'transform 0.15s ease-out' : 'none',
+              willChange: heroScale > 1.01 ? 'transform' : undefined,
+              animation: heroScale <= 1.01
+                ? 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards'
+                : 'none',
               transformOrigin: 'center center',
             }} />
           )}
+          <ViewfinderHUD />
+
+          {/* ── VF_WARNING_DOTS — compact amber indicators, top-right ──
+              Collapsed: small amber dot with count badge. Tap to expand
+              into the full chip set. Each chip opens chipDetail on tap. */}
+          {sections.edgeCaseWarnings?.length > 0 && (
+            <div style={{
+              position: 'absolute', top: 10, right: 10,
+              zIndex: 8,
+              display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5,
+            }}>
+              {warningsExpanded ? (
+                /* Expanded — full chips */
+                <>
+                  {sections.edgeCaseWarnings.map((w, i) => (
+                    <Chip
+                      key={i}
+                      label={w.label}
+                      variant={sevToVariant(w.sev)}
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); tapHaptic(); setChipDetail(w); }}
+                      title={w.detail || 'Tap for details'}
+                    />
+                  ))}
+                  <div
+                    role="button" aria-label="Close warnings" tabIndex={0}
+                    onClick={(e) => { e.stopPropagation(); setWarningsExpanded(false); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setWarningsExpanded(false); } }}
+                    style={{
+                      width: 44, height: 44,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                      margin: '-13px -13px -13px 0',
+                    }}
+                  >
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 9,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      backgroundColor: 'rgba(0,0,0,0.5)',
+                    }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.60), lineHeight: 1 }}>×</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Collapsed — amber dot with count */
+                <div
+                  role="button" aria-label="Show warnings" tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); tapHaptic(); setWarningsExpanded(true); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setWarningsExpanded(true); } }}
+                  style={{
+                    width: 44, height: 44,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div style={{
+                    width: 22, height: 22, borderRadius: 11,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'rgba(245,190,72,0.18)',
+                    boxShadow: '0 0 6px rgba(245,190,72,0.25), inset 0 0 0 0.5px rgba(245,190,72,0.30)',
+                  }}>
+                    <span style={{
+                      fontSize: 9, fontWeight: 700,
+                      color: 'rgba(250,210,130,0.95)',
+                      lineHeight: 1,
+                    }}>
+                      {sections.edgeCaseWarnings?.length}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Blown-highlights region overlay — appears only when the user
               taps the Blown Highlights warning chip. Sampled client-side from
               the loaded hero bitmap; tints clipped pixels red and near-clipped
@@ -1963,24 +2312,60 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               objectPosition={isDesktop ? '50% 50%' : faceCrop}
             />
           )}
-          {/* Bottom vignette — fades photo into dark bg */}
+          {/* Bottom vignette — fades photo into the result overlay at VF bottom */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(to bottom, transparent 35%, rgba(9,9,11,0.55) 72%, rgba(9,9,11,0.88) 100%)',
-            opacity: infoVisible ? 1 : 0.3,
-            transition: 'opacity 0.35s ease',
+            background: 'linear-gradient(to bottom, transparent 45%, rgba(9,9,11,0.35) 75%, rgba(9,9,11,0.65) 100%)',
+            pointerEvents: 'none',
           }} />
-          {/* Glass panel — lens vignette + upper-left key light reflection (matches HomeScreen) */}
-          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, zIndex: 2, pointerEvents: 'none' }}>
+          {/* Glass panel — lens vignette + upper-left key light reflection (identical to HomeScreen) */}
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 2, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, opacity: 0.48 }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
           </div>
-          {/* Inner shadow — Figma-exact bevel (matches HomeScreen) */}
+          {/* Inner shadow — identical to HomeScreen */}
           <div style={{
-            position: 'absolute', inset: 0, borderRadius: 14,
+            position: 'absolute', inset: 0, borderRadius: 0,
             pointerEvents: 'none', zIndex: 3,
             boxShadow: VIEWFINDER_INNER_SHADOW,
           }} />
+          {/* ── Result identification overlay — Apple-style metadata on the photo ──
+              Pattern name + confidence sit on the lower third of the VF so the
+              answer is ON the photo, not below it. The vignette gradient at
+              the bottom provides readable contrast. */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            padding: '48px 20px 16px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.65) 50%, rgba(4,5,7,0.88) 100%)',
+            zIndex: 7, pointerEvents: 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+              <p style={{
+                margin: 0,
+                fontWeight: 800,
+                // Dynamic font size: long pattern names (e.g. "Butterfly (Paramount)")
+                // scale down so they never wrap to a second line on mobile.
+                fontSize: pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32,
+                lineHeight: pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px',
+                color: C.textPrimary,
+                letterSpacing: '-0.5px',
+                ...FONT_SMOOTH,
+                textShadow: TEXT_SHADOW_ENGRAVED,
+              }}>{prettify(pattern, { title: true })}</p>
+              <p style={{
+                margin: 0,
+                fontWeight: 700, fontSize: 20, lineHeight: '26px',
+                color: confColor,
+                ...FONT_SMOOTH,
+                textShadow: `0 1px 4px rgba(0,0,0,0.5), 0 0 2px ${confColor}`,
+              }}>{confidence}%</p>
+            </div>
+            {/* R-7: Removed VF overlay second line (modifier silhouette +
+                meta pill + source attribution). Pattern + confidence is
+                the hero — everything else lives below the drag handle. */}
+          </div>
+
           {/* Chip detail overlay — slides up over the hero when a warning chip
               is tapped. Sits above the inner-shadow bevel so the rim still
               reads behind it. */}
@@ -2019,16 +2404,23 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                   onClick={() => setChipDetail(null)}
                   aria-label="Close"
                   style={{
-                    position: 'absolute', top: 8, right: 10,
+                    position: 'absolute', top: -1, right: 1,
+                    width: 44, height: 44,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <span style={{
                     width: 26, height: 26, borderRadius: 13,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'rgba(255,255,255,0.04)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     color: 'rgba(245,247,250,0.7)',
                     fontSize: 16, lineHeight: '22px',
-                    cursor: 'pointer',
-                    WebkitTapHighlightColor: 'transparent',
-                  }}
-                >×</button>
+                  }}>×</span>
+                </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <Chip label={chipDetail.label} variant={sevToVariant(chipDetail.sev)} size="md" />
                   <span style={{
@@ -2051,130 +2443,37 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           )}
         </div>
 
-        {/* ── Info overlay — drag to dismiss, drag up to restore ── */}
-        <div
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          onMouseDown={onMouseDown}
-          style={{
-            position: 'absolute', top: isDesktop ? D_INFO_TOP : 290, left: 0, right: 0,
-            transform: infoVisible
-              ? `translateY(${isDragging ? dragOffset : 0}px)`
-              : `translateY(${isDragging ? 120 + dragOffset : 120}px)`,
-            opacity: infoVisible
-              ? Math.max(0, 1 - dragOffset / 120)
-              : Math.min(1, Math.abs(dragOffset) / 80),
-            transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease',
-            pointerEvents: infoVisible ? 'auto' : 'none',
-            touchAction: 'none',
-          }}
-        >
-          {/* Pattern name */}
-          <p style={{
-            position: 'absolute', top: 6, left: 25, margin: 0,
-            fontWeight: 800, fontSize: 26, lineHeight: '32px',
-            color: C.textPrimary,
-            letterSpacing: '-0.3px',
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            textShadow: '0 0 1px rgba(245,247,250,0.15)',
-          }}>{pattern}</p>
-
-          {/* Confidence % */}
-          <p style={{
-            position: 'absolute', top: 4, right: 25, margin: 0,
-            fontWeight: 800, fontSize: 28, lineHeight: '34px',
-            color: confColor,
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            textShadow: `0 0 2px ${confColor}`,
-          }}>{confidence}%</p>
-
-          {/* Mood — VLM image_read.mood, italic sub-line below pattern name */}
-          {mood ? (
-            <p style={{
-              position: 'absolute', top: 38, left: 25, margin: 0,
-              fontSize: 10, fontWeight: 400, fontStyle: 'italic',
-              color: steel(0.62),
-              letterSpacing: '0.1px',
+        {/* ── CTA — desktop only: absolute positioned below VF ── */}
+        {isDesktop && (
+          <button
+            onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
+            style={{
+              position: 'absolute', top: D_CTA_TOP, left: 25, right: 25,
+              display: isHighConf ? 'flex' : 'none',
+              alignItems: 'center', justifyContent: 'center',
+              height: 48,
+              borderRadius: 24,
+              background: CTA_BG,
+              boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
+              border: 'none', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              overflow: 'hidden',
+              opacity: infoVisible ? 1 : 0,
+              transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
+              transition: isDragging ? 'none' : 'opacity 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
+              pointerEvents: infoVisible ? 'auto' : 'none',
+            }}
+          >
+            <span style={{
+              fontSize: 14, fontWeight: 600,
+              color: 'rgba(245,247,250,0.9)',
+              letterSpacing: '0.5px',
+              pointerEvents: 'none',
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            }}>{mood}</p>
-          ) : null}
-
-          {/* Source attribution — dim sub-line: "strong · reference read" */}
-          {sourceAttribution ? (
-            <p style={{
-              position: 'absolute', top: 38, right: 25, margin: 0,
-              fontSize: 10, fontWeight: 500,
-              color: steel(0.58),
-              letterSpacing: '0.2px',
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            }}>{sourceAttribution}</p>
-          ) : null}
-
-          {/* Meta pills */}
-          <div style={{
-            position: 'absolute', top: 53, left: 25,
-            display: 'flex', flexWrap: 'wrap', gap: 8,
-            right: 25,
-          }}>
-            {meta.map(m => <Pill key={m} label={m} />)}
-          </div>
-        </div>
-
-        {/* CTA Button — HC only (Figma 1494:12) */}
-        <button
-          onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
-          style={{
-            position: 'absolute', top: isDesktop ? D_CTA_TOP : 415, left: 25, right: 25,
-            display: isHighConf ? 'flex' : 'none',
-            alignItems: 'center', justifyContent: 'center',
-            height: 48,
-            borderRadius: 24,
-            background: CTA_BG,
-            boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
-            border: 'none', cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            overflow: 'hidden',
-            opacity: infoVisible ? 1 : 0,
-            transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
-            transition: isDragging ? 'none' : 'opacity 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-            pointerEvents: infoVisible ? 'auto' : 'none',
-          }}
-        >
-          <span style={{
-            fontSize: 13, fontWeight: 600,
-            color: 'rgba(245,247,250,0.9)',
-            letterSpacing: '0.5px',
-            pointerEvents: 'none',
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-          }}>
-            Set Up This Light
-          </span>
-        </button>
-
-        {/* Low confidence: "Set up anyway" — same trough treatment as HC Retake/Save */}
-        {!isHighConf && (
-          <LCBottomActions
-            onRetry={onRetry}
-            onSetup={onSetup}
-            infoVisible={infoVisible}
-            isDragging={isDragging}
-            top={415}
-          />
-        )}
-
-        {/* High confidence: scroll affordance (mobile only — desktop has the
-            drawers visible alongside the hero, no scroll cue needed) */}
-        {isHighConf && !isDesktop && (
-          <div style={{
-            position: 'absolute', top: 479, left: '50%', transform: 'translateX(-50%)', width: 100, height: 0,
-            opacity: infoVisible ? 1 : 0,
-            transition: 'opacity 0.3s ease',
-          }}>
-            <div style={{ position: 'absolute', top: -1, left: 0, right: 0, bottom: 0 }}>
-              <img src={scrollAffordance} alt="" style={{ display: 'block', width: '100%' }} />
-            </div>
-          </div>
+            }}>
+              Build This Light
+            </span>
+          </button>
         )}
 
         {/* Desktop-only: LightingDiagram as an accompanying hero graphic —
@@ -2187,7 +2486,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             sitting at a fixed 300px in an oversized area. */}
         {isDesktop && (
           <div
-            onClick={() => { tapHaptic(); setDiagramFullscreen(true); }}
+            onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
             style={{
               position: 'absolute',
               top: D_DIAGRAM_TOP,
@@ -2216,6 +2515,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
               <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
               <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.42 }} />
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
             </div>
             {/* Inner-shadow bevel ring */}
             <div style={{
@@ -2228,6 +2528,88 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       </div>
       {/* ─── end top section ─── */}
 
+      {/* ─── Drag handle — swipe/tap affordance for panel show/hide (mobile) ── */}
+      {!isDesktop && (
+        <div
+          role="button"
+          aria-label={infoVisible ? 'Hide details panel' : 'Show details panel'}
+          tabIndex={0}
+          onClick={() => { setInfoVisible(v => !v); tapHaptic(); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setInfoVisible(v => !v); tapHaptic(); } }}
+          style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            padding: '8px 0 4px',
+            cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <div style={{
+            width: infoVisible ? 36 : 28, height: 4, borderRadius: 2,
+            backgroundColor: steel(infoVisible ? 0.35 : 0.5),
+            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), 0 0.5px 0 rgba(255,255,255,0.06)',
+            transition: 'width 0.25s ease, background-color 0.25s ease',
+          }} />
+        </div>
+      )}
+
+      {/* Hero pattern name removed — the VF overlay (bottom gradient,
+          line ~2266) already shows pattern + confidence ON the photo.
+          Duplicating it below the handle was redundant. The VF overlay
+          is the stronger Apple-style placement — data on the content. */}
+
+      {/* R-8: Removed Lighting Summary Strip (KEY UPPER LEFT / HARD chips).
+          The diagram directly below shows key position with a labeled arrow,
+          and light quality is in THE SETUP. Chips were a redundant caption
+          for a self-explanatory diagram. */}
+
+      {/* ─── Lighting Diagram (mobile only — always visible, not in a drawer) ───
+          The single most valuable visual in the app. Shows where to put the
+          lights. On desktop it's inline in the hero column; on mobile it was
+          buried in the Shadow Analysis drawer. Now it's always above the fold. */}
+      {!isDesktop && (
+        <div
+          onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
+          style={{
+            marginLeft: 25, marginRight: 25, marginTop: 10, marginBottom: 6,
+            position: 'relative',
+            width: 'calc(100% - 50px)',
+            aspectRatio: '300 / 200',
+            borderRadius: 12,
+            backgroundColor: '#070709',
+            boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+            overflow: 'hidden',
+            cursor: 'zoom-in',
+            opacity: infoVisible ? 1 : 0,
+            transition: isDragging ? 'none' : 'opacity 0.3s ease 0.08s',
+          }}
+          title="Tap to expand diagram"
+        >
+          <div style={{
+            position: 'absolute', inset: 0,
+            padding: '14px 16px',
+            display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+            zIndex: 1,
+          }}>
+            <LightingDiagram result={result} fluid compact />
+          </div>
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
+            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
+            <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
+          </div>
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: 12,
+            pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+          }} />
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{
+            position: 'absolute', bottom: 10, right: 10, zIndex: 11,
+            opacity: 0.45, pointerEvents: 'none',
+          }}>
+            <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" stroke={steel(0.85)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+
       {/* ─── Analytical Panel (pull-tab drawers) ───
           Desktop: the panel column lives in the right grid cell. We cap its
           height to the design viewport (1040) minus top/bottom chrome so
@@ -2236,7 +2618,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
-        marginTop: isDesktop ? 96 : 0,
+        marginTop: isDesktop ? 96 : 6,
         maxWidth: isDesktop ? 680 : undefined,
         display: 'flex',
         flexDirection: 'column',
@@ -2258,210 +2640,133 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           paddingBottom: 24,
         } : null),
       }}>
-        {/* Warning chips — compact strip above drawers */}
-        {sections.edgeCaseWarnings?.length > 0 && (
-          <div style={{
-            padding: '2px 4px',
-            display: 'flex', flexWrap: 'wrap', gap: 6,
+        {/* Warning chips moved to VF overlay — see VF_WARNING_DOTS below */}
+
+        {/* ── Desktop panel header — pattern name anchors the column ── */}
+        {isDesktop && (
+          <p style={{
+            margin: '0 0 2px',
+            fontSize: 18, fontWeight: 700,
+            color: 'rgba(245,247,250,0.88)',
+            letterSpacing: '-0.2px',
+            textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+            ...FONT_SMOOTH,
           }}>
-            {sections.edgeCaseWarnings.map((w, i) => (
-              <Chip
-                key={i}
-                label={w.label}
-                variant={sevToVariant(w.sev)}
-                size="md"
-                onClick={() => { tapHaptic(); setChipDetail(w); }}
-                title={w.detail || 'Tap for details'}
-              />
-            ))}
-          </div>
+            {prettify(result?.pattern, { title: true }) || 'Analysis'}
+          </p>
         )}
 
-        {/* PATTERN CANDIDATES */}
-        <PullTabDrawer label="PATTERN CANDIDATES" open={!!drawers.patterns} onToggle={() => toggle('patterns')} maxH={600} sharedMaxH={sharedDrawerMaxH}>
-          <PatternBars
-            candidates={sections.patternCandidates}
-            isHighConf={isHighConf}
-            shadowSide={(() => {
-              const q = (sections.shadowDirection && sections.shadowDirection.shadowQuadrant) || '';
-              if (/left$/.test(q)) return 'left';
-              if (/right$/.test(q)) return 'right';
-              return undefined;
-            })()}
-          />
-        </PullTabDrawer>
+        {/* ═══════════════════════════════════════════════════════════════
+            THE LIGHT — always visible.  This is the core answer: what
+            pattern did we find, and what does the shadow geometry say?
+            No toggle, no drawer — the answer is always front and center.
+            ═══════════════════════════════════════════════════════════════ */}
+        <SectionPanel label="THE LIGHT">
+          {/* On mobile, clip to show just the winning pattern + candidates
+              toggle. Signal / Components / Direction / Read are revealed on
+              "Show more" tap. Desktop: always expanded. With R-1 (runner-ups
+              collapsed), ~140px covers the leader row cleanly. */}
+          <div style={{
+            ...(!isDesktop && !lightExpanded ? {
+              maxHeight: 140,
+              overflow: 'hidden',
+              position: 'relative',
+            } : null),
+          }}>
+            {/* R-9: THE LIGHT shows ONLY the pattern answer. Signal, Components,
+                Direction, and Read all moved to DETAIL drawer under "Shadow Analysis"
+                so the photographer gets THE answer, not a wall of widgets. */}
+            <PatternBars
+              candidates={sections.patternCandidates}
+              isHighConf={isHighConf}
+              shadowSide={(() => {
+                const q = (sections.shadowDirection && sections.shadowDirection.shadowQuadrant) || '';
+                if (/left$/.test(q)) return 'left';
+                if (/right$/.test(q)) return 'right';
+                return undefined;
+              })()}
+            />
+          </div>
+        </SectionPanel>
 
-        {/* SHADOW ANALYSIS — LightingDiagram moved to the hero column on
-            desktop, so this drawer shows a compact ShadowSignature (angle
-            dial + density bar), the structured LightComponentChips, and a
-            DirectionalCompass above the narrative.  Each graphic pulls the
-            matching piece OUT of the raw engine narrative so the paragraph
-            at the bottom stays short and human. */}
-        <PullTabDrawer label="SHADOW ANALYSIS" open={!!drawers.shadow} onToggle={() => toggle('shadow')} maxH={900} sharedMaxH={sharedDrawerMaxH}>
-          {/* ── SIGNAL row ────────────────────────────────────────────────
-              Compact dashboard of the two raw shadow signals (angle dial +
-              density bar on desktop; full LightingDiagram on mobile so the
-              top-down map stays accessible without leaving the drawer). */}
-          <SubLabel>Signal</SubLabel>
-          {!isDesktop ? (
-            <div
-              onClick={() => { tapHaptic(); setDiagramFullscreen(true); }}
-              style={{
-                cursor: 'zoom-in',
-                marginBottom: 8,
-                position: 'relative',
-                width: '100%',
-                aspectRatio: '300 / 220',
+        {/* ═══════════════════════════════════════════════════════════════
+            THE SETUP — always visible.  What modifier created this light,
+            and how would you recreate it?  Catchlight + modifier together
+            are the rebuild blueprint — never hide them behind a toggle.
+            ═══════════════════════════════════════════════════════════════ */}
+        {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
+          <SectionPanel label="THE SETUP">
+            {/* L-5: Catchlight — stacked vertically for breathing room */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                padding: '14px 16px 10px',
                 borderRadius: 12,
                 backgroundColor: '#070709',
-                boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-                overflow: 'hidden',
-              }}
-              title="Tap to expand diagram"
-            >
-              <div style={{
-                position: 'absolute', inset: 0,
-                padding: '14px 16px',
-                display: 'flex', justifyContent: 'center', alignItems: 'stretch',
-                zIndex: 1,
-              }}>
-                <LightingDiagram result={result} fluid compact />
-              </div>
-              <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
-                <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-                <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
-              </div>
-              <div style={{
-                position: 'absolute', inset: 0, borderRadius: 12,
-                pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
-              }} />
-            </div>
-          ) : (
-            <ShadowSignature
-              angleDeg={rawSignals.nose_shadow_angle_deg}
-              density={rawSignals.shadow_density}
-            />
-          )}
-
-          {/* ── COMPONENTS row ────────────────────────────────────────────
-              Key/Fill/Ambient breakdown chips, isolated under their own
-              header so the shadow contributors read as a discrete group. */}
-          {sections.shadowComponents && (
-            <>
-              <SubLabel>Components</SubLabel>
-              <LightComponentChips components={sections.shadowComponents} />
-            </>
-          )}
-
-          {/* ── DIRECTION row ─────────────────────────────────────────────
-              Compass widget with engraved label so the directional read is
-              the most prominent secondary signal. */}
-          {sections.shadowDirection && (
-            <>
-              <SubLabel>Direction</SubLabel>
-              <DirectionalCompass direction={sections.shadowDirection} />
-            </>
-          )}
-
-          {/* ── NARRATIVE block ───────────────────────────────────────────
-              Engine paragraph + optional edge-case italic note grouped
-              under a single subhead so the read flows top-to-bottom. */}
-          {(sections.shadowAnalysis || sections.shadowEdgeNote) && (
-            <>
-              <SubLabel>Read</SubLabel>
-              {sections.shadowAnalysis && (
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-                  {sections.shadowAnalysis}
-                </p>
-              )}
-              {sections.shadowEdgeNote && (
-                <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                  {sections.shadowEdgeNote}
-                </p>
-              )}
-            </>
-          )}
-        </PullTabDrawer>
-
-        {/* SCENE — narrative paragraph + chip-card grid of VLM fields */}
-        {(sections.sceneDescription || sections.vlmNarrative) && (
-          <PullTabDrawer label="SCENE" open={!!drawers.scene} onToggle={() => toggle('scene')} maxH={800} sharedMaxH={sharedDrawerMaxH}>
-            {sections.sceneDescription && (
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '19px', color: C.textSub, ...FONT_SMOOTH }}>
-                {sections.sceneDescription}
-              </p>
-            )}
-            {sections.vlmNarrative?.fields?.length > 0 && (
-              <div style={{
-                marginTop: sections.sceneDescription ? 12 : 0,
-                display: 'grid',
-                gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
-                gap: 8,
-              }}>
-                {sections.vlmNarrative.fields.map(({ label, value }) => (
-                  <SceneField key={label} label={label} value={value} />
-                ))}
-              </div>
-            )}
-          </PullTabDrawer>
-        )}
-
-        {/* CATCHLIGHT & MODIFIER — combined drawer.  Catchlight context (eye
-            widget + position chips + iris coverage scale) reads on top so
-            the *what's reflected in the eye* story comes first; a hairline
-            divider separates that from the modifier silhouette + spec grid
-            + physical meaning below.  The iris coverage scale gives the
-            modifier numbers spatial context — small/medium/large/huge band
-            with a glowing marker on the actual % iris. */}
-        {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
-          <PullTabDrawer label="CATCHLIGHT & MODIFIER" open={!!drawers.catchlight} onToggle={() => toggle('catchlight')} maxH={900} sharedMaxH={sharedDrawerMaxH}>
-            {/* ── CATCHLIGHT row ───────────────────────────────────────── */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'auto minmax(0, 1fr)',
-              gap: 12,
-              alignItems: 'stretch',
-            }}>
-              <div style={{
-                padding: '8px 10px 6px',
-                borderRadius: 10,
-                backgroundColor: '#070709',
                 boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               }}>
                 <CatchlightEye
                   clockHour={catchlightClockHour}
                   angleDeg={rawSignals.nose_shadow_angle_deg}
                 />
-                <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.62), letterSpacing: '1px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
               </div>
-              <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6 }}>
-                {catchlightClockStr && (
-                  <Chip label={`POSITION · ${prettify(catchlightClockStr, { upper: true })}`} variant="warn" size="sm" />
-                )}
-                {sections.modifier?.shape && (
-                  <Chip label={`SHAPE · ${String(sections.modifier.shape).toUpperCase()}`} variant="warn" size="sm" />
+              <div style={{ textAlign: 'center' }}>
+                {(sections.modifier?.shape || catchlightClockStr) && (
+                  <p style={{
+                    margin: 0, fontSize: 14, fontWeight: 600,
+                    color: 'rgba(245,210,140,0.88)',
+                    lineHeight: 1.3,
+                    ...FONT_SMOOTH,
+                  }}>
+                    {[
+                      sections.modifier?.shape && String(sections.modifier.shape).charAt(0).toUpperCase() + String(sections.modifier.shape).slice(1).toLowerCase(),
+                      catchlightClockStr && `at ${prettify(catchlightClockStr)}`,
+                    ].filter(Boolean).join(' ')}
+                  </p>
                 )}
                 {sections.modifier?.angularArea && (
-                  <Chip label={`COVERAGE · ${sections.modifier.angularArea.toUpperCase()}`} variant="info" size="sm" />
-                )}
-                {rawSignals.nose_shadow_angle_deg != null && (
-                  <Chip label={`SHADOW ${rawSignals.nose_shadow_angle_deg.toFixed(0)}°`} variant="info" size="sm" />
+                  <p style={{
+                    margin: '4px 0 0', fontSize: 11, fontWeight: 500,
+                    color: steel(0.55),
+                    letterSpacing: '0.3px',
+                    ...FONT_SMOOTH,
+                  }}>
+                    {sections.modifier.angularArea} coverage
+                  </p>
                 )}
               </div>
             </div>
 
-            {/* Iris coverage scale — sits between catchlight context and the
-                modifier spec grid so the % iris number lands with size-band
-                context (tiny/small/medium/large/huge). */}
-            {sections.modifier?.catchlightSize && (
-              <IrisCoverageScale
-                catchlightSize={sections.modifier.catchlightSize}
-                angularArea={sections.modifier.angularArea}
-              />
-            )}
+            {/* Iris coverage — compact inline label (Apple simplicity).
+                The full banded-ruler IrisCoverageScale was engineer-facing;
+                photographers already know source size from the modifier name.
+                This single-line label adds context without 80px of overhead. */}
+            {sections.modifier?.catchlightSize && (() => {
+              const m = String(sections.modifier.catchlightSize).match(/([\d.]+)\s*%/);
+              const pct = m ? parseFloat(m[1]) : null;
+              if (pct == null) return null;
+              const band = pct < 25 ? 'Tiny' : pct < 50 ? 'Small' : pct < 100 ? 'Medium' : pct < 200 ? 'Large' : 'Very large';
+              return (
+                <div style={{
+                  marginTop: 10, marginBottom: 6,
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  backgroundColor: '#070709',
+                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                    APPARENT SOURCE
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(245,210,140,0.88)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                    {band}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Hairline divider */}
             {sections.modifier?.family && (
@@ -2473,29 +2778,26 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               }} />
             )}
 
-            {/* ── MODIFIER row ─────────────────────────────────────────── */}
+            {/* L-5: Modifier — stacked vertically for breathing room */}
             {sections.modifier?.family && (
               <>
                 <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto minmax(0, 1fr)',
-                  gap: 14,
-                  alignItems: 'start',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
                   marginBottom: 10,
                 }}>
                   <div style={{
-                    padding: '8px 10px 6px',
+                    padding: '10px 14px 8px',
                     borderRadius: 10,
                     backgroundColor: '#070709',
                     boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                   }}>
-                    <ModifierSilhouette family={sections.modifier.family} dimensions={sections.modifier.sizeRange} />
+                    <ModifierEmission family={sections.modifier.family} size={88} />
                     <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                       MODIFIER
                     </span>
                   </div>
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ width: '100%' }}>
                     <ModifierDetail modifier={sections.modifier} />
                   </div>
                 </div>
@@ -2507,9 +2809,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               </>
             )}
 
-            {/* Combined narrative — engine writes this from the catchlight
-                intelligence pass; lives at the bottom so it summarizes both
-                halves of the panel. */}
+            {/* Fallback narrative when no modifier family resolved */}
             {sections.catchlightModifier && !sections.modifier?.family && (
               <p style={{
                 margin: '10px 0 0',
@@ -2523,197 +2823,675 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 {sections.catchlightModifier}
               </p>
             )}
-          </PullTabDrawer>
+          </SectionPanel>
         )}
 
-        {/* COLOR PALETTE — wider swatches, CCTAxis under, harmony chip,
-            then italic character note. */}
-        {sections.colorPalette && (
-          <PullTabDrawer label="COLOR PALETTE" open={!!drawers.colors} onToggle={() => toggle('colors')} maxH={700} sharedMaxH={sharedDrawerMaxH}>
-            {sections.colorPalette.hexes.length > 0 && (
-              <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
-                {sections.colorPalette.hexes.map((hex, i) => (
-                  <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
-                    <div style={{
-                      width: '100%', maxWidth: 56, aspectRatio: '1 / 1', borderRadius: 10,
-                      backgroundColor: hex,
-                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.5)',
-                    }} />
-                    {sections.colorPalette.colors[i] && (
-                      <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.55), textAlign: 'center', lineHeight: 1.2, letterSpacing: '0.2px', ...FONT_SMOOTH }}>
-                        {sections.colorPalette.colors[i]}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            <CCTAxis keyKStr={sections.colorPalette.cctKey} shadowKStr={sections.colorPalette.cctShadows} />
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sections.colorPalette.character ? 8 : 0 }}>
-              {sections.colorPalette.harmony && (
-                <Chip
-                  label={`HARMONY · ${prettify(sections.colorPalette.harmony, { upper: true })}${sections.colorPalette.warmCool ? ' · WARM/COOL' : ''}`}
-                  variant="accent"
-                  size="sm"
+        {/* ═══════════════════════════════════════════════════════════════
+            DETAIL — single collapsible drawer.  Scene context, color
+            palette, and confidence signals live here for the curious.
+            Most users never need to open this — the answer and the
+            rebuild are already visible above.
+            ═══════════════════════════════════════════════════════════════ */}
+        {(sections.sceneDescription || sections.vlmNarrative || sections.colorPalette || sections.signalQuality) && (
+          <PullTabDrawer label="DETAIL" summary={detailSummary} open={detailOpen} onToggle={toggleDetail}>
+
+            {/* ── Shadow Analysis (R-9: moved from THE LIGHT) ─────────── */}
+            {(rawSignals.nose_shadow_angle_deg != null || sections.shadowComponents || sections.shadowDirection || sections.shadowAnalysis) && (
+              <>
+                <SubLabel>Shadow Analysis</SubLabel>
+                <ShadowSignature
+                  angleDeg={rawSignals.nose_shadow_angle_deg}
+                  density={rawSignals.shadow_density}
                 />
-              )}
-              {sections.colorPalette.cctKey && (
-                <Chip label={`KEY ${prettify(sections.colorPalette.cctKey, { upper: true })}`} variant="warn" size="sm" />
-              )}
-              {sections.colorPalette.cctShadows && (
-                <Chip label={`SHADOW ${prettify(sections.colorPalette.cctShadows, { upper: true })}`} variant="info" size="sm" />
-              )}
-            </div>
-            {sections.colorPalette.character && (
-              <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.50), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                {sections.colorPalette.character}
-              </p>
-            )}
-          </PullTabDrawer>
-        )}
-
-        {/* CONFIDENCE */}
-        {sections.signalQuality && (
-          <PullTabDrawer label="CONFIDENCE" open={!!drawers.confidence} onToggle={() => toggle('confidence')} maxH={1200} sharedMaxH={sharedDrawerMaxH}>
-            {sections.signalQuality.strength != null && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SIGNAL STRENGTH</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: isHighConf ? C.confHigh : C.confLow, ...FONT_SMOOTH }}>
-                    {sections.signalQuality.available != null
-                      ? `${sections.signalQuality.available}/${sections.signalQuality.total}`
-                      : `${Math.round(sections.signalQuality.strength * 100)}%`}
-                  </span>
-                </div>
-                <div style={{ height: 3, borderRadius: 1.5, backgroundColor: C.barTrack }}>
-                  <div style={{
-                    height: '100%', borderRadius: 1.5,
-                    width: `${Math.round(sections.signalQuality.strength * 100)}%`,
-                    backgroundColor: isHighConf ? C.confHighBar : C.confLowBar,
-                    transition: 'width 0.4s ease',
-                  }} />
-                </div>
-              </div>
-            )}
-            {hasRawSignals && (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                  RAW SIGNALS
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                  {rawSignals.nose_shadow_angle_deg != null && (
-                    <SignalGauge
-                      label="NOSE SHADOW"
-                      value={rawSignals.nose_shadow_angle_deg}
-                      display={`${rawSignals.nose_shadow_angle_deg > 0 ? '+' : ''}${rawSignals.nose_shadow_angle_deg.toFixed(0)}°`}
-                      mode="signed"
-                    />
-                  )}
-                  {rawSignals.left_right_asymmetry != null && (
-                    <SignalGauge
-                      label="L/R ASYMMETRY"
-                      value={Math.abs(rawSignals.left_right_asymmetry)}
-                      display={`${(rawSignals.left_right_asymmetry * 100).toFixed(1)}%`}
-                      mode="pct"
-                      accentColor="rgba(130,170,220,0.85)"
-                    />
-                  )}
-                  {rawSignals.shadow_density != null && (
-                    <SignalGauge
-                      label="SHADOW DENSITY"
-                      value={rawSignals.shadow_density}
-                      display={`${(rawSignals.shadow_density * 100).toFixed(1)}%`}
-                      mode="pct"
-                    />
-                  )}
-                  {rawSignals.highlight_width_ratio != null && (
-                    <SignalGauge
-                      label="HIGHLIGHT WIDTH"
-                      value={rawSignals.highlight_width_ratio}
-                      display={`${(rawSignals.highlight_width_ratio * 100).toFixed(0)}%`}
-                      mode="pct"
-                      accentColor="rgba(140,225,180,0.85)"
-                    />
-                  )}
-                </div>
-                {signalDiag.final_pattern && (
+                {sections.shadowComponents && (
                   <div style={{ marginTop: 10 }}>
+                    <LightComponentChips components={sections.shadowComponents} />
+                  </div>
+                )}
+                {sections.shadowDirection && (
+                  <div style={{ marginTop: 10 }}>
+                    <DirectionalCompass direction={sections.shadowDirection} />
+                  </div>
+                )}
+                {sections.shadowAnalysis && (
+                  <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '20px', color: C.textSub, ...FONT_SMOOTH }}>
+                    {sections.shadowAnalysis}
+                  </p>
+                )}
+                {sections.shadowEdgeNote && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                    {sections.shadowEdgeNote}
+                  </p>
+                )}
+                <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '14px 0' }} />
+              </>
+            )}
+
+            {/* ── Scene ────────────────────────────────────────────────── */}
+            {(sections.sceneDescription || sections.vlmNarrative) && (
+              <>
+                <SubLabel>Scene</SubLabel>
+                {sections.sceneDescription && (
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '20px', color: C.textSub, ...FONT_SMOOTH }}>
+                    {sections.sceneDescription}
+                  </p>
+                )}
+                {sections.vlmNarrative?.fields?.length > 0 && (
+                  <div style={{
+                    marginTop: sections.sceneDescription ? 12 : 0,
+                    display: 'grid',
+                    gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr',
+                    gap: 8,
+                  }}>
+                    {sections.vlmNarrative.fields.map(({ label, value }) => (
+                      <SceneField key={label} label={label} value={value} />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Color Palette ────────────────────────────────────────── */}
+            {sections.colorPalette && (
+              <>
+                <SubLabel>Color Palette</SubLabel>
+                {sections.colorPalette.hexes.length > 0 && (
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
+                    {sections.colorPalette.hexes.map((hex, i) => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flex: 1 }}>
+                        <div style={{
+                          width: '100%', maxWidth: 56, aspectRatio: '1 / 1', borderRadius: 10,
+                          backgroundColor: hex,
+                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.18), 0 2px 6px rgba(0,0,0,0.5)',
+                        }} />
+                        {sections.colorPalette.colors[i] && (
+                          <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.55), textAlign: 'center', lineHeight: 1.2, letterSpacing: '0.2px', ...FONT_SMOOTH }}>
+                            {sections.colorPalette.colors[i]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <CCTAxis keyKStr={sections.colorPalette.cctKey} shadowKStr={sections.colorPalette.cctShadows} />
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sections.colorPalette.character ? 8 : 0 }}>
+                  {sections.colorPalette.harmony && (
                     <Chip
-                      label={`PATTERN · ${prettify(signalDiag.final_pattern, { upper: true })}`}
+                      label={`HARMONY · ${prettify(sections.colorPalette.harmony, { upper: true })}${sections.colorPalette.warmCool ? ' · WARM/COOL' : ''}`}
                       variant="accent"
                       size="sm"
                     />
+                  )}
+                  {sections.colorPalette.cctKey && (
+                    <Chip label={`KEY ${prettify(sections.colorPalette.cctKey, { upper: true })}`} variant="warn" size="sm" />
+                  )}
+                  {sections.colorPalette.cctShadows && (
+                    <Chip label={`SHADOW ${prettify(sections.colorPalette.cctShadows, { upper: true })}`} variant="info" size="sm" />
+                  )}
+                </div>
+                {sections.colorPalette.character && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.58), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                    {sections.colorPalette.character}
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* ── Confidence — photographer-facing summary ─────────────── */}
+            {sections.signalQuality && (
+              <>
+                <SubLabel>Confidence</SubLabel>
+                {/* Signal strength bar — the one metric photographers care about */}
+                {sections.signalQuality.strength != null && (
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>SIGNAL STRENGTH</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: isHighConf ? C.confHigh : C.confLow, ...FONT_SMOOTH }}>
+                        {sections.signalQuality.available != null
+                          ? `${sections.signalQuality.available}/${sections.signalQuality.total}`
+                          : `${Math.round(sections.signalQuality.strength * 100)}%`}
+                      </span>
+                    </div>
+                    <div style={{ height: 3, borderRadius: 1.5, backgroundColor: C.barTrack }}>
+                      <div style={{
+                        height: '100%', borderRadius: 1.5,
+                        width: `${Math.round(sections.signalQuality.strength * 100)}%`,
+                        backgroundColor: isHighConf ? C.confHighBar : C.confLowBar,
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
                   </div>
                 )}
-              </div>
-            )}
-            {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                  PASS RELIABILITY
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {Object.entries(sections.signalQuality.passSummaries).map(([pass, level]) => {
-                    const variant = level === 'high' ? 'success' : level === 'moderate' ? 'info' : 'warn';
-                    const passLabel = prettify(pass.replace(/_pass$/, ''), { upper: true });
-                    return (
-                      <Chip
-                        key={pass}
-                        label={`${passLabel} · ${String(level).toUpperCase()}`}
-                        variant={variant}
-                        size="sm"
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            {sections.signalQuality.supporting.length > 0 && (
-              <div style={{ marginBottom: sections.signalQuality.contradicting.length > 0 ? 10 : 0 }}>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                  SUPPORTING
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {sections.signalQuality.supporting.map((s, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                      <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confHigh, marginTop: 6, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {sections.signalQuality.contradicting.length > 0 && (
-              <div>
-                <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
-                  CONTRADICTING
-                </p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {sections.signalQuality.contradicting.map((s, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
-                      <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confLow, marginTop: 6, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {sections.signalQuality.reasoning && (
-              <p style={{ margin: '10px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                {sections.signalQuality.reasoning}
-              </p>
+                {/* Reasoning narrative — human-readable confidence explanation */}
+                {sections.signalQuality.reasoning && (
+                  <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
+                    {sections.signalQuality.reasoning}
+                  </p>
+                )}
+
+                {/* ── Engine Diagnostics — collapsed by default ──────────
+                    Raw signals, pass reliability, and supporting/contradicting
+                    evidence. Useful for debugging or deep analysis, but not
+                    what a photographer on set needs. */}
+                {(hasRawSignals || (sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0) || sections.signalQuality.supporting.length > 0) && (
+                  <DiagnosticsDisclosure>
+                    {hasRawSignals && (
+                      <div style={{ marginBottom: 12 }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                          RAW SIGNALS
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          {rawSignals.nose_shadow_angle_deg != null && (
+                            <SignalGauge
+                              label="NOSE SHADOW"
+                              value={rawSignals.nose_shadow_angle_deg}
+                              display={`${rawSignals.nose_shadow_angle_deg > 0 ? '+' : ''}${rawSignals.nose_shadow_angle_deg.toFixed(0)}°`}
+                              mode="signed"
+                            />
+                          )}
+                          {rawSignals.left_right_asymmetry != null && (
+                            <SignalGauge
+                              label="L/R ASYMMETRY"
+                              value={Math.abs(rawSignals.left_right_asymmetry)}
+                              display={`${(rawSignals.left_right_asymmetry * 100).toFixed(1)}%`}
+                              mode="pct"
+                              accentColor="rgba(130,170,220,0.85)"
+                            />
+                          )}
+                          {rawSignals.shadow_density != null && (
+                            <SignalGauge
+                              label="SHADOW DENSITY"
+                              value={rawSignals.shadow_density}
+                              display={`${(rawSignals.shadow_density * 100).toFixed(1)}%`}
+                              mode="pct"
+                            />
+                          )}
+                          {rawSignals.highlight_width_ratio != null && (
+                            <SignalGauge
+                              label="HIGHLIGHT WIDTH"
+                              value={rawSignals.highlight_width_ratio}
+                              display={`${(rawSignals.highlight_width_ratio * 100).toFixed(0)}%`}
+                              mode="pct"
+                              accentColor="rgba(140,225,180,0.85)"
+                            />
+                          )}
+                        </div>
+                        {signalDiag.final_pattern && (
+                          <div style={{ marginTop: 10 }}>
+                            <Chip
+                              label={`PATTERN · ${prettify(signalDiag.final_pattern, { upper: true })}`}
+                              variant="accent"
+                              size="sm"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
+                      <div style={{ marginBottom: 12 }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                          PASS RELIABILITY
+                        </p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {Object.entries(sections.signalQuality.passSummaries).map(([pass, level]) => {
+                            const variant = level === 'high' ? 'success' : level === 'moderate' ? 'info' : 'warn';
+                            const passLabel = prettify(pass.replace(/_pass$/, ''), { upper: true });
+                            return (
+                              <Chip
+                                key={pass}
+                                label={`${passLabel} · ${String(level).toUpperCase()}`}
+                                variant={variant}
+                                size="sm"
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {sections.signalQuality.supporting.length > 0 && (
+                      <div style={{ marginBottom: sections.signalQuality.contradicting.length > 0 ? 10 : 0 }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                          SUPPORTING
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {sections.signalQuality.supporting.map((s, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                              <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confHigh, marginTop: 6, flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {sections.signalQuality.contradicting.length > 0 && (
+                      <div>
+                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                          CONTRADICTING
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {sections.signalQuality.contradicting.map((s, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 7 }}>
+                              <div style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: C.confLow, marginTop: 6, flexShrink: 0 }} />
+                              <span style={{ fontSize: 12, fontWeight: 400, color: C.textSub, lineHeight: 1.4, ...FONT_SMOOTH }}>{s}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </DiagnosticsDisclosure>
+                )}
+              </>
             )}
           </PullTabDrawer>
         )}
+
+        {/* Mobile CTA spacer — reserves room at bottom of scroll content
+            so the floating CTA bar doesn't occlude the last drawer items. */}
+        {!isDesktop && <div style={{ height: 72 }} />}
       </div>
 
       {/* ─── Bottom row: single spacer ───
           The BottomActions "New Photo | Save" trough was removed because its
-          Save button called the same `onSetup()` as the hero "Set Up This Light"
+          Save button called the same `onSetup()` as the hero "Build This Light"
           CTA, and New Photo duplicated the top-left back chevron (which already
           fires `onRetry`).  A single flat spacer keeps the grid row reserved so
           the panel column alignment stays put. */}
       <div style={{ height: 40, ...(isDesktop ? { gridArea: 'actions' } : null) }} />
+
+      {/* ─── Floating mobile CTA — sticky bottom bar ─── */}
+      {!isDesktop && (
+        <div style={{
+          position: 'sticky', bottom: 0, left: 0, right: 0,
+          zIndex: 40,
+          padding: '10px 25px 18px',
+          background: 'linear-gradient(to top, rgba(18,20,24,0.97) 60%, rgba(18,20,24,0) 100%)',
+          pointerEvents: 'none',
+          opacity: infoVisible ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease',
+        }}>
+          {isHighConf ? (
+            <button
+              onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
+              style={{
+                display: 'flex',
+                alignItems: 'center', justifyContent: 'center',
+                width: '100%',
+                height: 48,
+                borderRadius: 24,
+                background: CTA_BG,
+                boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
+                border: 'none', cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+                overflow: 'hidden',
+                pointerEvents: 'auto',
+              }}
+            >
+              <span style={{
+                fontSize: 14, fontWeight: 600,
+                color: 'rgba(245,247,250,0.9)',
+                letterSpacing: '0.5px',
+                pointerEvents: 'none',
+                ...FONT_SMOOTH,
+              }}>
+                Build This Light
+              </span>
+            </button>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, pointerEvents: 'auto' }}>
+              <button
+                onClick={() => { tapHaptic(); onRetry(); }}
+                style={{
+                  flex: 1, height: 44, borderRadius: 22,
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: 'rgba(245,247,250,0.7)',
+                  fontSize: 12, fontWeight: 600, letterSpacing: '0.4px',
+                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                  ...FONT_SMOOTH,
+                }}
+              >New Photo</button>
+              <button
+                onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
+                style={{
+                  flex: 1, height: 44, borderRadius: 22,
+                  background: 'linear-gradient(141.71deg, rgba(200,170,100,0.22) 0%, rgba(180,140,60,0.12) 100%)',
+                  boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.06), inset -0.5px -0.5px 0.5px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.4)',
+                  border: '0.5px solid rgba(245,190,72,0.18)',
+                  cursor: 'pointer',
+                  color: 'rgba(250,220,160,0.85)',
+                  fontSize: 12, fontWeight: 600, letterSpacing: '0.4px',
+                  WebkitTapHighlightColor: 'transparent',
+                  ...FONT_SMOOTH,
+                }}
+              >Build It Anyway</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── First-visit teach overlay — explains each Result section ──────── */}
+      {resultTeachVisible && !isDesktop && (() => {
+        const hw = 430; // design width
+        const steps = [
+          { // Step 0: Hero photo + pattern — the result
+            x: 0, y: VF_TOP + VF_HEIGHT - 80, w: hw, h: 80, r: 0,
+            title: 'Your lighting — decoded',
+            desc: 'Pattern name and confidence — the answer at a glance.',
+            tipY: VF_TOP + VF_HEIGHT + 24,
+            arrow: 'up',
+          },
+          { // Step 1: THE LIGHT section
+            x: 20, y: M_TOP_END + 60, w: hw - 40, h: 120, r: 12,
+            title: 'Shadow geometry',
+            desc: 'Which pattern, how strong, and what the shadows tell us.',
+            tipY: M_TOP_END - 10,
+            arrow: 'down',
+          },
+          { // Step 2: THE SETUP section
+            x: 20, y: M_TOP_END + 200, w: hw - 40, h: 140, r: 12,
+            title: 'Your rebuild blueprint',
+            desc: 'Modifier, catchlight, distance, height — everything to recreate it.',
+            tipY: M_TOP_END + 120,
+            arrow: 'down',
+          },
+          { // Step 3: Build This Light CTA
+            x: 25, y: stableVH - safeBottom - 68, w: hw - 50, h: 48, r: 24,
+            title: 'Ready to build it?',
+            desc: 'Step-by-step cockpit to match this light in your studio.',
+            tipY: stableVH - safeBottom - 148,
+            arrow: 'down',
+          },
+        ];
+        const s = steps[resultTeachStep] || steps[0];
+        const cx = s.x + s.w / 2;
+        const cy = s.y + s.h / 2;
+        const rx = s.w / 2 + 14;
+        const ry = s.h / 2 + 14;
+        const stepColors = ['rgba(245,210,140,1)', 'rgba(132,158,184,1)', 'rgba(107,148,245,1)', 'rgba(72,186,136,1)'];
+        const sc = stepColors[resultTeachStep] || stepColors[0];
+
+        // Arrow geometry
+        const cardCX = hw / 2;
+        const cardEdgeY = s.arrow === 'up' ? s.tipY : s.tipY + 72;
+        const tipYA = s.arrow === 'up' ? cy : cy;
+        const svgTop = Math.min(tipYA, cardEdgeY) - 10;
+        const svgBot = Math.max(tipYA, cardEdgeY) + 10;
+        const svgH = svgBot - svgTop;
+        const startLY = cardEdgeY - svgTop;
+        const endLY = tipYA - svgTop;
+        const cpOffset = s.arrow === 'up' ? 30 : -30;
+        const cpX = cardCX + cpOffset;
+        const cpY1 = startLY + (endLY - startLY) * 0.3;
+        const cpY2 = startLY + (endLY - startLY) * 0.7;
+        const curvePath = `M${cardCX} ${startLY} C${cpX} ${cpY1}, ${cpX} ${cpY2}, ${cx} ${endLY}`;
+        const aSize = 8;
+        const aDir = s.arrow === 'up' ? -1 : 1;
+        const aPath = `M${cx - aSize} ${endLY - aSize * aDir} L${cx} ${endLY} L${cx + aSize} ${endLY - aSize * aDir}`;
+        const curveLen = Math.hypot(cx - cardCX, endLY - startLY) * 1.4;
+
+        return (
+          <div
+            onClick={advanceResultTeach}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 60,
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              animation: resultTeachStep >= 4 ? 'rTeachOut 0.5s ease forwards' : 'rTeachIn 0.6s ease both',
+            }}
+          >
+            {/* Scrim */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              background: `radial-gradient(ellipse ${rx * 2}px ${ry * 2}px at ${cx}px ${cy}px, transparent 0%, transparent 38%, rgba(0,0,0,0.42) 50%, rgba(0,0,0,0.62) 66%, rgba(0,0,0,0.72) 100%)`,
+              transition: 'background 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+            }} />
+
+            {/* Volumetric bloom */}
+            <div style={{
+              position: 'absolute',
+              left: cx - 100, top: cy - 100,
+              width: 200, height: 200,
+              borderRadius: '50%',
+              background: `radial-gradient(circle, ${sc.replace(/[\d.]+\)$/, '0.06)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.02)')} 40%, transparent 70%)`,
+              pointerEvents: 'none',
+              animation: 'rTeachBloom 3s ease-in-out infinite',
+              transition: 'left 0.55s ease, top 0.55s ease',
+            }} />
+
+            {/* Spotlight rings */}
+            <div style={{
+              position: 'absolute',
+              left: s.x - 10, top: s.y - 10,
+              width: s.w + 20, height: s.h + 20,
+              borderRadius: s.r ? s.r + 10 : 10,
+              border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.12)')}`,
+              boxShadow: `0 0 44px ${sc.replace(/[\d.]+\)$/, '0.12)')}, inset 0 0 20px ${sc.replace(/[\d.]+\)$/, '0.05)')}`,
+              pointerEvents: 'none',
+              animation: 'rTeachPulse 2.4s ease-in-out infinite',
+              transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+            }} />
+            <div style={{
+              position: 'absolute',
+              left: s.x - 2, top: s.y - 2,
+              width: s.w + 4, height: s.h + 4,
+              borderRadius: s.r ? s.r + 2 : 2,
+              border: `1.5px solid ${sc.replace(/[\d.]+\)$/, '0.50)')}`,
+              boxShadow: `0 0 20px ${sc.replace(/[\d.]+\)$/, '0.22)')}, inset 0 0 10px ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
+              pointerEvents: 'none',
+              animation: 'rTeachPulse 2.4s ease-in-out 0.2s infinite',
+              transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+            }} />
+
+            {/* Tooltip card */}
+            <div key={resultTeachStep} style={{
+              position: 'absolute',
+              top: s.tipY,
+              left: 32, right: 32,
+              animation: 'rTeachCard 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+            }}>
+              {/* Animated border glow */}
+              <div style={{
+                position: 'absolute', inset: -1,
+                borderRadius: 15,
+                background: `conic-gradient(from var(--teach-border-angle, 0deg), ${sc.replace(/[\d.]+\)$/, '0.00)')}, ${sc.replace(/[\d.]+\)$/, '0.18)')}, ${sc.replace(/[\d.]+\)$/, '0.00)')}, ${sc.replace(/[\d.]+\)$/, '0.10)')}, ${sc.replace(/[\d.]+\)$/, '0.00)')})`,
+                animation: 'rTeachBorder 4s linear infinite',
+                opacity: 0.7,
+                pointerEvents: 'none',
+              }} />
+              <div style={{
+                position: 'relative',
+                padding: '10px 14px',
+                borderRadius: 14,
+                backgroundColor: 'rgba(10,11,14,0.85)',
+                border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
+                boxShadow: [
+                  '0 8px 32px rgba(0,0,0,0.55)',
+                  '0 2px 8px rgba(0,0,0,0.35)',
+                  `0 0 0 0.5px ${sc.replace(/[\d.]+\)$/, '0.06)')}`,
+                  'inset 0 1px 0 rgba(255,255,255,0.07)',
+                  'inset 0 -1px 0 rgba(0,0,0,0.2)',
+                ].join(', '),
+                backdropFilter: 'blur(20px) saturate(1.3)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Step icon */}
+                  <div style={{
+                    width: 36, height: 36, flexShrink: 0,
+                    borderRadius: 10,
+                    background: `linear-gradient(145deg, ${sc.replace(/[\d.]+\)$/, '0.14)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.03)')} 100%)`,
+                    border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.16)')}`,
+                    boxShadow: `inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {resultTeachStep === 0 && (
+                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="10" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
+                        <path d="M12 16l3 3 5-6" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                      </svg>
+                    )}
+                    {resultTeachStep === 1 && (
+                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                        <circle cx="16" cy="16" r="6" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
+                        <path d="M16 6v4M16 22v4M6 16h4M22 16h4M9 9l3 3M20 20l3 3M9 23l3-3M20 12l3-3" stroke={sc.replace(/[\d.]+\)$/, '0.50)')} strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                    )}
+                    {resultTeachStep === 2 && (
+                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                        <rect x="6" y="8" width="20" height="16" rx="2" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
+                        <path d="M10 14h4M10 18h8" stroke={sc.replace(/[\d.]+\)$/, '0.50)')} strokeWidth="1.4" strokeLinecap="round" />
+                        <circle cx="22" cy="14" r="2" fill={sc.replace(/[\d.]+\)$/, '0.35)')} />
+                      </svg>
+                    )}
+                    {resultTeachStep === 3 && (
+                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                        <path d="M16 6l-3 6h6l-3 6" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                        <path d="M8 22h16" stroke={sc.replace(/[\d.]+\)$/, '0.45)')} strokeWidth="1.6" strokeLinecap="round" />
+                        <path d="M10 26h12" stroke={sc.replace(/[\d.]+\)$/, '0.30)')} strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      margin: 0, fontSize: 14, fontWeight: 700, lineHeight: '18px',
+                      color: 'rgba(245,247,250,0.94)',
+                      letterSpacing: '-0.2px',
+                      ...FONT_SMOOTH,
+                    }}>{s.title}</p>
+                    <p style={{
+                      margin: '3px 0 0', fontSize: 11, fontWeight: 500, lineHeight: '15px',
+                      color: 'rgba(184,191,199,0.50)',
+                      ...FONT_SMOOTH,
+                    }}>{s.desc}</p>
+                  </div>
+
+                  <div
+                    onClick={(e) => { e.stopPropagation(); advanceResultTeach(); }}
+                    style={{
+                      flexShrink: 0, padding: '6px 14px', borderRadius: 9,
+                      background: `linear-gradient(135deg, ${sc.replace(/[\d.]+\)$/, '0.16)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.06)')} 100%)`,
+                      border: `1px solid ${sc.replace(/[\d.]+\)$/, resultTeachStep < 3 ? '0.18)' : '0.26)')}`,
+                      boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.06)')}`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <p style={{
+                      margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px',
+                      color: sc.replace(/[\d.]+\)$/, resultTeachStep < 3 ? '0.82)' : '0.90)'),
+                      ...FONT_SMOOTH, whiteSpace: 'nowrap',
+                    }}>{resultTeachStep < 3 ? 'Next' : 'Got it'}</p>
+                  </div>
+                </div>
+
+                {/* Progress bar + skip */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginTop: 8,
+                }}>
+                  <div style={{
+                    flex: 1, maxWidth: 80, height: 3, borderRadius: 2,
+                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${((resultTeachStep + 1) / 4) * 100}%`,
+                      height: '100%', borderRadius: 2,
+                      background: `linear-gradient(90deg, ${sc.replace(/[\d.]+\)$/, '0.35)')}, ${sc.replace(/[\d.]+\)$/, '0.60)')})`,
+                      transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.5s ease',
+                      boxShadow: `0 0 6px ${sc.replace(/[\d.]+\)$/, '0.20)')}`,
+                    }} />
+                  </div>
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, letterSpacing: '0.5px',
+                    color: sc.replace(/[\d.]+\)$/, '0.35)'),
+                    marginLeft: 8, ...FONT_SMOOTH,
+                  }}>{resultTeachStep + 1}/4</span>
+                  <div style={{ flex: 1 }} />
+                  {resultTeachStep < 3 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); skipResultTeach(); }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+                        fontSize: 10, fontWeight: 600, color: steel(0.24),
+                        WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                      }}
+                    >Skip</button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Draw-on arrow */}
+            <svg key={`rarrow-${resultTeachStep}`} style={{
+              position: 'absolute', left: 0, top: svgTop,
+              width: hw, height: svgH,
+              pointerEvents: 'none', overflow: 'visible',
+              filter: `drop-shadow(0 0 10px ${sc.replace(/[\d.]+\)$/, '0.35)')})`,
+            }}>
+              <path d={curvePath} stroke={sc.replace(/[\d.]+\)$/, '0.12)')}
+                strokeWidth="8" strokeLinecap="round" fill="none"
+                strokeDasharray={curveLen} strokeDashoffset={curveLen}
+                style={{ animation: 'rTeachDraw 0.7s cubic-bezier(0.4,0,0.2,1) 0.2s forwards' }} />
+              <path d={curvePath} stroke={sc.replace(/[\d.]+\)$/, '0.75)')}
+                strokeWidth="2.5" strokeLinecap="round" fill="none"
+                strokeDasharray={curveLen} strokeDashoffset={curveLen}
+                style={{ animation: 'rTeachDraw 0.7s cubic-bezier(0.4,0,0.2,1) 0.25s forwards' }} />
+              <path d={curvePath} stroke="rgba(255,255,255,0.12)"
+                strokeWidth="1" strokeLinecap="round" fill="none"
+                strokeDasharray={curveLen} strokeDashoffset={curveLen}
+                style={{ animation: 'rTeachDraw 0.7s cubic-bezier(0.4,0,0.2,1) 0.3s forwards' }} />
+              <g style={{ opacity: 0, animation: 'rTeachArrowIn 0.3s ease 0.85s forwards' }}>
+                <g style={{ animation: 'rTeachBounce 1.4s ease-in-out 1.1s infinite' }}>
+                  <circle cx={cx} cy={endLY} r="12" fill={sc.replace(/[\d.]+\)$/, '0.08)')} />
+                  <path d={aPath} stroke={sc.replace(/[\d.]+\)$/, '0.95)')}
+                    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  <path d={aPath} stroke="rgba(255,255,255,0.22)"
+                    strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                </g>
+              </g>
+            </svg>
+
+            {/* Tap anywhere hint */}
+            <p style={{
+              position: 'absolute', bottom: 14, left: 0, right: 0,
+              textAlign: 'center', margin: 0,
+              fontSize: 10, fontWeight: 500, letterSpacing: '0.5px',
+              color: steel(0.22), ...FONT_SMOOTH,
+              animation: 'rTeachFade 0.6s ease 1s both',
+              pointerEvents: 'none',
+            }}>Tap anywhere to continue</p>
+          </div>
+        );
+      })()}
+
+      {/* Result teach keyframes */}
+      <style>{`
+        @keyframes rTeachIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes rTeachOut { from { opacity: 1; } to { opacity: 0; pointer-events: none; } }
+        @keyframes rTeachCard {
+          0%   { opacity: 0; transform: translateY(16px) scale(0.96); }
+          60%  { opacity: 1; transform: translateY(-3px) scale(1.01); }
+          80%  { transform: translateY(1px) scale(1.0); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes rTeachFade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes rTeachPulse {
+          0%   { transform: scale(1); opacity: 0.85; }
+          50%  { transform: scale(1.06); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.85; }
+        }
+        @keyframes rTeachBloom {
+          0%   { transform: scale(1); opacity: 0.7; }
+          50%  { transform: scale(1.15); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.7; }
+        }
+        @keyframes rTeachDraw { to { stroke-dashoffset: 0; } }
+        @keyframes rTeachArrowIn { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+        @keyframes rTeachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+        @property --teach-border-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+        @keyframes rTeachBorder { to { --teach-border-angle: 360deg; } }
+      `}</style>
 
       {/* ─── Home Indicator — pinned to viewport bottom ─── */}
       <div style={{
@@ -2757,10 +3535,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             src={imagePreview}
             alt="Result fullscreen"
             style={{
-              maxWidth: '100vw',
-              maxHeight: '100dvh',
+              // Fill the device height — portrait photos (majority of
+              // portrait/beauty/fashion inputs) should occupy the full
+              // screen height.  Width overflows and is pannable.
+              height: '100dvh',
               width: 'auto',
-              height: 'auto',
               objectFit: 'contain',
               transform: `translate(${zoomPan.x}px, ${zoomPan.y}px) scale(${zoomScale})`,
               transformOrigin: 'center center',
@@ -2857,6 +3636,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none', zIndex: 9 }}>
               <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
               <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.42 }} />
+              <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
             </div>
             {/* Inner-shadow bevel ring */}
             <div style={{

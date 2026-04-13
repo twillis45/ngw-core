@@ -1490,7 +1490,17 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
 
     function onResize() { draw(canvasRef.current); }
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    // Orientation changes on mobile/tablet/foldable need a delayed redraw
+    // because viewport dimensions may not be final when the event fires.
+    const onOrient = () => setTimeout(onResize, 150);
+    window.addEventListener('orientationchange', onOrient);
+    const soApi = window.screen?.orientation;
+    if (soApi) soApi.addEventListener('change', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onOrient);
+      if (soApi) soApi.removeEventListener('change', onResize);
+    };
   }, [effectiveSpec, view, units, spaceCheck, roomDimensions, highlightRole, activeLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!spec) return null;
