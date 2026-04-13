@@ -38,7 +38,10 @@ export function getFaceCropPosition(rawResult) {
   // eyes-through-mid-cheek rather than parking eyes at dead center.
   const focusY = eyeMidY + (H * 0.02);
 
-  const xPct = Math.max(0, Math.min(100, (eyeMidX / W) * 100));
-  const yPct = Math.max(0, Math.min(100, (focusY  / H) * 100));
+  // Clamp to portrait-safe ranges: x 20-80% keeps the face centered in
+  // the crop even with noisy face detection; y 15-55% keeps the face in the
+  // upper portion where photographers expect it.
+  const xPct = Math.max(20, Math.min(80, (eyeMidX / W) * 100));
+  const yPct = Math.max(15, Math.min(55, (focusY  / H) * 100));
   return `${xPct.toFixed(1)}% ${yPct.toFixed(1)}%`;
 }

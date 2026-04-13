@@ -15,6 +15,7 @@
  * Use the `showDot={false}` escape hatch for dense meta readouts where the
  * dot would feel repetitive, but prefer keeping it for visual rhythm.
  */
+import { useState } from 'react';
 import { C, steel, FONT_SMOOTH } from '../../../theme/studioMatte';
 
 // ─── Variant palette ─────────────────────────────────────────────────────────
@@ -100,13 +101,20 @@ export default function Chip({
 }) {
   const v = VARIANTS[variant] || VARIANTS.neutral;
   const s = SIZES[size] || SIZES.sm;
+  const [pressed, setPressed] = useState(false);
+  const isClickable = !!onClick;
 
   return (
     <div
       title={title}
       onClick={onClick || undefined}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      onPointerDown={isClickable ? () => setPressed(true) : undefined}
+      onPointerUp={isClickable ? () => setPressed(false) : undefined}
+      onPointerLeave={isClickable ? () => setPressed(false) : undefined}
+      onKeyDown={isClickable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
+      role={isClickable ? 'button' : undefined}
+      aria-label={isClickable ? (title || label) : undefined}
+      tabIndex={isClickable ? 0 : undefined}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -119,8 +127,11 @@ export default function Chip({
         background: `linear-gradient(180deg, ${v.bg1} 0%, ${v.bg2} 100%)`,
         boxShadow: `${CHIP_BEVEL}, 0 0 0 0.5px ${v.rim}`,
         whiteSpace: 'nowrap',
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: isClickable ? 'pointer' : 'default',
         WebkitTapHighlightColor: 'transparent',
+        // Tactile press feedback — chip compresses on press like a real token
+        transform: pressed ? 'scale(0.94)' : 'scale(1)',
+        transition: 'transform 0.12s cubic-bezier(0.4, 0, 0.2, 1)',
         ...style,
       }}
     >

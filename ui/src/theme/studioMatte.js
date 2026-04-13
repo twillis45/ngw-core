@@ -56,6 +56,25 @@ export const FONT_SMOOTH = {
   textRendering:       'geometricPrecision',
 };
 
+// ─── 5-tier type scale ───────────────────────────────────────────────────────
+// Canonical sizes across all Studio Matte screens. Desktop variants scale up
+// each tier for wide-viewport reading distance (typically +2–6px).
+// T1 = hero leads / big numbers, T5 = micro metadata / drawer labels.
+export const TYPE = {
+  T1: 32,  // hero lead, step numbers
+  T2: 20,  // section titles, modifier names, pattern name
+  T3: 14,  // body text, spec values, drawer item copy
+  T4: 11,  // labels, secondary text, sub-leads
+  T5: 9,   // micro labels, metadata, category tags
+};
+export const TYPE_DK = {
+  T1: 38,
+  T2: 24,
+  T3: 16,
+  T4: 13,
+  T5: 11,
+};
+
 // ─── Panel shadow + bevel (Figma 1515:2) ─────────────────────────────────────
 export const PANEL_SHADOW = '1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4)';
 export const PANEL_BEVEL  = 'inset -1px -1px 2px 0px rgba(0,0,0,0.12), inset 1px 1px 0px 0px rgba(255,255,255,0.05)';
@@ -135,6 +154,14 @@ export const GLASS_REFLECTION = [
 ].join(' ');
 
 export const LENS_VIGNETTE = 'radial-gradient(ellipse 100% 90% at center, transparent 52%, rgba(0,0,0,0.08) 76%, rgba(0,0,0,0.22) 100%)';
+
+// ─── VF dither noise layer ──────────────────────────────────────────────────
+// Subtle high-frequency noise breaks up gradient banding in LENS_VIGNETTE and
+// GLASS_REFLECTION. Render as a `<div>` with this as `backgroundImage` inside
+// the glass overlay container, `position: absolute; inset: 0; opacity: 0.28;
+// mixBlendMode: 'overlay'`. The SVG encodes a 200×200 feTurbulence tile that
+// repeats seamlessly. Tiny footprint (~250 bytes), zero network requests.
+export const VF_DITHER_NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`;
 
 // ─── Metallic chevron (glossy embossed icon treatment) ────────────────────────
 export const METALLIC_CHEVRON = {

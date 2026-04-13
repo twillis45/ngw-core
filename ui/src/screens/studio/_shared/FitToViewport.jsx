@@ -43,7 +43,21 @@ export default function FitToViewport({
     if (typeof window === 'undefined') return;
     const handler = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
+    // orientationchange fires on mobile/tablet rotation and some foldable
+    // devices where the viewport dimensions swap but 'resize' may not fire
+    // (or fires before the new dimensions are available).  The 150ms delay
+    // gives the browser time to settle on the new viewport size.
+    const orientHandler = () => setTimeout(handler, 150);
+    window.addEventListener('orientationchange', orientHandler);
+    // screen.orientation API (modern browsers): fires on desktops with
+    // auto-rotate displays and on tablets docked in landscape.
+    const soApi = window.screen?.orientation;
+    if (soApi) soApi.addEventListener('change', handler);
+    return () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('orientationchange', orientHandler);
+      if (soApi) soApi.removeEventListener('change', handler);
+    };
   }, []);
 
   const scaleX = vp.w / designWidth;

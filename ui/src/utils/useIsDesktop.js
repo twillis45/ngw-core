@@ -8,17 +8,17 @@
  */
 import { useEffect, useState } from 'react';
 
-const DESKTOP_MIN_WIDTH = 1024;
+export const LAYOUT_DESKTOP_MIN = 1024;
 
 export function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined') return false;
-    return window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH}px)`).matches;
+    return window.matchMedia(`(min-width: ${LAYOUT_DESKTOP_MIN}px)`).matches;
   });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const mq = window.matchMedia(`(min-width: ${DESKTOP_MIN_WIDTH}px)`);
+    const mq = window.matchMedia(`(min-width: ${LAYOUT_DESKTOP_MIN}px)`);
     const handler = (e) => setIsDesktop(e.matches);
     // Safari < 14 uses addListener/removeListener
     if (mq.addEventListener) mq.addEventListener('change', handler);
@@ -43,7 +43,16 @@ export function useViewportWidth() {
     if (typeof window === 'undefined') return;
     const handler = () => setW(window.innerWidth);
     window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
+    // Orientation change fires on device rotation — delayed to let viewport settle.
+    const orientHandler = () => setTimeout(handler, 150);
+    window.addEventListener('orientationchange', orientHandler);
+    const soApi = window.screen?.orientation;
+    if (soApi) soApi.addEventListener('change', handler);
+    return () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('orientationchange', orientHandler);
+      if (soApi) soApi.removeEventListener('change', handler);
+    };
   }, []);
   return w;
 }

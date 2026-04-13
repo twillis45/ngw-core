@@ -68,6 +68,7 @@ function HandlePill({ open, pressed }) {
 
 export default function PullTabDrawer({
   label,
+  summary,     // optional one-line preview shown when closed
   open,
   onToggle,
   children,
@@ -118,7 +119,7 @@ export default function PullTabDrawer({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 10,
-          backgroundColor: pressed ? 'rgba(255,255,255,0.015)' : 'transparent',
+          backgroundColor: pressed ? 'rgba(255,255,255,0.025)' : hovered ? 'rgba(255,255,255,0.012)' : 'transparent',
           transition: 'background-color 0.18s ease',
         }}
       >
@@ -137,6 +138,24 @@ export default function PullTabDrawer({
         </span>
         <HandlePill open={open} pressed={pressed} />
       </div>
+
+      {/* Summary preview — visible when closed, fades out when opening */}
+      {summary && (
+        <p style={{
+          margin: 0,
+          padding: '0 20px 8px',
+          fontSize: 10, fontWeight: 500, lineHeight: '14px',
+          color: steel(0.55),
+          letterSpacing: '0.15px',
+          textAlign: 'center',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          opacity: open ? 0 : 1,
+          maxHeight: open ? 0 : 22,
+          transition: `opacity 0.25s ease, max-height 0.25s ${EASE_CLOSE}`,
+          pointerEvents: 'none',
+          ...FONT_SMOOTH,
+        }}>{summary}</p>
+      )}
 
       {/* Collapsing body — uses the grid-template-rows: 0fr→1fr trick so the
           drawer animates from 0 to its NATURAL content height (no max-height
