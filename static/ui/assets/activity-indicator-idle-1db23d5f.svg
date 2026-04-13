@@ -1,6 +1,0 @@
-<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g id="Activity Indicator (idle)">
-<circle cx="6" cy="6" r="6" fill="var(--fill-0, #595E6B)" fill-opacity="0.55"/>
-<circle cx="6" cy="6" r="5.75" stroke="var(--stroke-0, #A7ADB7)" stroke-opacity="0.08" stroke-width="0.5"/>
-</g>
-</svg>
