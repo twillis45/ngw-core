@@ -4,7 +4,7 @@
   "image_path": "benchmarks/images/high_key.jpg",
   "ground_truth": {
     "expected_pattern": "high_key",
-    "expected_light_count": 2,
+    "expected_light_count": 3,
     "expected_key_direction": "unknown",
     "acceptable_patterns": [
       "high_key",

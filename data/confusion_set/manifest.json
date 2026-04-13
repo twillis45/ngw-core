@@ -10,7 +10,7 @@
       "discriminating_signals": ["nose_shadow_length", "cheek_triangle_present", "shadow_boundary_sharpness"],
       "known_failure_mode": "short nose or certain facial structures prevent triangle formation even with rembrandt positioning",
       "expected_confusion_rate": 0.25,
-      "reference_ids": ["loop_standard", "rembrandt_classic", "corporate_soft_key"],
+      "reference_ids": ["loop_standard", "rembrandt_classic"],
       "confidence_threshold": 0.65
     },
     {

@@ -92,10 +92,12 @@ class TestPatternLoading:
         ids = {p["pattern_id"] for p in patterns}
         expected = {
             "rembrandt", "clamshell", "loop", "split", "butterfly",
-            "broad", "short", "rim_only", "high_key", "low_key",
-            "flat_fashion", "window_portrait", "golden_hour",
-            "overcast_natural", "ring_light", "bare_bulb_editorial",
-            "strip_dramatic", "short_fashion_key",
+            "broad", "short", "rim", "high_key", "low_key",
+            "flat", "window_portrait", "ring_light",
+            "bare_bulb_editorial", "strip_dramatic", "short_fashion_key",
+            # NOTE: golden_hour and overcast_natural removed — they are
+            # source_context values, not geometric patterns. rim_only → rim,
+            # flat_fashion → flat (migration aliases, see engine/enums.py).
         }
         for pid in expected:
             assert pid in ids, f"Missing pattern: {pid}"
@@ -290,7 +292,7 @@ class TestMatchLightingPatterns:
         )
         result = match_lighting_patterns(recon)
         top_ids = [m["pattern"] for m in result["pattern_matches"]]
-        assert any(p in top_ids for p in ("clamshell", "butterfly", "ring_light", "flat_fashion"))
+        assert any(p in top_ids for p in ("clamshell", "butterfly", "ring_light", "flat"))
 
     def test_split_at_90(self):
         """90-degree key with hard shadows should match split."""

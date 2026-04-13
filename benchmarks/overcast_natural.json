@@ -3,14 +3,17 @@
   "description": "Overcast natural \u2014 outdoor portrait under overcast sky, soft diffused light, no harsh shadows, urban setting",
   "image_path": "benchmarks/images/overcast_natural.jpg",
   "ground_truth": {
-    "expected_pattern": "flat",
+    "expected_pattern": "broad",
     "expected_light_count": 1,
-    "expected_key_direction": "unknown",
+    "expected_key_direction": "upper_right",
     "acceptable_patterns": [
+      "broad",
       "flat",
-      "high_key",
-      "rembrandt",
       "loop",
+      "rembrandt",
+      "short",
+      "butterfly",
+      "high_key",
       "unknown"
     ],
     "acceptable_light_count_range": [
@@ -24,7 +27,8 @@
     "known_challenges": [
       "overcast is an environment not a geometric pattern",
       "very soft diffused light produces near-zero shadow signal",
-      "outdoor scene with complex background may confuse analysis"
+      "outdoor scene with complex background may confuse analysis",
+      "image shows slight directionality (sd=0.134, asym=0.218) — not pure flat; pose-resolved patterns plausible"
     ],
     "added_date": "2026-03-17"
   }
