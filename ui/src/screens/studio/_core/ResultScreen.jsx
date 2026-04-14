@@ -1611,8 +1611,10 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
 function ModifierDetail({ modifier }) {
   if (!modifier) return null;
 
-  const heroName = modifier.sizeLabel
-    ? `${modifier.sizeLabel} ${modifier.family || 'Modifier'}`
+  // Avoid "Large Large Octabox" — skip sizeLabel if family already contains it
+  const family = modifier.family || 'Modifier';
+  const heroName = modifier.sizeLabel && !family.toLowerCase().startsWith(modifier.sizeLabel.toLowerCase())
+    ? `${modifier.sizeLabel} ${family}`
     : (modifier.family || null);
 
   // Apparent source band — folded into the subtitle line
