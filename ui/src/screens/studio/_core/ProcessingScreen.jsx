@@ -5,7 +5,8 @@
  *   - Photo dimmed to 0.78 with slow zoom (pros can clearly see their image during analysis)
  *   - Green ring glow replaces blue-steel idle ring
  *   - LED breathing green + halo bloom on button
- *   - "ANALYZING" label inside button (replaces "See the Light")
+ *   - "ANALYZING" engraved label on dome (matches HomeScreen typography)
+ *   - Pipeline stage sub-label rotates below the dome label
  *   - Scan line sweeps across viewfinder
  *   - Green progress bar in home indicator
  *   - EXIF strip persists from HomeScreen (continuity)
@@ -355,20 +356,40 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
       }} />
 
 
-      {/* ── Stage label — secondary, below the timer ── */}
+      {/* ── Primary dome label — engraved instrument lettering matching HomeScreen.
+           "ANALYZING" during analysis, "DONE" on completion. Same typography as
+           HomeScreen's "See the Light": Inter 600, 12px, 3px tracking, all-caps,
+           centered on the button dome. Green-tinted for the processing state. ── */}
       <p style={{
         position: 'absolute',
-        top: LBL_TOP + 14, left: '50%', width: BTN_D - 16,
+        top: LBL_TOP, left: '50%', width: BTN_D,
         transform: 'translateX(-50%)',
-        margin: 0, fontWeight: 600, fontSize: isDesktop ? 11 : 10, lineHeight: '14px',
-        color: steel(0.60), letterSpacing: '0.8px',
+        margin: 0, fontWeight: 600, fontSize: isDesktop ? 13 : 12, lineHeight: '16px',
+        color: analysisComplete ? 'rgba(140,225,180,0.92)' : 'rgba(140,225,180,0.85)',
+        letterSpacing: '3px',
         textTransform: 'uppercase',
-        textShadow: `0 1px 0 rgba(0,0,0,0.5)`,
+        textShadow: analysisComplete
+          ? '0 0 10px rgba(140,225,180,0.35)'
+          : '0 0 8px rgba(72,186,136,0.25)',
+        textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
+        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+        transition: 'color 0.3s ease, text-shadow 0.3s ease',
+      }}>{analysisComplete ? 'Done' : 'Analyzing'}</p>
+
+      {/* ── Stage label — secondary pipeline step below the dome label ── */}
+      <p style={{
+        position: 'absolute',
+        top: LBL_TOP + 20, left: '50%', width: BTN_D - 16,
+        transform: 'translateX(-50%)',
+        margin: 0, fontWeight: 500, fontSize: isDesktop ? 10 : 9, lineHeight: '13px',
+        color: steel(0.48), letterSpacing: '0.6px',
+        textTransform: 'uppercase',
+        textShadow: '0 1px 0 rgba(0,0,0,0.5)',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
         overflow: 'hidden', textOverflow: 'ellipsis',
         WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-        opacity: stageFade, transition: 'opacity 0.3s ease',
-      }}>{analysisComplete ? 'Done' : currentStage.label}</p>
+        opacity: analysisComplete ? 0 : stageFade, transition: 'opacity 0.3s ease',
+      }}>{currentStage.label}</p>
 
       {/* Home indicator removed — transient state, no nav bar needed.
            Progress is shown via the VF bottom green line + stage messages. */}
