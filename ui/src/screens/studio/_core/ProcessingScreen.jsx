@@ -101,16 +101,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
 
   const currentStage = STAGE_MESSAGES[stageIdx];
 
-  // ── Elapsed time counter — studio shot-clock feel ──
-  const [elapsed, setElapsed] = useState(0);
-  const startTime = useRef(Date.now());
-  useEffect(() => {
-    if (analysisComplete) return;
-    const tick = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTime.current) / 1000));
-    }, 1000);
-    return () => clearInterval(tick);
-  }, [analysisComplete]);
 
   // ── Layout geometry (shared hook — identical to HomeScreen) ──
   const { stableVH, safeBottom, isDesktop } = useStableViewport();
@@ -364,24 +354,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         animation: 'ringAnalyzeGlow 2.0s linear infinite',
       }} />
 
-      {/* ── Elapsed time — hero shot-clock, the dominant readout.
-           Photographers are time-aware on set; this confirms the engine
-           is actively working.  Large tabular numerals — Apple-level
-           confidence and clarity. ── */}
-      {!analysisComplete && elapsed > 0 && (
-        <p style={{
-          position: 'absolute',
-          top: LBL_TOP - 12, left: '50%', width: BTN_D - 8,
-          transform: 'translateX(-50%)',
-          margin: 0, padding: 0, textAlign: 'center',
-          fontSize: isDesktop ? 22 : 20, fontWeight: 300, letterSpacing: '2px',
-          color: steel(0.92),
-          fontVariantNumeric: 'tabular-nums',
-          textShadow: `0 0 10px ${steel(0.30)}, 0 1px 0 rgba(0,0,0,0.5)`,
-          pointerEvents: 'none',
-          WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-        }}>{elapsed}s</p>
-      )}
 
       {/* ── Stage label — secondary, below the timer ── */}
       <p style={{

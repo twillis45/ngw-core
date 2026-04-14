@@ -37,39 +37,6 @@ function getCtx() {
   return ctx;
 }
 
-// ─── Pulse seed loader ───────────────────────────────────────────────────────
-// User-recorded tone (ui/public/sounds/pulse-seed.m4a) used as the fundamental
-// color of processingPulseSound.  Cached after first decode so we only fetch
-// + decode once per session.  The decode is async, so callers may receive
-// either the resolved buffer or a promise — processingPulseSound handles both.
-let _pulseSeedBuffer = null;
-let _pulseSeedPromise = null;
-function loadPulseSeed() {
-  if (_pulseSeedBuffer) return Promise.resolve(_pulseSeedBuffer);
-  if (_pulseSeedPromise) return _pulseSeedPromise;
-  const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.BASE_URL) || '/static/ui/';
-  const url = `${base}sounds/pulse-seed.m4a`;
-  _pulseSeedPromise = fetch(url)
-    .then(r => {
-      if (!r.ok) throw new Error(`pulse-seed ${r.status}`);
-      return r.arrayBuffer();
-    })
-    .then(ab => getCtx().decodeAudioData(ab))
-    .then(buf => { _pulseSeedBuffer = buf; return buf; })
-    .catch(err => {
-      console.warn('[sounds] pulse seed load failed:', err);
-      _pulseSeedPromise = null;   // allow retry next call
-      return null;
-    });
-  return _pulseSeedPromise;
-}
-// Kick off the load eagerly at module evaluation so the buffer is usually
-// ready by the time the user navigates to ProcessingScreen.
-if (typeof window !== 'undefined') {
-  // Defer to next tick so we don't block module init or compete with first
-  // paint — but still warm before any pulse plays.
-  setTimeout(() => { loadPulseSeed(); }, 0);
-}
 
 /**
  * Pre-warm the AudioContext on the first user gesture.  Mobile browsers start
@@ -411,8 +378,15 @@ export function imageDropSound() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Result reveal — two mechanical impacts, like a precision latch engaging.
-// No tones. Two filtered noise impulses with a brief low-body resonance.
+// Result reveal — precision latch engaging.
+//
+// Two-stage mechanical impact: a heavy body thud (like a quality camera back
+// seating) followed 120ms later by a sharp metallic click (the latch point).
+// No tones, no arpeggios, no music.  The sound is read as "locked in" —
+// the analysis result is now confirmed and ready.
+//
+// Character reference: Leica rangefinder film advance stop.  Medium format
+// Hasselblad back locking. Not celebratory — authoritative.
 // ─────────────────────────────────────────────────────────────────────────────
 export function resultRevealSound() {
   try {
@@ -420,114 +394,81 @@ export function resultRevealSound() {
     const ac = getCtx();
     const now = ac.currentTime;
 
-    // ── Master + bus compressor ────────────────────────────────────────
-    // Glue compressor pumps perceived loudness on phone speakers (which
-    // can't reproduce dynamics in the same way as larger drivers).  The
-    // master rides hot — phones roll off below ~200 Hz, so we accept
-    // potential clipping headroom in exchange for being clearly audible.
+    // Master bus — moderate level, fast transient response
     const master = ac.createGain();
-    master.gain.setValueAtTime(0.95, now);
-    master.gain.linearRampToValueAtTime(0.95, now + 1.0);
-    master.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
+    master.gain.setValueAtTime(0.75, now);
+    master.connect(ac.destination);
 
-    const comp = ac.createDynamicsCompressor();
-    comp.threshold.setValueAtTime(-14, now);
-    comp.knee.setValueAtTime(6, now);
-    comp.ratio.setValueAtTime(5, now);
-    comp.attack.setValueAtTime(0.003, now);
-    comp.release.setValueAtTime(0.15, now);
+    // ── Stage 1: body impact (0ms) ────────────────────────────────────
+    // Low-mid bandpass noise with fast exponential decay — the physical
+    // mass of a mechanism seating.  600–900 Hz sits in the phone-speaker
+    // passband so it lands on mobile.
+    const impLen = Math.floor(ac.sampleRate * 0.12);
+    const impBuf = ac.createBuffer(1, impLen, ac.sampleRate);
+    const impD = impBuf.getChannelData(0);
+    for (let i = 0; i < impLen; i++) {
+      impD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.018));
+    }
+    const imp = ac.createBufferSource();
+    const impBp = ac.createBiquadFilter();
+    impBp.type = 'bandpass';
+    impBp.frequency.value = 720;
+    impBp.Q.value = 0.8;
+    const impG = ac.createGain();
+    impG.gain.setValueAtTime(1.0, now);
+    impG.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+    imp.buffer = impBuf;
+    imp.connect(impBp).connect(impG).connect(master);
+    imp.start(now);
 
-    // Presence shelf — phones project best in 1–4 kHz, so push that band
-    // to make the sound carry through small drivers.
-    const presence = ac.createBiquadFilter();
-    presence.type = 'peaking';
-    presence.frequency.value = 2400;
-    presence.Q.value = 0.9;
-    presence.gain.value = 4.0;
+    // Low sub-body — adds felt weight on desktop/headphones without
+    // muddying the mobile mix (phones can't reproduce it anyway)
+    const subOsc = ac.createOscillator();
+    const subG = ac.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(160, now);
+    subOsc.frequency.exponentialRampToValueAtTime(90, now + 0.08);
+    subG.gain.setValueAtTime(0.55, now);
+    subG.gain.exponentialRampToValueAtTime(0.001, now + 0.10);
+    subOsc.connect(subG).connect(master);
+    subOsc.start(now);
+    subOsc.stop(now + 0.12);
 
-    master.connect(comp).connect(presence).connect(ac.destination);
+    // ── Stage 2: latch click (120ms) ─────────────────────────────────
+    // Narrow bandpass impulse at 2800 Hz — the metallic contact point of
+    // the latch.  Very short (25ms) so it reads as a precise click, not
+    // a rattle.  The 120ms offset puts it clearly after the body impact
+    // so the two events are perceptually distinct.
+    const clickLen = Math.floor(ac.sampleRate * 0.04);
+    const clickBuf = ac.createBuffer(1, clickLen, ac.sampleRate);
+    const clickD = clickBuf.getChannelData(0);
+    for (let i = 0; i < clickLen; i++) {
+      clickD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.004));
+    }
+    const click = ac.createBufferSource();
+    const clickBp = ac.createBiquadFilter();
+    clickBp.type = 'bandpass';
+    clickBp.frequency.value = 2800;
+    clickBp.Q.value = 3.5;
+    const clickG = ac.createGain();
+    clickG.gain.setValueAtTime(0.85, now + 0.12);
+    clickG.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    click.buffer = clickBuf;
+    click.connect(clickBp).connect(clickG).connect(master);
+    click.start(now + 0.12);
 
-    // ── Punch transient — heavy lowpass thud ──────────────────────────
-    const punchLen = Math.floor(ac.sampleRate * 0.05);
-    const punchBuf = ac.createBuffer(1, punchLen, ac.sampleRate);
-    const punchD = punchBuf.getChannelData(0);
-    for (let i = 0; i < punchLen; i++) punchD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.010));
-    const punch = ac.createBufferSource();
-    const punchLp = ac.createBiquadFilter();
-    punchLp.type = 'lowpass';
-    punchLp.frequency.value = 800;
-    punchLp.Q.value = 0.7;
-    const punchG = ac.createGain();
-    punchG.gain.setValueAtTime(1.0, now);
-    punch.buffer = punchBuf;
-    punch.connect(punchLp).connect(punchG).connect(master);
-    punch.start(now);
-
-    // ── Ascending arpeggio — A4 → C#5 → E5 — staccato sine pings ─────
-    // Each note is a short, punchy sine with a quick attack and short
-    // release.  Sine waves so there's no metallic harmonic content (no
-    // bell character), but the rapid pitch climb + tight envelope reads
-    // unmistakably as "DONE".  Sits in the 440–660 Hz range — solidly
-    // within the phone-speaker passband.
-    const playPing = (freq, startOffset, peak, duration = 0.18) => {
-      const t0 = now + startOffset;
-      const osc = ac.createOscillator();
-      const g   = ac.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, t0);
-      g.gain.linearRampToValueAtTime(peak, t0 + 0.008);   // fast pluck
-      g.gain.setValueAtTime(peak, t0 + 0.04);
-      g.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
-      osc.connect(g).connect(master);
-      osc.start(t0);
-      osc.stop(t0 + duration + 0.05);
-    };
-
-    playPing(440.00, 0.04, 0.55);  // A4
-    playPing(554.37, 0.13, 0.55);  // C#5
-    playPing(659.25, 0.22, 0.55);  // E5
-
-    // ── Sustained A major triad chord — held under the arpeggio ───────
-    // Hits at the same moment as the third arpeggio note, holds for
-    // ~1.0 s.  Mild detuning between voices creates a slight chorus
-    // thickness so it sounds like a chord, not three identical sines.
-    // The chord is the resolution that the arpeggio "lands" on.
-    const chordStart = now + 0.22;
-    const playChordVoice = (freq, peak, detune = 0) => {
-      const osc = ac.createOscillator();
-      const g   = ac.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      osc.detune.value = detune;
-      g.gain.setValueAtTime(0, chordStart);
-      g.gain.linearRampToValueAtTime(peak, chordStart + 0.020);
-      g.gain.setValueAtTime(peak, chordStart + 0.30);
-      g.gain.exponentialRampToValueAtTime(0.001, chordStart + 1.30);
-      osc.connect(g).connect(master);
-      osc.start(chordStart);
-      osc.stop(chordStart + 1.40);
-    };
-
-    playChordVoice(440.00, 0.50, -3);  // A4 root
-    playChordVoice(554.37, 0.38, +2);  // C#5 third
-    playChordVoice(659.25, 0.32, -2);  // E5 fifth
-    playChordVoice(880.00, 0.22, +3);  // A5 octave glow
-
-    // ── Sub-body thud — long lowpass tail underneath ──────────────────
-    const bodyLen = Math.floor(ac.sampleRate * 0.18);
-    const bodyBuf = ac.createBuffer(1, bodyLen, ac.sampleRate);
-    const bodyD = bodyBuf.getChannelData(0);
-    for (let i = 0; i < bodyLen; i++) bodyD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.030));
-    const body = ac.createBufferSource();
-    const bodyLp = ac.createBiquadFilter();
-    bodyLp.type = 'lowpass';
-    bodyLp.frequency.value = 220;
-    const bodyG = ac.createGain();
-    bodyG.gain.setValueAtTime(0.8, now);
-    body.buffer = bodyBuf;
-    body.connect(bodyLp).connect(bodyG).connect(master);
-    body.start(now);
+    // Micro tail — very brief high-frequency ring confirming the latch
+    // point. 5500 Hz, 30ms, barely perceptible — adds the sense of
+    // precision without becoming a "ding".
+    const tailOsc = ac.createOscillator();
+    const tailG = ac.createGain();
+    tailOsc.type = 'sine';
+    tailOsc.frequency.value = 5500;
+    tailG.gain.setValueAtTime(0.055, now + 0.12);
+    tailG.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+    tailOsc.connect(tailG).connect(master);
+    tailOsc.start(now + 0.12);
+    tailOsc.stop(now + 0.20);
   } catch { /* silent */ }
 }
 
@@ -614,338 +555,115 @@ export function navSlideSound() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Processing pulse — User's recorded tone (looped) as the fundamental color,
-// layered with synth sub voices for chest pressure on phone speakers, fed
-// through chest-shelf / throat formant / breathing bandpass / tube-warmth
-// chain.  Slow LFO breathes the whole drone in and out.
+// Processing pulse — precision scan character.
 //
-// First call before the seed buffer decodes falls back to the all-synth
-// version so there's never silence.  The buffer is warm-loaded at module
-// init so this fallback path almost never fires in practice.
+// Sparse periodic clicks, like a high-end camera body processing a file or
+// a film scanner stepping through frames.  No music, no chord, no drone.
+// Two layers:
+//   1. A near-silent steady-state texture: very narrow bandpass noise at ~95 Hz,
+//      just enough to sense that equipment is running — subliminal presence.
+//   2. A scan click every 1.8s: brief bandpassed noise burst at ~1800 Hz with
+//      a fast attack and exponential decay (~70ms total).  Pitch drifts up
+//      subtly over the first several clicks (1800 → 2400 Hz) so the sound
+//      conveys "progressing" without any musical content.
+//
+// Total master level is quiet (0.055 texture, 0.13 per click).  The idea is
+// that you hear it more than you notice it — it confirms work is happening
+// without demanding attention.
 // ─────────────────────────────────────────────────────────────────────────────
 export function processingPulseSound() {
   try {
     if (!isSoundEnabled()) return () => {};
     const ac = getCtx();
     const now = ac.currentTime;
-    const haveSeed = !!_pulseSeedBuffer;
-    if (!haveSeed) loadPulseSeed();   // kick off load if not yet started
+    let stopped = false;
 
-    // ── Master chain — open, warm, MUSICAL pulse (polish pass) ───────────
-    // Lifted sustain so the trough is no longer a creepy whisper, but
-    // headroom is reserved for the LFO swell.  Longer attack = polish.
-    const master = ac.createGain();
-    master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(0.22, now + 1.8); // gentler fade-in
+    // ── Steady-state texture — barely-audible low hum ────────────────────
+    // Very narrow bandpass around 95 Hz.  On phone speakers this is at or
+    // below the speaker floor, so it adds nothing on mobile and a subliminal
+    // "system on" presence on desktop/headphones.
+    const texLen = Math.floor(ac.sampleRate * 0.6);
+    const texBuf = ac.createBuffer(1, texLen, ac.sampleRate);
+    const texD = texBuf.getChannelData(0);
+    for (let i = 0; i < texLen; i++) texD[i] = Math.random() * 2 - 1;
 
-    // Subtle low-shelf — JUST enough body to anchor the seed tone on a phone
-    // speaker.  Pulled back from +3 dB → +1.5 dB so the bottom doesn't sound
-    // ominous on big speakers / headphones.
-    const chestShelf = ac.createBiquadFilter();
-    chestShelf.type = 'lowshelf';
-    chestShelf.frequency.value = 200;
-    chestShelf.gain.value = 1.5;
+    const texBp = ac.createBiquadFilter();
+    texBp.type = 'bandpass';
+    texBp.frequency.value = 95;
+    texBp.Q.value = 3.5;
 
-    // High-shelf air — opens the top end so the tone reads as "warm and
-    // calm" rather than "muffled and lurking".  +2 dB above 3.5 kHz.
-    const airShelf = ac.createBiquadFilter();
-    airShelf.type = 'highshelf';
-    airShelf.frequency.value = 3500;
-    airShelf.gain.value = 2.0;
+    const texGain = ac.createGain();
+    texGain.gain.setValueAtTime(0, now);
+    texGain.gain.linearRampToValueAtTime(0.055, now + 1.6);
 
-    // Gentle presence peak around 1.4 kHz — adds clarity without the
-    // formant-y "vocal" character of the old bandpass.  Low-Q peaking
-    // filter = clean lift, no resonant ring.
-    const presence = ac.createBiquadFilter();
-    presence.type = 'peaking';
-    presence.frequency.value = 1400;
-    presence.Q.value = 0.8;
-    presence.gain.value = 1.5;
+    const texSrc = ac.createBufferSource();
+    texSrc.buffer = texBuf;
+    texSrc.loop = true;
+    texSrc.connect(texBp).connect(texGain).connect(ac.destination);
+    texSrc.start(now);
 
-    // Veil opened all the way to 6 kHz — barely a filter, just rolls off
-    // the harshest top.  Cleaner / less muffled than 5 kHz.
-    const veil = ac.createBiquadFilter();
-    veil.type = 'lowpass';
-    veil.frequency.value = 6000;
-    veil.Q.value = 0.5;
+    // ── Scan click — sparse periodic impulse ─────────────────────────────
+    // Noise burst shaped by a very fast exponential decay so it reads as a
+    // precise mechanical contact, not a swoosh.  Bandpass centered at
+    // baseFreq — sits solidly in the phone speaker passband (1–4 kHz).
+    // Pitch drifts from 1800 → 2400 Hz over ~10 clicks to convey progress.
+    let clickCount = 0;
+    let _interval = null;
 
-    // Softer limiter — gentler ratio + softer knee = polish, no audible
-    // pumping when the LFO swells.
-    const limiter = ac.createDynamicsCompressor();
-    limiter.threshold.setValueAtTime(-6, now);
-    limiter.knee.setValueAtTime(8, now);
-    limiter.ratio.setValueAtTime(5, now);
-    limiter.attack.setValueAtTime(0.012, now);
-    limiter.release.setValueAtTime(0.30, now);
+    const fireClick = () => {
+      if (stopped) return;
+      const t = ac.currentTime;
+      clickCount++;
 
-    // Stage chain (polish):
-    //   voices → master → chestShelf → presence → airShelf → veil → limiter → speakers
-    // No more bandpass (was the formant that made it sound "vocal").
-    master
-      .connect(chestShelf)
-      .connect(presence)
-      .connect(airShelf)
-      .connect(veil)
-      .connect(limiter)
-      .connect(ac.destination);
+      const baseFreq = Math.min(1800 + clickCount * 55, 2400);
 
-    // ── Voice 0 — USER'S RECORDED TONE, seamlessly looped ──────────────
-    // Two phased BufferSources with constant-sum crossfade.  Each source
-    // loops the same region, but srcB is offset by half the loop length.
-    // A cosine LFO drives gA and gB so that whenever one source crosses
-    // its loop seam, the other is at full volume — the seam is completely
-    // masked.  gA + gB sums to a constant 0.70 at every instant, so the
-    // perceived seed level is steady.
-    //
-    // Reference: standard double-buffered seamless looping technique used
-    // in game audio engines to hide loop points in arbitrary recordings.
-    let seedSrcA = null, seedSrcB = null;
-    let seedGainA = null, seedGainB = null;
-    let seedXfade = null;
-    if (haveSeed) {
-      const dur = _pulseSeedBuffer.duration;
-      const loopStart = dur * 0.20;     // skip more head/tail to land on cleaner sustain
-      const loopEnd   = dur * 0.80;
-      const loopLen   = loopEnd - loopStart;
-      const halfLoop  = loopLen / 2;
-      const SEED_PEAK = 0.70;
-      const HALF_PEAK = SEED_PEAK / 2;  // 0.35 — midpoint of crossfade range
+      // Main click — bandpassed decaying noise
+      const pLen = Math.floor(ac.sampleRate * 0.09);
+      const pBuf = ac.createBuffer(1, pLen, ac.sampleRate);
+      const pD = pBuf.getChannelData(0);
+      for (let i = 0; i < pLen; i++) {
+        pD[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ac.sampleRate * 0.011));
+      }
+      const pSrc = ac.createBufferSource();
+      const pBp = ac.createBiquadFilter();
+      const pGain = ac.createGain();
+      pBp.type = 'bandpass';
+      pBp.frequency.value = baseFreq;
+      pBp.Q.value = 2.8;
+      pGain.gain.setValueAtTime(0.13, t);
+      pGain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+      pSrc.buffer = pBuf;
+      pSrc.connect(pBp).connect(pGain).connect(ac.destination);
+      pSrc.start(t);
 
-      // Layer A — playhead at the loop start, seam happens at multiples of loopLen.
-      seedSrcA = ac.createBufferSource();
-      seedSrcA.buffer = _pulseSeedBuffer;
-      seedSrcA.loop = true;
-      seedSrcA.loopStart = loopStart;
-      seedSrcA.loopEnd   = loopEnd;
-      seedGainA = ac.createGain();
-      seedGainA.gain.setValueAtTime(0, now);
-      // Fade-in to midpoint over 2.4s — fade-in is layered over the
-      // crossfade modulation so the seam masking is always active.
-      seedGainA.gain.linearRampToValueAtTime(HALF_PEAK, now + 2.4);
-      seedSrcA.connect(seedGainA).connect(master);
-      seedSrcA.start(now, loopStart);
+      // Micro tail — second bandpass at half frequency, lower gain.
+      // Gives the click a tiny "body" without making it musical.
+      const tailSrc = ac.createBufferSource();
+      const tailBp = ac.createBiquadFilter();
+      const tailGain = ac.createGain();
+      tailBp.type = 'bandpass';
+      tailBp.frequency.value = baseFreq * 0.48;
+      tailBp.Q.value = 1.8;
+      tailGain.gain.setValueAtTime(0.045, t + 0.003);
+      tailGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      tailSrc.buffer = pBuf;
+      tailSrc.connect(tailBp).connect(tailGain).connect(ac.destination);
+      tailSrc.start(t);
+    };
 
-      // Layer B — playhead offset half a loop, seam happens between A's seams.
-      seedSrcB = ac.createBufferSource();
-      seedSrcB.buffer = _pulseSeedBuffer;
-      seedSrcB.loop = true;
-      seedSrcB.loopStart = loopStart;
-      seedSrcB.loopEnd   = loopEnd;
-      seedGainB = ac.createGain();
-      seedGainB.gain.setValueAtTime(0, now);
-      seedGainB.gain.linearRampToValueAtTime(HALF_PEAK, now + 2.4);
-      seedSrcB.connect(seedGainB).connect(master);
-      seedSrcB.start(now, loopStart + halfLoop);
-
-      // Cosine crossfade LFO at 1/loopLen Hz — drives both layers with
-      // opposite signs so they sum to a constant.  Web Audio doesn't
-      // expose a cosine oscillator natively, so we build one with
-      // PeriodicWave (DC=0, first cosine harmonic=1, no sine terms).
-      const cosReal = new Float32Array([0, 1]);
-      const cosImag = new Float32Array([0, 0]);
-      const cosWave = ac.createPeriodicWave(cosReal, cosImag, { disableNormalization: true });
-
-      seedXfade = ac.createOscillator();
-      seedXfade.setPeriodicWave(cosWave);
-      seedXfade.frequency.value = 1 / loopLen;
-
-      // Layer A modulation — −cos.  At t=0 (seam): gA = 0.35 − 0.35 = 0.
-      // At t=halfLoop: gA = 0.35 + 0.35 = 0.70.  At t=loopLen (seam again): 0.
-      const xfadeAGain = ac.createGain();
-      xfadeAGain.gain.value = -HALF_PEAK;
-      seedXfade.connect(xfadeAGain).connect(seedGainA.gain);
-
-      // Layer B modulation — +cos.  Inverted relative to A so the seams
-      // never align.  Sum gA + gB stays constant at SEED_PEAK.
-      const xfadeBGain = ac.createGain();
-      xfadeBGain.gain.value = +HALF_PEAK;
-      seedXfade.connect(xfadeBGain).connect(seedGainB.gain);
-
-      seedXfade.start(now);
-    }
-
-    // ── Synth pad — A major triad: A3 / C#4 / E4 / A4 ──────────────────
-    // Lifted everything by an octave from the old voicing.  Major thirds
-    // (the old chord was bare fifths — open and hollow, which can read as
-    // ominous).  Major triad = warm, hopeful, calm.
-    //
-    // Voice A1 — A3 (220 Hz), the root.  Was 110 Hz before — too low and
-    // murky for "calm and friendly".
-    const sub = ac.createOscillator();
-    const subGain = ac.createGain();
-    sub.type = 'sine';
-    sub.frequency.value = 220;
-    subGain.gain.setValueAtTime(0, now);
-    subGain.gain.linearRampToValueAtTime(0.10, now + 2.0);
-    sub.connect(subGain).connect(master);
-    sub.start(now);
-
-    // Voice A2 — C#4 (277.18 Hz), the major third.  Adds the "happy"
-    // colour the old bare-fifth voicing was missing.
-    const sub2 = ac.createOscillator();
-    const sub2Gain = ac.createGain();
-    sub2.type = 'sine';
-    sub2.frequency.value = 277.18;
-    sub2Gain.gain.setValueAtTime(0, now);
-    sub2Gain.gain.linearRampToValueAtTime(0.07, now + 2.2);
-    sub2.connect(sub2Gain).connect(master);
-    sub2.start(now);
-
-    // Voice A3 — E4 (329.63 Hz), the perfect fifth.  Anchors the chord.
-    const sub3 = ac.createOscillator();
-    const sub3Gain = ac.createGain();
-    sub3.type = 'sine';
-    sub3.frequency.value = 329.63;
-    sub3Gain.gain.setValueAtTime(0, now);
-    sub3Gain.gain.linearRampToValueAtTime(0.06, now + 2.4);
-    sub3.connect(sub3Gain).connect(master);
-    sub3.start(now);
-
-    // Voice A4 — A4 (440 Hz), octave shimmer.  Quiet glow on top of the
-    // chord — only audible at peaks.  Adds the "lit" quality.
-    const sparkle = ac.createOscillator();
-    const sparkleGain = ac.createGain();
-    sparkle.type = 'sine';
-    sparkle.frequency.value = 440;
-    sparkleGain.gain.setValueAtTime(0, now);
-    sparkleGain.gain.linearRampToValueAtTime(0.035, now + 2.8);
-    sparkle.connect(sparkleGain).connect(master);
-    sparkle.start(now);
-
-
-    // ─── FALLBACK BODY VOICES — only spun up when the seed buffer hasn't
-    // decoded yet on the first call.  Once the seed is loaded these are
-    // silent and the user's tone fully replaces them. ──────────────────
-    let drone, droneGain, droneB, droneBGain, droneC, droneCGain;
-    let fifthLow, fifthLowGain, oct, octGain, fifth, fifthGain;
-    let vibrato, vibratoGain, vibrato2, vibrato2Gain;
-    if (!haveSeed) {
-      drone = ac.createOscillator();
-      droneGain = ac.createGain();
-      drone.type = 'triangle';
-      drone.frequency.value = 55;
-      droneGain.gain.setValueAtTime(0, now);
-      droneGain.gain.linearRampToValueAtTime(0.42, now + 2.0);
-      drone.connect(droneGain).connect(master);
-      drone.start(now);
-
-      droneB = ac.createOscillator();
-      droneBGain = ac.createGain();
-      droneB.type = 'sine';
-      droneB.frequency.value = 55;
-      droneB.detune.value = +4;
-      droneBGain.gain.setValueAtTime(0, now);
-      droneBGain.gain.linearRampToValueAtTime(0.28, now + 2.1);
-      droneB.connect(droneBGain).connect(master);
-      droneB.start(now);
-
-      droneC = ac.createOscillator();
-      droneCGain = ac.createGain();
-      droneC.type = 'sine';
-      droneC.frequency.value = 55;
-      droneC.detune.value = -4;
-      droneCGain.gain.setValueAtTime(0, now);
-      droneCGain.gain.linearRampToValueAtTime(0.24, now + 2.2);
-      droneC.connect(droneCGain).connect(master);
-      droneC.start(now);
-
-      fifthLow = ac.createOscillator();
-      fifthLowGain = ac.createGain();
-      fifthLow.type = 'sine';
-      fifthLow.frequency.value = 82.4;
-      fifthLowGain.gain.setValueAtTime(0, now);
-      fifthLowGain.gain.linearRampToValueAtTime(0.20, now + 2.3);
-      fifthLow.connect(fifthLowGain).connect(master);
-      fifthLow.start(now);
-
-      oct = ac.createOscillator();
-      octGain = ac.createGain();
-      oct.type = 'sine';
-      oct.frequency.value = 110;
-      oct.detune.value = -3;
-      octGain.gain.setValueAtTime(0, now);
-      octGain.gain.linearRampToValueAtTime(0.16, now + 2.4);
-      oct.connect(octGain).connect(master);
-      oct.start(now);
-
-      fifth = ac.createOscillator();
-      fifthGain = ac.createGain();
-      fifth.type = 'sine';
-      fifth.frequency.value = 165;
-      fifthGain.gain.setValueAtTime(0, now);
-      fifthGain.gain.linearRampToValueAtTime(0.06, now + 2.6);
-      fifth.connect(fifthGain).connect(master);
-      fifth.start(now);
-
-      vibrato = ac.createOscillator();
-      vibratoGain = ac.createGain();
-      vibrato.type = 'sine';
-      vibrato.frequency.value = 2.8;
-      vibratoGain.gain.value = 4;
-      vibrato.connect(vibratoGain).connect(droneB.detune);
-      vibrato.start(now);
-
-      vibrato2 = ac.createOscillator();
-      vibrato2Gain = ac.createGain();
-      vibrato2.type = 'sine';
-      vibrato2.frequency.value = 2.4;
-      vibrato2Gain.gain.value = 3;
-      vibrato2.connect(vibrato2Gain).connect(droneC.detune);
-      vibrato2.start(now);
-    }
-
-    // ── PULSE LFO — synced to the LED's 4-second breath cycle (0.25 Hz).
-    // Depth pulled back from 0.32 → 0.18 so the pulses still read clearly
-    // but no longer feel like something's breathing in the dark.  Master
-    // sits at 0.22 sustain, swells to ~0.40 at peak, drops to ~0.04 at
-    // trough — clearly audible rhythm without being predatory. ─────────
-    const lfo = ac.createOscillator();
-    const lfoGain = ac.createGain();
-    lfo.type = 'sine';
-    lfo.frequency.value = 1 / 4;
-    lfoGain.gain.value = 0.18;          // gentler depth — calm pulse
-    lfo.connect(lfoGain).connect(master.gain);
-    lfo.start(now);
-
-    // Same LFO opens the air shelf on each pulse — peaks lift +1 dB
-    // brighter, troughs sit -1 dB darker.  Adds "lit" quality at peak
-    // without modulating any vocal-formant frequencies.
-    const airLfoGain = ac.createGain();
-    airLfoGain.gain.value = 1.0;
-    lfo.connect(airLfoGain).connect(airShelf.gain);
-
-    // Same LFO modulates the presence peak gain ±0.8 dB — clarity
-    // breathes with the pulse so it feels musical, not mechanical.
-    const presenceLfoGain = ac.createGain();
-    presenceLfoGain.gain.value = 0.8;
-    lfo.connect(presenceLfoGain).connect(presence.gain);
-
-    // Polish — no filter sweeps in vocal-formant range.  No throat
-    // formant.  No tube warmth.  Just a clean, breathing major chord.
+    // First click after a brief pause, then every 1.8s
+    const _firstTimeout = setTimeout(fireClick, 500);
+    _interval = setInterval(fireClick, 1800);
 
     return function stop() {
+      stopped = true;
+      clearTimeout(_firstTimeout);
+      clearInterval(_interval);
       const t = ac.currentTime;
-      master.gain.cancelScheduledValues(t);
-      master.gain.setValueAtTime(master.gain.value, t);
-      master.gain.linearRampToValueAtTime(0, t + 0.8); // gentler release for polish
-      try { if (seedSrcA) seedSrcA.stop(t + 0.9); } catch {}
-      try { if (seedSrcB) seedSrcB.stop(t + 0.9); } catch {}
-      try { if (seedXfade) seedXfade.stop(t + 0.9); } catch {}
-      sub.stop(t + 0.9);
-      sub2.stop(t + 0.9);
-      sub3.stop(t + 0.9);
-      sparkle.stop(t + 0.9);
-      if (drone) {
-        drone.stop(t + 0.9);
-        droneB.stop(t + 0.9);
-        droneC.stop(t + 0.9);
-        fifthLow.stop(t + 0.9);
-        oct.stop(t + 0.9);
-        fifth.stop(t + 0.9);
-        vibrato.stop(t + 0.9);
-        vibrato2.stop(t + 0.9);
-      }
-      lfo.stop(t + 0.9);
+      texGain.gain.cancelScheduledValues(t);
+      texGain.gain.setValueAtTime(texGain.gain.value, t);
+      texGain.gain.linearRampToValueAtTime(0, t + 0.35);
+      try { texSrc.stop(t + 0.4); } catch {}
     };
   } catch {
     return () => {};

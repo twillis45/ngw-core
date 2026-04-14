@@ -831,8 +831,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           left: 0,
           right: 0,
           height: VF_HEIGHT,
-          borderRadius: 20,
-          // No outer border — the slot is frameless, defined entirely by VIEWFINDER_INNER_SHADOW.
+          borderRadius: 0,
+          // Edge-to-edge viewfinder — no rounded corners, flush with screen edges.
           // Drag-over: faint steel tint to signal accept state.
           border: isDragOver ? `1.5px solid rgba(132, 158, 184,0.40)` : 'none',
           overflow: 'hidden',
@@ -1015,15 +1015,15 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         )}
 
         {/* 9 — Glass panel overlay: single natural lens vignette + upper-left key light reflection */}
-        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, zIndex: 9 }}>
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
           <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
         </div>
 
         {/* 10 — Inner shadow — Figma-exact bevel, always top of stack */}
         <div style={{
-          position: 'absolute', inset: 0, borderRadius: 20,
+          position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
         }} />
 
@@ -1251,14 +1251,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
       {/* Activity Indicator dot removed — too many lights */}
 
-      {/* ── Analyze label — Figma spec: 10px Inter Medium, centered INSIDE button face ── */}
+      {/* ── Analyze label — engraved instrument lettering.
+           All-caps, wide tracking, medium weight — reads like a precision
+           control label, not a software button. */}
       <p style={{
         position: 'absolute',
-        // Centered vertically inside button: BTN_CY - half line-height
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: lblTransform,
-        margin: 0, fontWeight: 600, fontSize: LBL_FONT, lineHeight: '19px',
-        color: analyzeText, letterSpacing: '0.4px', textShadow: analyzeGlow,
+        margin: 0, fontWeight: 500, fontSize: isDesktop ? 11 : 10, lineHeight: '16px',
+        color: analyzeText, letterSpacing: '2.2px', textShadow: analyzeGlow,
+        textTransform: 'uppercase',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
         transition: `color 0.18s ease, transform ${buttonState === 'pressed' ? '0.06s cubic-bezier(0.25,0.46,0.45,0.94)' : '0.22s cubic-bezier(0.34,1.56,0.64,1)'}`,
         WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
@@ -1328,55 +1330,31 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {showTeach ? (
-            /* First session — promoted discovery pill. Larger tap target, higher
-               contrast, pill shape so it reads as a real button — not a footnote. */
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '8px 20px',
-              borderRadius: 20,
-              backgroundColor: 'rgba(255,255,255,0.06)',
-              border: '1px solid rgba(255,255,255,0.10)',
-              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)',
+          {/* Always pill — consistent CTA shape for all users */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            padding: '8px 20px',
+            borderRadius: 20,
+            backgroundColor: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)',
+          }}>
+            <p style={{
+              margin: 0,
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.2px',
+              color: sampleLoading ? steel(0.55) : 'rgba(245,247,250,0.88)',
+              textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'geometricPrecision',
             }}>
-              <p style={{
-                margin: 0,
-                fontSize: 13, fontWeight: 600, letterSpacing: '0.2px',
-                color: sampleLoading ? steel(0.55) : 'rgba(245,247,250,0.88)',
-                textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-                WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-                textRendering: 'geometricPrecision',
-              }}>
-                {sampleLoading ? 'Loading…' : 'Try a Sample Photo'}
-              </p>
-              {!sampleLoading && (
-                <span style={{
-                  fontSize: 14, lineHeight: 1, color: 'rgba(245,247,250,0.70)',
-                }}>→</span>
-              )}
-            </div>
-          ) : (
-            /* Returning user — quiet utility link */
-            <>
-              <p style={{
-                margin: 0,
-                fontSize: 10, fontWeight: 600, letterSpacing: '1.2px',
-                color: steel(0.55),
-                textTransform: 'uppercase',
-                textShadow: '0 1px 1px rgba(0,0,0,0.7)',
-                WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-                textRendering: 'geometricPrecision',
-              }}>
-                {sampleLoading ? 'Loading sample…' : 'Try a sample photo'}
-              </p>
-              {!sampleLoading && (
-                <span style={{
-                  fontSize: 11, lineHeight: 1, color: steel(0.55),
-                  transform: 'translateY(-0.5px)',
-                }}>→</span>
-              )}
-            </>
-          )}
+              {sampleLoading ? 'Loading…' : 'Try a Sample Photo'}
+            </p>
+            {!sampleLoading && (
+              <span style={{
+                fontSize: 14, lineHeight: 1, color: 'rgba(245,247,250,0.70)',
+              }}>→</span>
+            )}
+          </div>
         </div>
       )}
 
@@ -1392,26 +1370,29 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
            Step 2: Sample CTA — "Or try a sample to see it in action" */}
       {teachVisible && (() => {
         // Spotlight geometry — position the cutout over the target element
+        // Column may be narrower than 430px on small viewports
+        const COL_W = Math.min(430, window.innerWidth);
+        const COL_CX = Math.round(COL_W / 2);
         const spotlights = [
           { // Step 0: IMPORT icon — the problem
-            x: 215 - 60, y: VF_TOP + Math.round(VF_HEIGHT / 2) - 50, w: 120, h: 100, r: 18,
+            x: COL_CX - 60, y: VF_TOP + Math.round(VF_HEIGHT / 2) - 50, w: 120, h: 100, r: 18,
             title: 'Recreate any light you see',
             desc: 'Drop in a portrait you want to reverse-engineer.',
             tipY: VF_TOP + VF_HEIGHT + 66,
             arrow: 'up',
           },
           { // Step 1: Analyze button — the solve
-            x: 215 - BTN_D / 2 - 10, y: BTN_TOP - 10, w: BTN_D + 20, h: BTN_D + 20, r: BTN_D,
+            x: COL_CX - BTN_D / 2 - 10, y: BTN_TOP - 10, w: BTN_D + 20, h: BTN_D + 20, r: BTN_D,
             title: 'Get the exact setup',
             desc: 'Pattern, modifier, distance, height — decoded.',
-            tipY: BTN_TOP - 130,
+            tipY: BTN_TOP - 220,
             arrow: 'down',
           },
           { // Step 2: Sample CTA — proof
-            x: 60, y: BTN_TOP + BTN_D + 2, w: 310, h: 48, r: 24,
+            x: COL_CX - 155, y: BTN_TOP + BTN_D + 2, w: 310, h: 48, r: 24,
             title: 'See it in action',
             desc: 'We\'ll analyze a Rembrandt portrait for you.',
-            tipY: BTN_TOP - 20,
+            tipY: BTN_TOP - 100,
             arrow: 'down',
           },
         ];
@@ -1426,22 +1407,31 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         const sc = stepColors[teachStep] || stepColors[0];
 
         // Arrow geometry — computed once, used by SVG
-        const cardCX = 215;
+        // Steps 1 & 2: card shifted left so arrow arcs naturally to centered spotlight
+        const cardLeft = s.arrow === 'down' ? 20 : 32;
+        const cardRight = s.arrow === 'down' ? 140 : 32;
+        const cardW = COL_W - cardLeft - cardRight;
+        const cardCX = cardLeft + cardW / 2;
         const cardEdgeY = s.arrow === 'up' ? s.tipY : s.tipY + 72;
-        const tipYA = s.arrow === 'up' ? cy - 4 : cy;
+        // Arrow tip lands at spotlight edge (bottom edge for up-arrows, top edge for down)
+        const tipYA = s.arrow === 'up' ? (s.y + s.h) : s.y;
         const svgTop = Math.min(tipYA, cardEdgeY) - 10;
         const svgBot = Math.max(tipYA, cardEdgeY) + 10;
         const svgH = svgBot - svgTop;
         const startLY = cardEdgeY - svgTop;
         const endLY = tipYA - svgTop;
-        const cpOffset = s.arrow === 'up' ? 30 : (teachStep === 2 ? -60 : -30);
-        const cpX = cardCX + cpOffset;
+        // Natural arc: card is left-offset, spotlight centered — modest rightward curve
+        const cpOffset = s.arrow === 'up' ? 30 : 20;
+        const cpX = (cardCX + cx) / 2 + cpOffset;
         const cpY1 = startLY + (endLY - startLY) * 0.3;
         const cpY2 = startLY + (endLY - startLY) * 0.7;
         const curvePath = `M${cardCX} ${startLY} C${cpX} ${cpY1}, ${cpX} ${cpY2}, ${cx} ${endLY}`;
         const aSize = 8;
         const aDir = s.arrow === 'up' ? -1 : 1;
-        const aPath = `M${cx - aSize} ${endLY - aSize * aDir} L${cx} ${endLY} L${cx + aSize} ${endLY - aSize * aDir}`;
+        // Arrowhead chevron at the curve endpoint (spotlight edge)
+        // Chevron centered on endpoint: tip extends past, arms behind
+        const aHalf = aSize / 2;
+        const aPath = `M${cx - aSize} ${endLY - aHalf * aDir} L${cx} ${endLY + aHalf * aDir} L${cx + aSize} ${endLY - aHalf * aDir}`;
         // Approximate curve length for stroke-dasharray draw-on animation
         const curveLen = Math.hypot(cx - cardCX, endLY - startLY) * 1.4;
 
@@ -1504,7 +1494,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             <div key={teachStep} style={{
               position: 'absolute',
               top: s.tipY,
-              left: 32, right: 32,
+              left: cardLeft, right: cardRight,
               animation: 'teachCardSpring 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
             }}>
               {/* Animated border glow — conic-gradient sweep */}
@@ -1666,7 +1656,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             {/* Dynamic arrow — draws itself from card → spotlight with animated stroke */}
             <svg key={`arrow-${teachStep}`} style={{
               position: 'absolute', left: 0, top: svgTop,
-              width: 430, height: svgH,
+              width: COL_W, height: svgH,
               pointerEvents: 'none', overflow: 'visible',
               filter: `drop-shadow(0 0 10px ${sc.replace(/[\d.]+\)$/, '0.35)')})`,
             }}>
@@ -1688,8 +1678,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 strokeDasharray={curveLen}
                 strokeDashoffset={curveLen}
                 style={{ animation: `teachDrawOn 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards` }} />
-              {/* Arrowhead — appears after line draws, then bounces */}
-              <g style={{ opacity: 0, animation: 'teachArrowAppear 0.3s ease 0.85s forwards' }}>
+              {/* Arrowhead — slides from card base along curve to endpoint */}
+              <style>{`
+                @keyframes teachArrowSlide${teachStep} {
+                  0%   { opacity: 0.4; transform: translate(${cardCX - cx}px, ${startLY - endLY}px) scale(0.7); }
+                  40%  { opacity: 1; }
+                  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+                }
+              `}</style>
+              <g style={{
+                opacity: 0,
+                animation: `teachArrowSlide${teachStep} 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards`,
+              }}>
                 <g style={{ animation: 'teachArrowBounce 1.4s ease-in-out 1.1s infinite' }}>
                   {/* Glow halo behind arrowhead */}
                   <circle cx={cx} cy={endLY} r="12" fill={sc.replace(/[\d.]+\)$/, '0.08)')} />
@@ -1787,11 +1787,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           to { stroke-dashoffset: 0; }
         }
 
-        /* ── Arrowhead reveal — fades in after line finishes drawing ── */
-        @keyframes teachArrowAppear {
-          from { opacity: 0; transform: scale(0.6); }
-          to   { opacity: 1; transform: scale(1); }
-        }
+        /* teachArrowSlideN keyframes are generated inline per step */
 
         /* ── Volumetric light bloom breathe ── */
         @keyframes teachBloom {
