@@ -597,11 +597,17 @@ function parseClockHour(str) {
     if (isNaN(str) || str < 1 || str > 12) return null;
     return Math.round(str);
   }
-  const m = String(str).match(/(\d+)\s*o.?clock/i);
-  if (!m) return null;
-  const h = parseInt(m[1], 10);
-  if (isNaN(h) || h < 1 || h > 12) return null;
-  return h;
+  const s = String(str).trim();
+  // "N o'clock" / "N oclock" format (engine narrative output)
+  const mOclock = s.match(/(\d+)\s*o.?clock/i);
+  if (mOclock) {
+    const h = parseInt(mOclock[1], 10);
+    if (!isNaN(h) && h >= 1 && h <= 12) return h;
+  }
+  // Bare integer string "10" or "10.0" (parseCatchlightObs / array format)
+  const hBare = parseInt(s, 10);
+  if (!isNaN(hBare) && hBare >= 1 && hBare <= 12 && String(hBare) === s.replace(/\.0$/, '')) return hBare;
+  return null;
 }
 function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
   // Resolve the dot-list:  clockHours[] → array, else clockHour → [hour], else
@@ -627,11 +633,11 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
     const clockDeg = -clamped;
     fallbackPos = {
       cx: 50 + 18 * Math.sin((clockDeg * Math.PI) / 180),
-      cy: 44 - 14 * Math.cos((clockDeg * Math.PI) / 180),
+      cy: 50 - 18 * Math.cos((clockDeg * Math.PI) / 180),
     };
   }
 
-  const stroke = steel(0.58);
+  const stroke = steel(0.65);
   const maxCount = Math.max(1, ...Array.from(counts.values()));
 
   // Resolve a primary hour for the readout label so the user sees the
@@ -657,40 +663,95 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
     return {
       hour: i === 0 ? 12 : i,
       x1: 50 + inner * Math.sin(r),
-      y1: 44 - inner * Math.cos(r),
+      y1: 50 - inner * Math.cos(r),
       x2: 50 + outer * Math.sin(r),
-      y2: 44 - outer * Math.cos(r),
+      y2: 50 - outer * Math.cos(r),
     };
   });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 48, minHeight: 48 }}>
-      <svg viewBox="0 0 100 100" width="80" height="80" style={{ display: 'block', minWidth: 48, minHeight: 48 }}>
-        {/* almond eye shape */}
-        <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
-        {/* clock-face tick ring around the iris — engraved guide so the
-            user reads the dot position as a clock hour, not a free angle. */}
+      <svg viewBox="0 0 100 100" width="80" height="80" style={{ display: 'block' }}>
+        <defs>
+          {/* Iris radial gradient — darker limbal ring fading to lighter mid-iris */}
+          <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"  stopColor="rgba(80,100,130,0.55)" />
+            <stop offset="62%" stopColor="rgba(55,72,95,0.75)" />
+            <stop offset="88%" stopColor="rgba(40,55,75,0.88)" />
+            <stop offset="100%" stopColor="rgba(30,42,58,0.95)" />
+          </radialGradient>
+          {/* Sclera fill — subtle off-white gradient for depth */}
+          <radialGradient id="scleraGrad" cx="50%" cy="46%" r="55%">
+            <stop offset="0%"  stopColor="rgba(210,215,220,0.12)" />
+            <stop offset="100%" stopColor="rgba(160,170,180,0.04)" />
+          </radialGradient>
+          {/* Pupil reflection gradient */}
+          <radialGradient id="pupilGrad" cx="42%" cy="38%" r="60%">
+            <stop offset="0%"  stopColor="rgba(15,18,25,0.90)" />
+            <stop offset="100%" stopColor="rgba(4,5,10,1)" />
+          </radialGradient>
+        </defs>
+
+        {/* Almond eye shape — anatomically tighter medial canthus (inner corner)
+            and rounder lateral canthus (outer corner) for a realistic silhouette */}
+        <path d="M10 50 C10 50 24 20 50 20 C76 20 90 50 90 50 C90 50 76 80 50 80 C24 80 10 50 10 50 Z"
+          fill="url(#scleraGrad)" stroke={stroke} strokeWidth={1.5} />
+
+        {/* Subtle sclera vasculature — faint lines near corners for realism */}
+        <line x1={16} y1={49} x2={28} y2={47} stroke={stroke} strokeWidth={0.3} opacity={0.15} />
+        <line x1={17} y1={51} x2={27} y2={52} stroke={stroke} strokeWidth={0.3} opacity={0.12} />
+        <line x1={72} y1={47} x2={84} y2={49} stroke={stroke} strokeWidth={0.3} opacity={0.15} />
+        <line x1={73} y1={52} x2={83} y2={51} stroke={stroke} strokeWidth={0.3} opacity={0.12} />
+
+        {/* Clock-face tick ring — faint spokes around the iris */}
         {ticks.map((t) => (
           <line
             key={t.hour}
             x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2}
             stroke={stroke}
-            strokeWidth={t.hour % 3 === 0 ? 1.1 : 0.6}
-            opacity={t.hour % 3 === 0 ? 0.85 : 0.5}
+            strokeWidth={t.hour % 3 === 0 ? 1.2 : 0.7}
+            opacity={t.hour % 3 === 0 ? 0.90 : 0.55}
             strokeLinecap="round"
           />
         ))}
-        {/* iris */}
-        <circle cx={50} cy={44} r={20} fill="rgba(60,70,85,0.55)" stroke={stroke} strokeWidth={1} />
-        {/* pupil */}
-        <circle cx={50} cy={44} r={8} fill="#05060a" />
+
+        {/* Limbal ring — the dark outer edge that defines the iris boundary.
+            This is the single strongest cue for a realistic eye. */}
+        <circle cx={50} cy={50} r={21} fill="none" stroke="rgba(25,35,50,0.80)" strokeWidth={2} />
+
+        {/* Iris — radial gradient from lighter center to dark limbal edge */}
+        <circle cx={50} cy={50} r={20} fill="url(#irisGrad)" stroke="none" />
+
+        {/* Iris fibers — radial striations that give the iris its organic texture.
+            Real irises have collagen fibers radiating from the pupil outward. */}
+        {Array.from({ length: 24 }, (_, i) => {
+          const deg = i * 15;
+          const r = (deg * Math.PI) / 180;
+          const innerR = 9;
+          const outerR = 18.5;
+          return (
+            <line key={`fiber${i}`}
+              x1={50 + innerR * Math.sin(r)} y1={50 - innerR * Math.cos(r)}
+              x2={50 + outerR * Math.sin(r)} y2={50 - outerR * Math.cos(r)}
+              stroke="rgba(90,115,145,0.35)" strokeWidth={0.4} />
+          );
+        })}
+
+        {/* Collarette ring — the wavy boundary between pupillary and ciliary
+            zones, roughly 60% out from pupil edge to iris edge */}
+        <circle cx={50} cy={50} r={13.5} fill="none" stroke="rgba(70,90,115,0.25)" strokeWidth={0.5}
+          strokeDasharray="1.5,2" />
+
+        {/* Pupil — subtle gradient for depth, not flat black */}
+        <circle cx={50} cy={50} r={8} fill="url(#pupilGrad)" />
+
         {/* Multi-dot catchlights — one per reported clock hour.  Dots on the
             same clock position stack into a single brighter dot whose radius
             grows with the count, so repeated hits read as "strongest light". */}
         {Array.from(counts.entries()).map(([h, n]) => {
           const clockDeg = (h % 12) * 30;
           const cx = 50 + 16 * Math.sin((clockDeg * Math.PI) / 180);
-          const cy = 44 - 16 * Math.cos((clockDeg * Math.PI) / 180);
+          const cy = 50 - 16 * Math.cos((clockDeg * Math.PI) / 180);
           const r = 3.4 + 1.5 * (n / maxCount);
           const alpha = 0.6 + 0.4 * (n / maxCount);
           const isPrimary = h === primaryHour;
@@ -702,6 +763,7 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
               <circle cx={cx} cy={cy} r={r + (isPrimary ? 2 : 1)}
                 fill={isPrimary ? 'rgba(245,210,140,0.40)' : 'rgba(245,210,140,0.16)'} />
               <circle cx={cx} cy={cy} r={r} fill={`rgba(245,210,140,${alpha})`} />
+              {/* Specular highlight — offset toward upper-left for realistic refraction */}
               <circle cx={cx - 0.9} cy={cy - 0.9} r={Math.max(0.8, r * 0.4)} fill="rgba(255,240,210,0.95)" />
             </g>
           );
@@ -714,8 +776,36 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
             <circle cx={fallbackPos.cx - 1.2} cy={fallbackPos.cy - 1.2} r={1.8} fill="rgba(255,240,210,0.95)" />
           </>
         )}
-        {/* subtle upper lash line */}
-        <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
+
+        {/* Upper eyelid — thicker lash line with natural taper at corners.
+            Anatomically the upper lid is always more prominent than the lower. */}
+        <path d="M12 50 C12 50 26 22 50 22 C74 22 88 50 88 50"
+          fill="none" stroke={stroke} strokeWidth={2} opacity={0.65}
+          strokeLinecap="round" />
+        {/* Lash fringe — tiny strokes along the upper lid for eyelash texture */}
+        {[20, 30, 40, 50, 60, 70, 80].map((pct, i) => {
+          // Points along the upper lid curve, approximated
+          const t = pct / 100;
+          const lx = 12 + t * 76;
+          const rawY = 50 - 28 * Math.sin(t * Math.PI);
+          const ly = Math.max(22, rawY);
+          const lashLen = (i === 2 || i === 3 || i === 4) ? 3.5 : 2.5;
+          const lashAngle = -0.3 + t * 0.6; // fan outward slightly
+          return (
+            <line key={`lash${i}`}
+              x1={lx} y1={ly}
+              x2={lx + lashLen * Math.sin(lashAngle)} y2={ly - lashLen * Math.cos(lashAngle)}
+              stroke={stroke} strokeWidth={0.8} opacity={0.45}
+              strokeLinecap="round" />
+          );
+        })}
+        {/* Lower eyelid — thinner, subtler line */}
+        <path d="M14 52 C14 52 28 76 50 76 C72 76 86 52 86 52"
+          fill="none" stroke={stroke} strokeWidth={0.8} opacity={0.35}
+          strokeLinecap="round" />
+        {/* Waterline — the inner rim of the lower lid, very faint */}
+        <path d="M16 51 C16 51 30 73 50 73 C70 73 84 51 84 51"
+          fill="none" stroke="rgba(190,200,210,0.12)" strokeWidth={0.6} />
       </svg>
       {/* Position readout — explicit "10 O'CLOCK" label so the dot's clock
           hour is spelled out in copy as well as plotted in the eye.
@@ -1997,11 +2087,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   const rawSignals = _rawSignalsRaw.nose_shadow_angle_deg != null
     ? { ..._rawSignalsRaw, nose_shadow_angle_deg: ((_rawSignalsRaw.nose_shadow_angle_deg + 180) % 360) }
     : _rawSignalsRaw;
-  // Catchlight clock position — prefer the same value the modifier spec-cell
-  // displays (sections.modifier.position) so the eye graphic and the visible
-  // POSITION readout never disagree.  Only fall back to the deeper engine
-  // field when the surface section omits it.
-  const catchlightClockStr = sections?.modifier?.position
+  // Catchlight clock position — clock-hour string for the dot in the eye graphic.
+  // Priority: parsed clock positions from key_observations > engine CI field.
+  // sections.modifier.position is a compass direction ("Upper Left"), not a clock
+  // hour — it must NOT be used for catchlightClockHour.
+  const catchlightClockStr =
+    (sections?.catchlightPositions?.[0])
     || raw.lighting_inference?.catchlight_intelligence?.primary_key?.position
     || null;
   const catchlightClockHour = parseClockHour(catchlightClockStr);
@@ -2717,16 +2808,19 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               backgroundColor: '#070709',
               boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
             }}>
-              {/* Catchlight dial */}
+              {/* Catchlight dial — icon container fixed 80px tall so label aligns with modifier label */}
               <div style={{
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                gap: 4, minWidth: 0,
+                gap: 6, minWidth: 0,
               }}>
-                <CatchlightEye
-                  clockHour={catchlightClockHour}
-                  angleDeg={rawSignals.nose_shadow_angle_deg}
-                  compact
-                />
+                <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CatchlightEye
+                    clockHour={catchlightClockHour}
+                    clockHours={sections.catchlightPositions}
+                    angleDeg={rawSignals.nose_shadow_angle_deg}
+                    compact
+                  />
+                </div>
                 <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
@@ -2738,13 +2832,15 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                   background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent 100%)',
                 }} />
               )}
-              {/* Modifier dial */}
+              {/* Modifier dial — icon container fixed 80px tall matches catchlight container */}
               {sections.modifier?.family && (
                 <div style={{
                   flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 4, minWidth: 0,
+                  gap: 6, minWidth: 0,
                 }}>
-                  <ModifierEmission family={sections.modifier.family} size={80} />
+                  <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ModifierEmission family={sections.modifier.family} size={80} />
+                  </div>
                   <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                     MODIFIER
                   </span>

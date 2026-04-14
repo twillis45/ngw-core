@@ -121,7 +121,7 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   // and the BG strip at the top.  Larger subR fills more of the canvas.
   const subX = W / 2;
   const subY = compact ? 68 : 90;
-  const subR = compact ? 26 : 28;  // larger head — more readable at fluid scale
+  const subR = compact ? 18 : 20;  // scaled down — human figure, not oversized
 
   // Camera — at the bottom of the canvas, looking UP at the subject (top-down
   // POV: camera is "in front of" the subject's face).
@@ -332,7 +332,7 @@ export default function LightingDiagram({ result, compact = false, fluid = false
             travel rather than a painted shape. */}
         <linearGradient id={`beamGrad_${sfx}`}
           x1={kX} y1={kY} x2={bX} y2={bY} gradientUnits="userSpaceOnUse">
-          <stop offset="0%"   stopColor={KEY_COLOR} stopOpacity="0.52" />
+          <stop offset="0%"   stopColor={KEY_COLOR} stopOpacity="0.70" />
           <stop offset="100%" stopColor={KEY_COLOR} stopOpacity="0" />
         </linearGradient>
         {/* Subject head lit-side glow: warm wash on the hemisphere facing
@@ -352,6 +352,22 @@ export default function LightingDiagram({ result, compact = false, fluid = false
           <stop offset="100%" stopColor="rgba(255,248,220,1)" stopOpacity="0" />
         </radialGradient>
       </defs>
+
+      {/* ─── Floor plan distance rings ─────────────────────────────────────
+          Faint concentric circles centred on the subject reinforce the
+          overhead / plan-view perspective — the same language used in pro
+          lighting-diagram software and photography textbooks.  Rendered
+          at the very bottom of the stack so all fixtures sit on top. */}
+      {[0.50, 1.00].map((scale, i) => (
+        <circle key={`floorRing${i}`}
+          cx={subX} cy={subY}
+          r={Math.round(kDist * scale)}
+          fill="none"
+          stroke={st(0.07 - i * 0.01)}
+          strokeWidth={0.5}
+          strokeDasharray="3,9"
+        />
+      ))}
 
       {/* Background indicator — rendered in both modes so the top-down
           scene reads as subject-between-background-and-camera.  Width is
@@ -394,7 +410,7 @@ export default function LightingDiagram({ result, compact = false, fluid = false
       {/* Light beam center line — lifted opacity so the principal ray is
           clearly visible even when the beam cone is narrow. */}
       <line x1={kX} y1={kY} x2={bX} y2={bY}
-        stroke="rgba(200,155,60,0.50)" strokeWidth={1.5} />
+        stroke="rgba(200,155,60,0.65)" strokeWidth={compact ? 1.8 : 2.2} />
 
       {/* Shadow direction line — dashed, originates from the nose tip so it
           reads as a cast shadow rather than a nose / face-direction arrow.
@@ -491,12 +507,12 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         </g>
       )}
 
-      {/* Key light marker — modifier-shape-aware.
-          Shapes represent the actual top-down footprint of each modifier:
-          a softbox IS a rectangle from above, an octabox IS an octagon,
-          a beauty dish IS a circle with a deflector plate.  Each shape is
-          rotated via kToSubDeg so its emission face aims at the subject —
-          physically correct for a floor-plan lighting diagram. */}
+      {/* Key light marker — modifier-shape-aware SIDE-VIEW profiles.
+          Each shape is the recognisable silhouette a photographer sees
+          looking at the modifier from the side: a softbox is a trapezoid
+          (narrow mount → wide diffusion face), a beauty dish is a shallow
+          concave bowl with a deflector plate, etc.  Rotated via kToSubDeg
+          so the emission face always aims at the subject. */}
       {(() => {
         const mf = (mod?.family || '').toLowerCase();
         const isRect  = mf.includes('rect') || (mf.includes('soft') && !mf.includes('oct'));
@@ -506,7 +522,7 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         const isRing  = mf.includes('ring');
         const isPara  = mf.includes('para') || mf.includes('umbr');
 
-        // Angle from key → subject (for orienting the modifier face)
+        // Angle from key → subject (for orienting the emission face)
         const kToSubDeg = Math.atan2(subX - kX, -(subY - kY)) * 180 / Math.PI;
 
         // Ambient glow halo (always)
@@ -515,99 +531,140 @@ export default function LightingDiagram({ result, compact = false, fluid = false
             fill="rgba(200,155,60,0.06)" stroke="none" />
         );
 
-        // Modifier shape — sized to read as a real physical object on the
-        // floor plan, not just a dot.  Inner structure (baffles, deflectors,
-        // grid lines) communicates modifier type at a glance.
+        // ── Side-view modifier silhouettes ──────────────────────────────
+        // Convention: −Y (up in SVG) = toward subject after the kToSubDeg
+        // rotation.  So the emission face (wide end of a trapezoid, open
+        // side of a bowl) is drawn at −Y, and the mount/back plate at +Y.
         let modShape = null;
         if (isRect || isStrip) {
-          const rW = compact ? (isStrip ? 6 : 24) : (isStrip ? 8 : 32);
-          const rH = compact ? (isStrip ? 20 : 12) : (isStrip ? 28 : 16);
-          // Inner baffle line — shows the diffusion panel inside the box
-          const baffleOffset = rH * 0.30;
+          // Softbox / strip side view: trapezoid — wide diffusion face at
+          // top (−Y → toward subject), narrow mount at bottom (+Y → away).
+          const backW  = compact ? (isStrip ? 4 : 10) : (isStrip ? 5 : 12);
+          const frontW = compact ? (isStrip ? 8 : 24) : (isStrip ? 10 : 32);
+          const depth  = compact ? (isStrip ? 14 : 12) : (isStrip ? 18 : 16);
+          const hd = depth / 2;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              <rect x={kX - rW/2} y={kY - rH/2} width={rW} height={rH} rx={2}
+              <path d={`M ${kX - frontW/2} ${kY - hd} L ${kX - backW/2} ${kY + hd} L ${kX + backW/2} ${kY + hd} L ${kX + frontW/2} ${kY - hd} Z`}
                 fill="rgba(200,155,60,0.16)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              {/* Inner diffusion baffle — the front face of the softbox */}
-              <line x1={kX - rW/2 + 2} y1={kY - rH/2 + baffleOffset}
-                    x2={kX + rW/2 - 2} y2={kY - rH/2 + baffleOffset}
-                stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.35} />
+              {/* Diffusion face — bright front panel (top edge = toward subject) */}
+              <line x1={kX - frontW/2 + 1} y1={kY - hd}
+                    x2={kX + frontW/2 - 1} y2={kY - hd}
+                stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.55} />
+              {/* Inner baffle — recessed diffusion layer */}
+              <line x1={kX - frontW * 0.32} y1={kY - hd * 0.35}
+                    x2={kX + frontW * 0.32} y2={kY - hd * 0.35}
+                stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.25} />
+              {/* Mount stem at back (bottom = away from subject) */}
+              <line x1={kX} y1={kY + hd}
+                    x2={kX} y2={kY + hd + (compact ? 3 : 4)}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
             </g>
           );
         } else if (isOct) {
-          const or = compact ? 11 : 15;
-          const pts = Array.from({length:8}, (_,i) => {
-            const a = (i * 45 + kToSubDeg) * Math.PI / 180;
-            return `${kX + or * Math.sin(a)},${kY - or * Math.cos(a)}`;
-          }).join(' ');
-          // Inner octagon — shows the recessed baffle
-          const ir = or * 0.55;
-          const innerPts = Array.from({length:8}, (_,i) => {
-            const a = (i * 45 + kToSubDeg) * Math.PI / 180;
-            return `${kX + ir * Math.sin(a)},${kY - ir * Math.cos(a)}`;
-          }).join(' ');
+          // Octabox side view: slightly wider trapezoid than regular softbox.
+          const backW  = compact ? 10 : 13;
+          const frontW = compact ? 26 : 34;
+          const depth  = compact ? 12 : 16;
+          const hd = depth / 2;
           modShape = (
-            <>
-              <polygon points={pts} fill="rgba(200,155,60,0.16)"
-                stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              <polygon points={innerPts} fill="none"
+            <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
+              <path d={`M ${kX - frontW/2} ${kY - hd} L ${kX - backW/2} ${kY + hd} L ${kX + backW/2} ${kY + hd} L ${kX + frontW/2} ${kY - hd} Z`}
+                fill="rgba(200,155,60,0.16)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
+              {/* Diffusion face */}
+              <line x1={kX - frontW/2 + 1} y1={kY - hd}
+                    x2={kX + frontW/2 - 1} y2={kY - hd}
+                stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.55} />
+              {/* Inner baffle */}
+              <line x1={kX - frontW * 0.30} y1={kY - hd * 0.30}
+                    x2={kX + frontW * 0.30} y2={kY - hd * 0.30}
                 stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.25} />
-            </>
+              {/* Mount stem */}
+              <line x1={kX} y1={kY + hd}
+                    x2={kX} y2={kY + hd + (compact ? 3 : 4)}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
+            </g>
           );
         } else if (isBeauty) {
-          const outerR = compact ? 11 : 14;
+          // Beauty dish side view: shallow concave bowl opening upward
+          // (toward subject) with a center deflector plate.
+          const dishW = compact ? 22 : 28;
+          const dishD = compact ? 7 : 9;
           modShape = (
-            <>
-              <circle cx={kX} cy={kY} r={outerR}
-                fill="rgba(200,155,60,0.16)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              {/* Deflector plate — the solid center disc that defines a
-                  beauty dish vs. a regular reflector */}
-              <circle cx={kX} cy={kY} r={outerR * 0.38}
-                fill="rgba(10,10,13,0.85)" stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.45} />
-            </>
+            <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
+              {/* Concave bowl — opens upward (−Y = toward subject) */}
+              <path d={`M ${kX - dishW/2} ${kY} C ${kX - dishW/4} ${kY - dishD * 1.4} ${kX + dishW/4} ${kY - dishD * 1.4} ${kX + dishW/2} ${kY}`}
+                fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
+              {/* Back plate closing the dish (at kY = center line) */}
+              <line x1={kX - dishW/2} y1={kY}
+                    x2={kX + dishW/2} y2={kY}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.4} />
+              {/* Deflector plate — signature element, inside the bowl */}
+              <line x1={kX - (compact ? 3 : 4)} y1={kY - dishD * 0.55}
+                    x2={kX + (compact ? 3 : 4)} y2={kY - dishD * 0.55}
+                stroke={KEY_COLOR} strokeWidth={1.5} strokeOpacity={0.55} strokeLinecap="round" />
+              {/* Mount stem at back (+Y = away from subject) */}
+              <line x1={kX} y1={kY}
+                    x2={kX} y2={kY + (compact ? 3 : 4)}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
+            </g>
           );
         } else if (isRing) {
-          const outerR = compact ? 12 : 16;
+          // Ring light seen edge-on: thin horizontal bar with center gap.
+          const ringW = compact ? 24 : 32;
+          const ringH = compact ? 3 : 4;
           modShape = (
-            <>
-              {/* Ring donut — thick stroke with hollow center, just like
-                  the actual ring light looks from above */}
-              <circle cx={kX} cy={kY} r={outerR}
-                fill="none" stroke={KEY_COLOR} strokeWidth={compact ? 4 : 5} strokeOpacity={0.50} />
-              <circle cx={kX} cy={kY} r={outerR}
-                fill="none" stroke="rgba(255,248,220,0.20)" strokeWidth={compact ? 2 : 3} />
-            </>
+            <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
+              <rect x={kX - ringW/2} y={kY - ringH/2} width={ringW} height={ringH} rx={1}
+                fill="rgba(200,155,60,0.22)" stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.6} />
+              {/* Center lens opening */}
+              <rect x={kX - (compact ? 2.5 : 3)} y={kY - ringH/2 - 0.5} width={compact ? 5 : 6} height={ringH + 1}
+                fill="#0a0a0d" stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.3} />
+              {/* Glow emission on the face side (−Y = toward subject) */}
+              <line x1={kX - ringW/2 + 2} y1={kY - ringH/2}
+                    x2={kX + ringW/2 - 2} y2={kY - ringH/2}
+                stroke="rgba(255,248,220,0.25)" strokeWidth={0.75} />
+            </g>
           );
         } else if (isPara) {
-          // Parabolic / umbrella — deep bowl shape.  From top-down it reads
-          // as a large circle with radial spokes (umbrella ribs).
-          const outerR = compact ? 12 : 16;
-          const spokeR = outerR * 0.85;
+          // Parabolic / umbrella side view: deep concave bowl opening
+          // upward (toward subject), shaft through center.
+          const paraW = compact ? 24 : 32;
+          const paraD = compact ? 14 : 18;
           modShape = (
-            <>
-              <circle cx={kX} cy={kY} r={outerR}
+            <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
+              {/* Deep parabolic curve — opens upward toward subject */}
+              <path d={`M ${kX - paraW/2} ${kY} C ${kX - paraW/6} ${kY - paraD * 1.2} ${kX + paraW/6} ${kY - paraD * 1.2} ${kX + paraW/2} ${kY}`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.65} />
-              {/* Umbrella ribs — 8 spokes radiating from center */}
-              {[0, 45, 90, 135].map(deg => {
-                const a = (deg + kToSubDeg) * Math.PI / 180;
-                return (
-                  <line key={deg}
-                    x1={kX - spokeR * Math.sin(a)} y1={kY + spokeR * Math.cos(a)}
-                    x2={kX + spokeR * Math.sin(a)} y2={kY - spokeR * Math.cos(a)}
-                    stroke={KEY_COLOR} strokeWidth={0.4} strokeOpacity={0.25} />
-                );
-              })}
-            </>
+              {/* Back plate */}
+              <line x1={kX - paraW/2} y1={kY}
+                    x2={kX + paraW/2} y2={kY}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.4} />
+              {/* Umbrella shaft — from back plate through focal point */}
+              <line x1={kX} y1={kY}
+                    x2={kX} y2={kY - paraD * 0.65}
+                stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.3} />
+              {/* Strobe head at focal point (inside the bowl) */}
+              <rect x={kX - 2} y={kY - paraD * 0.55 - 3} width={4} height={3} rx={0.5}
+                fill="rgba(200,155,60,0.35)" stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.35} />
+            </g>
           );
         } else {
-          // Unknown modifier — generic strobe head with reflector bowl
+          // Unknown modifier — generic reflector side view: small trapezoid
+          // with emission face (wide) at top, mount (narrow) at bottom.
+          const genBack  = compact ? 6 : 8;
+          const genFront = compact ? 16 : 20;
+          const genD     = compact ? 8 : 10;
+          const hd = genD / 2;
           modShape = (
-            <>
-              <circle cx={kX} cy={kY} r={compact ? 10 : 13}
+            <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
+              <path d={`M ${kX - genFront/2} ${kY - hd} L ${kX - genBack/2} ${kY + hd} L ${kX + genBack/2} ${kY + hd} L ${kX + genFront/2} ${kY - hd} Z`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.5} />
-              <circle cx={kX} cy={kY} r={compact ? 5 : 7}
-                fill="none" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.60} />
-            </>
+              {/* Mount stem at back */}
+              <line x1={kX} y1={kY + hd}
+                    x2={kX} y2={kY + hd + 3}
+                stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.25} />
+            </g>
           );
         }
 
@@ -666,23 +723,27 @@ export default function LightingDiagram({ result, compact = false, fluid = false
           </>
         );
       })()}
-      {/* Nose pointer — the single orientation anchor. A tapered triangle
-          toward camera tells the photographer which way the face points.
-          No eyes — the dual arcs and lit-side glow already communicate
-          everything about where light falls. Less is more. */}
+      {/* Nose pointer — orientation anchor in plan view.  Tapered triangle
+          toward camera (chin/nose direction) so a photographer instantly
+          reads "face pointing at camera".  Slightly larger and brighter
+          in full mode for legibility at expanded scale. */}
       <polygon
-        points={`${subX - 3},${subY + subR - 5} ${subX + 3},${subY + subR - 5} ${subX},${subY + subR + 5}`}
-        fill={st(0.55)}
+        points={`${subX - (compact ? 3 : 4)},${subY + subR - (compact ? 5 : 6)} ${subX + (compact ? 3 : 4)},${subY + subR - (compact ? 5 : 6)} ${subX},${subY + subR + (compact ? 5 : 7)}`}
+        fill={st(0.65)}
       />
+      {/* Hairline centre axis on the head — reinforces plan-view symmetry and
+          gives a calibration line for reading the lit-arc positions. */}
+      <line
+        x1={subX} y1={subY - subR + 4}
+        x2={subX} y2={subY + subR - 4}
+        stroke={st(0.12)} strokeWidth={0.5}
+      />
+      {/* SUBJECT label removed — photographers read the human silhouette instantly */}
 
-      {/* Camera icon — body + pentaprism + lens circle for recognition at
-          both compact and fullscreen scales. */}
+      {/* Camera icon — body + pentaprism for recognition at compact and fullscreen scales. */}
       <rect x={subX - 9} y={camY - 6} width={18} height={12} rx={2}
         fill="none" stroke={st(0.38)} strokeWidth={1} />
       <rect x={subX - 2.5} y={camY - 10} width={5} height={5} rx={1}
-        fill="none" stroke={st(0.30)} strokeWidth={0.75} />
-      {/* Lens — small circle on the camera body */}
-      <circle cx={subX} cy={camY} r={compact ? 2.5 : 3}
         fill="none" stroke={st(0.30)} strokeWidth={0.75} />
 
       {/* ─── Labels ─── */}
