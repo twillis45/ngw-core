@@ -677,6 +677,74 @@ export default function Day1DemoApp() {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Dev: ?day1_screen=setup previews the setup/recipe screen directly
+  //    with rich canned data so all panels, specs, and drawers render.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'setup') return;
+      const cannedResult = {
+        pattern: 'Rembrandt', confidence: 91,
+        meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+        mood: 'Dramatic',
+        sections: {
+          patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+          patternSource: 'shadow analysis', confidenceLabel: 'strong', edgeCaseWarnings: [],
+          shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+          shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+          shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+          catchlightPositions: ['10'], lightQuality: 'soft',
+          catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+          modifier: {
+            family: 'Large Octabox', sizeLabel: 'Large', sizeRange: '48"–60"',
+            distRange: '5–10 ft', optDist: '6–8 ft',
+            position: 'Upper Left', positionQuad: 'Camera-Left', positionIntensity: 'High',
+            catchlightSize: '85% iris',
+          },
+          sceneDescription: 'Single key light, studio background.',
+        },
+        _raw: {
+          lighting_inference: {
+            key_side: 'upper_left', key_elevation: 'high',
+            key_position_text: 'Camera-Left · High',
+            off_axis_angle: 45,
+          },
+          reference_analysis: {
+            recreation_setup: {
+              key_placement: 'Camera left, 45 degrees off axis, raised high',
+              fill_strategy: 'Negative fill — V-flat camera right',
+              background_strategy: 'Medium grey seamless, 6–8 ft behind subject. No background light.',
+              focal_length: '85–135mm',
+              aperture: 'f/2.8–4',
+              camera_subject_guidance: 'Eye-level camera, subject at edge of light fall-off',
+              setup_notes: [
+                'Position key at roughly 45° camera-left, 6–8 ft from subject',
+                'Feather modifier slightly past subject for softer wrap',
+                'Use V-flat on shadow side to deepen Rembrandt triangle',
+                'Watch for catchlight at 10 o\'clock position to confirm placement',
+              ],
+            },
+          },
+          reconstruction: {
+            key_light_angle_deg: 45,
+            key_light_height: 'high',
+            modifier_distance_ft: 7,
+            light_roles: {
+              key: {
+                present: true, confidence: 0.91, role: 'key', modifier: 'Large Octabox', distance: '5–10 ft',
+                position: 'Camera-Left · High', evidence: ['Strong shadow edge', 'Round catchlight at 10 o\'clock'],
+              },
+            },
+          },
+        },
+      };
+      setResult(cannedResult);
+      setImagePreview('/loop_standard.jpg');
+      setScreen('setup');
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
   // the full analyze flow.  Harmless in prod (no-op without the param).

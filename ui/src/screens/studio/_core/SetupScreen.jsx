@@ -216,7 +216,7 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
       onContextMenu={interactive ? (e) => e.preventDefault() : undefined}
       style={{
         flex: 1, minWidth: 0, borderRadius: 8,
-        padding: '8px 10px',
+        padding: '10px 12px',
         backgroundColor: pressed ? 'rgba(0,0,0,0.25)' : hasSecret ? 'rgba(0,0,0,0.08)' : 'transparent',
         boxShadow: pressed ? SPEC_DOWN : hasSecret ? SPEC_UP : 'none',
         transition: 'all 0.15s ease',
@@ -225,8 +225,8 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
         WebkitUserSelect: 'none', userSelect: 'none',
       }}
     >
-      <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
-      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, lineHeight: 1.25, ...FONT_SMOOTH, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{value}</p>
+      <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{value}</p>
       {showSecondary && (
         <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
           {secondary}
@@ -261,10 +261,10 @@ function LightRoleCard({ roleKey, role }) {
     ? role.evidence[0] : null;
   return (
     <div style={{
-      flexShrink: 0, minWidth: 130, maxWidth: 170,
-      borderRadius: 8, backgroundColor: C.panelBg,
+      flexShrink: 0, minWidth: 140, maxWidth: 180,
+      borderRadius: 10, backgroundColor: C.panelBg,
       boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-      padding: '8px 10px 10px 12px', position: 'relative', overflow: 'hidden',
+      padding: '10px 12px 12px 14px', position: 'relative', overflow: 'hidden',
     }}>
       <div style={{
         position: 'absolute', left: 0, top: 6, bottom: 6, width: 2.5,
@@ -533,7 +533,12 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
     ? rs.setup_notes.map(n => prettify(n)).filter(Boolean)
     : [];
 
-  const modName = mod ? `${mod.sizeLabel ? mod.sizeLabel + ' ' : ''}${prettify(mod.family) || 'Modifier'}` : null;
+  // Avoid "Large Large Octabox" — skip sizeLabel when family already includes it
+  const modFamily = prettify(mod?.family) || 'Modifier';
+  const modName = mod
+    ? (mod.sizeLabel && !modFamily.toLowerCase().startsWith(mod.sizeLabel.toLowerCase())
+        ? `${mod.sizeLabel} ${modFamily}` : modFamily)
+    : null;
   const positionDisplay = prettify(mod?.position || li.key_position_text) || null;
   const keySide = li.key_side;
   // Engine sends keySide as snake_case tokens like "upper_right" — run through
@@ -778,10 +783,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
       {/* ─── Content ─── */}
       <div style={{
-        padding: isDesktop ? '16px 40px 40px' : '14px 20px 40px',
+        padding: isDesktop ? '16px 40px 40px' : '16px 22px 40px',
         flex: 1,
         display: 'flex', flexDirection: 'column',
-        gap: 12,
+        gap: 14,
         position: 'relative', zIndex: 1,
       }}>
 
@@ -812,7 +817,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </button>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, ...FONT_SMOOTH }}>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
                 {result.pattern}
               </p>
               {result.sections?.sceneDescription && (
@@ -891,24 +896,24 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
                 <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
-                <div style={{ padding: '10px 16px 0' }}>
-                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                <div style={{ padding: '12px 18px 0' }}>
+                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                     KEY LIGHT
                   </p>
                 </div>
 
-                {/* Hero modifier emission — compact, no chrome wrapper */}
+                {/* Hero modifier emission — sized for visual impact */}
                 {mod?.family && (
-                  <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 2px' }}>
-                    <ModifierEmission family={mod.family} size={72} />
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0 4px' }}>
+                    <ModifierEmission family={mod.family} size={88} />
                   </div>
                 )}
 
                 {modName ? (
-                  <div style={{ padding: '4px 16px 0', textAlign: mod?.family ? 'center' : 'left' }}>
-                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{modName}</p>
+                  <div style={{ padding: '4px 18px 0', textAlign: mod?.family ? 'center' : 'left' }}>
+                    <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>{modName}</p>
                     {mod?.sizeRange && (
-                      <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                     )}
                   </div>
                 ) : result.sections?.catchlightModifier ? (
@@ -923,8 +928,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                     Only the photographer's essential "where to put it" specs.
                     Everything else (position, placement, iris coverage, guidance)
                     lives on the back face or SETUP GUIDE drawer. */}
-                <div onClick={(e) => e.stopPropagation()} style={{ padding: '8px 14px 10px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ padding: '10px 16px 12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     {mod?.distRange && (
                       <LongPressSpec
                         label="DISTANCE"
@@ -960,10 +965,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
                 {/* Flip hint */}
                 <div style={{
-                  padding: '0 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                  padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                 }}>
-                  <span style={{ fontSize: 10, opacity: 0.45, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
                     TAP FOR DIAGRAM
                   </span>
                 </div>
@@ -999,9 +1004,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   </p>
                 )}
 
-                <div style={{ padding: '4px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 10, opacity: 0.45, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
                     TAP FOR SPECS
                   </span>
                 </div>
@@ -1202,22 +1207,22 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         {/* Camera guidance from recreation_setup — focal_length, aperture, subject guidance */}
         {(rsFocal || rsAperture || rsCamGuide) && (
           <div style={{
-            borderRadius: 8, backgroundColor: C.panelBg,
+            borderRadius: 10, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: '8px 14px', position: 'relative',
+            padding: '10px 16px', position: 'relative',
           }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 8, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-            <p style={{ margin: '0 0 4px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 10, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+            <p style={{ margin: '0 0 5px', fontSize: 10, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
               CAMERA
             </p>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
               {rsFocal && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubBold, ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>
                   {rsFocal}
                 </span>
               )}
               {rsAperture && (
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.textSubBold, ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>
                   {rsAperture}
                 </span>
               )}
@@ -1347,8 +1352,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             transition: 'transform 0.1s ease, box-shadow 0.1s ease',
           }}
         >
-          <span style={{ fontSize: isDesktop ? 15 : 13, fontWeight: 600, color: 'rgba(245,247,250,0.9)', letterSpacing: '0.5px', pointerEvents: 'none', ...FONT_SMOOTH }}>
-            Start Cockpit
+          <span style={{ fontSize: isDesktop ? 15 : 14, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '1.5px', textTransform: 'uppercase', pointerEvents: 'none', ...FONT_SMOOTH }}>
+            Build This Light
           </span>
         </button>
 
