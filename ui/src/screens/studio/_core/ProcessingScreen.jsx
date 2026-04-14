@@ -226,6 +226,34 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6,
         }} />
 
+        {/* ── Stage narrative — centered inside the viewfinder, the hero
+            text element during analysis. Each stage fades in/out on a gentle
+            vertical slide so the progression feels alive. Gradient scrim at
+            the bottom keeps legibility over any photo content. ── */}
+        {!analysisComplete && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            padding: '48px 24px 22px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.55) 40%, rgba(4,5,7,0.88) 100%)',
+            zIndex: 7, pointerEvents: 'none',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          }}>
+            <p style={{
+              margin: 0,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontWeight: 500, fontSize: isDesktop ? 16 : 14, lineHeight: '20px',
+              color: 'rgba(235,240,245,0.88)',
+              letterSpacing: '0.2px',
+              textAlign: 'center',
+              textShadow: '0 1px 4px rgba(0,0,0,0.6), 0 0 16px rgba(72,186,136,0.15)',
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+              opacity: stageFade,
+              transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
+              transition: 'opacity 0.35s ease, transform 0.35s ease',
+            }}>{currentStage.label}</p>
+          </div>
+        )}
+
         {/* ── Pattern tease — flashes the identified pattern on the photo
             when analysis completes, before the screen transitions to results.
             1.2s dwell in Day1DemoApp gives this time to register. Fades in
@@ -376,20 +404,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         transition: 'color 0.3s ease, text-shadow 0.3s ease',
       }}>{analysisComplete ? 'Done' : 'Analyzing'}</p>
 
-      {/* ── Stage label — secondary pipeline step below the dome label ── */}
-      <p style={{
-        position: 'absolute',
-        top: LBL_TOP + 20, left: '50%', width: BTN_D - 16,
-        transform: 'translateX(-50%)',
-        margin: 0, fontWeight: 500, fontSize: isDesktop ? 10 : 9, lineHeight: '13px',
-        color: steel(0.48), letterSpacing: '0.6px',
-        textTransform: 'uppercase',
-        textShadow: '0 1px 0 rgba(0,0,0,0.5)',
-        textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
-        overflow: 'hidden', textOverflow: 'ellipsis',
-        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-        opacity: analysisComplete ? 0 : stageFade, transition: 'opacity 0.3s ease',
-      }}>{currentStage.label}</p>
+      {/* Stage label moved to viewfinder overlay — see "Stage narrative" above. */}
 
       {/* Home indicator removed — transient state, no nav bar needed.
            Progress is shown via the VF bottom green line + stage messages. */}
