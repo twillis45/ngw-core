@@ -9,6 +9,7 @@ import FitToViewport from './studio/_shared/FitToViewport';
 import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
+import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
@@ -767,6 +768,16 @@ export default function Day1DemoApp() {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Dev: ?day1_screen=build previews the build wizard.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'build') return;
+      setScreen('build');
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
   // the full analyze flow.  Harmless in prod (no-op without the param).
@@ -942,6 +953,12 @@ export default function Day1DemoApp() {
     setScreen('home');
   };
   const handleSavedSetups = () => setScreen('saved');
+  const handleBuildWizard = () => setScreen('build');
+  const handleBuildComplete = (payload) => {
+    // TODO: wire to /api/shoot-match with the wizard payload
+    console.log('[Day1] Build wizard complete:', payload);
+    setScreen('home');
+  };
   const handleSavedSetupSelect = (setup) => {
     // Load the saved setup's result and show the setup sheet
     if (setup.result) {
@@ -1083,6 +1100,24 @@ export default function Day1DemoApp() {
             imagePreview={imagePreview}
             mode={shootMode}
             onExit={handleExitShoot}
+          />
+        </FitToViewport>
+      );
+    }
+    case 'build': {
+      const buildMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const buildDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return (
+        <FitToViewport
+          designWidth={buildMobile ? 430 : 1180}
+          designHeight={buildMobile ? 932 : buildDesktopVH}
+          minScale={buildMobile ? 0.8 : 0.5}
+          maxScale={buildMobile ? 1.9 : 2.0}
+          tightness={buildMobile ? 0.96 : 1}
+        >
+          <BuildWizardScreen
+            onComplete={handleBuildComplete}
+            onBack={() => setScreen('home')}
           />
         </FitToViewport>
       );
