@@ -710,6 +710,9 @@ function _buildDemoInit(devModeUser) {
     if (demo === 'analytics') {
       return { ...base, screen: 'analytics' };
     }
+    if (demo === 'studio') {
+      return { ...base, screen: 'day1_demo' };
+    }
     if (demo === 'exec') {
       return { ...base, screen: 'exec' };
     }

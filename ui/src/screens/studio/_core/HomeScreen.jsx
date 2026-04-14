@@ -627,12 +627,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
     : (!hasImage && showTeach)                 ? 'Load a Photo'
     : 'See the Light';
   const analyzeText = isPressed
-    ? 'rgba(235,235,237,0.20)'  // deepest — face fully compressed, label in shadow
+    ? 'rgba(235,235,237,0.22)'  // deepest — face fully compressed, label in shadow
     : isHovered
-      ? { idle:'rgba(235,235,237,0.18)', loading:'rgba(235,235,237,0.50)', ready:'rgba(235,235,237,0.38)', hasResult:'rgba(235,235,237,0.44)', error:'rgba(235,235,237,0.44)' }[effectiveUiState]
-      : { idle:'rgba(245,247,250,0.72)', loading:'rgba(245,247,250,0.95)', ready:'rgba(245,247,250,0.95)', hasResult:'rgba(245,247,250,0.95)', error:'rgba(245,247,250,0.95)' }[effectiveUiState];
-  const analyzeGlow = effectiveUiState === 'idle' || isPressed || isHovered ? 'none'
-    : `0 0 6px rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.35).toFixed(2)})`;
+      ? { idle:'rgba(235,235,237,0.26)', loading:'rgba(235,235,237,0.55)', ready:'rgba(235,235,237,0.45)', hasResult:'rgba(235,235,237,0.48)', error:'rgba(235,235,237,0.48)' }[effectiveUiState]
+      : { idle:'rgba(245,247,250,0.88)', loading:'rgba(245,247,250,0.97)', ready:'rgba(245,247,250,0.97)', hasResult:'rgba(245,247,250,0.97)', error:'rgba(245,247,250,0.97)' }[effectiveUiState];
+  // Idle: faint self-illumination glow so label reads as an engraved backlit label even at rest.
+  const analyzeGlow = isPressed ? 'none'
+    : isHovered ? 'none'
+    : effectiveUiState === 'idle'
+      ? '0 0 8px rgba(185,200,220,0.18)'
+      : `0 0 8px rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.45).toFixed(2)})`;
 
   // Desktop media query listener — now handled by useStableViewport hook.
 
@@ -1258,8 +1262,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         position: 'absolute',
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: lblTransform,
-        margin: 0, fontWeight: 500, fontSize: isDesktop ? 11 : 10, lineHeight: '16px',
-        color: analyzeText, letterSpacing: '2.2px', textShadow: analyzeGlow,
+        margin: 0, fontWeight: 600, fontSize: isDesktop ? 13 : 12, lineHeight: '16px',
+        color: analyzeText, letterSpacing: '3px', textShadow: analyzeGlow,
         textTransform: 'uppercase',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
         transition: `color 0.18s ease, transform ${buttonState === 'pressed' ? '0.06s cubic-bezier(0.25,0.46,0.45,0.94)' : '0.22s cubic-bezier(0.34,1.56,0.64,1)'}`,

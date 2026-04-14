@@ -123,10 +123,10 @@ function SectionPanel({ label, children }) {
       }} />
       {/* Section header — authoritative left-aligned label with hairline rule */}
       <div style={{
-        padding: '12px 20px 0',
+        padding: '10px 16px 0',
       }}>
         <span style={{
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: steel(0.62),
           letterSpacing: '1.2px',
@@ -143,7 +143,7 @@ function SectionPanel({ label, children }) {
         }} />
       </div>
       {/* Content */}
-      <div style={{ padding: '12px 20px 14px' }}>
+      <div style={{ padding: '10px 16px 12px' }}>
         {children}
       </div>
     </div>
@@ -603,7 +603,7 @@ function parseClockHour(str) {
   if (isNaN(h) || h < 1 || h > 12) return null;
   return h;
 }
-function CatchlightEye({ clockHour, clockHours, angleDeg }) {
+function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false }) {
   // Resolve the dot-list:  clockHours[] → array, else clockHour → [hour], else
   // angleDeg fallback → synthetic single entry.
   let hours = null;
@@ -664,8 +664,8 @@ function CatchlightEye({ clockHour, clockHours, angleDeg }) {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 48, minHeight: 48 }}>
-      <svg viewBox="0 0 100 100" width="110" height="110" style={{ display: 'block', minWidth: 48, minHeight: 48 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 48, minHeight: 48 }}>
+      <svg viewBox="0 0 100 100" width="80" height="80" style={{ display: 'block', minWidth: 48, minHeight: 48 }}>
         {/* almond eye shape */}
         <path d="M12 44 Q50 12 88 44 Q50 76 12 44 Z" fill="rgba(184,191,199,0.06)" stroke={stroke} strokeWidth={1.3} />
         {/* clock-face tick ring around the iris — engraved guide so the
@@ -718,8 +718,9 @@ function CatchlightEye({ clockHour, clockHours, angleDeg }) {
         <path d="M14 42 Q50 16 86 42" fill="none" stroke={stroke} strokeWidth={0.6} opacity={0.5} />
       </svg>
       {/* Position readout — explicit "10 O'CLOCK" label so the dot's clock
-          hour is spelled out in copy as well as plotted in the eye. */}
-      {primaryHour != null && (
+          hour is spelled out in copy as well as plotted in the eye.
+          Suppressed in compact mode (twin instruments) — position is in the spec cell. */}
+      {!compact && primaryHour != null && (
         <span style={{
           fontSize: 9, fontWeight: 700,
           color: 'rgba(245,210,140,0.92)',
@@ -1132,20 +1133,18 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
   const runners = candidates.slice(1);
 
   return (
-    <div style={{ padding: '0 20px 16px' }}>
+    <div>
       {candidates.slice(0, 1).map((c) => {
         const def = defFor(c.name);
         return (
           <div key={c.name} style={{
-            marginTop: 10,
+            marginTop: 6,
             display: 'grid',
             gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-            columnGap: 14,
+            columnGap: 12,
             alignItems: 'center',
           }}>
-            {/* Silhouette card — clickable; opens fullscreen portal.  Wrapped
-                in a tactile inset well so the icon has a machined frame and
-                the tap target is obvious. */}
+            {/* Silhouette card — clickable; opens fullscreen portal */}
             <div
               role="button"
               aria-label={`Zoom ${c.name} pattern`}
@@ -1154,8 +1153,8 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: true }); } }}
               title="Tap to zoom"
               style={{
-                width: 72, height: 72,
-                borderRadius: 12,
+                width: 56, height: 56,
+                borderRadius: 10,
                 backgroundColor: '#070709',
                 boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1164,38 +1163,40 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                 flexShrink: 0,
               }}
             >
-              <PatternFaceIcon name={c.name} size={60} lit shadowSide={shadowSide} />
+              <PatternFaceIcon name={c.name} size={46} lit shadowSide={shadowSide} />
             </div>
 
             {/* Name + definition + bar */}
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <span style={{
-                  fontSize: 14,
+                  fontSize: 18,
                   fontWeight: 700,
                   color: C.textSubBold,
+                  letterSpacing: '0px',
                   ...FONT_SMOOTH,
                 }}>{c.name}</span>
               </div>
               {def && (
                 <p style={{
-                  margin: '2px 0 6px', fontSize: 11, lineHeight: 1.4,
-                  color: steel(0.78),
+                  margin: '2px 0 6px', fontSize: 11, lineHeight: 1.35,
+                  color: steel(0.68),
                   fontWeight: 400,
                   ...FONT_SMOOTH,
                 }}>{def}</p>
               )}
               {/* Bar track + fill */}
               <div style={{
-                width: '100%', height: 3, borderRadius: 1.5,
+                width: '100%', height: 4, borderRadius: 2,
                 backgroundColor: C.barTrack,
                 position: 'relative',
               }}>
                 <div style={{
                   position: 'absolute', left: 0, top: 0,
                   width: `${c.score}%`, height: '100%',
-                  borderRadius: 1.5,
+                  borderRadius: 2,
                   backgroundColor: barFill,
+                  boxShadow: `0 0 6px ${barFill}`,
                   transition: 'width 0.4s ease',
                 }} />
               </div>
@@ -1203,9 +1204,11 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
 
             {/* Score */}
             <span style={{
-              fontSize: 14, fontWeight: 700,
+              fontSize: 22, fontWeight: 800,
               color: scoreColor,
               alignSelf: 'center',
+              letterSpacing: '-0.5px',
+              lineHeight: 1,
               ...FONT_SMOOTH,
             }}>{c.score}%</span>
           </div>
@@ -1220,10 +1223,10 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
             const def = defFor(c.name);
             return (
               <div key={c.name} style={{
-                marginTop: 18,
+                marginTop: 14,
                 display: 'grid',
                 gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-                columnGap: 14,
+                columnGap: 12,
                 alignItems: 'center',
               }}>
                 <div
@@ -1234,8 +1237,8 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tapHaptic(); setZoomedPattern({ name: c.name, score: c.score, def, lit: false }); } }}
                   title="Tap to zoom"
                   style={{
-                    width: 72, height: 72,
-                    borderRadius: 12,
+                    width: 56, height: 56,
+                    borderRadius: 10,
                     backgroundColor: '#070709',
                     boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1244,7 +1247,7 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                     flexShrink: 0,
                   }}
                 >
-                  <PatternFaceIcon name={c.name} size={60} lit={false} shadowSide={shadowSide} />
+                  <PatternFaceIcon name={c.name} size={46} lit={false} shadowSide={shadowSide} />
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
@@ -1288,7 +1291,7 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setShowRunners(v => !v); tapHaptic(); } }}
             style={{
               display: 'flex', justifyContent: 'center', alignItems: 'center',
-              padding: '10px 0 2px',
+              padding: '8px 0 0',
               cursor: 'pointer',
               WebkitTapHighlightColor: 'transparent',
             }}
@@ -1393,10 +1396,10 @@ function SpecCell({ label, value, secondary, secondaryColor }) {
       backgroundColor: SPEC_CELL_BG,
       boxShadow: SPEC_CELL_SHADOW,
     }}>
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
-      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
+      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.1px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, ...FONT_SMOOTH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
       {secondary && (
-        <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
+        <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: secondaryColor || C.confHigh, letterSpacing: '0.1px', ...FONT_SMOOTH }}>
           {secondary}
         </p>
       )}
@@ -1522,6 +1525,16 @@ function ModifierDetail({ modifier }) {
     ? `${modifier.sizeLabel} ${modifier.family || 'Modifier'}`
     : (modifier.family || null);
 
+  // Apparent source band — folded into the subtitle line
+  let sourceBand = null;
+  if (modifier.catchlightSize) {
+    const m = String(modifier.catchlightSize).match(/([\d.]+)\s*%/);
+    if (m) {
+      const pct = parseFloat(m[1]);
+      sourceBand = pct < 25 ? 'Tiny source' : pct < 50 ? 'Small source' : pct < 100 ? 'Medium source' : pct < 200 ? 'Large source' : 'Very large source';
+    }
+  }
+
   const cells = [
     modifier.distRange && (
       <SpecCell
@@ -1540,13 +1553,8 @@ function ModifierDetail({ modifier }) {
         secondary={[modifier.positionQuad, modifier.positionIntensity].filter(Boolean).join(' · ') || null}
       />
     ),
-    // SHAPE and COVERAGE moved into the CATCHLIGHT half of the combined
-    // CATCHLIGHT & MODIFIER drawer — they describe what's *reflected in
-    // the eye*, not the modifier itself, so they belong with the catchlight
-    // chips alongside the iris coverage scale.
-    modifier.lightCount && (
-      <SpecCell key="lights" label="LIGHTS" value={String(modifier.lightCount)} />
-    ),
+    // LIGHTS cell removed — single-light count is obvious from the diagram;
+    // multi-light count surfaces in the DETAIL drawer's signal breakdown.
   ].filter(Boolean);
 
   if (!heroName && !cells.length) return null;
@@ -1558,21 +1566,21 @@ function ModifierDetail({ modifier }) {
   }
 
   return (
-    <div style={{ marginTop: 12 }}>
+    <div style={{ marginTop: 8 }}>
       {heroName && (
-        <div style={{ marginBottom: 12 }}>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>
+        <div style={{ marginBottom: 8 }}>
+          <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '0.1px', ...FONT_SMOOTH }}>
             {heroName}
           </p>
-          {modifier.sizeRange && (
-            <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.62), ...FONT_SMOOTH }}>
-              {modifier.sizeRange}
+          {(modifier.sizeRange || sourceBand) && (
+            <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.60), letterSpacing: '0.2px', ...FONT_SMOOTH }}>
+              {[modifier.sizeRange, sourceBand].filter(Boolean).join(' · ')}
             </p>
           )}
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} style={{ display: 'flex', gap: 12, marginTop: i === 0 ? 0 : 10 }}>
+        <div key={i} style={{ display: 'flex', gap: 10, marginTop: i === 0 ? 0 : 8 }}>
           {row}
           {row.length === 1 && <div style={{ flex: 1 }} />}
         </div>
@@ -1608,9 +1616,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // Single detail drawer — THE LIGHT and THE SETUP are always visible.
   // Only the DETAIL section (scene + colors + confidence) collapses.
   const [detailOpen, setDetailOpen] = useState(false);
-  // THE LIGHT section clips at 200px on mobile to prevent scroll fatigue;
-  // tap "Show more" to expand and see the full shadow narrative.
-  const [lightExpanded, setLightExpanded] = useState(false);
+  // lightExpanded state removed — THE LIGHT now shows only the pattern
+  // answer (shadow analysis moved to DETAIL), so no clip is needed.
   // Daylight brightness boost — persisted across screens via settings store.
   const [daylightMode] = useState(() => {
     try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
@@ -2465,9 +2472,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             }}
           >
             <span style={{
-              fontSize: 14, fontWeight: 600,
-              color: 'rgba(245,247,250,0.9)',
-              letterSpacing: '0.5px',
+              fontSize: 11, fontWeight: 600,
+              color: 'rgba(245,247,250,0.92)',
+              letterSpacing: '2.5px',
+              textTransform: 'uppercase',
               pointerEvents: 'none',
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
             }}>
@@ -2544,10 +2552,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           }}
         >
           <div style={{
-            width: infoVisible ? 36 : 28, height: 4, borderRadius: 2,
-            backgroundColor: steel(infoVisible ? 0.35 : 0.5),
-            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), 0 0.5px 0 rgba(255,255,255,0.06)',
-            transition: 'width 0.25s ease, background-color 0.25s ease',
+            width: infoVisible ? 40 : 32, height: 4, borderRadius: 2,
+            backgroundColor: steel(infoVisible ? 0.35 : 0.50),
+            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 0.5px 0 rgba(255,255,255,0.06)',
+            transition: 'width 0.3s cubic-bezier(0.4,0,0.2,1), background-color 0.3s ease',
           }} />
         </div>
       )}
@@ -2570,10 +2578,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         <div
           onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
           style={{
-            marginLeft: 25, marginRight: 25, marginTop: 10, marginBottom: 6,
+            marginLeft: 25, marginRight: 25, marginTop: 6, marginBottom: 4,
             position: 'relative',
             width: 'calc(100% - 50px)',
-            aspectRatio: '300 / 200',
+            aspectRatio: '300 / 175',
             borderRadius: 12,
             backgroundColor: '#070709',
             boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
@@ -2586,7 +2594,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         >
           <div style={{
             position: 'absolute', inset: 0,
-            padding: '14px 16px',
+            padding: '8px 14px 18px',
             display: 'flex', justifyContent: 'center', alignItems: 'stretch',
             zIndex: 1,
           }}>
@@ -2601,12 +2609,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             position: 'absolute', inset: 0, borderRadius: 12,
             pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
           }} />
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{
-            position: 'absolute', bottom: 10, right: 10, zIndex: 11,
-            opacity: 0.45, pointerEvents: 'none',
+          {/* Label + expand icon — anchored bottom, reads as purposeful */}
+          <div style={{
+            position: 'absolute', bottom: 6, left: 12, right: 12, zIndex: 11,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            pointerEvents: 'none',
           }}>
-            <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" stroke={steel(0.85)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+            <span style={{
+              fontSize: 9, fontWeight: 700,
+              color: steel(0.42),
+              letterSpacing: '1px',
+              ...FONT_SMOOTH,
+            }}>LIGHTING DIAGRAM</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.45 }}>
+              <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.65), letterSpacing: '0.5px', ...FONT_SMOOTH }}>TAP TO EXPAND</span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" stroke={steel(0.85)} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2618,7 +2639,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
-        marginTop: isDesktop ? 96 : 6,
+        marginTop: isDesktop ? 96 : 4,
         maxWidth: isDesktop ? 680 : undefined,
         display: 'flex',
         flexDirection: 'column',
@@ -2662,20 +2683,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             No toggle, no drawer — the answer is always front and center.
             ═══════════════════════════════════════════════════════════════ */}
         <SectionPanel label="THE LIGHT">
-          {/* On mobile, clip to show just the winning pattern + candidates
-              toggle. Signal / Components / Direction / Read are revealed on
-              "Show more" tap. Desktop: always expanded. With R-1 (runner-ups
-              collapsed), ~140px covers the leader row cleanly. */}
-          <div style={{
-            ...(!isDesktop && !lightExpanded ? {
-              maxHeight: 140,
-              overflow: 'hidden',
-              position: 'relative',
-            } : null),
-          }}>
-            {/* R-9: THE LIGHT shows ONLY the pattern answer. Signal, Components,
-                Direction, and Read all moved to DETAIL drawer under "Shadow Analysis"
-                so the photographer gets THE answer, not a wall of widgets. */}
+          {/* R-9: THE LIGHT shows ONLY the pattern answer. Signal, Components,
+              Direction, and Read all moved to DETAIL drawer under "Shadow Analysis"
+              so the photographer gets THE answer, not a wall of widgets. */}
+          <div>
             <PatternBars
               candidates={sections.patternCandidates}
               isHighConf={isHighConf}
@@ -2696,123 +2707,67 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             ═══════════════════════════════════════════════════════════════ */}
         {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
           <SectionPanel label="THE SETUP">
-            {/* L-5: Catchlight — stacked vertically for breathing room */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            {/* ── Twin instruments: Catchlight + Modifier side-by-side ──
+                Two visual anchors in one shared well so they read as a
+                paired instrument panel, not two orphaned widgets. */}
+            <div style={{
+              display: 'flex', gap: 10, alignItems: 'stretch',
+              padding: '10px 10px 8px',
+              borderRadius: 10,
+              backgroundColor: '#070709',
+              boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
+            }}>
+              {/* Catchlight dial */}
               <div style={{
-                padding: '14px 16px 10px',
-                borderRadius: 12,
-                backgroundColor: '#070709',
-                boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                gap: 4, minWidth: 0,
               }}>
                 <CatchlightEye
                   clockHour={catchlightClockHour}
                   angleDeg={rawSignals.nose_shadow_angle_deg}
+                  compact
                 />
-                <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.62), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                {(sections.modifier?.shape || catchlightClockStr) && (
-                  <p style={{
-                    margin: 0, fontSize: 14, fontWeight: 600,
-                    color: 'rgba(245,210,140,0.88)',
-                    lineHeight: 1.3,
-                    ...FONT_SMOOTH,
-                  }}>
-                    {[
-                      sections.modifier?.shape && String(sections.modifier.shape).charAt(0).toUpperCase() + String(sections.modifier.shape).slice(1).toLowerCase(),
-                      catchlightClockStr && `at ${prettify(catchlightClockStr)}`,
-                    ].filter(Boolean).join(' ')}
-                  </p>
-                )}
-                {sections.modifier?.angularArea && (
-                  <p style={{
-                    margin: '4px 0 0', fontSize: 11, fontWeight: 500,
-                    color: steel(0.55),
-                    letterSpacing: '0.3px',
-                    ...FONT_SMOOTH,
-                  }}>
-                    {sections.modifier.angularArea} coverage
-                  </p>
-                )}
-              </div>
+              {/* Vertical divider */}
+              {sections.modifier?.family && (
+                <div style={{
+                  width: 1, alignSelf: 'stretch',
+                  background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent 100%)',
+                }} />
+              )}
+              {/* Modifier dial */}
+              {sections.modifier?.family && (
+                <div style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                  gap: 4, minWidth: 0,
+                }}>
+                  <ModifierEmission family={sections.modifier.family} size={80} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                    MODIFIER
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Iris coverage — compact inline label (Apple simplicity).
-                The full banded-ruler IrisCoverageScale was engineer-facing;
-                photographers already know source size from the modifier name.
-                This single-line label adds context without 80px of overhead. */}
-            {sections.modifier?.catchlightSize && (() => {
-              const m = String(sections.modifier.catchlightSize).match(/([\d.]+)\s*%/);
-              const pct = m ? parseFloat(m[1]) : null;
-              if (pct == null) return null;
-              const band = pct < 25 ? 'Tiny' : pct < 50 ? 'Small' : pct < 100 ? 'Medium' : pct < 200 ? 'Large' : 'Very large';
-              return (
-                <div style={{
-                  marginTop: 10, marginBottom: 6,
-                  padding: '7px 12px',
-                  borderRadius: 8,
-                  backgroundColor: '#070709',
-                  boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
-                    APPARENT SOURCE
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(245,210,140,0.88)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
-                    {band}
-                  </span>
-                </div>
-              );
-            })()}
-
-            {/* Hairline divider */}
+            {/* ── Modifier hero name — the answer to "what created this light" ── */}
             {sections.modifier?.family && (
-              <div style={{
-                margin: sections.modifier?.catchlightSize ? '4px 0 12px' : '14px 0 12px',
-                height: 1,
-                background: 'linear-gradient(to right, transparent 0%, rgba(255,255,255,0.06) 50%, transparent 100%)',
-                boxShadow: '0 0.5px 0 rgba(0,0,0,0.5)',
-              }} />
+              <div style={{ marginTop: 10 }}>
+                <ModifierDetail modifier={sections.modifier} />
+              </div>
             )}
 
-            {/* L-5: Modifier — stacked vertically for breathing room */}
-            {sections.modifier?.family && (
-              <>
-                <div style={{
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-                  marginBottom: 10,
-                }}>
-                  <div style={{
-                    padding: '10px 14px 8px',
-                    borderRadius: 10,
-                    backgroundColor: '#070709',
-                    boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  }}>
-                    <ModifierEmission family={sections.modifier.family} size={88} />
-                    <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
-                      MODIFIER
-                    </span>
-                  </div>
-                  <div style={{ width: '100%' }}>
-                    <ModifierDetail modifier={sections.modifier} />
-                  </div>
-                </div>
-                {sections.modifier?.physicalMeaning && (
-                  <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
-                    {sections.modifier.physicalMeaning}
-                  </p>
-                )}
-              </>
-            )}
+            {/* Iris coverage + physical meaning removed — source size is
+                implied by the modifier name/size range, and physical meaning
+                was verbose repetition. APPARENT SOURCE band is now folded
+                into the modifier subtitle. */}
 
             {/* Fallback narrative when no modifier family resolved */}
             {sections.catchlightModifier && !sections.modifier?.family && (
               <p style={{
-                margin: '10px 0 0',
+                margin: '6px 0 0',
                 fontSize: 12,
                 fontWeight: 400,
                 lineHeight: '18px',
@@ -2853,11 +2808,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                     <DirectionalCompass direction={sections.shadowDirection} />
                   </div>
                 )}
-                {sections.shadowAnalysis && (
-                  <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 400, lineHeight: '20px', color: C.textSub, ...FONT_SMOOTH }}>
-                    {sections.shadowAnalysis}
-                  </p>
-                )}
+                {/* sections.shadowAnalysis is engine-internal debug text (e.g.
+                    "Vertical angle pass: high (0.75). Round catchlights → …")
+                    — suppressed from user-facing UI. O-2. */}
                 {sections.shadowEdgeNote && (
                   <p style={{ margin: '8px 0 0', fontSize: 12, fontWeight: 400, lineHeight: '17px', color: steel(0.62), fontStyle: 'italic', ...FONT_SMOOTH }}>
                     {sections.shadowEdgeNote}
@@ -3096,14 +3049,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           CTA, and New Photo duplicated the top-left back chevron (which already
           fires `onRetry`).  A single flat spacer keeps the grid row reserved so
           the panel column alignment stays put. */}
-      <div style={{ height: 40, ...(isDesktop ? { gridArea: 'actions' } : null) }} />
+      <div style={{ height: isDesktop ? 40 : 16, ...(isDesktop ? { gridArea: 'actions' } : null) }} />
 
       {/* ─── Floating mobile CTA — sticky bottom bar ─── */}
       {!isDesktop && (
         <div style={{
           position: 'sticky', bottom: 0, left: 0, right: 0,
           zIndex: 40,
-          padding: '10px 25px 18px',
+          padding: '8px 25px 14px',
           background: 'linear-gradient(to top, rgba(18,20,24,0.97) 60%, rgba(18,20,24,0) 100%)',
           pointerEvents: 'none',
           opacity: infoVisible ? 1 : 0,
@@ -3127,9 +3080,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               }}
             >
               <span style={{
-                fontSize: 14, fontWeight: 600,
-                color: 'rgba(245,247,250,0.9)',
-                letterSpacing: '0.5px',
+                fontSize: 11, fontWeight: 600,
+                color: 'rgba(245,247,250,0.92)',
+                letterSpacing: '2.5px',
+                textTransform: 'uppercase',
                 pointerEvents: 'none',
                 ...FONT_SMOOTH,
               }}>
@@ -3171,34 +3125,36 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
 
       {/* ── First-visit teach overlay — explains each Result section ──────── */}
       {resultTeachVisible && !isDesktop && (() => {
-        const hw = 430; // design width
+        // Responsive column width — matches Home teach
+        const COL_W = Math.min(430, window.innerWidth);
+        const COL_CX = Math.round(COL_W / 2);
         const steps = [
           { // Step 0: Hero photo + pattern — the result
-            x: 0, y: VF_TOP + VF_HEIGHT - 80, w: hw, h: 80, r: 0,
+            x: 0, y: VF_TOP + VF_HEIGHT - 80, w: COL_W, h: 80, r: 0,
             title: 'Your lighting — decoded',
             desc: 'Pattern name and confidence — the answer at a glance.',
-            tipY: VF_TOP + VF_HEIGHT + 24,
+            tipY: VF_TOP + VF_HEIGHT + 48,
             arrow: 'up',
           },
           { // Step 1: THE LIGHT section
-            x: 20, y: M_TOP_END + 60, w: hw - 40, h: 120, r: 12,
+            x: 20, y: M_TOP_END + 60, w: COL_W - 40, h: 120, r: 12,
             title: 'Shadow geometry',
             desc: 'Which pattern, how strong, and what the shadows tell us.',
-            tipY: M_TOP_END - 10,
+            tipY: M_TOP_END - 40,
             arrow: 'down',
           },
           { // Step 2: THE SETUP section
-            x: 20, y: M_TOP_END + 200, w: hw - 40, h: 140, r: 12,
+            x: 20, y: M_TOP_END + 200, w: COL_W - 40, h: 140, r: 12,
             title: 'Your rebuild blueprint',
             desc: 'Modifier, catchlight, distance, height — everything to recreate it.',
-            tipY: M_TOP_END + 120,
+            tipY: M_TOP_END + 80,
             arrow: 'down',
           },
           { // Step 3: Build This Light CTA
-            x: 25, y: stableVH - safeBottom - 68, w: hw - 50, h: 48, r: 24,
+            x: 25, y: stableVH - safeBottom - 68, w: COL_W - 50, h: 48, r: 24,
             title: 'Ready to build it?',
             desc: 'Step-by-step cockpit to match this light in your studio.',
-            tipY: stableVH - safeBottom - 148,
+            tipY: stableVH - safeBottom - 186,
             arrow: 'down',
           },
         ];
@@ -3210,23 +3166,30 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         const stepColors = ['rgba(245,210,140,1)', 'rgba(132,158,184,1)', 'rgba(107,148,245,1)', 'rgba(72,186,136,1)'];
         const sc = stepColors[resultTeachStep] || stepColors[0];
 
-        // Arrow geometry
-        const cardCX = hw / 2;
+        // Arrow geometry — card shifted left for down-arrows, arrow targets spotlight edge
+        const cardLeft = s.arrow === 'down' ? 20 : 32;
+        const cardRight = s.arrow === 'down' ? 140 : 32;
+        const cardW = COL_W - cardLeft - cardRight;
+        const cardCX = cardLeft + cardW / 2;
         const cardEdgeY = s.arrow === 'up' ? s.tipY : s.tipY + 72;
-        const tipYA = s.arrow === 'up' ? cy : cy;
+        // Arrow tip lands at spotlight edge (bottom for up-arrows, top for down)
+        const tipYA = s.arrow === 'up' ? (s.y + s.h) : s.y;
         const svgTop = Math.min(tipYA, cardEdgeY) - 10;
         const svgBot = Math.max(tipYA, cardEdgeY) + 10;
         const svgH = svgBot - svgTop;
         const startLY = cardEdgeY - svgTop;
         const endLY = tipYA - svgTop;
-        const cpOffset = s.arrow === 'up' ? 30 : -30;
-        const cpX = cardCX + cpOffset;
+        // Natural arc: card is left-offset, spotlight centered — modest rightward curve
+        const cpOffset = s.arrow === 'up' ? 30 : 20;
+        const cpX = (cardCX + cx) / 2 + cpOffset;
         const cpY1 = startLY + (endLY - startLY) * 0.3;
         const cpY2 = startLY + (endLY - startLY) * 0.7;
         const curvePath = `M${cardCX} ${startLY} C${cpX} ${cpY1}, ${cpX} ${cpY2}, ${cx} ${endLY}`;
         const aSize = 8;
         const aDir = s.arrow === 'up' ? -1 : 1;
-        const aPath = `M${cx - aSize} ${endLY - aSize * aDir} L${cx} ${endLY} L${cx + aSize} ${endLY - aSize * aDir}`;
+        // Chevron centered on endpoint: tip extends past, arms behind
+        const aHalf = aSize / 2;
+        const aPath = `M${cx - aSize} ${endLY - aHalf * aDir} L${cx} ${endLY + aHalf * aDir} L${cx + aSize} ${endLY - aHalf * aDir}`;
         const curveLen = Math.hypot(cx - cardCX, endLY - startLY) * 1.4;
 
         return (
@@ -3255,28 +3218,29 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               background: `radial-gradient(circle, ${sc.replace(/[\d.]+\)$/, '0.06)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.02)')} 40%, transparent 70%)`,
               pointerEvents: 'none',
               animation: 'rTeachBloom 3s ease-in-out infinite',
-              transition: 'left 0.55s ease, top 0.55s ease',
+              transition: 'left 0.55s cubic-bezier(0.4,0,0.2,1), top 0.55s cubic-bezier(0.4,0,0.2,1)',
             }} />
 
-            {/* Spotlight rings */}
+            {/* Outer glow ring — soft halo, step-colored */}
             <div style={{
               position: 'absolute',
-              left: s.x - 10, top: s.y - 10,
-              width: s.w + 20, height: s.h + 20,
-              borderRadius: s.r ? s.r + 10 : 10,
+              left: s.x - 14, top: s.y - 14,
+              width: s.w + 28, height: s.h + 28,
+              borderRadius: s.r ? s.r + 14 : 14,
               border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.12)')}`,
-              boxShadow: `0 0 44px ${sc.replace(/[\d.]+\)$/, '0.12)')}, inset 0 0 20px ${sc.replace(/[\d.]+\)$/, '0.05)')}`,
+              boxShadow: `0 0 44px ${sc.replace(/[\d.]+\)$/, '0.12)')}, 0 0 18px ${sc.replace(/[\d.]+\)$/, '0.06)')}, inset 0 0 20px ${sc.replace(/[\d.]+\)$/, '0.05)')}`,
               pointerEvents: 'none',
               animation: 'rTeachPulse 2.4s ease-in-out infinite',
               transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
             }} />
+            {/* Inner spotlight ring — crisp border */}
             <div style={{
               position: 'absolute',
-              left: s.x - 2, top: s.y - 2,
-              width: s.w + 4, height: s.h + 4,
-              borderRadius: s.r ? s.r + 2 : 2,
+              left: s.x - 3, top: s.y - 3,
+              width: s.w + 6, height: s.h + 6,
+              borderRadius: s.r ? s.r + 3 : 3,
               border: `1.5px solid ${sc.replace(/[\d.]+\)$/, '0.50)')}`,
-              boxShadow: `0 0 20px ${sc.replace(/[\d.]+\)$/, '0.22)')}, inset 0 0 10px ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
+              boxShadow: `0 0 20px ${sc.replace(/[\d.]+\)$/, '0.22)')}, 0 0 6px ${sc.replace(/[\d.]+\)$/, '0.12)')}, inset 0 0 10px ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
               pointerEvents: 'none',
               animation: 'rTeachPulse 2.4s ease-in-out 0.2s infinite',
               transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -3286,7 +3250,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <div key={resultTeachStep} style={{
               position: 'absolute',
               top: s.tipY,
-              left: 32, right: 32,
+              left: cardLeft, right: cardRight,
               animation: 'rTeachCard 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
             }}>
               {/* Animated border glow */}
@@ -3323,6 +3287,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                     border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.16)')}`,
                     boxShadow: `inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    animation: 'rTeachFloat 3s ease-in-out infinite',
                   }}>
                     {resultTeachStep === 0 && (
                       <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
@@ -3425,7 +3390,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             {/* Draw-on arrow */}
             <svg key={`rarrow-${resultTeachStep}`} style={{
               position: 'absolute', left: 0, top: svgTop,
-              width: hw, height: svgH,
+              width: COL_W, height: svgH,
               pointerEvents: 'none', overflow: 'visible',
               filter: `drop-shadow(0 0 10px ${sc.replace(/[\d.]+\)$/, '0.35)')})`,
             }}>
@@ -3441,7 +3406,18 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 strokeWidth="1" strokeLinecap="round" fill="none"
                 strokeDasharray={curveLen} strokeDashoffset={curveLen}
                 style={{ animation: 'rTeachDraw 0.7s cubic-bezier(0.4,0,0.2,1) 0.3s forwards' }} />
-              <g style={{ opacity: 0, animation: 'rTeachArrowIn 0.3s ease 0.85s forwards' }}>
+              {/* Arrowhead — slides from card base along curve to endpoint */}
+              <style>{`
+                @keyframes rTeachArrowSlide${resultTeachStep} {
+                  0%   { opacity: 0.4; transform: translate(${cardCX - cx}px, ${startLY - endLY}px) scale(0.7); }
+                  40%  { opacity: 1; }
+                  100% { opacity: 1; transform: translate(0, 0) scale(1); }
+                }
+              `}</style>
+              <g style={{
+                opacity: 0,
+                animation: `rTeachArrowSlide${resultTeachStep} 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards`,
+              }}>
                 <g style={{ animation: 'rTeachBounce 1.4s ease-in-out 1.1s infinite' }}>
                   <circle cx={cx} cy={endLY} r="12" fill={sc.replace(/[\d.]+\)$/, '0.08)')} />
                   <path d={aPath} stroke={sc.replace(/[\d.]+\)$/, '0.95)')}
@@ -3487,8 +3463,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           100% { transform: scale(1); opacity: 0.7; }
         }
         @keyframes rTeachDraw { to { stroke-dashoffset: 0; } }
-        @keyframes rTeachArrowIn { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: scale(1); } }
+        /* rTeachArrowSlideN keyframes are generated inline per step */
         @keyframes rTeachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+        @keyframes rTeachFloat {
+          0%   { transform: translateY(0); }
+          50%  { transform: translateY(-3px); }
+          100% { transform: translateY(0); }
+        }
         @property --teach-border-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
         @keyframes rTeachBorder { to { --teach-border-angle: 360deg; } }
       `}</style>

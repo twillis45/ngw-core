@@ -598,6 +598,51 @@ export default function Day1DemoApp() {
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
 
+  // ── Dev: ?day1_screen=result jumps straight to the result screen with a
+  // canned Rembrandt result so layout + typography can be reviewed instantly.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'result') return;
+      const cannedResult = {
+        pattern: 'Rembrandt', confidence: 91,
+        meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+        mood: 'Dramatic',
+        sections: {
+          patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+          patternSource: 'shadow analysis',
+          confidenceLabel: 'strong',
+          edgeCaseWarnings: [],
+          shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+          shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+          shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+          shadowEdgeNote: null,
+          catchlightPositions: ['10'],
+          lightQuality: 'soft',
+          catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+          modifier: {
+            family: 'Large Octabox',
+            sizeLabel: 'Large',
+            sizeRange: '48"–60"',
+            distRange: '5–10 ft',
+            optDist: '6–8 ft',
+            position: 'Upper Left',
+            positionQuad: 'Camera-Left',
+            positionIntensity: 'High',
+            catchlightSize: '85% iris',
+          },
+          sceneDescription: 'Single key light, studio background.',
+          colorPalette: null, signalQuality: null, vlmNarrative: null,
+        },
+        _raw: {},
+      };
+      setResult(cannedResult);
+      setImagePreview('/loop_standard.jpg');
+      setScreen('result');
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
   // the full analyze flow.  Harmless in prod (no-op without the param).
