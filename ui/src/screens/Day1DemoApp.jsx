@@ -7,6 +7,8 @@ import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
 import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
 import FitToViewport from './studio/_shared/FitToViewport';
 import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
+import RecipeScreen from './studio/_core/RecipeScreen';
+import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import { analyzeImage } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
@@ -745,6 +747,26 @@ export default function Day1DemoApp() {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Dev: ?day1_screen=recipes previews the recipe browser directly.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'recipes') return;
+      setScreen('recipes');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=saved previews the saved setups library.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'saved') return;
+      setScreen('saved');
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
   // the full analyze flow.  Harmless in prod (no-op without the param).
@@ -913,6 +935,21 @@ export default function Day1DemoApp() {
   };
 
   const handleSetupCancel = () => setScreen('result');
+  const handleRecipes = () => setScreen('recipes');
+  const handleRecipeSelect = (recipe) => {
+    // When a recipe is selected, navigate to setup with recipe data as result
+    // TODO: build a richer result object from recipe data
+    setScreen('home');
+  };
+  const handleSavedSetups = () => setScreen('saved');
+  const handleSavedSetupSelect = (setup) => {
+    // Load the saved setup's result and show the setup sheet
+    if (setup.result) {
+      setResult(setup.result);
+      setImagePreview(setup.imagePreview || null);
+      setScreen('setup');
+    }
+  };
 
   const handleRetry = () => {
     // Abort any in-flight analysis
@@ -1046,6 +1083,49 @@ export default function Day1DemoApp() {
             imagePreview={imagePreview}
             mode={shootMode}
             onExit={handleExitShoot}
+          />
+        </FitToViewport>
+      );
+    }
+    case 'saved': {
+      const savedMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const savedDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return (
+        <FitToViewport
+          designWidth={savedMobile ? 430 : 1180}
+          designHeight={savedMobile ? 932 : savedDesktopVH}
+          minScale={savedMobile ? 0.8 : 0.5}
+          maxScale={savedMobile ? 1.9 : 2.0}
+          tightness={savedMobile ? 0.96 : 1}
+        >
+          <SavedSetupsScreen
+            onSelect={handleSavedSetupSelect}
+            onBack={() => setScreen('home')}
+            onBuild={() => setScreen('recipes')}
+            onShoot={(setup) => {
+              if (setup.result) {
+                setResult(setup.result);
+                handleStartCockpit('photographer');
+              }
+            }}
+          />
+        </FitToViewport>
+      );
+    }
+    case 'recipes': {
+      const recipesMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const recipesDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return (
+        <FitToViewport
+          designWidth={recipesMobile ? 430 : 1180}
+          designHeight={recipesMobile ? 932 : recipesDesktopVH}
+          minScale={recipesMobile ? 0.8 : 0.5}
+          maxScale={recipesMobile ? 1.9 : 2.0}
+          tightness={recipesMobile ? 0.96 : 1}
+        >
+          <RecipeScreen
+            onSelect={handleRecipeSelect}
+            onBack={() => setScreen('home')}
           />
         </FitToViewport>
       );
