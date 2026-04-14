@@ -216,7 +216,7 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
       onContextMenu={interactive ? (e) => e.preventDefault() : undefined}
       style={{
         flex: 1, minWidth: 0, borderRadius: 8,
-        padding: '10px 14px',
+        padding: '8px 10px',
         backgroundColor: pressed ? 'rgba(0,0,0,0.25)' : hasSecret ? 'rgba(0,0,0,0.08)' : 'transparent',
         boxShadow: pressed ? SPEC_DOWN : hasSecret ? SPEC_UP : 'none',
         transition: 'all 0.15s ease',
@@ -225,8 +225,8 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
         WebkitUserSelect: 'none', userSelect: 'none',
       }}
     >
-      <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
-      <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{value}</p>
+      <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.5), letterSpacing: '0.8px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: '3px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, lineHeight: 1.25, ...FONT_SMOOTH, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{value}</p>
       {showSecondary && (
         <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
           {secondary}
@@ -261,10 +261,10 @@ function LightRoleCard({ roleKey, role }) {
     ? role.evidence[0] : null;
   return (
     <div style={{
-      flexShrink: 0, minWidth: 140, maxWidth: 180,
-      borderRadius: 10, backgroundColor: C.panelBg,
+      flexShrink: 0, minWidth: 130, maxWidth: 170,
+      borderRadius: 8, backgroundColor: C.panelBg,
       boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-      padding: '10px 12px 12px 14px', position: 'relative', overflow: 'hidden',
+      padding: '8px 10px 10px 12px', position: 'relative', overflow: 'hidden',
     }}>
       <div style={{
         position: 'absolute', left: 0, top: 6, bottom: 6, width: 2.5,
@@ -294,7 +294,7 @@ function LightRoleStrip({ roles }) {
   if (!roles || roles.length === 0) return null;
   return (
     <div style={{
-      borderRadius: 10, padding: '8px 8px',
+      borderRadius: 8, padding: '6px 6px',
       backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW,
       position: 'relative',
     }}>
@@ -778,10 +778,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
       {/* ─── Content ─── */}
       <div style={{
-        padding: isDesktop ? '20px 40px 40px' : '20px 25px 40px',
+        padding: isDesktop ? '16px 40px 40px' : '14px 20px 40px',
         flex: 1,
         display: 'flex', flexDirection: 'column',
-        gap: 16,
+        gap: 12,
         position: 'relative', zIndex: 1,
       }}>
 
@@ -790,8 +790,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <div style={{
             borderRadius: 14, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: isDesktop ? '18px 28px' : '14px 20px',
-            display: 'flex', alignItems: 'center', gap: isDesktop ? 20 : 14,
+            padding: isDesktop ? '16px 24px' : '10px 16px',
+            display: 'flex', alignItems: 'center', gap: isDesktop ? 18 : 12,
             position: 'relative',
             width: '100%',
           }}>
@@ -802,7 +802,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 onClick={openThumb}
                 aria-label="Zoom photo"
                 style={{
-                  width: 48, height: 48, borderRadius: 8, flexShrink: 0,
+                  width: 42, height: 42, borderRadius: 8, flexShrink: 0,
                   overflow: 'hidden', boxShadow: '0px 2px 6px rgba(0,0,0,0.5)',
                   padding: 0, border: 'none', background: 'none', cursor: 'zoom-in',
                   WebkitTapHighlightColor: 'transparent',
@@ -857,7 +857,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           // breathe.  FitToViewport scales down if the full stack exceeds
           // the 920 design viewport, so a slightly taller hero panel is
           // safe and gives us much more room for the zoomed diagram.
-          display: 'flex', flexDirection: 'column', gap: 14,
+          display: 'flex', flexDirection: 'column', gap: 12,
           maxHeight: 620,
           overflowY: 'auto',
           paddingRight: 6,
@@ -891,37 +891,24 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
                 <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
-                <div style={{ padding: '14px 16px 0' }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                <div style={{ padding: '10px 16px 0' }}>
+                  <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                     KEY LIGHT
                   </p>
                 </div>
 
-                {/* Hero modifier emission face (mobile) — subject-POV glow
-                    from modifier-studio-matte.html Set A, Column A */}
+                {/* Hero modifier emission — compact, no chrome wrapper */}
                 {mod?.family && (
-                  <div style={{
-                    display: 'flex', justifyContent: 'center',
-                    margin: '8px 0 4px',
-                  }}>
-                    <div style={{
-                      width: 108, height: 88,
-                      borderRadius: 12,
-                      backgroundColor: '#121316',
-                      boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.12), inset 0 -1px 1px rgba(0,0,0,0.25), inset 0 1px 3px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 30px rgba(95,124,150,0.03), inset 0 0 14px rgba(95,124,150,0.06)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: '0.5px solid rgba(167,173,183,0.06)',
-                    }}>
-                      <ModifierEmission family={mod.family} size={108} />
-                    </div>
+                  <div style={{ display: 'flex', justifyContent: 'center', margin: '6px 0 2px' }}>
+                    <ModifierEmission family={mod.family} size={72} />
                   </div>
                 )}
 
                 {modName ? (
-                  <div style={{ padding: '6px 20px 0', textAlign: mod?.family ? 'center' : 'left' }}>
-                    <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{modName}</p>
+                  <div style={{ padding: '4px 16px 0', textAlign: mod?.family ? 'center' : 'left' }}>
+                    <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH }}>{modName}</p>
                     {mod?.sizeRange && (
-                      <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
+                      <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                     )}
                   </div>
                 ) : result.sections?.catchlightModifier ? (
@@ -936,8 +923,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                     Only the photographer's essential "where to put it" specs.
                     Everything else (position, placement, iris coverage, guidance)
                     lives on the back face or SETUP GUIDE drawer. */}
-                <div onClick={(e) => e.stopPropagation()} style={{ padding: '10px 16px 12px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div onClick={(e) => e.stopPropagation()} style={{ padding: '8px 14px 10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                     {mod?.distRange && (
                       <LongPressSpec
                         label="DISTANCE"
@@ -973,10 +960,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
                 {/* Flip hint */}
                 <div style={{
-                  padding: '0 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                  padding: '0 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                 }}>
-                  <span style={{ fontSize: 12, opacity: 0.55, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 10, opacity: 0.45, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR DIAGRAM
                   </span>
                 </div>
@@ -1012,9 +999,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   </p>
                 )}
 
-                <div style={{ padding: '6px 20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 12, opacity: 0.55, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.65), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                <div style={{ padding: '4px 16px 8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 10, opacity: 0.45, lineHeight: 1 }}>&#x21BB;</span>
+                  <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
                     TAP FOR SPECS
                   </span>
                 </div>
@@ -1201,7 +1188,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         <div style={isDesktop ? {
           // Same cap as the hero column so the two columns align and the
           // bottom CTA never gets pushed below the 920 design viewport.
-          display: 'flex', flexDirection: 'column', gap: 14,
+          display: 'flex', flexDirection: 'column', gap: 12,
           maxHeight: 540,
           overflowY: 'auto',
           paddingRight: 6,
@@ -1215,12 +1202,12 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         {/* Camera guidance from recreation_setup — focal_length, aperture, subject guidance */}
         {(rsFocal || rsAperture || rsCamGuide) && (
           <div style={{
-            borderRadius: 10, backgroundColor: C.panelBg,
+            borderRadius: 8, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: '10px 16px', position: 'relative',
+            padding: '8px 14px', position: 'relative',
           }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 10, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-            <p style={{ margin: '0 0 6px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 8, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+            <p style={{ margin: '0 0 4px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
               CAMERA
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -1258,7 +1245,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           return (
             <div style={{
               borderRadius: 8, backgroundColor: '#050507',
-              boxShadow: RING_TRACK_SHADOW, padding: '6px 4px',
+              boxShadow: RING_TRACK_SHADOW, padding: '5px 4px',
               overflow: 'hidden',
             }}>
               <div style={{
@@ -1284,9 +1271,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               overflow: 'hidden', position: 'relative',
             }}>
               <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-              <div style={{ padding: '14px 20px' }}>
+              <div style={{ padding: '10px 16px' }}>
                 <RowLabel>PRE-SHOOT CHECK</RowLabel>
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {items.map((item, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <div style={{ width: 18, height: 18, borderRadius: 4, flexShrink: 0, border: `1.5px solid ${steel(0.50)}` }} />

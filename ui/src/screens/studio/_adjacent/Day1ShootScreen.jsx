@@ -1413,6 +1413,9 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
 
         {/* ── Cockpit teach overlay — first-time user walkthrough (mobile only) ── */}
         {cockpitTeachVisible && !isDesktop && (() => {
+          // Responsive column width — matches Home teach
+          const COL_W = Math.min(430, window.innerWidth);
+          const COL_CX = Math.round(COL_W / 2);
           // Cockpit layout geometry for spotlight targeting (mobile single-column)
           const _headerH = 40;
           const _specH = 56;
@@ -1423,31 +1426,31 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
 
           const _spots = [
             { // Step 0: Reference photo — the target
-              x: 20, y: _photoTop, w: 390, h: _photoH, r: 12,
+              x: 20, y: _photoTop, w: COL_W - 40, h: _photoH, r: 12,
               title: 'Your target light',
               desc: 'The light you\'re recreating — match this on set.',
-              tipY: _photoTop + _photoH + 14,
+              tipY: _photoTop + _photoH + 40,
               arrow: 'up',
             },
             { // Step 1: Step lead + spec strip — the instructions
-              x: 16, y: _headerH, w: 398, h: _specH + 20, r: 14,
+              x: 16, y: _headerH, w: COL_W - 32, h: _specH + 20, r: 14,
               title: 'Step-by-step rebuild',
               desc: 'Each step tells you exactly what to place and where.',
-              tipY: _headerH + _specH + 34,
+              tipY: _headerH + _specH + 50,
               arrow: 'up',
             },
             { // Step 2: Step dots — navigation
-              x: 100, y: _dotsTop - 6, w: 230, h: 24, r: 12,
+              x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 24, r: 12,
               title: 'Swipe or tap to navigate',
               desc: 'Move between setup steps at your own pace.',
-              tipY: _dotsTop - 100,
+              tipY: _dotsTop - 130,
               arrow: 'down',
             },
             { // Step 3: Capture button — the action
-              x: 60, y: _ctaTop - 4, w: 310, h: 52, r: 26,
+              x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 52, r: 26,
               title: 'Fire when it matches',
               desc: 'Tap Capture once your light matches the reference.',
-              tipY: _ctaTop - 108,
+              tipY: _ctaTop - 140,
               arrow: 'down',
             },
           ];
@@ -1465,23 +1468,30 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           ];
           const _sc = _colors[cockpitTeachStep] || _colors[0];
 
-          // Arrow geometry
-          const _cardCX = 215;
+          // Arrow geometry — card shifted left for down-arrows, arrow targets spotlight edge
+          const _cardLeft = _s.arrow === 'down' ? 20 : 32;
+          const _cardRight = _s.arrow === 'down' ? 140 : 32;
+          const _cardW = COL_W - _cardLeft - _cardRight;
+          const _cardCX = _cardLeft + _cardW / 2;
           const _cardEdgeY = _s.arrow === 'up' ? _s.tipY : _s.tipY + 72;
-          const _tipYA = _s.arrow === 'up' ? _cy - 4 : _cy;
+          // Arrow tip lands at spotlight edge (bottom for up-arrows, top for down)
+          const _tipYA = _s.arrow === 'up' ? (_s.y + _s.h) : _s.y;
           const _svgTop = Math.min(_tipYA, _cardEdgeY) - 10;
           const _svgBot = Math.max(_tipYA, _cardEdgeY) + 10;
           const _svgH = _svgBot - _svgTop;
           const _startLY = _cardEdgeY - _svgTop;
           const _endLY = _tipYA - _svgTop;
-          const _cpOffset = _s.arrow === 'up' ? 30 : (cockpitTeachStep === 3 ? -60 : -30);
-          const _cpX = _cardCX + _cpOffset;
+          // Natural arc: card is left-offset, spotlight centered — modest rightward curve
+          const _cpOffset = _s.arrow === 'up' ? 30 : 20;
+          const _cpX = (_cardCX + _cx) / 2 + _cpOffset;
           const _cpY1 = _startLY + (_endLY - _startLY) * 0.3;
           const _cpY2 = _startLY + (_endLY - _startLY) * 0.7;
           const _curvePath = `M${_cardCX} ${_startLY} C${_cpX} ${_cpY1}, ${_cpX} ${_cpY2}, ${_cx} ${_endLY}`;
           const _aSize = 8;
           const _aDir = _s.arrow === 'up' ? -1 : 1;
-          const _aPath = `M${_cx - _aSize} ${_endLY - _aSize * _aDir} L${_cx} ${_endLY} L${_cx + _aSize} ${_endLY - _aSize * _aDir}`;
+          // Chevron centered on endpoint: tip extends past, arms behind
+          const _aHalf = _aSize / 2;
+          const _aPath = `M${_cx - _aSize} ${_endLY - _aHalf * _aDir} L${_cx} ${_endLY + _aHalf * _aDir} L${_cx + _aSize} ${_endLY - _aHalf * _aDir}`;
           const _curveLen = Math.hypot(_cx - _cardCX, _endLY - _startLY) * 1.4;
 
           // Step icons
@@ -1575,7 +1585,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               <div key={cockpitTeachStep} style={{
                 position: 'absolute',
                 top: _s.tipY,
-                left: 32, right: 32,
+                left: _cardLeft, right: _cardRight,
                 animation: 'ckTeachCard 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
               }}>
                 {/* Animated conic border sweep */}
@@ -1711,7 +1721,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               {/* Draw-on arrow from card → spotlight */}
               <svg key={`ck-arrow-${cockpitTeachStep}`} style={{
                 position: 'absolute', left: 0, top: _svgTop,
-                width: 430, height: _svgH,
+                width: COL_W, height: _svgH,
                 pointerEvents: 'none', overflow: 'visible',
                 filter: `drop-shadow(0 0 10px ${_sc.replace(/[\d.]+\)$/, '0.35)')})`,
               }}>
@@ -1733,8 +1743,18 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   strokeDasharray={_curveLen}
                   strokeDashoffset={_curveLen}
                   style={{ animation: `ckTeachDraw 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards` }} />
-                {/* Arrowhead */}
-                <g style={{ opacity: 0, animation: 'ckTeachArrowIn 0.3s ease 0.85s forwards' }}>
+                {/* Arrowhead — slides from card base along curve to endpoint */}
+                <style>{`
+                  @keyframes ckTeachArrowSlide${cockpitTeachStep} {
+                    0%   { opacity: 0.4; transform: translate(${_cardCX - _cx}px, ${_startLY - _endLY}px) scale(0.7); }
+                    40%  { opacity: 1; }
+                    100% { opacity: 1; transform: translate(0, 0) scale(1); }
+                  }
+                `}</style>
+                <g style={{
+                  opacity: 0,
+                  animation: `ckTeachArrowSlide${cockpitTeachStep} 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards`,
+                }}>
                   <g style={{ animation: 'ckTeachArrowBounce 1.4s ease-in-out 1.1s infinite' }}>
                     <circle cx={_cx} cy={_endLY} r="12" fill={_sc.replace(/[\d.]+\)$/, '0.08)')} />
                     <path d={_aPath} stroke={_sc.replace(/[\d.]+\)$/, '0.95)')}
@@ -1781,10 +1801,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           @keyframes ckTeachDraw {
             to { stroke-dashoffset: 0; }
           }
-          @keyframes ckTeachArrowIn {
-            from { opacity: 0; transform: scale(0.6); }
-            to   { opacity: 1; transform: scale(1); }
-          }
+          /* ckTeachArrowSlideN keyframes are generated inline per step */
           @keyframes ckTeachArrowBounce {
             0%, 100% { transform: translateY(0); }
             50%      { transform: translateY(3px); }
@@ -1837,7 +1854,8 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <p style={{ margin: 0, fontSize: dk ? 16 : 14, fontWeight: 700, color: C.textPrimary,
-            letterSpacing: '0.2px', ...FONT_SMOOTH }}>
+            letterSpacing: '0.2px', ...FONT_SMOOTH,
+            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {[
               angleDeg != null ? `${Math.round(angleDeg)}°` : position,
               distance,
@@ -1846,7 +1864,9 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
           </p>
           <p style={{ margin: 0, fontSize: dk ? 14 : 12, fontWeight: 600,
             color: confidence >= 70 ? C.confHigh : C.confLow,
-            letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+            letterSpacing: '0.5px', ...FONT_SMOOTH,
+            flexShrink: 0, marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: '48%' }}>
             {confidence}% · {pattern}
           </p>
         </div>
@@ -1874,8 +1894,9 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
       {/* C-7: Simplified step lead — hero number + single context line.
           Title label removed; step position is implied by the dots. */}
       <div style={{ padding: dk ? '14px 28px 0' : '10px 24px 0', position: 'relative', zIndex: 1, textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: dk ? 38 : 32, fontWeight: 800,
-          color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: dk ? 38 : 30, fontWeight: 800,
+          color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {step.lead}
         </p>
         {step.subLead && (
