@@ -85,12 +85,56 @@ export function ToggleRow({ label, sub, value, onChange, tooltip }) {
   // Track: 48×28. Knob: 24×24 (fills height minus 2px border each side).
   // Full travel: left:2 → left:22.
   const knobX = value ? 22 : 2;
+  const [tipOpen, setTipOpen] = useState(false);
   return (
-    <div
-      title={tooltip || undefined}
-      style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: tooltip ? 'help' : undefined }}>
-      <div>
-        <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: C.textPrimary, ...FS }}>{label}</p>
+    <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: C.textPrimary, ...FS }}>{label}</p>
+          {/* Catchlight info dot — photography-native tooltip indicator.
+              A tiny ring (like a catchlight reflection) that expands to
+              show the explanation on hover/tap. */}
+          {tooltip && (
+            <div
+              onMouseEnter={() => setTipOpen(true)}
+              onMouseLeave={() => setTipOpen(false)}
+              onClick={(e) => { e.stopPropagation(); setTipOpen(v => !v); }}
+              style={{
+                width: 14, height: 14, borderRadius: '50%', cursor: 'pointer',
+                flexShrink: 0, position: 'relative',
+                // Catchlight ring — steel ring with bright center dot
+                background: `radial-gradient(circle at 40% 35%, ${steel(0.35)} 0%, ${steel(0.18)} 45%, transparent 70%)`,
+                boxShadow: `0 0 0 1px ${steel(0.15)}, inset 0 0 2px ${steel(0.10)}`,
+              }}
+            >
+              {/* Center dot — the "catchlight" */}
+              <div style={{
+                position: 'absolute', top: 5, left: 5, width: 4, height: 4, borderRadius: '50%',
+                background: `radial-gradient(circle, ${steel(0.55)} 0%, ${steel(0.30)} 100%)`,
+              }} />
+              {/* Tooltip card */}
+              {tipOpen && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
+                  marginBottom: 8, width: 220, padding: '8px 12px',
+                  borderRadius: 10, backgroundColor: 'rgba(10,11,14,0.95)',
+                  border: `1px solid ${steel(0.10)}`,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.4)',
+                  backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                  zIndex: 20, pointerEvents: 'none',
+                }}>
+                  <p style={{ margin: 0, fontSize: 11, fontWeight: 500, lineHeight: '15px', color: steel(0.60), ...FS }}>{tooltip}</p>
+                  {/* Caret */}
+                  <div style={{
+                    position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%) rotate(45deg)',
+                    width: 8, height: 8, backgroundColor: 'rgba(10,11,14,0.95)',
+                    border: `1px solid ${steel(0.10)}`, borderTop: 'none', borderLeft: 'none',
+                  }} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         {sub && <p style={{ margin: '2px 0 0', fontSize: 11, color: steel(0.62), ...FS }}>{sub}</p>}
       </div>
       <div
