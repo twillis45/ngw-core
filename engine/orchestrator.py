@@ -1052,11 +1052,9 @@ def _signal_contradiction_score(
             and getattr(_sc_loop, "triangle_connected", False)
             and getattr(_sc_loop, "connectivity_score", 0.0) > 0.70
             and getattr(_sc_loop, "confidence", 0.0) > 0.40
-            and not _ls_directional_loop   # shadow pass says loop → shadow_continuity
-                                           # "triangle" is a nose-shadow artifact, not
-                                           # a genuine Rembrandt cheek triangle
+            and not _ls_directional_loop
         ):
-            score += 0.65  # direct cheek-triangle confirmation → not loop
+            score += 0.65
             cues.append("triangle_isolation")
         # Combined bilateral guard: flat fill AND very low LR asymmetry AND
         # light_structure NOT independently calling a directional pattern.
