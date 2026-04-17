@@ -11,7 +11,7 @@ import { loadSettings } from '../../../data/settingsStore';
 import { fetchImageFromUrl } from '../../../data/labApi';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import useStableViewport from '../../../utils/useStableViewport';
-import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, VF_DITHER_NOISE } from '../../../theme/studioMatte';
+import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
@@ -1041,7 +1041,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
         </div>
 
         {/* 10 — Inner shadow — Figma-exact bevel, always top of stack */}

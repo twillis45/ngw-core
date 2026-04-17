@@ -1,0 +1,1183 @@
+{
+  "run_timestamp": "2026-03-17T19:14:35.894918+00:00",
+  "benchmark_count": 32,
+  "summary": {
+    "PASS": 2,
+    "SOFT_PASS": 13,
+    "FAIL": 17,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "athletic_rim_sculpt",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "athletic_rim_sculpt",
+          "acceptable": [
+            "athletic_rim_sculpt",
+            "rim_only",
+            "split",
+            "short",
+            "low_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "center",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "center"
+      },
+      "timing_s": 1.2
+    },
+    {
+      "benchmark_id": "beauty_dish_clean",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "butterfly",
+          "acceptable": [
+            "butterfly",
+            "clamshell",
+            "flat_fashion",
+            "high_key"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 6,
+          "expected": 1,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "left",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 6,
+        "key_direction": "left"
+      },
+      "timing_s": 0.59
+    },
+    {
+      "benchmark_id": "bottle_backlight",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "unknown",
+          "expected": "bottle_backlight",
+          "acceptable": [
+            "bottle_backlight",
+            "rim_only",
+            "low_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "broad",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "broad",
+          "acceptable": [
+            "broad",
+            "loop",
+            "rembrandt",
+            "short"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "right",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "right"
+      },
+      "timing_s": 0.2
+    },
+    {
+      "benchmark_id": "butterfly",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "butterfly",
+          "acceptable": [
+            "butterfly",
+            "clamshell",
+            "flat_fashion"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "left",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "clamshell_clean",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "butterfly",
+          "expected": "clamshell",
+          "acceptable": [
+            "clamshell",
+            "butterfly"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "center",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "butterfly",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "center"
+      },
+      "timing_s": 0.2
+    },
+    {
+      "benchmark_id": "corporate_soft_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "flat_fashion",
+            "butterfly",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 2.05
+    },
+    {
+      "benchmark_id": "editorial_rim_key",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "gobo",
+          "expected": "editorial_rim_key",
+          "acceptable": [
+            "editorial_rim_key",
+            "rim_only",
+            "split",
+            "short",
+            "low_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.31
+    },
+    {
+      "benchmark_id": "gobo",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "gobo",
+          "expected": "gobo"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "center"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.22
+    },
+    {
+      "benchmark_id": "golden_hour",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "gobo",
+          "expected": "golden_hour",
+          "acceptable": [
+            "golden_hour",
+            "loop",
+            "rembrandt",
+            "short",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "upper_left",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 0.26
+    },
+    {
+      "benchmark_id": "high_key",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "high_key",
+          "acceptable": [
+            "high_key",
+            "flat_fashion",
+            "butterfly",
+            "clamshell",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 0.25
+    },
+    {
+      "benchmark_id": "high_key_beauty",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "high_key",
+          "acceptable": [
+            "high_key",
+            "flat_fashion",
+            "butterfly",
+            "clamshell",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 5,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "upper_right",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 5,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.26
+    },
+    {
+      "benchmark_id": "hurley_triangle",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "triangle",
+          "acceptable": [
+            "triangle",
+            "clamshell",
+            "rembrandt",
+            "butterfly"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 3,
+          "expected": 3
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 0.3
+    },
+    {
+      "benchmark_id": "loop_standard",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "right"
+      },
+      "timing_s": 0.51
+    },
+    {
+      "benchmark_id": "low_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "low_key",
+          "acceptable": [
+            "low_key",
+            "rembrandt",
+            "loop",
+            "butterfly",
+            "short"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.26
+    },
+    {
+      "benchmark_id": "mixed_light_failure",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "gobo",
+          "expected": "unknown",
+          "acceptable": [
+            "unknown",
+            "flat_fashion",
+            "hybrid",
+            "rembrandt",
+            "loop",
+            "split",
+            "gobo",
+            "grid/window gobo"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "overcast_natural",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "overcast_natural",
+          "acceptable": [
+            "overcast_natural",
+            "flat_fashion",
+            "high_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.25
+    },
+    {
+      "benchmark_id": "overfill_flat",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "unknown",
+          "expected": "flat_fashion",
+          "acceptable": [
+            "flat_fashion",
+            "high_key",
+            "clamshell",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.28
+    },
+    {
+      "benchmark_id": "reflector_fill",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 2,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 0.45
+    },
+    {
+      "benchmark_id": "rembrandt_classic",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "rembrandt",
+          "expected": "rembrandt"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 0.29
+    },
+    {
+      "benchmark_id": "rim_only",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "rim_only",
+          "acceptable": [
+            "rim_only",
+            "low_key",
+            "split",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.22
+    },
+    {
+      "benchmark_id": "ring_light",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "ring_light",
+          "acceptable": [
+            "ring_light",
+            "butterfly",
+            "flat_fashion",
+            "clamshell",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 3,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "right",
+          "expected": "center"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 0.26
+    },
+    {
+      "benchmark_id": "short",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "short",
+          "acceptable": [
+            "short",
+            "rembrandt",
+            "loop",
+            "split",
+            "broad"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "upper_left",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 0.22
+    },
+    {
+      "benchmark_id": "short_fashion_key",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "gobo",
+          "expected": "short",
+          "acceptable": [
+            "short",
+            "split",
+            "rembrandt",
+            "rim_only",
+            "low_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.19
+    },
+    {
+      "benchmark_id": "soft_editorial_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "window_portrait",
+            "golden_hour",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_left",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_left"
+      },
+      "timing_s": 0.28
+    },
+    {
+      "benchmark_id": "split_strong",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "split",
+          "acceptable": [
+            "split",
+            "rembrandt",
+            "loop"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 2,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "right"
+      },
+      "timing_s": 0.19
+    },
+    {
+      "benchmark_id": "tabletop_soft_product",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "hard directional shadows \u2014 strong contrast visible on ground/surfaces",
+          "expected": "tabletop_soft_product",
+          "acceptable": [
+            "tabletop_soft_product",
+            "flat_fashion",
+            "high_key",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "hard directional shadows \u2014 strong contrast visible on ground/surfaces",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.24
+    },
+    {
+      "benchmark_id": "weak_catchlight",
+      "verdict": "PASS",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "rembrandt",
+          "expected": "rembrandt"
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "white_seamless_catalog",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "flat_fashion",
+          "acceptable": [
+            "flat_fashion",
+            "high_key",
+            "butterfly",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 3,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "right",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 0.29
+    },
+    {
+      "benchmark_id": "window_light_side",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "window_portrait",
+          "acceptable": [
+            "window_portrait",
+            "loop",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 4,
+          "expected": 1,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 4,
+        "key_direction": "left"
+      },
+      "timing_s": 0.33
+    },
+    {
+      "benchmark_id": "window_negative_fill",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "gobo",
+          "acceptable": [
+            "gobo",
+            "window_portrait",
+            "window_negative_fill",
+            "split",
+            "rembrandt",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "upper_right",
+          "expected": "right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.25
+    },
+    {
+      "benchmark_id": "window_soft_side",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "window_portrait",
+          "acceptable": [
+            "window_portrait",
+            "loop",
+            "rembrandt",
+            "window_negative_fill"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "upper_right",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "upper_right"
+      },
+      "timing_s": 0.25
+    }
+  ]
+}

@@ -15,10 +15,10 @@ os.chdir(UI_DIR)
 
 result = subprocess.run(
     [
-        "/usr/local/bin/node",
+        os.environ.get("NODE_PATH", "/opt/local/bin/node"),
         "node_modules/.bin/vite",
     ],
     cwd=UI_DIR,
-    env={**os.environ, "PATH": "/usr/local/bin:/usr/bin:/bin"},
+    env={**os.environ, "PATH": "/opt/local/bin:/usr/local/bin:/usr/bin:/bin"},
 )
 sys.exit(result.returncode)

@@ -1,0 +1,52 @@
+{
+  "run_timestamp": "2026-03-17T17:14:48.429833+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 0,
+    "FAIL": 1,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "overfill_flat",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "flat_fashion",
+          "acceptable": [
+            "flat_fashion",
+            "high_key",
+            "clamshell",
+            "unknown"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            4
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 0.84
+    }
+  ]
+}

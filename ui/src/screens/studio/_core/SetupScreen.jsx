@@ -17,7 +17,7 @@ import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
-         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, VF_DITHER_NOISE,
+         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
          KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import LightingDiagram from './components/LightingDiagram';
@@ -1085,7 +1085,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
                   <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
                   <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.35 }} />
-                  <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.22, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
                 </div>
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10 }} />
               </div>
@@ -1398,7 +1397,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       }}>
         <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: GLASS_REFLECTION, pointerEvents: 'none', zIndex: 2 }} />
         <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: LENS_VIGNETTE, pointerEvents: 'none', zIndex: 3 }} />
-        <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none', zIndex: 4 }} />
 
         <div style={{ position: 'relative', zIndex: 1, padding: '20px 20px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>

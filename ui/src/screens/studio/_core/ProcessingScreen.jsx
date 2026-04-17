@@ -21,7 +21,7 @@ import useStableViewport        from '../../../utils/useStableViewport';
 import analyzeTrackAlive      from '../../../assets/day1/analyze-track-alive.svg';
 import ellipseBg              from '../../../assets/day1/ellipse-bg.svg';
 
-import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW, VF_DITHER_NOISE } from '../../../theme/studioMatte';
+import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
@@ -217,7 +217,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
-          <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
         </div>
 
         {/* Inner shadow (identical to HomeScreen) */}

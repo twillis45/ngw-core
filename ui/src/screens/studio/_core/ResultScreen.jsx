@@ -24,7 +24,7 @@ import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_
          READOUT_FG, READOUT_GLOW, READOUT_LABEL,
          DRAWER_RADIUS,
          BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN,
-         VF_DITHER_NOISE } from '../../../theme/studioMatte';
+          } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
@@ -2441,7 +2441,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 2, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
             <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
           </div>
           {/* Inner shadow — identical to HomeScreen */}
           <div style={{
@@ -2646,7 +2645,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
             <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
-            <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
           </div>
           <div style={{
             position: 'absolute', inset: 0, borderRadius: 12,
@@ -2758,7 +2756,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CatchlightEye
                     clockHour={catchlightClockHour}
-                    clockHours={sections.catchlightPositions}
+                    clockHours={catchlightClockHour ? [String(catchlightClockHour)] : []}
                     angleDeg={rawSignals.nose_shadow_angle_deg}
                     compact
                   />
@@ -3648,7 +3646,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none', zIndex: 9 }}>
               <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
               <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.42 }} />
-              <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
             </div>
             {/* Inner-shadow bevel ring */}
             <div style={{

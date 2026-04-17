@@ -1,0 +1,53 @@
+{
+  "run_timestamp": "2026-03-17T23:18:59.318758+00:00",
+  "benchmark_count": 1,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 0,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "corporate_soft_key",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "flat_fashion",
+            "butterfly",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "left"
+      },
+      "timing_s": 2.64
+    }
+  ]
+}

@@ -1,0 +1,367 @@
+{
+  "run_timestamp": "2026-03-17T13:49:36.973805+00:00",
+  "benchmark_count": 10,
+  "summary": {
+    "PASS": 0,
+    "SOFT_PASS": 1,
+    "FAIL": 9,
+    "SKIP": 0,
+    "ERROR": 0
+  },
+  "results": [
+    {
+      "benchmark_id": "clamshell_clean",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "clamshell",
+          "acceptable": [
+            "clamshell",
+            "butterfly"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 1,
+          "expected": 2,
+          "range": [
+            2,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 1,
+        "key_direction": "unknown"
+      },
+      "timing_s": 1.19
+    },
+    {
+      "benchmark_id": "hurley_triangle",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "triangle",
+          "acceptable": [
+            "triangle",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 3,
+          "expected": 3
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "right",
+          "expected": "top_center"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 3,
+        "key_direction": "right"
+      },
+      "timing_s": 0.29
+    },
+    {
+      "benchmark_id": "loop_standard",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "top_center",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 1,
+        "key_direction": "top_center"
+      },
+      "timing_s": 0.51
+    },
+    {
+      "benchmark_id": "mixed_light_failure",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "rembrandt",
+          "expected": "unknown",
+          "acceptable": [
+            "unknown",
+            "flat_fashion",
+            "hybrid"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 35,
+          "expected": 2,
+          "range": [
+            1,
+            3
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "unknown",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 35,
+        "key_direction": "unknown"
+      },
+      "timing_s": 7.14
+    },
+    {
+      "benchmark_id": "overfill_flat",
+      "verdict": "SOFT_PASS",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "clamshell",
+          "expected": "flat_fashion",
+          "acceptable": [
+            "flat_fashion",
+            "high_key",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 2,
+          "expected": 2
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "top_center",
+          "expected": "unknown"
+        }
+      },
+      "detected": {
+        "pattern": "clamshell",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "top_center"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "reflector_fill",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "SOFT_PASS",
+          "detected": "rembrandt",
+          "expected": "loop",
+          "acceptable": [
+            "loop",
+            "rembrandt",
+            "clamshell"
+          ]
+        },
+        "light_count": {
+          "status": "SOFT_PASS",
+          "detected": 2,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 2,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.43
+    },
+    {
+      "benchmark_id": "rembrandt_classic",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "clamshell",
+          "expected": "rembrandt",
+          "acceptable": [
+            "rembrandt",
+            "loop",
+            "short"
+          ]
+        },
+        "light_count": {
+          "status": "PASS",
+          "detected": 1,
+          "expected": 1
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "top_center",
+          "expected": "upper_left"
+        }
+      },
+      "detected": {
+        "pattern": "clamshell",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 1,
+        "key_direction": "top_center"
+      },
+      "timing_s": 0.32
+    },
+    {
+      "benchmark_id": "split_strong",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "gobo",
+          "expected": "split",
+          "acceptable": [
+            "split"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 0,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "gobo",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 0,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.21
+    },
+    {
+      "benchmark_id": "weak_catchlight",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "PASS",
+          "detected": "rembrandt",
+          "expected": "rembrandt"
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 0,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "upper_right"
+        }
+      },
+      "detected": {
+        "pattern": "rembrandt",
+        "pattern_source": "reference_read",
+        "pattern_confidence": 0.85,
+        "light_count": 0,
+        "key_direction": "unknown"
+      },
+      "timing_s": 0.23
+    },
+    {
+      "benchmark_id": "window_light_side",
+      "verdict": "FAIL",
+      "checks": {
+        "pattern": {
+          "status": "FAIL",
+          "detected": "unknown",
+          "expected": "window_portrait",
+          "acceptable": [
+            "window_portrait",
+            "loop",
+            "rembrandt"
+          ]
+        },
+        "light_count": {
+          "status": "FAIL",
+          "detected": 4,
+          "expected": 1,
+          "range": [
+            1,
+            2
+          ]
+        },
+        "key_direction": {
+          "status": "PASS",
+          "detected": "left",
+          "expected": "left"
+        }
+      },
+      "detected": {
+        "pattern": "unknown",
+        "pattern_source": "none",
+        "pattern_confidence": 0.0,
+        "light_count": 4,
+        "key_direction": "left"
+      },
+      "timing_s": 0.34
+    }
+  ]
+}

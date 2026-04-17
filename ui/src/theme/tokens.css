@@ -412,6 +412,24 @@
 
 /* photoshop and daynote themes removed — dark/light/studio only */
 
+/* ── Studio Matte focus-visible ─────────────────────── */
+/* Keyboard-only focus ring for all interactive elements */
+/* on dark surfaces. Uses steel-blue glow that's visible */
+/* without clashing with the warm accent system.         */
+/* Targets both dark and studio themes since Day1DemoApp */
+/* renders Studio Matte screens on dark regardless.      */
+[data-theme="dark"] *:focus-visible,
+[data-theme="studio"] *:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(132, 158, 184, 0.55),
+    0 0 8px rgba(132, 158, 184, 0.20) !important;
+}
+[data-theme="dark"] *:focus:not(:focus-visible),
+[data-theme="studio"] *:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* ── Font Size Scale ─────────────────────────────────── */
 /* Controlled by data-font-size attribute on <html>.     */
 /* "medium" is the default (uses :root values above).    */
