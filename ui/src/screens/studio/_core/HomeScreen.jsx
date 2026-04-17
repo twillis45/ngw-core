@@ -722,16 +722,34 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FONT_SMOOTH }}>LIGHTING</p>
         </div>
         {user && (
-          <div style={{
-            display: 'flex', gap: 14, alignItems: 'center',
-            padding: '5px 14px', borderRadius: 8,
-            background: 'rgba(255,255,255,0.02)', border: `1px solid ${steel(0.06)}`,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 4px rgba(0,0,0,0.35)`,
-          }}>
-            <span style={{ fontSize: 10.5, fontWeight: 500, color: steel(0.32), ...FONT_SMOOTH }}>{user.username || user.email}</span>
-            <div style={{ width: 1, height: 11, background: steel(0.07) }} />
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {/* Settings — machined button */}
             <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: steel(0.28), letterSpacing: '0.5px', ...FONT_SMOOTH }}>Settings</button>
+              className="sm-btn-lift"
+              style={{
+                background: `linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)`,
+                border: 'none', borderRadius: 8, cursor: 'pointer',
+                padding: '6px 14px',
+                boxShadow: [
+                  '4px 4px 12px rgba(0,0,0,0.55)',
+                  '2px 2px 5px rgba(0,0,0,0.40)',
+                  '-1px -1px 1px rgba(255,255,255,0.04)',
+                  'inset 0 1px 0 rgba(255,255,255,0.07)',
+                  'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                ].join(', '),
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+              {/* Gear icon */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={steel(0.40)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                </svg>
+                <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.38), letterSpacing: '0.5px', ...FONT_SMOOTH }}>Settings</span>
+              </div>
+            </button>
+            {/* User name — plain text, not a button */}
+            <span style={{ fontSize: 10, fontWeight: 500, color: steel(0.22), ...FONT_SMOOTH }}>{user.username || user.email}</span>
           </div>
         )}
       </div>
@@ -739,18 +757,20 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       {/* ── EMPTY STATE ── */}
       {!hasImage && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'auto' }}>
-          {/* Hero tagline ABOVE the viewfinder — the first thing you read */}
+          {/* Hero — brand statement. Typography: bold weight for the brand claim,
+              regular weight for the supporting line. All Inter, all antialiased. */}
           <p style={{
-            margin: '0 0 8px', fontWeight: 700, fontSize: 28, lineHeight: '34px',
-            color: 'rgba(245,247,250,0.88)', letterSpacing: '-0.6px',
+            margin: '0 0 6px', fontWeight: 700, fontSize: 30, lineHeight: '36px',
+            color: 'rgba(245,247,250,0.90)', letterSpacing: '-0.5px',
             textAlign: 'center', ...FONT_SMOOTH,
           }}>See how any portrait was lit.</p>
           <p style={{
-            margin: '0 0 28px', fontWeight: 500, fontSize: 13.5, lineHeight: '18px',
-            color: steel(0.38), textAlign: 'center', ...FONT_SMOOTH,
+            margin: '0 0 30px', fontWeight: 500, fontSize: 14, lineHeight: '20px',
+            color: steel(0.35), letterSpacing: '0.1px',
+            textAlign: 'center', ...FONT_SMOOTH,
           }}>Reverse-engineer the lighting. Rebuild it in your studio.</p>
 
-          {/* Viewfinder — machined cavity with VISIBLE contrast */}
+          {/* Viewfinder — identical material treatment to mobile VF slot */}
           <div
             onClick={() => fileRef.current?.click()}
             onDragOver={handleDragOver}
@@ -758,69 +778,68 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             onDrop={handleDrop}
             style={{
               width: _D_VF, height: `calc(${_D_VF} * 0.72)`,
-              borderRadius: 16, cursor: 'pointer',
+              borderRadius: 0, cursor: 'pointer',
               position: 'relative', overflow: 'hidden',
-              // Darker interior than the body — VISIBLE contrast
-              background: `linear-gradient(141.71deg, #080a0e 0%, #05060a 50%, #03040700 100%)`,
-              boxShadow: [
-                'inset 6px 6px 18px rgba(0,0,0,0.75)',
-                'inset 3px 3px 8px rgba(0,0,0,0.55)',
-                'inset 0 0 50px rgba(0,0,0,0.25)',
-                'inset -1px -1px 2px rgba(255,255,255,0.035)',
-                // Outer rim — machined chamfer catches the 141.71° key
-                '-1px -1px 1px rgba(255,255,255,0.055)',
-                '3px 3px 12px rgba(0,0,0,0.65)',
-                '1px 1px 4px rgba(0,0,0,0.45)',
-              ].join(', '),
-              border: isDragOver ? `1.5px solid ${_D_AMBER}0.35)` : `1px solid ${steel(0.08)}`,
-              transition: 'border 0.25s ease, box-shadow 0.25s ease',
+              // No background fill — the slot is a raw hole in the body,
+              // depth comes entirely from shadow stack (same as mobile)
+              backgroundColor: 'transparent',
+              // Mobile-identical shadow: inset trough + outer drop + chamfer catch
+              boxShadow: isDragOver
+                ? `inset 0 0 40px ${_D_AMBER}0.12), ${VIEWFINDER_INNER_SHADOW}`
+                : VIEWFINDER_INNER_SHADOW,
+              transition: 'box-shadow 0.25s ease',
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {/* LCD backlight — cool blue-steel, brighter than before */}
+            {/* LCD backlight — same as mobile: cool panel glow from the LCD surface */}
             <div style={{
-              position: 'absolute', inset: 0, pointerEvents: 'none',
+              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
               background: [
-                'radial-gradient(ellipse 80% 65% at 50% 48%, rgba(110,145,195,0.055) 0%, rgba(90,125,178,0.025) 40%, transparent 68%)',
-                'linear-gradient(180deg, rgba(100,135,185,0.02) 0%, transparent 35%, transparent 70%, rgba(80,115,165,0.015) 100%)',
+                'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
+                'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
               ].join(', '),
             }} />
-            {/* Inner shadow stack */}
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 16, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW }} />
-            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, pointerEvents: 'none' }} />
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-              background: GLASS_REFLECTION, borderRadius: 16, opacity: 0.45,
-              transform: glassReflectionTransform(tilt), willChange: 'transform', pointerEvents: 'none',
-            }} />
-            {/* Ellipse depth ring — same as mobile VF */}
-            <div style={{ position: 'absolute', left: '3%', top: -20, right: '3%', bottom: 8, zIndex: 1, opacity: 0.4 }}>
+            {/* Ellipse depth oval — Leica-style distance indicator */}
+            <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
               <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
             </div>
-            {/* Center: large bracket icon + instruction */}
+            {/* Glass panel overlay — lens vignette + directional key reflection */}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
+              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+                background: GLASS_REFLECTION, opacity: 0.62,
+                transform: glassReflectionTransform(tilt), willChange: 'transform',
+              }} />
+            </div>
+            {/* Inner shadow — Figma-exact bevel, always top of stack */}
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
+              boxShadow: VIEWFINDER_INNER_SHADOW,
+            }} />
+            {/* Center: bracket icon + instruction — z-index 3 so it sits
+                UNDER the glass overlay (z5) and inner shadow (z6). This makes
+                the text look like it's behind the glass, inside the LCD. */}
             <div style={{
               position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: 2,
+              alignItems: 'center', justifyContent: 'center', gap: 14, zIndex: 3,
+              // Subtle text shadow simulates LCD sub-pixel glow
+              textShadow: `0 0 6px ${steel(0.12)}`,
             }}>
-              <svg width="56" height="56" viewBox="0 0 38 38" fill="none">
-                <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-                <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-                <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-                <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-                {/* Down-arrow import glyph */}
-                <g style={{ animation: showTeach ? 'none' : undefined }}>
-                  <path d="M19 13v8" stroke={steel(0.45)} strokeWidth="1.3" strokeLinecap="round" />
-                  <path d="M16 18l3 3 3-3" stroke={steel(0.45)} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <svg width="52" height="52" viewBox="0 0 38 38" fill="none" style={{ opacity: 0.50 }}>
+                <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <g>
+                  <path d="M19 13v8" stroke={steel(0.40)} strokeWidth="1.2" strokeLinecap="round" />
+                  <path d="M16 18l3 3 3-3" stroke={steel(0.40)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               </svg>
               <p style={{
-                margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '2.5px',
-                color: steel(0.55), textTransform: 'uppercase', ...FONT_SMOOTH,
-              }}>Import a Portrait</p>
-              <p style={{
-                margin: 0, fontSize: 11.5, fontWeight: 500,
-                color: steel(0.30), ...FONT_SMOOTH,
-              }}>drag & drop · paste · click to browse</p>
+                margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '2.8px',
+                color: steel(0.42), textTransform: 'uppercase', ...FONT_SMOOTH,
+              }}>LOAD PHOTO</p>
             </div>
             {/* Drag-over glow */}
             {isDragOver && (
@@ -832,54 +851,94 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             )}
           </div>
 
-          {/* Action row — Studio Matte machined buttons */}
-          <div style={{ display: 'flex', gap: 14, marginTop: 26, alignItems: 'center' }}>
-            {/* Try a Sample — warm amber CTA with deep machined well */}
-            <button onClick={loadSample} style={{
-              background: `linear-gradient(141.71deg, #3a3428 0%, #2a2418 50%, #1c1a12 100%)`,
-              border: 'none', cursor: 'pointer', padding: '14px 32px', borderRadius: 12,
-              boxShadow: [
-                // Deep outer drop stack — button floats above the body
-                '8px 8px 24px rgba(0,0,0,0.7)',
-                '4px 4px 10px rgba(0,0,0,0.55)',
-                '1px 2px 4px rgba(0,0,0,0.4)',
-                // Warm amber glow — state indicator
-                `0 0 8px ${_D_AMBER}0.10)`,
-                // Top-left chamfer catch — 141.71° key light
-                '-1px -1px 1px rgba(255,255,255,0.06)',
-                // Inner bevel — machined face edge
-                `inset 0 1.5px 0 ${_D_AMBER}0.15)`,
-                `inset 1px 0 0 ${_D_AMBER}0.08)`,
-                'inset -1px -1px 0 rgba(0,0,0,0.35)',
-              ].join(', '),
-              opacity: sampleLoading ? 0.5 : 1,
-              transition: 'all 0.15s ease, transform 0.12s ease',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.5px', color: `${_D_AMBER}0.85)`, textShadow: `0 0 8px ${_D_AMBER}0.20)`, ...FONT_SMOOTH }}>
-                {sampleLoading ? 'Loading...' : 'Try a Sample Photo'}
-              </span>
-            </button>
-            {hasLastResult && (
-              <button onClick={onViewLastResult} style={{
-                background: CTA_BG, border: 'none',
-                cursor: 'pointer', padding: '14px 32px', borderRadius: 12,
+          {/* Action row — Studio Matte WELL + DOME buttons */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 28, alignItems: 'center' }}>
+            {/* Try a Sample — WELL cavity behind the button face */}
+            <div style={{ position: 'relative' }}>
+              {/* Well trough — recessed cavity the button sits in */}
+              <div style={{
+                position: 'absolute', inset: -4,
+                borderRadius: 16,
+                background: 'radial-gradient(ellipse at 50% 40%, #040508 0%, #02030500 70%)',
                 boxShadow: [
-                  CTA_SHADOW,
-                  CTA_BEVEL,
+                  'inset 6px 6px 14px rgba(0,0,0,0.90)',
+                  'inset 3px 3px 7px rgba(0,0,0,0.75)',
+                  'inset 1px 1px 3px rgba(0,0,0,0.55)',
+                  `inset 0 0 8px ${_D_AMBER}0.05)`,
+                  'inset -1px -1px 3px rgba(255,255,255,0.015)',
                   '-1px -1px 1px rgba(255,255,255,0.04)',
+                  '3px 4px 10px rgba(0,0,0,0.55)',
                 ].join(', '),
-                transition: 'transform 0.12s ease',
+                pointerEvents: 'none',
+              }} />
+              {/* Button face — floats inside the well */}
+              <button onClick={loadSample} style={{
+                position: 'relative',
+                background: `linear-gradient(141.71deg, #3a3428 0%, #2a2418 50%, #1c1a12 100%)`,
+                border: 'none', cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                boxShadow: [
+                  // Outer drop — face floats above well floor
+                  '10px 10px 28px rgba(0,0,0,0.80)',
+                  '5px 5px 12px rgba(0,0,0,0.60)',
+                  '2px 2px 5px rgba(0,0,0,0.40)',
+                  // Top-left chamfer — 141.71° key catch
+                  '-1px -1px 2px rgba(255,255,255,0.07)',
+                  // Warm amber LED glow
+                  `0 0 10px ${_D_AMBER}0.10)`,
+                  // Inner bevel — machined face edges
+                  `inset 0 2px 0 ${_D_AMBER}0.18)`,
+                  `inset 2px 0 0 ${_D_AMBER}0.10)`,
+                  'inset -1px -1px 0 rgba(0,0,0,0.40)',
+                ].join(', '),
+                opacity: sampleLoading ? 0.5 : 1,
+                transition: 'all 0.15s ease, transform 0.12s ease',
                 WebkitTapHighlightColor: 'transparent',
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+              className="sm-btn-lift"
               >
-                <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', color: steel(0.72), ...FONT_SMOOTH }}>Last Result</span>
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.5px', color: `${_D_AMBER}0.88)`, textShadow: `0 0 8px ${_D_AMBER}0.22)`, ...FONT_SMOOTH }}>
+                  {sampleLoading ? 'Loading...' : 'Try a Sample Photo'}
+                </span>
               </button>
+            </div>
+            {hasLastResult && (
+              <div style={{ position: 'relative' }}>
+                {/* Well cavity */}
+                <div style={{
+                  position: 'absolute', inset: -4, borderRadius: 16,
+                  background: 'radial-gradient(ellipse at 50% 40%, #040508 0%, #02030500 70%)',
+                  boxShadow: [
+                    'inset 6px 6px 14px rgba(0,0,0,0.88)',
+                    'inset 3px 3px 7px rgba(0,0,0,0.70)',
+                    'inset 1px 1px 3px rgba(0,0,0,0.50)',
+                    'inset -1px -1px 3px rgba(255,255,255,0.012)',
+                    '-1px -1px 1px rgba(255,255,255,0.035)',
+                    '3px 4px 10px rgba(0,0,0,0.50)',
+                  ].join(', '),
+                  pointerEvents: 'none',
+                }} />
+                <button onClick={onViewLastResult} style={{
+                  position: 'relative',
+                  background: CTA_BG, border: 'none',
+                  cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                  boxShadow: [
+                    '10px 10px 28px rgba(0,0,0,0.78)',
+                    '5px 5px 12px rgba(0,0,0,0.58)',
+                    '2px 2px 5px rgba(0,0,0,0.38)',
+                    '-1px -1px 2px rgba(255,255,255,0.06)',
+                    `0 0 6px ${steel(0.06)}`,
+                    'inset 0 2px 0 rgba(255,255,255,0.14)',
+                    'inset 2px 0 0 rgba(255,255,255,0.07)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.40)',
+                  ].join(', '),
+                  transition: 'transform 0.12s ease',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                className="sm-btn-lift"
+                >
+                  <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', color: steel(0.75), ...FONT_SMOOTH }}>Last Result</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -984,36 +1043,51 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           { label: 'Build', icon: 'M12 2L2 7l10 5 10-5M2 17l10 5 10-5M2 12l10 5 10-5', action: onBuildWizard },
           { label: 'My Kit', icon: 'M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM6 12h.01M12 12h.01M18 12h.01', action: onMyKit },
         ].map(item => (
-          <button key={item.label} onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
-            style={{
-              // Studio Matte panel button — 141.71° directional gradient, deep shadow, machined bevel
-              background: `linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)`,
-              border: 'none', borderRadius: 10, cursor: 'pointer',
-              padding: '11px 22px',
-              display: 'flex', alignItems: 'center', gap: 9,
+          <div key={item.label} style={{ position: 'relative' }}>
+            {/* Well cavity — recessed behind each dock button */}
+            <div style={{
+              position: 'absolute', inset: -3,
+              borderRadius: 13,
               boxShadow: [
-                // Outer drop — 3-layer depth (matches mobile button well shadow)
-                '6px 6px 18px rgba(0,0,0,0.65)',
-                '3px 3px 8px rgba(0,0,0,0.50)',
-                '1px 1px 3px rgba(0,0,0,0.35)',
-                // Top-left chamfer catch — 141.71° directional highlight
-                '-1px -1px 1px rgba(255,255,255,0.055)',
-                // Inner bevel — machined face edges
-                'inset 0 1px 0 rgba(255,255,255,0.07)',
-                'inset 1px 0 0 rgba(255,255,255,0.03)',
-                'inset -1px -1px 0 rgba(0,0,0,0.30)',
+                'inset 4px 4px 10px rgba(0,0,0,0.85)',
+                'inset 2px 2px 5px rgba(0,0,0,0.65)',
+                'inset 1px 1px 2px rgba(0,0,0,0.45)',
+                'inset -1px -1px 2px rgba(255,255,255,0.012)',
+                '-1px -1px 1px rgba(255,255,255,0.03)',
+                '2px 3px 8px rgba(0,0,0,0.45)',
               ].join(', '),
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'transform 0.12s ease, box-shadow 0.12s ease',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d={item.icon} />
-            </svg>
-            <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.3px', color: steel(0.58), ...FONT_SMOOTH }}>{item.label}</span>
-          </button>
+              pointerEvents: 'none',
+            }} />
+            <button onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
+              style={{
+                position: 'relative',
+                background: `linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)`,
+                border: 'none', borderRadius: 10, cursor: 'pointer',
+                padding: '11px 22px',
+                display: 'flex', alignItems: 'center', gap: 9,
+                boxShadow: [
+                  // Outer drop — face floats above well
+                  '8px 8px 22px rgba(0,0,0,0.72)',
+                  '4px 4px 10px rgba(0,0,0,0.55)',
+                  '1px 2px 4px rgba(0,0,0,0.38)',
+                  // Chamfer — 141.71° key catch
+                  '-1px -1px 2px rgba(255,255,255,0.06)',
+                  // Inner bevel — machined face
+                  'inset 0 1.5px 0 rgba(255,255,255,0.10)',
+                  'inset 1.5px 0 0 rgba(255,255,255,0.05)',
+                  'inset -1px -1px 0 rgba(0,0,0,0.35)',
+                ].join(', '),
+                WebkitTapHighlightColor: 'transparent',
+                transition: 'transform 0.12s ease, box-shadow 0.15s ease',
+              }}
+              className="sm-btn-lift"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.52)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d={item.icon} />
+              </svg>
+              <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.3px', color: steel(0.60), ...FONT_SMOOTH }}>{item.label}</span>
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -1220,29 +1294,24 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           animation: viewfinderShake ? 'vfShake 0.4s ease' : 'none',
         }}
       >
-        {/* 0 — LCD panel backlight — real LCDs emit faint cool-blue luminance even on black frames.
-             This lifts the VF from "dark cavity" to "active display surface".
-             zIndex 0 so it sits below all overlays but above the transparent bg. */}
+        {/* 0 — LCD panel backlight — desktop hides when no photo (overlay VF handles empty state) */}
+        {(!isDesktop || hasImage) && (
         <div style={{
           position: 'absolute', inset: 0,
           background: [
-            // Central backlight pool — LCD panel center is always brightest
             'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
-            // Subtle cool edge-lift — backlight bleed from panel perimeter
             'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
+        )}
 
-        {/* 0b — Empty state removed.
-             Apple principle: one affordance per state. The centered IMPORT glyph
-             (section 7b) is the single import CTA. The breathing reticle was a
-             second competing signal — deleted. */}
-
-        {/* 1 — Ellipse depth oval (3% stroke from Figma SVG — Leica-style distance indicator) */}
+        {/* 1 — Ellipse depth oval — desktop hides when no photo */}
+        {(!isDesktop || hasImage) && (
         <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1 }}>
           <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
         </div>
+        )}
 
         {/* Grid + reticle — only show when a real photo is loaded.
             Fades to near-invisible after initial flash so the photo owns
@@ -1278,8 +1347,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         {/* Invisible settings hit target removed — Apple principle "reduce, don't hide".
             Settings is already reachable via wordmark tap → profile panel → Settings row. */}
 
-        {/* 7b — Tap prompt / URL fetching / URL error indicator */}
-        {!hasImage && (
+        {/* 7b — Tap prompt / URL fetching / URL error indicator (mobile only on desktop — overlay handles it) */}
+        {!hasImage && !isDesktop && (
           urlLoadError ? (
             <p style={{
               position: 'absolute', top: '50%', left: '50%',
@@ -1386,17 +1455,21 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           }} />
         )}
 
-        {/* 9 — Glass panel overlay: single natural lens vignette + upper-left key light reflection */}
+        {/* 9 — Glass panel overlay — desktop: only when photo loaded (overlay VF handles empty state) */}
+        {(!isDesktop || hasImage) && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
+        )}
 
-        {/* 10 — Inner shadow — Figma-exact bevel, always top of stack */}
+        {/* 10 — Inner shadow — desktop: only when photo loaded */}
+        {(!isDesktop || hasImage) && (
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
         }} />
+        )}
 
         {/* 11 — Teach glow — first-session pulsing edge glow to draw the eye to the VF.
              Gentle steel-blue inner border that breathes, says "this is where your photo goes"
@@ -2085,6 +2158,23 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
       {/* ── State animation keyframes ── */}
       <style>{`
+        /* Desktop button hover — physical lift with spring easing.
+           The button face rises out of its well on hover (shadow deepens),
+           sinks on press (shadow collapses, inset appears). */
+        .sm-btn-lift {
+          transition: transform 0.22s cubic-bezier(0.34,1.56,0.64,1),
+                      box-shadow 0.22s ease,
+                      filter 0.18s ease;
+        }
+        .sm-btn-lift:hover {
+          transform: translateY(-2px);
+          filter: brightness(1.08);
+        }
+        .sm-btn-lift:active {
+          transform: translateY(1px);
+          filter: brightness(0.92);
+          transition: transform 0.06s ease, filter 0.06s ease;
+        }
         @keyframes ghostFadeIn {
           from { opacity: 0; }
           to   { opacity: 1; }

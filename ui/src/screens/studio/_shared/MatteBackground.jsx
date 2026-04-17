@@ -35,9 +35,9 @@ export default function MatteBackground({ variant = 'default' }) {
     ? `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.008 * m).toFixed(3)}) 0%, transparent 65%)`
     : `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.010 * m).toFixed(3)}) 0%, transparent 65%)`;
 
-  // Layer 3 — edge vignette — stronger on desktop to anchor the massive frame
-  const vignetteAlpha = isWide ? 0.55 : 0.45;
-  const vignette = `radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,${vignetteAlpha}) 100%)`;
+  // Layer 3 — edge vignette — smoothed with extra stops to prevent visible oval edge
+  const va = isWide ? 0.55 : 0.45;
+  const vignette = `radial-gradient(ellipse 120% 90% at 50% 50%, transparent 40%, rgba(0,0,0,${(va * 0.05).toFixed(3)}) 52%, rgba(0,0,0,${(va * 0.15).toFixed(3)}) 60%, rgba(0,0,0,${(va * 0.35).toFixed(3)}) 72%, rgba(0,0,0,${(va * 0.65).toFixed(3)}) 85%, rgba(0,0,0,${va}) 100%)`;
 
   // Layer 4 — top specular edge (141.71° key light catch)
   const specularEdge = subdued
@@ -62,10 +62,23 @@ export default function MatteBackground({ variant = 'default' }) {
           The grain gives the matte body its characteristic brushed-metal feel
           that Profoto/Hasselblad surfaces have. On mobile the phone pixel density
           already provides texture; on desktop monitors the surface is flat without it. */}
+      {/* Dither noise — breaks gradient banding on 8-bit displays.
+          Fine-grained noise at low opacity overlaid on the gradients adds
+          enough per-pixel variation to eliminate visible color steps.
+          Uses 'overlay' blend at very low opacity so it adds both light
+          and dark noise without shifting the overall tone. */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        opacity: isWide ? 0.28 : 0.18,
+        mixBlendMode: 'overlay',
+        backgroundImage: grainUrl, backgroundSize: '64px 64px',
+        pointerEvents: 'none',
+      }} />
+      {/* Tactile grain — desktop body texture (Profoto/Hasselblad surface feel) */}
       {isWide && (
         <div style={{
           position: 'absolute', inset: 0,
-          opacity: 0.12, mixBlendMode: 'multiply',
+          opacity: 0.10, mixBlendMode: 'multiply',
           backgroundImage: grainUrl, backgroundSize: '128px 128px',
         }} />
       )}
