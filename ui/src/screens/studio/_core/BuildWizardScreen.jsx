@@ -16,12 +16,9 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { tapHaptic, navHaptic, warnHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound, segmentPressSound } from '../../../utils/sounds';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
-import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
+import { steel, accent, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, SCREEN_BG, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
-
-// ─── Tokens ──────────────────────────────────────────────────────────────────
-const KEY_ACCENT = '#c89b45';
 const STEP_NAMES = ['The Shot', 'The Space', 'Your Gear'];
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -78,7 +75,9 @@ const ENV_LOCATION = [
   { value: 'event',               label: 'Event' },
 ];
 
-const NON_STUDIO = ['on_location_indoor', 'on_location_outdoor', 'event'];
+// Only truly outdoor/event locations skip ceiling height — indoor locations
+// (ballrooms, hotel rooms, offices) absolutely have ceiling constraints.
+const NO_CEILING = ['on_location_outdoor', 'event'];
 
 const CEILING_OPTIONS = [
   { value: 'under_8',  label: 'Under 8 ft' },
@@ -119,17 +118,56 @@ const MODIFIER_TYPES = [
 
 // ─── Shared Components ──────────────────────────────────────────────────────
 
+/** Standard Studio Matte primary CTA — matches SetupScreen "Build This Light". */
+function CTA({ label, disabled, onClick, isDesktop }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={() => { if (!disabled) onClick?.(); }}
+      disabled={disabled}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        width: '100%',
+        height: isDesktop ? 56 : 50, borderRadius: isDesktop ? 28 : 24,
+        border: 'none',
+        background: disabled ? steel(0.08) : CTA_BG,
+        boxShadow: disabled
+          ? 'none'
+          : pressed
+            ? 'inset 0px 2px 4px rgba(0,0,0,0.5)'
+            : `${CTA_SHADOW}, ${CTA_BEVEL}`,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        transform: pressed && !disabled ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <span style={{
+        fontSize: isDesktop ? 14 : 13, fontWeight: 700,
+        color: disabled ? steel(0.3) : 'rgba(245,247,250,0.92)',
+        letterSpacing: '1.5px', textTransform: 'uppercase',
+        pointerEvents: 'none', ...FONT_SMOOTH,
+      }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 function WizardProgress({ step, total }) {
   return (
     <div style={{
-      display: 'flex', gap: 6, padding: '0 22px 8px',
+      display: 'flex', gap: 6,
       position: 'relative', zIndex: 2,
     }}>
       {Array.from({ length: total }, (_, i) => (
         <div key={i} style={{
           flex: 1, height: 3, borderRadius: 2,
           background: i <= step
-            ? `linear-gradient(90deg, ${KEY_ACCENT}, rgba(200,155,69,0.6))`
+            ? `linear-gradient(90deg, ${KEY_ACCENT}, ${accent(0.6)})`
             : steel(0.10),
           transition: 'background 0.3s ease',
         }} />
@@ -139,10 +177,11 @@ function WizardProgress({ step, total }) {
 }
 
 function SectionLabel({ children }) {
+  const isDesktop = useIsDesktop();
   return (
     <p style={{
-      margin: '0 0 10px', fontSize: 10, fontWeight: 700,
-      color: steel(0.5), letterSpacing: '1.2px',
+      margin: '0 0 10px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+      color: steel(0.55), letterSpacing: '1.2px',
       textTransform: 'uppercase', ...FONT_SMOOTH,
     }}>
       {children}
@@ -158,30 +197,33 @@ function OptionChip({ label, hint, selected, onClick, icon }) {
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
-        padding: hint ? '10px 14px' : '8px 14px',
+        padding: hint ? '10px 14px' : '10px 14px',
+        minHeight: 44,
         borderRadius: 10,
         border: `1px solid ${selected ? KEY_ACCENT : steel(hover ? 0.15 : 0.10)}`,
         background: selected
-          ? 'rgba(200,155,69,0.12)'
+          ? accent(0.12)
           : hover ? steel(0.06) : steel(0.03),
         cursor: 'pointer',
         display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+        justifyContent: 'center',
         transition: 'all 0.15s ease',
         WebkitTapHighlightColor: 'transparent',
         ...FONT_SMOOTH,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {icon && <span style={{ fontSize: 13, opacity: selected ? 1 : 0.5 }}>{icon}</span>}
+        {icon && <span style={{ fontSize: 13, opacity: selected ? 1 : 0.5, ...FONT_SMOOTH }}>{icon}</span>}
         <span style={{
           fontSize: 13, fontWeight: 600,
-          color: selected ? KEY_ACCENT : C.textSecondary,
+          color: selected ? KEY_ACCENT : C.textSub,
+          ...FONT_SMOOTH,
         }}>
           {label}
         </span>
       </div>
       {hint && (
-        <span style={{ fontSize: 10, color: steel(0.4), fontWeight: 400 }}>{hint}</span>
+        <span style={{ fontSize: 10, color: steel(0.4), fontWeight: 400, ...FONT_SMOOTH }}>{hint}</span>
       )}
     </button>
   );
@@ -196,7 +238,7 @@ function IntentCard({ icon, label, desc, onClick, disabled }) {
       onMouseLeave={() => setHover(false)}
       style={{
         width: '100%', padding: '16px 18px',
-        borderRadius: 12,
+        borderRadius: 14,
         border: `1px solid ${steel(disabled ? 0.06 : hover ? 0.18 : 0.12)}`,
         background: disabled
           ? steel(0.02)
@@ -206,7 +248,7 @@ function IntentCard({ icon, label, desc, onClick, disabled }) {
         display: 'flex', alignItems: 'center', gap: 14,
         textAlign: 'left',
         transition: 'all 0.15s ease',
-        boxShadow: disabled ? 'none' : PANEL_SHADOW,
+        boxShadow: disabled ? 'none' : `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
         WebkitTapHighlightColor: 'transparent',
         ...FONT_SMOOTH,
       }}
@@ -215,15 +257,15 @@ function IntentCard({ icon, label, desc, onClick, disabled }) {
         fontSize: 22, width: 40, height: 40, borderRadius: 10,
         background: steel(0.06), border: `1px solid ${steel(0.10)}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
+        flexShrink: 0, ...FONT_SMOOTH,
       }}>
         {icon}
       </span>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, marginBottom: 2 }}>{label}</div>
-        <div style={{ fontSize: 11, color: steel(0.45), fontWeight: 400 }}>{desc}</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, marginBottom: 2, ...FONT_SMOOTH }}>{label}</div>
+        <div style={{ fontSize: 11, color: steel(0.45), fontWeight: 400, ...FONT_SMOOTH }}>{desc}</div>
       </div>
-      <span style={{ fontSize: 16, color: steel(0.3) }}>›</span>
+      <span style={{ fontSize: 16, color: steel(0.3), ...FONT_SMOOTH }}>›</span>
     </button>
   );
 }
@@ -233,15 +275,16 @@ function SkinToneChip({ tone, selected, onClick }) {
   const isMixed = tone.value === 'mixed';
   return (
     <button
-      onClick={() => { tapHaptic(); onClick(); }}
+      onClick={() => { tapHaptic(); segmentPressSound(); onClick(); }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '6px 12px', borderRadius: 8,
         border: `1px solid ${selected ? KEY_ACCENT : steel(hover ? 0.15 : 0.08)}`,
-        background: selected ? 'rgba(200,155,69,0.10)' : 'transparent',
+        background: selected ? accent(0.10) : 'transparent',
         cursor: 'pointer',
+        transition: 'all 0.15s ease',
         WebkitTapHighlightColor: 'transparent',
         ...FONT_SMOOTH,
       }}
@@ -254,7 +297,7 @@ function SkinToneChip({ tone, selected, onClick }) {
         border: `1px solid ${steel(0.15)}`,
         flexShrink: 0,
       }} />
-      <span style={{ fontSize: 12, color: selected ? KEY_ACCENT : steel(0.55), fontWeight: 500 }}>
+      <span style={{ fontSize: 12, color: selected ? KEY_ACCENT : steel(0.55), fontWeight: 500, ...FONT_SMOOTH }}>
         {tone.label}
       </span>
     </button>
@@ -338,7 +381,7 @@ function StepTheShot({ state, onChange }) {
             ...FONT_SMOOTH,
           }}
         >
-          <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.5), letterSpacing: '1.2px', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '1.2px', textTransform: 'uppercase', ...FONT_SMOOTH }}>
             STYLE REFERENCE
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -377,7 +420,7 @@ function StepTheShot({ state, onChange }) {
 // ─── Step 2: The Space ──────────────────────────────────────────────────────
 function StepTheSpace({ state, onChange, onGearPick }) {
   const { environment, ceiling } = state;
-  const isOutdoor = NON_STUDIO.includes(environment);
+  const isOutdoor = NO_CEILING.includes(environment);
   const envReady = environment && (isOutdoor || ceiling);
   const isDesktop = useIsDesktop();
 
@@ -632,7 +675,7 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
     <div style={{
       position: 'relative', width: '100%', height: '100%',
       display: 'flex', flexDirection: 'column',
-      backgroundColor: '#0a0b0d',
+      backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
       <MatteBackground />
@@ -653,14 +696,14 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
           <p style={{
-            margin: 0, fontSize: 10, fontWeight: 600,
+            margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600,
             color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH,
           }}>
             BUILD FROM SCRATCH
           </p>
         </div>
         <p style={{
-          margin: 0, fontSize: 11, fontWeight: 500,
+          margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500,
           color: steel(0.4), ...FONT_SMOOTH,
         }}>
           Step {step + 1} of 3
@@ -678,7 +721,7 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
         position: 'relative', zIndex: 2,
       }}>
         <h2 style={{
-          margin: 0, fontSize: 20, fontWeight: 700,
+          margin: 0, fontSize: isDesktop ? 24 : 20, fontWeight: 700,
           color: C.textPrimary, letterSpacing: '-0.3px',
           ...FONT_SMOOTH,
         }}>
@@ -702,29 +745,15 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           padding: isDesktop ? '16px 40px 24px' : '16px 22px 34px',
-          background: 'linear-gradient(transparent, rgba(10,11,13,0.95) 30%)',
+          background: `linear-gradient(transparent, ${SCREEN_BG}f2 30%)`,
           zIndex: 10,
         }}>
-          <button
-            onClick={handleNext}
+          <CTA
+            label={step === 2 ? 'BUILD THIS SETUP →' : 'NEXT →'}
             disabled={!canNext}
-            style={{
-              width: '100%', padding: '14px 0',
-              borderRadius: 12, border: 'none',
-              background: canNext
-                ? CTA_BG
-                : steel(0.08),
-              color: canNext ? '#0a0b0d' : steel(0.3),
-              fontSize: 13, fontWeight: 700,
-              letterSpacing: '1.5px', textTransform: 'uppercase',
-              cursor: canNext ? 'pointer' : 'not-allowed',
-              boxShadow: canNext ? CTA_SHADOW : 'none',
-              transition: 'all 0.2s ease',
-              ...FONT_SMOOTH,
-            }}
-          >
-            {step === 2 ? 'BUILD THIS SETUP →' : 'NEXT →'}
-          </button>
+            onClick={handleNext}
+            isDesktop={isDesktop}
+          />
         </div>
       )}
     </div>

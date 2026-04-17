@@ -17,9 +17,13 @@ import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
-         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, VF_DITHER_NOISE } from '../../../theme/studioMatte';
+         VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, VF_DITHER_NOISE,
+         KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import LightingDiagram from './components/LightingDiagram';
+import {
+  OtherSetupsCard, SubstitutionsCard, QuickFixesCard, WhatToLookForCard,
+} from './components/ResultCards';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import ModifierEmission from '../_shared/ModifierEmission';
 import PullTabDrawer from '../_shared/PullTabDrawer';
@@ -42,8 +46,6 @@ const C = {
 const FIELD_SHADOW       = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 8px 0px rgba(0,0,0,0.3), inset 1px 1px 2px 0px rgba(0,0,0,0.4)';
 const FIELD_SHADOW_FOCUS = `inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 8px 0px rgba(0,0,0,0.3), inset 1px 1px 2px 0px rgba(0,0,0,0.4), 0px 0px 0px 1px ${steel(0.35)}`;
 
-const KEY_ACCENT = '#c89b45';
-
 const RING_TRACK_SHADOW  = 'inset 0px 2px 5px 0px rgba(0,0,0,0.7), inset 0px 1px 2px 0px rgba(0,0,0,0.5), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)';
 const RING_ACTIVE_SHADOW = '0px 2px 6px 0px rgba(0,0,0,0.6), 0px 1px 2px 0px rgba(0,0,0,0.4), inset 0px 0.5px 0px 0px rgba(255,255,255,0.08), inset 0px -0.5px 0px 0px rgba(0,0,0,0.3)';
 
@@ -61,7 +63,7 @@ function prettify(str, { upper = false } = {}) {
 
 // ─── Role colors (per-light role accent) ────────────────────────────────────
 const ROLE_COLORS = {
-  key:         '#c89b45',  // amber
+  key:         KEY_ACCENT,  // amber
   fill:        '#6fa8dc',  // steel blue
   rim:         '#d67b4e',  // coral
   kicker:      '#e8b05f',  // warm gold
@@ -655,11 +657,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       modifier: result?.sections?.catchlightModifier });
   }, [saved, setupName, notes, defaultName, result, onSave]);
 
+  const [cockpitLaunchedThisSetup, setCockpitLaunchedThisSetup] = useState(false);
   const handleStartCockpit = useCallback(() => {
     softClickSound(); tapHaptic();
-    // F-2: Skip mode picker if user has a saved preference — go straight to cockpit
+    // First tap on this setup: always show the role picker so the
+    // photographer can choose their cockpit mode. Subsequent taps
+    // (e.g. after returning from cockpit) skip it using the saved role.
     const savedRole = loadShootRole();
-    if (savedRole) {
+    if (savedRole && cockpitLaunchedThisSetup) {
       setSelectedMode(savedRole);
       trackEvent('SETUP_START_COCKPIT', {
         pattern: result?.pattern, mode: savedRole, skippedPicker: true,
@@ -667,14 +672,16 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       onStartCockpit?.(savedRole);
       return;
     }
+    if (savedRole) setSelectedMode(savedRole);
     trackEvent('SETUP_MODE_PICKER_OPENED', {
       pattern: result?.pattern, confidence: result?.confidence,
     });
     setModeSheetOpen(true);
-  }, [result, onStartCockpit]);
+  }, [result, onStartCockpit, cockpitLaunchedThisSetup]);
 
   const handleConfirmMode = useCallback(() => {
     successHaptic(); softClickSound();
+    setCockpitLaunchedThisSetup(true);
     saveShootRole(selectedMode);
     trackEvent('SETUP_START_COCKPIT', {
       pattern: result?.pattern, mode: selectedMode,
@@ -740,7 +747,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       onTouchMove={handleSwipeBackMove}
       onTouchEnd={handleSwipeBackEnd}
       style={{
-      width: '100%', maxWidth: isDesktop ? 'min(92vw, 1280px)' : 430, height: '100%', margin: '0 auto',
+      width: '100%', maxWidth: isDesktop ? 'min(96vw, 1400px)' : 430, height: '100%', margin: '0 auto',
       backgroundColor: C.bg,
       display: 'flex', flexDirection: 'column', overflowY: 'auto',
       position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
@@ -853,8 +860,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           // Hero column widened from 540 → 620 so the LCD lighting diagram
           // reads at a real diagnostic size rather than a thumbnail.  The
           // right column stays fluid (1180 − 620 − 20 gap = 540 min).
-          gridTemplateColumns: '620px minmax(0, 1fr)',
-          gap: 20,
+          gridTemplateColumns: 'minmax(420px, 0.40fr) minmax(0, 1fr)',
+          gap: 28,
           alignItems: 'start',
         } : { display: 'contents' }}>
         <div style={isDesktop ? {
@@ -863,8 +870,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           // the 920 design viewport, so a slightly taller hero panel is
           // safe and gives us much more room for the zoomed diagram.
           display: 'flex', flexDirection: 'column', gap: 12,
-          maxHeight: 620,
-          overflowY: 'auto',
           paddingRight: 6,
         } : { display: 'contents' }}>
 
@@ -1023,167 +1028,96 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             values, 28px modifier title, 24px internal padding — so the
             panel reads natively at desktop viewing distances rather than
             looking like a stretched phone card. */}
+        {/* ── Key Light hero — DESKTOP — diagram-dominant layout ──
+            The diagram is the hero visual at desktop. Modifier identity sits
+            in a compact header above it, and the spec grid sits below.
+            Total height target: ~450px so the right column has room for
+            coaching cards and the CTA stays in viewport at 1080p. */}
         {result && isDesktop && (modName || positionDisplay || result._raw) && (
-          <div style={{
-            borderRadius: 16,
-            backgroundColor: C.panelBg,
-            boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-            padding: '16px 22px 18px',
-            position: 'relative',
-            overflow: 'hidden',
-          }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: 16, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-            <div style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            {/* Header row — label left, size-range right */}
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-                KEY LIGHT
-              </p>
-              {mod?.sizeRange && (
-                <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: C.textDim, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
-                  {mod.sizeRange}
-                </p>
-              )}
-            </div>
-
-            {/* Hero modifier emission face (desktop) — subject-POV glow
-                from modifier-studio-matte.html Set A, Column A */}
-            {mod?.family && (
-              <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
-                margin: '6px 0 8px',
-              }}>
+            {/* Modifier identity bar — compact */}
+            <div style={{
+              borderRadius: 14, backgroundColor: C.panelBg,
+              boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+              padding: '12px 20px',
+              position: 'relative', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', gap: 16,
+            }}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+              <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
+              {mod?.family && (
                 <div style={{
-                  width: 140, height: Math.round(140 * 88 / 108),
-                  borderRadius: 14,
-                  backgroundColor: '#121316',
-                  boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.12), inset 0 -1px 1px rgba(0,0,0,0.25), inset 0 1px 3px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.07), inset 0 0 30px rgba(95,124,150,0.03), inset 0 0 14px rgba(95,124,150,0.06)',
+                  width: 56, height: 48, flexShrink: 0,
+                  borderRadius: 10, backgroundColor: '#121316',
+                  boxShadow: 'inset 0 -1px 2px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,255,255,0.04)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '0.5px solid rgba(167,173,183,0.06)',
                   overflow: 'hidden',
                 }}>
-                  <ModifierEmission family={mod.family} size={140} />
+                  <ModifierEmission family={mod.family} size={56} />
                 </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+                  KEY LIGHT
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
+                  {modName || result.sections?.catchlightModifier || 'Modifier'}
+                </p>
                 {mod?.sizeRange && (
-                  <div style={{
-                    marginTop: 6,
-                    padding: '2px 10px',
-                    borderRadius: 999,
-                    backgroundColor: '#070709',
-                    boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.6), inset 0px 0px 4px rgba(0,0,0,0.35), 0 0.5px 0 rgba(255,255,255,0.04)',
-                    fontSize: 10, fontWeight: 700, letterSpacing: '0.4px',
-                    color: 'rgba(95,124,150,0.75)',
-                    ...FONT_SMOOTH,
-                  }}>{mod.sizeRange}</div>
+                  <p style={{ margin: '2px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                 )}
               </div>
-            )}
-
-            {/* Title row — modifier name + distance guidance */}
-            <div style={{ textAlign: mod?.family ? 'center' : 'left' }}>
-              {modName ? (
-                <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.textPrimary, lineHeight: 1.1, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
-                  {modName}
-                </p>
-              ) : result.sections?.catchlightModifier ? (
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
-                  {result.sections.catchlightModifier}
-                </p>
-              ) : null}
-              {mod?.distRange && (
-                <p style={{ margin: '5px 0 0', fontSize: 11, fontWeight: 400, color: steel(0.55), lineHeight: 1.35, ...FONT_SMOOTH }}>
-                  The closer you place it, the softer the wrap. Pull it back for harder, more directional light.
-                </p>
-              )}
             </div>
 
-            {/* L-3: Compact apparent source label (back face) */}
-            {mod?.catchlightSize && (() => {
-              const m = String(mod.catchlightSize).match(/([\d.]+)\s*%/);
-              const pct = m ? parseFloat(m[1]) : null;
-              const band = pct == null ? null
-                : pct < 25 ? 'Tiny' : pct < 50 ? 'Small' : pct < 100 ? 'Medium'
-                : pct < 200 ? 'Large' : pct < 350 ? 'Huge' : 'XL';
-              return band ? (
-                <div style={{ margin: '10px 0' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
-                    APPARENT SOURCE
-                  </span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: steel(0.35), letterSpacing: '0.5px', margin: '0 6px', ...FONT_SMOOTH }}>·</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
-                    {band}
-                  </span>
-                </div>
-              ) : null;
-            })()}
-
-            {/* Viewfinder diagram well — matches the HomeScreen / ResultScreen
-                glass viewfinder treatment so the Setup screen reads as the
-                same instrument family.  Layered stack:
-                  • inset LCD well (engraved into matte surface)
-                  • diagram SVG (zIndex 1)
-                  • lens vignette + upper-left glass reflection (zIndex 9)
-                  • Figma-exact inner-shadow bevel (zIndex 10)
-                Capped at maxWidth so the diagram cannot grow large enough
-                to push the DIRECTION / HEIGHT spec cells off the column on
-                wide desktop layouts. */}
+            {/* Diagram well — LARGE, fills the column width */}
             {result._raw && (
               <div style={{
-                marginTop: 12,
-                position: 'relative',
-                width: '100%',
-                maxWidth: 360,
-                marginLeft: 'auto', marginRight: 'auto',
-                aspectRatio: '220 / 150',
-                borderRadius: 12,
-                backgroundColor: '#070709',
+                position: 'relative', width: '100%',
+                aspectRatio: '16 / 9', maxHeight: 280,
+                borderRadius: 14, backgroundColor: '#070709',
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
                 overflow: 'hidden',
               }}>
-                {/* Diagram SVG fills the well */}
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  padding: '14px 16px',
-                  display: 'flex', justifyContent: 'center', alignItems: 'stretch',
-                  zIndex: 1,
-                }}>
-                  <LightingDiagram result={result} compact fluid />
+                <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
+                  <LightingDiagram result={result} fluid />
                 </div>
-                {/* Glass panel — lens vignette + upper-left key reflection */}
-                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
+                <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
                   <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
-                  <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.35 }} />
+                  <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.22, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
                 </div>
-                {/* Inner shadow bevel — Figma-exact, always top of stack */}
-                <div style={{
-                  position: 'absolute', inset: 0, borderRadius: 12,
-                  pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
-                }} />
+                <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10 }} />
               </div>
             )}
 
-            {/* Spec grid — 2-column, engraved inset cells */}
-            <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              {mod?.distRange && (
-                <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `sweet spot ${mod.optDist}` : null} hintColor={C.confHigh} />
-              )}
-              {positionDisplay && (
-                <DesktopSpec label="POSITION" value={positionDisplay} />
-              )}
-              {directionDisplay && (
-                <DesktopSpec label="DIRECTION" value={directionDisplay} hint={keyAngleDisplay} hintColor={KEY_ACCENT} />
-              )}
-              {keyHeightDisplay && (
-                <DesktopSpec label="HEIGHT" value={keyHeightDisplay} hint={keyHeightMeasurement} hintColor={C.confHigh} />
-              )}
-              {rsPlacement && (
-                <DesktopSpec label="PLACEMENT" value={rsPlacement} />
-              )}
-              {rsFill && (
-                <DesktopSpec label="FILL" value={rsFill} />
-              )}
+            {/* Spec grid — 3-column for density */}
+            <div style={{
+              borderRadius: 14, backgroundColor: C.panelBg,
+              boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+              padding: '12px 16px', position: 'relative', overflow: 'hidden',
+            }}>
+              <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {mod?.distRange && (
+                  <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `sweet spot ${mod.optDist}` : null} hintColor={C.confHigh} />
+                )}
+                {(directionDisplay || positionDisplay) && (
+                  <DesktopSpec label="DIRECTION" value={directionDisplay || positionDisplay} hint={keyAngleDisplay} hintColor={KEY_ACCENT} />
+                )}
+                {keyHeightDisplay && (
+                  <DesktopSpec label="HEIGHT" value={keyHeightDisplay} hint={keyHeightMeasurement} hintColor={C.confHigh} />
+                )}
+                {rsFill && (
+                  <DesktopSpec label="FILL" value={rsFill} />
+                )}
+                {rsPlacement && (
+                  <DesktopSpec label="PLACEMENT" value={rsPlacement} />
+                )}
+                {positionDisplay && directionDisplay && (
+                  <DesktopSpec label="POSITION" value={positionDisplay} />
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -1191,12 +1125,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         </div>
         {/* ── Right column (desktop) — secondary panels ── */}
         <div style={isDesktop ? {
-          // Same cap as the hero column so the two columns align and the
-          // bottom CTA never gets pushed below the 920 design viewport.
           display: 'flex', flexDirection: 'column', gap: 12,
-          maxHeight: 540,
-          overflowY: 'auto',
-          paddingRight: 6,
         } : { display: 'contents' }}>
 
         {/* ── Multi-light roles strip ── */}
@@ -1291,6 +1220,28 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           );
         })()}
 
+        {/* ── Engine-built result cards (from /api/shoot-match) ──
+            Rendered only when `result.cards` is populated. Each card is
+            self-gating (returns null on empty data) so we can drop them
+            unconditionally. Wizard flow populates `cards` via
+            Day1DemoApp.handleBuildComplete → shootMatch(). Other entry
+            paths (analyze, recipe) currently leave `cards` unset — cards
+            silently do not render until those flows are wired too. */}
+        {result?.cards && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <WhatToLookForCard
+              goodSigns={result.cards.whatToLookFor?.goodSigns}
+              warnings={result.cards.whatToLookFor?.warnings}
+            />
+            <QuickFixesCard
+              items={result.cards.quickFixes?.fixes}
+              fixOrder={result.cards.quickFixes?.fixOrder}
+            />
+            <SubstitutionsCard items={result.cards.substitutions?.items} />
+            <OtherSetupsCard items={result.cards.otherSetups} />
+          </div>
+        )}
+
         {/* ── Pull-tab: Setup Guide — recreation_setup notes + bg strategy ── */}
         {(rsNotes.length > 0 || rsBg) && (
           <PullTabDrawer label="SETUP GUIDE" open={!!drawers.setupGuide} onToggle={() => toggleDrawer('setupGuide')} maxH={400}>
@@ -1331,16 +1282,22 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         </div>{/* end rightCol */}
         </div>{/* end middleWrap */}
 
-        <div style={{ flex: 1 }} />
+        {!isDesktop && <div style={{ flex: 1 }} />}
 
-        {/* ── Start Cockpit CTA (primary) ── */}
+        {/* ── CTA dock — sticky at bottom on desktop so it's always in viewport ── */}
+        <div style={isDesktop ? {
+          position: 'sticky', bottom: 0, zIndex: 20,
+          padding: '16px 40px 20px',
+          background: `linear-gradient(transparent, ${C.bg} 24%)`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+        } : { display: 'contents' }}>
         <button
           onClick={handleStartCockpit}
           onPointerDown={() => setSavePressed(true)}
           onPointerUp={() => setSavePressed(false)}
           onPointerLeave={() => setSavePressed(false)}
           style={{
-            width: '100%', maxWidth: isDesktop ? 540 : undefined,
+            width: '100%', maxWidth: isDesktop ? 640 : undefined,
             alignSelf: isDesktop ? 'center' : undefined,
             height: isDesktop ? 58 : 52, borderRadius: isDesktop ? 29 : 24,
             background: CTA_BG,
@@ -1357,11 +1314,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </span>
         </button>
 
-        {/* ── Save Setup secondary + Cancel row ── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '10px 4px 0',
-          width: '100%', maxWidth: isDesktop ? 540 : undefined,
+          padding: isDesktop ? '0' : '10px 4px 0',
+          width: '100%', maxWidth: isDesktop ? 640 : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
         }}>
           <button onClick={handleCancel} style={{
@@ -1407,12 +1363,15 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             )}
           </button>
         </div>
+        </div>{/* end CTA dock */}
       </div>
 
-      {/* iOS home indicator */}
-      <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: 'rgba(245,247,250,0.06)' }} />
-      </div>
+      {/* iOS home indicator — mobile only */}
+      {!isDesktop && (
+        <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+          <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: 'rgba(245,247,250,0.06)' }} />
+        </div>
+      )}
     </div>
 
     {/* ── Viewfinder overlay ── */}

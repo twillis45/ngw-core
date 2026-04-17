@@ -10,7 +10,8 @@ import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
-import { analyzeImage } from '../data/labApi';
+import MyKitScreen from './studio/_core/MyKitScreen';
+import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
 import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
@@ -58,6 +59,36 @@ function downsampleImage(file, maxBytes) {
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
   });
+}
+
+/**
+ * Map a BuildWizard `onComplete` payload → /api/shoot-match request body.
+ *
+ * Wizard emits internal enum codes (e.g. mood="beauty", environment="studio_medium",
+ * gearMode="my_gear"|"best_setup") — the shoot-match route's MOOD_MAP /
+ * ENVIRONMENT_MAP already accept these as identity keys.  Two translations
+ * are needed:
+ *   - gearMode:  my_gear → myGear   |   best_setup → anyGear
+ *   - gear:      flatten lights[] + modifiers[] into a single gear list
+ *
+ * Defensive defaults: mood/environment are required by the server; fall back
+ * to sensible values if the wizard ever submits without them.
+ */
+function wizardPayloadToShootMatch(payload) {
+  const gear = [
+    ...(Array.isArray(payload.lights) ? payload.lights : []),
+    ...(Array.isArray(payload.modifiers) ? payload.modifiers : []),
+  ];
+  const gearMode = payload.gearMode === 'my_gear' ? 'myGear' : 'anyGear';
+  return {
+    subject: payload.subject || 'headshot',
+    mood: payload.mood || 'natural',
+    environment: payload.environment || 'studio_medium',
+    ceiling: payload.ceiling || 'normal',
+    gearMode,
+    gear,
+    skinTone: payload.skinTone || null,
+  };
 }
 
 /**
@@ -778,6 +809,87 @@ export default function Day1DemoApp() {
     } catch { /* ignore */ }
   }, []);
 
+  // ── Dev: ?day1_screen=shoot jumps straight into the cockpit.
+  //    Two variants for cross-device review without driving the full flow:
+  //      ?day1_screen=shoot          — analyze/teach-sample path (canned Rembrandt)
+  //      ?day1_screen=shoot_wizard   — wizard-path result shape (mood='beauty')
+  //    The shoot mode is 'photographer' by default; override with &mode=learning
+  //    or &mode=assistant.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('day1_screen');
+      if (s !== 'shoot' && s !== 'shoot_wizard') return;
+      const requestedMode = params.get('mode');
+      const validModes = ['photographer', 'assistant', 'learning'];
+      setShootMode(validModes.includes(requestedMode) ? requestedMode : 'photographer');
+
+      if (s === 'shoot_wizard') {
+        // Wizard-source result shape — mirrors handleBuildComplete output
+        // BEFORE the shoot-match cards arrive.  This is what the cockpit
+        // actually sees when a user walks the Build From Scratch flow.
+        setResult({
+          pattern: toTitleCase('beauty'),
+          confidence: 100,
+          meta: ['Headshot', 'Studio Medium', 'Best Setup'],
+          mood: 'Beauty',
+          _wizardSource: true,
+          sections: {
+            patternCandidates: [],
+            patternSource: 'wizard', confidenceLabel: 'custom build',
+            edgeCaseWarnings: [], shadowAnalysis: null, shadowComponents: null,
+            shadowDirection: null, catchlightPositions: [], lightQuality: null,
+            catchlightModifier: null, modifier: null,
+            sceneDescription: 'Beauty Headshot — Studio Medium',
+            colorPalette: null, signalQuality: null, vlmNarrative: null,
+          },
+          _raw: { wizard: { mood: 'beauty', subject: 'headshot', environment: 'studio_medium', gearMode: 'best_setup' } },
+        });
+        setImagePreview(null);
+      } else {
+        // Analyze/teach-sample path — reuses the setup shortcut's canned Rembrandt
+        setResult({
+          pattern: 'Rembrandt', confidence: 91,
+          meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+          mood: 'Dramatic',
+          sections: {
+            patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+            patternSource: 'shadow analysis', confidenceLabel: 'strong', edgeCaseWarnings: [],
+            shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+            shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+            shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+            catchlightPositions: ['10'], lightQuality: 'soft',
+            catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+            modifier: {
+              family: 'Large Octabox', sizeLabel: 'Large', sizeRange: '48"–60"',
+              distRange: '5–10 ft', optDist: '6–8 ft',
+              position: 'Upper Left', positionQuad: 'Camera-Left', positionIntensity: 'High',
+              catchlightSize: '85% iris',
+            },
+            sceneDescription: 'Single key light, studio background.',
+          },
+          _raw: {
+            authoritative_pattern: 'rembrandt',
+            lighting_inference: {
+              key_side: 'upper_left', key_elevation: 'high',
+              key_position_text: 'Camera-Left · High', off_axis_angle: 45,
+              detected_cct_kelvin: 5500,
+            },
+            reconstruction: {
+              key_light_angle_deg: 45, key_light_height: 'high', modifier_distance_ft: 7,
+            },
+            signal_diagnostics: {
+              signals: { left_right_asymmetry: 0.72, nose_shadow_angle_deg: 38 },
+            },
+          },
+        });
+        setImagePreview('/loop_standard.jpg');
+      }
+      setScreen('shoot');
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
   // the full analyze flow.  Harmless in prod (no-op without the param).
@@ -912,7 +1024,17 @@ export default function Day1DemoApp() {
     }
   };
 
-  const handleSetup = () => setScreen('setup');
+  const handleSetup = (altPattern) => {
+    if (altPattern && typeof altPattern === 'string') {
+      // Runner-up candidate selected — update result with the alternative pattern
+      setResult(prev => ({
+        ...prev,
+        pattern: toTitleCase(altPattern),
+        _altPatternOverride: altPattern,
+      }));
+    }
+    setScreen('setup');
+  };
   const handleSettings = () => setScreen('settings');
 
   const handleSetupSave = () => {
@@ -920,20 +1042,13 @@ export default function Day1DemoApp() {
     // see the "Saved" confirmation before deciding to Start Cockpit.
   };
 
-  // Bucket B runtime gate — cockpit unlock comes from ?studio=1&cockpit=1
-  // (Checkpoint 2 flag plumbing). Without it, all nav paths into Day1ShootScreen
-  // redirect cleanly to Studio Home.
-  const isCockpitUnlocked = () => {
-    try { return sessionStorage.getItem('ngw_studio_cockpit') === '1'; }
-    catch { return false; }
-  };
-
+  // Bucket B cockpit gate — REMOVED.
+  // Originally gated all paths into Day1ShootScreen behind
+  // ?studio=1&cockpit=1 session flag while the cockpit stabilised.
+  // The cockpit is now functional for analyze, wizard, and recipe paths,
+  // so the gate is no longer needed.  The separate login gate below
+  // still blocks unauthenticated users from loading Studio Matte.
   const handleStartCockpit = (mode) => {
-    if (!isCockpitUnlocked()) {
-      // Bucket B locked in this build — return to Home cleanly.
-      setScreen('home');
-      return;
-    }
     setShootMode(mode || 'photographer');
     setScreen('shoot');
   };
@@ -945,19 +1060,202 @@ export default function Day1DemoApp() {
     setResult(null);
   };
 
-  const handleSetupCancel = () => setScreen('result');
+  const handleSetupCancel = () => {
+    // If result came from recipe or wizard (no real analysis), go home instead of result screen
+    if (result?._recipeSource || result?._wizardSource) {
+      setScreen('home');
+      setResult(null);
+    } else {
+      setScreen('result');
+    }
+  };
   const handleRecipes = () => setScreen('recipes');
   const handleRecipeSelect = (recipe) => {
-    // When a recipe is selected, navigate to setup with recipe data as result
-    // TODO: build a richer result object from recipe data
-    setScreen('home');
+    // Build a result object from recipe data so SetupScreen can render it
+    const lightCount = recipe.setupTime?.match(/(\d+)\s*light/)?.[1] || '1';
+    const recipeResult = {
+      pattern: toTitleCase(recipe.pattern),
+      confidence: 100,
+      meta: [
+        recipe.modifierFamily ? prettyModifierLabel(recipe.modifierFamily) : null,
+        `${lightCount} light${lightCount !== '1' ? 's' : ''}`,
+        recipe.environment ? toTitleCase(recipe.environment) : null,
+      ].filter(Boolean),
+      mood: toTitleCase(recipe.mood),
+      _recipeSource: recipe.id,
+      sections: {
+        patternCandidates: [{ name: toTitleCase(recipe.pattern), score: 100 }],
+        patternSource: 'recipe',
+        confidenceLabel: 'recipe',
+        edgeCaseWarnings: [],
+        shadowAnalysis: null,
+        shadowComponents: null,
+        shadowDirection: null,
+        catchlightPositions: [],
+        lightQuality: recipe.difficulty <= 1 ? 'soft' : 'mixed',
+        catchlightModifier: recipe.modifierFamily
+          ? prettyModifierLabel(recipe.modifierFamily)
+          : null,
+        modifier: recipe.modifierFamily ? {
+          family: prettyModifierLabel(recipe.modifierFamily),
+          sizeLabel: null,
+          sizeRange: null,
+          distRange: null,
+          optDist: null,
+          position: null,
+          positionQuad: null,
+          positionIntensity: null,
+          catchlightSize: null,
+        } : null,
+        sceneDescription: recipe.description,
+        colorPalette: null, signalQuality: null, vlmNarrative: null,
+      },
+      _raw: {
+        shoot_checklist: recipe.warning ? [recipe.warning] : [],
+        recipe: {
+          id: recipe.id,
+          name: recipe.name,
+          whyItWorks: recipe.whyItWorks,
+          gearFlexibility: recipe.gearFlexibility,
+          useCase: recipe.useCase,
+          variations: recipe.variations,
+        },
+      },
+    };
+    setResult(recipeResult);
+    setImagePreview(null);
+    setScreen('setup');
   };
   const handleSavedSetups = () => setScreen('saved');
   const handleBuildWizard = () => setScreen('build');
+  const handleMyKit = () => setScreen('mykit');
   const handleBuildComplete = (payload) => {
-    // TODO: wire to /api/shoot-match with the wizard payload
-    console.log('[Day1] Build wizard complete:', payload);
-    setScreen('home');
+    // Build a result object from wizard payload so SetupScreen can render it
+    const wizardResult = {
+      pattern: toTitleCase(payload.mood || 'custom'),
+      confidence: 100,
+      meta: [
+        payload.subject ? toTitleCase(payload.subject) : null,
+        payload.environment ? toTitleCase(payload.environment) : null,
+        payload.gearMode === 'best_setup' ? 'Best Setup' : 'My Gear',
+      ].filter(Boolean),
+      mood: toTitleCase(payload.mood),
+      _wizardSource: true,
+      sections: {
+        patternCandidates: [],
+        patternSource: 'wizard',
+        confidenceLabel: 'custom build',
+        edgeCaseWarnings: [],
+        shadowAnalysis: null,
+        shadowComponents: null,
+        shadowDirection: null,
+        catchlightPositions: [],
+        lightQuality: null,
+        catchlightModifier: null,
+        modifier: null,
+        sceneDescription: `${toTitleCase(payload.mood)} ${toTitleCase(payload.subject)} — ${toTitleCase(payload.environment)}`,
+        colorPalette: null, signalQuality: null, vlmNarrative: null,
+      },
+      _raw: {
+        wizard: payload,
+      },
+    };
+    setResult(wizardResult);
+    setImagePreview(null);
+    setScreen('setup');
+
+    // Fetch engine-built result cards in the background and merge them into
+    // the result when they arrive.  Navigation is not blocked on this — the
+    // wizard→setup transition stays instant.  If the call fails we keep the
+    // fallback wizardResult in place; new card renderers must tolerate a
+    // missing `cards` field.
+    shootMatch(wizardPayloadToShootMatch(payload))
+      .then(resp => {
+        if (!resp) return;
+        const cards = resp.cards || {};
+        const diag = cards.diagram || {};
+        const keyLight = cards.shootThisSetup?.lights?.[0];
+        const cam = cards.cameraSettings || {};
+
+        // Canonical pattern from the engine's diagram (e.g. "loop",
+        // "rembrandt") — NOT the mood label the wizard used as a
+        // placeholder.  This is what the cockpit keys coaching on.
+        const enginePattern = diag.pattern
+          || resp.authoritative_pattern
+          || null;
+        const patternDisplay = enginePattern
+          ? toTitleCase(enginePattern)
+          : toTitleCase(payload.mood || 'custom');
+
+        // Flatten key-light data into the shapes Day1ShootScreen reads:
+        //   result.sections.modifier.*   (catchlight / modifier panel)
+        //   result._raw.reconstruction.* (angle, height, distance)
+        //   result._raw.lighting_inference.* (position text, CCT)
+        const modifier = keyLight ? {
+          family: keyLight.modifier || null,
+          sizeLabel: null,
+          sizeRange: null,
+          distRange: keyLight.distance || null,
+          optDist: keyLight.distance || null,
+          position: keyLight.position || null,
+          positionQuad: keyLight.angle || null,
+          positionIntensity: null,
+          catchlightSize: null,
+        } : null;
+
+        // Convention conversion: shoot-match diagram_spec uses
+        // 0°=camera-facing, 90°=side, 180°=behind. The engine/cockpit
+        // convention is inverted: 0°=behind, 90°=side, 180°=camera-facing.
+        const _smAngle = keyLight?.angle_deg;
+        const reconstruction = keyLight ? {
+          key_light_angle_deg: typeof _smAngle === 'number' ? 180 - _smAngle : null,
+          key_light_height: keyLight.height_m != null
+            ? (keyLight.height_m >= 2.0 ? 'high'
+              : keyLight.height_m >= 1.5 ? 'medium' : 'low')
+            : null,
+          modifier_distance_ft: keyLight.distance_m != null
+            ? Math.round(keyLight.distance_m * 3.281)
+            : null,
+        } : {};
+
+        const cctRaw = cam.wb;
+        const cctKelvin = typeof cctRaw === 'string'
+          ? parseInt(cctRaw.replace(/[^\d]/g, ''), 10) || null
+          : null;
+
+        setResult(prev => ({
+          ...prev,
+          pattern: patternDisplay,
+          confidence: cards.bestMatch?.reliability ?? prev.confidence,
+          cards,
+          shootLoop: resp.shootLoop || null,
+          authoritative_pattern: resp.authoritative_pattern || null,
+          _shootMatchRaw: resp,
+          sections: {
+            ...prev.sections,
+            modifier,
+            patternSource: 'shoot-match',
+            confidenceLabel: cards.bestMatch?.reliabilityLabel || prev.sections?.confidenceLabel,
+          },
+          _raw: {
+            ...prev._raw,
+            authoritative_pattern: enginePattern,
+            reconstruction,
+            lighting_inference: {
+              key_position_text: keyLight?.position || null,
+              key_side: keyLight?.angle_deg != null
+                ? (keyLight.angle_deg > 5 ? 'upper_right'
+                  : keyLight.angle_deg < -5 ? 'upper_left' : 'center')
+                : null,
+              key_elevation: reconstruction.key_light_height || null,
+              detected_cct_kelvin: cctKelvin,
+            },
+          },
+        }));
+      })
+      .catch(err => {
+        console.warn('[Studio] shoot-match failed for wizard payload:', err?.message || err);
+      });
   };
   const handleSavedSetupSelect = (setup) => {
     // Load the saved setup's result and show the setup sheet
@@ -979,20 +1277,11 @@ export default function Day1DemoApp() {
     setAnalysisReady(false);
   };
 
-  // Login gate — StudioLoginScreen is Bucket B, gated behind cockpit unlock.
-  // Without cockpit, an unauthenticated tester exits studio cleanly to prod auth
-  // (clears studio session flags so they don't yo-yo back before authenticating).
+  // Login gate — unauthenticated users see the Studio login screen.
+  // (The old Bucket B cockpit-unlock branch that redirected to prod auth
+  // was removed along with the cockpit gate — all studio paths now show
+  // the in-studio login screen.)
   if (!user) {
-    if (!isCockpitUnlocked()) {
-      try {
-        sessionStorage.removeItem('ngw_studio_active');
-        sessionStorage.removeItem('ngw_goto_day1_demo');
-      } catch { /* ignore */ }
-      if (typeof window !== 'undefined') {
-        window.location.replace('/?login=1');
-      }
-      return null;
-    }
     return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
   }
 
@@ -1020,6 +1309,10 @@ export default function Day1DemoApp() {
             user={user}
             onLogout={() => { clearAuth(); setUser(null); }}
             onSettings={handleSettings}
+            onRecipes={handleRecipes}
+            onSavedSetups={handleSavedSetups}
+            onBuildWizard={handleBuildWizard}
+            onMyKit={handleMyKit}
             lastAnalysisTime={lastAnalysisTime}
           />
         </FitToViewport>
@@ -1047,11 +1340,11 @@ export default function Day1DemoApp() {
       const resultDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
         <FitToViewport
-          designWidth={resultMobile ? 430 : 1300}
-          designHeight={resultMobile ? undefined : resultDesktopVH}
-          fitMode={resultMobile ? 'width' : 'both'}
+          designWidth={resultMobile ? 430 : 1600}
+          designHeight={resultMobile ? undefined : undefined}
+          fitMode="width"
           minScale={resultMobile ? 1 : 0.5}
-          maxScale={resultMobile ? 1.3 : 2.0}
+          maxScale={resultMobile ? 1.3 : 1.5}
           tightness={resultMobile ? 0.96 : 1}
         >
           <ResultScreen
@@ -1068,7 +1361,7 @@ export default function Day1DemoApp() {
       const setupDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
         <FitToViewport
-          designWidth={setupMobile ? 430 : 1180}
+          designWidth={setupMobile ? 430 : 1400}
           designHeight={setupMobile ? 932 : setupDesktopVH}
           minScale={setupMobile ? 0.8 : 0.5}
           maxScale={setupMobile ? 1.9 : 2.0}
@@ -1085,7 +1378,10 @@ export default function Day1DemoApp() {
       );
     }
     case 'shoot': {
-      const shootMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      // Cockpit uses a LOCAL 768px threshold (not the global 1024)
+      // so tablet portrait gets the two-column photo+chrome layout
+      // in both FitToViewport AND the internal isDesktop branching.
+      const shootMobile = typeof window !== 'undefined' && window.innerWidth < 768;
       const shootDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
       return (
         <FitToViewport
@@ -1161,6 +1457,25 @@ export default function Day1DemoApp() {
           <RecipeScreen
             onSelect={handleRecipeSelect}
             onBack={() => setScreen('home')}
+            onBuild={handleBuildWizard}
+          />
+        </FitToViewport>
+      );
+    }
+    case 'mykit': {
+      const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const mkDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return (
+        <FitToViewport
+          designWidth={mkMobile ? 430 : 1180}
+          designHeight={mkMobile ? 932 : mkDesktopVH}
+          minScale={mkMobile ? 0.8 : 0.5}
+          maxScale={mkMobile ? 1.9 : 2.0}
+          tightness={mkMobile ? 0.96 : 1}
+        >
+          <MyKitScreen
+            onBack={() => setScreen('home')}
+            onRecipes={handleRecipes}
           />
         </FitToViewport>
       );
@@ -1193,6 +1508,10 @@ export default function Day1DemoApp() {
             user={user}
             onLogout={() => { clearAuth(); setUser(null); }}
             onSettings={handleSettings}
+            onRecipes={handleRecipes}
+            onSavedSetups={handleSavedSetups}
+            onBuildWizard={handleBuildWizard}
+            onMyKit={handleMyKit}
             lastAnalysisTime={lastAnalysisTime}
           />
         </FitToViewport>

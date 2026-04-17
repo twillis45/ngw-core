@@ -13,13 +13,10 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { tapHaptic, navHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound, segmentPressSound } from '../../../utils/sounds';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
-import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
+import { steel, accent, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, SCREEN_BG, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import { RECIPES, RECIPE_CATEGORIES } from '../../../data/recipes';
-
-// ─── Tokens ──────────────────────────────────────────────────────────────────
-const KEY_ACCENT = '#c89b45';
 
 const DIFFICULTY_LABEL = { 1: 'Easy', 2: 'Moderate', 3: 'Advanced' };
 const DIFFICULTY_COLOR = {
@@ -43,7 +40,7 @@ function humanModifier(modFamily, modifiers) {
 
 // ─── Pattern mini diagram (side-view style) ─────────────────────────────────
 const PAT_COLOR = KEY_ACCENT;
-const DIM_COLOR = 'rgba(170,185,200,0.4)';
+const DIM_COLOR = steel(0.4);
 
 function PatternDiagram({ pattern }) {
   const shapes = {
@@ -57,8 +54,8 @@ function PatternDiagram({ pattern }) {
     ),
     loop: (
       <>
-        <circle cx="16" cy="18" r="6" fill={PAT_COLOR} opacity={0.7} />
-        <line x1="21" y1="22" x2="28" y2="31" stroke={PAT_COLOR} strokeWidth="1" opacity="0.4" />
+        <circle cx="20" cy="14" r="6" fill={PAT_COLOR} opacity={0.7} />
+        <line x1="24" y1="19" x2="29" y2="31" stroke={PAT_COLOR} strokeWidth="1" opacity="0.4" />
         <circle cx="32" cy="38" r="7" stroke={DIM_COLOR} strokeWidth="1.5" fill="none" />
         <circle cx="32" cy="38" r="2" fill={DIM_COLOR} />
       </>
@@ -69,7 +66,7 @@ function PatternDiagram({ pattern }) {
         <line x1="32" y1="18" x2="32" y2="30" stroke={PAT_COLOR} strokeWidth="1" opacity="0.4" />
         <circle cx="32" cy="38" r="7" stroke={DIM_COLOR} strokeWidth="1.5" fill="none" />
         <circle cx="32" cy="38" r="2" fill={DIM_COLOR} />
-        <circle cx="32" cy="56" r="4" stroke={DIM_COLOR} strokeWidth="1" fill="none" opacity="0.5" />
+        <line x1="26" y1="56" x2="38" y2="56" stroke={DIM_COLOR} strokeWidth="1.5" opacity="0.5" />
       </>
     ),
     clamshell: (
@@ -78,7 +75,7 @@ function PatternDiagram({ pattern }) {
         <line x1="32" y1="18" x2="32" y2="30" stroke={PAT_COLOR} strokeWidth="1" opacity="0.4" />
         <circle cx="32" cy="38" r="7" stroke={DIM_COLOR} strokeWidth="1.5" fill="none" />
         <circle cx="32" cy="38" r="2" fill={DIM_COLOR} />
-        <circle cx="32" cy="54" r="5" fill={PAT_COLOR} opacity={0.45} />
+        <circle cx="32" cy="54" r="6" fill={PAT_COLOR} opacity={0.45} />
       </>
     ),
     split: (
@@ -93,8 +90,8 @@ function PatternDiagram({ pattern }) {
       <>
         <circle cx="16" cy="18" r="5" fill={PAT_COLOR} opacity={0.6} />
         <circle cx="48" cy="18" r="5" fill={PAT_COLOR} opacity={0.6} />
-        <line x1="20" y1="22" x2="28" y2="31" stroke={PAT_COLOR} strokeWidth="0.8" opacity="0.3" />
-        <line x1="44" y1="22" x2="36" y2="31" stroke={PAT_COLOR} strokeWidth="0.8" opacity="0.3" />
+        <line x1="20" y1="22" x2="28" y2="31" stroke={PAT_COLOR} strokeWidth="1" opacity="0.3" />
+        <line x1="44" y1="22" x2="36" y2="31" stroke={PAT_COLOR} strokeWidth="1" opacity="0.3" />
         <circle cx="32" cy="38" r="7" stroke={DIM_COLOR} strokeWidth="1.5" fill="none" />
         <circle cx="32" cy="38" r="2" fill={DIM_COLOR} />
       </>
@@ -136,18 +133,22 @@ function CategoryPills({ categories, active, onChange }) {
 }
 
 function PillButton({ label, active, onClick }) {
+  const [hover, setHover] = useState(false);
+  const isDesktop = useIsDesktop();
   return (
     <button
       onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         flexShrink: 0,
-        padding: '6px 14px', borderRadius: 999,
+        padding: isDesktop ? '8px 16px' : '8px 14px', minHeight: 36, borderRadius: 999,
         border: 'none', cursor: 'pointer',
-        backgroundColor: active ? 'rgba(200,155,69,0.15)' : 'rgba(255,255,255,0.04)',
+        backgroundColor: active ? accent(0.15) : (hover ? steel(0.08) : C.divider),
         boxShadow: active
-          ? `inset 0 0 0 1px rgba(200,155,69,0.4), 0 1px 3px rgba(0,0,0,0.3)`
-          : 'inset 0 0 0 1px rgba(170,185,200,0.12), 0 1px 2px rgba(0,0,0,0.2)',
-        fontSize: 11, fontWeight: active ? 700 : 600,
+          ? `inset 0 0 0 1px ${accent(0.4)}, 0 1px 3px rgba(0,0,0,0.3)`
+          : `inset 0 0 0 1px ${hover && !active ? steel(0.18) : steel(0.12)}, 0 1px 2px rgba(0,0,0,0.2)`,
+        fontSize: isDesktop ? 12 : 11, fontWeight: active ? 700 : 600,
         color: active ? KEY_ACCENT : steel(0.65),
         letterSpacing: '0.5px',
         WebkitTapHighlightColor: 'transparent',
@@ -167,11 +168,13 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
   const diffLabel = DIFFICULTY_LABEL[recipe.difficulty] || '';
   const diffColor = DIFFICULTY_COLOR[recipe.difficulty] || steel(0.6);
   const lightCount = recipe.setupTime?.split('·')[0]?.trim() || '';
+  const metaFs = isDesktop ? 11 : 10;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button" tabIndex={0}
       onClick={() => { onSelect(recipe); tapHaptic(); softClickSound(); }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(recipe); } }}
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
@@ -182,8 +185,8 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
           ? 'inset 0 2px 4px rgba(0,0,0,0.4)'
           : `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
         padding: isDesktop ? '16px 20px' : '14px 16px',
-        border: 'none', cursor: 'pointer',
-        position: 'relative', overflow: 'hidden',
+        cursor: 'pointer',
+        position: 'relative',
         transform: pressed ? 'scale(0.98)' : 'scale(1)',
         transition: 'transform 0.1s ease, box-shadow 0.1s ease',
         WebkitTapHighlightColor: 'transparent',
@@ -196,7 +199,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
       {/* Pattern thumbnail */}
       <div style={{
         flexShrink: 0, width: 64, height: 64, borderRadius: 10,
-        backgroundColor: '#070709',
+        backgroundColor: C.pillBg,
         boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5), inset 0 0 6px rgba(0,0,0,0.3)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden',
@@ -210,9 +213,10 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
           <p style={{
             margin: 0, fontSize: isDesktop ? 17 : 15, fontWeight: 700,
-            color: C.textPrimary, lineHeight: 1.2, letterSpacing: '-0.1px',
+            color: C.textPrimary, lineHeight: 1.25, letterSpacing: '-0.1px',
             ...FONT_SMOOTH,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
           }}>
             {recipe.name}
           </p>
@@ -226,7 +230,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
 
         {/* Description */}
         <p style={{
-          margin: '3px 0 0', fontSize: 12, fontWeight: 400,
+          margin: '3px 0 0', fontSize: isDesktop ? 13 : 12, fontWeight: 400,
           color: C.textDim, lineHeight: 1.35, ...FONT_SMOOTH,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>
@@ -237,7 +241,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
         <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {lightCount && (
             <span style={{
-              fontSize: 10, fontWeight: 600, color: steel(0.6),
+              fontSize: metaFs, fontWeight: 600, color: steel(0.6),
               letterSpacing: '0.3px', ...FONT_SMOOTH,
             }}>
               {lightCount}
@@ -245,9 +249,9 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
           )}
           {modLabel && (
             <>
-              <span style={{ fontSize: 10, color: steel(0.25) }}>·</span>
+              <span style={{ fontSize: metaFs, color: steel(0.25) }}>·</span>
               <span style={{
-                fontSize: 10, fontWeight: 600, color: steel(0.6),
+                fontSize: metaFs, fontWeight: 600, color: steel(0.6),
                 letterSpacing: '0.3px', ...FONT_SMOOTH,
               }}>
                 {modLabel}
@@ -256,9 +260,9 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
           )}
           {diffLabel && (
             <>
-              <span style={{ fontSize: 10, color: steel(0.25) }}>·</span>
+              <span style={{ fontSize: metaFs, color: steel(0.25) }}>·</span>
               <span style={{
-                fontSize: 10, fontWeight: 600, color: diffColor,
+                fontSize: metaFs, fontWeight: 600, color: diffColor,
                 letterSpacing: '0.3px', ...FONT_SMOOTH,
               }}>
                 {diffLabel}
@@ -275,12 +279,12 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
       }}>
         ›
       </div>
-    </button>
+    </div>
   );
 }
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
-export default function RecipeScreen({ onSelect, onBack }) {
+export default function RecipeScreen({ onSelect, onBack, onBuild }) {
   const isDesktop = useIsDesktop();
   const [activeCategory, setActiveCategory] = useState(null);
 
@@ -308,7 +312,7 @@ export default function RecipeScreen({ onSelect, onBack }) {
     <div style={{
       position: 'relative', width: '100%', height: '100%',
       display: 'flex', flexDirection: 'column',
-      backgroundColor: '#0a0b0d',
+      backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
       <MatteBackground />
@@ -320,7 +324,7 @@ export default function RecipeScreen({ onSelect, onBack }) {
         position: 'relative', zIndex: 2,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button aria-label="Back" onClick={onBack} style={{
+          <button aria-label="Back" onClick={() => { tapHaptic(); navSlideSound(); onBack(); }} style={{
             background: 'none', border: 'none', cursor: 'pointer',
             padding: '10px 12px 10px 0', display: 'flex', alignItems: 'center',
             WebkitTapHighlightColor: 'transparent',
@@ -328,11 +332,11 @@ export default function RecipeScreen({ onSelect, onBack }) {
           }}>
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
-          <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+          <p style={{ margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
             LIGHTING RECIPES
           </p>
         </div>
-        <p style={{ margin: 0, fontSize: 11, fontWeight: 500, color: steel(0.4), ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500, color: steel(0.4), ...FONT_SMOOTH }}>
           {sortedRecipes.length} setups
         </p>
       </div>
@@ -366,20 +370,48 @@ export default function RecipeScreen({ onSelect, onBack }) {
             </p>
           </div>
         ) : (
-          sortedRecipes.map(recipe => (
-            <RecipeCard
-              key={recipe.id}
-              recipe={recipe}
-              onSelect={onSelect}
-              isDesktop={isDesktop}
-            />
-          ))
+          <>
+            {sortedRecipes.map(recipe => (
+              <RecipeCard
+                key={recipe.id}
+                recipe={recipe}
+                onSelect={onSelect}
+                isDesktop={isDesktop}
+              />
+            ))}
+            {/* Build-your-own escape hatch */}
+            {onBuild && (
+              <div
+                role="button" tabIndex={0}
+                onClick={() => { onBuild(); tapHaptic(); softClickSound(); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onBuild(); } }}
+                style={{
+                  width: '100%', textAlign: 'center',
+                  borderRadius: 14, padding: '18px 20px',
+                  border: `1px dashed ${steel(0.15)}`,
+                  background: steel(0.03),
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  WebkitTapHighlightColor: 'transparent',
+                  ...(isDesktop ? { gridColumn: '1 / -1' } : {}),
+                }}
+              >
+                <span style={{ fontSize: 16, color: steel(0.35), lineHeight: 1 }}>+</span>
+                <span style={{
+                  fontSize: isDesktop ? 13 : 12, fontWeight: 600, color: steel(0.45),
+                  letterSpacing: '0.5px', ...FONT_SMOOTH,
+                }}>
+                  Build from Scratch
+                </span>
+              </div>
+            )}
+          </>
         )}
       </div>
 
       {/* iOS home indicator */}
       <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-        <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: 'rgba(245,247,250,0.06)' }} />
+        <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: C.homeBar }} />
       </div>
     </div>
   );

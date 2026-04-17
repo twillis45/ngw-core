@@ -25,15 +25,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { navHaptic, tapHaptic, successHaptic, grainHaptic, longPressHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
 import { postSignal } from '../../../data/signalsApi';
 import useStableViewport from '../../../utils/useStableViewport';
 import { getUser } from '../../../data/authApi';
 import ZoomableHeroOverlay from './components/ZoomableHeroOverlay';
 import NailedItOverlay from './components/NailedItOverlay';
-
-const KEY_ACCENT = '#c89b45';
+import LightingDiagram from '../_core/components/LightingDiagram';
 
 const MODE_LABELS = {
   photographer: { label: 'Photographer', tag: 'FULL DETAILS' },
@@ -770,47 +769,100 @@ function buildSteps({ pattern, confidence, modName, position, distance,
     },
   ];
 
-  // LEARNING — narrative lead + WHY callout with lighting theory + data
+  // LEARNING — pattern-specific copy. Each lighting pattern has a distinct
+  // personality, shadow signature, and teaching angle. A grandmother should
+  // be able to follow every sentence.
+  const _hLow = heightDisplay === 'Low' || heightDisplay === 'low';
+  const _hHigh = heightDisplay === 'High' || heightDisplay === 'high';
+  const _p = (pattern || '').toLowerCase();
+  const _pos = (position || '').toLowerCase() || 'the side';
+
+  // Pattern-specific personality
+  const _patternVibe = {
+    rembrandt: { mood: 'dramatic and sculptural', shadow: 'a small triangle of light on the shadow cheek, just below the eye', signature: 'Rembrandt triangle', origin: 'Named after the painter who used this shadow shape in nearly every portrait.' },
+    loop:      { mood: 'natural and flattering', shadow: 'a small loop-shaped shadow from the nose that doesn\'t quite touch the cheek', signature: 'loop shadow', origin: 'The most common portrait pattern because it flatters almost every face shape.' },
+    butterfly: { mood: 'glamorous and symmetrical', shadow: 'a butterfly-shaped shadow directly under the nose', signature: 'butterfly shadow', origin: 'Used in classic Hollywood glamour photography — the light sits directly in front, high above.' },
+    clamshell: { mood: 'clean and beauty-focused', shadow: 'almost no shadows at all — the face is evenly lit with soft, glowing skin', signature: 'shadowless beauty look', origin: 'The go-to for beauty and skincare photography. Two lights (above + below) wrap the face completely.' },
+    split:     { mood: 'bold and dramatic', shadow: 'exactly half the face lit, half in deep shadow — a hard vertical line down the center', signature: 'half-and-half split', origin: 'The most dramatic portrait pattern. One side of the face tells the story, the other hides in mystery.' },
+    short:     { mood: 'slimming and dimensional', shadow: 'the narrow (short) side of the face is lit while the wider side falls into shadow', signature: 'short-side lighting', origin: 'Photographers use this to slim the face and add depth. The light hits the side of the face that\'s turned away from camera.' },
+    broad:     { mood: 'open and wide', shadow: 'the broad (camera-facing) side of the face is lit, with shadow falling away from camera', signature: 'broad-side lighting', origin: 'Makes the face appear wider and more open. Often used for thin faces that need more visual weight.' },
+  };
+  const _v = _patternVibe[_p] || { mood: 'distinctive', shadow: 'a characteristic shadow pattern on the face', signature: 'shadow pattern', origin: 'Each lighting pattern creates a unique shadow shape that defines the mood of the portrait.' };
+
   const learning = [
     {
       key: 'setup',
-      title: 'YOUR SETUP',
-      lead: `You're rebuilding ${pattern.toLowerCase()} lighting with a ${modName}.`,
-      why: `${pattern} is a ${confidence}%-confidence match. The key light sits at ${position}${angleDeg != null ? ` (${angleDeg}° off-axis)` : ''}, ${distance} away${heightDisplay !== '—' ? `, at ${heightDisplay.toLowerCase()} height` : ''}. Each step walks you through placing it.`,
+      title: 'WHAT YOU\'RE BUILDING',
+      lead: `This is ${pattern} lighting — it creates a ${_v.mood} look. You'll use a ${modName} as your main light.`,
+      why: `${_v.origin} The defining feature: ${_v.shadow}. Your ${modName} will create this shape — we just need to put it in the right spot.`,
       coach: null,
     },
     {
       key: 'position',
-      title: 'PLACE THE KEY LIGHT',
-      lead: `Place the ${modName} at ${position}${angleDeg != null ? ` — about ${angleDeg}° off-axis` : ''}.`,
-      why: noseShadowAngle != null
-        ? `The nose shadow falls at ${noseShadowAngle.toFixed(0)}°, which is what creates this pattern. ${pattern.toLowerCase()} lighting forms when the key is ~30–45° off-axis — the shadow under the nose curves into a short "loop" or triangle on the shadow-side cheek.`
-        : `Clock position is relative to the subject facing camera — 12 is directly behind, 6 is in front. Off-axis placement is what builds a directional pattern instead of flat lighting.`,
+      title: 'WHERE TO PUT THE LIGHT',
+      lead: _p === 'butterfly' || _p === 'clamshell'
+        ? `Place your ${modName} directly in front of your subject, centered with the camera. The light should come from straight ahead.`
+        : _p === 'split'
+          ? `Move your ${modName} to the ${_pos} — all the way to 90 degrees, perpendicular to the face. You want it lighting exactly one half.`
+          : _p === 'rembrandt'
+            ? `Swing your ${modName} to the ${_pos} — about 45 degrees from the camera. You're looking for that sweet spot where the nose shadow just reaches the far cheek.`
+            : `Move your ${modName} to the ${_pos}. The angle creates the ${_v.signature} — further to the side means more dramatic shadows, closer to center means flatter light.`,
+      why: _p === 'butterfly' || _p === 'clamshell'
+        ? `Centered light eliminates side shadows completely. That's why it's so flattering for beauty work — no unflattering shadows under cheekbones or along the jawline. The only shadow you'll see is a small ${_v.signature} directly under the nose.`
+        : _p === 'split'
+          ? `At 90 degrees, the nose acts like a wall — light can't wrap around to the other side. That's what creates the clean vertical division. Even a few degrees off will start to let light leak onto the shadow side.`
+          : _p === 'rembrandt'
+            ? `The magic angle for Rembrandt is where the nose shadow extends just far enough to connect with the cheek shadow — creating a small triangle of light on the shadow-side cheek. If you can't see the triangle, move the light further to the side. If the shadow side goes completely dark, you've gone too far.`
+            : `The position of your light relative to the face is what creates the specific shadow shape. Think of it like sunlight through a window — where the window is determines where the shadows fall.`,
       coach: coach('position'),
     },
     {
       key: 'distance',
-      title: 'SET THE DISTANCE',
-      lead: `Pull the softbox to ${distance} from your subject.`,
-      why: angularArea
-        ? `Distance controls shadow hardness via apparent light size. At this range, your ${modName} yields ${angularArea} angular area — enough wrap for flattering skin without losing dimensional shadow.`
-        : `Closer = softer, more wrap (larger apparent light). Farther = harder shadows, more directional fall-off. Distance is a dial, not a binary.`,
+      title: 'HOW FAR AWAY',
+      lead: `Place the light about ${distance} from your subject.`,
+      why: _p === 'clamshell' || _p === 'butterfly'
+        ? `For ${pattern.toLowerCase()}, distance matters a lot. Too close and the light wraps too much — you lose the clean ${_v.signature}. Too far and the light gets harsh. At ${distance}, your ${modName} is close enough to keep skin smooth but controlled enough to hold the pattern.`
+        : _p === 'split'
+          ? `With split lighting, moving closer makes the lit side softer and the transition at the center more gradual. Moving farther makes the edge sharper and more dramatic. At ${distance}, you get a defined split that still has some skin texture visible.`
+          : _p === 'rembrandt'
+            ? `At ${distance}, your ${modName} creates shadows that have a soft edge — firm enough to see the Rembrandt triangle clearly, but gentle enough that the skin still looks natural. Closer would make it too soft to see the triangle; farther would make the shadows too harsh.`
+            : `The simple rule: closer = softer shadows (like an overcast day). Farther = harder shadows (like direct sun). At ${distance}, you get the right balance for ${pattern.toLowerCase()} — defined shadows without being harsh.`,
       coach: coach('distance'),
     },
     {
       key: 'height',
-      title: 'DIAL THE HEIGHT',
-      lead: `Raise the light to ${heightDisplay.toLowerCase()} — tilted down onto the eyes.`,
-      why: `Height sets the nose-shadow *length*. Higher placement → longer shadow → more dramatic. Too high and you lose catchlights in the eyes; too low and the pattern flattens into a butterfly. Aim for the catchlight to land around 10–11 o'clock in the iris.`,
+      title: 'HOW HIGH',
+      lead: _p === 'butterfly' || _p === 'clamshell'
+        ? `Raise the light directly above the camera — high enough to create the ${_v.signature}, aimed down at the face.`
+        : _p === 'split'
+          ? _hHigh
+            ? `Raise the light above head height. For split lighting, height adds drama — a higher light makes the lit side more sculpted.`
+            : `Keep the light at about face level. This keeps the split clean and even from forehead to chin.`
+          : _hHigh
+            ? `Raise the light well above your subject's head — aim it down toward the eyes, like afternoon sun.`
+            : _hLow
+              ? `Keep the light near eye level — you want it looking straight at the face.`
+              : `Set the light just above eye level — tilted slightly down toward the face.`,
+      why: _p === 'butterfly'
+        ? `Height is everything for butterfly lighting. The higher the light, the longer the shadow under the nose. You want a short, symmetrical butterfly shape — not a long shadow that reaches the lip. Watch for the bright spark (catchlight) in the eyes at the 12 o'clock position. If you can't see it, the light is too high.`
+        : _p === 'clamshell'
+          ? `The top light creates the main shape. Your fill light (or reflector) below opens up the shadows under the chin and eyes. Together they "clam shell" the face in soft, even light. Check for two catchlights — one from above, one from below.`
+          : _p === 'rembrandt'
+            ? `Height controls the Rembrandt triangle. Too high: the triangle disappears and the eye sockets go dark (raccoon eyes). Too low: the triangle opens up into a loop pattern instead. The sweet spot: you can see the triangle AND a bright spark of light in both eyes.`
+            : `Height controls the length of the nose shadow. Higher = longer shadow = more dramatic. Lower = shorter shadow = softer feel. The key check: can you see a bright spark of light reflected in both eyes? If not, the light is too high — lower it until you see that spark.`,
       coach: coach('height'),
     },
     {
       key: 'capture',
-      title: 'FIRE A FRAME',
-      lead: `${pattern} locked at ${confidence}% confidence — capture and compare.`,
-      why: asymmetry != null
-        ? `Your final reference had ${(asymmetry * 100).toFixed(0)}% left/right shadow asymmetry — that's what keeps this from reading as flat/butterfly. After capture, compare catchlight shape in both eyes: they should be near-identical in position and size.`
-        : `Compare your frame against the reference. Catchlight position, shadow triangle under the eye, and shadow-side wrap all need to match. If pattern drifts, step back and re-check position before touching height.`,
+      title: 'TAKE THE SHOT',
+      lead: `You're set for ${pattern.toLowerCase()}. Take a photo and compare it to the reference.`,
+      why: _p === 'rembrandt'
+        ? `Check for three things: (1) Can you see the small triangle of light on the shadow cheek? That's the Rembrandt signature. (2) Is there a bright spark in both eyes? (3) Does the shadow side still show some detail — it shouldn't be pure black. If the triangle is missing, adjust position. If eyes are dark, lower the light.`
+        : _p === 'butterfly'
+          ? `Check for: (1) A symmetrical butterfly shadow under the nose — it should be centered, not leaning to one side. (2) Catchlights at the top of both eyes (12 o'clock). (3) Clean jawline without heavy shadows. If the shadow leans, your light isn't centered.`
+          : _p === 'split'
+            ? `Check for: (1) A clean, straight line dividing the lit and shadow sides of the face. (2) The line should run through the center of the nose. (3) The shadow side can be very dark — that's intentional. If light is leaking onto the shadow side, push the light further to the side.`
+            : `Check your photo against the reference: (1) Does the shadow shape on the face match? (2) Can you see a bright spark of light in both eyes? (3) Is there detail in the shadow side — not pure black? If something's off, adjust one thing at a time. Start with position, then distance, then height.`,
       coach: coach('capture'),
     },
   ];
@@ -896,12 +948,19 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
     onPointerUp: endHeroLongPress,
     onPointerLeave: endHeroLongPress,
     onPointerCancel: endHeroLongPress,
+    onDoubleClick: () => { longPressHaptic(); setHeroZoomed(true); },
   };
 
   // ── VF geometry — match Home / Results viewfinder height ───────────────────
   // L-1 / user request: "same vf size for cockpit as other windows".
   // Replicates the HomeScreen fluid VF calc so the reference photo is identical.
-  const { stableVH, safeBottom, isDesktop } = useStableViewport();
+  const { stableVH, safeBottom, isDesktop: _isDesktopGlobal } = useStableViewport();
+  // Cockpit uses a LOCAL wide-screen check at 768px so tablet portrait
+  // (iPad mini) gets the two-column photo+chrome layout.  Other screens
+  // keep the global LAYOUT_DESKTOP_MIN = 1024 threshold to avoid the
+  // FitToViewport conflict zone.
+  const isDesktop = _isDesktopGlobal
+    || (typeof window !== 'undefined' && window.innerWidth >= 768);
   const VF_TOP = 100;
   const VF_BTN_D = 136;
   const VF_WELL_D = 146;
@@ -1080,7 +1139,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
         onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         style={{
-        width: '100%', maxWidth: isDesktop ? 1180 : 430, height: '100%', margin: '0 auto',
+        width: '100%', maxWidth: isDesktop ? 1440 : 430, height: '100%', margin: '0 auto',
         backgroundColor: C.bg,
         display: 'flex', flexDirection: 'column',
         position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
@@ -1097,19 +1156,20 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
             backgroundSize: '128px 128px' }} />
         </div>
 
-        {/* ── Desktop: two-column layout (photo left, controls right) ──
+        {/* ── Desktop: two-column (photo left, controls right) ──
              Mobile: single-column stack (header → body → dots → controls) ── */}
         {isDesktop && !isAssistant ? (
           <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
-            {/* Left column — persistent reference photo with overlay */}
-            <div
-              {...(heroPressHandlers || {})}
-              style={{
-                flex: '0 0 55%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                padding: 24, cursor: 'zoom-in', WebkitTapHighlightColor: 'transparent',
-              }}
-            >
-              {imagePreview && (
+            {/* Left column — reference photo with overlays */}
+            {imagePreview && (
+              <div
+                {...(heroPressHandlers || {})}
+                style={{
+                  flex: '0 0 55%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 16, cursor: 'zoom-in', WebkitTapHighlightColor: 'transparent',
+                  overflow: 'hidden',
+                }}
+              >
                 <ReferenceWithOverlay
                   imagePreview={imagePreview}
                   result={result}
@@ -1120,13 +1180,17 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   pattern={pattern}
                   maxHeight={stableVH - 80}
                   mode={mode}
+                  fullWidth
+                  heightDisplay={heightDisplay}
+                  modName={modName}
                 />
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Right column — header, body content, dots, controls */}
             <div style={{
-              flex: '0 0 45%', display: 'flex', flexDirection: 'column',
+              flex: imagePreview ? '0 0 45%' : '1 1 100%',
+              display: 'flex', flexDirection: 'column',
               minHeight: 0, position: 'relative',
             }}>
               {/* Header */}
@@ -1887,6 +1951,8 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
             distance={distance}
             maxHeight={vfHeight}
             mode="photographer"
+            heightDisplay={heightDisplay}
+            modName={modName}
           />
         </div>
       )}
@@ -1914,34 +1980,42 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
 
 // ─── Coaching disclosure — collapsed toggle for photographer, expanded for learning ──
 function CoachingDisclosure({ coach, variant = 'photographer' }) {
-  const [open, setOpen] = useState(false);
-  if (!coach) return null;
   const isLearning = variant === 'learning';
-  const label = isLearning ? 'TROUBLESHOOTING' : 'TIPS';
-  const labelHide = isLearning ? 'HIDE TROUBLESHOOTING' : 'HIDE TIPS';
-  // Both modes: collapsed behind a toggle. WHY block covers learning's
-  // educational angle; coaching is diagnostic in both contexts.
+  const [open, setOpen] = useState(isLearning);
+  if (!coach) return null;
+  const label = isLearning ? 'NOT LOOKING RIGHT?' : 'TROUBLESHOOTING';
+  const labelHide = isLearning ? 'HIDE TROUBLESHOOTING' : 'HIDE';
   return (
     <div style={{ padding: '10px 20px 0', position: 'relative', zIndex: 1 }}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { setOpen(o => !o); tapHaptic(); }}
         style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          background: 'none', border: 'none', cursor: 'pointer',
-          padding: '6px 0', margin: '0 auto',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: open ? 'rgba(214,123,78,0.08)' : 'rgba(255,255,255,0.03)',
+          border: `1px solid ${open ? 'rgba(214,123,78,0.2)' : 'rgba(255,255,255,0.06)'}`,
+          borderRadius: 8,
+          cursor: 'pointer',
+          padding: '8px 16px',
+          margin: '0 auto',
+          width: '100%',
+          maxWidth: 280,
           WebkitTapHighlightColor: 'transparent',
+          transition: 'background 0.2s ease, border-color 0.2s ease',
         }}
       >
         <span style={{
-          fontSize: 9, fontWeight: 700, color: steel(0.5),
-          letterSpacing: '1.2px', ...FONT_SMOOTH,
+          fontSize: 10, fontWeight: 700,
+          color: open ? 'rgba(214,123,78,0.9)' : steel(0.6),
+          letterSpacing: '1px', ...FONT_SMOOTH,
+          transition: 'color 0.2s ease',
         }}>
           {open ? labelHide : label}
         </span>
         <span style={{
-          fontSize: 10, color: steel(0.45),
+          fontSize: 11,
+          color: open ? 'rgba(214,123,78,0.7)' : steel(0.45),
           transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-          transition: 'transform 0.2s ease',
+          transition: 'transform 0.2s ease, color 0.2s ease',
           ...FONT_SMOOTH,
         }}>▾</span>
       </button>
@@ -2116,6 +2190,8 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             pattern={pattern}
             maxHeight={vfHeight}
             mode="learning"
+            heightDisplay={heightDisplay}
+            modName={modName}
           />
         </div>
       )}
@@ -2133,23 +2209,34 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
         </p>
       </div>
 
-      {/* WHY callout — lighting theory from signal diagnostics */}
+      {/* WHY callout — clean readable layout */}
       {step.why && (
         <div style={{ padding: dk ? '18px 28px 0' : '14px 20px 0', position: 'relative', zIndex: 1 }}>
           <div style={{
-            backgroundColor: C.panelBg,
+            backgroundColor: 'rgba(18,19,22,0.85)',
             borderRadius: dk ? 14 : 12,
-            boxShadow: `inset 0px 0px 0px 1px rgba(200,155,69,0.14), ${PANEL_BEVEL}`,
-            padding: dk ? '14px 18px' : '12px 14px',
+            border: `1px solid rgba(200,155,69,0.12)`,
+            boxShadow: PANEL_BEVEL,
+            padding: dk ? '16px 20px' : '12px 16px',
           }}>
             <p style={{ margin: 0, fontSize: dk ? 10 : 9, fontWeight: 700,
               color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-              WHY
+              WHY THIS MATTERS
             </p>
-            <p style={{ margin: '6px 0 0', fontSize: dk ? 14 : 12, fontWeight: 500,
-              color: C.textSub, lineHeight: 1.55, ...FONT_SMOOTH }}>
-              {step.why}
-            </p>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {step.why.split('. ').filter(Boolean).map((sentence, i, arr) => (
+                <p key={i} style={{
+                  margin: 0,
+                  fontSize: dk ? 14 : 12,
+                  fontWeight: i === 0 ? 600 : 400,
+                  color: i === 0 ? C.textPrimary : C.textSub,
+                  lineHeight: 1.55,
+                  ...FONT_SMOOTH,
+                }}>
+                  {sentence}{i < arr.length - 1 ? '.' : ''}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -2162,7 +2249,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
 // ─── Reference photo with per-step catchlight / key-light overlays ─────────
 // Role-aware: Photographer gets minimal clinical markers; Learning gets
 // labeled educational annotations. Assistant never renders a photo at all.
-function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300 }) {
+function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300, fullWidth = false, heightDisplay = '—', modName = '' }) {
   const imgDim = result?._raw?.image_dimensions
     || result?._raw?.description?.size
     || { width: 1177, height: 1592 };
@@ -2220,6 +2307,10 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // center. When a catchlight is within SNAP_THRESHOLD of an eye center,
   // snap the rendering anchor to the eye center so the ring sits
   // precisely on the catchlight reflection the photographer sees.
+  // When no catchlights are detected, snappedAnchor is null and the
+  // overlay arrows do not render — we never synthesize a fake anchor
+  // from face geometry because that would present inferred data as
+  // observed catchlight evidence.
   const SNAP_THRESHOLD = 35; // px in original image space
   const snappedAnchor = (() => {
     if (!primaryKey) return null;
@@ -2243,11 +2334,42 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
 
   // Clock string → unit vector (SVG screen coords, y-down; 12 = up)
   // Parse hour portion (e.g. "1 o'clock" or "1:30 o'clock")
-  const clockHour = (() => {
+  const catchlightClockHr = (() => {
     const m = (position || '').match(/(\d+)(?::(\d+))?\s*o'?clock/i);
-    if (!m) return 1;
+    if (!m) return null;
     return parseInt(m[1]) + (m[2] ? parseInt(m[2]) / 60 : 0);
   })();
+
+  // Resolution guard: when the iris is < 15px radius, the catchlight
+  // centroid is at its positioning floor — a 1–2px shift flips the clock
+  // direction.  Fall back to angleDeg (shadow-geometry-derived, robust at
+  // any resolution).  Also cross-check: if catchlight clock and angleDeg
+  // disagree by > 90°, prefer angleDeg.
+  const _eyeDist = Math.hypot(rightEye[0] - leftEye[0], rightEye[1] - leftEye[1]) || (W * 0.18);
+  const irisR = primaryKey?.enc_r_px
+    ? primaryKey.enc_r_px / (primaryKey.size_ratio || 0.15)
+    : _eyeDist * 0.22;
+  const lowResIris = irisR < 15;
+
+  const angleClockHr = (() => {
+    if (typeof angleDeg !== 'number') return null;
+    const h = (12 - angleDeg / 30 + 12) % 12;
+    return h === 0 ? 12 : h;
+  })();
+
+  const clockHour = (() => {
+    // If no catchlight clock available, use angleDeg-derived
+    if (catchlightClockHr == null) return angleClockHr ?? 1;
+    // Low-res iris: trust shadow geometry over catchlight position
+    if (lowResIris && angleClockHr != null) return angleClockHr;
+    // Cross-check: catchlight vs shadow geometry
+    if (angleClockHr != null) {
+      const diff = Math.abs(((catchlightClockHr - angleClockHr + 6) % 12) - 6);
+      if (diff > 3) return angleClockHr; // >90° disagreement → prefer shadow
+    }
+    return catchlightClockHr;
+  })();
+
   const clockVec = (() => {
     const angle = ((clockHour % 12) * 30 - 90) * Math.PI / 180;
     return { dx: Math.cos(angle), dy: Math.sin(angle) };
@@ -2256,7 +2378,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // Face centroid (used for sizing & fallback arrow origin)
   const faceCx = (leftEye[0] + rightEye[0]) / 2;
   const faceCy = (foreheadTop[1] + chin[1]) / 2 - (chin[1] - foreheadTop[1]) * 0.25;
-  const padding = Math.min(W, H) * 0.06;
+  const padding = Math.min(W, H) * 0.12;
 
   // Key-light arrow ANCHORS AT THE CATCHLIGHT (not face center).
   // This visually communicates: the catchlight in the eye IS the observable
@@ -2271,19 +2393,23 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
     clockVec.dy > 0 ? (H - padding - anchorY) / Math.max(0.001, clockVec.dy) : Infinity,
     clockVec.dy < 0 ? (anchorY - padding - Math.min(W, H) * 0.08) / Math.max(0.001, -clockVec.dy) : Infinity
   );
-  const arrowLen = Math.min(Math.min(W, H) * 0.38, maxArrowLen);
+  const arrowLen = Math.min(Math.min(W, H) * 0.28, maxArrowLen);
   // Arrow starts AT the primary catchlight center so the visual anchor is
   // unambiguous. The bright dot + ring render on top of the line, so the
   // overlap reads as "the line emerges from this catchlight."
   const arrowStartX = anchorX;
   const arrowStartY = anchorY;
-  const arrowEndX = anchorX + clockVec.dx * arrowLen;
-  const arrowEndY = anchorY + clockVec.dy * arrowLen;
+  // Clamp arrow endpoint to stay well within viewBox
+  const _margin = padding * 2.5;
+  const arrowEndX = Math.max(_margin, Math.min(W - _margin, anchorX + clockVec.dx * arrowLen));
+  const arrowEndY = Math.max(_margin, Math.min(H - _margin, anchorY + clockVec.dy * arrowLen));
 
   // Nose shadow: opposite direction of light, shorter
   const shadowLen = Math.min(W, H) * 0.14;
-  const shadowEndX = noseTip ? noseTip[0] - clockVec.dx * shadowLen : 0;
-  const shadowEndY = noseTip ? noseTip[1] - clockVec.dy * shadowLen + shadowLen * 0.5 : 0;
+  const _rawShadowEndX = noseTip ? noseTip[0] - clockVec.dx * shadowLen : 0;
+  const _rawShadowEndY = noseTip ? noseTip[1] - clockVec.dy * shadowLen + shadowLen * 0.5 : 0;
+  const shadowEndX = Math.max(_margin, Math.min(W - _margin, _rawShadowEndX));
+  const shadowEndY = Math.max(_margin, Math.min(H - _margin, _rawShadowEndY));
 
   const isLearning = mode === 'learning';
 
@@ -2294,9 +2420,19 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   const keyColor = KEY_ACCENT;
   const distColor = '#48ba88';
   const shadowColor = '#6ea8d1';
-  const strokeBase = isLearning ? 7 : 6;
-  const fontBase = isLearning ? 40 : 36;
-  const ringR = isLearning ? 22 : 18;
+
+  // ── Face-relative sizing ───────────────────────────────────────────────
+  // Scale all overlay elements to interocular distance so the ring fits
+  // the eye whether the source image is 236px or 4000px wide.
+  const iod = _eyeDist;
+  const _lm = isLearning ? 1.1 : 1;
+  // Sizing floors ensure overlays are visible even on small source images
+  // (e.g. 236×419 upscaled portrait where IOD is only ~70px in image space).
+  // The SVG is sliced/scaled to fill the container, so these floor values
+  // in image-space pixels become much larger visually.
+  const strokeBase = Math.max(2.5, iod * 0.035 * _lm);
+  const fontBase   = Math.max(16, iod * 0.32 * _lm);
+  const ringR      = Math.max(8, iod * 0.12 * _lm);
 
   const showKey = stepKey === 'position' || stepKey === 'capture';
   const showDist = stepKey === 'distance' || stepKey === 'capture';
@@ -2304,7 +2440,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // On the capture step every overlay system renders at once, so suppress
   // text labels to avoid stacking four callouts on one face. Visual markers
   // (rings, arrows) remain.
-  const showLabels = isLearning && stepKey !== 'capture';
+  const showLabels = isLearning;
 
   // Container matches the VF height from Home/Results. For landscape images
   // the width may exceed the screen — the parent's overflow:hidden clips it
@@ -2316,25 +2452,73 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   return (
     <div style={{
       position: 'relative',
-      width: Math.min(containerW, 390), height: containerH,
-      borderRadius: 12, overflow: 'hidden',
-      backgroundColor: C.slotBg,
-      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+      width: fullWidth ? '100%' : Math.min(containerW, 390),
+      height: fullWidth ? '100%' : containerH,
+      borderRadius: fullWidth ? 0 : 12, overflow: 'hidden',
+      backgroundColor: '#000',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <img src={imagePreview} alt="Reference"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'hidden' }}>
         <defs>
-          <marker id={`kar-${mode}`} viewBox="0 0 10 10" refX="8" refY="5"
+          <clipPath id={`vb-${mode}`}><rect x={-fontBase * 0.5} y={-fontBase * 0.5} width={W + fontBase} height={H + fontBase} /></clipPath>
+          <marker id={`kar-${mode}`} viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0,0 L10,5 L0,10 z" fill={keyColor} />
+            <path d="M1,1 L10,5 L1,9 z" fill={keyColor} opacity="0.95" />
           </marker>
-          <marker id={`sar-${mode}`} viewBox="0 0 10 10" refX="8" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0,0 L10,5 L0,10 z" fill={shadowColor} />
+          <marker id={`sar-${mode}`} viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="4.5" markerHeight="4.5" orient="auto">
+            <path d="M1,1 L10,5 L1,9 z" fill={shadowColor} opacity="0.85" />
           </marker>
+          {/* Catchlight glow — tight bloom */}
+          <filter id={`cg-${mode}`} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation={ringR * 0.5} />
+          </filter>
+          {/* Shadow soft edge */}
+          <filter id={`sb-${mode}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation={strokeBase * 0.4} />
+          </filter>
+          {/* Key arrow gradient — fades like light falloff */}
+          <linearGradient id={`kag-${mode}`}
+            x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
+            gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={keyColor} stopOpacity="1.0" />
+            <stop offset="70%" stopColor={keyColor} stopOpacity="0.65" />
+            <stop offset="100%" stopColor={keyColor} stopOpacity="0.35" />
+          </linearGradient>
+          {/* Text drop shadow filter */}
+          <filter id={`ts-${mode}`} x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy={fontBase * 0.06} stdDeviation={fontBase * 0.08}
+              floodColor="#000" floodOpacity="0.7" />
+          </filter>
+          {/* Shadow stroke falloff gradient — fades like real shadow softens */}
+          {noseTip && (
+            <linearGradient id={`sfg-${mode}`}
+              x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
+              gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor={shadowColor} stopOpacity="0.9" />
+              <stop offset="50%" stopColor={shadowColor} stopOpacity="0.45" />
+              <stop offset="100%" stopColor={shadowColor} stopOpacity="0.1" />
+            </linearGradient>
+          )}
+          <style>{`
+            @keyframes catchlightPulse-${mode} {
+              0%, 100% { opacity: 0.3; }
+              50% { opacity: 0.5; }
+            }
+            @keyframes keyArrowFlow-${mode} {
+              0% { stroke-dashoffset: 0; }
+              100% { stroke-dashoffset: ${iod * 0.29}; }
+            }
+            @keyframes overlayIn-${mode} {
+              0% { opacity: 0; transform: scale(0.96); }
+              100% { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
         </defs>
+        <g clipPath={`url(#vb-${mode})`}>
 
         {/* Step 1 / 4:
             CATCHLIGHT POSITION — bright dot + ring on each eye (the reflection)
@@ -2346,29 +2530,36 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
           const cx = isPrimary && snappedAnchor ? snappedAnchor.x : c.abs_cx;
           const cy = isPrimary && snappedAnchor ? snappedAnchor.y : c.abs_cy;
           return (
-            <g key={`c${i}`}>
-              {/* Inner bright dot = the actual catchlight highlight */}
-              <circle cx={cx} cy={cy} r={strokeBase * 0.9}
-                fill={catchColor} opacity={isPrimary ? 1 : 0.7} />
-              {/* Ring marker around it */}
+            <g key={`c${i}`} style={stepKey === 'capture' ? { opacity: 0.8 } : undefined}>
+              {isPrimary && (
+                <circle cx={cx} cy={cy} r={ringR * 0.9}
+                  fill={catchColor} filter={`url(#cg-${mode})`}
+                  style={{ animation: `catchlightPulse-${mode} 2.8s ease-in-out infinite` }} />
+              )}
+              <circle cx={cx} cy={cy} r={strokeBase * 0.8}
+                fill={catchColor} opacity={isPrimary ? 1 : 0.8} />
               <circle cx={cx} cy={cy} r={ringR}
-                fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.55}
-                opacity={isPrimary ? 0.95 : 0.5} />
+                fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.6}
+                opacity={isPrimary ? 0.95 : 0.6} />
               {isLearning && isPrimary && !showDist && (
-                <circle cx={cx} cy={cy} r={ringR * 1.7}
-                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.3}
-                  opacity="0.3" />
+                <circle cx={cx} cy={cy} r={ringR * 1.5}
+                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.2}
+                  opacity="0.2" />
               )}
             </g>
           );
         })}
         {showKey && (
-          <g>
-            {/* KEY LIGHT ANGLE arrow — anchored at the catchlight, pointing outward */}
+          <g style={stepKey === 'capture' ? { opacity: 0.75 } : undefined}>
             <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
-              stroke={keyColor} strokeWidth={strokeBase * 1.3} opacity="0.92"
-              markerEnd={`url(#kar-${mode})`} strokeDasharray={isLearning ? '20 12' : '14 8'}
-              strokeLinecap="round" />
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 2.5}
+              opacity="0.22" filter={`url(#cg-${mode})`} strokeLinecap="round" />
+            <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 1.2}
+              markerEnd={`url(#kar-${mode})`}
+              strokeDasharray={isLearning ? `${iod * 0.14} ${iod * 0.09}` : `${iod * 0.10} ${iod * 0.06}`}
+              strokeLinecap="round"
+              style={isLearning ? { animation: `keyArrowFlow-${mode} 6s linear infinite` } : undefined} />
             {showLabels && (() => {
               // KEY LIGHT ANGLE label — near the arrow tip, clamped inside image
               const labelX = Math.max(padding, Math.min(W - padding, arrowEndX - fontBase * 0.3));
@@ -2378,20 +2569,40 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
               const secondary = tr
                 ? `${(pattern || '').toUpperCase()} TARGET ${tr}`
                 : `FROM ${(position || '').toUpperCase()}`;
+              // Clamp labels well inside viewBox
+              const _lx = Math.max(fontBase * 2, Math.min(W - fontBase * 2, labelX));
+              const _ly = Math.max(fontBase * 2.5, Math.min(H - fontBase * 4, labelY));
+              const heightLabel = heightDisplay && heightDisplay !== '—' ? `↕ ${heightDisplay.toUpperCase()}` : null;
               return (
                 <>
-                  <text x={labelX} y={labelY} textAnchor="end"
+                  <text x={_lx} y={_ly} textAnchor="end"
                     fontSize={fontBase} fontWeight="900" fill={keyColor}
                     letterSpacing="2" fontFamily="Inter, system-ui, sans-serif"
-                    style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 8 }}>
+                    filter={`url(#ts-${mode})`}>
                     {primary}
                   </text>
-                  <text x={labelX} y={labelY + fontBase * 0.62} textAnchor="end"
+                  <text x={_lx} y={_ly + fontBase * 0.58} textAnchor="end"
                     fontSize={fontBase * 0.44} fontWeight="700" fill={keyColor}
                     letterSpacing="1.2" fontFamily="Inter, system-ui, sans-serif"
-                    style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 5 }}>
+                    filter={`url(#ts-${mode})`}>
                     {secondary}
                   </text>
+                  {heightLabel && (
+                    <text x={_lx} y={_ly + fontBase * 1.08} textAnchor="end"
+                      fontSize={fontBase * 0.40} fontWeight="700" fill={steel(0.7)}
+                      letterSpacing="1" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {heightLabel}
+                    </text>
+                  )}
+                  {modName && modName !== 'Modifier' && (
+                    <text x={_lx} y={_ly + fontBase * (heightLabel ? 1.54 : 1.08)} textAnchor="end"
+                      fontSize={fontBase * 0.38} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {modName.toUpperCase()}
+                    </text>
+                  )}
                 </>
               );
             })()}
@@ -2401,7 +2612,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
                 textAnchor="end"
                 fontSize={fontBase * 0.62} fontWeight="800" fill={catchColor}
                 letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 6 }}>
+                filter={`url(#ts-${mode})`}>
                 CATCHLIGHT @ {position || ''}
               </text>
             )}
@@ -2410,42 +2621,65 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
 
         {/* Step 2 / 4: distance rings at primary catchlight */}
         {showDist && primaryKey && (
-          <g>
+          <g style={stepKey === 'capture' ? { opacity: 0.7 } : undefined}>
             <circle cx={anchorX} cy={anchorY}
-              r={ringR * 2.5} fill="none" stroke={distColor}
-              strokeWidth={strokeBase * 0.7} opacity="0.85" />
+              r={ringR * 2.2} fill="none" stroke={distColor}
+              strokeWidth={strokeBase * 0.5} opacity="0.92"
+              style={{ mixBlendMode: 'lighten' }} />
             <circle cx={anchorX} cy={anchorY}
-              r={ringR * 3.6} fill="none" stroke={distColor}
-              strokeWidth={strokeBase * 0.4} opacity="0.45" strokeDasharray="10 8" />
-            {showLabels && (
-              <text x={anchorX + ringR * 4.0} y={anchorY + 14}
-                fontSize={fontBase * 0.9} fontWeight="800" fill={distColor}
-                letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.6)', strokeWidth: 6 }}>
-                {distance || 'DIST'}
-              </text>
-            )}
+              r={ringR * 3.2} fill="none" stroke={distColor}
+              strokeWidth={strokeBase * 0.3} opacity="0.45"
+              strokeDasharray={`${iod * 0.08} ${iod * 0.05}`} />
+            {showLabels && (() => {
+              const _dx = Math.min(W - fontBase * 2, anchorX + ringR * 4.0);
+              const _dy = Math.min(H - fontBase, anchorY + 14);
+              return (
+                <>
+                  <text x={_dx} y={_dy}
+                    fontSize={fontBase * 0.9} fontWeight="800" fill={distColor}
+                    letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
+                    filter={`url(#ts-${mode})`}>
+                    {distance || 'DIST'}
+                  </text>
+                  {result?.sections?.modifier?.optDist && (
+                    <text x={_dx} y={_dy + fontBase * 0.52}
+                      fontSize={fontBase * 0.38} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      SWEET SPOT {result.sections.modifier.optDist.toUpperCase()}
+                    </text>
+                  )}
+                </>
+              );
+            })()}
           </g>
         )}
 
         {/* Step 3 / 4: nose shadow vector */}
         {showShadow && noseTip && (
-          <g>
+          <g style={stepKey === 'capture' ? { opacity: 0.65 } : undefined}>
             <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
-              stroke={shadowColor} strokeWidth={strokeBase} opacity="0.9"
-              markerEnd={`url(#sar-${mode})`} strokeLinecap="round" />
-            <circle cx={noseTip[0]} cy={noseTip[1]} r={strokeBase * 0.9}
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 1.4} opacity="0.28"
+              filter={`url(#sb-${mode})`} strokeLinecap="round" />
+            <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 0.8} opacity="0.95"
+              markerEnd={`url(#sar-${mode})`} strokeLinecap="round"
+              style={{ mixBlendMode: 'multiply' }} />
+            <circle cx={noseTip[0]} cy={noseTip[1]} r={ringR * 0.5}
+              fill={shadowColor} opacity="0.08" filter={`url(#sb-${mode})`} />
+            <circle cx={noseTip[0]} cy={noseTip[1]} r={strokeBase * 0.6}
               fill={shadowColor} />
             {showLabels && (
               <text x={shadowEndX + 12} y={shadowEndY + 14}
                 fontSize={fontBase * 0.75} fontWeight="800" fill={shadowColor}
                 letterSpacing="1.4" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.6)', strokeWidth: 5 }}>
+                filter={`url(#ts-${mode})`}>
                 NOSE SHADOW
               </text>
             )}
           </g>
         )}
+        </g>{/* end clipPath group */}
       </svg>
     </div>
   );

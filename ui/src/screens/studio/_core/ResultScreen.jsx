@@ -1196,7 +1196,7 @@ function PatternFaceIcon({ name, size = 64, lit, shadowSide }) {
   );
 }
 
-function PatternBars({ candidates, isHighConf, shadowSide }) {
+function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
   const scoreColor  = isHighConf ? C.confHigh     : C.confLowScore;
   const barFill     = isHighConf ? C.confHighBar  : C.confLowBar;
 
@@ -1366,11 +1366,27 @@ function PatternBars({ candidates, isHighConf, shadowSide }) {
                     }} />
                   </div>
                 </div>
-                <span style={{
-                  fontSize: 14, fontWeight: 700,
-                  color: C.textSub, alignSelf: 'center',
-                  ...FONT_SMOOTH,
-                }}>{c.score}%</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, alignSelf: 'center' }}>
+                  <span style={{
+                    fontSize: 14, fontWeight: 700,
+                    color: C.textSub,
+                    ...FONT_SMOOTH,
+                  }}>{c.score}%</span>
+                  {onSelectSetup && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); tapHaptic(); onSelectSetup(c.name); }}
+                      style={{
+                        padding: '3px 10px', borderRadius: 6,
+                        border: `1px solid ${steel(0.2)}`,
+                        background: 'rgba(255,255,255,0.03)',
+                        color: steel(0.7), fontSize: 10, fontWeight: 600,
+                        letterSpacing: '0.6px', cursor: 'pointer',
+                        WebkitTapHighlightColor: 'transparent',
+                        ...FONT_SMOOTH,
+                      }}
+                    >BUILD</button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1688,7 +1704,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // photo breathe (less aggressive face crop) and makes room for a taller
   // hero block alongside the analytical panel. FitToViewport handles the
   // uniform scale on wide screens at the app shell.
-  const heroWidth = isDesktop ? 540 : 430;
+  const heroWidth = isDesktop ? 720 : 430;
 
   // ── VF geometry (identical to HomeScreen) ──────────────────────────────────
   // Compute the same viewfinder height so the result hero matches HomeScreen.
@@ -2121,13 +2137,18 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // top-to-bottom inside the hero column. panelTop = D_DIAGRAM_TOP + 300
   // gives the diagram well ~300px of real estate before the analytical
   // panel column begins.
-  const D_PHOTO_TOP    = 100;
-  const D_PHOTO_HEIGHT = VF_HEIGHT;   // matches HomeScreen VF exactly
+  const D_PHOTO_TOP    = isDesktop ? 16 : 100;
+  // Desktop photo: fill the grid row. The `1fr` grid row stretches to
+  // viewport minus CTA. The photo fills this, with the pattern overlay
+  // sitting at the bottom inside a gradient fade.
+  const D_PHOTO_HEIGHT = isDesktop ? Math.max(VF_HEIGHT, stableVH - 100) : VF_HEIGHT;
   const D_PHOTO_BOTTOM = D_PHOTO_TOP + D_PHOTO_HEIGHT;
   const D_INFO_TOP     = D_PHOTO_BOTTOM + 20;   // photo bottom + 20 gap
   const D_CTA_TOP      = D_INFO_TOP + 120;       // info (pattern+pills) ~ 80 tall + 40 gap
   const D_DIAGRAM_TOP  = D_CTA_TOP + 60;         // CTA (48) + 12 gap → diagram well
-  const panelTop    = isDesktop ? (D_DIAGRAM_TOP + 300) : M_TOP_END;
+  // Desktop: hero fills available viewport height (minus CTA area at bottom).
+  // The photo + pattern overlay stretch to fill the column naturally.
+  const panelTop    = isDesktop ? (stableVH - 80) : M_TOP_END;
 
   // Detail drawer toggle — silent.  THE LIGHT and THE SETUP are always
   // visible; only the DETAIL section collapses.
@@ -2173,7 +2194,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
     <div
       style={{
       width: '100%',
-      maxWidth: isDesktop ? 'min(92vw, 1400px)' : 430,
+      maxWidth: isDesktop ? '100%' : 430,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
@@ -2191,11 +2212,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       ...(isDesktop ? {
         display: 'grid',
         gridTemplateColumns: `${heroWidth}px minmax(0, 1fr)`,
-        gridTemplateRows: 'auto auto',
-        gridTemplateAreas: '"hero panel" "actions panel"',
-        columnGap: 36,
+        gridTemplateRows: '1fr auto',
+        gridTemplateAreas: '"hero panel" "cta cta"',
+        columnGap: 16,
         rowGap: 0,
-        paddingLeft: 40, paddingRight: 40,
+        paddingLeft: 20, paddingRight: 20,
         alignItems: 'start',
         justifyContent: 'center',
       } : null),
@@ -2306,10 +2327,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           {imagePreview && (
             <img key={imagePreview} src={imagePreview} alt="Result" style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              // Desktop shows the whole photo (contain) since we have room;
-              // mobile stays on the tight face-crop (cover).
-              objectFit: isDesktop ? 'contain' : 'cover',
-              objectPosition: isDesktop ? '50% 50%' : faceCrop,
+              objectFit: 'contain',
+              objectPosition: '50% 50%',
               opacity: 1,
               // Inline pinch-zoom + pan — transform applied directly so the
               // image scales inside the VF with overflow: hidden clipping.
@@ -2408,8 +2427,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           {imagePreview && chipDetail?.label === 'Blown Highlights' && (
             <BlownHighlightsCanvas
               src={imagePreview}
-              objectFit={isDesktop ? 'contain' : 'cover'}
-              objectPosition={isDesktop ? '50% 50%' : faceCrop}
+              objectFit="contain"
+              objectPosition="50% 50%"
             />
           )}
           {/* Bottom vignette — fades photo into the result overlay at VF bottom */}
@@ -2446,8 +2465,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 fontWeight: 800,
                 // Dynamic font size: long pattern names (e.g. "Butterfly (Paramount)")
                 // scale down so they never wrap to a second line on mobile.
-                fontSize: pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32,
-                lineHeight: pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px',
+                fontSize: isDesktop
+                  ? (pattern.length > 18 ? 28 : pattern.length > 12 ? 36 : 42)
+                  : (pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32),
+                lineHeight: isDesktop ? '1.1' : (pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px'),
                 color: C.textPrimary,
                 letterSpacing: '-0.5px',
                 ...FONT_SMOOTH,
@@ -2455,7 +2476,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               }}>{prettify(pattern, { title: true })}</p>
               <p style={{
                 margin: 0,
-                fontWeight: 700, fontSize: 20, lineHeight: '26px',
+                fontWeight: 700, fontSize: isDesktop ? 28 : 20, lineHeight: '1.1',
                 color: confColor,
                 ...FONT_SMOOTH,
                 textShadow: `0 1px 4px rgba(0,0,0,0.5), 0 0 2px ${confColor}`,
@@ -2543,39 +2564,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           )}
         </div>
 
-        {/* ── CTA — desktop only: absolute positioned below VF ── */}
-        {isDesktop && (
-          <button
-            onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
-            style={{
-              position: 'absolute', top: D_CTA_TOP, left: 25, right: 25,
-              display: isHighConf ? 'flex' : 'none',
-              alignItems: 'center', justifyContent: 'center',
-              height: 48,
-              borderRadius: 24,
-              background: CTA_BG,
-              boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
-              border: 'none', cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-              overflow: 'hidden',
-              opacity: infoVisible ? 1 : 0,
-              transform: infoVisible ? 'translateY(0)' : 'translateY(40px)',
-              transition: isDragging ? 'none' : 'opacity 0.3s ease, transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-              pointerEvents: infoVisible ? 'auto' : 'none',
-            }}
-          >
-            <span style={{
-              fontSize: 11, fontWeight: 600,
-              color: 'rgba(245,247,250,0.92)',
-              letterSpacing: '2.5px',
-              textTransform: 'uppercase',
-              pointerEvents: 'none',
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-            }}>
-              Build This Light
-            </span>
-          </button>
-        )}
+        {/* Hero-column CTA removed — single sticky CTA at bottom handles all viewports */}
 
         {/* Desktop-only: LightingDiagram as an accompanying hero graphic —
             pulled out of the SHADOW drawer so the hero image no longer
@@ -2585,46 +2574,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             the hero photo above it.  The diagram itself fills the well
             fluidly so it zooms with the hero column width instead of
             sitting at a fixed 300px in an oversized area. */}
-        {isDesktop && (
-          <div
-            onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
-            style={{
-              position: 'absolute',
-              top: D_DIAGRAM_TOP,
-              left: 25, right: 25,
-              bottom: 25,
-              opacity: infoVisible ? 1 : 0,
-              transition: 'opacity 0.3s ease',
-              cursor: 'zoom-in',
-              borderRadius: 14,
-              backgroundColor: '#070709',
-              boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-              overflow: 'hidden',
-            }}
-            title="Click to expand diagram"
-          >
-            {/* Diagram fills the viewfinder well */}
-            <div style={{
-              position: 'absolute', inset: 0,
-              padding: '18px 20px',
-              display: 'flex', justifyContent: 'center', alignItems: 'stretch',
-              zIndex: 1,
-            }}>
-              <LightingDiagram result={result} fluid />
-            </div>
-            {/* Glass reflection + lens vignette overlay */}
-            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
-              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-              <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.42 }} />
-              <div style={{ position: 'absolute', inset: 0, backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px', opacity: 0.28, mixBlendMode: 'overlay', pointerEvents: 'none' }} />
-            </div>
-            {/* Inner-shadow bevel ring */}
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: 14,
-              pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
-            }} />
-          </div>
-        )}
+        {/* Desktop diagram moved to panel column — see SETUP DIAGRAM SectionPanel below */}
       </div>
       </div>
       {/* ─── end top section ─── */}
@@ -2732,11 +2682,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
-        marginTop: isDesktop ? 96 : 4,
-        maxWidth: isDesktop ? 680 : undefined,
+        marginTop: isDesktop ? 16 : 4,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: isDesktop ? 4 : 12,
         opacity: infoVisible ? 1 : 0,
         transform: infoVisible ? 'translateY(0)' : 'translateY(60px)',
         transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s',
@@ -2744,36 +2693,23 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         ...(isDesktop ? {
           gridArea: 'panel',
           alignSelf: 'start',
-          // Hard-capped to fit within the 1040 design viewport:
-          //   1040 (designHeight) − 96 (panel marginTop) − 72 (actions row)
-          // = 872 of usable height. Drawers scroll within this column so
-          // the hero + CTA stay anchored and visible at all times.
-          maxHeight: 872,
-          overflowY: 'auto',
-          paddingRight: 6,
-          paddingBottom: 24,
-        } : null),
+          overflowY: 'visible',
+          paddingRight: 24,
+          paddingBottom: 12,
+        } : {
+          marginLeft: 25,
+          marginRight: 25,
+        }),
       }}>
         {/* Warning chips moved to VF overlay — see VF_WARNING_DOTS below */}
 
-        {/* ── Desktop panel header — pattern name anchors the column ── */}
-        {isDesktop && (
-          <p style={{
-            margin: '0 0 2px',
-            fontSize: 18, fontWeight: 700,
-            color: 'rgba(245,247,250,0.88)',
-            letterSpacing: '-0.2px',
-            textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-            ...FONT_SMOOTH,
-          }}>
-            {prettify(result?.pattern, { title: true }) || 'Analysis'}
-          </p>
-        )}
+        {/* Pattern name removed from panel header — it's already on the hero
+            overlay AND inside THE LIGHT's PatternBars. Three repetitions
+            diluted the impact. Now the panel starts immediately with THE LIGHT. */}
 
         {/* ═══════════════════════════════════════════════════════════════
-            THE LIGHT — always visible.  This is the core answer: what
-            pattern did we find, and what does the shadow geometry say?
-            No toggle, no drawer — the answer is always front and center.
+            THE LIGHT — always visible.  The core answer: what pattern,
+            how confident.
             ═══════════════════════════════════════════════════════════════ */}
         <SectionPanel label="THE LIGHT">
           {/* R-9: THE LIGHT shows ONLY the pattern answer. Signal, Components,
@@ -2789,6 +2725,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 if (/right$/.test(q)) return 'right';
                 return undefined;
               })()}
+              onSelectSetup={(patternName) => {
+                segmentPressSound(); tapHaptic();
+                onSetup(patternName);
+              }}
             />
           </div>
         </SectionPanel>
@@ -2815,7 +2755,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
                 gap: 6, minWidth: 0,
               }}>
-                <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <CatchlightEye
                     clockHour={catchlightClockHour}
                     clockHours={sections.catchlightPositions}
@@ -2827,21 +2767,19 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                   CATCHLIGHT
                 </span>
               </div>
-              {/* Vertical divider */}
               {sections.modifier?.family && (
                 <div style={{
                   width: 1, alignSelf: 'stretch',
                   background: 'linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.06) 70%, transparent 100%)',
                 }} />
               )}
-              {/* Modifier dial — icon container fixed 80px tall matches catchlight container */}
               {sections.modifier?.family && (
                 <div style={{
                   flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
                   gap: 6, minWidth: 0,
                 }}>
-                  <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <ModifierEmission family={sections.modifier.family} size={80} />
+                  <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <ModifierEmission family={sections.modifier.family} size={100} />
                   </div>
                   <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                     MODIFIER
@@ -2877,6 +2815,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               </p>
             )}
           </SectionPanel>
+        )}
+
+        {/* ── SETUP DIAGRAM — inline in the panel column on desktop ── */}
+        {isDesktop && result?._raw && (
+          <div
+            onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
+            style={{
+              position: 'relative', width: '100%',
+              height: 'clamp(180px, 30vh, 320px)',
+              borderRadius: 12, backgroundColor: '#0a0c0e',
+              boxShadow: 'inset 0px 1px 3px 0px rgba(0,0,0,0.35)',
+              overflow: 'hidden', cursor: 'zoom-in',
+            }}
+            title="Click to expand diagram"
+          >
+            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
+              <LightingDiagram result={result} fluid />
+            </div>
+          </div>
         )}
 
         {/* ═══════════════════════════════════════════════════════════════
@@ -3147,27 +3104,30 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
           CTA, and New Photo duplicated the top-left back chevron (which already
           fires `onRetry`).  A single flat spacer keeps the grid row reserved so
           the panel column alignment stays put. */}
-      <div style={{ height: isDesktop ? 40 : 16, ...(isDesktop ? { gridArea: 'actions' } : null) }} />
+      {!isDesktop && <div style={{ height: 16 }} />}
 
-      {/* ─── Floating mobile CTA — sticky bottom bar ─── */}
-      {!isDesktop && (
+      {/* ─── Sticky CTA bar — all viewports ─── */}
+      {(
         <div style={{
           position: 'sticky', bottom: 0, left: 0, right: 0,
           zIndex: 40,
-          padding: '8px 25px 14px',
-          background: 'linear-gradient(to top, rgba(18,20,24,0.97) 60%, rgba(18,20,24,0) 100%)',
+          padding: isDesktop ? '12px 28px 16px' : '8px 25px 14px',
+          background: `linear-gradient(to top, ${C.bg}f8 60%, ${C.bg}00 100%)`,
           pointerEvents: 'none',
           opacity: infoVisible ? 1 : 0,
           transition: isDragging ? 'none' : 'opacity 0.3s ease',
+          ...(isDesktop ? { gridArea: 'cta' } : null),
         }}>
-          {isHighConf ? (
+          {(
             <button
               onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
               style={{
                 display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
                 width: '100%',
-                height: 48,
+                maxWidth: isDesktop ? 700 : undefined,
+                margin: isDesktop ? '0 auto' : undefined,
+                height: isDesktop ? 54 : 48,
                 borderRadius: 24,
                 background: CTA_BG,
                 boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
@@ -3188,35 +3148,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 Build This Light
               </span>
             </button>
-          ) : (
-            <div style={{ display: 'flex', gap: 10, pointerEvents: 'auto' }}>
-              <button
-                onClick={() => { tapHaptic(); onRetry(); }}
-                style={{
-                  flex: 1, height: 44, borderRadius: 22,
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  color: 'rgba(245,247,250,0.7)',
-                  fontSize: 12, fontWeight: 600, letterSpacing: '0.4px',
-                  cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
-                  ...FONT_SMOOTH,
-                }}
-              >New Photo</button>
-              <button
-                onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
-                style={{
-                  flex: 1, height: 44, borderRadius: 22,
-                  background: 'linear-gradient(141.71deg, rgba(200,170,100,0.22) 0%, rgba(180,140,60,0.12) 100%)',
-                  boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.06), inset -0.5px -0.5px 0.5px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.4)',
-                  border: '0.5px solid rgba(245,190,72,0.18)',
-                  cursor: 'pointer',
-                  color: 'rgba(250,220,160,0.85)',
-                  fontSize: 12, fontWeight: 600, letterSpacing: '0.4px',
-                  WebkitTapHighlightColor: 'transparent',
-                  ...FONT_SMOOTH,
-                }}
-              >Build It Anyway</button>
-            </div>
           )}
         </div>
       )}
@@ -3572,19 +3503,21 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         @keyframes rTeachBorder { to { --teach-border-angle: 360deg; } }
       `}</style>
 
-      {/* ─── Home Indicator — pinned to viewport bottom ─── */}
-      <div style={{
-        position: 'fixed', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-        width: 134, height: 5, borderRadius: 3,
-        backgroundColor: 'rgba(89,94,107,0.55)',
-        boxShadow: [
-          'inset 0px 1px 1px 0px rgba(255,255,255,0.12)',
-          'inset 0px -0.5px 0.5px 0px rgba(0,0,0,0.2)',
-          '0px 0.5px 0px 0px rgba(255,255,255,0.03)',
-          '0px -0.5px 1px 0px rgba(0,0,0,0.25)',
-        ].join(', '),
-        zIndex: 50,
-      }} />
+      {/* Home indicator — mobile only (desktop has no safe area bar) */}
+      {!isDesktop && (
+        <div style={{
+          position: 'fixed', bottom: 8, left: '50%', transform: 'translateX(-50%)',
+          width: 134, height: 5, borderRadius: 3,
+          backgroundColor: 'rgba(89,94,107,0.55)',
+          boxShadow: [
+            'inset 0px 1px 1px 0px rgba(255,255,255,0.12)',
+            'inset 0px -0.5px 0.5px 0px rgba(0,0,0,0.2)',
+            '0px 0.5px 0px 0px rgba(255,255,255,0.03)',
+            '0px -0.5px 1px 0px rgba(0,0,0,0.25)',
+          ].join(', '),
+          zIndex: 50,
+        }} />
+      )}
 
       {/* ─── Hero fullscreen overlay ───
           PORTALED to document.body — same reason as the diagram modal: the

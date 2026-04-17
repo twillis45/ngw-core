@@ -1,10 +1,15 @@
 /**
  * useIsDesktop — viewport width breakpoint hook for Studio Matte screens.
  *
- * Returns true when viewport width is >= 1024px. Used by ResultScreen and
- * SetupScreen to swap from their mobile stacked layout into a two-column
- * desktop composition while preserving all Studio Matte visual language and
- * Bucket A flow behavior.
+ * Returns true when viewport width is >= 1024px. This threshold controls
+ * BOTH the internal two-column layout switch AND the FitToViewport
+ * designWidth branching in Day1DemoApp.  They must match — a mismatch
+ * creates a conflict zone where screens render desktop layouts inside
+ * mobile-scaled FitToViewport frames.
+ *
+ * For tablet portrait (768–1023px), screens that need a wider layout
+ * (e.g. the cockpit) should use a LOCAL viewport-width check rather
+ * than lowering this global threshold.
  */
 import { useEffect, useState } from 'react';
 

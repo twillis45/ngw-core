@@ -567,7 +567,7 @@ class SEGMENTATION:
 
     PERSON_MASK_CONFIDENCE = 0.5  # min confidence for person segmentation
     PERSON_MASK_BLUR_KERNEL = 7   # median blur kernel for mask cleanup
-    FACE_DETECTOR_CONFIDENCE = 0.5  # min detection confidence for face detector
+    FACE_DETECTOR_CONFIDENCE = 0.3  # lowered from 0.5 — dark skin faces can score lower
 
 
 # ═══════════════════════════════════════════════════════════════════════════

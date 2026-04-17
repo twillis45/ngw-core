@@ -13,12 +13,41 @@
 // CSS equivalent: var(--sm-steel-r/g/b) in tokens.css
 export const steel = (a) => `rgba(132, 158, 184,${a})`;
 
+// ─── Key accent tint helper ──────────────────────────────────────────────────
+// Base RGB: 200, 155, 69 — amber gold accent.
+// Mirrors the steel() helper for KEY_ACCENT alpha tints.
+export const accent = (a) => `rgba(200,155,69,${a})`;
+
+// ─── Warm / Dusty Bronze tokens (Figma canonical Tier 1 attention) ──────────
+// Figma palette 1318:2 section "ACCENT — WARM". Dusty Bronze replaces pure gold
+// for cinematic teal-and-orange grading. Use for KEY arrows, modifier silhouettes,
+// hero CTA gradients, ACTIVE chips, readout numerals — anywhere Tier 1 attention
+// is needed.  The existing `accent()` amber gold remains for backward compat;
+// new work should prefer `warm()` and WARM_* constants.
+//
+// Migration: screens will transition from `accent()`/KEY_ACCENT to `warm()`/
+// WARM_PRIMARY over successive passes. Both coexist safely.
+export const WARM_PRIMARY = '#A06D4A';  // key arrows, active chip, hero CTA
+export const WARM_HOVER   = '#7F5536';
+export const WARM_TEXT    = '#C88A63';   // on-dark body/label text
+export const warm = (a) => `rgba(160,109,74,${a})`;
+
+// Canonical KEY_ACCENT — single export so screens stop hardcoding the hex.
+// Currently amber gold; will migrate to WARM_PRIMARY in a future pass.
+export const KEY_ACCENT = '#c89b45';
+
+// ─── Screen background ──────────────────────────────────────────────────────
+// All Studio Matte full-screen roots use this Carbon Black instead of C.bg
+// which is pure black. Provides a softer, warmer near-black.
+// Figma canonical: #0B0B0C (Carbon Black, node 1318:2).
+export const SCREEN_BG = '#0b0b0c';
+
 // ─── Color palette ────────────────────────────────────────────────────────────
 export const C = {
   // ── Surface ──
   bg:          '#000001',           // --sm-bg
   slotBg:      '#08080a',           // --sm-surface-slot
-  panelBg:     '#0f1013',           // --sm-surface
+  panelBg:     '#121316',           // --sm-surface  (Figma: Soft Black)
   pillBg:      '#070709',           // --sm-surface-pill
   ctaFrom:     '#3d404d',           // --sm-surface-cta-from
   ctaMid:      '#292b36',
@@ -74,6 +103,13 @@ export const TYPE_DK = {
   T4: 13,
   T5: 11,
 };
+
+// ─── Focus-visible ring ──────────────────────────────────────────────────────
+// Steel-blue ring that shows ONLY on keyboard navigation (:focus-visible).
+// Since inline styles can't target :focus-visible, inject as a <style> tag or
+// apply via onFocus/onBlur + a state flag.  The constant is the boxShadow value
+// to merge into a component's existing boxShadow when focused.
+export const FOCUS_RING = `0 0 0 2px ${steel(0.55)}, 0 0 8px ${steel(0.20)}`;
 
 // ─── Panel shadow + bevel (Figma 1515:2) ─────────────────────────────────────
 export const PANEL_SHADOW = '1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4)';

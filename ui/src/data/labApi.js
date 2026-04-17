@@ -128,6 +128,24 @@ export async function cancelAnalysis(analysisId) {
   return labFetch(`/analyze/cancel/${analysisId}`, { method: 'POST' });
 }
 
+
+// ── Shoot Match ──────────────────────────────────────────
+// Recommend a full lighting setup from wizard inputs (mood, environment, gear,
+// gearMode, optional skinTone / masterMode / priorAnalysis).  Returns a
+// `cards` dict assembled by engine.services.shoot_match_service._build_cards
+// with bestMatch, shootThisSetup, spaceCheck, whyThisWorks, whatToLookFor,
+// quickFixes, substitutions, otherSetups, cameraSettings and diagram.
+//
+// Route is /api/shoot-match (not /api/lab/...) so it goes through coreFetch.
+
+export async function shootMatch(payload, { signal } = {}) {
+  return coreFetch('/shoot-match', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    signal,
+  });
+}
+
 /**
  * Regenerate a debug overlay with a specific subset of layers.
  * @param {string} overlayUrl  - Existing overlay URL, e.g. "/static/debug/overlay_foo_abc.jpg"

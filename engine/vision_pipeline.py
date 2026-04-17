@@ -33,8 +33,8 @@ _MODEL_DIR = Path(__file__).resolve().parent.parent / "data" / "mp_models"
 # ── MediaPipe delegate selection ──────────────────────────────────────
 # GPU delegate crashes on macOS headless (NSOpenGLPixelFormat unavailable).
 # Use GPU only on Linux with a display or when explicitly requested.
-_MP_MAX_DIM = int(_os.environ.get("NGW_MP_MAX_DIM", "1920"))
-_MP_MIN_DIM = int(_os.environ.get("NGW_MP_MIN_DIM", "1024"))
+_MP_MAX_DIM = int(_os.environ.get("NGW_MP_MAX_DIM", "2048"))
+_MP_MIN_DIM = int(_os.environ.get("NGW_MP_MIN_DIM", "2048"))
 
 def _mp_delegate():
     """Choose best MediaPipe delegate for this platform."""
@@ -681,19 +681,54 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         s_chan = hsv[:, :, 1]
 
         # Bright, low-saturation spots = catchlights.
-        # For B&W dramatic images, lower the brightness threshold since
-        # contrast compression pushes visible catchlights to 170-200 range.
-        v_threshold = CATCHLIGHT.V_THRESHOLD_BW if _is_bw_like else CATCHLIGHT.V_THRESHOLD_COLOR
-        mask = ((v_chan > v_threshold) & (s_chan < CATCHLIGHT.S_MAX)).astype(np.uint8) * 255
-
-        # Clean noise — use smaller kernel for B&W to preserve tiny catchlights
-        if _is_bw_like:
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CATCHLIGHT.MORPH_KERNEL_BW, CATCHLIGHT.MORPH_KERNEL_BW))
+        # Adaptive threshold: use the crop's own brightness histogram so
+        # extreme low-key images (where catchlights peak at V=130–150)
+        # aren't missed by a fixed global cutoff.  The threshold is the
+        # higher of:
+        #   a) The static per-mode floor (V_THRESHOLD_BW or _COLOR)
+        #   b) 70% of the crop's 99th-percentile V value
+        # This means "the brightest ~1% of the iris crop is always a
+        # candidate" while still rejecting noise in bright/normal images.
+        _v_floor = CATCHLIGHT.V_THRESHOLD_BW if _is_bw_like else CATCHLIGHT.V_THRESHOLD_COLOR
+        _v_p99 = float(np.percentile(v_chan, 99)) if v_chan.size > 0 else 255
+        _v_mean = float(np.mean(v_chan)) if v_chan.size > 0 else 128
+        # Adaptive threshold: three regimes based on iris-crop brightness.
+        #
+        # 1. Bright peak (p99 > 200): the iris area has bright skin AND a
+        #    catchlight.  Use 92% of p99 to isolate just the catchlight
+        #    peak, rejecting the surrounding V~170-200 skin that would
+        #    otherwise merge into one giant contour.
+        #
+        # 2. Dark crop (v_mean < 80): extreme low-key — catchlights are
+        #    faint.  Lower to 70% of p99 so V~130-150 specs aren't missed.
+        #
+        # 3. Normal: use the static per-mode floor.
+        if _v_p99 > 200:
+            v_threshold = max(_v_floor, _v_p99 * 0.92)
+        elif _v_mean < 80:
+            v_threshold = max(80, _v_p99 * 0.70)
         else:
-            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CATCHLIGHT.MORPH_KERNEL_COLOR, CATCHLIGHT.MORPH_KERNEL_COLOR))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+            v_threshold = _v_floor
+        # Adaptive saturation cap: in dark eye crops (low-key / dramatic),
+        # catchlights pick up skin tone and ambient color → S > 80.
+        s_max = CATCHLIGHT.S_MAX if _v_mean >= 100 else min(180, CATCHLIGHT.S_MAX + int((100 - _v_mean) * 1.2))
+        mask = ((v_chan > v_threshold) & (s_chan < s_max)).astype(np.uint8) * 255
+        _vp_logger.debug("[catchlight] eye=%s v_mean=%.0f v_p99=%.0f v_thresh=%.0f s_max=%d iris_r=%.1f",
+                         eye_label, _v_mean, _v_p99, v_threshold, s_max, radius)
+
+        # Clean noise — skip morph open when iris is small (< 25px radius)
+        # because catchlights are only 2-3px across and the erosion step
+        # destroys them. Downstream filters handle noise rejection.
+        if radius >= 25:
+            if _is_bw_like:
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CATCHLIGHT.MORPH_KERNEL_BW, CATCHLIGHT.MORPH_KERNEL_BW))
+            else:
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CATCHLIGHT.MORPH_KERNEL_COLOR, CATCHLIGHT.MORPH_KERNEL_COLOR))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        _vp_logger.debug("[catchlight] eye=%s contours=%d morph_skipped=%s",
+                         eye_label, len(contours), radius < 25)
 
         crop_area = crop.shape[0] * crop.shape[1]
         results = []
@@ -726,8 +761,14 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             # mascara, metallic eye shadow, specular lashes) in B&W images
             # without touching real light-source reflections.
             _dist = math.hypot(dx, dy)
-            _prox_limit = (CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT_BW if _is_bw_like
-                           else CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT)
+            _prox_base = (CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT_BW if _is_bw_like
+                          else CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT)
+            # Relax proximity for small irises (< 30px) — MediaPipe iris
+            # center detection is less precise at low resolution, so genuine
+            # catchlights can appear at 1.5-1.8× radius.
+            _prox_limit = _prox_base + (0.4 if radius < 30 else 0)
+            _vp_logger.debug("[catchlight] eye=%s cnt area=%.0f prox=%.2f (limit=%.2f)",
+                             eye_label, area, _dist / radius if radius > 0 else 999, _prox_limit)
             if _dist > _prox_limit * radius:
                 continue
 
@@ -739,6 +780,12 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             _size_ratio_pre = enc_r_pre / radius if radius > 0 else 999
             _size_cap = (CATCHLIGHT.SIZE_RATIO_MAX_BW if _is_bw_like
                          else CATCHLIGHT.SIZE_RATIO_MAX_COLOR)
+            # Relax size cap for small irises — at low resolution, catchlight
+            # blobs spread beyond their true boundaries via interpolation.
+            if radius < 30:
+                _size_cap += 0.25
+            _vp_logger.debug("[catchlight] eye=%s cnt sr=%.2f (cap=%.2f)",
+                             eye_label, _size_ratio_pre, _size_cap)
             if _size_ratio_pre > _size_cap:
                 continue
 
@@ -804,8 +851,8 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
 
             _pos_str = clock_position(dx, dy)
             _sr = round(enc_r / radius, 3) if radius > 0 else None
-            _vp_logger.debug("[catchlight-detail] eye=%s pos=%s int=%.3f shape=%s size_ratio=%s area=%.0f",
-                             eye_label, _pos_str, intensity, shape, _sr, area)
+            _vp_logger.debug("[catchlight-detail] eye=%s pos=%s int=%.3f shape=%s sr=%.3f area=%.0f",
+                             eye_label, _pos_str, intensity, shape, _sr or 0, area)
 
             results.append({
                 "eye": eye_label,
@@ -878,11 +925,18 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         left_catchlights = [c for c in left_catchlights if not _is_lower(c) or id(c) in _kept_lower_set]
         right_catchlights = [c for c in right_catchlights if not _is_lower(c) or id(c) in _kept_lower_set]
     elif _lower_cls and not _upper_cls:
-        # Only lower-hemisphere catchlights — discard entirely.
-        # Lone catchlight below iris is almost certainly a costume reflection.
-        all_catchlights   = []
-        left_catchlights  = []
-        right_catchlights = []
+        # Only lower-hemisphere catchlights.  Previously discarded entirely
+        # as "costume reflections", but at small iris sizes (<30px) the clock
+        # position can be off by 2-3 hours, so a real upper catchlight may
+        # register at 4 o'clock.  Keep them — the proximity + size_ratio
+        # filters already reject genuine costume artifacts.
+        _small_iris = min(left_r, right_r) < 30
+        if _small_iris:
+            pass  # keep all — position unreliable at this resolution
+        else:
+            all_catchlights   = []
+            left_catchlights  = []
+            right_catchlights = []
 
     # ── Face yaw + geometry ───────────────────────────────────────────
     if not _estimated_geometry:
@@ -1021,6 +1075,36 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     if not seg_model.exists():
         return {"ok": False, "error": "selfie_segmenter model not found"}
 
+    # ── Face detection — run BEFORE segmenter to avoid MediaPipe model
+    # state interference that can cause detection failures on dark skin.
+    face_box = None
+    face_detection_score: float = 0.0
+    fd_model = _MODEL_DIR / "face_detector.tflite"
+    if fd_model.exists():
+        fd_opts = mp.tasks.vision.FaceDetectorOptions(
+            base_options=mp.tasks.BaseOptions(
+                model_asset_path=str(fd_model),
+                delegate=_mp_delegate(),
+            ),
+            running_mode=mp.tasks.vision.RunningMode.IMAGE,
+            min_detection_confidence=SEGMENTATION.FACE_DETECTOR_CONFIDENCE,
+        )
+        detector = mp.tasks.vision.FaceDetector.create_from_options(fd_opts)
+        try:
+            fd_res = detector.detect(mp_image)
+        finally:
+            detector.close()
+        if fd_res.detections:
+            det = fd_res.detections[0]
+            face_detection_score = det.categories[0].score if det.categories else 0.0
+            bb = det.bounding_box
+            x0 = bb.origin_x
+            y0 = bb.origin_y
+            x1 = bb.origin_x + bb.width
+            y1 = bb.origin_y + bb.height
+            x0, y0, x1, y1 = _safe_box(x0, y0, x1, y1, w, h)
+            face_box = (x0, y0, x1, y1)
+
     seg_opts = mp.tasks.vision.ImageSegmenterOptions(
         base_options=mp.tasks.BaseOptions(
             model_asset_path=str(seg_model),
@@ -1049,35 +1133,7 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     person_u8 = cv2.medianBlur(person_u8, SEGMENTATION.PERSON_MASK_BLUR_KERNEL)
     person_mask = (person_u8 > 0)
 
-    # Face detection for better skin region targeting
-    face_box = None
-    face_detection_score: float = 0.0
-    fd_model = _MODEL_DIR / "face_detector.tflite"
-    if fd_model.exists():
-        fd_opts = mp.tasks.vision.FaceDetectorOptions(
-            base_options=mp.tasks.BaseOptions(
-                model_asset_path=str(fd_model),
-                delegate=_mp_delegate(),
-            ),
-            running_mode=mp.tasks.vision.RunningMode.IMAGE,
-            min_detection_confidence=SEGMENTATION.FACE_DETECTOR_CONFIDENCE,
-        )
-        detector = mp.tasks.vision.FaceDetector.create_from_options(fd_opts)
-        try:
-            fd_res = detector.detect(mp_image)
-        finally:
-            detector.close()
-
-        if fd_res.detections:
-            det = fd_res.detections[0]
-            face_detection_score = det.categories[0].score if det.categories else 0.0
-            bb = det.bounding_box
-            x0 = bb.origin_x
-            y0 = bb.origin_y
-            x1 = bb.origin_x + bb.width
-            y1 = bb.origin_y + bb.height
-            x0, y0, x1, y1 = _safe_box(x0, y0, x1, y1, w, h)
-            face_box = (x0, y0, x1, y1)
+    # Face detection moved BEFORE segmenter — see above.
 
     # Skin mask: use YCbCr mask, optionally constrained to face box
     skin_mask = _ycbcr_skin_mask(img)
@@ -1150,8 +1206,24 @@ def analyze_image_regions(image_path: str, *, return_masks: bool = False) -> Dic
     is_gs = bool(np.std(img.astype(float).mean(axis=2) - cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(float)) < SKIN.COLOR_VARIANCE_BW)
     bg_environment = _detect_background_environment(img, background_mask, is_grayscale=is_gs)
 
-    # Catchlights
+    # Catchlights — detection runs on the (possibly upscaled) image.
+    # Normalize all pixel coordinates back to original image space so
+    # they match image_dimensions in the API response.
     catchlight_info = _detect_catchlights(img, face_box)
+    if _scale != 1.0 and catchlight_info.get("ok"):
+        for _cl in catchlight_info.get("catchlights", []):
+            _cl["abs_cx"] = round(_cl["abs_cx"] / _scale)
+            _cl["abs_cy"] = round(_cl["abs_cy"] / _scale)
+            if "enc_r_px" in _cl:
+                _cl["enc_r_px"] = round(_cl["enc_r_px"] / _scale, 1)
+        _fg = catchlight_info.get("face_geometry", {})
+        for _fk in ("left_eye_center", "right_eye_center", "nose_tip",
+                     "chin", "forehead_top", "nose_bridge",
+                     "left_face_edge", "right_face_edge"):
+            if _fk in _fg and _fg[_fk] is not None:
+                _fg[_fk] = (round(_fg[_fk][0] / _scale, 1), round(_fg[_fk][1] / _scale, 1))
+        if "image_size" in _fg:
+            _fg["image_size"] = (round(_fg["image_size"][0] / _scale), round(_fg["image_size"][1] / _scale))
 
     # Skin tone guess from skin pixels luma (Y from YCrCb)
     skin_tone = {"ok": False, "reason": "no_skin_pixels"}

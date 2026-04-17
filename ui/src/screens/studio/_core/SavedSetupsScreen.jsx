@@ -12,13 +12,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { tapHaptic, navHaptic, warnHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
-import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL } from '../../../theme/studioMatte';
+import { steel, accent, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, SCREEN_BG,
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import { loadSetups, deleteSetup, onSetupsChanged } from '../../../data/setupStore';
-
-// ─── Tokens ──────────────────────────────────────────────────────────────────
-const KEY_ACCENT  = '#c89b45';
-const DANGER_RED  = 'rgba(230,100,90,0.9)';
 
 const LAST_USED_KEY = 'ngw_last_used_setup';
 
@@ -27,6 +24,40 @@ function getLastUsedId() {
 }
 function setLastUsedIdLS(id) {
   try { localStorage.setItem(LAST_USED_KEY, id); } catch {}
+}
+
+/** Standard Studio Matte primary CTA — matches SetupScreen "Build This Light". */
+function CTAButton({ label, onClick }) {
+  const [pressed, setPressed] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      style={{
+        padding: '0 32px', height: 50, borderRadius: 24,
+        border: 'none', cursor: 'pointer',
+        background: CTA_BG,
+        boxShadow: pressed
+          ? 'inset 0px 2px 4px rgba(0,0,0,0.5)'
+          : `${CTA_SHADOW}, ${CTA_BEVEL}`,
+        transform: pressed ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+    >
+      <span style={{
+        fontSize: 13, fontWeight: 700,
+        color: 'rgba(245,247,250,0.92)',
+        letterSpacing: '1.5px', textTransform: 'uppercase',
+        pointerEvents: 'none', ...FONT_SMOOTH,
+      }}>
+        {label}
+      </span>
+    </button>
+  );
 }
 
 // ─── Title Case helper ──────────────────────────────────────────────────────
@@ -72,8 +103,9 @@ function MiniDiagram({ lights = [], starred }) {
 }
 
 // ─── Setup Card ─────────────────────────────────────────────────────────────
-function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, deleteConfirm, onLoad, onShoot }) {
+function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, deleteConfirm, onLoad, onShoot, isDesktop }) {
   const [hover, setHover] = useState(false);
+  const [pressed, setPressed] = useState(false);
 
   const pattern = setup.result?.bestMatch?.name
     || setup.result?.bestMatch?.lightingPattern
@@ -99,21 +131,29 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
 
   return (
     <div
+      role="button" tabIndex={0}
       onClick={onTap}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTap(); } }}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => { setPressed(false); setHover(false); }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         position: 'relative',
         display: 'flex', alignItems: 'center', gap: 14,
         padding: '14px 16px',
+        transform: pressed ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease, background 0.15s ease',
         background: hover
           ? `linear-gradient(135deg, ${steel(0.10)}, ${steel(0.06)})`
           : `linear-gradient(135deg, ${steel(0.07)}, ${steel(0.04)})`,
-        borderRadius: 12,
+        borderRadius: 14,
         border: `1px solid ${steel(0.10)}`,
-        boxShadow: PANEL_SHADOW,
+        boxShadow: pressed
+          ? 'inset 0 2px 4px rgba(0,0,0,0.4)'
+          : `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
         cursor: 'pointer',
-        transition: 'background 0.15s ease',
         ...FONT_SMOOTH,
       }}
     >
@@ -122,9 +162,9 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
       {/* Body */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <span style={{
-          fontSize: 15, fontWeight: 600, color: C.textPrimary,
+          fontSize: isDesktop ? 17 : 15, fontWeight: 600, color: C.textPrimary,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          letterSpacing: '-0.2px',
+          letterSpacing: '-0.2px', ...FONT_SMOOTH,
         }}>
           {setup.name || 'Untitled Setup'}
         </span>
@@ -134,15 +174,15 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
             <span style={{
               fontSize: 11, fontWeight: 600, color: KEY_ACCENT,
               padding: '2px 8px', borderRadius: 6,
-              background: 'rgba(200,155,69,0.12)',
-              letterSpacing: '0.3px',
+              background: accent(0.12),
+              letterSpacing: '0.3px', ...FONT_SMOOTH,
             }}>
               {toTitleCase(pattern)}
             </span>
           )}
           {lightCount && (
             <span style={{
-              fontSize: 11, fontWeight: 500, color: steel(0.5),
+              fontSize: 11, fontWeight: 500, color: steel(0.5), ...FONT_SMOOTH,
             }}>
               {lightCount === 1 ? '1 light' : `${lightCount} lights`}
             </span>
@@ -150,14 +190,14 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, color: steel(0.35) }}>
+          <span style={{ fontSize: 11, color: steel(0.35), ...FONT_SMOOTH }}>
             {formatDate(setup.timestamp ?? setup.created_at)}
           </span>
           {setup.note && (
             <span style={{
               fontSize: 11, color: steel(0.4), fontStyle: 'italic',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              maxWidth: 180,
+              maxWidth: 180, ...FONT_SMOOTH,
             }}>
               {setup.note}
             </span>
@@ -170,8 +210,8 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
         onClick={(e) => { e.stopPropagation(); onMenu(); }}
         style={{
           background: 'none', border: 'none', cursor: 'pointer',
-          padding: '10px 6px', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: 3, minWidth: 28, minHeight: 44,
+          padding: '10px 8px', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', gap: 3, minWidth: 44, minHeight: 44,
           justifyContent: 'center',
           WebkitTapHighlightColor: 'transparent',
         }}
@@ -193,14 +233,12 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
             position: 'absolute', top: '100%', right: 12, zIndex: 20,
             marginTop: 4, minWidth: 180,
             background: C.panelBg,
-            border: `1px solid ${steel(0.15)}`,
-            borderRadius: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+            borderRadius: 14,
+            boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}, 0 8px 20px rgba(0,0,0,0.4)`,
             overflow: 'hidden',
           }}
         >
-          <MenuButton label="Open Setup" onClick={() => { onLoad(); }} />
-          <MenuButton label="Run in Shoot Mode" onClick={() => { onShoot(); }} />
+          <MenuButton label="Shoot This Setup" onClick={() => { onShoot(); }} />
           <div style={{ height: 1, background: steel(0.10), margin: '2px 10px' }} />
           <MenuButton
             label={deleteConfirm ? 'Confirm Delete' : 'Delete'}
@@ -226,9 +264,10 @@ function MenuButton({ label, danger, onClick }) {
         border: 'none', cursor: 'pointer',
         padding: '10px 14px',
         fontSize: 13, fontWeight: 500,
-        color: danger ? DANGER_RED : C.textSecondary,
+        color: danger ? C.textDanger : C.textSub,
         ...FONT_SMOOTH,
         transition: 'background 0.12s ease',
+        WebkitTapHighlightColor: 'transparent',
       }}
     >
       {label}
@@ -269,14 +308,14 @@ function EmptyState({ onBuild }) {
       </div>
 
       <h3 style={{
-        margin: '0 0 8px', fontSize: 18, fontWeight: 700,
-        color: C.textPrimary, letterSpacing: '-0.3px',
+        margin: '0 0 8px', fontSize: 20, fontWeight: 700,
+        color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH,
       }}>
         No setups yet
       </h3>
       <p style={{
         margin: '0 0 28px', fontSize: 13, fontWeight: 400,
-        color: steel(0.45), lineHeight: 1.5, maxWidth: 280,
+        color: steel(0.45), lineHeight: 1.5, maxWidth: 280, ...FONT_SMOOTH,
       }}>
         Build a setup or analyze a photo — then save it to build your collection.
       </p>
@@ -296,12 +335,12 @@ function EmptyState({ onBuild }) {
               width: 24, height: 24, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 11, fontWeight: 700, lineHeight: 1,
-              background: step.gold ? 'rgba(200,155,69,0.18)' : steel(0.08),
+              background: step.gold ? accent(0.18) : steel(0.08),
               color: step.gold ? KEY_ACCENT : steel(0.5),
-              border: `1px solid ${step.gold ? 'rgba(200,155,69,0.25)' : steel(0.12)}`,
-              flexShrink: 0,
+              border: `1px solid ${step.gold ? accent(0.25) : steel(0.12)}`,
+              flexShrink: 0, ...FONT_SMOOTH,
             }}>{step.num}</span>
-            <span style={{ fontSize: 13, color: steel(0.55), textAlign: 'left' }}>
+            <span style={{ fontSize: 13, color: steel(0.55), textAlign: 'left', ...FONT_SMOOTH }}>
               {step.text}
             </span>
           </div>
@@ -309,20 +348,10 @@ function EmptyState({ onBuild }) {
       </div>
 
       {/* CTA */}
-      <button
+      <CTAButton
+        label="BUILD A SETUP"
         onClick={() => { tapHaptic(); softClickSound(); onBuild?.(); }}
-        style={{
-          padding: '12px 32px', borderRadius: 10,
-          background: `linear-gradient(135deg, ${KEY_ACCENT}, #a07830)`,
-          border: 'none', cursor: 'pointer',
-          fontSize: 13, fontWeight: 700, color: '#0a0b0d',
-          letterSpacing: '1px', textTransform: 'uppercase',
-          boxShadow: '0 2px 8px rgba(200,155,69,0.25)',
-          ...FONT_SMOOTH,
-        }}
-      >
-        BUILD A SETUP
-      </button>
+      />
     </div>
   );
 }
@@ -388,7 +417,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
     <div style={{
       position: 'relative', width: '100%', height: '100%',
       display: 'flex', flexDirection: 'column',
-      backgroundColor: '#0a0b0d',
+      backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
       <MatteBackground />
@@ -409,7 +438,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
           <p style={{
-            margin: 0, fontSize: 10, fontWeight: 600,
+            margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600,
             color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH,
           }}>
             SAVED SETUPS
@@ -417,7 +446,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
         </div>
         {setups.length > 0 && (
           <p style={{
-            margin: 0, fontSize: 11, fontWeight: 500,
+            margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500,
             color: steel(0.4), ...FONT_SMOOTH,
           }}>
             {setups.length} {setups.length === 1 ? 'setup' : 'setups'}
@@ -442,6 +471,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
             <SetupCard
               key={setup.id}
               setup={setup}
+              isDesktop={isDesktop}
               isStarred={i === 0 && setup.id === lastUsedId}
               isMenuOpen={menuId === setup.id}
               deleteConfirm={deleteId === setup.id}
@@ -478,6 +508,11 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
           </div>
         </div>
       )}
+
+      {/* iOS home indicator */}
+      <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1, flexShrink: 0 }}>
+        <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: C.homeBar }} />
+      </div>
     </div>
   );
 }

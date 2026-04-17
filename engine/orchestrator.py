@@ -749,6 +749,15 @@ def _signal_contradiction_score(
     score = 0.0
     cues: List[str] = []
 
+    # ── Extreme low-key guard ──────────────────────────────────────────────
+    # In extreme low-key images (shadow_density > 0.90), CV signals are
+    # unreliable — most of the face is in shadow, so tri_iso, lr_asym, and
+    # highlight_symmetry all read near-zero/extreme regardless of actual
+    # lighting pattern.  Cap the total contradiction score at 0.40 so that
+    # NO candidate gets demoted.  The lighting_inference (VLM-informed) is
+    # the most reliable source in extreme low-key and should hold.
+    _extreme_lowkey = shadow_den > 0.90
+
     if pattern == "rembrandt":
         # Rembrandt requires: asymmetry (shadow side) + triangle of light
         # on cheek.  Low triangle_isolation = no distinct cheek triangle.
@@ -756,18 +765,24 @@ def _signal_contradiction_score(
         # is strongest; very low isolation alone is moderate; weak isolation
         # with near-symmetric face is the mildest tier.
         _tri_detected_rem = getattr(ls, "triangle_detected", None)
-        if tri_iso < 0.03 and _tri_detected_rem is False:
-            score += 0.45  # CV explicitly says no triangle + near-zero isolation
-            cues.append("triangle_isolation")
-        elif tri_iso < 0.05:
-            score += 0.25  # very low isolation — unlikely cheek triangle
-            cues.append("triangle_isolation")
-        elif tri_iso < 0.10 and lr_asym < 0.10:
-            score += 0.15  # weak triangle + symmetric face → mild contradiction
-            cues.append("triangle_isolation")
-            cues.append("left_right_asymmetry")
+        if _extreme_lowkey:
+            # In extreme low-key, tri_iso and lr_asym are unreliable — halve weight
+            if tri_iso < 0.03 and _tri_detected_rem is False:
+                score += 0.20
+                cues.append("triangle_isolation(lowkey_reduced)")
+        else:
+            if tri_iso < 0.03 and _tri_detected_rem is False:
+                score += 0.45
+                cues.append("triangle_isolation")
+            elif tri_iso < 0.05:
+                score += 0.25
+                cues.append("triangle_isolation")
+            elif tri_iso < 0.10 and lr_asym < 0.10:
+                score += 0.15
+                cues.append("triangle_isolation")
+                cues.append("left_right_asymmetry")
         if shadow_den < 0.05:
-            score += 0.3  # near-zero shadow → can't form rembrandt pattern
+            score += 0.3
             cues.append("shadow_density")
         # Highlight symmetry: rembrandt requires one side in shadow (low sym).
         # When hs.symmetry is high, the illumination is bilateral — the
@@ -777,12 +792,14 @@ def _signal_contradiction_score(
         # Measured on soft-butterfly misclassified as rembrandt: hs.sym=0.99.
         _hs_rem = getattr(cr, "highlight_symmetry", None)
         _hs_sym_rem = getattr(_hs_rem, "symmetry_score", 0.0) if _hs_rem else 0.0
-        if _hs_sym_rem > 0.70:
-            score += 0.50  # bilateral highlights → shadow side is lit → not rembrandt
-            cues.append("highlight_symmetry")
-        elif _hs_sym_rem > 0.50:
-            score += 0.25  # moderate bilateral symmetry → unlikely rembrandt
-            cues.append("highlight_symmetry")
+        if not _extreme_lowkey:
+            # Highlight symmetry unreliable in extreme low-key (face is 90%+ shadow)
+            if _hs_sym_rem > 0.70:
+                score += 0.50
+                cues.append("highlight_symmetry")
+            elif _hs_sym_rem > 0.50:
+                score += 0.25
+                cues.append("highlight_symmetry")
         # Fill ratio: rembrandt requires a dark shadow side (low fill ratio).
         # Flat fill (ratio > 0.85) means the fill is nearly equal to key —
         # the shadow side IS illuminated, contradicting rembrandt.
@@ -1005,7 +1022,7 @@ def _signal_contradiction_score(
 
     elif pattern == "loop":
         # Loop = diagonal nose shadow, moderate asymmetry.
-        # Very high asymmetry (> 0.5) suggests split, not loop.
+        # High asymmetry contradicts loop — Rembrandt or split territory.
         if lr_asym > 0.50:
             score += 0.4
             cues.append("left_right_asymmetry")
@@ -1424,6 +1441,9 @@ def _signal_contradiction_score(
             seen.add(_c)
             unique_cues.append(_c)
 
+    # Cap score for extreme low-key so unreliable CV signals can't demote
+    if _extreme_lowkey:
+        score = min(score, 0.40)
     return min(1.0, score), unique_cues
 
 
@@ -1899,6 +1919,47 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
             contradictions.append(
                 f"zero-confidence ({_zc.confidence:.3f}) demoted "
                 f"{_zc_orig} '{_zc.pattern}'"
+            )
+
+    # ── Extreme low-key classical pattern preference ─────────────────────
+    # In extreme low-key (shadow_density > 0.90), the VLM's reference_read
+    # often misclassifies turned-face Rembrandt as "athletic_rim_sculpt" or
+    # similar specialty patterns because it reads the lit face edge as a rim
+    # highlight.  When lighting_inference identifies a classical portrait
+    # pattern (rembrandt, loop, split, short, broad, butterfly, clamshell)
+    # and reference_read says a specialty/niche pattern, boost the classical
+    # candidate so it wins the ranking.
+    _CLASSICAL_PATTERNS = {
+        "rembrandt", "loop", "split", "short", "broad", "butterfly",
+        "clamshell", "triangle",
+    }
+    # edge_case_flags isn't computed yet (it runs after the resolver).
+    # Derive extreme_low_key directly from light_structure shadow_density.
+    _ls_for_elkey = getattr(
+        getattr(getattr(result, "cue_report", None), "light_structure", None),
+        "shadow_density", 0.0
+    )
+    _is_extreme_lowkey = _ls_for_elkey > 0.85
+    if _is_extreme_lowkey:
+        _li_classical = [c for c in candidates
+                         if c.source in ("lighting_inference", "lighting_inference_demoted")
+                         and c.pattern in _CLASSICAL_PATTERNS]
+        _ref_specialty = [c for c in candidates
+                          if c.source in ("reference_read", "reference_read_demoted")
+                          and c.pattern not in _CLASSICAL_PATTERNS
+                          and c.pattern != "unknown"]
+        if _li_classical and _ref_specialty:
+            # Boost classical and demote specialty so classical wins
+            _li_classical[0].confidence = max(_li_classical[0].confidence, 0.80)
+            if _li_classical[0].source == "lighting_inference_demoted":
+                _li_classical[0].source = "lighting_inference"
+            # Demote the specialty reference_read below lighting_inference
+            _ref_specialty[0].source = "reference_read_demoted"
+            SOURCE_PRIORITY["reference_read_demoted"] = 2
+            contradictions.append(
+                f"extreme_low_key: boosted lighting_inference "
+                f"'{_li_classical[0].pattern}' over reference_read "
+                f"'{_ref_specialty[0].pattern}' (specialty demoted)"
             )
 
     # Rank by precedence (source priority, then confidence)
@@ -2749,7 +2810,13 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
             _ars_sd = getattr(ls_data, "shadow_density", 0.0) if ls_data else 0.0
             _ars_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
             if _ars_sd > 0.3 and 0.25 <= _ars_hl < 0.35:
-                return "athletic_rim_sculpt"
+                # Don't override a classical pattern in extreme low-key —
+                # the narrow highlight is from the turned face edge, not a
+                # rim-only setup.
+                if _ars_sd > 0.85 and base in ("rembrandt", "loop", "split", "short", "broad"):
+                    pass  # keep the classical base
+                else:
+                    return "athletic_rim_sculpt"
 
     # ── Rim-only: face mostly in shadow, only edge/rim highlights ─────
     # Rim lighting illuminates only the edges of the subject with no

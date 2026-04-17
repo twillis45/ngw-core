@@ -77,35 +77,73 @@ export default function LightingDiagram({ result, compact = false, fluid = false
     ? recon.key_light_angle_deg_pose_corrected
     : (typeof recon.key_light_angle_deg === 'number' ? recon.key_light_angle_deg : null));
 
-  // Determine key light angle from clock position or key_side fallback
+  // ═══════════════════════════════════════════════════════════════════════
+  // KEY LIGHT ANGLE — DEFINITIVE CONVENTION (DO NOT CHANGE WITHOUT TESTS)
+  //
+  // TOP-DOWN DIAGRAM LAYOUT:
+  //   • Camera at BOTTOM (large Y), subject at CENTER
+  //   • Background at TOP (small Y)
+  //   • Positive angles = RIGHT of camera-subject axis
+  //   • Negative angles = LEFT of camera-subject axis
+  //   • 0° = directly behind camera (on-axis)
+  //   • ±90° = perpendicular (side light)
+  //   • ±180° = behind subject
+  //
+  // KEY POSITION FORMULA (from angle):
+  //   kX = subX + kDist × sin(angle)   → positive angle → right
+  //   kY = subY + kDist × cos(angle)   → 0° → below subject (camera side) ✓
+  //
+  // MODIFIER ORIENTATION (emission face → subject):
+  //   kToSubDeg = atan2(kX - subX, -(subY - kY))
+  //   NOTE: (kX - subX) not (subX - kX) — this points the emission face
+  //   TOWARD the subject. Swapping the sign makes it face AWAY.
+  //
+  // THREE INPUT SOURCES (priority order):
+  //   1. Catchlight clock position (directly observed in iris)
+  //   2. Reconstruction angle + key_side (inferred from shadow geometry)
+  //   3. key_side coarse fallback
+  // ═══════════════════════════════════════════════════════════════════════
+
   const clockPos    = mod?.position || (li.catchlight_intelligence?.primary_key?.position);
   const clockAngle  = clockToAngle(clockPos);
-  // Resolve diagram angle (0°=up/back-of-frame, 90°=right, 180°=down/camera-side):
-  //   1) reconKeyDeg + side → camera-anchored offset (most accurate)
-  //   2) clock position from catchlight intel
-  //   3) key_side coarse fallback
+
+  const _ks = String(keySide).toLowerCase();
+  const sign = _ks.includes('right')
+    ? 1
+    : _ks.includes('left')
+      ? -1
+      : (shadowDeg != null && shadowDeg > 180 ? -1 : 1);
+
+  // Clock hour → diagram angle. Extracts the HORIZONTAL component only
+  // using sin() — because the clock position encodes both direction AND
+  // elevation, and the top-down diagram only shows direction.
+  //
+  //   sin(clock angle from 12) gives the left-right component:
+  //     12 → sin(0°)=0 → 0° on-axis
+  //      1 → sin(30°)=0.5 → 30° right
+  //      2 → sin(60°)=0.87 → 60° right
+  //      3 → sin(90°)=1.0 → 90° right (perpendicular)
+  //      4 → sin(120°)=0.87 → 60° right  (NOT behind — same horizontal as 2)
+  //      9 → sin(270°)=-1.0 → 90° left
+  //     10 → sin(300°)=-0.87 → 60° left
+  //
+  // Result is always ±90° (camera-side hemisphere) because lights behind
+  // the subject don't create catchlights in the iris.
+  const clockToDiagram = (clockDeg) => {
+    if (clockDeg == null) return null;
+    const rad = clockDeg * Math.PI / 180;
+    const horiz = Math.sin(rad);
+    return Math.asin(Math.max(-1, Math.min(1, horiz))) * 180 / Math.PI;
+  };
+
   let kAngleDeg;
-  if (reconKeyDeg != null) {
-    // Engine convention: 0°=behind subject, 90°=side, 180°=camera-facing.
-    // Diagram convention (math): 0°=directly below (camera-side), ±90°=side,
-    // 180°=directly above (background-side).
-    // Mapping: diagram = 180 - engine, so camera-facing (180°) → 0° (below),
-    // side (90°) → 90° (side), behind (0°) → 180° (above).
-    // This ensures Rembrandt/Loop keys (engine ~120-150°) render in the
-    // camera-side zone where they physically illuminate the face.
-    const _ks = String(keySide).toLowerCase();
-    const sign = _ks.includes('right')
-      ? 1
-      : _ks.includes('left')
-        ? -1
-        : (shadowDeg != null && shadowDeg > 180 ? -1 : 1);
+  if (clockAngle != null) {
+    kAngleDeg = clockToDiagram(clockAngle);
+  } else if (reconKeyDeg != null) {
+    // Engine convention: 0°=behind subject, 90°=side, 180°=camera-facing
+    // Diagram convention: 0°=camera-side, ±90°=side, ±180°=behind
+    // Mapping: diagram = sign × (180 - engine)
     kAngleDeg = sign * (180 - reconKeyDeg);
-  } else if (clockAngle != null) {
-    // Top-down diagram: subject faces camera (downward).  The catchlight
-    // clock position is from the subject's viewpoint — 1 o'clock = subject's
-    // left = camera-right.  `180 - clockAngle` mirrors X so camera-right
-    // maps to diagram-right.
-    kAngleDeg = 180 - clockAngle;
   } else {
     kAngleDeg = sideToAngle(keySide, keyElevation);
   }
@@ -205,8 +243,25 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   });
 
   // Label positioning
+  // Key label placement — push away from the modifier and avoid collisions
+  // with the subject circle and camera zone.
   const keyLabelSide = kX > subX + 6 ? 'start' : 'end';
-  const keyLabelX    = kX > subX + 6 ? kX + (compact ? 18 : 24) : kX - (compact ? 18 : 24);
+  const _keyLabelOffset = compact ? 20 : 26;
+  let keyLabelX = kX > subX + 6 ? kX + _keyLabelOffset : kX - _keyLabelOffset;
+  // Clamp to canvas bounds
+  keyLabelX = Math.max(compact ? 4 : 6, Math.min(W - (compact ? 4 : 6), keyLabelX));
+  // Push key label Y away from camera zone and subject
+  const _keyLabelBaseY = kY;
+  const _keyLabelY = (() => {
+    let y = _keyLabelBaseY;
+    // If label overlaps camera zone, push up
+    if (y > camY - (compact ? 20 : 28)) y = camY - (compact ? 20 : 28);
+    // If label overlaps subject, push away vertically
+    if (Math.abs(y - subY) < (compact ? 24 : 30) && Math.abs(kX - subX) < (compact ? 40 : 50)) {
+      y = kY < subY ? subY - (compact ? 28 : 34) : subY + subR + (compact ? 16 : 20);
+    }
+    return y;
+  })();
 
   // Steel alias — every alpha is bumped by ~0.18 with a floor at 0.42 so
   // the diagram reads on bright displays. The original dim 0.15–0.30 stops
@@ -522,8 +577,10 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         const isRing  = mf.includes('ring');
         const isPara  = mf.includes('para') || mf.includes('umbr');
 
-        // Angle from key → subject (for orienting the emission face)
-        const kToSubDeg = Math.atan2(subX - kX, -(subY - kY)) * 180 / Math.PI;
+        // Modifier emission face points TOWARD the subject.
+        // atan2(kX - subX, ...) — NOT (subX - kX). Swapping the sign
+        // makes the modifier face AWAY from the subject (a past bug).
+        const kToSubDeg = Math.atan2(kX - subX, -(subY - kY)) * 180 / Math.PI;
 
         // Ambient glow halo (always)
         const halo = (
@@ -749,27 +806,28 @@ export default function LightingDiagram({ result, compact = false, fluid = false
       {/* ─── Labels ─── */}
 
       {/* KEY label */}
-      <text x={keyLabelX} y={kY + (compact ? 4 : 5)} textAnchor={keyLabelSide}
+      <text x={keyLabelX} y={_keyLabelY + (compact ? 4 : 5)} textAnchor={keyLabelSide}
         fill={st(0.55)} fontSize={compact ? 7 : 8} fontWeight="700" letterSpacing="0.8"
         fontFamily="Inter, system-ui, sans-serif">KEY</text>
       {reconKeyDeg != null && (
-        <text x={keyLabelX} y={kY + (compact ? 13 : 15)} textAnchor={keyLabelSide}
+        <text x={keyLabelX} y={_keyLabelY + (compact ? 13 : 15)} textAnchor={keyLabelSide}
           fill={st(0.40)} fontSize={compact ? 6 : 7} fontWeight="600" letterSpacing="0.3"
           fontFamily="Inter, system-ui, sans-serif">{Math.round(180 - reconKeyDeg)}°</text>
       )}
-      {/* Elevation + distance labels — stacked below the angle readout */}
       {(() => {
         const elev = (keyElevation || '').toLowerCase();
         const isMed = elev === 'medium' || elev === 'mid' || !elev || elev === 'unknown';
-        const showElev = !isMed || !compact; // compact suppresses MED, full always shows
+        const showElev = !isMed || !compact;
         const elevLabel = elev === 'high' ? 'HIGH' : elev === 'low' ? 'LOW' : 'MED';
         const elevColor = elev === 'high' ? 'rgba(245,190,72,0.85)'
                         : elev === 'low'  ? 'rgba(120,170,220,0.80)'
                         : st(0.38);
+        const _sp = compact ? 9 : 10;
         const angleRow = reconKeyDeg != null;
-        let y = kY + (compact ? 4 : 5); // KEY row
-        if (angleRow) y += compact ? 9 : 10;  // 58° row
-        y += compact ? 9 : 10; // elevation row base
+        // Stack: KEY (row 0) → angle° (row 1 if present) → elevation (row 2) → distance (row 3 compact only)
+        let y = _keyLabelY + (compact ? 4 : 5); // KEY row baseline
+        if (angleRow) y += _sp;
+        y += _sp; // elevation row
         const distLabel = mod?.distRange;
         return (
           <>
@@ -779,7 +837,7 @@ export default function LightingDiagram({ result, compact = false, fluid = false
                 fontFamily="Inter, system-ui, sans-serif">{elevLabel}</text>
             )}
             {compact && distLabel && (
-              <text x={keyLabelX} y={y + (showElev ? (compact ? 9 : 10) : 0)} textAnchor={keyLabelSide}
+              <text x={keyLabelX} y={y + (showElev ? _sp : 0)} textAnchor={keyLabelSide}
                 fill={st(0.38)} fontSize={compact ? 5.5 : 6.5} fontWeight="500" letterSpacing="0.3"
                 fontFamily="Inter, system-ui, sans-serif">{distLabel}</text>
             )}
@@ -802,23 +860,25 @@ export default function LightingDiagram({ result, compact = false, fluid = false
       {/* Angle readout is now merged into the SHADOW label above so the
           two never stack on top of each other. */}
 
-      {/* ─── Full-mode annotations ─── */}
+      {/* ─── Full-mode annotations — limited to avoid overlap ─── */}
       {!compact && (
         <>
-          {/* Clock position label */}
+          {/* Clock position — below elevation stack */}
           {clockPos && (
             <text
-              x={keyLabelX} y={kY + 26} textAnchor={keyLabelSide}
+              x={keyLabelX}
+              y={_keyLabelY + 5 + (reconKeyDeg != null ? 10 : 0) + 10 + 10}
+              textAnchor={keyLabelSide}
               fill={st(0.40)} fontSize={7} fontWeight="500"
               fontFamily="Inter, system-ui, sans-serif"
             >{clockPos}</text>
           )}
-
-          {/* Modifier label below key */}
           {modLabel && (
             <text
-              x={keyLabelX} y={kY + 36} textAnchor={keyLabelSide}
-              fill={st(0.30)} fontSize={6.5} fontWeight="500"
+              x={keyLabelX}
+              y={_keyLabelY + 5 + (reconKeyDeg != null ? 10 : 0) + 10 + (clockPos ? 20 : 10)}
+              textAnchor={keyLabelSide}
+              fill={st(0.35)} fontSize={6.5} fontWeight="500"
               fontFamily="Inter, system-ui, sans-serif"
             >{modLabel}</text>
           )}

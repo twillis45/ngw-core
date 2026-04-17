@@ -31,7 +31,7 @@ const C = {
   glassSheen:  'rgba(178,191,209,0.07)',
 };
 
-export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, lastAnalysisTime }) {
+export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, onRecipes, onSavedSetups, onBuildWizard, onMyKit, lastAnalysisTime }) {
   const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isPressed,    setIsPressed]    = useState(false);
@@ -778,6 +778,25 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               </p>
             )}
             <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '12px 0' }} />
+            {/* ── Studio tools ── */}
+            {[
+              { label: 'Lighting Recipes', action: onRecipes },
+              { label: 'Saved Setups',     action: onSavedSetups },
+              { label: 'Build from Scratch', action: onBuildWizard },
+              { label: 'My Kit',           action: onMyKit },
+            ].map(item => (
+              <button key={item.label} onClick={() => { item.action?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
+                style={{
+                  backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '6px 0',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
+                  WebkitTapHighlightColor: 'transparent', minHeight: 36,
+                }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>{item.label}</span>
+                <span style={{ fontSize: 13, color: steel(0.4), lineHeight: 1, ...FONT_SMOOTH }}>›</span>
+              </button>
+            ))}
+            <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '10px 0 8px' }} />
+            {/* ── Account ── */}
             <button onClick={() => { onSettings?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
               style={{
                 backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '2px 0',
