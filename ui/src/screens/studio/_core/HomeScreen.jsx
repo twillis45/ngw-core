@@ -792,28 +792,42 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {/* LCD backlight — diffused panel glow with warm center hotspot */}
+            {/* LCD backlight — edge-lit panel with corner bleed + center pool */}
             <div style={{
               position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
               background: [
-                // Central backlight pool — LCD panel center is brightest
-                'radial-gradient(ellipse 85% 70% at 50% 48%, rgba(110,145,195,0.06) 0%, rgba(90,125,178,0.03) 40%, transparent 70%)',
-                // Edge backlight bleed — panel perimeter
-                'linear-gradient(180deg, rgba(100,135,185,0.022) 0%, transparent 25%, transparent 75%, rgba(80,115,165,0.016) 100%)',
+                // Central backlight pool — panel center is brightest
+                'radial-gradient(ellipse 80% 65% at 50% 48%, rgba(110,145,195,0.065) 0%, rgba(90,125,178,0.03) 40%, transparent 68%)',
+                // Corner backlight bleed — edge-lit LEDs leak at corners
+                'radial-gradient(circle at 0% 0%, rgba(100,140,190,0.025) 0%, transparent 30%)',
+                'radial-gradient(circle at 100% 0%, rgba(100,140,190,0.018) 0%, transparent 30%)',
+                'radial-gradient(circle at 0% 100%, rgba(90,130,180,0.015) 0%, transparent 25%)',
+                'radial-gradient(circle at 100% 100%, rgba(90,130,180,0.012) 0%, transparent 25%)',
               ].join(', '),
             }} />
-            {/* Glass edge reflection — thin bright line on top/left edge
-                where ambient light catches the glass surface. This is the
-                defining visual cue that says "this is glass, not a hole". */}
+            {/* Off-axis color shift — edges tint slightly warmer/cooler than center
+                (IPS panel characteristic — viewing angle affects color temp) */}
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+              background: 'linear-gradient(141.71deg, rgba(140,160,195,0.012) 0%, transparent 40%, transparent 60%, rgba(100,120,150,0.008) 100%)',
+            }} />
+            {/* Glass surface — top/left edge catch + full-surface subtle reflection */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 7,
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.02) 100%)',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.07) 35%, rgba(255,255,255,0.02) 100%)',
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 7,
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 40%, transparent 70%)',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 35%, transparent 65%)',
               pointerEvents: 'none',
+            }} />
+            {/* Screen-off reflection — when the panel is dark, you see a faint
+                reflection of the surrounding bezel. This is the ghost you see on
+                a powered-down camera LCD in a lit room. */}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
+              background: 'radial-gradient(ellipse 70% 50% at 45% 42%, rgba(255,255,255,0.008) 0%, transparent 60%)',
             }} />
             {/* Ellipse depth oval — Leica-style distance indicator */}
             <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
