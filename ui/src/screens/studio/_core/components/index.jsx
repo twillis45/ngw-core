@@ -3,7 +3,7 @@
  * Single source of truth for shared UI primitives across all Day1 screens.
  * Import: import { Panel, Divider, NavRow, ToggleRow, ... } from '../components/day1';
  */
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { tapHaptic, selectHaptic, navHaptic } from '../../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../../utils/sounds';
 import { steel, C, FONT_SMOOTH as FS, PANEL_SHADOW, PANEL_BEVEL,
@@ -67,12 +67,33 @@ export function SectionLabel({ label }) {
  *  Hover/tap shows a frosted glass card with the explanation. */
 function InfoDot({ text }) {
   const [open, setOpen] = useState(false);
+  const dotRef = useRef(null);
+  const [tipStyle, setTipStyle] = useState({});
   if (!text) return null;
+
+  // Compute clamped tooltip position when opening
+  const handleOpen = () => {
+    setOpen(true);
+    if (!dotRef.current) return;
+    const rect = dotRef.current.getBoundingClientRect();
+    const tipW = 240;
+    const pad = 12; // viewport edge padding
+    // Center on dot, then clamp to viewport
+    let leftPx = rect.left + rect.width / 2 - tipW / 2;
+    leftPx = Math.max(pad, Math.min(window.innerWidth - tipW - pad, leftPx));
+    // Convert to offset from dot's left
+    const offsetLeft = leftPx - rect.left;
+    // Caret position: where the dot center is within the tooltip
+    const caretLeft = rect.left + rect.width / 2 - leftPx;
+    setTipStyle({ offsetLeft, caretLeft });
+  };
+
   return (
     <div
-      onMouseEnter={() => setOpen(true)}
+      ref={dotRef}
+      onMouseEnter={handleOpen}
       onMouseLeave={() => setOpen(false)}
-      onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+      onClick={(e) => { e.stopPropagation(); if (open) setOpen(false); else handleOpen(); }}
       style={{
         width: 14, height: 14, borderRadius: '50%', cursor: 'pointer',
         flexShrink: 0, position: 'relative',
@@ -86,12 +107,11 @@ function InfoDot({ text }) {
       }} />
       {open && (
         <div style={{
-          position: 'absolute', bottom: '100%', left: '50%',
-          transform: 'translateX(-50%)',
+          position: 'absolute', bottom: '100%',
+          left: tipStyle.offsetLeft ?? 0,
           marginBottom: 10, width: 240, padding: '10px 14px',
           borderRadius: 12,
-          // Apple Sequoia glass — more transparent, heavier blur
-          backgroundColor: 'rgba(20,20,24,0.45)',
+          backgroundColor: 'rgba(18,18,22,0.35)',
           backdropFilter: 'blur(48px) saturate(2.0)',
           WebkitBackdropFilter: 'blur(48px) saturate(2.0)',
           border: '0.5px solid rgba(255,255,255,0.14)',
@@ -105,11 +125,13 @@ function InfoDot({ text }) {
           animation: 'tooltipIn 0.18s ease-out both',
         }}>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 500, lineHeight: '16px', color: 'rgba(255,255,255,0.85)', letterSpacing: '0.05px', ...FS }}>{text}</p>
+          {/* Caret — follows the dot position even when tooltip is clamped */}
           <div style={{
-            position: 'absolute', bottom: -5, left: '50%',
+            position: 'absolute', bottom: -5,
+            left: tipStyle.caretLeft ?? 120,
             transform: 'translateX(-50%) rotate(45deg)',
             width: 10, height: 10,
-            backgroundColor: 'rgba(20,20,24,0.45)',
+            backgroundColor: 'rgba(18,18,22,0.35)',
             backdropFilter: 'blur(48px) saturate(2.0)',
             WebkitBackdropFilter: 'blur(48px) saturate(2.0)',
             borderRight: '0.5px solid rgba(255,255,255,0.14)',
