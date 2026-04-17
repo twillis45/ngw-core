@@ -11,7 +11,8 @@ import { loadSettings } from '../../../data/settingsStore';
 import { fetchImageFromUrl } from '../../../data/labApi';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import useStableViewport from '../../../utils/useStableViewport';
-import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../../../theme/studioMatte';
+import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
+         PANEL_SHADOW, PANEL_BEVEL, CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
@@ -679,188 +680,341 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
     if (e.target === e.currentTarget) closePanels();
   };
 
-  // ── Desktop two-column layout ────────────────────────────────────────────
-  // On desktop (≥1024px), the home screen becomes a split view:
-  //   LEFT  — full-height viewfinder (the photo is the hero)
-  //   RIGHT — studio tools panel (wordmark, analyze CTA, tools, sample)
-  // Mobile stays single-column with absolute positioning.
-  const D_RIGHT_W = 420; // right panel width on desktop
+  // ── Desktop layout ──────────────────────────────────────────────────────
+  // Profoto / Hasselblad / Capture One design philosophy:
+  //   - The photograph IS the interface — everything else recedes
+  //   - Centered composition with generous breathing room
+  //   - Instrument-grade typography and materials
+  //   - Tools are organized in inset panels, not flat lists
+  //   - The primary action dominates the viewport
+  //
+  // Layout: centered single-column with max-width constraint.
+  // The VF is a contained, elevated panel (not edge-to-edge void).
+  // Below it: centered CTA + tools in a horizontal strip.
 
-  // ── Desktop right panel — studio tools ──────────────────────────────────
+  // ── Desktop overlay — Studio Matte instrument panel (5 levels deep) ─────
+  // Level 1: Centered composition with proper visual hierarchy
+  // Level 2: Studio Matte material treatment on every surface
+  // Level 3: Icons + warm amber accents for photography touchpoints
+  // Level 4: Glass viewfinder with full overlay stack on loaded photo
+  // Level 5: Tactile CTA with dome physics + state-colored LED ring
+  const _D_VF = `min(56vh, 480px)`;
+  const _D_AMBER = 'rgba(200,155,60,';  // warm amber base for accents
+
   const desktopRightPanel = isDesktop ? (
     <div style={{
-      gridColumn: '2 / 3',
+      gridColumn: '1 / -1', gridRow: '1 / -1',
+      position: 'relative', zIndex: 10,
       display: 'flex', flexDirection: 'column',
-      padding: '48px 40px 32px',
-      position: 'relative', zIndex: 2,
-      borderLeft: `1px solid ${steel(0.06)}`,
-      background: 'linear-gradient(180deg, rgba(12,13,16,0.95) 0%, rgba(8,9,12,0.98) 100%)',
+      alignItems: 'center', justifyContent: 'center',
+      pointerEvents: 'none',
     }}>
-      {/* Wordmark — tighter lockup */}
-      <div style={{ marginBottom: 8 }}>
-        <p style={{
-          margin: 0, fontWeight: 800, fontSize: 26, lineHeight: '30px',
-          color: C.textPrimary, letterSpacing: '-0.5px',
-          ...FONT_SMOOTH,
-        }}>No Guesswork</p>
-        <p style={{
-          margin: '3px 0 0 1px', fontWeight: 800, fontSize: 10.5, lineHeight: '14px',
-          color: steel(0.50), letterSpacing: '4px',
-          ...FONT_SMOOTH,
-        }}>LIGHTING</p>
-        <p style={{
-          margin: '12px 0 0', fontWeight: 500, fontSize: 14, lineHeight: '20px',
-          color: steel(0.42), letterSpacing: '0.1px',
-          ...FONT_SMOOTH,
-        }}>See how any photo was lit — and rebuild it.</p>
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: 1, background: steel(0.06), margin: '24px 0' }} />
-
-      {/* Analyze CTA — desktop variant: full-width rounded rectangle */}
-      <button
-        onClick={handleButtonClick}
-        onMouseDown={handleButtonPress}
-        onMouseUp={handleButtonRelease}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => { setIsHovered(false); handleButtonRelease(); }}
-        style={{
-          width: '100%', padding: '18px 0',
-          border: 'none', borderRadius: 14, cursor: 'pointer',
-          background: buttonState === 'pressed'
-            ? 'linear-gradient(141.71deg, #020304 0%, #040506 50%, #060708 100%)'
-            : isHovered
-              ? 'linear-gradient(141.71deg, #1a1e28 0%, #0e1118 100%)'
-              : hasImage
-                ? `linear-gradient(141.71deg, #1e2640 0%, #141828 50%, #0a0d18 100%)`
-                : 'linear-gradient(141.71deg, #16191f 0%, #0c0e14 100%)',
-          boxShadow: buttonState === 'pressed'
-            ? 'inset 0 2px 6px rgba(0,0,0,0.8), inset 0 1px 2px rgba(0,0,0,0.6)'
-            : [
-                '0 4px 16px rgba(0,0,0,0.6)',
-                '0 1px 4px rgba(0,0,0,0.4)',
-                'inset 0 1px 0 rgba(255,255,255,0.08)',
-                'inset 0 -1px 0 rgba(0,0,0,0.3)',
-                hasImage ? `0 0 20px rgba(${SC.r},${SC.g},${SC.b},0.12)` : '',
-              ].filter(Boolean).join(', '),
-          transition: 'all 0.15s ease',
-          WebkitTapHighlightColor: 'transparent',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {/* LED accent line — top edge */}
-        <div style={{
-          position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-          background: hasImage
-            ? `linear-gradient(90deg, transparent 0%, rgba(${SC.r},${SC.g},${SC.b},${isPressed ? 0.1 : 0.5}) 50%, transparent 100%)`
-            : `linear-gradient(90deg, transparent 0%, ${steel(0.15)} 50%, transparent 100%)`,
-          transition: 'background 0.3s ease',
-        }} />
-        <span style={{
-          fontSize: 14, fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase',
-          color: isPressed
-            ? steel(0.3)
-            : hasImage
-              ? `rgba(${SC.r},${SC.g},${SC.b},0.95)`
-              : steel(0.75),
-          textShadow: hasImage && !isPressed
-            ? `0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.3)`
-            : 'none',
-          ...FONT_SMOOTH,
-          transition: 'color 0.15s ease',
-        }}>{analyzeLabel}</span>
-      </button>
-
-      {/* Sample CTA — below analyze */}
-      {!hasImage && (
-        <button
-          onClick={loadSample}
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '12px 0 4px', width: '100%', textAlign: 'center',
-            WebkitTapHighlightColor: 'transparent',
-            opacity: sampleLoading ? 0.5 : 1,
-          }}
-        >
-          <span style={{
-            fontSize: 12, fontWeight: 600, letterSpacing: '0.3px',
-            color: steel(0.50), ...FONT_SMOOTH,
-          }}>{sampleLoading ? 'Loading…' : 'Try a Sample Photo →'}</span>
-        </button>
-      )}
-
-      {/* Last result recall */}
-      {hasLastResult && !hasImage && (
-        <button
-          onClick={onViewLastResult}
-          style={{
-            background: 'none', border: `1px solid ${steel(0.08)}`, cursor: 'pointer',
-            padding: '10px 0', width: '100%', borderRadius: 10, marginTop: 12,
-            WebkitTapHighlightColor: 'transparent',
-          }}
-        >
-          <span style={{
-            fontSize: 11, fontWeight: 600, letterSpacing: '0.5px',
-            color: steel(0.45), ...FONT_SMOOTH,
-          }}>View Last Result</span>
-        </button>
-      )}
-
-      {/* Divider */}
-      <div style={{ height: 1, background: steel(0.06), margin: '24px 0 20px' }} />
-
-      {/* Studio tools — always visible on desktop, not hidden in profile */}
-      <p style={{
-        margin: '0 0 14px', fontSize: 9.5, fontWeight: 700, letterSpacing: '2.5px',
-        color: steel(0.25), textTransform: 'uppercase', ...FONT_SMOOTH,
-      }}>STUDIO</p>
-      {[
-        { label: 'Lighting Recipes', action: onRecipes },
-        { label: 'Saved Setups',     action: onSavedSetups },
-        { label: 'Build from Scratch', action: onBuildWizard },
-        { label: 'My Kit',           action: onMyKit },
-      ].map(item => (
-        <button key={item.label} onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
-          style={{
-            backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
-            padding: '10px 0', width: '100%',
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            WebkitTapHighlightColor: 'transparent',
-          }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>{item.label}</span>
-          <span style={{ fontSize: 15, color: steel(0.25), lineHeight: 1, ...FONT_SMOOTH }}>›</span>
-        </button>
-      ))}
-
-      {/* Spacer */}
-      <div style={{ flex: 1 }} />
-
-      {/* Profile footer */}
-      <div style={{ paddingTop: 16, borderTop: `1px solid ${steel(0.06)}` }}>
+      {/* ── Top bar — instrument header ── */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '20px 36px',
+        pointerEvents: 'auto',
+        background: 'linear-gradient(180deg, rgba(6,7,10,0.80) 0%, rgba(6,7,10,0.40) 60%, transparent 100%)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>No Guesswork</p>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FONT_SMOOTH }}>LIGHTING</p>
+        </div>
         {user && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: steel(0.40), ...FONT_SMOOTH }}>
-              {user.username || user.email}
-            </span>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: steel(0.30), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
-                Settings
-              </button>
-              <button onClick={() => { onLogout?.(); softClickSound(); tapHaptic(); }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: 'rgba(180,60,60,0.55)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
-                Sign Out
-              </button>
-            </div>
+          <div style={{
+            display: 'flex', gap: 14, alignItems: 'center',
+            padding: '5px 14px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.02)', border: `1px solid ${steel(0.06)}`,
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 4px rgba(0,0,0,0.35)`,
+          }}>
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: steel(0.32), ...FONT_SMOOTH }}>{user.username || user.email}</span>
+            <div style={{ width: 1, height: 11, background: steel(0.07) }} />
+            <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: steel(0.28), letterSpacing: '0.5px', ...FONT_SMOOTH }}>Settings</button>
           </div>
         )}
-        <p style={{
-          margin: '6px 0 0', textAlign: 'right',
-          fontSize: 9, fontWeight: 500, letterSpacing: '0.5px', color: steel(0.15),
-          ...FONT_SMOOTH,
-        }}>v1.4.0</p>
+      </div>
+
+      {/* ── EMPTY STATE ── */}
+      {!hasImage && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'auto' }}>
+          {/* Hero tagline ABOVE the viewfinder — the first thing you read */}
+          <p style={{
+            margin: '0 0 8px', fontWeight: 700, fontSize: 28, lineHeight: '34px',
+            color: 'rgba(245,247,250,0.88)', letterSpacing: '-0.6px',
+            textAlign: 'center', ...FONT_SMOOTH,
+          }}>See how any portrait was lit.</p>
+          <p style={{
+            margin: '0 0 28px', fontWeight: 500, fontSize: 13.5, lineHeight: '18px',
+            color: steel(0.38), textAlign: 'center', ...FONT_SMOOTH,
+          }}>Reverse-engineer the lighting. Rebuild it in your studio.</p>
+
+          {/* Viewfinder — machined cavity with VISIBLE contrast */}
+          <div
+            onClick={() => fileRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              width: _D_VF, height: `calc(${_D_VF} * 0.72)`,
+              borderRadius: 16, cursor: 'pointer',
+              position: 'relative', overflow: 'hidden',
+              // Darker interior than the body — VISIBLE contrast
+              background: `linear-gradient(141.71deg, #080a0e 0%, #05060a 50%, #03040700 100%)`,
+              boxShadow: [
+                'inset 6px 6px 18px rgba(0,0,0,0.75)',
+                'inset 3px 3px 8px rgba(0,0,0,0.55)',
+                'inset 0 0 50px rgba(0,0,0,0.25)',
+                'inset -1px -1px 2px rgba(255,255,255,0.035)',
+                // Outer rim — machined chamfer catches the 141.71° key
+                '-1px -1px 1px rgba(255,255,255,0.055)',
+                '3px 3px 12px rgba(0,0,0,0.65)',
+                '1px 1px 4px rgba(0,0,0,0.45)',
+              ].join(', '),
+              border: isDragOver ? `1.5px solid ${_D_AMBER}0.35)` : `1px solid ${steel(0.08)}`,
+              transition: 'border 0.25s ease, box-shadow 0.25s ease',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            {/* LCD backlight — cool blue-steel, brighter than before */}
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none',
+              background: [
+                'radial-gradient(ellipse 80% 65% at 50% 48%, rgba(110,145,195,0.055) 0%, rgba(90,125,178,0.025) 40%, transparent 68%)',
+                'linear-gradient(180deg, rgba(100,135,185,0.02) 0%, transparent 35%, transparent 70%, rgba(80,115,165,0.015) 100%)',
+              ].join(', '),
+            }} />
+            {/* Inner shadow stack */}
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 16, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW }} />
+            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, pointerEvents: 'none' }} />
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+              background: GLASS_REFLECTION, borderRadius: 16, opacity: 0.45,
+              transform: glassReflectionTransform(tilt), willChange: 'transform', pointerEvents: 'none',
+            }} />
+            {/* Ellipse depth ring — same as mobile VF */}
+            <div style={{ position: 'absolute', left: '3%', top: -20, right: '3%', bottom: 8, zIndex: 1, opacity: 0.4 }}>
+              <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
+            </div>
+            {/* Center: large bracket icon + instruction */}
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: 2,
+            }}>
+              <svg width="56" height="56" viewBox="0 0 38 38" fill="none">
+                <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+                {/* Down-arrow import glyph */}
+                <g style={{ animation: showTeach ? 'none' : undefined }}>
+                  <path d="M19 13v8" stroke={steel(0.45)} strokeWidth="1.3" strokeLinecap="round" />
+                  <path d="M16 18l3 3 3-3" stroke={steel(0.45)} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              </svg>
+              <p style={{
+                margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '2.5px',
+                color: steel(0.55), textTransform: 'uppercase', ...FONT_SMOOTH,
+              }}>Import a Portrait</p>
+              <p style={{
+                margin: 0, fontSize: 11.5, fontWeight: 500,
+                color: steel(0.30), ...FONT_SMOOTH,
+              }}>drag & drop · paste · click to browse</p>
+            </div>
+            {/* Drag-over glow */}
+            {isDragOver && (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none',
+                background: `radial-gradient(ellipse 80% 65% at center, ${_D_AMBER}0.10) 0%, ${_D_AMBER}0.03) 50%, transparent 75%)`,
+                boxShadow: `inset 0 0 40px ${_D_AMBER}0.12)`,
+              }} />
+            )}
+          </div>
+
+          {/* Action row — Studio Matte machined buttons */}
+          <div style={{ display: 'flex', gap: 14, marginTop: 26, alignItems: 'center' }}>
+            {/* Try a Sample — warm amber CTA with deep machined well */}
+            <button onClick={loadSample} style={{
+              background: `linear-gradient(141.71deg, #3a3428 0%, #2a2418 50%, #1c1a12 100%)`,
+              border: 'none', cursor: 'pointer', padding: '14px 32px', borderRadius: 12,
+              boxShadow: [
+                // Deep outer drop stack — button floats above the body
+                '8px 8px 24px rgba(0,0,0,0.7)',
+                '4px 4px 10px rgba(0,0,0,0.55)',
+                '1px 2px 4px rgba(0,0,0,0.4)',
+                // Warm amber glow — state indicator
+                `0 0 8px ${_D_AMBER}0.10)`,
+                // Top-left chamfer catch — 141.71° key light
+                '-1px -1px 1px rgba(255,255,255,0.06)',
+                // Inner bevel — machined face edge
+                `inset 0 1.5px 0 ${_D_AMBER}0.15)`,
+                `inset 1px 0 0 ${_D_AMBER}0.08)`,
+                'inset -1px -1px 0 rgba(0,0,0,0.35)',
+              ].join(', '),
+              opacity: sampleLoading ? 0.5 : 1,
+              transition: 'all 0.15s ease, transform 0.12s ease',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.5px', color: `${_D_AMBER}0.85)`, textShadow: `0 0 8px ${_D_AMBER}0.20)`, ...FONT_SMOOTH }}>
+                {sampleLoading ? 'Loading...' : 'Try a Sample Photo'}
+              </span>
+            </button>
+            {hasLastResult && (
+              <button onClick={onViewLastResult} style={{
+                background: CTA_BG, border: 'none',
+                cursor: 'pointer', padding: '14px 32px', borderRadius: 12,
+                boxShadow: [
+                  CTA_SHADOW,
+                  CTA_BEVEL,
+                  '-1px -1px 1px rgba(255,255,255,0.04)',
+                ].join(', '),
+                transition: 'transform 0.12s ease',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', color: steel(0.72), ...FONT_SMOOTH }}>Last Result</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── PHOTO LOADED STATE ── */}
+      {hasImage && (<>
+        {/* Glass overlay on the photo — same instrument treatment as mobile */}
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
+        }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+            background: GLASS_REFLECTION, opacity: 0.4,
+            transform: glassReflectionTransform(tilt), willChange: 'transform',
+          }} />
+          <div style={{ position: 'absolute', inset: 0, boxShadow: VIEWFINDER_INNER_SHADOW }} />
+        </div>
+
+        {/* Bottom dock — gradient scrim + EXIF + CTA */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 12,
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          padding: '0 0 40px', pointerEvents: 'auto',
+          background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.50) 30%, rgba(4,5,7,0.82) 70%, rgba(4,5,7,0.92) 100%)',
+        }}>
+          <ExifStrip exifData={exifData} style={{ marginBottom: 18, opacity: 0.85 }} />
+          {/* CTA — Studio Matte canonical button: directional gradient + chamfer + LED ring */}
+          <button
+            onClick={handleButtonClick}
+            onMouseDown={handleButtonPress}
+            onMouseUp={handleButtonRelease}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => { setIsHovered(false); handleButtonRelease(); }}
+            style={{
+              padding: '18px 84px',
+              border: 'none', borderRadius: 14, cursor: 'pointer',
+              // 141.71° directional gradient — same as mobile dome face
+              background: isPressed
+                ? 'linear-gradient(141.71deg, #020304 0%, #040506 50%, #060708 100%)'
+                : isHovered
+                  ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`
+                  : `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`,
+              boxShadow: isPressed
+                ? [
+                    'inset 0 3px 8px rgba(0,0,0,0.85)',
+                    'inset 3px 0 7px rgba(0,0,0,0.55)',
+                    'inset -1px -1px 4px rgba(0,0,0,0.4)',
+                    'inset 0 1px 2px rgba(0,0,0,0.7)',
+                    '1px 1px 3px rgba(0,0,0,0.4)',
+                  ].join(', ')
+                : [
+                    // Deep outer drop — floats above the gradient scrim
+                    '0 8px 28px rgba(0,0,0,0.75)',
+                    '0 4px 12px rgba(0,0,0,0.55)',
+                    '2px 3px 7px rgba(0,0,0,0.45)',
+                    // LED ring — state-colored perimeter glow
+                    `0 0 0 1px rgba(${SC.r},${SC.g},${SC.b},0.40)`,
+                    `0 0 20px rgba(${SC.r},${SC.g},${SC.b},0.14)`,
+                    // Top-left chamfer — 141.71° key light catch
+                    '-1px -1px 2px rgba(255,255,255,0.08)',
+                    // Inner bevel — machined face edge
+                    'inset 0 2px 0 rgba(255,255,255,0.18)',
+                    'inset 2px 0 0 rgba(255,255,255,0.08)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.45)',
+                    isHovered ? '-2px -2px 3px rgba(255,255,255,0.10)' : '',
+                  ].filter(Boolean).join(', '),
+              transition: `all ${isPressed ? '0.06s' : '0.18s'} ease`,
+              transform: isPressed ? 'translateY(1px)' : isHovered ? 'translateY(-1px)' : 'none',
+              WebkitTapHighlightColor: 'transparent',
+              position: 'relative', overflow: 'hidden',
+            }}
+          >
+            {/* LED accent line — top chamfer glow */}
+            <div style={{
+              position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+              background: `linear-gradient(90deg, transparent 0%, rgba(${SC.r},${SC.g},${SC.b},${isPressed ? 0.06 : 0.60}) 50%, transparent 100%)`,
+              transition: 'background 0.15s ease',
+            }} />
+            <span style={{
+              fontSize: 14, fontWeight: 700, letterSpacing: '3.5px', textTransform: 'uppercase',
+              color: isPressed ? steel(0.30) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
+              textShadow: isPressed ? 'none' : `0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.30)`,
+              ...FONT_SMOOTH,
+            }}>{analyzeLabel}</span>
+          </button>
+        </div>
+      </>)}
+
+      {/* ── Bottom dock — studio tools with icons ── */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        display: hasImage ? 'none' : 'flex',
+        justifyContent: 'center', alignItems: 'center',
+        gap: 6, padding: '0 48px 22px',
+        pointerEvents: 'auto',
+      }}>
+        {[
+          { label: 'Recipes', icon: 'M4 6h16M4 12h10M4 18h14', action: onRecipes },
+          { label: 'Saved', icon: 'M5 5v14l7-5 7 5V5', action: onSavedSetups },
+          { label: 'Build', icon: 'M12 2L2 7l10 5 10-5M2 17l10 5 10-5M2 12l10 5 10-5', action: onBuildWizard },
+          { label: 'My Kit', icon: 'M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM6 12h.01M12 12h.01M18 12h.01', action: onMyKit },
+        ].map(item => (
+          <button key={item.label} onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
+            style={{
+              // Studio Matte panel button — 141.71° directional gradient, deep shadow, machined bevel
+              background: `linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)`,
+              border: 'none', borderRadius: 10, cursor: 'pointer',
+              padding: '11px 22px',
+              display: 'flex', alignItems: 'center', gap: 9,
+              boxShadow: [
+                // Outer drop — 3-layer depth (matches mobile button well shadow)
+                '6px 6px 18px rgba(0,0,0,0.65)',
+                '3px 3px 8px rgba(0,0,0,0.50)',
+                '1px 1px 3px rgba(0,0,0,0.35)',
+                // Top-left chamfer catch — 141.71° directional highlight
+                '-1px -1px 1px rgba(255,255,255,0.055)',
+                // Inner bevel — machined face edges
+                'inset 0 1px 0 rgba(255,255,255,0.07)',
+                'inset 1px 0 0 rgba(255,255,255,0.03)',
+                'inset -1px -1px 0 rgba(0,0,0,0.30)',
+              ].join(', '),
+              WebkitTapHighlightColor: 'transparent',
+              transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d={item.icon} />
+            </svg>
+            <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.3px', color: steel(0.58), ...FONT_SMOOTH }}>{item.label}</span>
+          </button>
+        ))}
       </div>
     </div>
   ) : null;
@@ -884,10 +1038,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         // the UI stays readable in bright outdoor / on-location shoots.
         filter: daylightMode ? 'brightness(1.15)' : undefined,
         transition: 'filter 0.4s ease',
-        // Desktop: CSS Grid two-column layout (VF fills left, tools panel right)
+        // Desktop: single-column grid — VF fills entire viewport, controls overlay
         ...(isDesktop ? {
           display: 'grid',
-          gridTemplateColumns: `1fr ${D_RIGHT_W}px`,
+          gridTemplateColumns: '1fr',
+          gridTemplateRows: '1fr',
         } : {}),
       }}
     >
@@ -1044,7 +1199,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           left: isDesktop ? undefined : 0,
           right: isDesktop ? undefined : 0,
           height: isDesktop ? '100%' : VF_HEIGHT,
-          gridColumn: isDesktop ? '1 / 2' : undefined,
+          gridColumn: isDesktop ? '1 / -1' : undefined,
           gridRow: isDesktop ? '1 / -1' : undefined,
           borderRadius: 0,
           // Edge-to-edge viewfinder — no rounded corners, flush with screen edges.
