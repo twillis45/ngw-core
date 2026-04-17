@@ -11,10 +11,12 @@ import { saveSetting, loadSettings, resetSettings, applySettings,
 import { loadMode, saveMode } from '../../../data/modeStore';
 import { isEnabled, setFlag } from '../../../modes/featureFlags';
 import useMode from '../../../hooks/useMode';
-import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN } from '../../../theme/studioMatte';
+import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN, KEY_ACCENT } from '../../../theme/studioMatte';
 import { Panel, Divider, SectionLabel, NavRow, ToggleRow, InfoRow, ScreenHeader, HomeIndicator }
   from '../_core/components';
 import MatteBackground from '../_shared/MatteBackground';
+import usePlan from '../../../hooks/usePlan';
+import { PLAN_LABELS } from '../../../data/planStore';
 
 const SUPPORT_EMAIL = 'hello@noguesswork.com';
 const HELP_URL      = 'https://noguessworksystems.com/help';
@@ -159,6 +161,13 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
 function AccountScreen({ user, onBack, onLogout }) {
   const [resetSent, setResetSent] = useState(false);
   const displayEmail = user?.email || user?.username || '';
+  const { plan, setPlan, isPaid, isAdmin } = usePlan(displayEmail);
+  const planLabel = PLAN_LABELS[plan] || plan;
+
+  // Plan accent colors
+  const planAccent = isPaid
+    ? { bg: 'rgba(72,186,136,0.10)', border: 'rgba(72,186,136,0.25)', color: GREEN, label: 'ACTIVE' }
+    : { bg: 'rgba(200,155,60,0.08)', border: 'rgba(200,155,60,0.20)', color: KEY_ACCENT, label: 'FREE' };
 
   async function handlePasswordReset() {
     if (!displayEmail) return;
@@ -177,27 +186,74 @@ function AccountScreen({ user, onBack, onLogout }) {
       <ScreenHeader title="Account" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
-        {/* Plan card */}
+        {/* Plan card — reads from real plan state */}
         <div style={{
           backgroundColor: '#0c0e14',
           borderRadius: 14, padding: '18px 20px',
           boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-          border: '0.5px solid rgba(72,186,136,0.15)',
+          border: `0.5px solid ${planAccent.border}`,
           marginTop: 8,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FS }}>Pro Plan</p>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: steel(0.55), ...FS }}>Active subscription</p>
+              <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FS }}>{planLabel} Plan</p>
+              <p style={{ margin: '4px 0 0', fontSize: 12, color: steel(0.55), ...FS }}>
+                {isPaid ? 'Active subscription' : 'Free tier — limited analyses'}
+              </p>
             </div>
             <div style={{
-              backgroundColor: 'rgba(72,186,136,0.12)', border: '0.5px solid rgba(72,186,136,0.3)',
+              backgroundColor: planAccent.bg, border: `0.5px solid ${planAccent.border}`,
               borderRadius: 8, padding: '5px 10px',
             }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, letterSpacing: '0.8px', ...FS }}>ACTIVE</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: planAccent.color, letterSpacing: '0.8px', ...FS }}>{planAccent.label}</span>
             </div>
           </div>
         </div>
+
+        {/* Admin — plan switcher for testing free vs paid experience */}
+        {isAdmin && (
+          <>
+            <SectionLabel label="ADMIN — SUBSCRIPTION TESTING" />
+            <Panel>
+              <p style={{ margin: 0, padding: '10px 20px 6px', fontSize: 11, color: steel(0.40), ...FS }}>
+                Switch between tiers to test the paywall and feature gates.
+              </p>
+              <div style={{ display: 'flex', gap: 8, padding: '8px 20px 14px', flexWrap: 'wrap' }}>
+                {['free', 'paid', 'pro', 'enterprise'].map(tier => {
+                  const active = plan === tier;
+                  return (
+                    <button key={tier} onClick={() => { setPlan(tier); softClickSound(); selectHaptic(); }}
+                      style={{
+                        background: active
+                          ? `linear-gradient(141.71deg, ${tier === 'free' ? '#2a2218' : '#1a2a22'} 0%, ${tier === 'free' ? '#1c1810' : '#122018'} 100%)`
+                          : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
+                        border: active ? `1px solid ${tier === 'free' ? 'rgba(200,155,60,0.30)' : 'rgba(72,186,136,0.30)'}` : `1px solid ${steel(0.08)}`,
+                        borderRadius: 10, padding: '8px 18px', cursor: 'pointer',
+                        boxShadow: active
+                          ? `${PANEL_SHADOW}, inset 0 1px 0 rgba(255,255,255,0.08)`
+                          : `1px 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)`,
+                        WebkitTapHighlightColor: 'transparent',
+                      }}
+                    >
+                      <span style={{
+                        fontSize: 12, fontWeight: active ? 700 : 500,
+                        letterSpacing: '0.5px', textTransform: 'uppercase',
+                        color: active
+                          ? (tier === 'free' ? KEY_ACCENT : GREEN)
+                          : steel(0.40),
+                        ...FS,
+                      }}>{PLAN_LABELS[tier]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <Divider />
+              <InfoRow label="Current tier" value={planLabel} />
+              <Divider />
+              <InfoRow label="Is paid" value={isPaid ? 'Yes' : 'No'} />
+            </Panel>
+          </>
+        )}
 
         <SectionLabel label="ACCOUNT" />
         <Panel>
@@ -212,8 +268,15 @@ function AccountScreen({ user, onBack, onLogout }) {
         <SectionLabel label="BILLING" />
         <Panel>
           <NavRow
-            label="Manage billing & invoices"
-            onClick={() => window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank')}
+            label={isPaid ? 'Manage billing & invoices' : 'Upgrade to Pro'}
+            onClick={() => {
+              if (isPaid) {
+                window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank');
+              } else {
+                // TODO: link to Stripe checkout
+                softClickSound();
+              }
+            }}
           />
         </Panel>
 
