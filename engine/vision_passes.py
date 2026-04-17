@@ -2835,19 +2835,16 @@ def light_structure_pass(
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
     if face_box is None:
-        notes.append("no face_box — cannot analyze nose shadow structure")
-        return {
-            "ok": True,
-            "nose_shadow_shape": nose_shadow_shape,
-            "nose_shadow_length_ratio": nose_shadow_length_ratio,
-            "nose_shadow_angle_deg": nose_shadow_angle_deg,
-            "triangle_detected": False,
-            "triangle_cheek": None,
-            "triangle_completeness": 0.0,
-            "pattern_name": pattern_name,
-            "confidence": 0.1,
-            "notes": notes,
-        }
+        # Estimate face region from person segmentation or image center.
+        # Many dark-skin portrait images fail face detection due to MediaPipe
+        # model limitations.  Use a conservative center crop (20-80% of image)
+        # as the face ROI so shadow analysis can still run.
+        h_img, w_img = img_bgr.shape[:2]
+        face_box = (
+            int(w_img * 0.15), int(h_img * 0.08),
+            int(w_img * 0.85), int(h_img * 0.80),
+        )
+        notes.append("face_box estimated from image center crop (face detector failed)")
 
     # face_box is (x0, y0, x1, y1) — two corner coordinates, not (x, y, w, h).
     # Every other pass in this file unpacks as x0, y0, x1, y1.  Convert to
@@ -3145,22 +3142,33 @@ def light_structure_pass(
         _shadow_side_pct = left_shadow if shadow_side == "left" else right_shadow
         _shadow_strong = _shadow_side_pct >= 0.15
 
-        # Check for triangle: look at the cheek area on shadow side.
-        # The Rembrandt triangle is an ISOLATED bright patch on an otherwise
-        # shadowed cheek — mere "above threshold" brightness isn't enough.
-        cheek_top = 2 * fh // 3
-        cheek_bottom = fh
+        # Check for triangle: the Rembrandt triangle sits on the shadow
+        # cheek BELOW the eye and ABOVE the jawline. Using 45-70% of face
+        # height captures the eye-to-nose region where the triangle forms.
+        # The outer 40% of the face width on the shadow side targets the
+        # cheek specifically (wider than the old 1/3 which missed the
+        # triangle on wide or turned faces).
+        cheek_top = int(fh * 0.45)
+        cheek_bottom = int(fh * 0.70)
         if shadow_side == "left":
-            cheek_region = face_roi[cheek_top:cheek_bottom, :fw // 3]
-            # Surrounding shadow: above the cheek on the same side
-            surround_region = face_roi[fh // 2:cheek_top, :fw // 3]
+            cheek_region = face_roi[cheek_top:cheek_bottom, :int(fw * 0.40)]
+            surround_region = face_roi[int(fh * 0.25):cheek_top, :int(fw * 0.40)]
         else:
-            cheek_region = face_roi[cheek_top:cheek_bottom, 2 * fw // 3:]
-            surround_region = face_roi[fh // 2:cheek_top, 2 * fw // 3:]
+            cheek_region = face_roi[cheek_top:cheek_bottom, int(fw * 0.60):]
+            surround_region = face_roi[int(fh * 0.25):cheek_top, int(fw * 0.60):]
+
+        # Also sample BELOW the cheek (jaw zone) for peak detection
+        jaw_top = int(fh * 0.70)
+        jaw_bottom = int(fh * 0.85)
+        if shadow_side == "left":
+            jaw_region = face_roi[jaw_top:jaw_bottom, :int(fw * 0.40)]
+        else:
+            jaw_region = face_roi[jaw_top:jaw_bottom, int(fw * 0.60):]
 
         if cheek_region.size > 20:
             cheek_brightness = float(np.mean(cheek_region))
             surround_brightness = float(np.mean(surround_region)) if surround_region.size > 20 else cheek_brightness
+            jaw_brightness = float(np.mean(jaw_region)) if jaw_region.size > 20 else cheek_brightness
 
             # ── Skin-tone-aware triangle isolation ────────────────────────
             # The triangle is a bright patch surrounded by shadow. The
@@ -3194,6 +3202,31 @@ def light_structure_pass(
             # Local threshold: 0.20 of local range (triangle is 20%+ of the
             # shadow-side tonal range — works even on very dark skin)
             _isolation_ok = _tri_global >= 0.12 or _tri_local >= 0.20
+
+            # ── Percentile-based triangle detection ────────────────────
+            # The Rembrandt triangle is a BRIGHT PATCH (maybe 20-30% of the
+            # cheek area) surrounded by shadow. The mean of the cheek
+            # region is diluted by shadow pixels. Instead, compare the
+            # BRIGHT FRACTION of the cheek (p75 = upper quartile, which
+            # captures the triangle patch) against the DARK FRACTION of
+            # the same region (p25 = lower quartile, the shadow around it).
+            # If the spread is wide, there's a distinct bright patch.
+            if cheek_region.size > 50:
+                _cheek_p75 = float(np.percentile(cheek_region, 75))
+                _cheek_p25 = float(np.percentile(cheek_region, 25))
+                _cheek_spread = (_cheek_p75 - _cheek_p25) / max(face_mean, 1.0)
+                # Also check: does the bright fraction of the cheek
+                # exceed the mean of the jaw below? (triangle is brighter
+                # than the lowest shadow zone)
+                _bright_vs_jaw = (_cheek_p75 - jaw_brightness) / max(face_mean, 1.0) if jaw_brightness > 0 else 0
+                if _cheek_spread > 0.15 and _bright_vs_jaw > 0.10:
+                    _isolation_ok = True
+                    _triangle_isolation = _cheek_spread
+                    notes.append(
+                        f"percentile triangle: cheek_p75={_cheek_p75:.0f} "
+                        f"cheek_p25={_cheek_p25:.0f} spread={_cheek_spread:.3f} "
+                        f"jaw={jaw_brightness:.0f} bright_vs_jaw={_bright_vs_jaw:.3f}"
+                    )
 
             # ── Dark skin / no-face-box fallback ──────────────────────────
             # When the face box is unavailable (face detector failed) or the
