@@ -254,7 +254,7 @@ function AccountScreen({ user, onBack, onLogout }) {
               <p style={{ margin: 0, padding: '10px 20px 6px', fontSize: 11, color: steel(0.38), ...FS }}>
                 Switch tiers to test paywall and feature gates.
               </p>
-              <div style={{ display: 'flex', gap: 10, padding: '10px 20px 16px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, padding: '10px 20px 16px', flexWrap: 'nowrap' }}>
                 {['free', 'paid', 'pro', 'enterprise'].map(tier => {
                   const active = plan === tier;
                   const isFreeTier = tier === 'free';
@@ -281,7 +281,7 @@ function AccountScreen({ user, onBack, onLogout }) {
                           background: active
                             ? `linear-gradient(141.71deg, ${isFreeTier ? '#2a2218' : '#1a2a22'} 0%, ${isFreeTier ? '#1c1810' : '#122018'} 100%)`
                             : 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
-                          border: 'none', borderRadius: 10, padding: '10px 20px', cursor: 'pointer',
+                          border: 'none', borderRadius: 10, padding: '9px 14px', cursor: 'pointer',
                           boxShadow: [
                             '6px 6px 16px rgba(0,0,0,0.65)',
                             '3px 3px 7px rgba(0,0,0,0.48)',
