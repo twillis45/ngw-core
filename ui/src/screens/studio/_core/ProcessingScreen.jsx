@@ -126,28 +126,30 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
   const greenRing = 'rgba(72,186,136,0.55)';
   const greenGlow = 'rgba(72,186,136,0.25)';
 
+  const D_RIGHT_W = 420;
+  const FS = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' };
+
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
     <div
       style={{
       position: 'relative',
       width: '100%',
-      maxWidth: isDesktop ? 680 : undefined,
       height: '100%',
       backgroundColor: C.bg,
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
-      margin: isDesktop ? '0 auto' : undefined,
-      boxShadow: isDesktop ? '2px 4px 40px rgba(0,0,0,0.6)' : undefined,
       filter: daylightMode ? 'brightness(1.15)' : undefined,
       transition: 'filter 0.4s ease',
+      ...(isDesktop ? {
+        display: 'grid',
+        gridTemplateColumns: `1fr ${D_RIGHT_W}px`,
+      } : {}),
     }}>
       <MatteBackground />
 
-      {/* Cancel — abort analysis and return to HomeScreen. Uses the same
-          back-chevron glyph and position as ResultScreen so the navigation
-          affordance is identical across all screens (Apple consistency rule). */}
-      {onCancel && !analysisComplete && (
+      {/* Cancel — mobile only (desktop has cancel in right panel) */}
+      {!isDesktop && onCancel && !analysisComplete && (
         <button
           aria-label="Cancel analysis"
           onClick={onCancel}
@@ -162,18 +164,19 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           <span style={{
             position: 'absolute', left: 14, top: 8,
             fontSize: 22, fontWeight: 600, color: '#a7adb7', lineHeight: 1,
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
+            ...FS,
           }}>‹</span>
         </button>
       )}
 
-      {/* ── Viewfinder — full-width, fluid, edge-to-edge (identical to HomeScreen) ── */}
+      {/* ── Viewfinder — full-height on desktop, absolute-positioned on mobile ── */}
       <div style={{
-        position: 'absolute',
-        top: VF_TOP,
-        left: 0,
-        right: 0,
-        height: VF_HEIGHT,
+        position: isDesktop ? 'relative' : 'absolute',
+        top: isDesktop ? undefined : VF_TOP,
+        left: isDesktop ? undefined : 0,
+        right: isDesktop ? undefined : 0,
+        height: isDesktop ? '100%' : VF_HEIGHT,
+        gridColumn: isDesktop ? '1 / 2' : undefined,
         borderRadius: 0,
         overflow: 'hidden',
         backgroundColor: 'transparent',
@@ -183,7 +186,9 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         {imagePreview && (
           <img key={imagePreview} src={imagePreview} alt="Analyzing" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: '50% 25%', opacity: 0.78, zIndex: 1,
+            objectFit: isDesktop ? 'contain' : 'cover',
+            objectPosition: isDesktop ? '50% 50%' : '50% 25%',
+            opacity: 0.78, zIndex: 1,
             animation: 'heroZoomIn 12s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
           }} />
@@ -198,38 +203,33 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
 
         {/* Progress — green glow at VF bottom edge */}
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: 4,
+          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: isDesktop ? 3 : 4,
           background: 'linear-gradient(90deg, rgba(72,186,136,0.0) 0%, rgba(72,186,136,0.40) 50%, rgba(72,186,136,0.75) 100%)',
           boxShadow: '0 0 12px rgba(72,186,136,0.30), 0 0 4px rgba(72,186,136,0.45)',
           transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
           zIndex: 4,
         }} />
 
-        {/* EXIF readout strip — persists from HomeScreen for continuity.
-            Fades out when pattern tease appears (EXIF is no longer relevant
-            once the answer has landed). */}
+        {/* EXIF readout strip */}
         <ExifStrip exifData={exifData} style={{
           opacity: (analysisComplete && result?.pattern) ? 0 : 1,
           transition: 'opacity 0.4s ease',
         }} />
 
-        {/* Glass overlay (identical to HomeScreen) */}
+        {/* Glass overlay */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
 
-        {/* Inner shadow (identical to HomeScreen) */}
+        {/* Inner shadow */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6,
         }} />
 
-        {/* ── Stage narrative — centered inside the viewfinder, the hero
-            text element during analysis. Each stage fades in/out on a gentle
-            vertical slide so the progression feels alive. Gradient scrim at
-            the bottom keeps legibility over any photo content. ── */}
-        {!analysisComplete && (
+        {/* ── Stage narrative — mobile: overlaid on photo. Desktop: in right panel. */}
+        {!isDesktop && !analysisComplete && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '48px 24px 22px',
@@ -239,13 +239,12 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           }}>
             <p style={{
               margin: 0,
-              fontFamily: 'Inter, system-ui, sans-serif',
-              fontWeight: 500, fontSize: isDesktop ? 16 : 14, lineHeight: '20px',
+              fontWeight: 500, fontSize: 14, lineHeight: '20px',
               color: 'rgba(235,240,245,0.88)',
               letterSpacing: '0.2px',
               textAlign: 'center',
               textShadow: '0 1px 4px rgba(0,0,0,0.6), 0 0 16px rgba(72,186,136,0.15)',
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+              ...FS,
               opacity: stageFade,
               transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
               transition: 'opacity 0.35s ease, transform 0.35s ease',
@@ -253,11 +252,8 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           </div>
         )}
 
-        {/* ── Pattern tease — flashes the identified pattern on the photo
-            when analysis completes, before the screen transitions to results.
-            1.2s dwell in Day1DemoApp gives this time to register. Fades in
-            from the bottom with a warm glow so it reads as a "reveal". */}
-        {analysisComplete && result?.pattern && (
+        {/* ── Pattern tease — mobile: overlaid on photo. Desktop: in right panel. */}
+        {!isDesktop && analysisComplete && result?.pattern && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '36px 20px 18px',
@@ -272,8 +268,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
               letterSpacing: '-0.3px',
               textAlign: 'center',
               textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)',
-              WebkitFontSmoothing: 'antialiased',
-              MozOsxFontSmoothing: 'grayscale',
+              ...FS,
             }}>
               {prettify(result.pattern, { title: true })}
             </p>
@@ -285,8 +280,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                 letterSpacing: '0.8px',
                 textAlign: 'center',
                 textTransform: 'uppercase',
-                WebkitFontSmoothing: 'antialiased',
-                MozOsxFontSmoothing: 'grayscale',
+                ...FS,
               }}>
                 {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
               </p>
@@ -295,7 +289,132 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         )}
       </div>
 
-      {/* ── Button Trough (identical to HomeScreen) ── */}
+      {/* ── Desktop right panel — analysis status ── */}
+      {isDesktop && (
+        <div style={{
+          gridColumn: '2 / 3',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          padding: '48px 40px',
+          position: 'relative', zIndex: 2,
+          borderLeft: `1px solid ${steel(0.06)}`,
+          background: 'linear-gradient(180deg, rgba(12,13,16,0.95) 0%, rgba(8,9,12,0.98) 100%)',
+          gap: 32,
+        }}>
+          {/* Cancel — top left */}
+          {onCancel && !analysisComplete && (
+            <button
+              aria-label="Cancel analysis"
+              onClick={onCancel}
+              style={{
+                position: 'absolute', top: 20, left: 20,
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 13, fontWeight: 600, color: steel(0.40),
+                letterSpacing: '0.3px', ...FS,
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >← Cancel</button>
+          )}
+
+          {/* Analyzing state */}
+          {!analysisComplete && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
+              {/* Pulsing ring indicator */}
+              <div style={{
+                width: 64, height: 64, borderRadius: '50%',
+                border: `2px solid rgba(72,186,136,0.45)`,
+                boxShadow: `0 0 20px rgba(72,186,136,0.15), inset 0 0 12px rgba(72,186,136,0.08)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                animation: 'ringAnalyzeGlow 2.0s linear infinite',
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  backgroundColor: 'rgba(72,186,136,0.85)',
+                  boxShadow: '0 0 8px rgba(72,186,136,0.6)',
+                  animation: 'ringAnalyzePulse 2.0s linear infinite',
+                }} />
+              </div>
+
+              {/* ANALYZING label */}
+              <p style={{
+                margin: 0, fontWeight: 700, fontSize: 14, letterSpacing: '3px',
+                color: 'rgba(140,225,180,0.80)', textTransform: 'uppercase',
+                textShadow: '0 0 8px rgba(72,186,136,0.20)',
+                ...FS,
+              }}>Analyzing</p>
+
+              {/* Stage message */}
+              <p style={{
+                margin: 0, fontWeight: 500, fontSize: 15, lineHeight: '22px',
+                color: 'rgba(235,240,245,0.75)',
+                letterSpacing: '0.1px', textAlign: 'center',
+                ...FS,
+                opacity: stageFade,
+                transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
+                transition: 'opacity 0.35s ease, transform 0.35s ease',
+                minHeight: 22,
+              }}>{currentStage.label}</p>
+
+              {/* Progress bar */}
+              <div style={{
+                width: '80%', maxWidth: 240, height: 3, borderRadius: 2,
+                backgroundColor: 'rgba(255,255,255,0.04)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${progress}%`, height: '100%', borderRadius: 2,
+                  background: 'linear-gradient(90deg, rgba(72,186,136,0.35), rgba(72,186,136,0.70))',
+                  boxShadow: '0 0 6px rgba(72,186,136,0.25)',
+                  transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
+                }} />
+              </div>
+            </div>
+          )}
+
+          {/* Pattern tease — completion state */}
+          {analysisComplete && result?.pattern && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+              animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+            }}>
+              {/* Check mark */}
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%',
+                border: '2px solid rgba(140,225,180,0.50)',
+                boxShadow: '0 0 20px rgba(72,186,136,0.20)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                marginBottom: 8,
+              }}>
+                <span style={{ fontSize: 24, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
+              </div>
+
+              <p style={{
+                margin: 0, fontSize: 28, fontWeight: 700,
+                color: 'rgba(245,247,250,0.92)',
+                letterSpacing: '-0.3px', textAlign: 'center',
+                textShadow: '0 0 18px rgba(245,190,72,0.25)',
+                ...FS,
+              }}>
+                {prettify(result.pattern, { title: true })}
+              </p>
+              {result.confidence != null && (
+                <p style={{
+                  margin: 0, fontSize: 12, fontWeight: 600,
+                  color: result.confidence >= 70 ? 'rgba(140,225,180,0.80)' : 'rgba(250,210,130,0.80)',
+                  letterSpacing: '1px', textTransform: 'uppercase',
+                  ...FS,
+                }}>
+                  {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Mobile-only: button trough, well, dome, ring, label ── */}
+      {!isDesktop && <>
+      {/* Button Trough */}
       <div style={{
         position: 'absolute', left: 0, right: 0,
         top: VF_BOTTOM + 10,
@@ -312,7 +431,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         ].join(', '),
       }} />
 
-      {/* ── Track ring (identical to HomeScreen — alive state) ── */}
+      {/* Track ring */}
       <div style={{
         position: 'absolute', left: '50%', top: TRK_TOP, width: TRK_D, height: TRK_D,
         transform: 'translateX(-50%)', pointerEvents: 'none',
@@ -327,7 +446,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         }} />
       </div>
 
-      {/* ── Well (identical to HomeScreen — green-tinted for analyzing) ── */}
+      {/* Well */}
       <div style={{
         position: 'absolute', left: '50%', top: WELL_TOP, width: WELL_D, height: WELL_D,
         transform: 'translateX(-50%)', pointerEvents: 'none',
@@ -338,7 +457,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           'inset 7px 7px 14px rgba(0,0,0,0.90)',
           'inset 3px 3px 6px rgba(0,0,0,0.78)',
           'inset 1px 1px 2px rgba(0,0,0,0.60)',
-          // Green LED light trapped inside
           'inset 0 0 12px rgba(72,186,136,0.10)',
           'inset 0 0 5px rgba(72,186,136,0.06)',
           'inset -2px -2px 5px rgba(255,255,255,0.018)',
@@ -348,7 +466,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         ].join(', '),
       }} />
 
-      {/* ── Button dome (identical to HomeScreen alive state — CSS, not SVG) ── */}
+      {/* Button dome */}
       <div style={{
         position: 'absolute', left: '50%', top: BTN_TOP, width: BTN_D, height: BTN_D,
         transform: 'translateX(-50%)',
@@ -367,7 +485,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         animation: analysisComplete ? 'completePulse 0.6s ease-out' : undefined,
       }} />
 
-      {/* ── LED ring — green analyzing glow (replaces blue-steel idle) ── */}
+      {/* LED ring */}
       <div style={{
         position: 'absolute', left: '50%', top: BTN_TOP, width: BTN_D, height: BTN_D,
         transform: 'translateX(-50%)', borderRadius: '50%', pointerEvents: 'none',
@@ -382,16 +500,12 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         animation: 'ringAnalyzeGlow 2.0s linear infinite',
       }} />
 
-
-      {/* ── Primary dome label — engraved instrument lettering matching HomeScreen.
-           "ANALYZING" during analysis, "DONE" on completion. Same typography as
-           HomeScreen's "See the Light": Inter 600, 12px, 3px tracking, all-caps,
-           centered on the button dome. Green-tinted for the processing state. ── */}
+      {/* Dome label */}
       <p style={{
         position: 'absolute',
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: 'translateX(-50%)',
-        margin: 0, fontWeight: 600, fontSize: isDesktop ? 13 : 12, lineHeight: '16px',
+        margin: 0, fontWeight: 600, fontSize: 12, lineHeight: '16px',
         color: analysisComplete ? 'rgba(140,225,180,0.92)' : 'rgba(140,225,180,0.85)',
         letterSpacing: '3px',
         textTransform: 'uppercase',
@@ -399,14 +513,10 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           ? '0 0 10px rgba(140,225,180,0.35)'
           : '0 0 8px rgba(72,186,136,0.25)',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
-        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+        ...FS,
         transition: 'color 0.3s ease, text-shadow 0.3s ease',
       }}>{analysisComplete ? 'Done' : 'Analyzing'}</p>
-
-      {/* Stage label moved to viewfinder overlay — see "Stage narrative" above. */}
-
-      {/* Home indicator removed — transient state, no nav bar needed.
-           Progress is shown via the VF bottom green line + stage messages. */}
+      </>}
 
       <style>{`
         @keyframes heroZoomIn {

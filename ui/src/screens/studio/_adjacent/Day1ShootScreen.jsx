@@ -2425,14 +2425,12 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // Scale all overlay elements to interocular distance so the ring fits
   // the eye whether the source image is 236px or 4000px wide.
   const iod = _eyeDist;
-  const _lm = isLearning ? 1.1 : 1;
-  // Sizing floors ensure overlays are visible even on small source images
-  // (e.g. 236×419 upscaled portrait where IOD is only ~70px in image space).
-  // The SVG is sliced/scaled to fill the container, so these floor values
-  // in image-space pixels become much larger visually.
-  const strokeBase = Math.max(2.5, iod * 0.035 * _lm);
-  const fontBase   = Math.max(16, iod * 0.32 * _lm);
-  const ringR      = Math.max(8, iod * 0.12 * _lm);
+  // Face-relative sizing — scale to interocular distance so overlays fit
+  // the eye proportionally across image sizes. Capped to prevent runaway
+  // label sizes on upscaled images (IOD 300-500px after 2048px upscale).
+  const strokeBase = Math.min(5,  Math.max(2, iod * 0.022));
+  const fontBase   = Math.min(56, Math.max(14, iod * 0.18));
+  const ringR      = Math.min(22, Math.max(6, iod * 0.07));
 
   const showKey = stepKey === 'position' || stepKey === 'capture';
   const showDist = stepKey === 'distance' || stepKey === 'capture';
@@ -2463,7 +2461,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'hidden' }}>
         <defs>
-          <clipPath id={`vb-${mode}`}><rect x={-fontBase * 0.5} y={-fontBase * 0.5} width={W + fontBase} height={H + fontBase} /></clipPath>
+          <clipPath id={`vb-${mode}`}><rect x={-fontBase * 1.5} y={-fontBase * 1.5} width={W + fontBase * 3} height={H + fontBase * 3} /></clipPath>
           <marker id={`kar-${mode}`} viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="5" markerHeight="5" orient="auto">
             <path d="M1,1 L10,5 L1,9 z" fill={keyColor} opacity="0.95" />
@@ -2510,7 +2508,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
             }
             @keyframes keyArrowFlow-${mode} {
               0% { stroke-dashoffset: 0; }
-              100% { stroke-dashoffset: ${iod * 0.29}; }
+              100% { stroke-dashoffset: ${iod * 0.17}; }
             }
             @keyframes overlayIn-${mode} {
               0% { opacity: 0; transform: scale(0.96); }
@@ -2542,9 +2540,9 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
                 fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.6}
                 opacity={isPrimary ? 0.95 : 0.6} />
               {isLearning && isPrimary && !showDist && (
-                <circle cx={cx} cy={cy} r={ringR * 1.5}
-                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.2}
-                  opacity="0.2" />
+                <circle cx={cx} cy={cy} r={ringR * 1.4}
+                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.18}
+                  opacity="0.18" />
               )}
             </g>
           );
@@ -2552,53 +2550,70 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
         {showKey && (
           <g style={stepKey === 'capture' ? { opacity: 0.75 } : undefined}>
             <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
-              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 2.5}
-              opacity="0.22" filter={`url(#cg-${mode})`} strokeLinecap="round" />
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 2}
+              opacity="0.18" filter={`url(#cg-${mode})`} strokeLinecap="round" />
             <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
-              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 1.2}
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 1}
               markerEnd={`url(#kar-${mode})`}
-              strokeDasharray={isLearning ? `${iod * 0.14} ${iod * 0.09}` : `${iod * 0.10} ${iod * 0.06}`}
+              strokeDasharray={isLearning ? `${iod * 0.10} ${iod * 0.07}` : `${iod * 0.07} ${iod * 0.04}`}
               strokeLinecap="round"
               style={isLearning ? { animation: `keyArrowFlow-${mode} 6s linear infinite` } : undefined} />
             {showLabels && (() => {
-              // KEY LIGHT ANGLE label — near the arrow tip, clamped inside image
-              const labelX = Math.max(padding, Math.min(W - padding, arrowEndX - fontBase * 0.3));
-              const labelY = Math.max(padding + fontBase, arrowEndY + fontBase * 1.0);
+              // ── Zone-based label placement ──────────────────────────────
+              // The arrow extends from the catchlight outward. Place the KEY
+              // label stack in the CORNER nearest the arrow tip so it stays
+              // clear of the face. Use the arrow direction to pick the corner.
+              const arrowGoesRight = clockVec.dx >= 0;
+              const arrowGoesDown  = clockVec.dy >= 0;
+              // Anchor in the corner the arrow points toward
+              const cornerX = arrowGoesRight ? W - padding : padding;
+              const cornerY = arrowGoesDown  ? H - padding * 1.5 : padding * 2.5;
+              const anchor  = arrowGoesRight ? 'end' : 'start';
+
               const primary = angleDeg != null ? `KEY · ${Math.round(angleDeg)}°` : 'KEY LIGHT';
               const tr = targetRangeFor(pattern);
               const secondary = tr
                 ? `${(pattern || '').toUpperCase()} TARGET ${tr}`
                 : `FROM ${(position || '').toUpperCase()}`;
-              // Clamp labels well inside viewBox
-              const _lx = Math.max(fontBase * 2, Math.min(W - fontBase * 2, labelX));
-              const _ly = Math.max(fontBase * 2.5, Math.min(H - fontBase * 4, labelY));
               const heightLabel = heightDisplay && heightDisplay !== '—' ? `↕ ${heightDisplay.toUpperCase()}` : null;
+
+              // On capture step compress to single line (all overlays visible)
+              const isCapture = stepKey === 'capture';
+
+              // Stack direction: labels grow DOWN from top corners, UP from bottom
+              const stackDir = arrowGoesDown ? -1 : 1;
+              const _ly = arrowGoesDown
+                ? Math.min(H - padding, cornerY)
+                : Math.max(padding + fontBase, cornerY);
+
               return (
                 <>
-                  <text x={_lx} y={_ly} textAnchor="end"
-                    fontSize={fontBase} fontWeight="900" fill={keyColor}
-                    letterSpacing="2" fontFamily="Inter, system-ui, sans-serif"
+                  <text x={cornerX} y={_ly} textAnchor={anchor}
+                    fontSize={fontBase * (isCapture ? 0.7 : 1)} fontWeight="900" fill={keyColor}
+                    letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
                     filter={`url(#ts-${mode})`}>
                     {primary}
                   </text>
-                  <text x={_lx} y={_ly + fontBase * 0.58} textAnchor="end"
-                    fontSize={fontBase * 0.44} fontWeight="700" fill={keyColor}
-                    letterSpacing="1.2" fontFamily="Inter, system-ui, sans-serif"
-                    filter={`url(#ts-${mode})`}>
-                    {secondary}
-                  </text>
-                  {heightLabel && (
-                    <text x={_lx} y={_ly + fontBase * 1.08} textAnchor="end"
-                      fontSize={fontBase * 0.40} fontWeight="700" fill={steel(0.7)}
+                  {!isCapture && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * 0.52} textAnchor={anchor}
+                      fontSize={fontBase * 0.42} fontWeight="700" fill={keyColor}
                       letterSpacing="1" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {secondary}
+                    </text>
+                  )}
+                  {!isCapture && heightLabel && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * 0.92} textAnchor={anchor}
+                      fontSize={fontBase * 0.38} fontWeight="700" fill={steel(0.7)}
+                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
                       filter={`url(#ts-${mode})`}>
                       {heightLabel}
                     </text>
                   )}
-                  {modName && modName !== 'Modifier' && (
-                    <text x={_lx} y={_ly + fontBase * (heightLabel ? 1.54 : 1.08)} textAnchor="end"
-                      fontSize={fontBase * 0.38} fontWeight="600" fill={steel(0.55)}
-                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                  {!isCapture && modName && modName !== 'Modifier' && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * (heightLabel ? 1.28 : 0.92)} textAnchor={anchor}
+                      fontSize={fontBase * 0.36} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
                       filter={`url(#ts-${mode})`}>
                       {modName.toUpperCase()}
                     </text>
@@ -2607,11 +2622,11 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
               );
             })()}
             {/* CATCHLIGHT POSITION label — tags the reflection in the eye */}
-            {showLabels && primaryKey && !showDist && (
-              <text x={anchorX - ringR * 1.4} y={anchorY - ringR * 1.9}
+            {showLabels && primaryKey && !showDist && stepKey !== 'capture' && (
+              <text x={anchorX - ringR * 1.2} y={anchorY - ringR * 1.6}
                 textAnchor="end"
-                fontSize={fontBase * 0.62} fontWeight="800" fill={catchColor}
-                letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
+                fontSize={fontBase * 0.42} fontWeight="800" fill={catchColor}
+                letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
                 filter={`url(#ts-${mode})`}>
                 CATCHLIGHT @ {position || ''}
               </text>
@@ -2631,20 +2646,27 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
               strokeWidth={strokeBase * 0.3} opacity="0.45"
               strokeDasharray={`${iod * 0.08} ${iod * 0.05}`} />
             {showLabels && (() => {
-              const _dx = Math.min(W - fontBase * 2, anchorX + ringR * 4.0);
-              const _dy = Math.min(H - fontBase, anchorY + 14);
+              // Place distance label on the OPPOSITE side from the key arrow
+              // so they never collide. If key arrow goes right, distance goes left.
+              const keyGoesRight = clockVec.dx >= 0;
+              const _dx = keyGoesRight
+                ? Math.max(padding, anchorX - ringR * 4)
+                : Math.min(W - padding, anchorX + ringR * 4);
+              const _anchor = keyGoesRight ? 'end' : 'start';
+              const _dy = Math.max(fontBase * 1.5, Math.min(H - fontBase * 2, anchorY + ringR * 0.5));
+              const isCapture = stepKey === 'capture';
               return (
                 <>
-                  <text x={_dx} y={_dy}
-                    fontSize={fontBase * 0.9} fontWeight="800" fill={distColor}
-                    letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
+                  <text x={_dx} y={_dy} textAnchor={_anchor}
+                    fontSize={fontBase * (isCapture ? 0.52 : 0.72)} fontWeight="800" fill={distColor}
+                    letterSpacing="1" fontFamily="Inter, system-ui, sans-serif"
                     filter={`url(#ts-${mode})`}>
                     {distance || 'DIST'}
                   </text>
-                  {result?.sections?.modifier?.optDist && (
-                    <text x={_dx} y={_dy + fontBase * 0.52}
-                      fontSize={fontBase * 0.38} fontWeight="600" fill={steel(0.55)}
-                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                  {!isCapture && result?.sections?.modifier?.optDist && (
+                    <text x={_dx} y={_dy + fontBase * 0.44} textAnchor={_anchor}
+                      fontSize={fontBase * 0.34} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
                       filter={`url(#ts-${mode})`}>
                       SWEET SPOT {result.sections.modifier.optDist.toUpperCase()}
                     </text>
@@ -2659,24 +2681,35 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
         {showShadow && noseTip && (
           <g style={stepKey === 'capture' ? { opacity: 0.65 } : undefined}>
             <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
-              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 1.4} opacity="0.28"
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 1.2} opacity="0.22"
               filter={`url(#sb-${mode})`} strokeLinecap="round" />
             <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
-              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 0.8} opacity="0.95"
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 0.7} opacity="0.90"
               markerEnd={`url(#sar-${mode})`} strokeLinecap="round"
               style={{ mixBlendMode: 'multiply' }} />
             <circle cx={noseTip[0]} cy={noseTip[1]} r={ringR * 0.5}
               fill={shadowColor} opacity="0.08" filter={`url(#sb-${mode})`} />
             <circle cx={noseTip[0]} cy={noseTip[1]} r={strokeBase * 0.6}
               fill={shadowColor} />
-            {showLabels && (
-              <text x={shadowEndX + 12} y={shadowEndY + 14}
-                fontSize={fontBase * 0.75} fontWeight="800" fill={shadowColor}
-                letterSpacing="1.4" fontFamily="Inter, system-ui, sans-serif"
-                filter={`url(#ts-${mode})`}>
-                NOSE SHADOW
-              </text>
-            )}
+            {showLabels && (() => {
+              // Place nose shadow label below the shadow endpoint, on the
+              // opposite horizontal side from the key arrow to avoid collision.
+              const keyGoesRight = clockVec.dx >= 0;
+              const _sx = keyGoesRight
+                ? Math.max(padding, shadowEndX - fontBase * 0.2)
+                : Math.min(W - padding, shadowEndX + fontBase * 0.2);
+              const _sAnchor = keyGoesRight ? 'end' : 'start';
+              const _sy = Math.min(H - padding * 0.5, shadowEndY + fontBase * 0.6);
+              const isCapture = stepKey === 'capture';
+              return (
+                <text x={_sx} y={_sy} textAnchor={_sAnchor}
+                  fontSize={fontBase * (isCapture ? 0.38 : 0.48)} fontWeight="800" fill={shadowColor}
+                  letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                  filter={`url(#ts-${mode})`}>
+                  NOSE SHADOW
+                </text>
+              );
+            })()}
           </g>
         )}
         </g>{/* end clipPath group */}

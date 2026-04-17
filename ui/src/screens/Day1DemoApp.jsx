@@ -1289,46 +1289,44 @@ export default function Day1DemoApp() {
   const screenContent = (() => {
     switch (screen) {
     case 'home': {
-      // Mobile: 430×932 aspect-preserving contain.
-      // Desktop: 430×designH at tightness=1 so the scaled inner box
-      // exactly matches the viewport height — no clipping. stableVH
-      // (= innerHeight on desktop) will match the inner box height.
+      // Desktop: HomeScreen manages its own two-column grid layout at native
+      // viewport width — no FitToViewport scaling needed.
+      // Mobile: 430×932 aspect-preserving contain via FitToViewport.
       const homeMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const desktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const homeEl = (
+        <HomeScreen
+          onAnalyze={handleAnalyze}
+          hasLastResult={!!lastResult}
+          onViewLastResult={handleViewLastResult}
+          user={user}
+          onLogout={() => { clearAuth(); setUser(null); }}
+          onSettings={handleSettings}
+          onRecipes={handleRecipes}
+          onSavedSetups={handleSavedSetups}
+          onBuildWizard={handleBuildWizard}
+          onMyKit={handleMyKit}
+          lastAnalysisTime={lastAnalysisTime}
+        />
+      );
+      if (!homeMobile) return homeEl;
       return (
         <FitToViewport
           designWidth={430}
-          designHeight={homeMobile ? 932 : desktopVH}
+          designHeight={932}
           maxScale={1.9}
-          tightness={homeMobile ? 0.96 : 1}
+          tightness={0.96}
         >
-          <HomeScreen
-            onAnalyze={handleAnalyze}
-            hasLastResult={!!lastResult}
-            onViewLastResult={handleViewLastResult}
-            user={user}
-            onLogout={() => { clearAuth(); setUser(null); }}
-            onSettings={handleSettings}
-            onRecipes={handleRecipes}
-            onSavedSetups={handleSavedSetups}
-            onBuildWizard={handleBuildWizard}
-            onMyKit={handleMyKit}
-            lastAnalysisTime={lastAnalysisTime}
-          />
+          {homeEl}
         </FitToViewport>
       );
     }
     case 'processing': {
       const procMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const desktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const procEl = <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />;
+      if (!procMobile) return procEl;
       return (
-        <FitToViewport
-          designWidth={430}
-          designHeight={procMobile ? 932 : desktopVH}
-          maxScale={1.9}
-          tightness={procMobile ? 0.96 : 1}
-        >
-          <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>
+          {procEl}
         </FitToViewport>
       );
     }

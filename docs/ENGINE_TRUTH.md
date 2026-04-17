@@ -1,6 +1,6 @@
 # ENGINE_TRUTH.md — Official Inference Pipeline & Rules
 
-> Control document. Last audited: 2026-04-12
+> Control document. Last audited: 2026-04-17
 > This file is the single authoritative reference for how the NGW engine
 > processes images and produces lighting analysis. Any code change that
 > contradicts this document requires updating the document first.
@@ -145,6 +145,21 @@ VLM output is **semantic hinting only** — it never enters as a ranked candidat
 | `lighting_inference` | 0.80 | Highest — most reliable hardware signal |
 | `light_structure` | 0.70 | Secondary confirmation; pushed to priority 4 when demoted |
 
+### Triangle Isolation Contradiction (added 2026-04-17)
+
+`triangle_isolation` from `light_structure` (percentile-based cheek brightness spread) contradicts both **loop** and **split** when the value indicates a Rembrandt triangle:
+
+| Pattern | Threshold | Score | Rationale |
+|---------|-----------|-------|-----------|
+| `loop` | tri_iso > 0.80 | +0.70 | Definitive triangle — loop has no connected cheek triangle |
+| `loop` | tri_iso > 0.40 | +0.45 | Moderate triangle evidence |
+| `split` | tri_iso > 0.80 | +0.60 | Split has uniformly dark shadow side — no bright patch |
+| `split` | tri_iso > 0.40 | +0.40 | Moderate triangle evidence |
+
+These rules fire independently of `shadow_continuity` — they use different detection methods (percentile spread vs connected-component analysis) and must not gate each other.
+
+**Dark skin fix**: `extract_light_structure()` previously rejected valid pipeline data because `light_structure_pass` does not set `"ok": True` in its output dict. Fixed to check `"ok" is not False` instead of `get("ok", False)`. Without this fix, `cue_report.light_structure` was never populated, and all triangle_isolation contradiction rules silently failed.
+
 ### Cascade Demotion
 
 When `reference_read` is demoted for pattern X, any other source that independently agrees on X AND passes the same contradiction test is also demoted. All demoted sources are pushed to priority 4 (below `light_structure` at 3).
@@ -282,7 +297,34 @@ The following were removed because they test setup_family / mood / technique —
 
 ---
 
-## 10. Data Architecture
+## 10. Dark Skin / Low-Contrast Adaptations (added 2026-04-17)
+
+### FaceLandmarker CLAHE Boost
+
+`vision_pipeline.py` applies CLAHE (Contrast Limited Adaptive Histogram Equalization) to the face crop before FaceLandmarker when the crop's mean luminance is below 80. This lifts shadow detail without blowing highlights, giving the landmark model more gradient signal on dark skin against dark backgrounds.
+
+- Applied in LAB color space (L channel only) — preserves hue/saturation
+- `clipLimit=2.5, tileGridSize=(8, 8)` — moderate boost, avoids artifacts
+- Face crop padding increased from 20% → 25% for additional context
+
+### Adaptive Catchlight Detection
+
+- V threshold: bright images (p99 > 200): `max(floor, p99 * 0.92)`; dark images (v_mean < 80): `max(80, p99 * 0.70)`; normal: floor
+- Adaptive S max: `80 + int((100 - v_mean) * 1.2)` when v_mean < 100
+- Morph opening skipped when iris radius < 25px (small catchlights destroyed)
+- Relaxed proximity and size ratio for small irises (radius < 30)
+- Lower-hemisphere catchlights kept when min(left_r, right_r) < 30
+
+### Triangle Detection for Dark Skin
+
+- Percentile-based triangle: `p75/p25 spread > 0.15 AND bright_vs_jaw > 0.10`
+- Split-branch triangle check: when |L-R| > 0.5, checks for triangle before classifying as split
+- Dark skin fallback: strong asymmetry + shadow_strong as triangle evidence
+- Shadow connectivity relaxed for dark skin (face_mean < 75)
+
+---
+
+## 11. Data Architecture
 
 | Source | Count | Purpose | Keyed On |
 |--------|-------|---------|----------|

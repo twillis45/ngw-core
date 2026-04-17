@@ -534,7 +534,7 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
     _lm_cw, _lm_ch = w, h
 
     if face_box is not None:
-        _pad = 0.20                          # 20% padding on each side
+        _pad = 0.25                          # 25% padding (was 20% — more context helps dark skin)
         _fb_x0, _fb_y0, _fb_x1, _fb_y1 = face_box
         _fb_w = _fb_x1 - _fb_x0
         _fb_h = _fb_y1 - _fb_y0
@@ -545,6 +545,17 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
         _img_for_lm = img_rgb[_lm_crop_y0:_lm_crop_y1, _lm_crop_x0:_lm_crop_x1]
         _lm_cw = _lm_crop_x1 - _lm_crop_x0
         _lm_ch = _lm_crop_y1 - _lm_crop_y0
+        # CLAHE contrast boost for dark-skin faces: MediaPipe FaceLandmarker
+        # struggles with low-contrast crops (dark skin + dark background).
+        # CLAHE lifts local contrast in shadows without blowing highlights,
+        # giving the landmark model more gradient signal to work with.
+        # Only applied when the crop is dark (mean luminance < 80).
+        _lm_gray = cv2.cvtColor(_img_for_lm, cv2.COLOR_RGB2GRAY)
+        if _lm_gray.mean() < 80:
+            _clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+            _lm_lab = cv2.cvtColor(_img_for_lm, cv2.COLOR_RGB2LAB)
+            _lm_lab[:, :, 0] = _clahe.apply(_lm_lab[:, :, 0])
+            _img_for_lm = cv2.cvtColor(_lm_lab, cv2.COLOR_LAB2RGB)
     else:
         _img_for_lm = img_rgb
 

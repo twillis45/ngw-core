@@ -791,7 +791,7 @@ def extract_light_structure(
     structure_data: Dict[str, Any],
 ) -> Optional[LightStructureDetection]:
     """Extract light structure detection from the light_structure_pass output."""
-    if not structure_data.get("ok", False):
+    if structure_data.get("ok") is False:
         return None
 
     return LightStructureDetection(

@@ -705,6 +705,23 @@ def _signal_contradiction_score(
     """
     cr = getattr(result, "cue_report", None)
     ls = getattr(cr, "light_structure", None) if cr else None
+    # Fallback: when cue_report.light_structure is missing but the
+    # light_structure pass ran in the pipeline and produced structured
+    # signals (common on dark-skin images where face detection partially
+    # fails but shadow analysis still runs), build a proxy from
+    # pipeline_results["light_structure"].
+    if ls is None:
+        _pr = getattr(result, "pipeline_results", None) or {}
+        _ls_raw = _pr.get("light_structure")
+        if isinstance(_ls_raw, dict) and _ls_raw.get("ok"):
+            class _LSProxy:
+                pass
+            ls = _LSProxy()
+            for k in ("triangle_isolation", "left_right_asymmetry", "shadow_density",
+                       "highlight_width_ratio", "top_bottom_ratio",
+                       "nose_shadow_centroid_distance", "nose_shadow_centroid_angle_deg",
+                       "pattern_name"):
+                setattr(ls, k, _ls_raw.get(k, 0.0))
     if ls is None:
         return 0.0, []
 
@@ -1019,6 +1036,17 @@ def _signal_contradiction_score(
         if _fill_det and _hs_sym > 0.40:
             score += 0.30  # fill light present + bilateral symmetry → not split
             cues.append("fill_detected")
+        # Triangle isolation contradicts split: split has NO connected cheek
+        # triangle — the shadow side is uniformly dark with no bright patch.
+        # A Rembrandt triangle (tri_iso > 0.40) means the shadow side has
+        # a defined bright region, which is physically incompatible with
+        # true split lighting. High lr_asym + high tri_iso = Rembrandt.
+        if tri_iso > 0.80:
+            score += 0.60  # definitive triangle → Rembrandt, not split
+            cues.append("triangle_isolation")
+        elif tri_iso > 0.40:
+            score += 0.40  # moderate triangle → likely Rembrandt
+            cues.append("triangle_isolation")
 
     elif pattern == "loop":
         # Loop = diagonal nose shadow, moderate asymmetry.
@@ -1077,6 +1105,24 @@ def _signal_contradiction_score(
             and getattr(_sc_loop, "connectivity_score", 0.0) > 0.70
             and getattr(_sc_loop, "confidence", 0.0) > 0.40
         )
+        # Strong triangle_isolation from light_structure directly contradicts
+        # loop.  Loop produces a diagonal nose shadow that does NOT connect to
+        # the cheek shadow — that connected triangle IS the Rembrandt signature.
+        # When triangle_isolation > 0.80, the cheek-triangle geometry is definitive
+        # (e.g. dark-skin portraits where reference_read may over-call loop).
+        # Guard: skip when shadow_continuity already fired (+0.65) to avoid
+        # double-counting the same triangle evidence.
+        # Strong triangle_isolation directly contradicts loop regardless of
+        # shadow_continuity state — these are independent evidence sources.
+        # shadow_continuity uses connected-component analysis; triangle_isolation
+        # uses percentile brightness spread. Both detect the Rembrandt triangle
+        # but via different methods, so neither should gate the other.
+        if tri_iso > 0.80:
+            score += 0.70
+            cues.append("triangle_isolation")
+        elif tri_iso > 0.40:
+            score += 0.45
+            cues.append("triangle_isolation")
         _fr_loop = getattr(cr, "fill_ratio", None)
         _fr_ratio_loop = getattr(_fr_loop, "ratio", 0.5) if _fr_loop else 0.5
         if (
@@ -3645,7 +3691,7 @@ def analyze_image(
         # and shadow_data that only become available in the extended pipeline.
         if result.pipeline_results and result.cue_report:
             _ls_data = result.pipeline_results.get("light_structure")
-            if isinstance(_ls_data, dict) and _ls_data.get("ok"):
+            if isinstance(_ls_data, dict) and _ls_data.get("ok") is not False:
                 try:
                     from engine.cue_extraction import extract_light_structure
                     result.cue_report.light_structure = extract_light_structure(_ls_data)

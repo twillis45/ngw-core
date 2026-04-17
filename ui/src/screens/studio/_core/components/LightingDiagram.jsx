@@ -140,10 +140,19 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   if (clockAngle != null) {
     kAngleDeg = clockToDiagram(clockAngle);
   } else if (reconKeyDeg != null) {
-    // Engine convention: 0°=behind subject, 90°=side, 180°=camera-facing
-    // Diagram convention: 0°=camera-side, ±90°=side, ±180°=behind
-    // Mapping: diagram = sign × (180 - engine)
-    kAngleDeg = sign * (180 - reconKeyDeg);
+    // Engine convention: 0°=camera-facing (on-axis), 90°=side, 180°=behind
+    // Diagram convention: 0°=camera-side (on-axis), ±90°=side, ±180°=behind
+    // Mapping: direct pass-through with key_side sign.
+    // Clamp to ±85° for standard portrait patterns — the engine's shadow
+    // geometry can over-estimate off-axis angle on extreme low-key or
+    // dark-skin images (e.g. 93.9° for what is visually a ~60° key).
+    // No standard portrait pattern (loop, rembrandt, split, butterfly,
+    // broad, short) places the key behind the subject. Rim/accent lights
+    // can go past 90°, but those are rendered as separate markers.
+    const _pat = (raw.authoritative_pattern || '').toLowerCase();
+    const isStandardPortrait = ['loop','rembrandt','butterfly','split','broad','short','clamshell','paramount'].some(p => _pat.includes(p));
+    const clamped = isStandardPortrait ? Math.min(reconKeyDeg, 85) : reconKeyDeg;
+    kAngleDeg = sign * clamped;
   } else {
     kAngleDeg = sideToAngle(keySide, keyElevation);
   }
@@ -173,6 +182,31 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   const kRad  = (kAngleDeg * Math.PI) / 180;
   const kX    = subX + kDist * Math.sin(kRad);
   const kY    = subY + kDist * Math.cos(kRad);
+
+  // ── Modifier feathering ──────────────────────────────────────────────
+  // Photographers feather the modifier so the subject catches the soft
+  // EDGE of the light. The emission center aims slightly PAST the face
+  // toward the camera side. Computed here so both the beam cone and the
+  // modifier shape can share the same feathered orientation.
+  const _featherDeg = (() => {
+    const mf = (mod?.family || '').toLowerCase();
+    const pat = (result?.pattern || '').toLowerCase();
+    const isOnAxis = pat.includes('butterfly') || pat.includes('clamshell') || pat.includes('ring');
+    if (isOnAxis) return 0;
+    const isHardOff = pat.includes('split');
+    const isSoftOff = pat.includes('loop') || pat.includes('rembrandt') || pat.includes('short') || pat.includes('broad');
+    let f = isSoftOff ? 15 : isHardOff ? 8 : 10;
+    // Larger/softer modifiers feather more
+    if (mf.includes('oct') || (mf.includes('soft') && !mf.includes('strip') && !mf.includes('oct'))) f += 5;
+    else if (mf.includes('strip')) f += 8;
+    else if (mf.includes('beauty')) f += 3;
+    else if (mf.includes('para') || mf.includes('umbr')) f -= 2;
+    return Math.max(0, Math.min(28, f));
+  })();
+  // Feather swings emission PAST subject toward camera axis.
+  // Key right of subject → CCW (negative). Key left → CW (positive).
+  const featherSign = kX >= subX ? -1 : 1;
+  const featherRad = (featherSign * _featherDeg) * Math.PI / 180;
 
   // Shadow direction — derived from the RENDERED key position so it always
   // makes physical sense.  The cast shadow falls in the opposite direction
@@ -220,15 +254,32 @@ export default function LightingDiagram({ result, compact = false, fluid = false
     `${sTipX + aWidth * perpX},${sTipY + aWidth * perpY}`,
   ].join(' ');
 
-  // Light beam cone (triangular spread from key to subject surface)
+  // ── Modifier rotation angle ──────────────────────────────────────────
+  // Wide face is drawn at +Y in local coords. This angle makes +Y land
+  // on the subject-facing side after SVG rotate(). Computed here so both
+  // the beam and the modifier shape share the same feathered basis.
+  const _modRotRad = Math.atan2(kX - subX, subY - kY);
+
+  // Light beam cone — feathered to match modifier aim. The subject
+  // catches the edge of the cone, not the center.
   const beamSpread = compact ? 20 : 26;
-  const beamPerp = kRad + Math.PI / 2;
-  const bX = subX + subR * Math.sin(kRad);
-  const bY = subY + subR * Math.cos(kRad);
+  const featheredModRad = _modRotRad + featherRad;
+  // Beam base: project from key in the feathered emission direction
+  // (+Y in rotated local = toward subject). In SVG the +Y offset after
+  // rotation by θ lands at (-sin(θ), cos(θ)), so the beam direction is
+  // (-sin(θ), cos(θ)) — which IS the key-to-subject direction.
+  const beamDx = -Math.sin(featheredModRad);
+  const beamDy =  Math.cos(featheredModRad);
+  const beamReach = kDist - subR;
+  const bX = kX + beamReach * beamDx;
+  const bY = kY + beamReach * beamDy;
+  // Perpendicular for beam spread
+  const perpDx = -beamDy;
+  const perpDy =  beamDx;
   const beamPts = [
     `${kX},${kY}`,
-    `${bX + beamSpread * Math.sin(beamPerp)},${bY - beamSpread * Math.cos(beamPerp)}`,
-    `${bX - beamSpread * Math.sin(beamPerp)},${bY + beamSpread * Math.cos(beamPerp)}`,
+    `${bX + beamSpread * perpDx},${bY + beamSpread * perpDy}`,
+    `${bX - beamSpread * perpDx},${bY - beamSpread * perpDy}`,
   ].join(' ');
 
   // Sun rays around key light
@@ -577,10 +628,10 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         const isRing  = mf.includes('ring');
         const isPara  = mf.includes('para') || mf.includes('umbr');
 
-        // Modifier emission face points TOWARD the subject.
-        // atan2(kX - subX, ...) — NOT (subX - kX). Swapping the sign
-        // makes the modifier face AWAY from the subject (a past bug).
-        const kToSubDeg = Math.atan2(kX - subX, -(subY - kY)) * 180 / Math.PI;
+        // Modifier shape rotation — wide emission face drawn at +Y in local.
+        // _modRotRad = atan2(kX-subX, subY-kY) makes +Y land on the
+        // subject-facing side after SVG rotate(). Feathering offsets aim.
+        const kToSubDeg = (_modRotRad + featherRad) * 180 / Math.PI;
 
         // Ambient glow halo (always)
         const halo = (
@@ -589,109 +640,103 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         );
 
         // ── Side-view modifier silhouettes ──────────────────────────────
-        // Convention: −Y (up in SVG) = toward subject after the kToSubDeg
-        // rotation.  So the emission face (wide end of a trapezoid, open
-        // side of a bowl) is drawn at −Y, and the mount/back plate at +Y.
+        // Convention: +Y (down in SVG local coords) = TOWARD SUBJECT after
+        // kToSubDeg rotation. The emission face (wide end of a trapezoid,
+        // open bowl) is drawn at +Y, the mount/back at −Y. This ensures
+        // the wide face always renders on the subject-facing side regardless
+        // of key angle quadrant.
         let modShape = null;
         if (isRect || isStrip) {
-          // Softbox / strip side view: trapezoid — wide diffusion face at
-          // top (−Y → toward subject), narrow mount at bottom (+Y → away).
+          // Softbox / strip side view: trapezoid
           const backW  = compact ? (isStrip ? 4 : 10) : (isStrip ? 5 : 12);
           const frontW = compact ? (isStrip ? 8 : 24) : (isStrip ? 10 : 32);
           const depth  = compact ? (isStrip ? 14 : 12) : (isStrip ? 18 : 16);
           const hd = depth / 2;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              <path d={`M ${kX - frontW/2} ${kY - hd} L ${kX - backW/2} ${kY + hd} L ${kX + backW/2} ${kY + hd} L ${kX + frontW/2} ${kY - hd} Z`}
+              <path d={`M ${kX - frontW/2} ${kY + hd} L ${kX - backW/2} ${kY - hd} L ${kX + backW/2} ${kY - hd} L ${kX + frontW/2} ${kY + hd} Z`}
                 fill="rgba(200,155,60,0.16)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              {/* Diffusion face — bright front panel (top edge = toward subject) */}
-              <line x1={kX - frontW/2 + 1} y1={kY - hd}
-                    x2={kX + frontW/2 - 1} y2={kY - hd}
+              {/* Diffusion face — bright front panel (+Y = toward subject) */}
+              <line x1={kX - frontW/2 + 1} y1={kY + hd}
+                    x2={kX + frontW/2 - 1} y2={kY + hd}
                 stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.55} />
               {/* Inner baffle — recessed diffusion layer */}
-              <line x1={kX - frontW * 0.32} y1={kY - hd * 0.35}
-                    x2={kX + frontW * 0.32} y2={kY - hd * 0.35}
+              <line x1={kX - frontW * 0.32} y1={kY + hd * 0.35}
+                    x2={kX + frontW * 0.32} y2={kY + hd * 0.35}
                 stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.25} />
-              {/* Mount stem at back (bottom = away from subject) */}
-              <line x1={kX} y1={kY + hd}
-                    x2={kX} y2={kY + hd + (compact ? 3 : 4)}
+              {/* Mount stem at back (−Y = away from subject) */}
+              <line x1={kX} y1={kY - hd}
+                    x2={kX} y2={kY - hd - (compact ? 3 : 4)}
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
             </g>
           );
         } else if (isOct) {
-          // Octabox side view: slightly wider trapezoid than regular softbox.
           const backW  = compact ? 10 : 13;
           const frontW = compact ? 26 : 34;
           const depth  = compact ? 12 : 16;
           const hd = depth / 2;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              <path d={`M ${kX - frontW/2} ${kY - hd} L ${kX - backW/2} ${kY + hd} L ${kX + backW/2} ${kY + hd} L ${kX + frontW/2} ${kY - hd} Z`}
+              <path d={`M ${kX - frontW/2} ${kY + hd} L ${kX - backW/2} ${kY - hd} L ${kX + backW/2} ${kY - hd} L ${kX + frontW/2} ${kY + hd} Z`}
                 fill="rgba(200,155,60,0.16)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              {/* Diffusion face */}
-              <line x1={kX - frontW/2 + 1} y1={kY - hd}
-                    x2={kX + frontW/2 - 1} y2={kY - hd}
+              {/* Diffusion face (+Y = toward subject) */}
+              <line x1={kX - frontW/2 + 1} y1={kY + hd}
+                    x2={kX + frontW/2 - 1} y2={kY + hd}
                 stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.55} />
               {/* Inner baffle */}
-              <line x1={kX - frontW * 0.30} y1={kY - hd * 0.30}
-                    x2={kX + frontW * 0.30} y2={kY - hd * 0.30}
+              <line x1={kX - frontW * 0.30} y1={kY + hd * 0.30}
+                    x2={kX + frontW * 0.30} y2={kY + hd * 0.30}
                 stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.25} />
-              {/* Mount stem */}
-              <line x1={kX} y1={kY + hd}
-                    x2={kX} y2={kY + hd + (compact ? 3 : 4)}
+              {/* Mount stem (−Y = away) */}
+              <line x1={kX} y1={kY - hd}
+                    x2={kX} y2={kY - hd - (compact ? 3 : 4)}
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
             </g>
           );
         } else if (isBeauty) {
-          // Beauty dish side view: shallow concave bowl opening upward
-          // (toward subject) with a center deflector plate.
           const dishW = compact ? 22 : 28;
           const dishD = compact ? 7 : 9;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              {/* Concave bowl — opens upward (−Y = toward subject) */}
-              <path d={`M ${kX - dishW/2} ${kY} C ${kX - dishW/4} ${kY - dishD * 1.4} ${kX + dishW/4} ${kY - dishD * 1.4} ${kX + dishW/2} ${kY}`}
+              {/* Concave bowl — opens downward (+Y = toward subject) */}
+              <path d={`M ${kX - dishW/2} ${kY} C ${kX - dishW/4} ${kY + dishD * 1.4} ${kX + dishW/4} ${kY + dishD * 1.4} ${kX + dishW/2} ${kY}`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
-              {/* Back plate closing the dish (at kY = center line) */}
+              {/* Back plate (at center) */}
               <line x1={kX - dishW/2} y1={kY}
                     x2={kX + dishW/2} y2={kY}
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.4} />
-              {/* Deflector plate — signature element, inside the bowl */}
-              <line x1={kX - (compact ? 3 : 4)} y1={kY - dishD * 0.55}
-                    x2={kX + (compact ? 3 : 4)} y2={kY - dishD * 0.55}
+              {/* Deflector plate inside the bowl */}
+              <line x1={kX - (compact ? 3 : 4)} y1={kY + dishD * 0.55}
+                    x2={kX + (compact ? 3 : 4)} y2={kY + dishD * 0.55}
                 stroke={KEY_COLOR} strokeWidth={1.5} strokeOpacity={0.55} strokeLinecap="round" />
-              {/* Mount stem at back (+Y = away from subject) */}
+              {/* Mount stem (−Y = away from subject) */}
               <line x1={kX} y1={kY}
-                    x2={kX} y2={kY + (compact ? 3 : 4)}
+                    x2={kX} y2={kY - (compact ? 3 : 4)}
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.28} />
             </g>
           );
         } else if (isRing) {
-          // Ring light seen edge-on: thin horizontal bar with center gap.
           const ringW = compact ? 24 : 32;
           const ringH = compact ? 3 : 4;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
               <rect x={kX - ringW/2} y={kY - ringH/2} width={ringW} height={ringH} rx={1}
                 fill="rgba(200,155,60,0.22)" stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.6} />
-              {/* Center lens opening */}
               <rect x={kX - (compact ? 2.5 : 3)} y={kY - ringH/2 - 0.5} width={compact ? 5 : 6} height={ringH + 1}
                 fill="#0a0a0d" stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.3} />
-              {/* Glow emission on the face side (−Y = toward subject) */}
-              <line x1={kX - ringW/2 + 2} y1={kY - ringH/2}
-                    x2={kX + ringW/2 - 2} y2={kY - ringH/2}
+              {/* Glow emission (+Y = toward subject) */}
+              <line x1={kX - ringW/2 + 2} y1={kY + ringH/2}
+                    x2={kX + ringW/2 - 2} y2={kY + ringH/2}
                 stroke="rgba(255,248,220,0.25)" strokeWidth={0.75} />
             </g>
           );
         } else if (isPara) {
-          // Parabolic / umbrella side view: deep concave bowl opening
-          // upward (toward subject), shaft through center.
           const paraW = compact ? 24 : 32;
           const paraD = compact ? 14 : 18;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              {/* Deep parabolic curve — opens upward toward subject */}
-              <path d={`M ${kX - paraW/2} ${kY} C ${kX - paraW/6} ${kY - paraD * 1.2} ${kX + paraW/6} ${kY - paraD * 1.2} ${kX + paraW/2} ${kY}`}
+              {/* Deep parabolic curve — opens downward (+Y = toward subject) */}
+              <path d={`M ${kX - paraW/2} ${kY} C ${kX - paraW/6} ${kY + paraD * 1.2} ${kX + paraW/6} ${kY + paraD * 1.2} ${kX + paraW/2} ${kY}`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.65} />
               {/* Back plate */}
               <line x1={kX - paraW/2} y1={kY}
@@ -699,27 +744,26 @@ export default function LightingDiagram({ result, compact = false, fluid = false
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.4} />
               {/* Umbrella shaft — from back plate through focal point */}
               <line x1={kX} y1={kY}
-                    x2={kX} y2={kY - paraD * 0.65}
+                    x2={kX} y2={kY + paraD * 0.65}
                 stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.3} />
               {/* Strobe head at focal point (inside the bowl) */}
-              <rect x={kX - 2} y={kY - paraD * 0.55 - 3} width={4} height={3} rx={0.5}
+              <rect x={kX - 2} y={kY + paraD * 0.55} width={4} height={3} rx={0.5}
                 fill="rgba(200,155,60,0.35)" stroke={KEY_COLOR} strokeWidth={0.5} strokeOpacity={0.35} />
             </g>
           );
         } else {
-          // Unknown modifier — generic reflector side view: small trapezoid
-          // with emission face (wide) at top, mount (narrow) at bottom.
+          // Unknown modifier — generic reflector
           const genBack  = compact ? 6 : 8;
           const genFront = compact ? 16 : 20;
           const genD     = compact ? 8 : 10;
           const hd = genD / 2;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              <path d={`M ${kX - genFront/2} ${kY - hd} L ${kX - genBack/2} ${kY + hd} L ${kX + genBack/2} ${kY + hd} L ${kX + genFront/2} ${kY - hd} Z`}
+              <path d={`M ${kX - genFront/2} ${kY + hd} L ${kX - genBack/2} ${kY - hd} L ${kX + genBack/2} ${kY - hd} L ${kX + genFront/2} ${kY + hd} Z`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1} strokeOpacity={0.5} />
-              {/* Mount stem at back */}
-              <line x1={kX} y1={kY + hd}
-                    x2={kX} y2={kY + hd + 3}
+              {/* Mount stem (−Y = away) */}
+              <line x1={kX} y1={kY - hd}
+                    x2={kX} y2={kY - hd - 3}
                 stroke={KEY_COLOR} strokeWidth={0.75} strokeOpacity={0.25} />
             </g>
           );

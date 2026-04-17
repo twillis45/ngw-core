@@ -679,6 +679,192 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
     if (e.target === e.currentTarget) closePanels();
   };
 
+  // ── Desktop two-column layout ────────────────────────────────────────────
+  // On desktop (≥1024px), the home screen becomes a split view:
+  //   LEFT  — full-height viewfinder (the photo is the hero)
+  //   RIGHT — studio tools panel (wordmark, analyze CTA, tools, sample)
+  // Mobile stays single-column with absolute positioning.
+  const D_RIGHT_W = 420; // right panel width on desktop
+
+  // ── Desktop right panel — studio tools ──────────────────────────────────
+  const desktopRightPanel = isDesktop ? (
+    <div style={{
+      gridColumn: '2 / 3',
+      display: 'flex', flexDirection: 'column',
+      padding: '48px 40px 32px',
+      position: 'relative', zIndex: 2,
+      borderLeft: `1px solid ${steel(0.06)}`,
+      background: 'linear-gradient(180deg, rgba(12,13,16,0.95) 0%, rgba(8,9,12,0.98) 100%)',
+    }}>
+      {/* Wordmark — tighter lockup */}
+      <div style={{ marginBottom: 8 }}>
+        <p style={{
+          margin: 0, fontWeight: 800, fontSize: 26, lineHeight: '30px',
+          color: C.textPrimary, letterSpacing: '-0.5px',
+          ...FONT_SMOOTH,
+        }}>No Guesswork</p>
+        <p style={{
+          margin: '3px 0 0 1px', fontWeight: 800, fontSize: 10.5, lineHeight: '14px',
+          color: steel(0.50), letterSpacing: '4px',
+          ...FONT_SMOOTH,
+        }}>LIGHTING</p>
+        <p style={{
+          margin: '12px 0 0', fontWeight: 500, fontSize: 14, lineHeight: '20px',
+          color: steel(0.42), letterSpacing: '0.1px',
+          ...FONT_SMOOTH,
+        }}>See how any photo was lit — and rebuild it.</p>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: steel(0.06), margin: '24px 0' }} />
+
+      {/* Analyze CTA — desktop variant: full-width rounded rectangle */}
+      <button
+        onClick={handleButtonClick}
+        onMouseDown={handleButtonPress}
+        onMouseUp={handleButtonRelease}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => { setIsHovered(false); handleButtonRelease(); }}
+        style={{
+          width: '100%', padding: '18px 0',
+          border: 'none', borderRadius: 14, cursor: 'pointer',
+          background: buttonState === 'pressed'
+            ? 'linear-gradient(141.71deg, #020304 0%, #040506 50%, #060708 100%)'
+            : isHovered
+              ? 'linear-gradient(141.71deg, #1a1e28 0%, #0e1118 100%)'
+              : hasImage
+                ? `linear-gradient(141.71deg, #1e2640 0%, #141828 50%, #0a0d18 100%)`
+                : 'linear-gradient(141.71deg, #16191f 0%, #0c0e14 100%)',
+          boxShadow: buttonState === 'pressed'
+            ? 'inset 0 2px 6px rgba(0,0,0,0.8), inset 0 1px 2px rgba(0,0,0,0.6)'
+            : [
+                '0 4px 16px rgba(0,0,0,0.6)',
+                '0 1px 4px rgba(0,0,0,0.4)',
+                'inset 0 1px 0 rgba(255,255,255,0.08)',
+                'inset 0 -1px 0 rgba(0,0,0,0.3)',
+                hasImage ? `0 0 20px rgba(${SC.r},${SC.g},${SC.b},0.12)` : '',
+              ].filter(Boolean).join(', '),
+          transition: 'all 0.15s ease',
+          WebkitTapHighlightColor: 'transparent',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* LED accent line — top edge */}
+        <div style={{
+          position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+          background: hasImage
+            ? `linear-gradient(90deg, transparent 0%, rgba(${SC.r},${SC.g},${SC.b},${isPressed ? 0.1 : 0.5}) 50%, transparent 100%)`
+            : `linear-gradient(90deg, transparent 0%, ${steel(0.15)} 50%, transparent 100%)`,
+          transition: 'background 0.3s ease',
+        }} />
+        <span style={{
+          fontSize: 14, fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase',
+          color: isPressed
+            ? steel(0.3)
+            : hasImage
+              ? `rgba(${SC.r},${SC.g},${SC.b},0.95)`
+              : steel(0.75),
+          textShadow: hasImage && !isPressed
+            ? `0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.3)`
+            : 'none',
+          ...FONT_SMOOTH,
+          transition: 'color 0.15s ease',
+        }}>{analyzeLabel}</span>
+      </button>
+
+      {/* Sample CTA — below analyze */}
+      {!hasImage && (
+        <button
+          onClick={loadSample}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '12px 0 4px', width: '100%', textAlign: 'center',
+            WebkitTapHighlightColor: 'transparent',
+            opacity: sampleLoading ? 0.5 : 1,
+          }}
+        >
+          <span style={{
+            fontSize: 12, fontWeight: 600, letterSpacing: '0.3px',
+            color: steel(0.50), ...FONT_SMOOTH,
+          }}>{sampleLoading ? 'Loading…' : 'Try a Sample Photo →'}</span>
+        </button>
+      )}
+
+      {/* Last result recall */}
+      {hasLastResult && !hasImage && (
+        <button
+          onClick={onViewLastResult}
+          style={{
+            background: 'none', border: `1px solid ${steel(0.08)}`, cursor: 'pointer',
+            padding: '10px 0', width: '100%', borderRadius: 10, marginTop: 12,
+            WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{
+            fontSize: 11, fontWeight: 600, letterSpacing: '0.5px',
+            color: steel(0.45), ...FONT_SMOOTH,
+          }}>View Last Result</span>
+        </button>
+      )}
+
+      {/* Divider */}
+      <div style={{ height: 1, background: steel(0.06), margin: '24px 0 20px' }} />
+
+      {/* Studio tools — always visible on desktop, not hidden in profile */}
+      <p style={{
+        margin: '0 0 14px', fontSize: 9.5, fontWeight: 700, letterSpacing: '2.5px',
+        color: steel(0.25), textTransform: 'uppercase', ...FONT_SMOOTH,
+      }}>STUDIO</p>
+      {[
+        { label: 'Lighting Recipes', action: onRecipes },
+        { label: 'Saved Setups',     action: onSavedSetups },
+        { label: 'Build from Scratch', action: onBuildWizard },
+        { label: 'My Kit',           action: onMyKit },
+      ].map(item => (
+        <button key={item.label} onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
+          style={{
+            backgroundColor: 'transparent', border: 'none', cursor: 'pointer',
+            padding: '10px 0', width: '100%',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            WebkitTapHighlightColor: 'transparent',
+          }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>{item.label}</span>
+          <span style={{ fontSize: 15, color: steel(0.25), lineHeight: 1, ...FONT_SMOOTH }}>›</span>
+        </button>
+      ))}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* Profile footer */}
+      <div style={{ paddingTop: 16, borderTop: `1px solid ${steel(0.06)}` }}>
+        {user && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 500, color: steel(0.40), ...FONT_SMOOTH }}>
+              {user.username || user.email}
+            </span>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: steel(0.30), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                Settings
+              </button>
+              <button onClick={() => { onLogout?.(); softClickSound(); tapHaptic(); }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, fontWeight: 600, color: 'rgba(180,60,60,0.55)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+        <p style={{
+          margin: '6px 0 0', textAlign: 'right',
+          fontSize: 9, fontWeight: 500, letterSpacing: '0.5px', color: steel(0.15),
+          ...FONT_SMOOTH,
+        }}>v1.4.0</p>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#000', overflow: 'hidden', overscrollBehavior: 'none' }}>
     <div
@@ -698,15 +884,19 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         // the UI stays readable in bright outdoor / on-location shoots.
         filter: daylightMode ? 'brightness(1.15)' : undefined,
         transition: 'filter 0.4s ease',
+        // Desktop: CSS Grid two-column layout (VF fills left, tools panel right)
+        ...(isDesktop ? {
+          display: 'grid',
+          gridTemplateColumns: `1fr ${D_RIGHT_W}px`,
+        } : {}),
       }}
     >
       <MatteBackground />
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: 'none' }} />
 
-      {/* ── Wordmark — tap or long-press for profile panel ──
-          Auto-fades after 3s or when an image loads. Still tappable for
-          profile access; just visually quiet so the photo owns the screen. */}
+      {/* ── Wordmark — mobile only (desktop has it in right panel) ── */}
+      {!isDesktop && (
       <div
         role="button"
         aria-label="Menu"
@@ -734,7 +924,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
           textShadow: '0 0 1px rgba(245,247,250,0.12)',
         }}>No Guesswork</p>
-        {/* Product promise — hierarchy 2, must read stronger than the category label */}
         <p style={{
           margin: '3px 0 0 1px',
           fontWeight: 700, fontSize: 12, lineHeight: '15px',
@@ -742,10 +931,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
         }}>See how any photo was lit — and rebuild it.</p>
       </div>
+      )}
 
 
-{/* ── Profile panel scrim — tap anywhere outside to dismiss ── */}
-      {profileOpen && (
+{/* ── Profile panel scrim — mobile only ── */}
+      {!isDesktop && profileOpen && (
         <div
           onClick={() => { setProfileOpen(false); softClickSound(); }}
           style={{
@@ -756,8 +946,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         />
       )}
 
-      {/* ── Profile Panel — slides down from wordmark on tap/long-press ── */}
-      <div style={{
+      {/* ── Profile Panel — mobile only (desktop has tools in right panel) ── */}
+      {!isDesktop && <div style={{
         position: 'absolute', top: 76, left: 20, right: 20,
         borderRadius: 14, backgroundColor: '#0f1013',
         boxShadow: '1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4), inset -1px -1px 2px 0px rgba(0,0,0,0.12), inset 1px 1px 0px 0px rgba(255,255,255,0.05)',
@@ -829,7 +1019,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           color: steel(0.18),
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
         }}>v1.4.0</p>
-      </div>
+      </div>}
 
 
       {/* Illumination Well removed — one button, one mental model.
@@ -849,11 +1039,13 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         role="button"
         aria-label={hasImage ? 'Photo loaded — tap to swap, long-press to clear' : 'Tap to load a photo'}
         style={{
-          position: 'absolute',
-          top: VF_TOP,
-          left: 0,
-          right: 0,
-          height: VF_HEIGHT,
+          position: isDesktop ? 'relative' : 'absolute',
+          top: isDesktop ? undefined : VF_TOP,
+          left: isDesktop ? undefined : 0,
+          right: isDesktop ? undefined : 0,
+          height: isDesktop ? '100%' : VF_HEIGHT,
+          gridColumn: isDesktop ? '1 / 2' : undefined,
+          gridRow: isDesktop ? '1 / -1' : undefined,
           borderRadius: 0,
           // Edge-to-edge viewfinder — no rounded corners, flush with screen edges.
           // Drag-over: faint steel tint to signal accept state.
@@ -994,7 +1186,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             }}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', objectPosition: '50% 25%', opacity: 0.85, zIndex: 8,
+              objectFit: isDesktop ? 'contain' : 'cover',
+              objectPosition: isDesktop ? '50% 50%' : '50% 25%',
+              opacity: isDesktop ? 0.92 : 0.85, zIndex: 8,
               animation: 'heroZoomIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
               transformOrigin: 'center 25%',
             }} />
@@ -1068,6 +1262,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
       {/* Sound / haptic / daylight toggles moved to Settings screen */}
 
+      {/* ── Mobile-only: button trough, well, analyze button, sample CTA, teach ──
+           On desktop these controls live in the right panel. */}
+      {!isDesktop && <>
       {/* ── LCD spill — warm light leaking from upper-left from under viewfinder glass ── */}
       <div style={{
         position: 'absolute', top: VF_TOP + 20, left: 10, right: 10, height: VF_HEIGHT - 30,
@@ -1725,6 +1922,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           </div>
         );
       })()}
+      </>}
+      {/* end !isDesktop mobile-only block */}
+
+      {/* ── Desktop right panel ── */}
+      {desktopRightPanel}
 
       {/* ── State animation keyframes ── */}
       <style>{`
