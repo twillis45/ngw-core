@@ -126,7 +126,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
   const greenRing = 'rgba(72,186,136,0.55)';
   const greenGlow = 'rgba(72,186,136,0.25)';
 
-  const D_RIGHT_W = 420;
   const FS = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' };
 
   return (
@@ -141,14 +140,12 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
       fontFamily: 'Inter, system-ui, sans-serif',
       filter: daylightMode ? 'brightness(1.15)' : undefined,
       transition: 'filter 0.4s ease',
-      ...(isDesktop ? {
-        display: 'grid',
-        gridTemplateColumns: `1fr ${D_RIGHT_W}px`,
-      } : {}),
+      // Desktop: single-column — photo fills viewport, status overlays centered
+      ...(isDesktop ? { display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr' } : {}),
     }}>
       <MatteBackground />
 
-      {/* Cancel — mobile only (desktop has cancel in right panel) */}
+      {/* Cancel — mobile only */}
       {!isDesktop && onCancel && !analysisComplete && (
         <button
           aria-label="Cancel analysis"
@@ -157,32 +154,25 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             position: 'absolute', top: 52, left: 8,
             width: 44, height: 44, zIndex: 30,
             background: 'none', border: 'none', cursor: 'pointer',
-            overflow: 'hidden',
-            WebkitTapHighlightColor: 'transparent',
+            overflow: 'hidden', WebkitTapHighlightColor: 'transparent',
           }}
         >
-          <span style={{
-            position: 'absolute', left: 14, top: 8,
-            fontSize: 22, fontWeight: 600, color: '#a7adb7', lineHeight: 1,
-            ...FS,
-          }}>‹</span>
+          <span style={{ position: 'absolute', left: 14, top: 8, fontSize: 22, fontWeight: 600, color: '#a7adb7', lineHeight: 1, ...FS }}>‹</span>
         </button>
       )}
 
-      {/* ── Viewfinder — full-height on desktop, absolute-positioned on mobile ── */}
+      {/* ── Viewfinder — fills entire viewport on desktop ── */}
       <div style={{
         position: isDesktop ? 'relative' : 'absolute',
         top: isDesktop ? undefined : VF_TOP,
         left: isDesktop ? undefined : 0,
         right: isDesktop ? undefined : 0,
         height: isDesktop ? '100%' : VF_HEIGHT,
-        gridColumn: isDesktop ? '1 / 2' : undefined,
-        borderRadius: 0,
-        overflow: 'hidden',
+        gridColumn: isDesktop ? '1 / -1' : undefined,
+        gridRow: isDesktop ? '1 / -1' : undefined,
+        borderRadius: 0, overflow: 'hidden',
         backgroundColor: 'transparent',
-        WebkitTapHighlightColor: 'transparent',
       }}>
-        {/* User's photo — dimmed for analysis, slow dramatic zoom */}
         {imagePreview && (
           <img key={imagePreview} src={imagePreview} alt="Analyzing" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -193,15 +183,11 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             transformOrigin: 'center 30%',
           }} />
         )}
-
-        {/* Ellipse depth oval (same as HomeScreen) */}
         <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
           <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
         </div>
-
         <ViewfinderHUD dimmed />
-
-        {/* Progress — green glow at VF bottom edge */}
+        {/* Progress — green glow at bottom edge */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: isDesktop ? 3 : 4,
           background: 'linear-gradient(90deg, rgba(72,186,136,0.0) 0%, rgba(72,186,136,0.40) 50%, rgba(72,186,136,0.75) 100%)',
@@ -209,26 +195,18 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
           zIndex: 4,
         }} />
-
-        {/* EXIF readout strip */}
         <ExifStrip exifData={exifData} style={{
           opacity: (analysisComplete && result?.pattern) ? 0 : 1,
           transition: 'opacity 0.4s ease',
         }} />
-
         {/* Glass overlay */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 0, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6 }} />
 
-        {/* Inner shadow */}
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: 0,
-          pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6,
-        }} />
-
-        {/* ── Stage narrative — mobile: overlaid on photo. Desktop: in right panel. */}
+        {/* Stage narrative — mobile overlay */}
         {!isDesktop && !analysisComplete && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -238,50 +216,28 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
           }}>
             <p style={{
-              margin: 0,
-              fontWeight: 500, fontSize: 14, lineHeight: '20px',
-              color: 'rgba(235,240,245,0.88)',
-              letterSpacing: '0.2px',
-              textAlign: 'center',
+              margin: 0, fontWeight: 500, fontSize: 14, lineHeight: '20px',
+              color: 'rgba(235,240,245,0.88)', letterSpacing: '0.2px', textAlign: 'center',
               textShadow: '0 1px 4px rgba(0,0,0,0.6), 0 0 16px rgba(72,186,136,0.15)',
-              ...FS,
-              opacity: stageFade,
+              ...FS, opacity: stageFade,
               transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
               transition: 'opacity 0.35s ease, transform 0.35s ease',
             }}>{currentStage.label}</p>
           </div>
         )}
-
-        {/* ── Pattern tease — mobile: overlaid on photo. Desktop: in right panel. */}
+        {/* Pattern tease — mobile overlay */}
         {!isDesktop && analysisComplete && result?.pattern && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '36px 20px 18px',
             background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.70) 40%, rgba(4,5,7,0.92) 100%)',
-            zIndex: 7,
-            animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+            zIndex: 7, animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
           }}>
-            <p style={{
-              margin: 0,
-              fontSize: 24, fontWeight: 700,
-              color: 'rgba(245,247,250,0.92)',
-              letterSpacing: '-0.3px',
-              textAlign: 'center',
-              textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)',
-              ...FS,
-            }}>
+            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.3px', textAlign: 'center', textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)', ...FS }}>
               {prettify(result.pattern, { title: true })}
             </p>
             {result.confidence != null && (
-              <p style={{
-                margin: '4px 0 0',
-                fontSize: 11, fontWeight: 600,
-                color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)',
-                letterSpacing: '0.8px',
-                textAlign: 'center',
-                textTransform: 'uppercase',
-                ...FS,
-              }}>
+              <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
                 {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
               </p>
             )}
@@ -289,119 +245,134 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         )}
       </div>
 
-      {/* ── Desktop right panel — analysis status ── */}
+      {/* ── Desktop overlay — centered status (matches HomeScreen pattern) ── */}
       {isDesktop && (
         <div style={{
-          gridColumn: '2 / 3',
+          gridColumn: '1 / -1', gridRow: '1 / -1',
+          position: 'relative', zIndex: 10,
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          padding: '48px 40px',
-          position: 'relative', zIndex: 2,
-          borderLeft: `1px solid ${steel(0.06)}`,
-          background: 'linear-gradient(180deg, rgba(12,13,16,0.95) 0%, rgba(8,9,12,0.98) 100%)',
-          gap: 32,
+          pointerEvents: 'none',
         }}>
-          {/* Cancel — top left */}
-          {onCancel && !analysisComplete && (
-            <button
-              aria-label="Cancel analysis"
-              onClick={onCancel}
-              style={{
-                position: 'absolute', top: 20, left: 20,
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: 13, fontWeight: 600, color: steel(0.40),
-                letterSpacing: '0.3px', ...FS,
+          {/* Top bar — wordmark + cancel */}
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '20px 36px', pointerEvents: 'auto',
+            background: 'linear-gradient(180deg, rgba(6,7,10,0.70) 0%, transparent 100%)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>No Guesswork</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
+            </div>
+            {onCancel && !analysisComplete && (
+              <button onClick={onCancel} style={{
+                background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+                border: 'none', borderRadius: 8, cursor: 'pointer', padding: '6px 16px',
+                boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -1px -1px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
                 WebkitTapHighlightColor: 'transparent',
-              }}
-            >← Cancel</button>
-          )}
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px', ...FS }}>Cancel</span>
+              </button>
+            )}
+          </div>
 
-          {/* Analyzing state */}
+          {/* Centered analysis status */}
           {!analysisComplete && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
-              {/* Pulsing ring indicator */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, pointerEvents: 'none' }}>
+              {/* Pulsing ring — machined well */}
               <div style={{
-                width: 64, height: 64, borderRadius: '50%',
-                border: `2px solid rgba(72,186,136,0.45)`,
-                boxShadow: `0 0 20px rgba(72,186,136,0.15), inset 0 0 12px rgba(72,186,136,0.08)`,
+                width: 72, height: 72, borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                boxShadow: [
+                  'inset 6px 6px 14px rgba(0,0,0,0.85)',
+                  'inset 3px 3px 7px rgba(0,0,0,0.65)',
+                  'inset 0 0 8px rgba(72,186,136,0.08)',
+                  '-1px -1px 1px rgba(255,255,255,0.04)',
+                  '3px 4px 10px rgba(0,0,0,0.50)',
+                  `0 0 0 1.5px rgba(72,186,136,0.35)`,
+                  `0 0 16px rgba(72,186,136,0.10)`,
+                ].join(', '),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 animation: 'ringAnalyzeGlow 2.0s linear infinite',
               }}>
                 <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  backgroundColor: 'rgba(72,186,136,0.85)',
-                  boxShadow: '0 0 8px rgba(72,186,136,0.6)',
-                  animation: 'ringAnalyzePulse 2.0s linear infinite',
+                  width: 10, height: 10, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.90) 0%, rgba(72,186,136,0.80) 60%, rgba(40,120,85,0.70) 100%)',
+                  boxShadow: '0 0 10px rgba(72,186,136,0.55), 0 0 3px rgba(140,230,190,0.30)',
                 }} />
               </div>
 
-              {/* ANALYZING label */}
               <p style={{
-                margin: 0, fontWeight: 700, fontSize: 14, letterSpacing: '3px',
-                color: 'rgba(140,225,180,0.80)', textTransform: 'uppercase',
-                textShadow: '0 0 8px rgba(72,186,136,0.20)',
+                margin: 0, fontWeight: 700, fontSize: 13, letterSpacing: '3.5px',
+                color: 'rgba(140,225,180,0.78)', textTransform: 'uppercase',
+                textShadow: '0 0 10px rgba(72,186,136,0.20), 0 2px 8px rgba(0,0,0,0.5)',
                 ...FS,
               }}>Analyzing</p>
 
-              {/* Stage message */}
               <p style={{
                 margin: 0, fontWeight: 500, fontSize: 15, lineHeight: '22px',
-                color: 'rgba(235,240,245,0.75)',
-                letterSpacing: '0.1px', textAlign: 'center',
-                ...FS,
-                opacity: stageFade,
+                color: 'rgba(235,240,245,0.72)', letterSpacing: '0.1px', textAlign: 'center',
+                textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                ...FS, opacity: stageFade,
                 transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
                 transition: 'opacity 0.35s ease, transform 0.35s ease',
                 minHeight: 22,
               }}>{currentStage.label}</p>
 
-              {/* Progress bar */}
+              {/* Progress bar — machined track */}
               <div style={{
-                width: '80%', maxWidth: 240, height: 3, borderRadius: 2,
-                backgroundColor: 'rgba(255,255,255,0.04)',
+                width: 260, height: 4, borderRadius: 2,
+                background: '#0a0b0e',
+                boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.60), inset -1px -1px 2px rgba(255,255,255,0.015), 1px 1px 3px rgba(0,0,0,0.35)',
                 overflow: 'hidden',
               }}>
                 <div style={{
                   width: `${progress}%`, height: '100%', borderRadius: 2,
-                  background: 'linear-gradient(90deg, rgba(72,186,136,0.35), rgba(72,186,136,0.70))',
-                  boxShadow: '0 0 6px rgba(72,186,136,0.25)',
+                  background: 'linear-gradient(90deg, rgba(72,186,136,0.30), rgba(72,186,136,0.65))',
+                  boxShadow: '0 0 8px rgba(72,186,136,0.25)',
                   transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
                 }} />
               </div>
             </div>
           )}
 
-          {/* Pattern tease — completion state */}
+          {/* Pattern tease — completion */}
           {analysisComplete && result?.pattern && (
             <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
               animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+              pointerEvents: 'none',
             }}>
-              {/* Check mark */}
               <div style={{
-                width: 56, height: 56, borderRadius: '50%',
-                border: '2px solid rgba(140,225,180,0.50)',
-                boxShadow: '0 0 20px rgba(72,186,136,0.20)',
+                width: 64, height: 64, borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                boxShadow: [
+                  'inset 4px 4px 10px rgba(0,0,0,0.75)',
+                  `0 0 0 1.5px rgba(140,225,180,0.45)`,
+                  `0 0 20px rgba(72,186,136,0.18)`,
+                  '-1px -1px 1px rgba(255,255,255,0.04)',
+                  '3px 4px 10px rgba(0,0,0,0.45)',
+                ].join(', '),
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                marginBottom: 8,
               }}>
-                <span style={{ fontSize: 24, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
+                <span style={{ fontSize: 26, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
               </div>
 
               <p style={{
-                margin: 0, fontSize: 28, fontWeight: 700,
-                color: 'rgba(245,247,250,0.92)',
-                letterSpacing: '-0.3px', textAlign: 'center',
-                textShadow: '0 0 18px rgba(245,190,72,0.25)',
+                margin: 0, fontSize: 32, fontWeight: 700,
+                color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.4px', textAlign: 'center',
+                textShadow: '0 0 20px rgba(245,190,72,0.25), 0 3px 12px rgba(0,0,0,0.6)',
                 ...FS,
               }}>
                 {prettify(result.pattern, { title: true })}
               </p>
               {result.confidence != null && (
                 <p style={{
-                  margin: 0, fontSize: 12, fontWeight: 600,
+                  margin: 0, fontSize: 13, fontWeight: 600,
                   color: result.confidence >= 70 ? 'rgba(140,225,180,0.80)' : 'rgba(250,210,130,0.80)',
-                  letterSpacing: '1px', textTransform: 'uppercase',
+                  letterSpacing: '1.2px', textTransform: 'uppercase',
+                  textShadow: '0 2px 8px rgba(0,0,0,0.5)',
                   ...FS,
                 }}>
                   {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
