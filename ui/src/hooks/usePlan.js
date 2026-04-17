@@ -31,8 +31,8 @@ export default function usePlan(userEmail) {
     }
   }, [isAdmin]);
 
-  const setPlan = useCallback((p) => {
-    if (isAdmin) return; // admin cannot be downgraded
+  const setPlan = useCallback((p, { force = false } = {}) => {
+    if (isAdmin && !force) return; // admin cannot be downgraded (unless force=true for testing)
     savePlan(p);
     setPlanState(p);
   }, [isAdmin]);

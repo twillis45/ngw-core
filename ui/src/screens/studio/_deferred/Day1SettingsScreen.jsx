@@ -275,7 +275,7 @@ function AccountScreen({ user, onBack, onLogout }) {
                         pointerEvents: 'none',
                       }} />
                       {/* Button face */}
-                      <button onClick={() => { setPlan(tier); softClickSound(); selectHaptic(); }}
+                      <button onClick={() => { setPlan(tier, { force: true }); softClickSound(); selectHaptic(); }}
                         style={{
                           position: 'relative',
                           background: active
