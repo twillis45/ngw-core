@@ -780,9 +780,10 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               width: _D_VF, height: `calc(${_D_VF} * 0.72)`,
               borderRadius: 0, cursor: 'pointer',
               position: 'relative', overflow: 'hidden',
-              // Solid dark glass surface — blocks the body grain texture.
-              // Real LCDs are opaque panels, not transparent holes.
-              backgroundColor: '#050608',
+              // LCD glass panel — opaque dark surface with faint blue-black cast.
+              // Real camera LCDs aren't pure black — they have a subtle cool shift
+              // from the backlight diffuser layer even when "off".
+              background: 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)',
               // Mobile-identical shadow: inset trough + outer drop + chamfer catch
               boxShadow: isDragOver
                 ? `inset 0 0 40px ${_D_AMBER}0.12), ${VIEWFINDER_INNER_SHADOW}`
@@ -791,13 +792,28 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {/* LCD backlight — same as mobile: cool panel glow from the LCD surface */}
+            {/* LCD backlight — diffused panel glow with warm center hotspot */}
             <div style={{
               position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
               background: [
-                'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
-                'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
+                // Central backlight pool — LCD panel center is brightest
+                'radial-gradient(ellipse 85% 70% at 50% 48%, rgba(110,145,195,0.06) 0%, rgba(90,125,178,0.03) 40%, transparent 70%)',
+                // Edge backlight bleed — panel perimeter
+                'linear-gradient(180deg, rgba(100,135,185,0.022) 0%, transparent 25%, transparent 75%, rgba(80,115,165,0.016) 100%)',
               ].join(', '),
+            }} />
+            {/* Glass edge reflection — thin bright line on top/left edge
+                where ambient light catches the glass surface. This is the
+                defining visual cue that says "this is glass, not a hole". */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 7,
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.06) 40%, rgba(255,255,255,0.02) 100%)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 7,
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 40%, transparent 70%)',
+              pointerEvents: 'none',
             }} />
             {/* Ellipse depth oval — Leica-style distance indicator */}
             <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
@@ -853,50 +869,40 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
           {/* Action row — Studio Matte WELL + DOME buttons */}
           <div style={{ display: 'flex', gap: 16, marginTop: 28, alignItems: 'center' }}>
-            {/* Try a Sample — WELL cavity behind the button face */}
+            {/* Try a Sample — Studio Matte steel CTA with well */}
             <div style={{ position: 'relative' }}>
-              {/* Well trough — recessed cavity the button sits in */}
               <div style={{
-                position: 'absolute', inset: -4,
-                borderRadius: 16,
-                background: 'radial-gradient(ellipse at 50% 40%, #040508 0%, #02030500 70%)',
+                position: 'absolute', inset: -4, borderRadius: 16,
                 boxShadow: [
-                  'inset 6px 6px 14px rgba(0,0,0,0.90)',
-                  'inset 3px 3px 7px rgba(0,0,0,0.75)',
-                  'inset 1px 1px 3px rgba(0,0,0,0.55)',
-                  `inset 0 0 8px ${_D_AMBER}0.05)`,
-                  'inset -1px -1px 3px rgba(255,255,255,0.015)',
-                  '-1px -1px 1px rgba(255,255,255,0.04)',
-                  '3px 4px 10px rgba(0,0,0,0.55)',
+                  'inset 6px 6px 14px rgba(0,0,0,0.88)',
+                  'inset 3px 3px 7px rgba(0,0,0,0.70)',
+                  'inset 1px 1px 3px rgba(0,0,0,0.50)',
+                  'inset -1px -1px 3px rgba(255,255,255,0.012)',
+                  '-1px -1px 1px rgba(255,255,255,0.035)',
+                  '3px 4px 10px rgba(0,0,0,0.50)',
                 ].join(', '),
                 pointerEvents: 'none',
               }} />
-              {/* Button face — floats inside the well */}
               <button onClick={loadSample} style={{
                 position: 'relative',
-                background: `linear-gradient(141.71deg, #3a3428 0%, #2a2418 50%, #1c1a12 100%)`,
-                border: 'none', cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                background: CTA_BG, border: 'none',
+                cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
                 boxShadow: [
-                  // Outer drop — face floats above well floor
-                  '10px 10px 28px rgba(0,0,0,0.80)',
-                  '5px 5px 12px rgba(0,0,0,0.60)',
-                  '2px 2px 5px rgba(0,0,0,0.40)',
-                  // Top-left chamfer — 141.71° key catch
-                  '-1px -1px 2px rgba(255,255,255,0.07)',
-                  // Warm amber LED glow
-                  `0 0 10px ${_D_AMBER}0.10)`,
-                  // Inner bevel — machined face edges
-                  `inset 0 2px 0 ${_D_AMBER}0.18)`,
-                  `inset 2px 0 0 ${_D_AMBER}0.10)`,
+                  '10px 10px 28px rgba(0,0,0,0.78)',
+                  '5px 5px 12px rgba(0,0,0,0.58)',
+                  '2px 2px 5px rgba(0,0,0,0.38)',
+                  '-1px -1px 2px rgba(255,255,255,0.06)',
+                  `0 0 6px ${steel(0.06)}`,
+                  'inset 0 2px 0 rgba(255,255,255,0.14)',
+                  'inset 2px 0 0 rgba(255,255,255,0.07)',
                   'inset -1px -1px 0 rgba(0,0,0,0.40)',
                 ].join(', '),
                 opacity: sampleLoading ? 0.5 : 1,
-                transition: 'all 0.15s ease, transform 0.12s ease',
                 WebkitTapHighlightColor: 'transparent',
               }}
               className="sm-btn-lift"
               >
-                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.5px', color: `${_D_AMBER}0.88)`, textShadow: `0 0 8px ${_D_AMBER}0.22)`, ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1px', color: steel(0.78), ...FONT_SMOOTH }}>
                   {sampleLoading ? 'Loading...' : 'Try a Sample Photo'}
                 </span>
               </button>
