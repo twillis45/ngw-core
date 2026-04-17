@@ -82,7 +82,9 @@ export function NavRow({ label, value, onClick, danger = false, chevron = true }
 
 /** Toggle switch row with optional sub-label. */
 export function ToggleRow({ label, sub, value, onChange }) {
-  const knobX = value ? 16 : 2;
+  // Track: 46×28. Knob: 22×22 (fills height minus 3px border each side).
+  // Knob travels from left:3 → left:21 (full edge-to-edge within track).
+  const knobX = value ? 21 : 3;
   return (
     <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
       <div>
@@ -92,18 +94,48 @@ export function ToggleRow({ label, sub, value, onChange }) {
       <div
         onClick={() => { softClickSound(); selectHaptic(); onChange(!value); }}
         style={{
-          width: 44, height: 26, borderRadius: 13, cursor: 'pointer', flexShrink: 0,
-          backgroundColor: value ? GREEN_DIM : 'rgba(255,255,255,0.06)',
-          boxShadow: 'inset 0px 1px 3px 0px rgba(0,0,0,0.5), inset 0px 0px 0px 0.5px rgba(0,0,0,0.4)',
-          position: 'relative', transition: 'background-color 0.2s ease',
+          width: 46, height: 28, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
+          // Track: deep machined cavity with directional inset shadows
+          backgroundColor: value ? GREEN_DIM : 'rgba(255,255,255,0.04)',
+          boxShadow: [
+            // Deep carved interior — 141.71° key light blocked by rim
+            'inset 3px 3px 6px rgba(0,0,0,0.70)',
+            'inset 1px 1px 3px rgba(0,0,0,0.50)',
+            'inset 0 0 0 0.5px rgba(0,0,0,0.45)',
+            // Bottom-right bounce — faint fill catch
+            'inset -1px -1px 2px rgba(255,255,255,0.02)',
+            // Outer chamfer — rim catches key light
+            '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+            '1px 1px 3px rgba(0,0,0,0.35)',
+            // Active: green LED glow trapped in the well
+            value ? 'inset 0 0 6px rgba(72,186,136,0.15)' : '',
+          ].filter(Boolean).join(', '),
+          position: 'relative',
+          transition: 'background-color 0.2s ease, box-shadow 0.25s ease',
         }}
       >
+        {/* Knob — raised dome with directional highlight + shadow */}
         <div style={{
           position: 'absolute', top: 3, left: knobX,
-          width: 20, height: 20, borderRadius: 10,
-          backgroundColor: value ? GREEN : steel(0.5),
-          boxShadow: '0px 1px 3px 0px rgba(0,0,0,0.5)',
-          transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), background-color 0.2s ease',
+          width: 22, height: 22, borderRadius: 11,
+          // Dome face — directional gradient from 141.71°
+          background: value
+            ? 'linear-gradient(141.71deg, rgba(140,230,190,0.95) 0%, rgba(72,186,136,0.90) 50%, rgba(50,140,100,0.85) 100%)'
+            : `linear-gradient(141.71deg, ${steel(0.65)} 0%, ${steel(0.45)} 50%, ${steel(0.30)} 100%)`,
+          boxShadow: [
+            // Outer drop — knob floats above track floor
+            '2px 2px 6px rgba(0,0,0,0.55)',
+            '1px 1px 3px rgba(0,0,0,0.40)',
+            // Top-left chamfer — key light catch on dome
+            '-0.5px -0.5px 1px rgba(255,255,255,0.20)',
+            // Inner bevel — machined edge
+            'inset 0 1px 0 rgba(255,255,255,0.25)',
+            'inset 1px 0 0 rgba(255,255,255,0.12)',
+            'inset -1px -1px 0 rgba(0,0,0,0.20)',
+            // Active state: green glow halo
+            value ? '0 0 6px rgba(72,186,136,0.30)' : '',
+          ].filter(Boolean).join(', '),
+          transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), background 0.2s ease, box-shadow 0.2s ease',
         }} />
       </div>
     </div>
