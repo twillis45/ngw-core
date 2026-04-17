@@ -456,17 +456,20 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
             label="Units"
             value={settings.units === 'metric' ? 'Metric' : 'Imperial'}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+            tooltip="Switch between feet/inches and meters for all distance and height measurements."
           />
           <Divider />
           <ToggleRow
             label="Analysis auto-save"
             value={settings.sessionStorage === 'auto'}
             onChange={v => update('sessionStorage', v ? 'auto' : 'manual')}
+            tooltip="Automatically save each analysis to your session history. When off, results are only available during the current session."
           />
           <Divider />
           <NavRow
             label="Preferences"
             onClick={() => { navSlideSound(); tapHaptic(); setSubScreen('preferences'); }}
+            tooltip="Analysis settings, display options, shoot mode, and privacy controls."
           />
         </Panel>
 
