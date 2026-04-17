@@ -3106,11 +3106,43 @@ def light_structure_pass(
             f"+ diagonal angle ({nose_shadow_angle_deg:.0f}°) → loop pattern"
         )
 
-    # Split: half face in shadow
+    # Split: half face in shadow — but check for Rembrandt triangle first.
+    # At |L-R| > 0.5, both split and Rembrandt are possible. The triangle
+    # check disambiguates.
     elif abs(left_shadow - right_shadow) > 0.5:
-        pattern_name = "split"
-        nose_shadow_shape = "half_face"
-        notes.append("strong left/right asymmetry → split lighting")
+        shadow_side = "left" if left_shadow > right_shadow else "right"
+        # Quick triangle check using percentile spread
+        _sp_ct = int(fh * 0.45); _sp_cb = int(fh * 0.70)
+        _sp_jt = int(fh * 0.70); _sp_jb = int(fh * 0.85)
+        if shadow_side == "left":
+            _sp_cr = face_roi[_sp_ct:_sp_cb, :int(fw * 0.40)]
+            _sp_jr = face_roi[_sp_jt:_sp_jb, :int(fw * 0.40)]
+        else:
+            _sp_cr = face_roi[_sp_ct:_sp_cb, int(fw * 0.60):]
+            _sp_jr = face_roi[_sp_jt:_sp_jb, int(fw * 0.60):]
+        _sp_has_triangle = False
+        if _sp_cr.size > 50 and _sp_jr.size > 20:
+            _sp_p75 = float(np.percentile(_sp_cr, 75))
+            _sp_p25 = float(np.percentile(_sp_cr, 25))
+            _sp_jm = float(np.mean(_sp_jr))
+            _sp_spread = (_sp_p75 - _sp_p25) / max(face_mean, 1.0)
+            _sp_bvj = (_sp_p75 - _sp_jm) / max(face_mean, 1.0)
+            _sp_has_triangle = _sp_spread > 0.15 and _sp_bvj > 0.10
+        if _sp_has_triangle:
+            # Triangle found in split-range asymmetry → this is Rembrandt
+            _triangle_isolation = _sp_spread
+            triangle_detected = True
+            triangle_cheek = shadow_side
+            pattern_name = "rembrandt"
+            nose_shadow_shape = "angled_with_triangle"
+            notes.append(
+                f"split-range asymmetry ({abs(left_shadow-right_shadow):.3f}) "
+                f"but triangle present (spread={_sp_spread:.3f}) → rembrandt"
+            )
+        else:
+            pattern_name = "split"
+            nose_shadow_shape = "half_face"
+            notes.append("strong left/right asymmetry → split lighting")
 
     # Rembrandt: triangle on shadow-side cheek
     elif abs(left_shadow - right_shadow) > 0.2:
