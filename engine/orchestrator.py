@@ -2952,7 +2952,12 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # cheek) in a controlled studio setting with cinematic/editorial/fashion
     # mood.  Distinguished from standard "short" by the intentional dramatic
     # mood and studio environment — not a window or outdoor setting.
-    if base == "short" and not _env_is_natural:
+    # Guard: strong triangle_isolation (> 0.80) means the pose resolver
+    # called "short" but the shadow geometry is Rembrandt — the triangle
+    # on the shadow cheek is the defining feature. Don't reclassify.
+    _ls_sfk = getattr(cr, "light_structure", None) if cr else None
+    _tri_sfk = getattr(_ls_sfk, "triangle_isolation", 0.0) if _ls_sfk else 0.0
+    if base == "short" and not _env_is_natural and _tri_sfk < 0.80:
         if mood in ("cinematic", "editorial", "fashion", "low_key"):
             return "short_fashion_key"
 
