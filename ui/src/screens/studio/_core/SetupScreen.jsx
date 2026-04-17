@@ -126,19 +126,29 @@ const HEIGHT_CLASS_ELEV_DEG = {
   high:                30,
   overhead:            55,
 };
-function estimateKeyHeightFt(heightClass, distanceFt) {
-  if (!heightClass || distanceFt == null) return null;
+function estimateKeyHeightFt(heightClass, distanceFt, elevationDeg) {
+  if (distanceFt == null) return null;
   const d = Number(distanceFt);
   if (!Number.isFinite(d) || d <= 0) return null;
-  const key = String(heightClass).trim().toLowerCase();
-  const elev = HEIGHT_CLASS_ELEV_DEG[key];
+  // Prefer numeric elevation from catchlight (direct measurement) over
+  // categorical height class (bucketed from shadow length).
+  let elev = null;
+  if (typeof elevationDeg === 'number' && Number.isFinite(elevationDeg)) {
+    elev = elevationDeg;
+  } else if (heightClass) {
+    const key = String(heightClass).trim().toLowerCase();
+    elev = HEIGHT_CLASS_ELEV_DEG[key] ?? null;
+  }
   if (elev == null) return null;
   const subjectEyeFt = 5.5;
   const deltaFt = d * Math.tan(elev * Math.PI / 180);
   const totalFt = subjectEyeFt + deltaFt;
   if (!Number.isFinite(totalFt)) return null;
-  const lo = Math.max(1, totalFt - 0.6);
-  const hi = totalFt + 0.6;
+  // Tighter tolerance when using catchlight-derived angle (±0.3 ft)
+  // vs categorical class (±0.6 ft)
+  const tol = typeof elevationDeg === 'number' ? 0.3 : 0.6;
+  const lo = Math.max(1, totalFt - tol);
+  const hi = totalFt + tol;
   return `~${lo.toFixed(1)}–${hi.toFixed(1)} ft`;
 }
 
@@ -584,11 +594,21 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const keyAngleDisplay = (typeof keyAngleDeg === 'number')
     ? `${keyAngleDeg.toFixed(0)}° off-axis` : null;
   const keyHeight = raw.reconstruction?.key_light_height;
-  const keyHeightDisplay = keyHeight
-    ? (typeof keyHeight === 'string'
-        ? keyHeight.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-        : String(keyHeight))
-    : null;
+  const _keyElevAbove = raw.reconstruction?.key_elevation_above_eye_deg;
+  const keyHeightDisplay = (() => {
+    // Prefer numeric elevation from catchlight when available
+    if (typeof _keyElevAbove === 'number' && Number.isFinite(_keyElevAbove)) {
+      if (_keyElevAbove > 45) return 'High';
+      if (_keyElevAbove > 20) return 'Medium-High';
+      if (_keyElevAbove > 5) return 'Slightly Above Eye';
+      if (_keyElevAbove > -5) return 'Eye Level';
+      return 'Low';
+    }
+    if (!keyHeight) return null;
+    return typeof keyHeight === 'string'
+      ? keyHeight.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      : String(keyHeight);
+  })();
 
   // Height measurement estimate — combines height class with measured distance.
   // Prefers engine-computed numeric distance (modifier_distance_ft) over the
@@ -598,7 +618,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
     : (typeof raw.reconstruction?.estimated_source_distance_ft === 'number')
       ? raw.reconstruction.estimated_source_distance_ft
       : parseDistanceMid(mod?.distRange);
-  const keyHeightMeasurement = estimateKeyHeightFt(keyHeight, distanceFtNumeric);
+  const keyElevDeg = raw.reconstruction?.key_elevation_above_eye_deg;
+  const keyHeightMeasurement = estimateKeyHeightFt(keyHeight, distanceFtNumeric, keyElevDeg);
 
   // ── CCT / color temperature ──
   const cctDetected = li.detected_cct_kelvin;

@@ -6279,6 +6279,48 @@ def reconstruction_pass(
                     "height downgraded: chin_down mimics high-light shadow"
                 )
 
+    # -- Elevation above eye (numeric) --
+    # Two methods, in priority order:
+    #   1. Catchlight elevation_ratio — direct measurement from iris reflection
+    #   2. Nose shadow length ratio — geometric: shorter shadow = higher light
+    import math as _m
+
+    key_elevation_above_eye_deg = None
+    _elev_source = None
+
+    # Method 1: catchlight position in iris
+    _cat_list = cat.get("catchlights", [])
+    _key_cl = None
+    _best_score = -1
+    for _cl in _cat_list:
+        _s = (_cl.get("intensity", 0) or 0) * (_cl.get("size_ratio", 0) or 0)
+        if _s > _best_score:
+            _best_score = _s
+            _key_cl = _cl
+    if _key_cl and _key_cl.get("elevation_ratio") is not None:
+        _er = max(-1.0, min(1.0, _key_cl["elevation_ratio"]))
+        key_elevation_above_eye_deg = round(_m.degrees(_m.asin(_er)), 1)
+        _elev_source = "catchlight"
+
+    # Method 2: nose shadow length (always available from shadow analysis)
+    # Shadow length ratio ≈ 1/tan(elevation_angle):
+    #   ratio 0.2 → tan(elev) ≈ 5 → elev ≈ 79° (very high, butterfly)
+    #   ratio 0.5 → tan(elev) ≈ 2 → elev ≈ 63° (high)
+    #   ratio 0.8 → tan(elev) ≈ 1.25 → elev ≈ 51° (medium-high)
+    #   ratio 1.0 → tan(elev) ≈ 1 → elev ≈ 45° (medium)
+    #   ratio 1.5 → tan(elev) ≈ 0.67 → elev ≈ 34° (low)
+    # Clamp to [5°, 75°] — below 5° is physically at eye level; above 75°
+    # is directly overhead (butterfly territory).
+    if key_elevation_above_eye_deg is None:
+        _sl = shd.get("shadow_length_ratio")
+        if isinstance(_sl, (int, float)) and _sl > 0.05:
+            _elev_raw = _m.degrees(_m.atan(1.0 / _sl))
+            key_elevation_above_eye_deg = round(max(5.0, min(75.0, _elev_raw)), 1)
+            _elev_source = "shadow_length"
+
+    if key_elevation_above_eye_deg is not None:
+        notes.append(f"elevation_above_eye={key_elevation_above_eye_deg}° (source={_elev_source})")
+
     # -- Modifier size class --
     # Combine shadow softness, edge gradient, and highlight rolloff
     softness_signals = []
@@ -6567,6 +6609,7 @@ def reconstruction_pass(
         "key_light_angle_deg_pose_corrected": round(key_angle_corrected, 1),
         "key_light_angle_deg": round(key_angle_corrected, 1),
         "key_light_height": key_height,
+        "key_elevation_above_eye_deg": key_elevation_above_eye_deg,
         "modifier_size_class": modifier_size,
         "modifier_size_class_raw": modifier_size_raw,
         "modifier_size_class_surface_corrected": modifier_size_corrected,

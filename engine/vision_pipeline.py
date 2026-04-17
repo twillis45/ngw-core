@@ -865,6 +865,12 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             _vp_logger.debug("[catchlight-detail] eye=%s pos=%s int=%.3f shape=%s sr=%.3f area=%.0f",
                              eye_label, _pos_str, intensity, shape, _sr or 0, area)
 
+            # Elevation ratio: how far above/below iris center the catchlight sits.
+            # Normalized by iris radius. Negative = above eye (light is high),
+            # positive = below (light is low/uplight). 0 = eye level.
+            # This is a direct physical signal of light height relative to the eye.
+            _elev_ratio = round(-dy / radius, 3) if radius > 0 else 0.0  # negate: up in image = high light
+
             results.append({
                 "eye": eye_label,
                 "position": _pos_str,
@@ -873,6 +879,10 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
                 # size_ratio: catchlight enclosing-circle radius / iris radius (0–1+)
                 # <0.1 = point/hard source, 0.1–0.3 = medium, >0.3 = large diffuse source
                 "size_ratio": round(enc_r / radius, 3) if radius > 0 else None,
+                # elevation_ratio: catchlight vertical position in iris.
+                # >0.5 = high (above eye), ~0 = eye level, <-0.3 = low/uplight.
+                # Directly encodes light height relative to the subject's eyes.
+                "elevation_ratio": _elev_ratio,
                 # Pixel coordinates for overlay — absolute position in full image
                 "abs_cx": int(x0 + ccx),
                 "abs_cy": int(y0 + ccy),
