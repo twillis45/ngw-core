@@ -194,26 +194,54 @@ function AccountScreen({ user, onBack, onLogout }) {
       <ScreenHeader title="Account" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
-        {/* Plan card — reads from real plan state */}
+        {/* Plan card — machined instrument panel with LED status indicator */}
         <div style={{
           backgroundColor: '#0c0e14',
-          borderRadius: 14, padding: '18px 20px',
+          borderRadius: 14, padding: '20px 22px',
           boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-          border: `0.5px solid ${planAccent.border}`,
           marginTop: 8,
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FS }}>{planLabel} Plan</p>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: steel(0.55), ...FS }}>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.textPrimary, letterSpacing: '-0.2px', ...FS }}>{planLabel} Plan</p>
+              <p style={{ margin: '5px 0 0', fontSize: 12, color: steel(0.50), ...FS }}>
                 {isPaid ? 'Active subscription' : 'Free tier — limited analyses'}
               </p>
             </div>
+            {/* LED status indicator — machined well with glowing dot */}
             <div style={{
-              backgroundColor: planAccent.bg, border: `0.5px solid ${planAccent.border}`,
-              borderRadius: 8, padding: '5px 10px',
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: planAccent.color, letterSpacing: '0.8px', ...FS }}>{planAccent.label}</span>
+              {/* Status dot in recessed well */}
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 50%, transparent 80%)',
+                boxShadow: [
+                  'inset 3px 3px 6px rgba(0,0,0,0.80)',
+                  'inset 1px 1px 3px rgba(0,0,0,0.55)',
+                  'inset -1px -1px 2px rgba(255,255,255,0.015)',
+                  '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+                  '1px 2px 4px rgba(0,0,0,0.40)',
+                  // LED glow trapped in well
+                  isPaid ? 'inset 0 0 6px rgba(72,186,136,0.12)' : 'inset 0 0 4px rgba(200,155,60,0.08)',
+                ].join(', '),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: isPaid
+                    ? 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.85) 60%, rgba(40,120,85,0.75) 100%)'
+                    : `radial-gradient(circle at 35% 30%, rgba(255,220,160,0.85) 0%, rgba(200,155,60,0.70) 60%, rgba(140,100,30,0.60) 100%)`,
+                  boxShadow: isPaid
+                    ? '0 0 6px rgba(72,186,136,0.50), 0 0 2px rgba(140,230,190,0.30)'
+                    : '0 0 5px rgba(200,155,60,0.40), 0 0 2px rgba(255,200,100,0.20)',
+                }} />
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase',
+                color: isPaid ? 'rgba(140,225,180,0.70)' : 'rgba(200,155,60,0.60)',
+                ...FS,
+              }}>{planAccent.label}</span>
             </div>
           </div>
         </div>
@@ -223,35 +251,77 @@ function AccountScreen({ user, onBack, onLogout }) {
           <>
             <SectionLabel label="ADMIN — SUBSCRIPTION TESTING" />
             <Panel>
-              <p style={{ margin: 0, padding: '10px 20px 6px', fontSize: 11, color: steel(0.40), ...FS }}>
-                Switch between tiers to test the paywall and feature gates.
+              <p style={{ margin: 0, padding: '10px 20px 6px', fontSize: 11, color: steel(0.38), ...FS }}>
+                Switch tiers to test paywall and feature gates.
               </p>
-              <div style={{ display: 'flex', gap: 8, padding: '8px 20px 14px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 10, padding: '10px 20px 16px', flexWrap: 'wrap' }}>
                 {['free', 'paid', 'pro', 'enterprise'].map(tier => {
                   const active = plan === tier;
+                  const isFreeTier = tier === 'free';
+                  const accentColor = isFreeTier ? 'rgba(200,155,60,' : 'rgba(72,186,136,';
                   return (
-                    <button key={tier} onClick={() => { setPlan(tier); softClickSound(); selectHaptic(); }}
-                      style={{
-                        background: active
-                          ? `linear-gradient(141.71deg, ${tier === 'free' ? '#2a2218' : '#1a2a22'} 0%, ${tier === 'free' ? '#1c1810' : '#122018'} 100%)`
-                          : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
-                        border: active ? `1px solid ${tier === 'free' ? 'rgba(200,155,60,0.30)' : 'rgba(72,186,136,0.30)'}` : `1px solid ${steel(0.08)}`,
-                        borderRadius: 10, padding: '8px 18px', cursor: 'pointer',
-                        boxShadow: active
-                          ? `${PANEL_SHADOW}, inset 0 1px 0 rgba(255,255,255,0.08)`
-                          : `1px 1px 4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.03)`,
-                        WebkitTapHighlightColor: 'transparent',
-                      }}
-                    >
-                      <span style={{
-                        fontSize: 12, fontWeight: active ? 700 : 500,
-                        letterSpacing: '0.5px', textTransform: 'uppercase',
-                        color: active
-                          ? (tier === 'free' ? KEY_ACCENT : GREEN)
-                          : steel(0.40),
-                        ...FS,
-                      }}>{PLAN_LABELS[tier]}</span>
-                    </button>
+                    <div key={tier} style={{ position: 'relative' }}>
+                      {/* Well cavity behind each button */}
+                      <div style={{
+                        position: 'absolute', inset: -3, borderRadius: 13,
+                        boxShadow: [
+                          'inset 4px 4px 10px rgba(0,0,0,0.80)',
+                          'inset 2px 2px 5px rgba(0,0,0,0.60)',
+                          'inset -1px -1px 2px rgba(255,255,255,0.012)',
+                          '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+                          '2px 3px 8px rgba(0,0,0,0.45)',
+                          active ? `inset 0 0 6px ${accentColor}0.08)` : '',
+                        ].filter(Boolean).join(', '),
+                        pointerEvents: 'none',
+                      }} />
+                      {/* Button face */}
+                      <button onClick={() => { setPlan(tier); softClickSound(); selectHaptic(); }}
+                        style={{
+                          position: 'relative',
+                          background: active
+                            ? `linear-gradient(141.71deg, ${isFreeTier ? '#2a2218' : '#1a2a22'} 0%, ${isFreeTier ? '#1c1810' : '#122018'} 100%)`
+                            : 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+                          border: 'none', borderRadius: 10, padding: '10px 20px', cursor: 'pointer',
+                          boxShadow: [
+                            '6px 6px 16px rgba(0,0,0,0.65)',
+                            '3px 3px 7px rgba(0,0,0,0.48)',
+                            '1px 1px 3px rgba(0,0,0,0.32)',
+                            '-1px -1px 1px rgba(255,255,255,0.05)',
+                            'inset 0 1.5px 0 rgba(255,255,255,0.09)',
+                            'inset 1px 0 0 rgba(255,255,255,0.04)',
+                            'inset -1px -1px 0 rgba(0,0,0,0.30)',
+                            active ? `0 0 0 1px ${accentColor}0.30)` : '',
+                            active ? `0 0 10px ${accentColor}0.10)` : '',
+                          ].filter(Boolean).join(', '),
+                          WebkitTapHighlightColor: 'transparent',
+                          transition: 'transform 0.15s ease',
+                          transform: active ? 'translateY(-1px)' : 'none',
+                        }}
+                      >
+                        {/* Active LED dot */}
+                        {active && (
+                          <div style={{
+                            position: 'absolute', top: -3, right: -3,
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: isFreeTier
+                              ? 'radial-gradient(circle at 35% 30%, rgba(255,220,160,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+                              : 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+                            boxShadow: isFreeTier
+                              ? '0 0 6px rgba(200,155,60,0.50)'
+                              : '0 0 6px rgba(72,186,136,0.50)',
+                          }} />
+                        )}
+                        <span style={{
+                          fontSize: 11.5, fontWeight: active ? 700 : 600,
+                          letterSpacing: '0.8px', textTransform: 'uppercase',
+                          color: active
+                            ? `${accentColor}0.88)`
+                            : steel(0.45),
+                          textShadow: active ? `0 0 8px ${accentColor}0.20)` : 'none',
+                          ...FS,
+                        }}>{PLAN_LABELS[tier]}</span>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
