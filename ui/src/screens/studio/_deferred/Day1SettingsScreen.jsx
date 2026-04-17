@@ -50,9 +50,9 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
 
         <SectionLabel label="APPEARANCE" />
         <Panel>
-          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} />
+          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} tooltip="Vibration feedback on taps and interactions. Turn off for silent operation." />
           <Divider />
-          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} />
+          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} tooltip="Simplify animations for accessibility or to reduce visual distraction." />
           <Divider />
           <NavRow
             label="Font size"
@@ -93,6 +93,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
             label="Show confidence score"
             value={!!settings.showConfidenceScore}
             onChange={v => update('showConfidenceScore', v)}
+            tooltip="Display the engine's confidence percentage on results. Useful for understanding ambiguous reads."
           />
           <Divider />
           <NavRow
@@ -131,6 +132,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
             label="Allow analytics"
             value={settings.allowAnalytics !== false}
             onChange={v => update('allowAnalytics', v)}
+            tooltip="Anonymous usage data helps improve the engine. No images are ever sent — only interaction patterns."
           />
           <Divider />
           <NavRow

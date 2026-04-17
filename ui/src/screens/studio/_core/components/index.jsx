@@ -81,12 +81,14 @@ export function NavRow({ label, value, onClick, danger = false, chevron = true }
 }
 
 /** Toggle switch row with optional sub-label. */
-export function ToggleRow({ label, sub, value, onChange }) {
-  // Track: 46×28. Knob: 22×22 (fills height minus 3px border each side).
-  // Knob travels from left:3 → left:21 (full edge-to-edge within track).
-  const knobX = value ? 21 : 3;
+export function ToggleRow({ label, sub, value, onChange, tooltip }) {
+  // Track: 48×28. Knob: 24×24 (fills height minus 2px border each side).
+  // Full travel: left:2 → left:22.
+  const knobX = value ? 22 : 2;
   return (
-    <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <div
+      title={tooltip || undefined}
+      style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: tooltip ? 'help' : undefined }}>
       <div>
         <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: C.textPrimary, ...FS }}>{label}</p>
         {sub && <p style={{ margin: '2px 0 0', fontSize: 11, color: steel(0.62), ...FS }}>{sub}</p>}
@@ -94,49 +96,69 @@ export function ToggleRow({ label, sub, value, onChange }) {
       <div
         onClick={() => { softClickSound(); selectHaptic(); onChange(!value); }}
         style={{
-          width: 46, height: 28, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
-          // Track: deep machined cavity with directional inset shadows
-          backgroundColor: value ? GREEN_DIM : 'rgba(255,255,255,0.04)',
-          boxShadow: [
-            // Deep carved interior — 141.71° key light blocked by rim
-            'inset 3px 3px 6px rgba(0,0,0,0.70)',
-            'inset 1px 1px 3px rgba(0,0,0,0.50)',
-            'inset 0 0 0 0.5px rgba(0,0,0,0.45)',
-            // Bottom-right bounce — faint fill catch
-            'inset -1px -1px 2px rgba(255,255,255,0.02)',
-            // Outer chamfer — rim catches key light
-            '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
-            '1px 1px 3px rgba(0,0,0,0.35)',
-            // Active: green LED glow trapped in the well
-            value ? 'inset 0 0 6px rgba(72,186,136,0.15)' : '',
-          ].filter(Boolean).join(', '),
+          width: 48, height: 28, borderRadius: 14, cursor: 'pointer', flexShrink: 0,
           position: 'relative',
-          transition: 'background-color 0.2s ease, box-shadow 0.25s ease',
+          // Track cavity — deep machined slot
+          background: value
+            ? 'linear-gradient(141.71deg, rgba(30,70,55,0.95) 0%, rgba(22,55,42,0.92) 100%)'
+            : 'linear-gradient(141.71deg, #0a0b0e 0%, #070809 100%)',
+          boxShadow: [
+            // Carved interior — directional inset from 141.71°
+            'inset 4px 4px 8px rgba(0,0,0,0.80)',
+            'inset 2px 2px 4px rgba(0,0,0,0.60)',
+            'inset 1px 1px 2px rgba(0,0,0,0.45)',
+            // Perimeter ring — hard edge definition
+            'inset 0 0 0 0.5px rgba(0,0,0,0.50)',
+            // Fill bounce — bottom-right
+            'inset -1px -1px 2px rgba(255,255,255,0.018)',
+            // Outer rim chamfer
+            '-0.5px -0.5px 1px rgba(255,255,255,0.035)',
+            '1px 2px 4px rgba(0,0,0,0.40)',
+            // Green LED glow in the well when active
+            value ? 'inset 0 0 10px rgba(72,186,136,0.20)' : '',
+            value ? 'inset 0 0 4px rgba(72,186,136,0.12)' : '',
+          ].filter(Boolean).join(', '),
+          transition: 'background 0.25s ease, box-shadow 0.3s ease',
         }}
       >
-        {/* Knob — raised dome with directional highlight + shadow */}
+        {/* Knob — chrome ball bearing with specular highlight */}
         <div style={{
-          position: 'absolute', top: 3, left: knobX,
-          width: 22, height: 22, borderRadius: 11,
-          // Dome face — directional gradient from 141.71°
+          position: 'absolute', top: 2, left: knobX,
+          width: 24, height: 24, borderRadius: '50%',
+          // Radial gradient — top-left hot-spot simulates spherical key catch
           background: value
-            ? 'linear-gradient(141.71deg, rgba(140,230,190,0.95) 0%, rgba(72,186,136,0.90) 50%, rgba(50,140,100,0.85) 100%)'
-            : `linear-gradient(141.71deg, ${steel(0.65)} 0%, ${steel(0.45)} 50%, ${steel(0.30)} 100%)`,
+            ? 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(120,220,170,0.88) 25%, rgba(72,186,136,0.82) 55%, rgba(40,120,85,0.78) 100%)'
+            : `radial-gradient(circle at 35% 30%, ${steel(0.85)} 0%, ${steel(0.55)} 30%, ${steel(0.35)} 65%, ${steel(0.22)} 100%)`,
           boxShadow: [
-            // Outer drop — knob floats above track floor
-            '2px 2px 6px rgba(0,0,0,0.55)',
-            '1px 1px 3px rgba(0,0,0,0.40)',
-            // Top-left chamfer — key light catch on dome
-            '-0.5px -0.5px 1px rgba(255,255,255,0.20)',
-            // Inner bevel — machined edge
-            'inset 0 1px 0 rgba(255,255,255,0.25)',
-            'inset 1px 0 0 rgba(255,255,255,0.12)',
-            'inset -1px -1px 0 rgba(0,0,0,0.20)',
-            // Active state: green glow halo
-            value ? '0 0 6px rgba(72,186,136,0.30)' : '',
+            // Contact shadow — knob sits on track floor
+            '3px 3px 8px rgba(0,0,0,0.65)',
+            '1px 1px 3px rgba(0,0,0,0.45)',
+            // Perimeter edge ring — separates knob from shadow
+            '0 0 0 0.5px rgba(0,0,0,0.30)',
+            // Top-left rim catch — chamfer from 141.71° key
+            '-0.5px -0.5px 1px rgba(255,255,255,0.22)',
+            // Inner dome bevel — machined edge
+            'inset 0 1.5px 0 rgba(255,255,255,0.30)',
+            'inset 1px 0.5px 0 rgba(255,255,255,0.15)',
+            'inset -1px -1px 1px rgba(0,0,0,0.25)',
+            // Active glow — green LED halo around the knob
+            value ? '0 0 8px rgba(72,186,136,0.35)' : '',
+            value ? '0 0 3px rgba(140,230,190,0.20)' : '',
           ].filter(Boolean).join(', '),
-          transition: 'left 0.2s cubic-bezier(0.4,0,0.2,1), background 0.2s ease, box-shadow 0.2s ease',
-        }} />
+          // Spring overshoot on travel — the knob overshoots slightly then settles
+          transition: 'left 0.28s cubic-bezier(0.34,1.56,0.64,1), background 0.2s ease, box-shadow 0.25s ease',
+        }}>
+          {/* Specular dot — pinpoint chrome reflection on dome surface */}
+          <div style={{
+            position: 'absolute', top: 4, left: 5,
+            width: 4, height: 3, borderRadius: '50%',
+            background: value
+              ? 'radial-gradient(circle, rgba(255,255,255,0.65) 0%, rgba(200,255,230,0.25) 60%, transparent 100%)'
+              : 'radial-gradient(circle, rgba(255,255,255,0.45) 0%, rgba(200,210,220,0.15) 60%, transparent 100%)',
+            transform: 'rotate(-48deg)',
+            pointerEvents: 'none',
+          }} />
+        </div>
       </div>
     </div>
   );
