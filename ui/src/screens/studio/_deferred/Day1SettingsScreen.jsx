@@ -60,12 +60,14 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
             label="Font size"
             value={(FONT_SIZES.find(f => f.id === settings.fontSize) || FONT_SIZES[2]).label}
             onClick={() => cycleOption('fontSize', FONT_SIZES)}
+            tooltip="Adjust text size across all screens for readability."
           />
           <Divider />
           <NavRow
             label="Unit system"
             value={settings.units === 'metric' ? 'Metric' : 'Imperial'}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+            tooltip="Switch between feet/inches and meters for distance and height measurements."
           />
         </Panel>
 
@@ -79,6 +81,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
               update('confidenceDisplay', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How confidence is shown on results. Simple: strong/partial. Numeric: percentage. Detailed: both with signal breakdown."
           />
           <Divider />
           <NavRow
@@ -89,6 +92,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
               update('patternSensitivity', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How strictly the engine matches patterns. Strict: only calls a pattern when evidence is strong. Flexible: calls with less evidence. Balanced: default."
           />
           <Divider />
           <ToggleRow
@@ -106,6 +110,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.explanationDepth || 'standard');
               update('explanationDepth', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How much detail the cockpit coaching provides. Brief: just the key action. Standard: action + why. Technical: full signal breakdown."
           />
         </Panel>
 
@@ -119,12 +124,14 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.comparisonPrompts || 'auto');
               update('comparisonPrompts', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="When to prompt you to compare your shot against the reference. Auto: after every capture. Low conf: only when the match is uncertain."
           />
           <Divider />
           <NavRow
             label="Power readout"
             value={(POWER_DISPLAY_OPTIONS.find(p => p.id === settings.powerDisplay) || POWER_DISPLAY_OPTIONS[0]).label}
             onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
+            tooltip="How strobe power is displayed in the cockpit. Stops: photographer standard (f-stop relative). Watts: absolute power. Ratio: key-to-fill ratio."
           />
         </Panel>
 
@@ -141,6 +148,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
             label="Image handling"
             value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
             onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
+            tooltip="Whether uploaded photos are stored for history or deleted immediately after analysis. Delete: maximum privacy. Store: enables result recall."
           />
         </Panel>
 

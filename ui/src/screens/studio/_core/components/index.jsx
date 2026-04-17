@@ -9,6 +9,19 @@ import { softClickSound, navSlideSound } from '../../../../utils/sounds';
 import { steel, C, FONT_SMOOTH as FS, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, GREEN, GREEN_DIM } from '../../../../theme/studioMatte';
 
+// ─── Shared keyframes (injected once) ─────────────────────────────────────────
+const _stylesInjected = { current: false };
+function InjectStyles() {
+  if (_stylesInjected.current) return null;
+  _stylesInjected.current = true;
+  return <style>{`
+    @keyframes tooltipIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(4px) scale(0.97); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+    }
+  `}</style>;
+}
+
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 /** Dark panel with neumorphic shadow + bevel. */
@@ -52,17 +65,18 @@ export function SectionLabel({ label }) {
  * Tappable row with label, optional value, and chevron.
  * Uses pointer events for press-state feedback.
  */
-export function NavRow({ label, value, onClick, danger = false, chevron = true }) {
+export function NavRow({ label, value, onClick, danger = false, chevron = true, tooltip }) {
   const [pressed, setPressed] = useState(false);
   return (
     <button
+      title={tooltip || undefined}
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => { setPressed(false); softClickSound(); tapHaptic(); onClick?.(); }}
       onPointerLeave={() => setPressed(false)}
       style={{
         width: '100%',
         backgroundColor: pressed ? 'rgba(255,255,255,0.025)' : 'transparent',
-        border: 'none', cursor: 'pointer',
+        border: 'none', cursor: tooltip ? 'help' : 'pointer',
         padding: '14px 20px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         WebkitTapHighlightColor: 'transparent',
@@ -88,6 +102,7 @@ export function ToggleRow({ label, sub, value, onChange, tooltip }) {
   const [tipOpen, setTipOpen] = useState(false);
   return (
     <div style={{ padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {tooltip && <InjectStyles />}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: C.textPrimary, ...FS }}>{label}</p>
@@ -112,23 +127,49 @@ export function ToggleRow({ label, sub, value, onChange, tooltip }) {
                 position: 'absolute', top: 5, left: 5, width: 4, height: 4, borderRadius: '50%',
                 background: `radial-gradient(circle, ${steel(0.55)} 0%, ${steel(0.30)} 100%)`,
               }} />
-              {/* Tooltip card */}
+              {/* Tooltip — Apple macOS Sequoia vibrancy glass */}
               {tipOpen && (
                 <div style={{
-                  position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-                  marginBottom: 8, width: 220, padding: '8px 12px',
-                  borderRadius: 10, backgroundColor: 'rgba(10,11,14,0.95)',
-                  border: `1px solid ${steel(0.10)}`,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.6), 0 1px 4px rgba(0,0,0,0.4)',
-                  backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+                  position: 'absolute', bottom: '100%', left: '50%',
+                  transform: 'translateX(-50%) translateY(0)',
+                  marginBottom: 10, width: 240, padding: '10px 14px',
+                  borderRadius: 12,
+                  // Apple glass: translucent dark material with heavy blur
+                  backgroundColor: 'rgba(28,28,32,0.72)',
+                  backdropFilter: 'blur(40px) saturate(1.8)',
+                  WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
+                  // Subtle border — Apple uses a single bright top edge + dim perimeter
+                  border: '0.5px solid rgba(255,255,255,0.12)',
+                  boxShadow: [
+                    // Outer glow — soft ambient shadow (Apple drop shadow)
+                    '0 8px 32px rgba(0,0,0,0.45)',
+                    '0 2px 8px rgba(0,0,0,0.30)',
+                    // Inner top edge — bright specular like Apple glass panels
+                    'inset 0 0.5px 0 rgba(255,255,255,0.15)',
+                    // Inner bottom edge — subtle ground shadow
+                    'inset 0 -0.5px 0 rgba(0,0,0,0.10)',
+                  ].join(', '),
                   zIndex: 20, pointerEvents: 'none',
+                  // Fade-in animation
+                  animation: 'tooltipIn 0.18s ease-out both',
                 }}>
-                  <p style={{ margin: 0, fontSize: 11, fontWeight: 500, lineHeight: '15px', color: steel(0.60), ...FS }}>{tooltip}</p>
-                  {/* Caret */}
+                  <p style={{
+                    margin: 0, fontSize: 12, fontWeight: 500, lineHeight: '16px',
+                    color: 'rgba(255,255,255,0.82)',
+                    letterSpacing: '0.05px',
+                    ...FS,
+                  }}>{tooltip}</p>
+                  {/* Caret — same glass material */}
                   <div style={{
-                    position: 'absolute', bottom: -4, left: '50%', transform: 'translateX(-50%) rotate(45deg)',
-                    width: 8, height: 8, backgroundColor: 'rgba(10,11,14,0.95)',
-                    border: `1px solid ${steel(0.10)}`, borderTop: 'none', borderLeft: 'none',
+                    position: 'absolute', bottom: -5, left: '50%',
+                    transform: 'translateX(-50%) rotate(45deg)',
+                    width: 10, height: 10,
+                    backgroundColor: 'rgba(28,28,32,0.72)',
+                    backdropFilter: 'blur(40px) saturate(1.8)',
+                    WebkitBackdropFilter: 'blur(40px) saturate(1.8)',
+                    borderRight: '0.5px solid rgba(255,255,255,0.12)',
+                    borderBottom: '0.5px solid rgba(255,255,255,0.12)',
+                    boxShadow: '2px 2px 4px rgba(0,0,0,0.20)',
                   }} />
                 </div>
               )}

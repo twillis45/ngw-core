@@ -69,7 +69,7 @@ export default function MatteBackground({ variant = 'default' }) {
           and dark noise without shifting the overall tone. */}
       <div style={{
         position: 'absolute', inset: 0,
-        opacity: isWide ? 0.28 : 0.18,
+        opacity: isWide ? 0.18 : 0.12,
         mixBlendMode: 'overlay',
         backgroundImage: grainUrl, backgroundSize: '64px 64px',
         pointerEvents: 'none',

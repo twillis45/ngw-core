@@ -780,9 +780,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               width: _D_VF, height: `calc(${_D_VF} * 0.72)`,
               borderRadius: 0, cursor: 'pointer',
               position: 'relative', overflow: 'hidden',
-              // No background fill — the slot is a raw hole in the body,
-              // depth comes entirely from shadow stack (same as mobile)
-              backgroundColor: 'transparent',
+              // Solid dark glass surface — blocks the body grain texture.
+              // Real LCDs are opaque panels, not transparent holes.
+              backgroundColor: '#050608',
               // Mobile-identical shadow: inset trough + outer drop + chamfer catch
               boxShadow: isDragOver
                 ? `inset 0 0 40px ${_D_AMBER}0.12), ${VIEWFINDER_INNER_SHADOW}`
