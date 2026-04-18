@@ -389,6 +389,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
     (kit?.modifiers || []).map(m => typeof m === 'string' ? m : m.type)
   );
   const [tab, setTab] = useState('lights');
+  const [search, setSearch] = useState('');
 
   function toggleLight(value) {
     segmentPressSound(); tapHaptic();
@@ -495,70 +496,147 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
         ))}
       </div>
 
+      {/* Search bar */}
+      <div style={{
+        padding: isDesktop ? '0 40px 12px' : '0 22px 12px',
+        position: 'relative', zIndex: 2,
+      }}>
+        <input
+          type="text"
+          placeholder={tab === 'lights' ? 'Search lights — Profoto, Godox, Canon...' : 'Search modifiers — softbox, beauty dish, umbrella...'}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            width: '100%', padding: '10px 14px', borderRadius: 10,
+            border: 'none',
+            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
+            boxShadow: [
+              'inset 3px 3px 8px rgba(0,0,0,0.60)',
+              'inset 1px 1px 3px rgba(0,0,0,0.40)',
+              'inset -1px -1px 2px rgba(255,255,255,0.015)',
+              '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+              '1px 1px 3px rgba(0,0,0,0.30)',
+            ].join(', '),
+            fontSize: 13, fontWeight: 500, color: C.textPrimary,
+            outline: 'none', WebkitAppearance: 'none',
+            ...FONT_SMOOTH,
+          }}
+        />
+      </div>
+
       {/* Catalog list */}
       <div style={{
         flex: 1, overflowY: 'auto',
         padding: isDesktop ? '0 40px 120px' : '0 22px 120px',
         position: 'relative', zIndex: 1,
       }}>
+        {/* Selected items pinned at top */}
+        {((tab === 'lights' && selectedLights.length > 0) || (tab === 'modifiers' && selectedMods.length > 0)) && (
+          <div style={{ marginBottom: 20 }}>
+            <p style={{
+              margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 700,
+              color: KEY_ACCENT, letterSpacing: '1.2px', textTransform: 'uppercase',
+              ...FONT_SMOOTH,
+            }}>
+              YOUR {tab === 'lights' ? 'LIGHTS' : 'MODIFIERS'}
+            </p>
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6,
+            }}>
+              {tab === 'lights'
+                ? selectedLights.map(v => {
+                    const cat = LIGHT_CATEGORIES.flatMap(c => c.items).find(i => i.value === v);
+                    return (
+                      <CatalogChip
+                        key={v}
+                        label={cat ? `${cat.vendor} ${cat.model}` : v}
+                        selected
+                        onClick={() => toggleLight(v)}
+                      />
+                    );
+                  })
+                : selectedMods.map(v => {
+                    const item = MODIFIER_CATALOG.find(m => m.value === v);
+                    return (
+                      <CatalogChip
+                        key={v}
+                        label={item?.label || v}
+                        selected
+                        onClick={() => toggleMod(v)}
+                      />
+                    );
+                  })
+              }
+            </div>
+          </div>
+        )}
+
         {tab === 'lights' ? (
-          LIGHT_CATEGORIES.map(cat => (
-            <div key={cat.category} style={{ marginBottom: 20 }}>
-              <p style={{
-                margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-                color: steel(0.55), letterSpacing: '1.2px', textTransform: 'uppercase',
-                ...FONT_SMOOTH,
-              }}>
-                {LIGHT_CAT_LABEL[cat.category] || cat.label}
-              </p>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-                gap: 6,
-              }}>
-                {cat.items.map(item => {
-                  const sel = selectedLights.includes(item.value);
-                  return (
+          LIGHT_CATEGORIES.map(cat => {
+            const q = search.toLowerCase().trim();
+            const filtered = q ? cat.items.filter(i =>
+              `${i.vendor} ${i.model}`.toLowerCase().includes(q)
+            ) : cat.items;
+            if (!filtered.length) return null;
+            return (
+              <div key={cat.category} style={{ marginBottom: 18 }}>
+                <p style={{
+                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
+                  ...FONT_SMOOTH,
+                }}>
+                  {LIGHT_CAT_LABEL[cat.category] || cat.label}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(200px, 1fr))' : 'repeat(2, 1fr)',
+                  gap: 6,
+                }}>
+                  {filtered.map(item => (
                     <CatalogChip
                       key={item.value}
                       label={`${item.vendor} ${item.model}`}
-                      selected={sel}
+                      selected={selectedLights.includes(item.value)}
                       onClick={() => toggleLight(item.value)}
                     />
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
-          MOD_CATEGORIES.map(cat => (
-            <div key={cat.category} style={{ marginBottom: 20 }}>
-              <p style={{
-                margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-                color: steel(0.55), letterSpacing: '1.2px', textTransform: 'uppercase',
-                ...FONT_SMOOTH,
-              }}>
-                {cat.label}
-              </p>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isDesktop ? 'repeat(3, 1fr)' : 'repeat(2, 1fr)',
-                gap: 6,
-              }}>
-                {cat.items.map(item => {
-                  const sel = selectedMods.includes(item.value);
-                  return (
+          MOD_CATEGORIES.map(cat => {
+            const q = search.toLowerCase().trim();
+            const filtered = q ? cat.items.filter(i =>
+              i.label.toLowerCase().includes(q) || (i.value || '').toLowerCase().includes(q)
+            ) : cat.items;
+            if (!filtered.length) return null;
+            return (
+              <div key={cat.category} style={{ marginBottom: 18 }}>
+                <p style={{
+                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
+                  ...FONT_SMOOTH,
+                }}>
+                  {cat.label}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(180px, 1fr))' : 'repeat(2, 1fr)',
+                  gap: 6,
+                }}>
+                  {filtered.map(item => (
                     <CatalogChip
                       key={item.value}
                       label={item.label}
-                      selected={sel}
+                      selected={selectedMods.includes(item.value)}
                       onClick={() => toggleMod(item.value)}
                     />
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
@@ -581,20 +659,33 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
 }
 
 function CatalogChip({ label, selected, onClick }) {
-  const [hover, setHover] = useState(false);
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       style={{
-        padding: '8px 10px', minHeight: 38,
-        borderRadius: 8,
-        border: `1px solid ${selected ? KEY_ACCENT : steel(hover ? 0.15 : 0.08)}`,
-        background: selected ? accent(0.10) : (hover ? steel(0.06) : steel(0.03)),
+        padding: '8px 12px', minHeight: 40,
+        borderRadius: 8, border: 'none',
+        // Studio Matte depth — machined chip with amber LED when selected
+        background: selected
+          ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+          : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
+        boxShadow: selected
+          ? [
+              '4px 4px 10px rgba(0,0,0,0.50)',
+              `0 0 0 0.5px ${accent(0.30)}`,
+              `0 0 6px ${accent(0.08)}`,
+              `inset 0 1px 0 ${accent(0.10)}`,
+              'inset -1px -1px 0 rgba(0,0,0,0.22)',
+            ].join(', ')
+          : [
+              '3px 3px 8px rgba(0,0,0,0.40)',
+              '1px 1px 3px rgba(0,0,0,0.28)',
+              'inset 0 1px 0 rgba(255,255,255,0.04)',
+              'inset -1px -1px 0 rgba(0,0,0,0.18)',
+            ].join(', '),
         cursor: 'pointer',
         fontSize: 11, fontWeight: selected ? 700 : 500,
-        color: selected ? KEY_ACCENT : steel(0.6),
+        color: selected ? KEY_ACCENT : steel(0.55),
         letterSpacing: '0.1px',
         textAlign: 'left',
         transition: 'all 0.15s ease',
