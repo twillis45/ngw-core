@@ -1,45 +1,64 @@
 /**
  * ProcessingScreen — Studio Matte design
- * Pixel-exact match to Figma: YQgGd8KZyZoXzZwJV7p4b6 / Studio Matte Theme / Processing → HC (1441:2)
+ * Layout-identical to HomeScreen: full-width fluid viewfinder, bottom-anchored
+ * button with well + trough, same matte surface. State differences:
+ *   - Photo dimmed to 0.78 with slow zoom (pros can clearly see their image during analysis)
+ *   - Green ring glow replaces blue-steel idle ring
+ *   - LED breathing green + halo bloom on button
+ *   - "ANALYZING" engraved label on dome (matches HomeScreen typography)
+ *   - Pipeline stage sub-label rotates below the dome label
+ *   - Scan line sweeps across viewfinder
+ *   - Green progress bar in home indicator
+ *   - EXIF strip persists from HomeScreen (continuity)
  */
 import { useState, useEffect, useRef } from 'react';
-import { tapHaptic, grainHaptic }          from '../../../utils/haptics';
+import { successHaptic }        from '../../../utils/haptics';
 import { processingPulseSound } from '../../../utils/sounds';
+import { loadSettings }         from '../../../data/settingsStore';
+import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
+import prettify                 from '../../../utils/prettify';
+import useStableViewport        from '../../../utils/useStableViewport';
 import analyzeTrackAlive      from '../../../assets/day1/analyze-track-alive.svg';
-import analyzeButtonAlive     from '../../../assets/day1/analyze-button-alive.svg';
+import ellipseBg              from '../../../assets/day1/ellipse-bg.svg';
 
-import illuminationWellAlive  from '../../../assets/day1/illumination-well-alive.svg';
-import illuminationLampOn     from '../../../assets/day1/illumination-lamp-on.svg';
+import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW } from '../../../theme/studioMatte';
+import MatteBackground from '../_shared/MatteBackground';
+import ViewfinderHUD from '../_shared/ViewfinderHUD';
+import ExifStrip from '../_shared/ExifStrip';
 
-import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, TEXT_SHADOW_ENGRAVED } from '../../../theme/studioMatte';
-
-// ─── Screen-local token extensions ───────────────────────────────────────────
 const C = { ...SM_C, border: 'rgba(167,173,183,0.06)' };
 
-// Processing-state viewfinder shadow — heavy directional inset from 141.71°
-// (light from upper-left), reading as a deep sunken well under the grain.
-const VIEWFINDER_INNER_SHADOW = [
-  'inset 6px 7px 18px 0px rgba(0,0,0,0.88)',
-  'inset 4px 5px 10px 0px rgba(0,0,0,0.72)',
-  'inset 2px 3px 5px 0px rgba(0,0,0,0.58)',
-  'inset 1px 1px 2px 0px rgba(0,0,0,0.50)',
-  'inset -1px -1px 1px 0px rgba(255,255,255,0.05)',
-  'inset -2px -2px 5px 0px rgba(95,124,150,0.07)',
-  'inset 0px 0px 24px 0px rgba(95,124,150,0.05)',
-  'inset 0px 0px 12px 0px rgba(95,124,150,0.07)',
-].join(', ');
+// Pipeline stage descriptions — real engine steps in photographer-friendly language.
+// Timed to roughly track actual analysis cadence (~6–8s total).
+// Pipeline stage labels — short enough to read in <2s at glance speed.
+// Detail line removed; the label alone carries the narrative.
+const STAGE_MESSAGES = [
+  { label: 'Reading the light…' },
+  { label: 'Mapping catchlights…' },
+  { label: 'Tracing shadows…' },
+  { label: 'Identifying pattern…' },
+  { label: 'Analyzing modifier…' },
+  { label: 'Counting sources…' },
+  { label: 'Building blueprint…' },
+];
 
-export default function ProcessingScreen({ imagePreview, analysisComplete }) {
+export default function ProcessingScreen({ imagePreview, analysisComplete, exifData, result, onCancel }) {
+  const tilt = useDeviceTilt();
   const [progress, setProgress] = useState(0);
   const pulseStopRef = useRef(null);
+  const [stageIdx, setStageIdx] = useState(0);
+  const [stageFade, setStageFade] = useState(1);
+  // Daylight brightness boost — read from persisted settings so the boost
+  // carries through from HomeScreen without a prop dependency.
+  const [daylightMode] = useState(() => {
+    try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
+  });
 
-  // Start ambient pulse on mount, stop on unmount or completion
   useEffect(() => {
     pulseStopRef.current = processingPulseSound();
     return () => { if (pulseStopRef.current) pulseStopRef.current(); };
   }, []);
 
-  // Animate progress toward 90% while analysis is running
   useEffect(() => {
     if (analysisComplete) return;
     const interval = setInterval(() => {
@@ -48,253 +67,479 @@ export default function ProcessingScreen({ imagePreview, analysisComplete }) {
     return () => clearInterval(interval);
   }, [analysisComplete]);
 
-  // When analysis completes, snap to 100% and stop pulse
   useEffect(() => {
     if (analysisComplete) {
-      setProgress(100);
+      // Animate progress to 100% with a brief deceleration instead of snapping
+      const steps = [92, 95, 97, 99, 100];
+      steps.forEach((v, i) => setTimeout(() => setProgress(v), i * 80));
       if (pulseStopRef.current) { pulseStopRef.current(); pulseStopRef.current = null; }
     }
   }, [analysisComplete]);
 
+  // ── Success haptic — fires when the pattern tease appears, not on raw
+  //    completion. The haptic confirms the *answer*, not the state change. ──
+  const teaseHapticFired = useRef(false);
+  useEffect(() => {
+    if (analysisComplete && result?.pattern && !teaseHapticFired.current) {
+      teaseHapticFired.current = true;
+      // Slight delay so haptic lands at the peak of the tease-in animation
+      setTimeout(() => successHaptic(), 250);
+    }
+  }, [analysisComplete, result?.pattern]);
+
+  // ── Stage message rotation ──
+  useEffect(() => {
+    if (analysisComplete) return;
+    const interval = setInterval(() => {
+      setStageFade(0);
+      setTimeout(() => {
+        setStageIdx(i => (i + 1) % STAGE_MESSAGES.length);
+        setStageFade(1);
+      }, 300);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, [analysisComplete]);
+
+  const currentStage = STAGE_MESSAGES[stageIdx];
+
+
+  // ── Layout geometry (shared hook — identical to HomeScreen) ──
+  const { stableVH, safeBottom, isDesktop } = useStableViewport();
+  const BTN_D   = isDesktop ? 168 : 136;
+  const WELL_D  = isDesktop ? 180 : 146;
+  const TRK_D   = isDesktop ? 174 : 142;
+  const LBL_FONT = isDesktop ? 14 : 13;
+
+  const BTN_OFFSET_FROM_BOTTOM = 48;
+  const BTN_CY = stableVH - safeBottom - BTN_OFFSET_FROM_BOTTOM - Math.round(BTN_D / 2);
+  const BTN_TOP  = BTN_CY - BTN_D  / 2;
+  const WELL_TOP = BTN_CY - WELL_D / 2;
+  const TRK_TOP  = BTN_CY - TRK_D  / 2;
+  const LBL_TOP  = BTN_CY - 9;
+
+  const VF_TOP = 100;
+  const VF_GAP = 16;
+  const VF_HEIGHT = Math.max(280, WELL_TOP - VF_GAP - VF_TOP);
+  const VF_BOTTOM = VF_TOP + VF_HEIGHT;
+
+  // Green ring color for analyzing state
+  const greenRing = 'rgba(72,186,136,0.55)';
+  const greenGlow = 'rgba(72,186,136,0.25)';
+
+  const FS = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' };
+
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
     <div
-      onClick={(e) => { if (e.target === e.currentTarget) tapHaptic(); }}
-      onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
-      onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
       position: 'relative',
       width: '100%',
-      maxWidth: 430,
       height: '100%',
-      minHeight: 600,
-      margin: '0 auto',
       backgroundColor: C.bg,
-      boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
+      filter: daylightMode ? 'brightness(1.15)' : undefined,
+      transition: 'filter 0.4s ease',
+      // Desktop: single-column — photo fills viewport, status overlays centered
+      ...(isDesktop ? { display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr' } : {}),
     }}>
-      {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
-      <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(95,124,150,0.008) 40%, transparent 72%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
-        <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
-      </div>
+      <MatteBackground />
 
-      {/* ── Wordmark (dimmed during processing per Figma 1441:3) ── */}
-      <p style={{
-        position: 'absolute', top: 30, left: 28, margin: 0,
-        fontWeight: 800, fontSize: 18, lineHeight: '22px',
-        color: 'rgba(245,247,250,0.6)', letterSpacing: '-0.3px',
-        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-        textShadow: '0 0 1px rgba(245,247,250,0.08)',
-      }}>No Guesswork</p>
-      <p style={{
-        position: 'absolute', top: 54, left: 29, margin: 0,
-        fontWeight: 800, fontSize: 9.5, lineHeight: '12px',
-        color: 'rgba(130,155,178,0.85)', letterSpacing: '3.2px',
-        WebkitFontSmoothing: 'antialiased',
-        MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'geometricPrecision',
-        textShadow: `0 0 3px ${steel(0.12)}`,
-      }}>LIGHTING</p>
+      {/* Cancel — mobile only */}
+      {!isDesktop && onCancel && !analysisComplete && (
+        <button
+          aria-label="Cancel analysis"
+          onClick={onCancel}
+          style={{
+            position: 'absolute', top: 52, left: 8,
+            width: 44, height: 44, zIndex: 30,
+            background: 'none', border: 'none', cursor: 'pointer',
+            overflow: 'hidden', WebkitTapHighlightColor: 'transparent',
+          }}
+        >
+          <span style={{ position: 'absolute', left: 14, top: 8, fontSize: 22, fontWeight: 600, color: '#a7adb7', lineHeight: 1, ...FS }}>‹</span>
+        </button>
+      )}
 
-      {/* ── Illumination Well (analyzing state — green LED) ── */}
-      <div style={{ position: 'absolute', top: 30, right: 24, width: 40, height: 40 }}>
-        <img src={illuminationWellAlive} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-        <div style={{ position: 'absolute', top: 4, left: 4, width: 32, height: 32, overflow: 'visible' }}>
-          <img src={illuminationLampOn} alt="" style={{
-            position: 'absolute',
-            top: '-15.63%', left: '-25%',
-            width: '150%', height: '150%',
-          }} />
-        </div>
-        {/* Green LED dot — replaces default LED during analysis */}
-        <div style={{
-          position: 'absolute', top: 15, left: 15, width: 10, height: 10,
-          borderRadius: '50%',
-          backgroundColor: 'rgba(72,186,136,0.95)',
-          boxShadow: '0 0 4px rgba(72,186,136,0.8), 0 0 10px rgba(72,186,136,0.4)',
-        }} />
-      </div>
-
-      {/* ── Viewfinder — analyzing state ── */}
+      {/* ── Viewfinder — fills entire viewport on desktop ── */}
       <div style={{
-        position: 'absolute',
-        top: 140, left: 24, right: 24, height: 360,
-        borderRadius: 8,
-        border: `0.5px solid rgba(0,0,0,0.45)`,
-        overflow: 'hidden',
-        backgroundColor: C.slotBg,
-        // Outer rim bevel — sunken well carved into the matte surface
-        boxShadow: '0 -1px 0 rgba(0,0,0,0.5), -1px 0 0 rgba(0,0,0,0.4), 1px 1px 0 rgba(255,255,255,0.05)',
+        position: isDesktop ? 'relative' : 'absolute',
+        top: isDesktop ? undefined : VF_TOP,
+        left: isDesktop ? undefined : 0,
+        right: isDesktop ? undefined : 0,
+        height: isDesktop ? '100%' : VF_HEIGHT,
+        gridColumn: isDesktop ? '1 / -1' : undefined,
+        gridRow: isDesktop ? '1 / -1' : undefined,
+        borderRadius: 0, overflow: 'hidden',
+        backgroundColor: 'transparent',
       }}>
-        {/* User's photo, dimmed for analysis */}
         {imagePreview && (
           <img key={imagePreview} src={imagePreview} alt="Analyzing" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', objectPosition: '50% 25%', opacity: 0.45, zIndex: 1,
-            animation: 'heroZoomIn 2.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+            objectFit: isDesktop ? 'contain' : 'cover',
+            objectPosition: isDesktop ? '50% 50%' : '50% 25%',
+            opacity: 0.78, zIndex: 1,
+            animation: 'heroZoomIn 12s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
           }} />
         )}
-
-        {/* Progress — subtle bottom edge glow, no visible bar */}
+        <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
+          <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
+        </div>
+        <ViewfinderHUD dimmed />
+        {/* Progress — green glow at bottom edge */}
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: 1,
-          background: 'rgba(255,255,255,0.06)',
-          boxShadow: '0 0 6px rgba(255,255,255,0.03)',
-          transition: 'width 0.35s ease',
+          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: isDesktop ? 3 : 4,
+          background: 'linear-gradient(90deg, rgba(72,186,136,0.0) 0%, rgba(72,186,136,0.40) 50%, rgba(72,186,136,0.75) 100%)',
+          boxShadow: '0 0 12px rgba(72,186,136,0.30), 0 0 4px rgba(72,186,136,0.45)',
+          transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
           zIndex: 4,
         }} />
-
-        {/* Glass overlay: natural lens vignette + reflection */}
+        <ExifStrip exifData={exifData} style={{
+          opacity: (analysisComplete && result?.pattern) ? 0 : 1,
+          transition: 'opacity 0.4s ease',
+        }} />
+        {/* Glass overlay */}
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-          <div style={{ position: 'absolute', top: -3, left: 0, right: '40%', bottom: 0, background: GLASS_REFLECTION }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+        </div>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 0, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6 }} />
+
+        {/* Stage narrative — mobile overlay */}
+        {!isDesktop && !analysisComplete && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            padding: '48px 24px 22px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.55) 40%, rgba(4,5,7,0.88) 100%)',
+            zIndex: 7, pointerEvents: 'none',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          }}>
+            <p style={{
+              margin: 0, fontWeight: 500, fontSize: 14, lineHeight: '20px',
+              color: 'rgba(235,240,245,0.88)', letterSpacing: '0.2px', textAlign: 'center',
+              textShadow: '0 1px 4px rgba(0,0,0,0.6), 0 0 16px rgba(72,186,136,0.15)',
+              ...FS, opacity: stageFade,
+              transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
+              transition: 'opacity 0.35s ease, transform 0.35s ease',
+            }}>{currentStage.label}</p>
+          </div>
+        )}
+        {/* Pattern tease — mobile overlay */}
+        {!isDesktop && analysisComplete && result?.pattern && (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            padding: '36px 20px 18px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.70) 40%, rgba(4,5,7,0.92) 100%)',
+            zIndex: 7, animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+          }}>
+            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.3px', textAlign: 'center', textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)', ...FS }}>
+              {prettify(result.pattern, { title: true })}
+            </p>
+            {result.confidence != null && (
+              <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
+                {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Desktop overlay — glass + bottom-anchored status ── */}
+      {isDesktop && (<>
+        {/* Glass overlay on the photo — same as HomeScreen loaded state */}
+        <div style={{
+          gridColumn: '1 / -1', gridRow: '1 / -1',
+          position: 'relative', zIndex: 11, pointerEvents: 'none',
+        }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+            background: GLASS_REFLECTION, opacity: 0.4,
+            transform: glassReflectionTransform(tilt), willChange: 'transform',
+          }} />
+          <div style={{ position: 'absolute', inset: 0, boxShadow: VIEWFINDER_INNER_SHADOW }} />
         </div>
 
-        {/* Inner shadow (top of stack) */}
+        {/* Status overlay */}
         <div style={{
-          position: 'absolute', inset: 0, borderRadius: 8,
-          pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6,
-        }} />
-      </div>
+          gridColumn: '1 / -1', gridRow: '1 / -1',
+          position: 'relative', zIndex: 12,
+          display: 'flex', flexDirection: 'column',
+          pointerEvents: 'none',
+        }}>
+          {/* Top bar — wordmark only (no cancel button on desktop — the
+              hero image should be clean; cancel is available via browser back) */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '20px 36px',
+            background: 'linear-gradient(180deg, rgba(6,7,10,0.75) 0%, rgba(6,7,10,0.30) 60%, transparent 100%)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+              <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>No Guesswork</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
+            </div>
+          </div>
 
-      <style>{`
-        /* Sexy two-layer breathing pulse:
-           - ledBreathe drives the inset core LED.  Asymmetric timing — quick
-             inhale (0→32%), slow exhale (32→100%).  Color drifts from base
-             green at rest to a cooler 110/235/175 cyan-tinged green at peak,
-             which reads as "lit harder."  Inset well rim stays constant.
-           - haloBreathe drives a separate soft halo layer behind the LED on
-             the analyze button.  Larger radius, lower opacity, phase-shifted
-             so the halo lags the core (the bloom keeps spreading after the
-             core has already started to dim — that's the "sexy" part). */
-        /* The inset rim shadow values below are STRONGER than the static rim
-           because transform: scale shrinks the shadow's perceived sharpness
-           at peak.  Boosting the rim depth keeps the well looking recessed
-           even when the LED has bloomed to 2× its rest size. */
-        /* Ragged breath — engine is working hard.
-           Fast inhale → stutter/catch mid-exhale → small re-bloom → long exhale.
-           The stutter (35%→44%) breaks the perfect sinusoid: LED drops sharply
-           then catches itself, the halo lags and desynchronises, which reads
-           as organic effort rather than idle glow. */
-        @keyframes ledBreathe {
-          0%   { transform: translateX(-50%) scale(1.00); opacity: 0.93;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 1.6px rgba(72,186,136,0.20), 0 0 3.5px rgba(72,186,136,0.07);
-                 animation-timing-function: cubic-bezier(0.38, 0, 0.62, 1); }
-          25%  { transform: translateX(-50%) scale(3.00); opacity: 1.00;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 5px rgba(140,245,190,0.72), 0 0 14px rgba(110,235,175,0.44), 0 0 28px rgba(72,186,136,0.20);
-                 animation-timing-function: cubic-bezier(0.7, 0, 0.3, 1); }
-          35%  { transform: translateX(-50%) scale(1.90); opacity: 0.97;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 3px rgba(110,235,175,0.45), 0 0 7px rgba(72,186,136,0.20);
-                 animation-timing-function: cubic-bezier(0.2, 0, 0.8, 1); }
-          44%  { transform: translateX(-50%) scale(2.50); opacity: 0.99;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 4px rgba(130,240,185,0.58), 0 0 10px rgba(110,235,175,0.30), 0 0 20px rgba(72,186,136,0.14);
-                 animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
-          72%  { transform: translateX(-50%) scale(1.06); opacity: 0.94;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 1.8px rgba(72,186,136,0.22), 0 0 4px rgba(72,186,136,0.08);
-                 animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
-          90%  { transform: translateX(-50%) scale(0.93); opacity: 0.91;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 1.4px rgba(72,186,136,0.16), 0 0 3px rgba(72,186,136,0.05);
-                 animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
-          100% { transform: translateX(-50%) scale(1.00); opacity: 0.93;
-                 box-shadow: inset 0 1.2px 2.2px rgba(0,0,0,0.95), inset 1px 0 1.4px rgba(0,0,0,0.7), inset -0.6px -0.6px 1px rgba(255,255,255,0.14), 0 0 1.6px rgba(72,186,136,0.20), 0 0 3.5px rgba(72,186,136,0.07); }
-        }
-        /* Halo — lags the LED and has a more dramatic stutter drop,
-           so it desynchronises from the LED during the catch.  The halo
-           is still spreading when the LED has already started to recover,
-           which amplifies the "ragged" read. */
-        @keyframes haloBreathe {
-          0%   { opacity: 0.04; transform: translateX(-50%) scale(0.50);
-                 animation-timing-function: cubic-bezier(0.38, 0, 0.62, 1); }
-          30%  { opacity: 0.95; transform: translateX(-50%) scale(2.95);
-                 animation-timing-function: cubic-bezier(0.7, 0, 0.3, 1); }
-          42%  { opacity: 0.28; transform: translateX(-50%) scale(1.40);
-                 animation-timing-function: cubic-bezier(0.2, 0, 0.8, 1); }
-          52%  { opacity: 0.65; transform: translateX(-50%) scale(2.20);
-                 animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
-          76%  { opacity: 0.07; transform: translateX(-50%) scale(0.60);
-                 animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1); }
-          100% { opacity: 0.04; transform: translateX(-50%) scale(0.50); }
-        }
-      `}</style>
+          {/* Spacer — pushes status to bottom */}
+          <div style={{ flex: 1 }} />
 
-      {/* ── Analyze Track (static) ── */}
-      <div style={{ position: 'absolute', left: '50%', top: 540, width: 96, height: 96, transform: 'translateX(-50%)' }}>
-        <img src={analyzeTrackAlive} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-          background: 'linear-gradient(141.71deg, rgba(255,255,255,0.07) 0%, transparent 35%, transparent 65%, rgba(0,0,0,0.12) 100%)',
-        }} />
-      </div>
+          {/* Bottom dock — gradient scrim + EXIF + status */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            padding: '0 0 44px', pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.45) 25%, rgba(4,5,7,0.78) 60%, rgba(4,5,7,0.90) 100%)',
+          }}>
+            {/* EXIF strip */}
+            <ExifStrip exifData={exifData} style={{
+              opacity: (analysisComplete && result?.pattern) ? 0 : 0.80,
+              transition: 'opacity 0.4s ease', marginBottom: 20,
+            }} />
 
-      {/* ── Analyze Button (static) ── */}
-      <div style={{
-        position: 'absolute', left: '50%', top: 548, width: 80, height: 80, transform: 'translateX(-50%)',
-        overflow: 'visible',
-      }}>
-        <div style={{ position: 'absolute', top: '-10%', left: '-15%', right: '-15%', bottom: '-20%' }}>
-          <img src={analyzeButtonAlive} alt="" style={{ width: '100%', height: '100%' }} />
+            {/* Analyzing state */}
+            {!analysisComplete && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                {/* Pulsing ring in well */}
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                  boxShadow: [
+                    'inset 5px 5px 12px rgba(0,0,0,0.85)',
+                    'inset 2px 2px 5px rgba(0,0,0,0.60)',
+                    'inset 0 0 6px rgba(72,186,136,0.08)',
+                    '-1px -1px 1px rgba(255,255,255,0.04)',
+                    '2px 3px 8px rgba(0,0,0,0.45)',
+                    '0 0 0 1.5px rgba(72,186,136,0.30)',
+                    '0 0 14px rgba(72,186,136,0.08)',
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  animation: 'ringAnalyzeGlow 2.0s linear infinite',
+                }}>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.90) 0%, rgba(72,186,136,0.80) 60%, rgba(40,120,85,0.70) 100%)',
+                    boxShadow: '0 0 10px rgba(72,186,136,0.55), 0 0 3px rgba(140,230,190,0.30)',
+                  }} />
+                </div>
+
+                <p style={{
+                  margin: 0, fontWeight: 700, fontSize: 12, letterSpacing: '3.5px',
+                  color: 'rgba(140,225,180,0.75)', textTransform: 'uppercase',
+                  textShadow: '0 0 10px rgba(72,186,136,0.20), 0 2px 8px rgba(0,0,0,0.5)',
+                  ...FS,
+                }}>Analyzing</p>
+
+                <p style={{
+                  margin: 0, fontWeight: 500, fontSize: 14, lineHeight: '20px',
+                  color: 'rgba(235,240,245,0.70)', textAlign: 'center',
+                  textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                  ...FS, opacity: stageFade,
+                  transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
+                  transition: 'opacity 0.35s ease, transform 0.35s ease',
+                  minHeight: 20,
+                }}>{currentStage.label}</p>
+
+                {/* Progress bar — machined inset track */}
+                <div style={{
+                  width: 280, height: 4, borderRadius: 2,
+                  background: '#0a0b0e',
+                  boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.65), inset -1px -1px 2px rgba(255,255,255,0.015), 1px 1px 3px rgba(0,0,0,0.35)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${progress}%`, height: '100%', borderRadius: 2,
+                    background: 'linear-gradient(90deg, rgba(72,186,136,0.30), rgba(72,186,136,0.65))',
+                    boxShadow: '0 0 8px rgba(72,186,136,0.25)',
+                    transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Pattern tease */}
+            {analysisComplete && result?.pattern && (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+              }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                  boxShadow: [
+                    'inset 4px 4px 10px rgba(0,0,0,0.70)',
+                    '0 0 0 1.5px rgba(140,225,180,0.40)',
+                    '0 0 18px rgba(72,186,136,0.15)',
+                    '-1px -1px 1px rgba(255,255,255,0.04)',
+                    '2px 3px 8px rgba(0,0,0,0.40)',
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ fontSize: 24, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
+                </div>
+
+                <p style={{
+                  margin: 0, fontSize: 30, fontWeight: 700,
+                  color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.4px', textAlign: 'center',
+                  textShadow: '0 0 20px rgba(245,190,72,0.25), 0 3px 12px rgba(0,0,0,0.6)',
+                  ...FS,
+                }}>
+                  {prettify(result.pattern, { title: true })}
+                </p>
+                {result.confidence != null && (
+                  <p style={{
+                    margin: 0, fontSize: 12, fontWeight: 600,
+                    color: result.confidence >= 70 ? 'rgba(140,225,180,0.78)' : 'rgba(250,210,130,0.78)',
+                    letterSpacing: '1.2px', textTransform: 'uppercase',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    ...FS,
+                  }}>
+                    {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{
-          position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
-          background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.10) 100%)',
-        }} />
-      </div>
+      </>)}
 
-      {/* ── Big halo bloom — phase-lagged glow that grows large as the core
-             LED breathes.  Sits behind the LED and over the analyze button
-             surface; mix-blend-mode: screen lights the matte metal instead
-             of pasting flat colour on top.  Carries the "large pulse" feel
-             while the LED stays a tight recessed point. ── */}
+      {/* ── Mobile-only: button trough, well, dome, ring, label ── */}
+      {!isDesktop && <>
+      {/* Button Trough */}
       <div style={{
-        position: 'absolute', left: '50%', top: 564, width: 48, height: 48,
-        transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 2,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle at 50% 50%, rgba(140,245,190,0.78) 0%, rgba(110,235,175,0.55) 18%, rgba(72,186,136,0.32) 42%, rgba(72,186,136,0.12) 68%, transparent 88%)',
-        filter: 'blur(3px)',
-        mixBlendMode: 'screen',
-        animation: 'haloBreathe 4s linear infinite',
-      }} />
-
-      {/* ── Green LED — INSET well that breathes; rim stays recessed ── */}
-      <div style={{
-        position: 'absolute', left: '50%', top: 584, width: 8, height: 8,
-        transform: 'translateX(-50%)', pointerEvents: 'none', zIndex: 3,
-        borderRadius: '50%',
-        // Same radial-gradient well as HomeScreen — bright center → dark rim.
-        background: 'radial-gradient(circle at 50% 55%, rgba(140,235,180,1) 0%, rgba(60,180,130,0.9) 55%, rgba(28,105,75,0.6) 100%)',
-        animation: 'ledBreathe 4s linear infinite',
-      }} />
-
-      {/* ── ANALYZING label ── */}
-      <p style={{
-        position: 'absolute', top: 638, left: '50%', transform: 'translateX(-50%)', margin: 0,
-        fontWeight: 800, fontSize: 13.5, lineHeight: '16px',
-        color: steel(0.90), letterSpacing: '4.5px',
-        whiteSpace: 'nowrap', pointerEvents: 'none',
-        WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-        textRendering: 'geometricPrecision',
-        textShadow: `${TEXT_SHADOW_ENGRAVED}, 0 0 8px ${steel(0.25)}`,
-      }}>ANALYZING</p>
-
-      {/* ── Home Indicator (green while analyzing) ── */}
-      <div style={{
-        position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-        width: 134, height: 5, borderRadius: 3,
-        backgroundColor: 'rgba(72,186,136,0.95)',
+        position: 'absolute', left: 0, right: 0,
+        top: VF_BOTTOM + 10,
+        height: Math.max(stableVH - (VF_BOTTOM + 10), BTN_D + 80),
+        pointerEvents: 'none',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.22) 100%)',
         boxShadow: [
-          'inset 0px 1px 1px 0px rgba(255,255,255,0.15)',
-          'inset 0px -0.5px 0.5px 0px rgba(0,0,0,0.15)',
-          '0px 0.5px 0px 0px rgba(255,255,255,0.03)',
-          '0px -0.5px 1px 0px rgba(0,0,0,0.25)',
-          '0 0 6px rgba(72,186,136,0.5)',
+          'inset 0 2px 4px rgba(0,0,0,0.78)',
+          'inset 0 1px 1px rgba(0,0,0,0.55)',
+          'inset 0 3px 0 rgba(255,255,255,0.025)',
+          'inset 6px 0 12px rgba(0,0,0,0.30)',
+          'inset -6px 0 12px rgba(0,0,0,0.20)',
+          'inset 0 -2px 4px rgba(132,158,184,0.04)',
         ].join(', '),
       }} />
+
+      {/* Track ring */}
+      <div style={{
+        position: 'absolute', left: '50%', top: TRK_TOP, width: TRK_D, height: TRK_D,
+        transform: 'translateX(-50%)', pointerEvents: 'none',
+      }}>
+        <img src={analyzeTrackAlive} alt="" style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          animation: 'ringAnalyzePulse 2.0s linear infinite',
+        }} />
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '50%', pointerEvents: 'none',
+          background: 'linear-gradient(141.71deg, rgba(255,255,255,0.10) 0%, transparent 35%, transparent 65%, rgba(0,0,0,0.15) 100%)',
+        }} />
+      </div>
+
+      {/* Well */}
+      <div style={{
+        position: 'absolute', left: '50%', top: WELL_TOP, width: WELL_D, height: WELL_D,
+        transform: 'translateX(-50%)', pointerEvents: 'none',
+        borderRadius: '50%',
+        background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, #09090d00 68%, transparent 100%), linear-gradient(141.71deg, #04050610 0%, #0a0b0f08 100%)',
+        boxShadow: [
+          'inset 12px 12px 24px rgba(0,0,0,0.97)',
+          'inset 7px 7px 14px rgba(0,0,0,0.90)',
+          'inset 3px 3px 6px rgba(0,0,0,0.78)',
+          'inset 1px 1px 2px rgba(0,0,0,0.60)',
+          'inset 0 0 12px rgba(72,186,136,0.10)',
+          'inset 0 0 5px rgba(72,186,136,0.06)',
+          'inset -2px -2px 5px rgba(255,255,255,0.018)',
+          '-1px -1px 1px rgba(255,255,255,0.055)',
+          '5px 7px 18px rgba(0,0,0,0.72)',
+          '2px 3px 6px rgba(0,0,0,0.50)',
+        ].join(', '),
+      }} />
+
+      {/* Button dome */}
+      <div style={{
+        position: 'absolute', left: '50%', top: BTN_TOP, width: BTN_D, height: BTN_D,
+        transform: 'translateX(-50%)',
+        pointerEvents: 'none',
+        borderRadius: '50%', willChange: 'transform',
+        background: 'linear-gradient(141.71deg, #2e3444 0%, #171c28 50%, #07080c 100%)',
+        boxShadow: [
+          '14px 14px 36px rgba(0,0,0,0.98)',
+          '7px 7px 18px rgba(0,0,0,0.86)',
+          '3px 3px 7px rgba(0,0,0,0.65)',
+          '-2px -2px 4px rgba(255,255,255,0.11)',
+          'inset 0 2px 0 rgba(255,255,255,0.22)',
+          'inset 2px 0 0 rgba(255,255,255,0.13)',
+          'inset -1px -1px 0 rgba(0,0,0,0.55)',
+        ].join(', '),
+        animation: analysisComplete ? 'completePulse 0.6s ease-out' : undefined,
+      }} />
+
+      {/* LED ring */}
+      <div style={{
+        position: 'absolute', left: '50%', top: BTN_TOP, width: BTN_D, height: BTN_D,
+        transform: 'translateX(-50%)', borderRadius: '50%', pointerEvents: 'none',
+        willChange: 'transform',
+        boxShadow: [
+          `0 0 0 1px ${greenRing}`,
+          `-1px -1px 0 0 rgba(72,186,136,0.70)`,
+          `1px 1px 0 0 rgba(0,0,0,0.28)`,
+          `0 0 12px ${greenGlow}`,
+          `0 0 24px rgba(72,186,136,0.12)`,
+        ].join(', '),
+        animation: 'ringAnalyzeGlow 2.0s linear infinite',
+      }} />
+
+      {/* Dome label */}
+      <p style={{
+        position: 'absolute',
+        top: LBL_TOP, left: '50%', width: BTN_D,
+        transform: 'translateX(-50%)',
+        margin: 0, fontWeight: 600, fontSize: 12, lineHeight: '16px',
+        color: analysisComplete ? 'rgba(140,225,180,0.92)' : 'rgba(140,225,180,0.85)',
+        letterSpacing: '3px',
+        textTransform: 'uppercase',
+        textShadow: analysisComplete
+          ? '0 0 10px rgba(140,225,180,0.35)'
+          : '0 0 8px rgba(72,186,136,0.25)',
+        textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
+        ...FS,
+        transition: 'color 0.3s ease, text-shadow 0.3s ease',
+      }}>{analysisComplete ? 'Done' : 'Analyzing'}</p>
+      </>}
+
+      <style>{`
+        @keyframes heroZoomIn {
+          0%   { transform: scale(1.00); }
+          100% { transform: scale(1.06); }
+        }
+        @keyframes ringAnalyzePulse {
+          0%   { filter: brightness(0.9); }
+          50%  { filter: brightness(1.25); }
+          100% { filter: brightness(0.9); }
+        }
+        @keyframes ringAnalyzeGlow {
+          0%   { opacity: 0.7; }
+          50%  { opacity: 1.0; }
+          100% { opacity: 0.7; }
+        }
+        @keyframes patternTeaseIn {
+          0%   { opacity: 0; transform: translateY(12px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes completePulse {
+          0%   { filter: brightness(1.0); }
+          40%  { filter: brightness(1.35); }
+          100% { filter: brightness(1.0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+      `}</style>
     </div>
     </div>
   );

@@ -791,7 +791,7 @@ def extract_light_structure(
     structure_data: Dict[str, Any],
 ) -> Optional[LightStructureDetection]:
     """Extract light structure detection from the light_structure_pass output."""
-    if not structure_data.get("ok", False):
+    if structure_data.get("ok") is False:
         return None
 
     return LightStructureDetection(
@@ -1674,6 +1674,7 @@ def extract_tonal_processing_estimation(
         is_bw=is_bw,
         is_high_contrast_grade=is_high_contrast,
         is_desaturated=is_desaturated,
+        highlights_clipped=bool(highlight_clip),
         estimated_processing=processing,
         mean_saturation=round(mean_sat, 1),
         confidence=confidence,
@@ -2834,6 +2835,22 @@ def enrich_cue_report_from_pipeline(
                         f"broad_side={broad_side}, short_side={short_side}."
                     ],
                 )
+        except Exception:
+            pass  # best-effort enrichment
+
+    # ── Occlusion shadow (gobo / projection pattern detection) ──
+    # occlusion_shadow_pass() detects high-frequency shadow patterns on the
+    # subject (blinds, geometric gobos, foliage).  When the pass detects a
+    # regular or geometric pattern (blinds | geometric), store the occlusion
+    # type in projected_pattern_shape so _apply_specialty_pattern can promote
+    # the base geometric pattern to "projected".
+    occlusion_data = pipeline_results.get("occlusion")
+    if isinstance(occlusion_data, dict) and occlusion_data.get("ok"):
+        try:
+            occ_type = occlusion_data.get("occlusion_type", "none")
+            occ_conf = occlusion_data.get("occlusion_confidence", 0.0)
+            if occ_type in ("blinds", "geometric") and occ_conf > 0.5:
+                report.projected_pattern_shape = occ_type
         except Exception:
             pass  # best-effort enrichment
 

@@ -2497,6 +2497,21 @@ def build_reference_description(
         "subject": describe_subject(vision_data, image_analysis=image_analysis),
     }
 
+    # ── Face orientation / pose resolver data ────────────────────────
+    # Include when cue_report provides face_orientation so the UI can
+    # display face turn direction and downstream callers can inspect
+    # why broad/short was assigned by the pose resolver.
+    if cue_report is not None:
+        _fo = getattr(cue_report, "face_orientation", None)
+        if _fo is not None and getattr(_fo, "confidence", 0.0) > 0.0:
+            result["poseOrientation"] = {
+                "yaw":        getattr(_fo, "yaw", None),
+                "yawLabel":   getattr(_fo, "yaw_label", "frontal"),
+                "broadSide":  getattr(_fo, "broad_side", "unknown"),
+                "shortSide":  getattr(_fo, "short_side", "unknown"),
+                "confidence": getattr(_fo, "confidence", 0.0),
+            }
+
     if cue_report is not None:
         try:
             from engine.reference_read import build_reference_photo_analysis

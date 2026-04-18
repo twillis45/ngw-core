@@ -42,13 +42,13 @@ export const REMBRANDT_PORTRAIT = {
   lightGeometry: {
     key: {
       angle_deg: 45,
-      height: 'slightly above forehead, angled down 30-40 degrees',
+      height: 'slightly above forehead, angled down 30-40°',
       height_m: 1.9,
       distance_m: 1.2,
       distance_ft: '3.5-5',
       modifier: ['softbox_rect', 'softbox_octa', 'umbrella_reflective'],
       preferredModifier: 'softbox_rect',
-      notes: 'Key at 45 degrees camera-left or camera-right. The triangle of light on the shadow cheek is the diagnostic. If using a softbox, feather the near edge past the subject for even falloff.',
+      notes: 'Key at 45° camera-left or camera-right. The triangle of light on the shadow cheek is the diagnostic. If using a softbox, feather the near edge past the subject for even falloff.',
     },
     fill: {
       position: 'opposite side of key, at camera axis or slightly behind',
@@ -85,7 +85,7 @@ export const REMBRANDT_PORTRAIT = {
   subjectPosition: {
     distanceFromBackground_ft: '5-8',
     distanceFromBackground_m: 2.0,
-    pose: 'turned 30-45 degrees toward the key light, chin slightly down',
+    pose: 'turned 30-45° toward the key light, chin slightly down',
     notes: 'The subject turns INTO the key light. The shadow-side cheek faces camera. This creates the triangle.',
   },
 
@@ -107,8 +107,8 @@ export const REMBRANDT_PORTRAIT = {
   ],
 
   failureModes: [
-    { problem: 'No triangle on shadow cheek', cause: 'Key too far forward (toward camera axis)', fix: 'Move key further to the side until triangle appears — typically 40-50 degrees' },
-    { problem: 'Triangle too large / face half-lit', cause: 'Key too far to the side (>60 degrees)', fix: 'Move key forward 10-15 degrees toward camera axis' },
+    { problem: 'No triangle on shadow cheek', cause: 'Key too far forward (toward camera axis)', fix: 'Move key further to the side until triangle appears — typically 40-50°' },
+    { problem: 'Triangle too large / face half-lit', cause: 'Key too far to the side (>60°)', fix: 'Move key forward 10-15° toward camera axis' },
     { problem: 'Nose shadow disconnected from cheek shadow', cause: 'Key too high or subject chin too far up', fix: 'Lower key or ask subject to drop chin slightly' },
     { problem: 'Raccoon eyes (dark eye sockets)', cause: 'Key too high', fix: 'Lower key to forehead level, not overhead' },
     { problem: 'Flat face, no dimension', cause: 'Fill too strong', fix: 'Pull fill back 2 ft or power down 1 stop' },
@@ -158,9 +158,9 @@ export const REMBRANDT_PORTRAIT = {
       'Nose shadow connected to cheek shadow',
     ],
     catchlightExpected: { count: 1, position: '10-11 o\'clock or 1-2 o\'clock', shape: 'rectangular or octagonal' },
-    shadowMap: { noseShadow: 'connected to cheek shadow, angled 45 degrees', cheekShadow: 'triangle of light visible', jawShadow: 'defined on key side' },
+    shadowMap: { noseShadow: 'connected to cheek shadow, angled 45°', cheekShadow: 'triangle of light visible', jawShadow: 'defined on key side' },
     lightCount: { min: 1, typical: 2, max: 3 },
-    keyPosition: '45 degrees camera-left or camera-right',
+    keyPosition: '45° camera-left or camera-right',
     backgroundExpected: 'dark, even, no visible spill pattern',
   },
 };
@@ -168,7 +168,7 @@ export const REMBRANDT_PORTRAIT = {
 
 // ─── 2. LOOP LIGHTING ───────────────────────────────────────────────
 // The safest, most universally flattering portrait pattern. Key light
-// at 25-35 degrees creates a small loop-shaped shadow beside the nose
+// at 25-35° creates a small loop-shaped shadow beside the nose
 // without crossing to the far cheek. Preferred by corporate headshot
 // studios (Peter Hurley workflow), real estate agent headshots, and
 // any high-volume session where consistency matters.
@@ -192,13 +192,13 @@ export const LOOP_LIGHTING = {
   lightGeometry: {
     key: {
       angle_deg: 30,
-      height: 'slightly above eye level, angled down 20-25 degrees',
+      height: 'slightly above eye level, angled down 20-25°',
       height_m: 1.85,
       distance_m: 1.0,
       distance_ft: '3-4',
       modifier: ['softbox_rect', 'softbox_octa', 'umbrella_shoot_through'],
       preferredModifier: 'softbox_octa',
-      notes: 'Key at 25-35 degrees. The nose shadow should be a small loop that does NOT touch the cheek shadow. This is the key diagnostic — if the shadow touches, you have Rembrandt, not Loop.',
+      notes: 'Key at 25-35°. The nose shadow should be a small loop that does NOT touch the cheek shadow. This is the key diagnostic — if the shadow touches, you have Rembrandt, not Loop.',
     },
     fill: {
       position: 'at or near camera axis, slightly below key height',
@@ -258,7 +258,7 @@ export const LOOP_LIGHTING = {
 
   expectedShadowPatterns: [
     'Small loop-shaped nose shadow on far cheek — does NOT connect to cheek shadow',
-    'Slight shadow under nose angled 20-30 degrees to one side',
+    'Slight shadow under nose angled 20-30° to one side',
     'Both eyes fully illuminated with clean catchlights',
     'Gentle shadow under chin on far side',
     'Even skin illumination with subtle modeling',
@@ -266,10 +266,10 @@ export const LOOP_LIGHTING = {
   ],
 
   failureModes: [
-    { problem: 'Nose shadow touching cheek shadow', cause: 'Key too far to the side (>40 degrees)', fix: 'Move key 10 degrees toward camera axis — you have Rembrandt, not Loop' },
-    { problem: 'No nose shadow at all', cause: 'Key too centered (< 15 degrees)', fix: 'Move key further to the side — you have Butterfly, not Loop' },
-    { problem: 'Face looks flat', cause: 'Fill too strong, key too centered, or both', fix: 'Pull fill back 1-2 ft or move key to 35 degrees' },
-    { problem: 'Glasses glare', cause: 'Key reflection hitting lens surface', fix: 'Raise key 6 inches, or angle subject chin down 5 degrees, or move key 5 degrees wider' },
+    { problem: 'Nose shadow touching cheek shadow', cause: 'Key too far to the side (>40°)', fix: 'Move key 10° toward camera axis — you have Rembrandt, not Loop' },
+    { problem: 'No nose shadow at all', cause: 'Key too centered (< 15°)', fix: 'Move key further to the side — you have Butterfly, not Loop' },
+    { problem: 'Face looks flat', cause: 'Fill too strong, key too centered, or both', fix: 'Pull fill back 1-2 ft or move key to 35°' },
+    { problem: 'Glasses glare', cause: 'Key reflection hitting lens surface', fix: 'Raise key 6 inches, or angle subject chin down 5°, or move key 5° wider' },
     { problem: 'Hot spot on forehead', cause: 'Key too close or not feathered', fix: 'Feather key so the near edge of the modifier passes just above the forehead' },
     { problem: 'Uneven illumination left to right', cause: 'Key too far to one side for this modifier size', fix: 'Use a larger modifier or move key closer to center' },
   ],
@@ -314,9 +314,9 @@ export const LOOP_LIGHTING = {
       'Even skin illumination across the face',
     ],
     catchlightExpected: { count: 1, position: '10-11 o\'clock or 1-2 o\'clock', shape: 'octagonal or rectangular' },
-    shadowMap: { noseShadow: 'small loop, 20-30 degrees, not touching cheek', cheekShadow: 'minimal', jawShadow: 'gentle on far side' },
+    shadowMap: { noseShadow: 'small loop, 20-30°, not touching cheek', cheekShadow: 'minimal', jawShadow: 'gentle on far side' },
     lightCount: { min: 1, typical: 2, max: 4 },
-    keyPosition: '25-35 degrees camera-left or camera-right',
+    keyPosition: '25-35° camera-left or camera-right',
     backgroundExpected: 'even or with gentle gradient',
   },
 };
@@ -352,7 +352,7 @@ export const BUTTERFLY_BEAUTY = {
       distance_ft: '3-4',
       modifier: ['beauty_dish', 'softbox_octa'],
       preferredModifier: 'beauty_dish',
-      notes: 'Key must be on the camera axis (0 degrees left/right). Height is critical: too high makes raccoon eyes, too low kills the butterfly shadow. The butterfly shadow should be small and symmetrical directly under the nose.',
+      notes: 'Key must be on the camera axis (0° left/right). Height is critical: too high makes raccoon eyes, too low kills the butterfly shadow. The butterfly shadow should be small and symmetrical directly under the nose.',
     },
     fill: {
       position: 'directly below key, at chin level or just below',
@@ -489,13 +489,13 @@ export const CARAVAGGIO_CHIAROSCURO = {
   lightGeometry: {
     key: {
       angle_deg: 60,
-      height: 'slightly above subject forehead, angled steeply down 40-50 degrees',
+      height: 'slightly above subject forehead, angled steeply down 40-50°',
       height_m: 2.0,
       distance_m: 1.4,
       distance_ft: '4-6',
       modifier: ['grid_spot', 'bare_bulb', 'grid'],
       preferredModifier: 'grid_spot',
-      notes: 'Hard, directional source. Caravaggio used a single overhead skylight; we replicate with a gridded strobe or bare bulb at 60 degrees. The grid prevents spill onto the background. This is NOT soft light — the shadow edges should be sharp and defined.',
+      notes: 'Hard, directional source. Caravaggio used a single overhead skylight; we replicate with a gridded strobe or bare bulb at 60°. The grid prevents spill onto the background. This is NOT soft light — the shadow edges should be sharp and defined.',
     },
     fill: null,
     rim: null,
@@ -514,7 +514,7 @@ export const CARAVAGGIO_CHIAROSCURO = {
   subjectPosition: {
     distanceFromBackground_ft: '8-12',
     distanceFromBackground_m: 3.0,
-    pose: 'turned 30-45 degrees toward key, or looking away from key for mystery',
+    pose: 'turned 30-45° toward key, or looking away from key for mystery',
     notes: 'Maximum distance from background to let it fall to pure black. No background light. The subject must be isolated in a pool of light surrounded by darkness.',
   },
 
@@ -584,7 +584,7 @@ export const CARAVAGGIO_CHIAROSCURO = {
     catchlightExpected: { count: 1, position: '10-11 o\'clock or 1-2 o\'clock', shape: 'small, defined point or grid pattern' },
     shadowMap: { noseShadow: 'strong, sharp-edged, connected to deep cheek shadow', cheekShadow: 'deep shadow covering half the face', jawShadow: 'extreme contrast' },
     lightCount: { min: 1, typical: 1, max: 2 },
-    keyPosition: '55-70 degrees, high and angled down steeply',
+    keyPosition: '55-70°, high and angled down steeply',
     backgroundExpected: 'black or near-black, no visible spill',
   },
 };
@@ -593,7 +593,7 @@ export const CARAVAGGIO_CHIAROSCURO = {
 // ─── 5. VERMEER WINDOW LIGHT ────────────────────────────────────────
 // Johannes Vermeer painted almost exclusively with north-facing window
 // light in his Delft studio. The large, soft, directional source at
-// 60-90 degrees creates luminous skin with gentle, rolling shadows.
+// 60-90° creates luminous skin with gentle, rolling shadows.
 // This is the foundation of "natural light" portraiture and the look
 // that lifestyle/branding photographers replicate with large softboxes.
 
@@ -620,7 +620,7 @@ export const VERMEER_WINDOW = {
       distance_ft: '2-3',
       modifier: ['softbox_rect', 'diffusion_panel'],
       preferredModifier: 'softbox_rect',
-      notes: 'Very large source (4x6 ft softbox or larger) placed at 60-90 degrees, as close to the subject as framing allows. The size-to-distance ratio is what creates the Vermeer quality — the modifier should appear as large as or larger than the subject. A diffusion panel with a strobe behind it is the closest to actual window light.',
+      notes: 'Very large source (4x6 ft softbox or larger) placed at 60-90°, as close to the subject as framing allows. The size-to-distance ratio is what creates the Vermeer quality — the modifier should appear as large as or larger than the subject. A diffusion panel with a strobe behind it is the closest to actual window light.',
     },
     fill: {
       position: 'white reflector or wall on opposite side',
@@ -657,7 +657,7 @@ export const VERMEER_WINDOW = {
     minRoomWidth_ft: 10,
     minDepth_ft: 12,
     backgroundNeeds: 'any — room walls, simple backdrop, environmental setting',
-    notes: 'For actual window light: north-facing window is ideal (no direct sun). For replication: place a 4x6 ft softbox or diffusion panel at 60-90 degrees. The room itself becomes part of the image.',
+    notes: 'For actual window light: north-facing window is ideal (no direct sun). For replication: place a 4x6 ft softbox or diffusion panel at 60-90°. The room itself becomes part of the image.',
   },
 
   expectedShadowPatterns: [
@@ -674,7 +674,7 @@ export const VERMEER_WINDOW = {
     { problem: 'Light looks artificial, not like window light', cause: 'Source too hard or too direct', fix: 'Add a layer of diffusion; bounce into a white wall instead of direct softbox' },
     { problem: 'Color mismatch (warm ambient, cool strobe)', cause: 'Mixed color temperatures', fix: 'Gel strobe with 1/4 CTO to match warm interior; or set WB to match the strobe and let ambient go warm' },
     { problem: 'Background too dark', cause: 'Subject too far from background', fix: 'Move subject closer to background; allow light to wrap into the scene' },
-    { problem: 'Flat, no dimension', cause: 'Source too large relative to angle', fix: 'Move source further to the side (closer to 90 degrees) for more wrap and shadow' },
+    { problem: 'Flat, no dimension', cause: 'Source too large relative to angle', fix: 'Move source further to the side (closer to 90°) for more wrap and shadow' },
   ],
 
   gearSubstitutions: [
@@ -716,7 +716,7 @@ export const VERMEER_WINDOW = {
     catchlightExpected: { count: 1, position: '9-10 o\'clock or 2-3 o\'clock (window angle)', shape: 'large rectangular' },
     shadowMap: { noseShadow: 'very soft, gradual transition', cheekShadow: 'gentle rolling falloff', jawShadow: 'soft, minimal' },
     lightCount: { min: 1, typical: 1, max: 2 },
-    keyPosition: '60-90 degrees, very close, large source',
+    keyPosition: '60-90°, very close, large source',
     backgroundExpected: 'environmental, receiving light from same source',
   },
 };
@@ -752,7 +752,7 @@ export const AVEDON_HIGH_KEY = {
       distance_ft: '3-4',
       modifier: ['softbox_rect', 'softbox_octa', 'beauty_dish'],
       preferredModifier: 'softbox_rect',
-      notes: 'Key nearly on-axis (10-20 degrees) for even illumination. The goal is flattering but not flat — just enough angle for modeling. Large softbox or octa at 3-4 ft.',
+      notes: 'Key nearly on-axis (10-20°) for even illumination. The goal is flattering but not flat — just enough angle for modeling. Large softbox or octa at 3-4 ft.',
     },
     fill: {
       position: 'opposite side at camera axis',
@@ -762,7 +762,7 @@ export const AVEDON_HIGH_KEY = {
       modifier: ['softbox_rect', 'reflector'],
       preferredModifier: 'softbox_rect',
       ratio: '-0.5 to -1 stop from key',
-      notes: 'Strong fill (3:2 ratio or less). The goal is low contrast on the face. For corporate volume work, some photographers use two equal lights at 45 degrees each.',
+      notes: 'Strong fill (3:2 ratio or less). The goal is low contrast on the face. For corporate volume work, some photographers use two equal lights at 45° each.',
     },
     rim: {
       position: 'behind subject from above or both sides',
@@ -782,7 +782,7 @@ export const AVEDON_HIGH_KEY = {
       modifier: ['bare_bulb', 'umbrella_reflective'],
       preferredModifier: 'bare_bulb',
       ratio: '+1 to +2 stops over key reading',
-      notes: 'Background lights must blow the white seamless to pure white (250-255 RGB) without spilling onto the subject. Two lights at 45 degrees to the background, evenly metered. Subject must be 6+ ft from background to prevent backlight wrapping onto the subject.',
+      notes: 'Background lights must blow the white seamless to pure white (250-255 RGB) without spilling onto the subject. Two lights at 45° to the background, evenly metered. Subject must be 6+ ft from background to prevent backlight wrapping onto the subject.',
     },
   },
 
@@ -867,7 +867,7 @@ export const AVEDON_HIGH_KEY = {
     catchlightExpected: { count: 2, position: '10 and 2 o\'clock', shape: 'rectangular or octagonal' },
     shadowMap: { noseShadow: 'minimal, very short', cheekShadow: 'nearly absent', jawShadow: 'gentle, filled' },
     lightCount: { min: 3, typical: 4, max: 5 },
-    keyPosition: '10-20 degrees, near camera axis',
+    keyPosition: '10-20°, near camera axis',
     backgroundExpected: 'pure white, 250-255 RGB, no gradient',
   },
 };
@@ -935,7 +935,7 @@ export const MEISEL_FASHION_FLASH = {
     catchlightExpected: { count: 1, position: 'centered', shape: 'round (from flash head)' },
     shadowMap: { noseShadow: 'directly behind, hard', cheekShadow: 'minimal (flat light)', jawShadow: 'hard shadow cast on background' },
     lightCount: { min: 1, typical: 1, max: 3 },
-    keyPosition: 'at camera position (0 degrees)',
+    keyPosition: 'at camera position (0°)',
     backgroundExpected: 'hard shadow silhouette or black (booth technique)',
   },
 };
@@ -1090,7 +1090,7 @@ export const WILLIAMS_BEAUTY = {
     catchlightExpected: { count: 1, position: '12 o\'clock', shape: 'round (beauty dish) or octagonal' },
     shadowMap: { noseShadow: 'butterfly shape below nose', cheekShadow: 'soft, sculpted', jawShadow: 'filled by reflector below' },
     lightCount: { min: 1, typical: 2, max: 3 },
-    keyPosition: 'centered above, 0-10 degrees off-axis, high',
+    keyPosition: 'centered above, 0-10° off-axis, high',
     backgroundExpected: 'clean white, grey, or solid color',
   },
 };
@@ -1126,7 +1126,7 @@ export const KADEL_EDITORIAL = {
       distance_ft: '4-6',
       modifier: ['softbox_rect', 'grid_spot'],
       preferredModifier: 'softbox_rect',
-      notes: 'Kadel blends natural light with controlled studio sources. On location, the environment provides the key and strobes fill or accent. In studio, a large softbox at 45 degrees creates cinematic dimension while maintaining enough detail for fashion work.',
+      notes: 'Kadel blends natural light with controlled studio sources. On location, the environment provides the key and strobes fill or accent. In studio, a large softbox at 45° creates cinematic dimension while maintaining enough detail for fashion work.',
     },
     fill: {
       position: 'negative fill or minimal active fill',
@@ -1167,7 +1167,7 @@ export const KADEL_EDITORIAL = {
     catchlightExpected: { count: 1, position: '10 o\'clock (camera left) or 2 o\'clock', shape: 'rectangular or environmental' },
     shadowMap: { noseShadow: 'loop to rembrandt', cheekShadow: 'dramatic with detail', jawShadow: 'sculpted, defining' },
     lightCount: { min: 1, typical: 2, max: 4 },
-    keyPosition: '45 degrees off-axis, elevated, dramatic',
+    keyPosition: '45° off-axis, elevated, dramatic',
     backgroundExpected: 'environmental — architectural, urban, or studio with narrative backdrop',
   },
 };

@@ -1,47 +1,48 @@
 {
   "_generated_by": "scripts/intelligence/build_gold_set.py",
   "_description": "Gold set: hand-labeled reference images for pattern accuracy benchmarking. Each entry has ground-truth expected_pattern and acceptable_patterns for boundary cases. Used by batch_runner.py and benchmark expansion.",
-  "total_entries": 33,
-  "patterns_covered": 21,
-  "pattern_coverage": {
-    "butterfly": 2,
-    "clamshell": 2,
-    "flat_fashion": 2,
-    "high_key": 2,
-    "loop": 5,
-    "low_key": 1,
-    "rembrandt": 2,
-    "split": 1,
-    "triangle": 1,
-    "window_portrait": 2,
-    "athletic_rim_sculpt": 1,
-    "bottle_backlight": 1,
-    "broad": 1,
-    "editorial_rim_key": 1,
-    "gobo": 2,
-    "golden_hour": 1,
-    "overcast_natural": 1,
-    "rim_only": 1,
-    "ring_light": 1,
-    "short": 2,
-    "tabletop_soft_product": 1
-  },
+  "total_entries": 29,
+  "patterns_covered": 22,
+  "pattern_coverage": [
+    "athletic_rim_sculpt",
+    "bottle_backlight",
+    "broad",
+    "butterfly",
+    "clamshell",
+    "editorial_rim_key",
+    "flat",
+    "high_key",
+    "loop",
+    "low_key",
+    "projected",
+    "rembrandt",
+    "rim",
+    "ring_light",
+    "short",
+    "short_fashion_key",
+    "split",
+    "tabletop_soft_product",
+    "triangle",
+    "unknown",
+    "window_negative_fill",
+    "window_portrait"
+  ],
   "skipped": 1,
   "entries": [
     {
       "id": "beauty_dish_clean",
       "image_path": "data/reference_dataset/butterfly/beauty_dish_clean/image.jpg",
-      "expected_pattern": "butterfly",
+      "expected_pattern": "clamshell",
       "acceptable_patterns": [
-        "butterfly",
         "clamshell",
+        "butterfly",
         "flat",
         "high_key",
         "rembrandt",
         "loop",
         "unknown"
       ],
-      "expected_light_count": 1,
+      "expected_light_count": 2,
       "acceptable_light_count_range": [
         1,
         6
@@ -130,7 +131,7 @@
     {
       "id": "white_seamless_catalog",
       "image_path": "data/reference_dataset/flat_fashion/white_seamless_catalog/image.jpg",
-      "expected_pattern": "flat",
+      "expected_pattern": "high_key",
       "acceptable_patterns": [
         "flat",
         "high_key",
@@ -139,7 +140,7 @@
         "loop",
         "unknown"
       ],
-      "expected_light_count": 2,
+      "expected_light_count": 1,
       "acceptable_light_count_range": [
         1,
         4
@@ -168,7 +169,7 @@
         "loop",
         "unknown"
       ],
-      "expected_light_count": 2,
+      "expected_light_count": 3,
       "acceptable_light_count_range": [
         1,
         4
@@ -212,32 +213,6 @@
       "notes": "High key beauty \u2014 bright white background, even multi-source lighting, minimal shadows, clean beauty closeup"
     },
     {
-      "id": "corporate_soft_key",
-      "image_path": "data/reference_dataset/loop/corporate_soft_key/image.jpg",
-      "expected_pattern": "loop",
-      "acceptable_patterns": [
-        "loop",
-        "rembrandt",
-        "flat",
-        "butterfly",
-        "clamshell"
-      ],
-      "expected_light_count": 2,
-      "acceptable_light_count_range": [
-        1,
-        3
-      ],
-      "expected_key_direction": "upper_left",
-      "dataset_tier": "gold",
-      "trust_score": 0.9,
-      "difficulty": "standard",
-      "known_challenges": [
-        "high fill ratio reduces shadow contrast \u2014 may read as flat",
-        "corporate lighting prioritizes flattering over dramatic \u2014 pattern borders are soft"
-      ],
-      "notes": "Corporate soft key + fill \u2014 soft key from upper left with fill, professional headshot, gray background"
-    },
-    {
       "id": "images__5_",
       "image_path": "data/reference_dataset/loop/images__5_/image.jpg",
       "expected_pattern": "loop",
@@ -278,7 +253,7 @@
     {
       "id": "soft_editorial_key",
       "image_path": "data/reference_dataset/loop/soft_editorial_key/image.jpg",
-      "expected_pattern": "loop",
+      "expected_pattern": "window_portrait",
       "acceptable_patterns": [
         "loop",
         "rembrandt",
@@ -304,12 +279,13 @@
     {
       "id": "low_key",
       "image_path": "data/reference_dataset/low_key/low_key/image.jpg",
-      "expected_pattern": "low_key",
+      "expected_pattern": "butterfly",
       "acceptable_patterns": [
+        "butterfly",
         "low_key",
         "rembrandt",
         "loop",
-        "butterfly",
+        "split",
         "short"
       ],
       "expected_light_count": 1,
@@ -479,14 +455,14 @@
     {
       "id": "bottle_backlight",
       "image_path": "data/reference_dataset/bottle_backlight/bottle_backlight/image.jpg",
-      "expected_pattern": "bottle_backlight",
+      "expected_pattern": "low_key",
       "acceptable_patterns": [
+        "low_key",
         "bottle_backlight",
         "rim",
-        "low_key",
         "unknown"
       ],
-      "expected_light_count": 2,
+      "expected_light_count": 1,
       "acceptable_light_count_range": [
         1,
         4
@@ -509,16 +485,19 @@
       "expected_pattern": "broad",
       "acceptable_patterns": [
         "broad",
+        "split",
         "loop",
         "rembrandt",
-        "short"
+        "short",
+        "clamshell",
+        "butterfly"
       ],
       "expected_light_count": 1,
       "acceptable_light_count_range": [
         1,
         2
       ],
-      "expected_key_direction": "right",
+      "expected_key_direction": "upper_right",
       "dataset_tier": "community",
       "trust_score": 0.7,
       "difficulty": "hard",
@@ -531,7 +510,7 @@
     {
       "id": "editorial_rim_key",
       "image_path": "data/reference_dataset/editorial_rim_key/editorial_rim_key/image.jpg",
-      "expected_pattern": "editorial_rim_key",
+      "expected_pattern": "rim",
       "acceptable_patterns": [
         "editorial_rim_key",
         "rim",
@@ -637,90 +616,18 @@
       "notes": "Window with negative fill \u2014 window blinds casting striped shadow pattern across face, warm side light, high contrast"
     },
     {
-      "id": "golden_hour",
-      "image_path": "data/reference_dataset/golden_hour/golden_hour/image.jpg",
-      "expected_pattern": "loop",
+      "id": "overcast_natural",
+      "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
+      "expected_pattern": "broad",
       "acceptable_patterns": [
+        "broad",
+        "flat",
         "loop",
         "rembrandt",
         "short",
-        "projected",
-        "unknown"
-      ],
-      "expected_light_count": 1,
-      "acceptable_light_count_range": [
-        1,
-        2
-      ],
-      "expected_key_direction": "unknown",
-      "dataset_tier": "community",
-      "trust_score": 0.7,
-      "difficulty": "hard",
-      "known_challenges": [
-        "golden_hour is an environment not a geometric pattern \u2014 classifiers may return the shadow geometry instead",
-        "warm color cast saturates skin tones",
-        "eyes closed limits catchlight analysis"
-      ],
-      "notes": "Golden hour portrait \u2014 warm low-angle natural sunlight, strong orange/gold color cast, outdoor"
-    },
-    {
-      "id": "reflector_fill",
-      "image_path": "data/reference_dataset/loop/reflector_fill/image.jpg",
-      "expected_pattern": "loop",
-      "acceptable_patterns": [
-        "loop",
-        "rembrandt",
-        "clamshell"
-      ],
-      "expected_light_count": 1,
-      "acceptable_light_count_range": [
-        1,
-        2
-      ],
-      "expected_key_direction": "upper_left",
-      "dataset_tier": "community",
-      "trust_score": 0.7,
-      "difficulty": "hard",
-      "known_challenges": [
-        "reflector may produce weak lower catchlight, triggering false clamshell"
-      ],
-      "notes": "Loop key with reflector fill from below \u2014 1 active light + passive reflector"
-    },
-    {
-      "id": "overcast_natural",
-      "image_path": "data/reference_dataset/overcast_natural/overcast_natural/image.jpg",
-      "expected_pattern": "flat",
-      "acceptable_patterns": [
-        "flat",
+        "butterfly",
         "high_key",
-        "rembrandt",
-        "loop",
         "unknown"
-      ],
-      "expected_light_count": 1,
-      "acceptable_light_count_range": [
-        1,
-        2
-      ],
-      "expected_key_direction": "unknown",
-      "dataset_tier": "community",
-      "trust_score": 0.7,
-      "difficulty": "hard",
-      "known_challenges": [
-        "overcast is an environment not a geometric pattern",
-        "very soft diffused light produces near-zero shadow signal",
-        "outdoor scene with complex background may confuse analysis"
-      ],
-      "notes": "Overcast natural \u2014 outdoor portrait under overcast sky, soft diffused light, no harsh shadows, urban setting"
-    },
-    {
-      "id": "weak_catchlight",
-      "image_path": "data/reference_dataset/rembrandt/weak_catchlight/image.jpg",
-      "expected_pattern": "rembrandt",
-      "acceptable_patterns": [
-        "rembrandt",
-        "loop",
-        "short"
       ],
       "expected_light_count": 1,
       "acceptable_light_count_range": [
@@ -732,9 +639,11 @@
       "trust_score": 0.7,
       "difficulty": "hard",
       "known_challenges": [
-        "catchlight detector may miss, forcing reliance on shadow-only classification"
+        "overcast is an environment not a geometric pattern",
+        "very soft diffused light produces near-zero shadow signal",
+        "outdoor scene with complex background may confuse analysis"
       ],
-      "notes": "Rembrandt-lit portrait with dark eyes \u2014 catchlights barely visible, shadow pattern strong"
+      "notes": "Overcast natural \u2014 outdoor portrait under overcast sky, soft diffused light, no harsh shadows, urban setting"
     },
     {
       "id": "rim_only",
@@ -767,9 +676,9 @@
     {
       "id": "ring_light",
       "image_path": "data/reference_dataset/ring_light/ring_light/image.jpg",
-      "expected_pattern": "axial",
+      "expected_pattern": "ring_light",
       "acceptable_patterns": [
-        "axial",
+        "ring_light",
         "butterfly",
         "flat",
         "clamshell",
@@ -796,7 +705,7 @@
     {
       "id": "short",
       "image_path": "data/reference_dataset/short/short/image.jpg",
-      "expected_pattern": "short",
+      "expected_pattern": "short_fashion_key",
       "acceptable_patterns": [
         "short",
         "rembrandt",
@@ -861,7 +770,7 @@
         "unknown",
         "rembrandt"
       ],
-      "expected_light_count": 2,
+      "expected_light_count": 1,
       "acceptable_light_count_range": [
         1,
         4

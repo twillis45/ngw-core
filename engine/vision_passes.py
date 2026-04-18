@@ -2835,19 +2835,16 @@ def light_structure_pass(
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
 
     if face_box is None:
-        notes.append("no face_box — cannot analyze nose shadow structure")
-        return {
-            "ok": True,
-            "nose_shadow_shape": nose_shadow_shape,
-            "nose_shadow_length_ratio": nose_shadow_length_ratio,
-            "nose_shadow_angle_deg": nose_shadow_angle_deg,
-            "triangle_detected": False,
-            "triangle_cheek": None,
-            "triangle_completeness": 0.0,
-            "pattern_name": pattern_name,
-            "confidence": 0.1,
-            "notes": notes,
-        }
+        # Estimate face region from person segmentation or image center.
+        # Many dark-skin portrait images fail face detection due to MediaPipe
+        # model limitations.  Use a conservative center crop (20-80% of image)
+        # as the face ROI so shadow analysis can still run.
+        h_img, w_img = img_bgr.shape[:2]
+        face_box = (
+            int(w_img * 0.15), int(h_img * 0.08),
+            int(w_img * 0.85), int(h_img * 0.80),
+        )
+        notes.append("face_box estimated from image center crop (face detector failed)")
 
     # face_box is (x0, y0, x1, y1) — two corner coordinates, not (x, y, w, h).
     # Every other pass in this file unpacks as x0, y0, x1, y1.  Convert to
@@ -2923,6 +2920,28 @@ def light_structure_pass(
 
     left_shadow = float(np.mean(shadow_mask[:, :mid_x]))
     right_shadow = float(np.mean(shadow_mask[:, mid_x:]))
+
+    # ── Skin-tone-aware shadow asymmetry ─────────────────────────
+    # On dark skin, the absolute threshold shadow_mask may register
+    # very few pixels as "shadow" on either side (the skin itself is
+    # near the threshold). Supplement with a RELATIVE brightness
+    # comparison: compare left-half mean vs right-half mean of the
+    # nose region, normalized by face_mean.  This captures the
+    # directional lighting asymmetry regardless of skin tone.
+    _left_mean = float(np.mean(nose_region[:, :mid_x]))
+    _right_mean = float(np.mean(nose_region[:, mid_x:]))
+    _rel_asym = abs(_left_mean - _right_mean) / max(face_mean, 1.0)
+    # When threshold-based asymmetry is low but relative brightness
+    # asymmetry is strong, use relative to boost the effective
+    # left_shadow / right_shadow difference so the Rembrandt branch
+    # can trigger.
+    if abs(left_shadow - right_shadow) < 0.20 and _rel_asym > 0.08:
+        # Remap: relative brightness difference → effective shadow ratio
+        # The darker half gets a shadow boost proportional to the asymmetry
+        if _left_mean < _right_mean:
+            left_shadow = max(left_shadow, min(0.50, _rel_asym * 3.0))
+        else:
+            right_shadow = max(right_shadow, min(0.50, _rel_asym * 3.0))
 
     top_shadow = float(np.mean(shadow_mask[:nr_h // 2, :]))
     bottom_shadow = float(np.mean(shadow_mask[nr_h // 2:, :]))
@@ -3087,11 +3106,43 @@ def light_structure_pass(
             f"+ diagonal angle ({nose_shadow_angle_deg:.0f}°) → loop pattern"
         )
 
-    # Split: half face in shadow
+    # Split: half face in shadow — but check for Rembrandt triangle first.
+    # At |L-R| > 0.5, both split and Rembrandt are possible. The triangle
+    # check disambiguates.
     elif abs(left_shadow - right_shadow) > 0.5:
-        pattern_name = "split"
-        nose_shadow_shape = "half_face"
-        notes.append("strong left/right asymmetry → split lighting")
+        shadow_side = "left" if left_shadow > right_shadow else "right"
+        # Quick triangle check using percentile spread
+        _sp_ct = int(fh * 0.45); _sp_cb = int(fh * 0.70)
+        _sp_jt = int(fh * 0.70); _sp_jb = int(fh * 0.85)
+        if shadow_side == "left":
+            _sp_cr = face_roi[_sp_ct:_sp_cb, :int(fw * 0.40)]
+            _sp_jr = face_roi[_sp_jt:_sp_jb, :int(fw * 0.40)]
+        else:
+            _sp_cr = face_roi[_sp_ct:_sp_cb, int(fw * 0.60):]
+            _sp_jr = face_roi[_sp_jt:_sp_jb, int(fw * 0.60):]
+        _sp_has_triangle = False
+        if _sp_cr.size > 50 and _sp_jr.size > 20:
+            _sp_p75 = float(np.percentile(_sp_cr, 75))
+            _sp_p25 = float(np.percentile(_sp_cr, 25))
+            _sp_jm = float(np.mean(_sp_jr))
+            _sp_spread = (_sp_p75 - _sp_p25) / max(face_mean, 1.0)
+            _sp_bvj = (_sp_p75 - _sp_jm) / max(face_mean, 1.0)
+            _sp_has_triangle = _sp_spread > 0.15 and _sp_bvj > 0.10
+        if _sp_has_triangle:
+            # Triangle found in split-range asymmetry → this is Rembrandt
+            _triangle_isolation = _sp_spread
+            triangle_detected = True
+            triangle_cheek = shadow_side
+            pattern_name = "rembrandt"
+            nose_shadow_shape = "angled_with_triangle"
+            notes.append(
+                f"split-range asymmetry ({abs(left_shadow-right_shadow):.3f}) "
+                f"but triangle present (spread={_sp_spread:.3f}) → rembrandt"
+            )
+        else:
+            pattern_name = "split"
+            nose_shadow_shape = "half_face"
+            notes.append("strong left/right asymmetry → split lighting")
 
     # Rembrandt: triangle on shadow-side cheek
     elif abs(left_shadow - right_shadow) > 0.2:
@@ -3123,41 +3174,121 @@ def light_structure_pass(
         _shadow_side_pct = left_shadow if shadow_side == "left" else right_shadow
         _shadow_strong = _shadow_side_pct >= 0.15
 
-        # Check for triangle: look at the cheek area on shadow side.
-        # The Rembrandt triangle is an ISOLATED bright patch on an otherwise
-        # shadowed cheek — mere "above threshold" brightness isn't enough.
-        cheek_top = 2 * fh // 3
-        cheek_bottom = fh
+        # Check for triangle: the Rembrandt triangle sits on the shadow
+        # cheek BELOW the eye and ABOVE the jawline. Using 45-70% of face
+        # height captures the eye-to-nose region where the triangle forms.
+        # The outer 40% of the face width on the shadow side targets the
+        # cheek specifically (wider than the old 1/3 which missed the
+        # triangle on wide or turned faces).
+        cheek_top = int(fh * 0.45)
+        cheek_bottom = int(fh * 0.70)
         if shadow_side == "left":
-            cheek_region = face_roi[cheek_top:cheek_bottom, :fw // 3]
-            # Surrounding shadow: above the cheek on the same side
-            surround_region = face_roi[fh // 2:cheek_top, :fw // 3]
+            cheek_region = face_roi[cheek_top:cheek_bottom, :int(fw * 0.40)]
+            surround_region = face_roi[int(fh * 0.25):cheek_top, :int(fw * 0.40)]
         else:
-            cheek_region = face_roi[cheek_top:cheek_bottom, 2 * fw // 3:]
-            surround_region = face_roi[fh // 2:cheek_top, 2 * fw // 3:]
+            cheek_region = face_roi[cheek_top:cheek_bottom, int(fw * 0.60):]
+            surround_region = face_roi[int(fh * 0.25):cheek_top, int(fw * 0.60):]
+
+        # Also sample BELOW the cheek (jaw zone) for peak detection
+        jaw_top = int(fh * 0.70)
+        jaw_bottom = int(fh * 0.85)
+        if shadow_side == "left":
+            jaw_region = face_roi[jaw_top:jaw_bottom, :int(fw * 0.40)]
+        else:
+            jaw_region = face_roi[jaw_top:jaw_bottom, int(fw * 0.60):]
 
         if cheek_region.size > 20:
             cheek_brightness = float(np.mean(cheek_region))
             surround_brightness = float(np.mean(surround_region)) if surround_region.size > 20 else cheek_brightness
-            # Triangle isolation: how much brighter is the cheek triangle
-            # compared to its surrounding shadow?  A genuine Rembrandt triangle
-            # should be significantly brighter than the shadow area above it.
-            _triangle_isolation = 0.0
-            if face_mean > 0:
-                _triangle_isolation = (cheek_brightness - surround_brightness) / max(face_mean, 1.0)
+            jaw_brightness = float(np.mean(jaw_region)) if jaw_region.size > 20 else cheek_brightness
 
-            # Triangle = bright patch on shadow cheek that is ALSO meaningfully
-            # brighter than the surrounding shadow area.  On dark skin the cheek
-            # can exceed shadow_threshold purely because of normal skin luminance,
-            # not because a lit triangle is present.  _triangle_isolation
-            # (cheek - surround) / face_mean guards against this false positive:
-            # a genuine Rembrandt triangle typically scores ≥ 0.12 (12% of face
-            # mean brighter than surround); skin-tone noise stays well below 0.08.
+            # ── Skin-tone-aware triangle isolation ────────────────────────
+            # The triangle is a bright patch surrounded by shadow. The
+            # absolute luminance delta is large on light skin (~30 units)
+            # and small on dark skin (~5-10 units), but the RELATIVE
+            # significance is the same: "this patch is meaningfully brighter
+            # than its neighbors."
+            #
+            # Two complementary measures:
+            #   1. Global: delta / face_mean (original — catches high-contrast)
+            #   2. Local:  delta / local_range (new — catches low-contrast
+            #              triangles on dark skin where the tonal range is
+            #              compressed but the triangle is still distinct)
+            #
+            # The triangle passes if EITHER measure exceeds its threshold.
+            _delta = cheek_brightness - surround_brightness
+            _tri_global = _delta / max(face_mean, 1.0)
+            # Local range: difference between brightest and darkest in the
+            # shadow-side region (cheek + surround combined).
+            _local_pixels = np.concatenate([
+                cheek_region.ravel(),
+                surround_region.ravel() if surround_region.size > 0 else np.array([])
+            ])
+            _local_range = float(np.percentile(_local_pixels, 95) - np.percentile(_local_pixels, 5)) if _local_pixels.size > 20 else max(face_mean, 1.0)
+            _tri_local = _delta / max(_local_range, 1.0)
+
+            _triangle_isolation = max(_tri_global, _tri_local)
+
             _above_threshold = cheek_brightness > shadow_threshold
-            _isolation_ok = _triangle_isolation >= 0.12
+            # Global threshold: 0.12 of face_mean (original)
+            # Local threshold: 0.20 of local range (triangle is 20%+ of the
+            # shadow-side tonal range — works even on very dark skin)
+            _isolation_ok = _tri_global >= 0.12 or _tri_local >= 0.20
+
+            # ── Percentile-based triangle detection ────────────────────
+            # The Rembrandt triangle is a BRIGHT PATCH (maybe 20-30% of the
+            # cheek area) surrounded by shadow. The mean of the cheek
+            # region is diluted by shadow pixels. Instead, compare the
+            # BRIGHT FRACTION of the cheek (p75 = upper quartile, which
+            # captures the triangle patch) against the DARK FRACTION of
+            # the same region (p25 = lower quartile, the shadow around it).
+            # If the spread is wide, there's a distinct bright patch.
+            if cheek_region.size > 50:
+                _cheek_p75 = float(np.percentile(cheek_region, 75))
+                _cheek_p25 = float(np.percentile(cheek_region, 25))
+                _cheek_spread = (_cheek_p75 - _cheek_p25) / max(face_mean, 1.0)
+                # Also check: does the bright fraction of the cheek
+                # exceed the mean of the jaw below? (triangle is brighter
+                # than the lowest shadow zone)
+                _bright_vs_jaw = (_cheek_p75 - jaw_brightness) / max(face_mean, 1.0) if jaw_brightness > 0 else 0
+                if _cheek_spread > 0.15 and _bright_vs_jaw > 0.10:
+                    _isolation_ok = True
+                    _triangle_isolation = _cheek_spread
+                    notes.append(
+                        f"percentile triangle: cheek_p75={_cheek_p75:.0f} "
+                        f"cheek_p25={_cheek_p25:.0f} spread={_cheek_spread:.3f} "
+                        f"jaw={jaw_brightness:.0f} bright_vs_jaw={_bright_vs_jaw:.3f}"
+                    )
+
+            # ── Dark skin / no-face-box fallback ──────────────────────────
+            # When the face box is unavailable (face detector failed) or the
+            # face has very dark skin (face_mean < 75), the fixed cheek
+            # regions often miss the actual Rembrandt triangle because:
+            #   a) Without landmarks, the ROI is a rough crop
+            #   b) On dark skin, the tonal delta between triangle and
+            #      shadow is too small for absolute thresholds
+            # In this case, STRONG shadow asymmetry (|L-R| > 0.25) +
+            # shadow_strong IS the Rembrandt evidence: one side of the face
+            # is clearly in shadow with enough depth to form the pattern.
+            _no_facebox = not hasattr(face_roi, '_facebox_sourced')  # rough proxy
+            _dark_skin = face_mean < 75
+            if (not _isolation_ok) and _shadow_strong and (_dark_skin or _delta < 0):
+                _lr_diff = abs(left_shadow - right_shadow)
+                if _lr_diff > 0.25:
+                    _isolation_ok = True
+                    _above_threshold = True
+                    notes.append(
+                        f"dark-skin/no-facebox triangle fallback: "
+                        f"lr_diff={_lr_diff:.3f} shadow_strong=True "
+                        f"face_mean={face_mean:.0f} → accepting as triangle"
+                    )
+
             # Full Rembrandt: triangle confirmed + shadow connects nose to cheek
             # + meaningful shadow depth on the shadow side.
-            if _above_threshold and _isolation_ok and _shadow_connected and _shadow_strong:
+            # Relaxed connectivity for dark skin (conn_region often reads above
+            # threshold because dark skin luminance is closer to shadow threshold).
+            _conn_ok = _shadow_connected or (_dark_skin and _shadow_strong)
+            if _above_threshold and _isolation_ok and _conn_ok and _shadow_strong:
                 triangle_detected = True
                 triangle_cheek = shadow_side
                 triangle_completeness = round(
@@ -6137,16 +6268,62 @@ def reconstruction_pass(
         notes.append(f"key_height from shadow_vertical: {shd_vert}°")
 
     # ── Chin/head pitch correction for height estimate ──────────────────
+    # cat_pos may not have been assigned if the primary clock-based
+    # catchlight parsing succeeded (the fallback at line ~6199 is inside
+    # an `if not weighted_angles` block).  Use cat dict directly.
+    _cat_pos_h = cat.get("catchlight_position", "")
     if has_pose:
         chin_pitch = pose.get("chin_pitch", "neutral")
         if chin_pitch in ("down", "slightly_down") and key_height == "high":
             # Chin down makes shadows LOOK like they come from higher.
             # Moderate confidence in "high" unless catchlights confirm it.
-            if not (cat_pos and "upper" in cat_pos.lower()):
+            if not (_cat_pos_h and "upper" in _cat_pos_h.lower()):
                 key_height = "eye_level"
                 notes.append(
                     "height downgraded: chin_down mimics high-light shadow"
                 )
+
+    # -- Elevation above eye (numeric) --
+    # Two methods, in priority order:
+    #   1. Catchlight elevation_ratio — direct measurement from iris reflection
+    #   2. Nose shadow length ratio — geometric: shorter shadow = higher light
+    import math as _m
+
+    key_elevation_above_eye_deg = None
+    _elev_source = None
+
+    # Method 1: catchlight position in iris
+    _cat_list = cat.get("catchlights", [])
+    _key_cl = None
+    _best_score = -1
+    for _cl in _cat_list:
+        _s = (_cl.get("intensity", 0) or 0) * (_cl.get("size_ratio", 0) or 0)
+        if _s > _best_score:
+            _best_score = _s
+            _key_cl = _cl
+    if _key_cl and _key_cl.get("elevation_ratio") is not None:
+        _er = max(-1.0, min(1.0, _key_cl["elevation_ratio"]))
+        key_elevation_above_eye_deg = round(_m.degrees(_m.asin(_er)), 1)
+        _elev_source = "catchlight"
+
+    # Method 2: nose shadow length (always available from shadow analysis)
+    # Shadow length ratio ≈ 1/tan(elevation_angle):
+    #   ratio 0.2 → tan(elev) ≈ 5 → elev ≈ 79° (very high, butterfly)
+    #   ratio 0.5 → tan(elev) ≈ 2 → elev ≈ 63° (high)
+    #   ratio 0.8 → tan(elev) ≈ 1.25 → elev ≈ 51° (medium-high)
+    #   ratio 1.0 → tan(elev) ≈ 1 → elev ≈ 45° (medium)
+    #   ratio 1.5 → tan(elev) ≈ 0.67 → elev ≈ 34° (low)
+    # Clamp to [5°, 75°] — below 5° is physically at eye level; above 75°
+    # is directly overhead (butterfly territory).
+    if key_elevation_above_eye_deg is None:
+        _sl = shd.get("shadow_length_ratio")
+        if isinstance(_sl, (int, float)) and _sl > 0.05:
+            _elev_raw = _m.degrees(_m.atan(1.0 / _sl))
+            key_elevation_above_eye_deg = round(max(5.0, min(75.0, _elev_raw)), 1)
+            _elev_source = "shadow_length"
+
+    if key_elevation_above_eye_deg is not None:
+        notes.append(f"elevation_above_eye={key_elevation_above_eye_deg}° (source={_elev_source})")
 
     # -- Modifier size class --
     # Combine shadow softness, edge gradient, and highlight rolloff
@@ -6436,6 +6613,7 @@ def reconstruction_pass(
         "key_light_angle_deg_pose_corrected": round(key_angle_corrected, 1),
         "key_light_angle_deg": round(key_angle_corrected, 1),
         "key_light_height": key_height,
+        "key_elevation_above_eye_deg": key_elevation_above_eye_deg,
         "modifier_size_class": modifier_size,
         "modifier_size_class_raw": modifier_size_raw,
         "modifier_size_class_surface_corrected": modifier_size_corrected,

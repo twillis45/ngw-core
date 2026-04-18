@@ -5,13 +5,22 @@ import ResultScreen from './studio/_core/ResultScreen';
 import SetupScreen from './studio/_core/SetupScreen';
 import Day1ShootScreen from './studio/_adjacent/Day1ShootScreen';
 import StudioLoginScreen from './studio/_adjacent/StudioLoginScreen';
-// Day1SettingsScreen (Bucket C) removed from shell in Checkpoint 3 — deferred.
-import { analyzeImage } from '../data/labApi';
+import FitToViewport from './studio/_shared/FitToViewport';
+import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
+import RecipeScreen from './studio/_core/RecipeScreen';
+import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
+import BuildWizardScreen from './studio/_core/BuildWizardScreen';
+import MyKitScreen from './studio/_core/MyKitScreen';
+import StudioLabWrapper from './studio/_core/StudioLabWrapper';
+import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
+import usePlan from '../hooks/usePlan';
+import { PLAN_LABELS } from '../data/planStore';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
 import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
-import { softClickSound } from '../utils/sounds';
+import { softClickSound, navSlideSound } from '../utils/sounds';
+import { LAYOUT_DESKTOP_MIN } from '../utils/useIsDesktop';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -53,6 +62,36 @@ function downsampleImage(file, maxBytes) {
     img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
   });
+}
+
+/**
+ * Map a BuildWizard `onComplete` payload → /api/shoot-match request body.
+ *
+ * Wizard emits internal enum codes (e.g. mood="beauty", environment="studio_medium",
+ * gearMode="my_gear"|"best_setup") — the shoot-match route's MOOD_MAP /
+ * ENVIRONMENT_MAP already accept these as identity keys.  Two translations
+ * are needed:
+ *   - gearMode:  my_gear → myGear   |   best_setup → anyGear
+ *   - gear:      flatten lights[] + modifiers[] into a single gear list
+ *
+ * Defensive defaults: mood/environment are required by the server; fall back
+ * to sensible values if the wizard ever submits without them.
+ */
+function wizardPayloadToShootMatch(payload) {
+  const gear = [
+    ...(Array.isArray(payload.lights) ? payload.lights : []),
+    ...(Array.isArray(payload.modifiers) ? payload.modifiers : []),
+  ];
+  const gearMode = payload.gearMode === 'my_gear' ? 'myGear' : 'anyGear';
+  return {
+    subject: payload.subject || 'headshot',
+    mood: payload.mood || 'natural',
+    environment: payload.environment || 'studio_medium',
+    ceiling: payload.ceiling || 'normal',
+    gearMode,
+    gear,
+    skinTone: payload.skinTone || null,
+  };
 }
 
 /**
@@ -128,6 +167,10 @@ function mapApiResult(data) {
   // Confidence: API returns 0–1 float → display as 0–100 int
   const confidence = Math.round((data.authoritative_confidence || 0) * 100);
   const pattern = displayPattern(data.authoritative_pattern);
+  // Compound pattern: when a tonal overlay (low_key, high_key) overrides
+  // a geometric base, show the geometry as a subtitle so photographers
+  // see both classification levels (e.g. "Low Key · Rembrandt geometry").
+  const geometricBase = data.geometric_base ? displayPattern(data.geometric_base) : null;
 
   // Meta pills — short descriptors from lighting inference.  Pattern/modifier
   // display rule: Title Case, no underscores.
@@ -196,33 +239,120 @@ function mapApiResult(data) {
   // Fall back to li.notes (engine debug notes) then to raw signal metrics.
   const lightingRead = data.reference_analysis?.lighting_read || {};
   let shadowAnalysis = '';
+  // Structured fields extracted from lighting_read so the ResultScreen can
+  // render them as graphics (component chips, directional compass, multi-dot
+  // catchlight eye) instead of dumping the raw narrative as a wall of text.
+  let shadowComponents = null;   // { source, fill, rim, pattern }
+  let shadowDirection  = null;   // { shadowQuadrant, keyQuadrant, keyIntensity }
+  let catchlightPositions = null; // string[] — clock hours parsed from observations
+  let shadowEdgeNote   = null;    // "Soft shadow edges → large/diffused source"
+
+  // Parse a "key_observations" string to pull directional cues + catchlight
+  // arrays OUT of the narrative so they can be rendered visually.
+  const DIR_QUADRANTS = ['upper_left','upper_right','lower_left','lower_right','left','right','above','below','front','back'];
+  const parseDirectionalObs = (obs) => {
+    const m = /shadow(?:s)?\s+fall[s]?\s+([a-z_]+)\s*(?:→|->|to)\s*key\s*light\s*at\s+([a-z_]+)(?:\s*\(([-\d.]+)\))?/i.exec(obs);
+    if (!m) return null;
+    return {
+      shadowQuadrant: m[1].replace(/_/g,' '),
+      keyQuadrant:    m[2].replace(/_/g,' '),
+      keyIntensity:   m[3] ? parseFloat(m[3]) : null,
+    };
+  };
+  const parseCatchlightObs = (obs) => {
+    const m = /catchlight\s+positions?\s*:?\s*\[([^\]]+)\]/i.exec(obs);
+    if (!m) return null;
+    return m[1].split(',').map(s => s.replace(/['"]/g,'').trim()).filter(Boolean);
+  };
+  const isEdgeObs = (obs) => /shadow\s+edge/i.test(obs);
 
   if (lightingRead.shadow_pattern || lightingRead.source_quality) {
-    const parts = [];
-    if (lightingRead.source_quality && lightingRead.shadow_pattern) {
-      const src = toTitleCase(lightingRead.source_quality);
-      const pat = toTitleCase(lightingRead.shadow_pattern);
-      parts.push(`${src} source with ${pat} shadow pattern`);
-    } else if (lightingRead.shadow_pattern) {
-      parts.push(`${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`);
-    } else if (lightingRead.source_quality) {
-      parts.push(`${toTitleCase(lightingRead.source_quality)} source`);
+    // Lead sentence — the physical headline.
+    const lead = (() => {
+      if (lightingRead.source_quality && lightingRead.shadow_pattern) {
+        return `${toTitleCase(lightingRead.source_quality)} source with ${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`;
+      }
+      if (lightingRead.shadow_pattern) return `${toTitleCase(lightingRead.shadow_pattern)} shadow pattern`;
+      if (lightingRead.source_quality) return `${toTitleCase(lightingRead.source_quality)} source`;
+      return null;
+    })();
+
+    // Structured components — these render as chips so they get pulled OUT of
+    // the narrative string below.
+    shadowComponents = {
+      source:  lightingRead.source_quality ? toTitleCase(lightingRead.source_quality) : null,
+      pattern: lightingRead.shadow_pattern ? toTitleCase(lightingRead.shadow_pattern) : null,
+      fill:    (lightingRead.fill_presence && !['none','unknown'].includes(lightingRead.fill_presence))
+        ? lightingRead.fill_presence : null,
+      rim:     (lightingRead.rim_presence && !['none','unknown'].includes(lightingRead.rim_presence))
+        ? lightingRead.rim_presence : null,
+    };
+
+    // Observations — triage into directional / catchlight / edge / other so
+    // each one lands in the right visual home.
+    const rawObs = (lightingRead.key_observations || []).filter(o => o && o.length < 200);
+    const otherObs = [];
+    // The engine emits a vertical prefix on shadow direction by comparing
+    // upper-vs-lower face brightness, but that test only fires when the
+    // bottom of the face is dramatically brighter (>25 luma diff).  In every
+    // other case it defaults to "upper_*" — which is misleading because the
+    // shadow physically falls on the LOWER side of the face whenever the
+    // key is above the subject (which is the dominant case).  We post-fix
+    // the parsed quadrant against the engine's `key_elevation` so the
+    // DirectionalCompass shows the physically correct cell.
+    // Determine whether the key sits ABOVE or BELOW the subject.  Prefer the
+    // engine's explicit key_elevation; when it's absent (common — the engine
+    // frequently leaves it blank), assume "above" because ~95% of real-world
+    // lighting setups put the key at or above eye level.  The only case this
+    // assumption is wrong is intentional uplighting / horror lighting, which
+    // the engine normally flags via the shadow_pattern narrative anyway.
+    const _keyElevRaw = (li.key_elevation || li.key_height || '').toLowerCase();
+    const _keyAbove =
+      _keyElevRaw === 'high' || _keyElevRaw === 'medium' || _keyElevRaw === ''
+        ? true
+        : _keyElevRaw === 'low' ? false : true;
+    for (const o of rawObs) {
+      const dir = parseDirectionalObs(o);
+      if (dir) {
+        // Physics rule: the shadow's vertical band is OPPOSITE the key's
+        // vertical band — high key → shadow falls low, low key → shadow
+        // falls high.  The horizontal axis is unchanged.  The engine often
+        // emits "shadow falls upper_* → key light at upper_*" for a
+        // loop-standard test image because its vertical inference only
+        // flips when the bottom of the face is dramatically brighter
+        // (>25 luma diff).  Post-fix here so the DirectionalCompass cell
+        // lands in the physically correct quadrant.
+        if (_keyAbove) {
+          dir.shadowQuadrant = (dir.shadowQuadrant || '').replace(/^upper /, 'lower ');
+          dir.keyQuadrant    = (dir.keyQuadrant    || '').replace(/^lower /, 'upper ');
+        } else {
+          dir.shadowQuadrant = (dir.shadowQuadrant || '').replace(/^lower /, 'upper ');
+          dir.keyQuadrant    = (dir.keyQuadrant    || '').replace(/^upper /, 'lower ');
+        }
+        shadowDirection = dir;
+        continue;
+      }
+      const cl = parseCatchlightObs(o);
+      if (cl) { catchlightPositions = cl; continue; }
+      if (isEdgeObs(o)) { shadowEdgeNote = o; continue; }
+      if (/shadow_pattern_detail|loop|rembrandt|split/i.test(o) && o.length < 40) continue; // noise
+      otherObs.push(o);
     }
-    if (lightingRead.fill_presence && !['none','unknown'].includes(lightingRead.fill_presence)) {
-      parts.push(`${lightingRead.fill_presence} fill`);
-    }
-    if (lightingRead.rim_presence && !['none','unknown'].includes(lightingRead.rim_presence)) {
-      parts.push(`${lightingRead.rim_presence} rim light`);
-    }
-    if (lightingRead.shadow_pattern_detail) {
-      parts.push(lightingRead.shadow_pattern_detail);
-    }
-    // Key observations — take up to 3, skip purely diagnostic notes
-    const obs = (lightingRead.key_observations || []).filter(o => o && o.length < 140);
-    parts.push(...obs.slice(0, 3));
-    // Ambiguity notes — surface uncertainty when present
+
+    // Detail line — only attach shadow_pattern_detail if it adds information
+    // beyond the lead pattern name.
+    const detailLine = (lightingRead.shadow_pattern_detail && lightingRead.shadow_pattern_detail.toLowerCase() !== (lightingRead.shadow_pattern || '').toLowerCase())
+      ? lightingRead.shadow_pattern_detail : null;
+
+    // Ambiguity — surface uncertainty when present, but cap at one.
     const amb = (lightingRead.ambiguity_notes || []).filter(o => o && !o.startsWith('[VLW'));
+
+    const parts = [];
+    if (lead) parts.push(lead);
+    if (detailLine) parts.push(detailLine);
+    parts.push(...otherObs.slice(0, 2));
     if (amb.length > 0 && parts.length < 3) parts.push(amb[0]);
+
     shadowAnalysis = parts.join('. ').trim();
     if (shadowAnalysis && !shadowAnalysis.endsWith('.')) shadowAnalysis += '.';
   }
@@ -375,11 +505,11 @@ function mapApiResult(data) {
   // Tells the photographer how the authoritative pattern was resolved —
   // i.e. which layer of the engine stack "won".
   const SOURCE_LABELS = {
-    reference_read:     'Reference Read',
-    lighting_inference: 'Lighting Inference',
-    definitive_sig:     'Definitive Signal',
-    cue_inference:      'Cue Analysis',
-    light_structure:    'Light Structure',
+    reference_read:     'full analysis',
+    lighting_inference: 'catchlight analysis',
+    definitive_sig:     'definitive signal',
+    cue_inference:      'shadow analysis',
+    light_structure:    'geometry analysis',
   };
   const patternSource    = SOURCE_LABELS[data.authoritative_pattern_source] || null;
   const confidenceLabel  = data.authoritative_confidence_label || null; // "strong" | "partial" | "weak"
@@ -387,13 +517,20 @@ function mapApiResult(data) {
   // ── Edge case warnings ───────────────────────────────────────────────────────
   // Surfaces analysis caveats before the photographer commits to "Set Up This Light".
   const EDGE_FLAGS = {
-    blown_highlights:               { label: 'Blown Highlights',    sev: 'warn' },
-    mixed_color_temperature:        { label: 'Mixed CCT',           sev: 'info' },
-    outdoor_foliage_shadows:        { label: 'Foliage Shadows',     sev: 'info' },
-    window_light_gradient:          { label: 'Window Gradient',     sev: 'info' },
-    extreme_low_key:                { label: 'Extreme Low Key',     sev: 'info' },
-    bw_processing:                  { label: 'B&W Detected',        sev: 'info' },
-    earring_catchlight_contamination: { label: 'Catchlight Noise',  sev: 'warn' },
+    blown_highlights:               { label: 'Blown Highlights',    sev: 'warn',
+      detail: 'Specular highlights are clipped to pure white. The engine cannot recover catchlight position or modifier shape from those pixels — diagram angles are estimated from shadows alone.' },
+    mixed_color_temperature:        { label: 'Mixed CCT',           sev: 'info',
+      detail: 'Key and fill (or ambient) light have different color temperatures. Pattern detection is unaffected, but white balance and palette readouts will reflect the dominant source.' },
+    outdoor_foliage_shadows:        { label: 'Foliage Shadows',     sev: 'info',
+      detail: 'Dappled light from tree cover creates broken shadow edges that are not from the key light. The shadow analyzer compensates, but density readouts may run high.' },
+    window_light_gradient:          { label: 'Window Gradient',     sev: 'info',
+      detail: 'Light falls off across the subject because the source is large and close. Treat the diagram distance as a guide, not literal — the inverse-square slope is steep here.' },
+    extreme_low_key:                { label: 'Extreme Low Key',     sev: 'info',
+      detail: 'Most of the frame sits in deep shadow. Pattern confidence is lower because the engine has fewer mid-tone pixels to triangulate the key direction from.' },
+    bw_processing:                  { label: 'B&W Detected',        sev: 'info',
+      detail: 'Image is monochrome, so the color palette panel is suppressed. Shadow density and direction still read normally.' },
+    earring_catchlight_contamination: { label: 'Catchlight Noise',  sev: 'warn',
+      detail: 'Reflective jewelry near the eye is producing false catchlights that confuse modifier detection. Trust the shadow-derived light angle over the catchlight-derived one.' },
   };
   const edgeCaseWarnings = [];
   const rawFlags = data.edge_case_flags || {};
@@ -461,6 +598,7 @@ function mapApiResult(data) {
 
   return {
     pattern,
+    geometricBase,
     confidence,
     meta,
     mood,
@@ -470,6 +608,10 @@ function mapApiResult(data) {
       confidenceLabel,
       edgeCaseWarnings,
       shadowAnalysis,
+      shadowComponents,
+      shadowDirection,
+      shadowEdgeNote,
+      catchlightPositions,
       lightQuality,
       catchlightModifier,
       modifier: modifierData,
@@ -495,8 +637,267 @@ export default function Day1DemoApp() {
   const [user, setUser] = useState(() => getUser());
   const [lastAnalysisTime, setLastAnalysisTime] = useState(null);
   const [shootMode, setShootMode] = useState('photographer');
+  const { plan: appPlan, isPaid: appIsPaid, isAdmin: appIsAdmin } = usePlan(user?.email);
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
+
+  // ── Dev: ?day1_screen=result jumps straight to the result screen with a
+  // canned Rembrandt result so layout + typography can be reviewed instantly.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'result') return;
+      const cannedResult = {
+        pattern: 'Rembrandt', confidence: 91,
+        meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+        mood: 'Dramatic',
+        sections: {
+          patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+          patternSource: 'shadow analysis',
+          confidenceLabel: 'strong',
+          edgeCaseWarnings: [],
+          shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+          shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+          shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+          shadowEdgeNote: null,
+          catchlightPositions: ['10'],
+          lightQuality: 'soft',
+          catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+          modifier: {
+            family: 'Large Octabox',
+            sizeLabel: 'Large',
+            sizeRange: '48"–60"',
+            distRange: '5–10 ft',
+            optDist: '6–8 ft',
+            position: 'Upper Left',
+            positionQuad: 'Camera-Left',
+            positionIntensity: 'High',
+            catchlightSize: '85% iris',
+          },
+          sceneDescription: 'Single key light, studio background.',
+          colorPalette: null, signalQuality: null, vlmNarrative: null,
+        },
+        _raw: {},
+      };
+      setResult(cannedResult);
+      setImagePreview('/loop_standard.jpg');
+      setScreen('result');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=processing previews the processing screen.
+  //    Auto-completes after 6s so the full flow (processing → result) is visible.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'processing') return;
+      setImagePreview('/loop_standard.jpg');
+      setScreen('processing');
+      // Simulate analysis completion after 6s
+      const t = setTimeout(() => {
+        setResult({
+          pattern: 'Rembrandt', confidence: 91,
+          meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+          mood: 'Dramatic',
+          sections: {
+            patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+            patternSource: 'shadow analysis', confidenceLabel: 'strong', edgeCaseWarnings: [],
+            shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+            shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+            shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+            catchlightPositions: ['10'], lightQuality: 'soft',
+            catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+            modifier: { family: 'Large Octabox', sizeLabel: 'Large', sizeRange: '48"–60"', distRange: '5–10 ft', optDist: '6–8 ft', position: 'Upper Left', positionQuad: 'Camera-Left', positionIntensity: 'High', catchlightSize: '85% iris' },
+            sceneDescription: 'Single key light, studio background.',
+          },
+          _raw: {},
+        });
+        setAnalysisReady(true);
+      }, 6000);
+      return () => clearTimeout(t);
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=setup previews the setup/recipe screen directly
+  //    with rich canned data so all panels, specs, and drawers render.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'setup') return;
+      const cannedResult = {
+        pattern: 'Rembrandt', confidence: 91,
+        meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+        mood: 'Dramatic',
+        sections: {
+          patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+          patternSource: 'shadow analysis', confidenceLabel: 'strong', edgeCaseWarnings: [],
+          shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+          shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+          shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+          catchlightPositions: ['10'], lightQuality: 'soft',
+          catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+          modifier: {
+            family: 'Large Octabox', sizeLabel: 'Large', sizeRange: '48"–60"',
+            distRange: '5–10 ft', optDist: '6–8 ft',
+            position: 'Upper Left', positionQuad: 'Camera-Left', positionIntensity: 'High',
+            catchlightSize: '85% iris',
+          },
+          sceneDescription: 'Single key light, studio background.',
+        },
+        _raw: {
+          lighting_inference: {
+            key_side: 'upper_left', key_elevation: 'high',
+            key_position_text: 'Camera-Left · High',
+            off_axis_angle: 45,
+          },
+          reference_analysis: {
+            recreation_setup: {
+              key_placement: 'Camera-left, 45° off axis, raised high',
+              fill_strategy: 'Negative fill — V-flat camera right',
+              background_strategy: 'Medium grey seamless, 6–8 ft behind subject. No background light.',
+              focal_length: '85–135mm',
+              aperture: 'f/2.8–4',
+              camera_subject_guidance: 'Eye-level camera, subject at edge of light fall-off',
+              setup_notes: [
+                'Position key at roughly 45° camera-left, 6–8 ft from subject',
+                'Feather modifier slightly past subject for softer wrap',
+                'Use V-flat on shadow side to deepen Rembrandt triangle',
+                'Watch for catchlight at 10 o\'clock position to confirm placement',
+              ],
+            },
+          },
+          reconstruction: {
+            key_light_angle_deg: 45,
+            key_light_height: 'high',
+            modifier_distance_ft: 7,
+            light_roles: {
+              key: {
+                present: true, confidence: 0.91, role: 'key', modifier: 'Large Octabox', distance: '5–10 ft',
+                position: 'Camera-Left · High', evidence: ['Strong shadow edge', 'Round catchlight at 10 o\'clock'],
+              },
+            },
+          },
+        },
+      };
+      setResult(cannedResult);
+      setImagePreview('/loop_standard.jpg');
+      setScreen('setup');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=recipes previews the recipe browser directly.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'recipes') return;
+      setScreen('recipes');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=saved previews the saved setups library.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'saved') return;
+      setScreen('saved');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=build previews the build wizard.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('day1_screen') !== 'build') return;
+      setScreen('build');
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Dev: ?day1_screen=shoot jumps straight into the cockpit.
+  //    Two variants for cross-device review without driving the full flow:
+  //      ?day1_screen=shoot          — analyze/teach-sample path (canned Rembrandt)
+  //      ?day1_screen=shoot_wizard   — wizard-path result shape (mood='beauty')
+  //    The shoot mode is 'photographer' by default; override with &mode=learning
+  //    or &mode=assistant.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('day1_screen');
+      if (s !== 'shoot' && s !== 'shoot_wizard') return;
+      const requestedMode = params.get('mode');
+      const validModes = ['photographer', 'assistant', 'learning'];
+      setShootMode(validModes.includes(requestedMode) ? requestedMode : 'photographer');
+
+      if (s === 'shoot_wizard') {
+        // Wizard-source result shape — mirrors handleBuildComplete output
+        // BEFORE the shoot-match cards arrive.  This is what the cockpit
+        // actually sees when a user walks the Build From Scratch flow.
+        setResult({
+          pattern: toTitleCase('beauty'),
+          confidence: 100,
+          meta: ['Headshot', 'Studio Medium', 'Best Setup'],
+          mood: 'Beauty',
+          _wizardSource: true,
+          sections: {
+            patternCandidates: [],
+            patternSource: 'wizard', confidenceLabel: 'custom build',
+            edgeCaseWarnings: [], shadowAnalysis: null, shadowComponents: null,
+            shadowDirection: null, catchlightPositions: [], lightQuality: null,
+            catchlightModifier: null, modifier: null,
+            sceneDescription: 'Beauty Headshot — Studio Medium',
+            colorPalette: null, signalQuality: null, vlmNarrative: null,
+          },
+          _raw: { wizard: { mood: 'beauty', subject: 'headshot', environment: 'studio_medium', gearMode: 'best_setup' } },
+        });
+        setImagePreview(null);
+      } else {
+        // Analyze/teach-sample path — reuses the setup shortcut's canned Rembrandt
+        setResult({
+          pattern: 'Rembrandt', confidence: 91,
+          meta: ['Camera-Left High', 'Large Octabox', '1 light'],
+          mood: 'Dramatic',
+          sections: {
+            patternCandidates: [{ name: 'Rembrandt', score: 91 }, { name: 'Loop', score: 64 }],
+            patternSource: 'shadow analysis', confidenceLabel: 'strong', edgeCaseWarnings: [],
+            shadowAnalysis: 'Hard-edged shadow. Triangle of light on shadow cheek.',
+            shadowComponents: { source: 'Soft', pattern: 'Rembrandt', fill: 'subtle', rim: null },
+            shadowDirection: { shadowQuadrant: 'lower right', keyQuadrant: 'upper left', keyIntensity: 0.8 },
+            catchlightPositions: ['10'], lightQuality: 'soft',
+            catchlightModifier: 'Large Octabox — catchlight at 10 o\'clock, round shape',
+            modifier: {
+              family: 'Large Octabox', sizeLabel: 'Large', sizeRange: '48"–60"',
+              distRange: '5–10 ft', optDist: '6–8 ft',
+              position: 'Upper Left', positionQuad: 'Camera-Left', positionIntensity: 'High',
+              catchlightSize: '85% iris',
+            },
+            sceneDescription: 'Single key light, studio background.',
+          },
+          _raw: {
+            authoritative_pattern: 'rembrandt',
+            lighting_inference: {
+              key_side: 'upper_left', key_elevation: 'high',
+              key_position_text: 'Camera-Left · High', off_axis_angle: 45,
+              detected_cct_kelvin: 5500,
+            },
+            reconstruction: {
+              key_light_angle_deg: 45, key_light_height: 'high', modifier_distance_ft: 7,
+            },
+            signal_diagnostics: {
+              signals: { left_right_asymmetry: 0.72, nose_shadow_angle_deg: 38 },
+            },
+          },
+        });
+        setImagePreview('/loop_standard.jpg');
+      }
+      setScreen('shoot');
+    } catch { /* ignore */ }
+  }, []);
 
   // ── Dev: ?day1_error=<key> jumps straight to the error screen with a
   // canned message so each scenario can be reviewed without going through
@@ -539,9 +940,12 @@ export default function Day1DemoApp() {
     };
   }, []);
 
-  const handleAnalyze = (file, preview) => {
+  const [exifData, setExifData] = useState(null);
+
+  const handleAnalyze = (file, preview, exif) => {
     setImageFile(file);
     setImagePreview(preview);
+    setExifData(exif || null);
     setResult(null);
     setAnalysisError(null);
     setAnalysisReady(false);
@@ -586,18 +990,18 @@ export default function Day1DemoApp() {
   });
   const [lastPreview, setLastPreview] = useState(() => sessionStorage.getItem('ngw_last_preview') || null);
 
-  // Transition to result when analysis finishes (ProcessingScreen stays until ready)
+  // Transition to result when analysis finishes.  A brief 1.2s dwell lets
+  // the pattern tease flash on the ProcessingScreen photo before we switch —
+  // the "reveal moment" that makes the user feel the analysis landed.
   useEffect(() => {
     if (screen === 'processing' && analysisReady) {
       if (result) {
-        setScreen('result');
-        // Cache for last-result recall
+        // Cache immediately (don't wait for the dwell timer)
         setLastResult(result);
         setLastPreview(imagePreview);
         setLastAnalysisTime(Date.now());
         try {
           sessionStorage.setItem('ngw_last_result', JSON.stringify(result));
-          // Convert blob URL to data URL so it survives page reloads
           if (imagePreview && imagePreview.startsWith('blob:')) {
             fetch(imagePreview).then(r => r.blob()).then(blob => {
               const reader = new FileReader();
@@ -612,6 +1016,9 @@ export default function Day1DemoApp() {
             sessionStorage.setItem('ngw_last_preview', imagePreview);
           }
         } catch { /* quota */ }
+        // 1.2s dwell — pattern tease shows on the processing photo
+        const timer = setTimeout(() => setScreen('result'), 1200);
+        return () => clearTimeout(timer);
       } else if (analysisError) {
         setScreen('error');
       }
@@ -626,30 +1033,31 @@ export default function Day1DemoApp() {
     }
   };
 
-  const handleSetup = () => setScreen('setup');
-  // Bucket C (Day1SettingsScreen) is not registered in this build — no-op.
-  // HomeScreen still receives onSettings; clicking the gear is a silent no-op.
-  const handleSettings = () => { /* Bucket C deferred */ };
+  const handleSetup = (altPattern) => {
+    if (altPattern && typeof altPattern === 'string') {
+      // Runner-up candidate selected — update result with the alternative pattern
+      setResult(prev => ({
+        ...prev,
+        pattern: toTitleCase(altPattern),
+        _altPatternOverride: altPattern,
+      }));
+    }
+    setScreen('setup');
+  };
+  const handleSettings = () => setScreen('settings');
 
   const handleSetupSave = () => {
     // Persistence happens inside SetupScreen; stay on setup so the user can
     // see the "Saved" confirmation before deciding to Start Cockpit.
   };
 
-  // Bucket B runtime gate — cockpit unlock comes from ?studio=1&cockpit=1
-  // (Checkpoint 2 flag plumbing). Without it, all nav paths into Day1ShootScreen
-  // redirect cleanly to Studio Home.
-  const isCockpitUnlocked = () => {
-    try { return sessionStorage.getItem('ngw_studio_cockpit') === '1'; }
-    catch { return false; }
-  };
-
+  // Bucket B cockpit gate — REMOVED.
+  // Originally gated all paths into Day1ShootScreen behind
+  // ?studio=1&cockpit=1 session flag while the cockpit stabilised.
+  // The cockpit is now functional for analyze, wizard, and recipe paths,
+  // so the gate is no longer needed.  The separate login gate below
+  // still blocks unauthenticated users from loading Studio Matte.
   const handleStartCockpit = (mode) => {
-    if (!isCockpitUnlocked()) {
-      // Bucket B locked in this build — return to Home cleanly.
-      setScreen('home');
-      return;
-    }
     setShootMode(mode || 'photographer');
     setScreen('shoot');
   };
@@ -661,7 +1069,211 @@ export default function Day1DemoApp() {
     setResult(null);
   };
 
-  const handleSetupCancel = () => setScreen('result');
+  const handleSetupCancel = () => {
+    // If result came from recipe or wizard (no real analysis), go home instead of result screen
+    if (result?._recipeSource || result?._wizardSource) {
+      setScreen('home');
+      setResult(null);
+    } else {
+      setScreen('result');
+    }
+  };
+  const handleRecipes = () => setScreen('recipes');
+  const handleRecipeSelect = (recipe) => {
+    // Build a result object from recipe data so SetupScreen can render it
+    const lightCount = recipe.setupTime?.match(/(\d+)\s*light/)?.[1] || '1';
+    const recipeResult = {
+      pattern: toTitleCase(recipe.pattern),
+      confidence: 100,
+      meta: [
+        recipe.modifierFamily ? prettyModifierLabel(recipe.modifierFamily) : null,
+        `${lightCount} light${lightCount !== '1' ? 's' : ''}`,
+        recipe.environment ? toTitleCase(recipe.environment) : null,
+      ].filter(Boolean),
+      mood: toTitleCase(recipe.mood),
+      _recipeSource: recipe.id,
+      sections: {
+        patternCandidates: [{ name: toTitleCase(recipe.pattern), score: 100 }],
+        patternSource: 'recipe',
+        confidenceLabel: 'recipe',
+        edgeCaseWarnings: [],
+        shadowAnalysis: null,
+        shadowComponents: null,
+        shadowDirection: null,
+        catchlightPositions: [],
+        lightQuality: recipe.difficulty <= 1 ? 'soft' : 'mixed',
+        catchlightModifier: recipe.modifierFamily
+          ? prettyModifierLabel(recipe.modifierFamily)
+          : null,
+        modifier: recipe.modifierFamily ? {
+          family: prettyModifierLabel(recipe.modifierFamily),
+          sizeLabel: null,
+          sizeRange: null,
+          distRange: null,
+          optDist: null,
+          position: null,
+          positionQuad: null,
+          positionIntensity: null,
+          catchlightSize: null,
+        } : null,
+        sceneDescription: recipe.description,
+        colorPalette: null, signalQuality: null, vlmNarrative: null,
+      },
+      _raw: {
+        shoot_checklist: recipe.warning ? [recipe.warning] : [],
+        recipe: {
+          id: recipe.id,
+          name: recipe.name,
+          whyItWorks: recipe.whyItWorks,
+          gearFlexibility: recipe.gearFlexibility,
+          useCase: recipe.useCase,
+          variations: recipe.variations,
+        },
+      },
+    };
+    setResult(recipeResult);
+    setImagePreview(null);
+    setScreen('setup');
+  };
+  const handleSavedSetups = () => setScreen('saved');
+  const handleBuildWizard = () => setScreen('build');
+  const handleMyKit = () => setScreen('mykit');
+  const handleBuildComplete = (payload) => {
+    // Build a result object from wizard payload so SetupScreen can render it
+    const wizardResult = {
+      pattern: toTitleCase(payload.mood || 'custom'),
+      confidence: 100,
+      meta: [
+        payload.subject ? toTitleCase(payload.subject) : null,
+        payload.environment ? toTitleCase(payload.environment) : null,
+        payload.gearMode === 'best_setup' ? 'Best Setup' : 'My Gear',
+      ].filter(Boolean),
+      mood: toTitleCase(payload.mood),
+      _wizardSource: true,
+      sections: {
+        patternCandidates: [],
+        patternSource: 'wizard',
+        confidenceLabel: 'custom build',
+        edgeCaseWarnings: [],
+        shadowAnalysis: null,
+        shadowComponents: null,
+        shadowDirection: null,
+        catchlightPositions: [],
+        lightQuality: null,
+        catchlightModifier: null,
+        modifier: null,
+        sceneDescription: `${toTitleCase(payload.mood)} ${toTitleCase(payload.subject)} — ${toTitleCase(payload.environment)}`,
+        colorPalette: null, signalQuality: null, vlmNarrative: null,
+      },
+      _raw: {
+        wizard: payload,
+      },
+    };
+    setResult(wizardResult);
+    setImagePreview(null);
+    setScreen('setup');
+
+    // Fetch engine-built result cards in the background and merge them into
+    // the result when they arrive.  Navigation is not blocked on this — the
+    // wizard→setup transition stays instant.  If the call fails we keep the
+    // fallback wizardResult in place; new card renderers must tolerate a
+    // missing `cards` field.
+    shootMatch(wizardPayloadToShootMatch(payload))
+      .then(resp => {
+        if (!resp) return;
+        const cards = resp.cards || {};
+        const diag = cards.diagram || {};
+        const keyLight = cards.shootThisSetup?.lights?.[0];
+        const cam = cards.cameraSettings || {};
+
+        // Canonical pattern from the engine's diagram (e.g. "loop",
+        // "rembrandt") — NOT the mood label the wizard used as a
+        // placeholder.  This is what the cockpit keys coaching on.
+        const enginePattern = diag.pattern
+          || resp.authoritative_pattern
+          || null;
+        const patternDisplay = enginePattern
+          ? toTitleCase(enginePattern)
+          : toTitleCase(payload.mood || 'custom');
+
+        // Flatten key-light data into the shapes Day1ShootScreen reads:
+        //   result.sections.modifier.*   (catchlight / modifier panel)
+        //   result._raw.reconstruction.* (angle, height, distance)
+        //   result._raw.lighting_inference.* (position text, CCT)
+        const modifier = keyLight ? {
+          family: keyLight.modifier || null,
+          sizeLabel: null,
+          sizeRange: null,
+          distRange: keyLight.distance || null,
+          optDist: keyLight.distance || null,
+          position: keyLight.position || null,
+          positionQuad: keyLight.angle || null,
+          positionIntensity: null,
+          catchlightSize: null,
+        } : null;
+
+        // Convention conversion: shoot-match diagram_spec uses
+        // 0°=camera-facing, 90°=side, 180°=behind. The engine/cockpit
+        // convention is inverted: 0°=behind, 90°=side, 180°=camera-facing.
+        const _smAngle = keyLight?.angle_deg;
+        const reconstruction = keyLight ? {
+          key_light_angle_deg: typeof _smAngle === 'number' ? 180 - _smAngle : null,
+          key_light_height: keyLight.height_m != null
+            ? (keyLight.height_m >= 2.0 ? 'high'
+              : keyLight.height_m >= 1.5 ? 'medium' : 'low')
+            : null,
+          modifier_distance_ft: keyLight.distance_m != null
+            ? Math.round(keyLight.distance_m * 3.281)
+            : null,
+        } : {};
+
+        const cctRaw = cam.wb;
+        const cctKelvin = typeof cctRaw === 'string'
+          ? parseInt(cctRaw.replace(/[^\d]/g, ''), 10) || null
+          : null;
+
+        setResult(prev => ({
+          ...prev,
+          pattern: patternDisplay,
+          confidence: cards.bestMatch?.reliability ?? prev.confidence,
+          cards,
+          shootLoop: resp.shootLoop || null,
+          authoritative_pattern: resp.authoritative_pattern || null,
+          _shootMatchRaw: resp,
+          sections: {
+            ...prev.sections,
+            modifier,
+            patternSource: 'shoot-match',
+            confidenceLabel: cards.bestMatch?.reliabilityLabel || prev.sections?.confidenceLabel,
+          },
+          _raw: {
+            ...prev._raw,
+            authoritative_pattern: enginePattern,
+            reconstruction,
+            lighting_inference: {
+              key_position_text: keyLight?.position || null,
+              key_side: keyLight?.angle_deg != null
+                ? (keyLight.angle_deg > 5 ? 'upper_right'
+                  : keyLight.angle_deg < -5 ? 'upper_left' : 'center')
+                : null,
+              key_elevation: reconstruction.key_light_height || null,
+              detected_cct_kelvin: cctKelvin,
+            },
+          },
+        }));
+      })
+      .catch(err => {
+        console.warn('[Studio] shoot-match failed for wizard payload:', err?.message || err);
+      });
+  };
+  const handleSavedSetupSelect = (setup) => {
+    // Load the saved setup's result and show the setup sheet
+    if (setup.result) {
+      setResult(setup.result);
+      setImagePreview(setup.imagePreview || null);
+      setScreen('setup');
+    }
+  };
 
   const handleRetry = () => {
     // Abort any in-flight analysis
@@ -674,26 +1286,23 @@ export default function Day1DemoApp() {
     setAnalysisReady(false);
   };
 
-  // Login gate — StudioLoginScreen is Bucket B, gated behind cockpit unlock.
-  // Without cockpit, an unauthenticated tester exits studio cleanly to prod auth
-  // (clears studio session flags so they don't yo-yo back before authenticating).
+  // Login gate — unauthenticated users see the Studio login screen.
+  // (The old Bucket B cockpit-unlock branch that redirected to prod auth
+  // was removed along with the cockpit gate — all studio paths now show
+  // the in-studio login screen.)
   if (!user) {
-    if (!isCockpitUnlocked()) {
-      try {
-        sessionStorage.removeItem('ngw_studio_active');
-        sessionStorage.removeItem('ngw_goto_day1_demo');
-      } catch { /* ignore */ }
-      if (typeof window !== 'undefined') {
-        window.location.replace('/?login=1');
-      }
-      return null;
-    }
     return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
   }
 
-  switch (screen) {
-    case 'home':
-      return (
+  // ── Screen crossfade — each screen fades in on mount (200ms) ──
+  const screenContent = (() => {
+    switch (screen) {
+    case 'home': {
+      // Desktop: HomeScreen manages its own two-column grid layout at native
+      // viewport width — no FitToViewport scaling needed.
+      // Mobile: 430×932 aspect-preserving contain via FitToViewport.
+      const homeMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const homeEl = (
         <HomeScreen
           onAnalyze={handleAnalyze}
           hasLastResult={!!lastResult}
@@ -701,40 +1310,155 @@ export default function Day1DemoApp() {
           user={user}
           onLogout={() => { clearAuth(); setUser(null); }}
           onSettings={handleSettings}
+          onRecipes={handleRecipes}
+          onSavedSetups={handleSavedSetups}
+          onBuildWizard={handleBuildWizard}
+          onMyKit={handleMyKit}
           lastAnalysisTime={lastAnalysisTime}
         />
       );
-    case 'processing':
-      return <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} />;
-    case 'result':
+      if (!homeMobile) return homeEl;
       return (
+        <FitToViewport
+          designWidth={430}
+          designHeight={932}
+          maxScale={1.9}
+          tightness={0.96}
+        >
+          {homeEl}
+        </FitToViewport>
+      );
+    }
+    case 'processing': {
+      const procMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const procEl = <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />;
+      if (!procMobile) return procEl;
+      return (
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>
+          {procEl}
+        </FitToViewport>
+      );
+    }
+    case 'result': {
+      // Desktop: bypass FitToViewport — ResultScreen manages its own layout.
+      // Mobile: 430-wide with width-only scaling.
+      const resultMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const resultEl = (
         <ResultScreen
           result={result}
           imagePreview={imagePreview}
           onSetup={handleSetup}
           onRetry={handleRetry}
+          isPaid={appIsPaid}
+          plan={appPlan}
         />
       );
-    case 'setup':
+      if (!resultMobile) return resultEl;
       return (
+        <FitToViewport designWidth={430} fitMode="width" minScale={1} maxScale={1.3} tightness={0.96}>
+          {resultEl}
+        </FitToViewport>
+      );
+    }
+    case 'setup': {
+      // Desktop: bypass FitToViewport — SetupScreen manages its own layout.
+      // Mobile: 430×932 with standard scaling.
+      const setupMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const setupEl = (
         <SetupScreen
           result={result}
           imagePreview={imagePreview}
           onSave={handleSetupSave}
           onCancel={handleSetupCancel}
           onStartCockpit={handleStartCockpit}
+          isPaid={appIsPaid}
+          plan={appPlan}
         />
       );
-    case 'shoot':
+      if (!setupMobile) return setupEl;
       return (
-        <Day1ShootScreen
-          result={result}
-          imagePreview={imagePreview}
-          mode={shootMode}
-          onExit={handleExitShoot}
+        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+          {setupEl}
+        </FitToViewport>
+      );
+    }
+    case 'shoot': {
+      // Cockpit uses a LOCAL 768px threshold (not the global 1024)
+      // so tablet portrait gets the two-column photo+chrome layout
+      // in both FitToViewport AND the internal isDesktop branching.
+      const shootMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+      const shootDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      return (
+        <FitToViewport
+          designWidth={shootMobile ? 430 : 1180}
+          designHeight={shootMobile ? 932 : shootDesktopVH}
+          minScale={shootMobile ? 0.8 : 0.5}
+          maxScale={shootMobile ? 1.9 : 2.0}
+          tightness={shootMobile ? 0.96 : 1}
+        >
+          <Day1ShootScreen
+            result={result}
+            imagePreview={imagePreview}
+            mode={shootMode}
+            onExit={handleExitShoot}
+          />
+        </FitToViewport>
+      );
+    }
+    case 'build': {
+      const buildMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const buildEl = <BuildWizardScreen onComplete={handleBuildComplete} onBack={() => setScreen('home')} />;
+      if (!buildMobile) return buildEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{buildEl}</FitToViewport>;
+    }
+    case 'saved': {
+      const savedMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const savedEl = (
+        <SavedSetupsScreen
+          onSelect={handleSavedSetupSelect}
+          onBack={() => setScreen('home')}
+          onBuild={() => setScreen('recipes')}
+          onShoot={(setup) => { if (setup.result) { setResult(setup.result); handleStartCockpit('photographer'); } }}
         />
       );
-    // case 'settings': removed in Checkpoint 3 — Day1SettingsScreen is Bucket C.
+      if (!savedMobile) return savedEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{savedEl}</FitToViewport>;
+    }
+    case 'recipes': {
+      const recipesMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const recipesEl = <RecipeScreen onSelect={handleRecipeSelect} onBack={() => setScreen('home')} onBuild={handleBuildWizard} />;
+      if (!recipesMobile) return recipesEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
+    }
+    case 'mykit': {
+      const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const mkEl = <MyKitScreen onBack={() => setScreen('home')} onRecipes={handleRecipes} />;
+      if (!mkMobile) return mkEl;
+      return (
+        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+          {mkEl}
+        </FitToViewport>
+      );
+    }
+    case 'settings': {
+      const settingsMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const settingsEl = (
+        <Day1SettingsScreen
+          user={user}
+          onBack={() => setScreen('home')}
+          onLogout={() => { clearAuth(); setUser(null); setScreen('home'); }}
+          onLab={() => setScreen('lab')}
+        />
+      );
+      if (!settingsMobile) return settingsEl;
+      return (
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>
+          {settingsEl}
+        </FitToViewport>
+      );
+    }
+    case 'lab':
+      return <StudioLabWrapper onBack={() => setScreen('settings')} />;
     case 'error':
       return (
         <FallbackReveal
@@ -743,19 +1467,57 @@ export default function Day1DemoApp() {
           onHome={handleRetry}
         />
       );
-    default:
-      return (
-        <HomeScreen
-          onAnalyze={handleAnalyze}
-          hasLastResult={!!lastResult}
-          onViewLastResult={handleViewLastResult}
-          user={user}
-          onLogout={() => { clearAuth(); setUser(null); }}
-          onSettings={handleSettings}
-          lastAnalysisTime={lastAnalysisTime}
-        />
+    default: {
+      // Fallback to home — same bypass pattern
+      const defMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const defEl = (
+        <HomeScreen onAnalyze={handleAnalyze} hasLastResult={!!lastResult} onViewLastResult={handleViewLastResult}
+          user={user} onLogout={() => { clearAuth(); setUser(null); }} onSettings={handleSettings}
+          onRecipes={handleRecipes} onSavedSetups={handleSavedSetups} onBuildWizard={handleBuildWizard}
+          onMyKit={handleMyKit} lastAnalysisTime={lastAnalysisTime} />
       );
-  }
+      if (!defMobile) return defEl;
+      return <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>{defEl}</FitToViewport>;
+    }
+    }
+  })();
+
+  // Admin testing indicator — shows when plan is overridden from default
+  const showTestingBadge = appIsAdmin && appPlan !== 'enterprise';
+
+  return (
+    <div key={screen} style={{ animation: 'screenFadeIn 0.2s ease both', position: 'relative' }}>
+      {screenContent}
+      {/* Admin tier testing indicator — fixed bottom-right corner */}
+      {showTestingBadge && (
+        <div style={{
+          position: 'fixed', bottom: 12, right: 12, zIndex: 9999,
+          padding: '4px 10px', borderRadius: 6,
+          background: appPlan === 'free'
+            ? 'linear-gradient(141.71deg, rgba(40,32,18,0.90) 0%, rgba(28,22,12,0.90) 100%)'
+            : 'linear-gradient(141.71deg, rgba(20,34,28,0.90) 0%, rgba(14,26,20,0.90) 100%)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', gap: 5,
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: appPlan === 'free'
+              ? 'radial-gradient(circle, rgba(255,200,100,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+              : 'radial-gradient(circle, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+            boxShadow: appPlan === 'free' ? '0 0 4px rgba(200,155,60,0.50)' : '0 0 4px rgba(72,186,136,0.50)',
+          }} />
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+            color: appPlan === 'free' ? 'rgba(200,155,60,0.75)' : 'rgba(140,225,180,0.70)',
+            WebkitFontSmoothing: 'antialiased',
+          }}>Testing as {PLAN_LABELS[appPlan]}</span>
+        </div>
+      )}
+      <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+    </div>
+  );
 }
 
 // ─── Fallback Reveal ─────────────────────────────────────────────────────────
@@ -827,7 +1589,7 @@ function FallbackReveal({ message, onRetry }) {
       kicker:    'rgba(150,180,210,0.92)',
       kickerGlow:`${steel(0.22)}`,
       ledHi:     'rgba(180,210,235,0.98)',
-      ledMid:    'rgba(95,124,150,0.85)',
+      ledMid:    'rgba(132, 158, 184,0.85)',
       ledLo:     'rgba(40,60,80,0.6)',
       ledHalo1:  `${steel(0.45)}`,
       ledHalo2:  `${steel(0.16)}`,
@@ -871,7 +1633,7 @@ function FallbackReveal({ message, onRetry }) {
       }}>
         {/* Matte metal surface — same ambient/vignette/grain stack as HomeScreen */}
         <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(95,124,150,0.010) 40%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(132, 158, 184,0.010) 40%, transparent 72%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 40%, transparent 80%)' }} />

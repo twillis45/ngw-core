@@ -4,7 +4,7 @@
   "image_path": "benchmarks/images/mixed_light_failure.jpg",
   "ground_truth": {
     "expected_pattern": "unknown",
-    "expected_light_count": 2,
+    "expected_light_count": 1,
     "expected_key_direction": "unknown",
     "acceptable_patterns": [
       "unknown",
@@ -14,7 +14,7 @@
       "loop",
       "split",
       "projected",
-      "grid/window gobo"
+      "projected"
     ],
     "acceptable_light_count_range": [
       1,

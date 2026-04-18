@@ -1250,15 +1250,15 @@ def infer_environment(cue_report: VisualCueReport) -> EnvironmentInference:
 SETUP_FAMILIES = {
     "single_key_rembrandt": {
         "pattern": "rembrandt",
-        "description": "Single key light at ~45 degrees creating Rembrandt triangle",
+        "description": "Single key light at ~45° creating Rembrandt triangle",
     },
     "single_key_split": {
         "pattern": "split",
-        "description": "Single key light at ~90 degrees creating split lighting",
+        "description": "Single key light at ~90° creating split lighting",
     },
     "single_key_loop": {
         "pattern": "loop",
-        "description": "Single key light at ~30 degrees creating loop shadow",
+        "description": "Single key light at ~30° creating loop shadow",
     },
     "clamshell_beauty": {
         "pattern": "clamshell",

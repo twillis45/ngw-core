@@ -608,6 +608,9 @@ export function transformForUI(apiResponse, mood, skinTone, { powerDisplay, unit
 
   // Pattern comes from the backend — no frontend inference fallback
   const lightingPattern = apiResponse.result?.authoritative_pattern || null;
+  // Geometric base: preserved when tonal specialty (low_key, high_key)
+  // overrides a geometric pattern. Used by diagrams for key placement.
+  const geometricBase = apiResponse.result?.geometric_base || null;
 
   // Build modifier summary for each light
   const modifierSummary = (spec.lights || []).map(l => ({

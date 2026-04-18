@@ -233,11 +233,13 @@
   --sm-surface-pill:  #070709;                      /* meta pill */
   --sm-surface-cta-from: #3d404d;                   /* CTA gradient top */
   --sm-surface-cta-to:   #1c1d24;                   /* CTA gradient bottom */
-  /* Steel-blue tint — base RGB separated for alpha compositing */
-  --sm-steel-r:       95;
-  --sm-steel-g:       124;
-  --sm-steel-b:       150;
-  --sm-steel:         rgb(95, 124, 150);            /* solid reference */
+  /* Steel-blue tint — base RGB separated for alpha compositing.
+     Brighter value (132, 158, 184) bumped 2026-04-10 for calibrated-display
+     legibility; previously 95, 124, 150 which read washed-out. */
+  --sm-steel-r:       132;
+  --sm-steel-g:       158;
+  --sm-steel-b:       184;
+  --sm-steel:         rgb(132, 158, 184);           /* solid reference */
   /* Typography */
   --sm-text-primary:  rgba(245, 247, 250, 0.95);
   --sm-text-sub:      rgba(184, 191, 199, 0.65);
@@ -402,13 +404,76 @@
   --color-bg-instrument:      #000001;
   --color-surface-instrument: #0c0c10;
 
-  --shadow-sm:   0 1px 2px rgba(0,0,0,0.5);
-  --shadow-md:   0 4px 12px rgba(0,0,0,0.7);
-  --shadow-lg:   0 8px 24px rgba(0,0,0,0.8);
-  --shadow-card: 0 1px 4px rgba(0,0,0,0.5);
+  /* Shadows — deeper for the matte surface */
+  --shadow-sm:   1px 2px 4px rgba(0,0,0,0.5);
+  --shadow-md:   2px 4px 12px rgba(0,0,0,0.6);
+  --shadow-lg:   4px 8px 24px rgba(0,0,0,0.7);
+  --shadow-card: 2px 4px 12px rgba(0,0,0,0.5),
+                 inset -1px -1px 2px rgba(0,0,0,0.12),
+                 inset 1px 1px 0 rgba(255,255,255,0.04);
+
+  /* Steel-tint the text secondary for instrument feel */
+  --color-text-secondary:  rgba(132, 158, 184, 0.55);
+  --color-text-dim:        rgba(132, 158, 184, 0.35);
+
+  /* Accent — KEY_ACCENT amber */
+  --color-accent:          #c89b45;
+  --color-accent-hover:    #d4a84f;
+  --color-accent-subtle:   rgba(200, 155, 69, 0.10);
+  --color-accent-subtle-border: rgba(200, 155, 69, 0.22);
+  --color-icon:            #c89b45;
+  --color-cta:             #c89b45;
+
+  /* ── Typography — Studio Matte instrument typography ──
+     Slightly smaller, tighter sizes matching the Day1 screens.
+     Inter at antialiased rendering with geometric precision. */
+  --font-family: "Inter Variable", "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
+
+  /* Tighter font scale — instrument labels, not editorial text */
+  --text-2xs:  10px;   /* data readouts, mono labels */
+  --text-xs:   11.5px; /* captions, metadata, tab labels */
+  --text-sm:   13px;   /* labels, tags, body */
+  --text-md:   16px;   /* section headings */
+  --text-lg:   20px;   /* screen titles */
+  --text-xl:   26px;   /* hero headings */
+
+  /* Weights — Studio Matte uses bolder weights for instrument readability */
+  --weight-normal:   500;  /* raised from 400 — 400 is too light on OLED */
+  --weight-medium:   600;  /* raised from 500 */
+  --weight-semibold: 700;  /* raised from 600 */
+  --weight-bold:     800;  /* raised from 700 — instrument lettering */
+
+  /* Letter spacing — tighter for instrument feel */
+  --tracking-tight: -0.3px;
+  --tracking-normal: 0;
+  --tracking-wide: 0.5px;
+  --tracking-caps: 1.2px; /* uppercase section labels */
+
+  /* Line height — compact for data density */
+  --leading-tight: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
 }
 
 /* photoshop and daynote themes removed — dark/light/studio only */
+
+/* ── Studio Matte focus-visible ─────────────────────── */
+/* Keyboard-only focus ring for all interactive elements */
+/* on dark surfaces. Uses steel-blue glow that's visible */
+/* without clashing with the warm accent system.         */
+/* Targets both dark and studio themes since Day1DemoApp */
+/* renders Studio Matte screens on dark regardless.      */
+[data-theme="dark"] *:focus-visible,
+[data-theme="studio"] *:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(132, 158, 184, 0.55),
+    0 0 8px rgba(132, 158, 184, 0.20) !important;
+}
+[data-theme="dark"] *:focus:not(:focus-visible),
+[data-theme="studio"] *:focus:not(:focus-visible) {
+  outline: none;
+}
 
 /* ── Font Size Scale ─────────────────────────────────── */
 /* Controlled by data-font-size attribute on <html>.     */

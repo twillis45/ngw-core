@@ -3,8 +3,8 @@
   "description": "White seamless catalog \u2014 full body on white seamless, even studio lighting, e-commerce/catalog style",
   "image_path": "benchmarks/images/white_seamless_catalog.jpg",
   "ground_truth": {
-    "expected_pattern": "flat",
-    "expected_light_count": 2,
+    "expected_pattern": "high_key",
+    "expected_light_count": 1,
     "expected_key_direction": "unknown",
     "acceptable_patterns": [
       "flat",

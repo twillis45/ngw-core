@@ -8,15 +8,46 @@
  */
 
 // ─── Steel-blue tint helper ───────────────────────────────────────────────────
-// Base RGB: 95, 124, 150  →  var(--sm-steel-r/g/b) in CSS
-export const steel = (a) => `rgba(95,124,150,${a})`;
+// Base RGB: 132, 158, 184 — brighter steel blue (bumped 2026-04-10 for
+// calibrated-display legibility; was 95, 124, 150 which read washed-out).
+// CSS equivalent: var(--sm-steel-r/g/b) in tokens.css
+export const steel = (a) => `rgba(132, 158, 184,${a})`;
+
+// ─── Key accent tint helper ──────────────────────────────────────────────────
+// Base RGB: 200, 155, 69 — amber gold accent.
+// Mirrors the steel() helper for KEY_ACCENT alpha tints.
+export const accent = (a) => `rgba(200,155,69,${a})`;
+
+// ─── Warm / Dusty Bronze tokens (Figma canonical Tier 1 attention) ──────────
+// Figma palette 1318:2 section "ACCENT — WARM". Dusty Bronze replaces pure gold
+// for cinematic teal-and-orange grading. Use for KEY arrows, modifier silhouettes,
+// hero CTA gradients, ACTIVE chips, readout numerals — anywhere Tier 1 attention
+// is needed.  The existing `accent()` amber gold remains for backward compat;
+// new work should prefer `warm()` and WARM_* constants.
+//
+// Migration: screens will transition from `accent()`/KEY_ACCENT to `warm()`/
+// WARM_PRIMARY over successive passes. Both coexist safely.
+export const WARM_PRIMARY = '#A06D4A';  // key arrows, active chip, hero CTA
+export const WARM_HOVER   = '#7F5536';
+export const WARM_TEXT    = '#C88A63';   // on-dark body/label text
+export const warm = (a) => `rgba(160,109,74,${a})`;
+
+// Canonical KEY_ACCENT — single export so screens stop hardcoding the hex.
+// Currently amber gold; will migrate to WARM_PRIMARY in a future pass.
+export const KEY_ACCENT = '#c89b45';
+
+// ─── Screen background ──────────────────────────────────────────────────────
+// All Studio Matte full-screen roots use this Carbon Black instead of C.bg
+// which is pure black. Provides a softer, warmer near-black.
+// Figma canonical: #0B0B0C (Carbon Black, node 1318:2).
+export const SCREEN_BG = '#0b0b0c';
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 export const C = {
   // ── Surface ──
   bg:          '#000001',           // --sm-bg
   slotBg:      '#08080a',           // --sm-surface-slot
-  panelBg:     '#0f1013',           // --sm-surface
+  panelBg:     '#121316',           // --sm-surface  (Figma: Soft Black)
   pillBg:      '#070709',           // --sm-surface-pill
   ctaFrom:     '#3d404d',           // --sm-surface-cta-from
   ctaMid:      '#292b36',
@@ -54,9 +85,59 @@ export const FONT_SMOOTH = {
   textRendering:       'geometricPrecision',
 };
 
+// ─── 5-tier type scale ───────────────────────────────────────────────────────
+// Canonical sizes across all Studio Matte screens. Desktop variants scale up
+// each tier for wide-viewport reading distance (typically +2–6px).
+// T1 = hero leads / big numbers, T5 = micro metadata / drawer labels.
+export const TYPE = {
+  T1: 32,  // hero lead, step numbers
+  T2: 20,  // section titles, modifier names, pattern name
+  T3: 14,  // body text, spec values, drawer item copy
+  T4: 11,  // labels, secondary text, sub-leads
+  T5: 9,   // micro labels, metadata, category tags
+};
+export const TYPE_DK = {
+  T1: 38,
+  T2: 24,
+  T3: 16,
+  T4: 13,
+  T5: 11,
+};
+
+// ─── Focus-visible ring ──────────────────────────────────────────────────────
+// Steel-blue ring that shows ONLY on keyboard navigation (:focus-visible).
+// Since inline styles can't target :focus-visible, inject as a <style> tag or
+// apply via onFocus/onBlur + a state flag.  The constant is the boxShadow value
+// to merge into a component's existing boxShadow when focused.
+export const FOCUS_RING = `0 0 0 2px ${steel(0.55)}, 0 0 8px ${steel(0.20)}`;
+
 // ─── Panel shadow + bevel (Figma 1515:2) ─────────────────────────────────────
 export const PANEL_SHADOW = '1px 2px 4px 0px rgba(0,0,0,0.2), 2px 4px 12px 0px rgba(0,0,0,0.4)';
 export const PANEL_BEVEL  = 'inset -1px -1px 2px 0px rgba(0,0,0,0.12), inset 1px 1px 0px 0px rgba(255,255,255,0.05)';
+
+// ─── Numeric readout tokens ──────────────────────────────────────────────────
+// Canonical foreground for any "instrument" numeric readout (angle dials,
+// density %, distance counters, etc.).  Always reach for these instead of
+// C.textSub when a number is the SUBJECT of the widget — textSub is meant
+// for secondary copy and reads as washed-out grey on calibrated displays.
+//
+// READOUT_FG    — bright primary readout colour (warm pearl)
+// READOUT_GLOW  — engraved text shadow that lifts the digits off the well
+// READOUT_LABEL — small letter-spaced label colour above/below the readout
+export const READOUT_FG    = 'rgba(245,210,140,0.95)';
+export const READOUT_GLOW  = '0 1px 0 rgba(0,0,0,0.7), 0 0 6px rgba(245,190,72,0.18)';
+export const READOUT_LABEL = 'rgba(150,158,170,0.78)';
+
+// ─── Pull-tab drawer tokens ──────────────────────────────────────────────────
+// Single source of truth for the tactile pullout used across SetupScreen and
+// ResultScreen.  The handle pill is a tiny inset slot machined into the panel
+// surface; the open-state foreground glows amber so closed/open state is
+// instantly readable.  Mirrors PullTabDrawer.jsx in screens/studio/_shared.
+export const DRAWER_HANDLE_SHADOW = 'inset 0px 1px 3px 0px rgba(0,0,0,0.6), inset 0px 0px 6px 0px rgba(0,0,0,0.3)';
+export const DRAWER_HANDLE_BG     = '#0a0b0d';
+export const DRAWER_RADIUS        = 14;
+export const DRAWER_LABEL_FG_OPEN   = 'rgba(245,210,140,0.92)';
+export const DRAWER_LABEL_FG_CLOSED = steel(0.75);
 
 // ─── Engraved label text shadow ───────────────────────────────────────────────
 // Dark top-edge shadow (light source above) + faint bottom reflection = pressed
@@ -80,9 +161,9 @@ export const VIEWFINDER_INNER_SHADOW = [
   'inset 2px 2px 4px 0px rgba(0,0,0,0.55)',
   'inset 1px 1px 2px 0px rgba(0,0,0,0.50)',
   'inset -1px -1px 1px 0px rgba(255,255,255,0.05)',
-  'inset -2px -2px 5px 0px rgba(95,124,150,0.07)',
-  'inset 0px 0px 24px 0px rgba(95,124,150,0.05)',
-  'inset 0px 0px 12px 0px rgba(95,124,150,0.07)',
+  'inset -2px -2px 5px 0px rgba(132, 158, 184,0.07)',
+  'inset 0px 0px 24px 0px rgba(132, 158, 184,0.05)',
+  'inset 0px 0px 12px 0px rgba(132, 158, 184,0.07)',
 ].join(', ');
 
 export const GLASS_REFLECTION = [
@@ -110,6 +191,14 @@ export const GLASS_REFLECTION = [
 
 export const LENS_VIGNETTE = 'radial-gradient(ellipse 100% 90% at center, transparent 52%, rgba(0,0,0,0.08) 76%, rgba(0,0,0,0.22) 100%)';
 
+// ─── VF dither noise layer ──────────────────────────────────────────────────
+// Subtle high-frequency noise breaks up gradient banding in LENS_VIGNETTE and
+// GLASS_REFLECTION. Render as a `<div>` with this as `backgroundImage` inside
+// the glass overlay container, `position: absolute; inset: 0; opacity: 0.28;
+// mixBlendMode: 'overlay'`. The SVG encodes a 200×200 feTurbulence tile that
+// repeats seamlessly. Tiny footprint (~250 bytes), zero network requests.
+export const VF_DITHER_NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`;
+
 // ─── Metallic chevron (glossy embossed icon treatment) ────────────────────────
 export const METALLIC_CHEVRON = {
   backgroundImage: 'linear-gradient(141.71deg, rgba(40,44,52,0.95) 0%, rgba(70,78,90,0.90) 30%, rgba(25,28,34,0.85) 55%, rgba(55,62,72,0.80) 75%, rgba(20,22,28,0.90) 100%)',
@@ -117,7 +206,7 @@ export const METALLIC_CHEVRON = {
   backgroundClip: 'text',
   color: 'transparent',
   ...FONT_SMOOTH,
-  filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.6)) drop-shadow(0px -1px 0px rgba(255,255,255,0.10)) drop-shadow(0px 0px 2px rgba(95,124,150,0.12))',
+  filter: 'drop-shadow(0px 1px 1px rgba(0,0,0,0.6)) drop-shadow(0px -1px 0px rgba(255,255,255,0.10)) drop-shadow(0px 0px 2px rgba(132, 158, 184,0.12))',
 };
 
 // ─── Neumorphic button states ─────────────────────────────────────────────────
@@ -129,7 +218,7 @@ export const BTN_RAISED_UP = [
   '0px 1px 2px 0px rgba(0,0,0,0.4)',
   `inset 0px 1.5px 0px 0px rgba(255,255,255,0.18)`,
   'inset 0px -1.5px 0px 0px rgba(0,0,0,0.45)',
-  `inset 0px 0px 16px 0px rgba(95,124,150,0.07)`,
+  `inset 0px 0px 16px 0px rgba(132, 158, 184,0.07)`,
   '0px 0px 0px 0.5px rgba(0,0,0,0.5)',
 ].join(', ');
 

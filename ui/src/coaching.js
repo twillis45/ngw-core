@@ -88,7 +88,7 @@ const COACHING = {
     },
     subject: {
       distanceFromBackground: '8-10 ft',
-      poseNote: 'Turned 30-45 degrees from camera',
+      poseNote: 'Turned 30–45° from camera',
     },
     background: null,
     goodSigns: [

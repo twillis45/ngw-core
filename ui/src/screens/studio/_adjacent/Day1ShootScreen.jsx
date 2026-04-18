@@ -25,14 +25,14 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { navHaptic, tapHaptic, successHaptic, grainHaptic, longPressHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
 import { postSignal } from '../../../data/signalsApi';
+import useStableViewport from '../../../utils/useStableViewport';
 import { getUser } from '../../../data/authApi';
 import ZoomableHeroOverlay from './components/ZoomableHeroOverlay';
 import NailedItOverlay from './components/NailedItOverlay';
-
-const KEY_ACCENT = '#c89b45';
+import LightingDiagram from '../_core/components/LightingDiagram';
 
 const MODE_LABELS = {
   photographer: { label: 'Photographer', tag: 'FULL DETAILS' },
@@ -690,6 +690,13 @@ function buildSteps({ pattern, confidence, modName, position, distance,
   // PHOTOGRAPHER — terse numeric leads, angle is primary photographer speak
   const photographer = [
     {
+      key: 'setup',
+      title: 'YOUR SETUP',
+      lead: modName,
+      subLead: `${pattern} · ${confidence}%`,
+      coach: null,
+    },
+    {
       key: 'position',
       title: 'KEY ANGLE',
       lead: angleDeg != null ? `${angleDeg}°` : position,
@@ -724,6 +731,13 @@ function buildSteps({ pattern, confidence, modName, position, distance,
   // ASSISTANT — single HUGE command, imperative verbs, angle leads, clock as sub
   const assistant = [
     {
+      key: 'setup',
+      verb: 'SETUP',
+      command: modName.toUpperCase(),
+      subCommand: `${pattern} · ${confidence}%`,
+      coach: null,
+    },
+    {
       key: 'position',
       verb: 'PLACE KEY',
       command: angleDeg != null ? `${angleDeg}°` : (position || '').toUpperCase(),
@@ -755,40 +769,100 @@ function buildSteps({ pattern, confidence, modName, position, distance,
     },
   ];
 
-  // LEARNING — narrative lead + WHY callout with lighting theory + data
+  // LEARNING — pattern-specific copy. Each lighting pattern has a distinct
+  // personality, shadow signature, and teaching angle. A grandmother should
+  // be able to follow every sentence.
+  const _hLow = heightDisplay === 'Low' || heightDisplay === 'low';
+  const _hHigh = heightDisplay === 'High' || heightDisplay === 'high';
+  const _p = (pattern || '').toLowerCase();
+  const _pos = (position || '').toLowerCase() || 'the side';
+
+  // Pattern-specific personality
+  const _patternVibe = {
+    rembrandt: { mood: 'dramatic and sculptural', shadow: 'a small triangle of light on the shadow cheek, just below the eye', signature: 'Rembrandt triangle', origin: 'Named after the painter who used this shadow shape in nearly every portrait.' },
+    loop:      { mood: 'natural and flattering', shadow: 'a small loop-shaped shadow from the nose that doesn\'t quite touch the cheek', signature: 'loop shadow', origin: 'The most common portrait pattern because it flatters almost every face shape.' },
+    butterfly: { mood: 'glamorous and symmetrical', shadow: 'a butterfly-shaped shadow directly under the nose', signature: 'butterfly shadow', origin: 'Used in classic Hollywood glamour photography — the light sits directly in front, high above.' },
+    clamshell: { mood: 'clean and beauty-focused', shadow: 'almost no shadows at all — the face is evenly lit with soft, glowing skin', signature: 'shadowless beauty look', origin: 'The go-to for beauty and skincare photography. Two lights (above + below) wrap the face completely.' },
+    split:     { mood: 'bold and dramatic', shadow: 'exactly half the face lit, half in deep shadow — a hard vertical line down the center', signature: 'half-and-half split', origin: 'The most dramatic portrait pattern. One side of the face tells the story, the other hides in mystery.' },
+    short:     { mood: 'slimming and dimensional', shadow: 'the narrow (short) side of the face is lit while the wider side falls into shadow', signature: 'short-side lighting', origin: 'Photographers use this to slim the face and add depth. The light hits the side of the face that\'s turned away from camera.' },
+    broad:     { mood: 'open and wide', shadow: 'the broad (camera-facing) side of the face is lit, with shadow falling away from camera', signature: 'broad-side lighting', origin: 'Makes the face appear wider and more open. Often used for thin faces that need more visual weight.' },
+  };
+  const _v = _patternVibe[_p] || { mood: 'distinctive', shadow: 'a characteristic shadow pattern on the face', signature: 'shadow pattern', origin: 'Each lighting pattern creates a unique shadow shape that defines the mood of the portrait.' };
+
   const learning = [
     {
+      key: 'setup',
+      title: 'WHAT YOU\'RE BUILDING',
+      lead: `This is ${pattern} lighting — it creates a ${_v.mood} look. You'll use a ${modName} as your main light.`,
+      why: `${_v.origin} The defining feature: ${_v.shadow}. Your ${modName} will create this shape — we just need to put it in the right spot.`,
+      coach: null,
+    },
+    {
       key: 'position',
-      title: 'PLACE THE KEY LIGHT',
-      lead: `Place the ${modName} at ${position}${angleDeg != null ? ` — about ${angleDeg}° off-axis` : ''}.`,
-      why: noseShadowAngle != null
-        ? `The nose shadow falls at ${noseShadowAngle.toFixed(0)}°, which is what creates this pattern. ${pattern.toLowerCase()} lighting forms when the key is ~30–45° off-axis — the shadow under the nose curves into a short "loop" or triangle on the shadow-side cheek.`
-        : `Clock position is relative to the subject facing camera — 12 is directly behind, 6 is in front. Off-axis placement is what builds a directional pattern instead of flat lighting.`,
+      title: 'WHERE TO PUT THE LIGHT',
+      lead: _p === 'butterfly' || _p === 'clamshell'
+        ? `Place your ${modName} directly in front of your subject, centered with the camera. The light should come from straight ahead.`
+        : _p === 'split'
+          ? `Move your ${modName} to the ${_pos} — all the way to 90°, perpendicular to the face. You want it lighting exactly one half.`
+          : _p === 'rembrandt'
+            ? `Swing your ${modName} to the ${_pos} — about 45° from the camera. You're looking for that sweet spot where the nose shadow just reaches the far cheek.`
+            : `Move your ${modName} to the ${_pos}. The angle creates the ${_v.signature} — further to the side means more dramatic shadows, closer to center means flatter light.`,
+      why: _p === 'butterfly' || _p === 'clamshell'
+        ? `Centered light eliminates side shadows completely. That's why it's so flattering for beauty work — no unflattering shadows under cheekbones or along the jawline. The only shadow you'll see is a small ${_v.signature} directly under the nose.`
+        : _p === 'split'
+          ? `At 90°, the nose acts like a wall — light can't wrap around to the other side. That's what creates the clean vertical division. Even a few degrees off will start to let light leak onto the shadow side.`
+          : _p === 'rembrandt'
+            ? `The magic angle for Rembrandt is where the nose shadow extends just far enough to connect with the cheek shadow — creating a small triangle of light on the shadow-side cheek. If you can't see the triangle, move the light further to the side. If the shadow side goes completely dark, you've gone too far.`
+            : `The position of your light relative to the face is what creates the specific shadow shape. Think of it like sunlight through a window — where the window is determines where the shadows fall.`,
       coach: coach('position'),
     },
     {
       key: 'distance',
-      title: 'SET THE DISTANCE',
-      lead: `Pull the softbox to ${distance} from your subject.`,
-      why: angularArea
-        ? `Distance controls shadow hardness via apparent light size. At this range, your ${modName} yields ${angularArea} angular area — enough wrap for flattering skin without losing dimensional shadow.`
-        : `Closer = softer, more wrap (larger apparent light). Farther = harder shadows, more directional fall-off. Distance is a dial, not a binary.`,
+      title: 'HOW FAR AWAY',
+      lead: `Place the light about ${distance} from your subject.`,
+      why: _p === 'clamshell' || _p === 'butterfly'
+        ? `For ${pattern.toLowerCase()}, distance matters a lot. Too close and the light wraps too much — you lose the clean ${_v.signature}. Too far and the light gets harsh. At ${distance}, your ${modName} is close enough to keep skin smooth but controlled enough to hold the pattern.`
+        : _p === 'split'
+          ? `With split lighting, moving closer makes the lit side softer and the transition at the center more gradual. Moving farther makes the edge sharper and more dramatic. At ${distance}, you get a defined split that still has some skin texture visible.`
+          : _p === 'rembrandt'
+            ? `At ${distance}, your ${modName} creates shadows that have a soft edge — firm enough to see the Rembrandt triangle clearly, but gentle enough that the skin still looks natural. Closer would make it too soft to see the triangle; farther would make the shadows too harsh.`
+            : `The simple rule: closer = softer shadows (like an overcast day). Farther = harder shadows (like direct sun). At ${distance}, you get the right balance for ${pattern.toLowerCase()} — defined shadows without being harsh.`,
       coach: coach('distance'),
     },
     {
       key: 'height',
-      title: 'DIAL THE HEIGHT',
-      lead: `Raise the light to ${heightDisplay.toLowerCase()} — tilted down onto the eyes.`,
-      why: `Height sets the nose-shadow *length*. Higher placement → longer shadow → more dramatic. Too high and you lose catchlights in the eyes; too low and the pattern flattens into a butterfly. Aim for the catchlight to land around 10–11 o'clock in the iris.`,
+      title: 'HOW HIGH',
+      lead: _p === 'butterfly' || _p === 'clamshell'
+        ? `Raise the light directly above the camera — high enough to create the ${_v.signature}, aimed down at the face.`
+        : _p === 'split'
+          ? _hHigh
+            ? `Raise the light above head height. For split lighting, height adds drama — a higher light makes the lit side more sculpted.`
+            : `Keep the light at about face level. This keeps the split clean and even from forehead to chin.`
+          : _hHigh
+            ? `Raise the light well above your subject's head — aim it down toward the eyes, like afternoon sun.`
+            : _hLow
+              ? `Keep the light near eye level — you want it looking straight at the face.`
+              : `Set the light just above eye level — tilted slightly down toward the face.`,
+      why: _p === 'butterfly'
+        ? `Height is everything for butterfly lighting. The higher the light, the longer the shadow under the nose. You want a short, symmetrical butterfly shape — not a long shadow that reaches the lip. Watch for the bright spark (catchlight) in the eyes at the 12 o'clock position. If you can't see it, the light is too high.`
+        : _p === 'clamshell'
+          ? `The top light creates the main shape. Your fill light (or reflector) below opens up the shadows under the chin and eyes. Together they "clam shell" the face in soft, even light. Check for two catchlights — one from above, one from below.`
+          : _p === 'rembrandt'
+            ? `Height controls the Rembrandt triangle. Too high: the triangle disappears and the eye sockets go dark (raccoon eyes). Too low: the triangle opens up into a loop pattern instead. The sweet spot: you can see the triangle AND a bright spark of light in both eyes.`
+            : `Height controls the length of the nose shadow. Higher = longer shadow = more dramatic. Lower = shorter shadow = softer feel. The key check: can you see a bright spark of light reflected in both eyes? If not, the light is too high — lower it until you see that spark.`,
       coach: coach('height'),
     },
     {
       key: 'capture',
-      title: 'FIRE A FRAME',
-      lead: `${pattern} locked at ${confidence}% confidence — capture and compare.`,
-      why: asymmetry != null
-        ? `Your final reference had ${(asymmetry * 100).toFixed(0)}% left/right shadow asymmetry — that's what keeps this from reading as flat/butterfly. After capture, compare catchlight shape in both eyes: they should be near-identical in position and size.`
-        : `Compare your frame against the reference. Catchlight position, shadow triangle under the eye, and shadow-side wrap all need to match. If pattern drifts, step back and re-check position before touching height.`,
+      title: 'TAKE THE SHOT',
+      lead: `You're set for ${pattern.toLowerCase()}. Take a photo and compare it to the reference.`,
+      why: _p === 'rembrandt'
+        ? `Check for three things: (1) Can you see the small triangle of light on the shadow cheek? That's the Rembrandt signature. (2) Is there a bright spark in both eyes? (3) Does the shadow side still show some detail — it shouldn't be pure black. If the triangle is missing, adjust position. If eyes are dark, lower the light.`
+        : _p === 'butterfly'
+          ? `Check for: (1) A symmetrical butterfly shadow under the nose — it should be centered, not leaning to one side. (2) Catchlights at the top of both eyes (12 o'clock). (3) Clean jawline without heavy shadows. If the shadow leans, your light isn't centered.`
+          : _p === 'split'
+            ? `Check for: (1) A clean, straight line dividing the lit and shadow sides of the face. (2) The line should run through the center of the nose. (3) The shadow side can be very dark — that's intentional. If light is leaking onto the shadow side, push the light further to the side.`
+            : `Check your photo against the reference: (1) Does the shadow shape on the face match? (2) Can you see a bright spark of light in both eyes? (3) Is there detail in the shadow side — not pure black? If something's off, adjust one thing at a time. Start with position, then distance, then height.`,
       coach: coach('capture'),
     },
   ];
@@ -804,6 +878,51 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
   const [heroZoomed, setHeroZoomed] = useState(false);
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const outcomeSentRef = useRef(false);
+
+  // ── Cockpit teach overlay (first-time user onboarding) ────────────────────
+  const [cockpitTeachStep, setCockpitTeachStep] = useState(0);
+  const [cockpitTeachVisible, setCockpitTeachVisible] = useState(() => {
+    try { return localStorage.getItem('ngw_cockpit_teach_seen') !== '1'; } catch { return false; }
+  });
+  const advanceCockpitTeach = useCallback(() => {
+    setCockpitTeachStep(prev => {
+      if (prev >= 3) {
+        setCockpitTeachVisible(false);
+        try { localStorage.setItem('ngw_cockpit_teach_seen', '1'); } catch { /* ignore */ }
+        return prev;
+      }
+      return prev + 1;
+    });
+  }, []);
+  const skipCockpitTeach = useCallback(() => {
+    setCockpitTeachVisible(false);
+    try { localStorage.setItem('ngw_cockpit_teach_seen', '1'); } catch { /* ignore */ }
+  }, []);
+
+  // C-5: Horizontal swipe navigation between steps
+  const swipeRef = useRef({ startX: 0, startY: 0, swiping: false });
+  const stepsCountRef = useRef(5); // updated after steps is computed
+  const handleSwipeStart = useCallback((e) => {
+    const t = e.touches[0];
+    swipeRef.current = { startX: t.clientX, startY: t.clientY, swiping: true };
+  }, []);
+  const handleSwipeEnd = useCallback((e) => {
+    if (!swipeRef.current.swiping) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeRef.current.startX;
+    const dy = t.clientY - swipeRef.current.startY;
+    swipeRef.current.swiping = false;
+    // Only count horizontal swipes where |dx| > 50px and |dx| > |dy| * 1.5
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const maxIdx = stepsCountRef.current - 1;
+    if (dx < 0) {
+      // Swipe left → next step
+      setStepIndex((i) => { const next = Math.min(maxIdx, i + 1); if (next !== i) { tapHaptic(); softClickSound(); } return next; });
+    } else {
+      // Swipe right → prev step
+      setStepIndex((i) => { const prev = Math.max(0, i - 1); if (prev !== i) { navHaptic(); softClickSound(); } return prev; });
+    }
+  }, []);
 
   // Long-press detection for hero zoom — same trigger feel as ResultScreen.
   const heroLongPressTimer = useRef(null);
@@ -829,7 +948,26 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
     onPointerUp: endHeroLongPress,
     onPointerLeave: endHeroLongPress,
     onPointerCancel: endHeroLongPress,
+    onDoubleClick: () => { longPressHaptic(); setHeroZoomed(true); },
   };
+
+  // ── VF geometry — match Home / Results viewfinder height ───────────────────
+  // L-1 / user request: "same vf size for cockpit as other windows".
+  // Replicates the HomeScreen fluid VF calc so the reference photo is identical.
+  const { stableVH, safeBottom, isDesktop: _isDesktopGlobal } = useStableViewport();
+  // Cockpit uses a LOCAL wide-screen check at 768px so tablet portrait
+  // (iPad mini) gets the two-column photo+chrome layout.  Other screens
+  // keep the global LAYOUT_DESKTOP_MIN = 1024 threshold to avoid the
+  // FitToViewport conflict zone.
+  const isDesktop = _isDesktopGlobal
+    || (typeof window !== 'undefined' && window.innerWidth >= 768);
+  const VF_TOP = 100;
+  const VF_BTN_D = 136;
+  const VF_WELL_D = 146;
+  const VF_BTN_OFFSET = 48;
+  const VF_BTN_CY = stableVH - safeBottom - VF_BTN_OFFSET - Math.round(VF_BTN_D / 2);
+  const VF_WELL_TOP = VF_BTN_CY - VF_WELL_D / 2;
+  const VF_HEIGHT = Math.max(280, VF_WELL_TOP - 16 - VF_TOP);
 
   const modeInfo = MODE_LABELS[mode] || MODE_LABELS.photographer;
   const isAssistant = mode === 'assistant';
@@ -871,6 +1009,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
        angleDeg, asymmetry, noseShadowAngle, cct, angularArea]);
 
   const steps = stepsAll[mode] || stepsAll.photographer;
+  stepsCountRef.current = steps.length; // C-5: keep swipe handler in sync
   const step = steps[stepIndex];
   const isLast = stepIndex === steps.length - 1;
   const isFirst = stepIndex === 0;
@@ -941,9 +1080,10 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
     setJustCaptured(true);
     trackEvent('SHOOT_MODE_FRAME_CAPTURED', { mode, frameCount: n });
     setTimeout(() => setJustCaptured(false), 1600);
-    // Assistant auto-returns to step 1 for next take after brief ack
+    // Assistant auto-returns to first action step for next take after brief ack
+    // (step 0 is the setup overview — skip it on subsequent takes)
     if (isAssistant) {
-      setTimeout(() => setStepIndex(0), 1800);
+      setTimeout(() => setStepIndex(1), 1800);
     }
   };
   const handleDone = () => {
@@ -979,13 +1119,13 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
       ? <LearningBody step={step} imagePreview={imagePreview}
           result={result} stepKey={step.key} position={position}
           angleDeg={angleDeg} distance={distance} pattern={pattern} mode={mode}
-          heroPressHandlers={heroPressHandlers} />
+          heroPressHandlers={heroPressHandlers} vfHeight={VF_HEIGHT} hidePhoto={isDesktop} />
       : <PhotographerBody step={step} imagePreview={imagePreview}
           modName={modName} position={position} distance={distance}
           heightDisplay={heightDisplay} angleDeg={angleDeg}
           pattern={pattern} confidence={confidence} cct={cct}
           result={result} stepKey={step.key} mode={mode}
-          heroPressHandlers={heroPressHandlers} />;
+          heroPressHandlers={heroPressHandlers} vfHeight={VF_HEIGHT} hidePhoto={isDesktop} />;
 
   const primaryLabel = justCaptured
     ? (isAssistant ? 'FRAME GOT' : 'FRAME CAPTURED')
@@ -999,7 +1139,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
         onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         style={{
-        width: '100%', maxWidth: 430, height: '100%', margin: '0 auto',
+        width: '100%', maxWidth: isDesktop ? 1440 : 430, height: '100%', margin: '0 auto',
         backgroundColor: C.bg,
         display: 'flex', flexDirection: 'column',
         position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
@@ -1007,7 +1147,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
 
         {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
         <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(95,124,150,0.008) 40%, transparent 72%)' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
@@ -1016,165 +1156,734 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
             backgroundSize: '128px 128px' }} />
         </div>
 
-        {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '16px 20px 10px', position: 'relative', zIndex: 1,
-          flexShrink: 0,
-        }}>
-          <button
-            onClick={handleExit}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: steel(0.65), fontSize: 14, padding: '4px 0',
-              WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
-            }}
-          >
-            ‹ Exit
-          </button>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT,
-              letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-              COCKPIT
-            </p>
-            <p style={{ margin: '2px 0 0', fontSize: 9, fontWeight: 600, color: steel(0.5),
-              letterSpacing: '0.9px', ...FONT_SMOOTH }}>
-              {modeInfo.tag} · STEP {stepIndex + 1}/{steps.length}
-            </p>
+        {/* ── Desktop: two-column (photo left, controls right) ──
+             Mobile: single-column stack (header → body → dots → controls) ── */}
+        {isDesktop && !isAssistant ? (
+          <div style={{ display: 'flex', flex: 1, minHeight: 0, position: 'relative', zIndex: 1 }}>
+            {/* Left column — reference photo with overlays */}
+            {imagePreview && (
+              <div
+                {...(heroPressHandlers || {})}
+                style={{
+                  flex: '0 0 55%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 16, cursor: 'zoom-in', WebkitTapHighlightColor: 'transparent',
+                  overflow: 'hidden',
+                }}
+              >
+                <ReferenceWithOverlay
+                  imagePreview={imagePreview}
+                  result={result}
+                  stepKey={step.key}
+                  position={position}
+                  angleDeg={angleDeg}
+                  distance={distance}
+                  pattern={pattern}
+                  maxHeight={stableVH - 80}
+                  mode={mode}
+                  fullWidth
+                  heightDisplay={heightDisplay}
+                  modName={modName}
+                />
+              </div>
+            )}
+
+            {/* Right column — header, body content, dots, controls */}
+            <div style={{
+              flex: imagePreview ? '0 0 45%' : '1 1 100%',
+              display: 'flex', flexDirection: 'column',
+              minHeight: 0, position: 'relative',
+            }}>
+              {/* Header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '20px 28px 12px', flexShrink: 0,
+              }}>
+                <button onClick={handleExit} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: steel(0.65), fontSize: 15, padding: '4px 0',
+                  WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                }}>‹ Exit</button>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT,
+                  letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+                  COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
+                    {stepIndex + 1}/{steps.length}
+                  </span>
+                </p>
+                {framesCaptured > 0 ? (
+                  <button onClick={handleDone} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: C.confHigh, fontSize: 14, fontWeight: 700,
+                    letterSpacing: '0.6px', padding: '4px 0',
+                    WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                  }}>DONE · {framesCaptured}</button>
+                ) : (
+                  <div style={{ width: 40 }} />
+                )}
+              </div>
+
+              {/* Scrollable body */}
+              <div
+                onTouchStart={handleSwipeStart}
+                onTouchEnd={handleSwipeEnd}
+                style={{
+                  flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
+                  WebkitOverflowScrolling: 'touch',
+                }}>
+                {body}
+              </div>
+
+              {/* Step dots */}
+              <div style={{
+                display: 'flex', justifyContent: 'center', gap: 6,
+                padding: '10px 20px 0', flexShrink: 0,
+              }}>
+                {steps.map((_, i) => (
+                  <div key={i}
+                    onClick={() => { if (i !== stepIndex) { tapHaptic(); softClickSound(); setStepIndex(i); } }}
+                    style={{
+                      width: i === stepIndex ? 18 : 6, height: 6, borderRadius: 3,
+                      backgroundColor: i === stepIndex ? KEY_ACCENT : steel(0.18),
+                      transition: 'width 0.2s ease, background-color 0.2s ease',
+                      cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                      padding: '8px 4px', margin: '-8px -4px',
+                      backgroundClip: 'content-box',
+                    }} />
+                ))}
+              </div>
+
+              {/* Action row */}
+              <div style={{
+                padding: '14px 28px 20px', display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0,
+              }}>
+                <button onClick={handlePrev} disabled={isFirst} style={{
+                  flex: '0 0 auto', width: 44, height: 44, borderRadius: 22,
+                  backgroundColor: C.pillBg,
+                  boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
+                  border: 'none', cursor: isFirst ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: isFirst ? steel(0.25) : steel(0.7), fontSize: 18,
+                  WebkitTapHighlightColor: 'transparent', transition: 'color 0.15s ease', ...FONT_SMOOTH,
+                }}>‹</button>
+                <button
+                  onClick={handleCapture}
+                  onPointerDown={() => { setCapturePressed(true); tapHaptic(); }}
+                  onPointerUp={() => setCapturePressed(false)}
+                  onPointerLeave={() => setCapturePressed(false)}
+                  style={{
+                    flex: 1, height: 44, borderRadius: 22,
+                    background: justCaptured
+                      ? 'linear-gradient(141.71deg, rgba(72,186,136,0.55) 0%, rgba(72,186,136,0.3) 100%)'
+                      : CTA_BG,
+                    boxShadow: capturePressed ? 'inset 0px 2px 4px rgba(0,0,0,0.5)' : `${CTA_SHADOW}, ${CTA_BEVEL}`,
+                    border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    WebkitTapHighlightColor: 'transparent',
+                    transform: capturePressed ? 'scale(0.98)' : 'scale(1)',
+                    transition: 'transform 0.1s ease, box-shadow 0.1s ease, background 0.25s ease',
+                  }}
+                >
+                  {justCaptured && (
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none"
+                      stroke="rgba(245,247,250,0.95)" strokeWidth="3"
+                      strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                  <span style={{
+                    fontSize: 13, fontWeight: 600, color: 'rgba(245,247,250,0.95)',
+                    letterSpacing: '0.8px', ...FONT_SMOOTH,
+                  }}>{primaryLabel}</span>
+                </button>
+                <button onClick={handleNext} disabled={isLast} style={{
+                  flex: '0 0 auto', width: 44, height: 44, borderRadius: 22,
+                  backgroundColor: C.pillBg,
+                  boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
+                  border: 'none', cursor: isLast ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: isLast ? steel(0.25) : steel(0.7), fontSize: 18,
+                  WebkitTapHighlightColor: 'transparent', transition: 'color 0.15s ease', ...FONT_SMOOTH,
+                }}>›</button>
+              </div>
+            </div>
           </div>
-          {framesCaptured > 0 ? (
-            <button
-              onClick={handleDone}
+        ) : (
+          /* ── Mobile / Assistant: original single-column layout ── */
+          <>
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 20px 6px', position: 'relative', zIndex: 1,
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={handleExit}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: steel(0.65), fontSize: 13, padding: '4px 0',
+                  WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                }}
+              >
+                ‹ Exit
+              </button>
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT,
+                letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
+                  {stepIndex + 1}/{steps.length}
+                </span>
+              </p>
+              {framesCaptured > 0 ? (
+                <button
+                  onClick={handleDone}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: C.confHigh, fontSize: 12, fontWeight: 700,
+                    letterSpacing: '0.6px', padding: '4px 0',
+                    WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                  }}
+                >
+                  DONE · {framesCaptured}
+                </button>
+              ) : (
+                <div style={{ width: 40 }} />
+              )}
+            </div>
+
+            {/* Scrollable body region */}
+            <div
+              onTouchStart={handleSwipeStart}
+              onTouchEnd={handleSwipeEnd}
               style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: C.confHigh, fontSize: 12, fontWeight: 700,
-                letterSpacing: '0.6px', padding: '4px 0',
-                WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
-              }}
-            >
-              DONE · {framesCaptured}
-            </button>
-          ) : (
-            <div style={{ width: 40 }} />
-          )}
-        </div>
+                flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
+                WebkitOverflowScrolling: 'touch',
+                position: 'relative', zIndex: 1,
+              }}>
+              {body}
+            </div>
 
-        {/* Scrollable body region — flex-1 so it expands, overflow-y:auto so tall coaching content scrolls */}
-        <div style={{
-          flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-          position: 'relative', zIndex: 1,
-        }}>
-          {body}
-        </div>
+            {/* Step dots (hidden in assistant) */}
+            {!isAssistant && (
+              <div style={{
+                display: 'flex', justifyContent: 'center', gap: 6,
+                padding: '10px 20px 0', position: 'relative', zIndex: 1,
+                flexShrink: 0,
+              }}>
+                {steps.map((_, i) => (
+                  <div key={i}
+                    onClick={() => { if (i !== stepIndex) { tapHaptic(); softClickSound(); setStepIndex(i); } }}
+                    style={{
+                      width: i === stepIndex ? 18 : 6, height: 6, borderRadius: 3,
+                      backgroundColor: i === stepIndex ? KEY_ACCENT : steel(0.18),
+                      transition: 'width 0.2s ease, background-color 0.2s ease',
+                      cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                      padding: '8px 4px', margin: '-8px -4px',
+                      backgroundClip: 'content-box',
+                    }} />
+                ))}
+              </div>
+            )}
 
-        {/* Step dots (hidden in assistant — they get their own big indicator) */}
-        {!isAssistant && (
-          <div style={{
-            display: 'flex', justifyContent: 'center', gap: 6,
-            padding: '16px 20px 0', position: 'relative', zIndex: 1,
-            flexShrink: 0,
-          }}>
-            {steps.map((_, i) => (
-              <div key={i} style={{
-                width: i === stepIndex ? 18 : 6, height: 6, borderRadius: 3,
-                backgroundColor: i === stepIndex ? KEY_ACCENT : steel(0.18),
-                transition: 'width 0.2s ease, background-color 0.2s ease',
-              }} />
-            ))}
-          </div>
+            {/* Cockpit action row */}
+            <div style={{
+              padding: '10px 20px 12px', position: 'relative', zIndex: 1,
+              display: 'flex', alignItems: 'center', gap: 12,
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={handlePrev}
+                disabled={isFirst}
+                style={{
+                  flex: '0 0 auto',
+                  width: isAssistant ? 64 : 44, height: isAssistant ? 64 : 44,
+                  borderRadius: isAssistant ? 32 : 22,
+                  backgroundColor: C.pillBg,
+                  boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
+                  border: 'none', cursor: isFirst ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: isFirst ? steel(0.25) : steel(0.7),
+                  fontSize: isAssistant ? 26 : 18,
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'color 0.15s ease',
+                  ...FONT_SMOOTH,
+                }}
+              >‹</button>
+
+              <button
+                onClick={handleCapture}
+                onPointerDown={() => { setCapturePressed(true); tapHaptic(); }}
+                onPointerUp={() => setCapturePressed(false)}
+                onPointerLeave={() => setCapturePressed(false)}
+                style={{
+                  flex: 1, height: isAssistant ? 64 : 44,
+                  borderRadius: isAssistant ? 32 : 22,
+                  background: justCaptured
+                    ? 'linear-gradient(141.71deg, rgba(72,186,136,0.55) 0%, rgba(72,186,136,0.3) 100%)'
+                    : CTA_BG,
+                  boxShadow: capturePressed
+                    ? 'inset 0px 2px 4px rgba(0,0,0,0.5)'
+                    : `${CTA_SHADOW}, ${CTA_BEVEL}`,
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  WebkitTapHighlightColor: 'transparent',
+                  transform: capturePressed ? 'scale(0.98)' : 'scale(1)',
+                  transition: 'transform 0.1s ease, box-shadow 0.1s ease, background 0.25s ease',
+                }}
+              >
+                {justCaptured && (
+                  <svg width={isAssistant ? 18 : 14} height={isAssistant ? 18 : 14} viewBox="0 0 24 24" fill="none"
+                    stroke="rgba(245,247,250,0.95)" strokeWidth="3"
+                    strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+                <span style={{
+                  fontSize: isAssistant ? 16 : 13,
+                  fontWeight: isAssistant ? 800 : 600,
+                  color: 'rgba(245,247,250,0.95)',
+                  letterSpacing: isAssistant ? '1.4px' : '0.8px',
+                  ...FONT_SMOOTH,
+                }}>
+                  {primaryLabel}
+                </span>
+              </button>
+
+              <button
+                onClick={handleNext}
+                disabled={isLast}
+                style={{
+                  flex: '0 0 auto',
+                  width: isAssistant ? 64 : 44, height: isAssistant ? 64 : 44,
+                  borderRadius: isAssistant ? 32 : 22,
+                  backgroundColor: C.pillBg,
+                  boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
+                  border: 'none', cursor: isLast ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: isLast ? steel(0.25) : steel(0.7),
+                  fontSize: isAssistant ? 26 : 18,
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'color 0.15s ease',
+                  ...FONT_SMOOTH,
+                }}
+              >›</button>
+            </div>
+
+            {/* iOS home indicator */}
+            <div style={{ height: 34, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+              <div style={{ width: 134, height: 5, borderRadius: 3,
+                backgroundColor: 'rgba(245,247,250,0.06)' }} />
+            </div>
+          </>
         )}
 
-        {/* Cockpit action row — Prev / Capture|Next / Next */}
-        <div style={{
-          padding: '16px 20px 20px', position: 'relative', zIndex: 1,
-          display: 'flex', alignItems: 'center', gap: 12,
-          flexShrink: 0,
-        }}>
-          <button
-            onClick={handlePrev}
-            disabled={isFirst}
-            style={{
-              flex: '0 0 auto',
-              width: isAssistant ? 64 : 52, height: isAssistant ? 64 : 52,
-              borderRadius: isAssistant ? 32 : 26,
-              backgroundColor: C.pillBg,
-              boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
-              border: 'none', cursor: isFirst ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isFirst ? steel(0.25) : steel(0.7),
-              fontSize: isAssistant ? 26 : 20,
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'color 0.15s ease',
-              ...FONT_SMOOTH,
-            }}
-          >‹</button>
+        {/* ── Cockpit teach overlay — first-time user walkthrough (mobile only) ── */}
+        {cockpitTeachVisible && !isDesktop && (() => {
+          // Responsive column width — matches Home teach
+          const COL_W = Math.min(430, window.innerWidth);
+          const COL_CX = Math.round(COL_W / 2);
+          // Cockpit layout geometry for spotlight targeting (mobile single-column)
+          const _headerH = 40;
+          const _specH = 56;
+          const _photoTop = _headerH + _specH;
+          const _photoH = Math.min(VF_HEIGHT, 260);
+          const _dotsTop = stableVH - safeBottom - 34 - 44 - 36;
+          const _ctaTop = stableVH - safeBottom - 34 - 52;
 
-          <button
-            onClick={handleCapture}
-            onPointerDown={() => { setCapturePressed(true); tapHaptic(); }}
-            onPointerUp={() => setCapturePressed(false)}
-            onPointerLeave={() => setCapturePressed(false)}
-            style={{
-              flex: 1, height: isAssistant ? 64 : 52,
-              borderRadius: isAssistant ? 32 : 26,
-              background: justCaptured
-                ? 'linear-gradient(141.71deg, rgba(72,186,136,0.55) 0%, rgba(72,186,136,0.3) 100%)'
-                : CTA_BG,
-              boxShadow: capturePressed
-                ? 'inset 0px 2px 4px rgba(0,0,0,0.5)'
-                : `${CTA_SHADOW}, ${CTA_BEVEL}`,
-              border: 'none', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              WebkitTapHighlightColor: 'transparent',
-              transform: capturePressed ? 'scale(0.98)' : 'scale(1)',
-              transition: 'transform 0.1s ease, box-shadow 0.1s ease, background 0.25s ease',
-            }}
-          >
-            {justCaptured && (
-              <svg width={isAssistant ? 18 : 14} height={isAssistant ? 18 : 14} viewBox="0 0 24 24" fill="none"
-                stroke="rgba(245,247,250,0.95)" strokeWidth="3"
-                strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
+          const _spots = [
+            { // Step 0: Reference photo — the target
+              x: 20, y: _photoTop, w: COL_W - 40, h: _photoH, r: 12,
+              title: 'Your target light',
+              desc: 'The light you\'re recreating — match this on set.',
+              tipY: _photoTop + _photoH + 40,
+              arrow: 'up',
+            },
+            { // Step 1: Step lead + spec strip — the instructions
+              x: 16, y: _headerH, w: COL_W - 32, h: _specH + 20, r: 14,
+              title: 'Step-by-step rebuild',
+              desc: 'Each step tells you exactly what to place and where.',
+              tipY: _headerH + _specH + 50,
+              arrow: 'up',
+            },
+            { // Step 2: Step dots — navigation
+              x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 24, r: 12,
+              title: 'Swipe or tap to navigate',
+              desc: 'Move between setup steps at your own pace.',
+              tipY: _dotsTop - 130,
+              arrow: 'down',
+            },
+            { // Step 3: Capture button — the action
+              x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 52, r: 26,
+              title: 'Fire when it matches',
+              desc: 'Tap Capture once your light matches the reference.',
+              tipY: _ctaTop - 140,
+              arrow: 'down',
+            },
+          ];
+          const _s = _spots[cockpitTeachStep] || _spots[0];
+          const _cx = _s.x + _s.w / 2;
+          const _cy = _s.y + _s.h / 2;
+          const _rx = _s.w / 2 + 14;
+          const _ry = _s.h / 2 + 14;
+          // Step accent: warm gold → steel → indigo → green
+          const _colors = [
+            'rgba(200,155,69,1)',    // warm gold (photo)
+            'rgba(132,158,184,1)',   // steel (specs)
+            'rgba(107,148,245,1)',   // indigo (nav)
+            'rgba(72,186,136,1)',    // green (capture)
+          ];
+          const _sc = _colors[cockpitTeachStep] || _colors[0];
+
+          // Arrow geometry — card shifted left for down-arrows, arrow targets spotlight edge
+          const _cardLeft = _s.arrow === 'down' ? 20 : 32;
+          const _cardRight = _s.arrow === 'down' ? 140 : 32;
+          const _cardW = COL_W - _cardLeft - _cardRight;
+          const _cardCX = _cardLeft + _cardW / 2;
+          const _cardEdgeY = _s.arrow === 'up' ? _s.tipY : _s.tipY + 72;
+          // Arrow tip lands at spotlight edge (bottom for up-arrows, top for down)
+          const _tipYA = _s.arrow === 'up' ? (_s.y + _s.h) : _s.y;
+          const _svgTop = Math.min(_tipYA, _cardEdgeY) - 10;
+          const _svgBot = Math.max(_tipYA, _cardEdgeY) + 10;
+          const _svgH = _svgBot - _svgTop;
+          const _startLY = _cardEdgeY - _svgTop;
+          const _endLY = _tipYA - _svgTop;
+          // Natural arc: card is left-offset, spotlight centered — modest rightward curve
+          const _cpOffset = _s.arrow === 'up' ? 30 : 20;
+          const _cpX = (_cardCX + _cx) / 2 + _cpOffset;
+          const _cpY1 = _startLY + (_endLY - _startLY) * 0.3;
+          const _cpY2 = _startLY + (_endLY - _startLY) * 0.7;
+          const _curvePath = `M${_cardCX} ${_startLY} C${_cpX} ${_cpY1}, ${_cpX} ${_cpY2}, ${_cx} ${_endLY}`;
+          const _aSize = 8;
+          const _aDir = _s.arrow === 'up' ? -1 : 1;
+          // Chevron centered on endpoint: tip extends past, arms behind
+          const _aHalf = _aSize / 2;
+          const _aPath = `M${_cx - _aSize} ${_endLY - _aHalf * _aDir} L${_cx} ${_endLY + _aHalf * _aDir} L${_cx + _aSize} ${_endLY - _aHalf * _aDir}`;
+          const _curveLen = Math.hypot(_cx - _cardCX, _endLY - _startLY) * 1.4;
+
+          // Step icons
+          const _icons = [
+            // 0: camera/viewfinder (photo target)
+            <svg key="i0" width="18" height="18" viewBox="0 0 32 32" fill="none">
+              <rect x="4" y="8" width="24" height="18" rx="3" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" fill="none" />
+              <path d="M12 8V6a2 2 0 012-2h4a2 2 0 012 2v2" stroke={_sc.replace(/[\d.]+\)$/, '0.50)')} strokeWidth="1.5" />
+              <circle cx="16" cy="17" r="4.5" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" fill="none" />
+              <circle cx="16" cy="17" r="1.5" fill={_sc.replace(/[\d.]+\)$/, '0.45)')} />
+            </svg>,
+            // 1: list/steps (rebuild instructions)
+            <svg key="i1" width="18" height="18" viewBox="0 0 32 32" fill="none">
+              <line x1="12" y1="9" x2="26" y2="9" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="12" y1="16" x2="26" y2="16" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="12" y1="23" x2="26" y2="23" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" />
+              <circle cx="7" cy="9" r="2" fill={_sc.replace(/[\d.]+\)$/, '0.45)')} />
+              <circle cx="7" cy="16" r="2" fill={_sc.replace(/[\d.]+\)$/, '0.45)')} />
+              <circle cx="7" cy="23" r="2" fill={_sc.replace(/[\d.]+\)$/, '0.45)')} />
+            </svg>,
+            // 2: arrows left-right (swipe nav)
+            <svg key="i2" width="18" height="18" viewBox="0 0 32 32" fill="none">
+              <path d="M10 16H22" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M7 16l4-4M7 16l4 4" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M25 16l-4-4M25 16l-4 4" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>,
+            // 3: shutter/capture (fire)
+            <svg key="i3" width="18" height="18" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="12" stroke={_sc.replace(/[\d.]+\)$/, '0.30)')} strokeWidth="1.6" fill="none" />
+              <circle cx="16" cy="16" r="8" stroke={_sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" fill="none" />
+              <circle cx="16" cy="16" r="4" fill={_sc.replace(/[\d.]+\)$/, '0.35)')} />
+            </svg>,
+          ];
+
+          return (
+            <div
+              onClick={advanceCockpitTeach}
+              style={{
+                position: 'absolute', inset: 0, zIndex: 50,
+                cursor: 'pointer',
+                WebkitTapHighlightColor: 'transparent',
+                animation: cockpitTeachStep >= 4 ? 'ckTeachOut 0.5s ease forwards' : 'ckTeachIn 0.6s ease both',
+              }}
+            >
+              {/* Scrim */}
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: `radial-gradient(ellipse ${_rx * 2}px ${_ry * 2}px at ${_cx}px ${_cy}px, transparent 0%, transparent 38%, rgba(0,0,0,0.42) 50%, rgba(0,0,0,0.62) 66%, rgba(0,0,0,0.72) 100%)`,
+                transition: 'background 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+              }} />
+
+              {/* Volumetric bloom */}
+              <div style={{
+                position: 'absolute',
+                left: _cx - 100, top: _cy - 100,
+                width: 200, height: 200,
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${_sc.replace(/[\d.]+\)$/, '0.06)')} 0%, ${_sc.replace(/[\d.]+\)$/, '0.02)')} 40%, transparent 70%)`,
+                pointerEvents: 'none',
+                animation: 'ckTeachBloom 3s ease-in-out infinite',
+                transition: 'left 0.55s cubic-bezier(0.4,0,0.2,1), top 0.55s cubic-bezier(0.4,0,0.2,1)',
+              }} />
+
+              {/* Outer glow ring */}
+              <div style={{
+                position: 'absolute',
+                left: _s.x - 14, top: _s.y - 14,
+                width: _s.w + 28, height: _s.h + 28,
+                borderRadius: _s.r ? _s.r + 14 : 14,
+                border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.12)')}`,
+                boxShadow: `0 0 44px ${_sc.replace(/[\d.]+\)$/, '0.12)')}, 0 0 18px ${_sc.replace(/[\d.]+\)$/, '0.06)')}, inset 0 0 20px ${_sc.replace(/[\d.]+\)$/, '0.05)')}`,
+                pointerEvents: 'none',
+                animation: 'ckTeachPulse 2.4s ease-in-out infinite',
+                transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+              }} />
+
+              {/* Inner spotlight ring */}
+              <div style={{
+                position: 'absolute',
+                left: _s.x - 3, top: _s.y - 3,
+                width: _s.w + 6, height: _s.h + 6,
+                borderRadius: _s.r ? _s.r + 3 : 3,
+                border: `1.5px solid ${_sc.replace(/[\d.]+\)$/, '0.50)')}`,
+                boxShadow: `0 0 20px ${_sc.replace(/[\d.]+\)$/, '0.22)')}, 0 0 6px ${_sc.replace(/[\d.]+\)$/, '0.12)')}, inset 0 0 10px ${_sc.replace(/[\d.]+\)$/, '0.08)')}`,
+                pointerEvents: 'none',
+                animation: 'ckTeachPulse 2.4s ease-in-out 0.2s infinite',
+                transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
+              }} />
+
+              {/* Glass tooltip card */}
+              <div key={cockpitTeachStep} style={{
+                position: 'absolute',
+                top: _s.tipY,
+                left: _cardLeft, right: _cardRight,
+                animation: 'ckTeachCard 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both',
+              }}>
+                {/* Animated conic border sweep */}
+                <div style={{
+                  position: 'absolute', inset: -1,
+                  borderRadius: 15,
+                  background: `conic-gradient(from var(--teach-border-angle, 0deg), ${_sc.replace(/[\d.]+\)$/, '0.00)')}, ${_sc.replace(/[\d.]+\)$/, '0.18)')}, ${_sc.replace(/[\d.]+\)$/, '0.00)')}, ${_sc.replace(/[\d.]+\)$/, '0.10)')}, ${_sc.replace(/[\d.]+\)$/, '0.00)')})`,
+                  animation: 'ckTeachBorder 4s linear infinite',
+                  opacity: 0.7,
+                  pointerEvents: 'none',
+                }} />
+                <div style={{
+                  position: 'relative',
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  backgroundColor: 'rgba(10,11,14,0.85)',
+                  border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.08)')}`,
+                  boxShadow: [
+                    '0 8px 32px rgba(0,0,0,0.55)',
+                    '0 2px 8px rgba(0,0,0,0.35)',
+                    `0 0 0 0.5px ${_sc.replace(/[\d.]+\)$/, '0.06)')}`,
+                    'inset 0 1px 0 rgba(255,255,255,0.07)',
+                    'inset 0 -1px 0 rgba(0,0,0,0.2)',
+                  ].join(', '),
+                  backdropFilter: 'blur(20px) saturate(1.3)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
+                }}>
+                  {/* Single row: icon + text + action */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {/* Icon badge */}
+                    <div style={{
+                      width: 36, height: 36, flexShrink: 0,
+                      borderRadius: 10,
+                      background: `linear-gradient(145deg, ${_sc.replace(/[\d.]+\)$/, '0.14)')} 0%, ${_sc.replace(/[\d.]+\)$/, '0.03)')} 100%)`,
+                      border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.16)')}`,
+                      boxShadow: `inset 0 1px 0 ${_sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      animation: 'ckTeachFloat 3s ease-in-out infinite',
+                    }}>
+                      {_icons[cockpitTeachStep]}
+                    </div>
+
+                    {/* Text block */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{
+                        margin: 0, fontSize: 14, fontWeight: 700, lineHeight: '18px',
+                        color: 'rgba(245,247,250,0.94)',
+                        letterSpacing: '-0.2px',
+                        ...FONT_SMOOTH,
+                      }}>{_s.title}</p>
+                      <p style={{
+                        margin: '3px 0 0', fontSize: 11, fontWeight: 500, lineHeight: '15px',
+                        color: 'rgba(184,191,199,0.50)',
+                        ...FONT_SMOOTH,
+                      }}>{_s.desc}</p>
+                    </div>
+
+                    {/* Action pill */}
+                    <div
+                      onClick={(e) => { e.stopPropagation(); advanceCockpitTeach(); }}
+                      style={{
+                        flexShrink: 0,
+                        padding: '6px 14px',
+                        borderRadius: 9,
+                        background: `linear-gradient(135deg, ${_sc.replace(/[\d.]+\)$/, '0.16)')} 0%, ${_sc.replace(/[\d.]+\)$/, '0.06)')} 100%)`,
+                        border: `1px solid ${_sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.18)' : '0.26)')}`,
+                        boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${_sc.replace(/[\d.]+\)$/, '0.06)')}`,
+                        cursor: 'pointer',
+                        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                      }}
+                    >
+                      <p style={{
+                        margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px',
+                        color: _sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.82)' : '0.90)'),
+                        ...FONT_SMOOTH,
+                        whiteSpace: 'nowrap',
+                      }}>{cockpitTeachStep < 3 ? 'Next' : 'Got it'}</p>
+                    </div>
+                  </div>
+
+                  {/* Progress track + skip */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    marginTop: 8,
+                  }}>
+                    <div style={{
+                      flex: 1, maxWidth: 80, height: 3, borderRadius: 2,
+                      backgroundColor: 'rgba(255,255,255,0.05)',
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        width: `${((cockpitTeachStep + 1) / 4) * 100}%`,
+                        height: '100%', borderRadius: 2,
+                        background: `linear-gradient(90deg, ${_sc.replace(/[\d.]+\)$/, '0.35)')}, ${_sc.replace(/[\d.]+\)$/, '0.60)')})`,
+                        transition: 'width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background 0.5s ease',
+                        boxShadow: `0 0 6px ${_sc.replace(/[\d.]+\)$/, '0.20)')}`,
+                      }} />
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: 600, letterSpacing: '0.5px',
+                      color: _sc.replace(/[\d.]+\)$/, '0.35)'),
+                      marginLeft: 8,
+                      ...FONT_SMOOTH,
+                    }}>{cockpitTeachStep + 1}/4</span>
+                    <div style={{ flex: 1 }} />
+                    {cockpitTeachStep < 3 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); skipCockpitTeach(); }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
+                          fontSize: 10, fontWeight: 600,
+                          color: steel(0.24),
+                          WebkitTapHighlightColor: 'transparent',
+                          ...FONT_SMOOTH,
+                        }}
+                      >Skip</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* "Tap anywhere" hint */}
+              <p style={{
+                position: 'absolute', bottom: 14, left: 0, right: 0,
+                textAlign: 'center', margin: 0,
+                fontSize: 10, fontWeight: 500, letterSpacing: '0.5px',
+                color: steel(0.22),
+                ...FONT_SMOOTH,
+                animation: 'ckTeachFade 0.6s ease 1s both',
+                pointerEvents: 'none',
+              }}>Tap anywhere to continue</p>
+
+              {/* Draw-on arrow from card → spotlight */}
+              <svg key={`ck-arrow-${cockpitTeachStep}`} style={{
+                position: 'absolute', left: 0, top: _svgTop,
+                width: COL_W, height: _svgH,
+                pointerEvents: 'none', overflow: 'visible',
+                filter: `drop-shadow(0 0 10px ${_sc.replace(/[\d.]+\)$/, '0.35)')})`,
+              }}>
+                {/* Glow trail */}
+                <path d={_curvePath} stroke={_sc.replace(/[\d.]+\)$/, '0.12)')}
+                  strokeWidth="8" strokeLinecap="round" fill="none"
+                  strokeDasharray={_curveLen}
+                  strokeDashoffset={_curveLen}
+                  style={{ animation: `ckTeachDraw 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards` }} />
+                {/* Main stroke */}
+                <path d={_curvePath} stroke={_sc.replace(/[\d.]+\)$/, '0.75)')}
+                  strokeWidth="2.5" strokeLinecap="round" fill="none"
+                  strokeDasharray={_curveLen}
+                  strokeDashoffset={_curveLen}
+                  style={{ animation: `ckTeachDraw 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.25s forwards` }} />
+                {/* Highlight edge */}
+                <path d={_curvePath} stroke="rgba(255,255,255,0.12)"
+                  strokeWidth="1" strokeLinecap="round" fill="none"
+                  strokeDasharray={_curveLen}
+                  strokeDashoffset={_curveLen}
+                  style={{ animation: `ckTeachDraw 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards` }} />
+                {/* Arrowhead — slides from card base along curve to endpoint */}
+                <style>{`
+                  @keyframes ckTeachArrowSlide${cockpitTeachStep} {
+                    0%   { opacity: 0.4; transform: translate(${_cardCX - _cx}px, ${_startLY - _endLY}px) scale(0.7); }
+                    40%  { opacity: 1; }
+                    100% { opacity: 1; transform: translate(0, 0) scale(1); }
+                  }
+                `}</style>
+                <g style={{
+                  opacity: 0,
+                  animation: `ckTeachArrowSlide${cockpitTeachStep} 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards`,
+                }}>
+                  <g style={{ animation: 'ckTeachArrowBounce 1.4s ease-in-out 1.1s infinite' }}>
+                    <circle cx={_cx} cy={_endLY} r="12" fill={_sc.replace(/[\d.]+\)$/, '0.08)')} />
+                    <path d={_aPath} stroke={_sc.replace(/[\d.]+\)$/, '0.95)')}
+                      strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                    <path d={_aPath} stroke="rgba(255,255,255,0.22)"
+                      strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+                  </g>
+                </g>
               </svg>
-            )}
-            <span style={{
-              fontSize: isAssistant ? 16 : 13,
-              fontWeight: isAssistant ? 800 : 600,
-              color: 'rgba(245,247,250,0.95)',
-              letterSpacing: isAssistant ? '1.4px' : '0.8px',
-              ...FONT_SMOOTH,
-            }}>
-              {primaryLabel}
-            </span>
-          </button>
+            </div>
+          );
+        })()}
 
-          <button
-            onClick={handleNext}
-            disabled={isLast}
-            style={{
-              flex: '0 0 auto',
-              width: isAssistant ? 64 : 52, height: isAssistant ? 64 : 52,
-              borderRadius: isAssistant ? 32 : 26,
-              backgroundColor: C.pillBg,
-              boxShadow: 'inset 0px 2px 4px rgba(0,0,0,0.55), inset 0px 1px 2px rgba(0,0,0,0.35)',
-              border: 'none', cursor: isLast ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: isLast ? steel(0.25) : steel(0.7),
-              fontSize: isAssistant ? 26 : 20,
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'color 0.15s ease',
-              ...FONT_SMOOTH,
-            }}
-          >›</button>
-        </div>
-
-        {/* iOS home indicator */}
-        <div style={{ height: 34, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-          <div style={{ width: 134, height: 5, borderRadius: 3,
-            backgroundColor: 'rgba(245,247,250,0.06)' }} />
-        </div>
+        {/* Cockpit teach keyframes */}
+        <style>{`
+          @keyframes ckTeachIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+          }
+          @keyframes ckTeachOut {
+            from { opacity: 1; }
+            to   { opacity: 0; pointer-events: none; }
+          }
+          @keyframes ckTeachFade {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes ckTeachPulse {
+            0%   { transform: scale(1); opacity: 0.85; }
+            50%  { transform: scale(1.06); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.85; }
+          }
+          @keyframes ckTeachFloat {
+            0%   { transform: translateY(0); }
+            50%  { transform: translateY(-3px); }
+            100% { transform: translateY(0); }
+          }
+          @keyframes ckTeachCard {
+            0%   { opacity: 0; transform: translateY(16px) scale(0.96); }
+            60%  { opacity: 1; transform: translateY(-3px) scale(1.01); }
+            80%  { transform: translateY(1px) scale(1.0); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+          }
+          @keyframes ckTeachDraw {
+            to { stroke-dashoffset: 0; }
+          }
+          /* ckTeachArrowSlideN keyframes are generated inline per step */
+          @keyframes ckTeachArrowBounce {
+            0%, 100% { transform: translateY(0); }
+            50%      { transform: translateY(3px); }
+          }
+          @keyframes ckTeachBloom {
+            0%   { transform: scale(1); opacity: 0.7; }
+            50%  { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.7; }
+          }
+          @property --teach-border-angle {
+            syntax: '<angle>';
+            initial-value: 0deg;
+            inherits: false;
+          }
+          @keyframes ckTeachBorder {
+            to { --teach-border-angle: 360deg; }
+          }
+        `}</style>
       </div>
 
       {/* Hero zoom — long-press the cockpit photo to enter fullscreen */}
@@ -1196,52 +1905,38 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
 
 // ─── Photographer body ──────────────────────────────────────────────────────
 function PhotographerBody({ step, imagePreview, modName, position, distance,
-  heightDisplay, angleDeg, pattern, confidence, cct, result, stepKey, mode, heroPressHandlers }) {
+  heightDisplay, angleDeg, pattern, confidence, cct, result, stepKey, mode, heroPressHandlers, vfHeight, hidePhoto }) {
+  const dk = hidePhoto; // desktop flag — scale up text for wider column
   return (
     <>
-      {/* Dense hero card with full spec grid */}
-      <div style={{ padding: '12px 20px 0', position: 'relative', zIndex: 1 }}>
+      {/* Compact spec strip — one-line summary of key light setup */}
+      <div style={{ padding: dk ? '16px 28px 0' : '12px 20px 0', position: 'relative', zIndex: 1 }}>
         <div style={{
-          backgroundColor: C.panelBg, borderRadius: 16,
+          backgroundColor: C.panelBg, borderRadius: dk ? 14 : 12,
           boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-          padding: '14px 16px',
+          padding: dk ? '12px 18px' : '10px 14px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT,
-              letterSpacing: '1.2px', ...FONT_SMOOTH }}>
-              KEY LIGHT · {modName.toUpperCase()}
-            </p>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 600,
-              color: confidence >= 70 ? C.confHigh : C.confLow,
-              letterSpacing: '0.6px', ...FONT_SMOOTH }}>
-              {confidence}% · {pattern}
-            </p>
-          </div>
-
-          {/* 4-cell spec grid — ANGLE leads, clock + pattern target as sub */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 10, marginTop: 12,
-          }}>
-            <SpecCell label="ANGLE"
-              value={angleDeg != null ? `${Math.round(angleDeg)}°` : position}
-              sub={(() => {
-                const parts = [];
-                if (angleDeg != null && position) parts.push(position);
-                const tr = targetRangeFor(pattern);
-                if (tr) parts.push(`target ${tr}`);
-                return parts.length ? parts.join(' · ') : null;
-              })()} />
-            <SpecCell label="DIST" value={distance} />
-            <SpecCell label="HEIGHT" value={heightDisplay} />
-            <SpecCell label="CCT"
-              value={cct ? `${cct}K` : '—'} />
-          </div>
+          <p style={{ margin: 0, fontSize: dk ? 16 : 14, fontWeight: 700, color: C.textPrimary,
+            letterSpacing: '0.2px', ...FONT_SMOOTH,
+            flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {[
+              angleDeg != null ? `${Math.round(angleDeg)}°` : position,
+              distance,
+              heightDisplay,
+            ].filter(v => v && v !== '—').join(' · ')}
+          </p>
+          <p style={{ margin: 0, fontSize: dk ? 14 : 12, fontWeight: 600,
+            color: confidence >= 70 ? C.confHigh : C.confLow,
+            letterSpacing: '0.5px', ...FONT_SMOOTH,
+            flexShrink: 0, marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: '48%' }}>
+            {confidence}% · {pattern}
+          </p>
         </div>
       </div>
 
-      {imagePreview && (
+      {imagePreview && !hidePhoto && (
         <div
           {...(heroPressHandlers || {})}
           style={{ padding: '10px 20px 0', position: 'relative', zIndex: 1,
@@ -1254,32 +1949,78 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
             position={position}
             angleDeg={angleDeg}
             distance={distance}
-            maxHeight={290}
+            maxHeight={vfHeight}
             mode="photographer"
+            heightDisplay={heightDisplay}
+            modName={modName}
           />
         </div>
       )}
 
-      {/* Terse step lead */}
-      <div style={{ padding: '14px 24px 0', position: 'relative', zIndex: 1, textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: 10, fontWeight: 700,
-          color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
-          {step.title}
-        </p>
-        <p style={{ margin: '6px 0 0', fontSize: 22, fontWeight: 800,
-          color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH }}>
+      {/* C-7: Simplified step lead — hero number + single context line.
+          Title label removed; step position is implied by the dots. */}
+      <div style={{ padding: dk ? '14px 28px 0' : '10px 24px 0', position: 'relative', zIndex: 1, textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: dk ? 38 : 30, fontWeight: 800,
+          color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {step.lead}
         </p>
         {step.subLead && (
-          <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500,
+          <p style={{ margin: dk ? '6px 0 0' : '4px 0 0', fontSize: dk ? 14 : 12, fontWeight: 500,
             color: C.textSub, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
             {step.subLead}
           </p>
         )}
       </div>
 
-      <CoachingPanel coach={step.coach} variant="photographer" />
+      <CoachingDisclosure coach={step.coach} variant="photographer" />
     </>
+  );
+}
+
+// ─── Coaching disclosure — collapsed toggle for photographer, expanded for learning ──
+function CoachingDisclosure({ coach, variant = 'photographer' }) {
+  const isLearning = variant === 'learning';
+  const [open, setOpen] = useState(isLearning);
+  if (!coach) return null;
+  const label = isLearning ? 'NOT LOOKING RIGHT?' : 'TROUBLESHOOTING';
+  const labelHide = isLearning ? 'HIDE TROUBLESHOOTING' : 'HIDE';
+  return (
+    <div style={{ padding: '10px 20px 0', position: 'relative', zIndex: 1 }}>
+      <button
+        onClick={() => { setOpen(o => !o); tapHaptic(); }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          background: open ? 'rgba(214,123,78,0.08)' : 'rgba(255,255,255,0.03)',
+          border: `1px solid ${open ? 'rgba(214,123,78,0.2)' : 'rgba(255,255,255,0.06)'}`,
+          borderRadius: 8,
+          cursor: 'pointer',
+          padding: '8px 16px',
+          margin: '0 auto',
+          width: '100%',
+          maxWidth: 280,
+          WebkitTapHighlightColor: 'transparent',
+          transition: 'background 0.2s ease, border-color 0.2s ease',
+        }}
+      >
+        <span style={{
+          fontSize: 10, fontWeight: 700,
+          color: open ? 'rgba(214,123,78,0.9)' : steel(0.6),
+          letterSpacing: '1px', ...FONT_SMOOTH,
+          transition: 'color 0.2s ease',
+        }}>
+          {open ? labelHide : label}
+        </span>
+        <span style={{
+          fontSize: 11,
+          color: open ? 'rgba(214,123,78,0.7)' : steel(0.45),
+          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+          transition: 'transform 0.2s ease, color 0.2s ease',
+          ...FONT_SMOOTH,
+        }}>▾</span>
+      </button>
+      {open && <CoachingPanel coach={coach} variant={variant} />}
+    </div>
   );
 }
 
@@ -1422,27 +2163,18 @@ function AssistantBody({ step }) {
           {step.subCommand}
         </p>
       )}
-      {/* Assistant stays terse — single "IF X → Y" line from the first fix */}
-      {step.coach?.fixes?.[0] && (
-        <p style={{
-          margin: '28px 0 0', fontSize: 13, fontWeight: 600,
-          color: steel(0.5), letterSpacing: '0.8px',
-          textAlign: 'center', lineHeight: 1.4,
-          textTransform: 'uppercase',
-          ...FONT_SMOOTH,
-        }}>
-          IF {step.coach.fixes[0][0]} → {step.coach.fixes[0][1]}
-        </p>
-      )}
+      {/* C-3: Assistant mode is pure command — no coaching. The photographer
+           gives verbal cues if adjustment is needed. */}
     </div>
   );
 }
 
 // ─── Learning body — narrative lead + WHY callout + big reference ──────────
-function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode, heroPressHandlers }) {
+function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode, heroPressHandlers, vfHeight, hidePhoto }) {
+  const dk = hidePhoto; // desktop flag
   return (
     <>
-      {imagePreview && (
+      {imagePreview && !hidePhoto && (
         <div
           {...(heroPressHandlers || {})}
           style={{ padding: '12px 20px 0', position: 'relative', zIndex: 1,
@@ -1456,47 +2188,60 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             angleDeg={angleDeg}
             distance={distance}
             pattern={pattern}
-            maxHeight={340}
+            maxHeight={vfHeight}
             mode="learning"
+            heightDisplay={heightDisplay}
+            modName={modName}
           />
         </div>
       )}
 
-      <div style={{ padding: '18px 22px 0', position: 'relative', zIndex: 1 }}>
-        <p style={{ margin: 0, fontSize: 10, fontWeight: 700,
+      <div style={{ padding: dk ? '22px 28px 0' : '18px 22px 0', position: 'relative', zIndex: 1 }}>
+        <p style={{ margin: 0, fontSize: dk ? 12 : 10, fontWeight: 700,
           color: KEY_ACCENT, letterSpacing: '1.2px',
           textAlign: 'center', ...FONT_SMOOTH }}>
           {step.title}
         </p>
-        <p style={{ margin: '8px 0 0', fontSize: 16, fontWeight: 700,
+        <p style={{ margin: dk ? '10px 0 0' : '8px 0 0', fontSize: dk ? 20 : 16, fontWeight: 700,
           color: C.textPrimary, letterSpacing: '-0.2px',
           lineHeight: 1.35, textAlign: 'center', ...FONT_SMOOTH }}>
           {step.lead}
         </p>
       </div>
 
-      {/* WHY callout — lighting theory from signal diagnostics */}
+      {/* WHY callout — clean readable layout */}
       {step.why && (
-        <div style={{ padding: '14px 20px 0', position: 'relative', zIndex: 1 }}>
+        <div style={{ padding: dk ? '18px 28px 0' : '14px 20px 0', position: 'relative', zIndex: 1 }}>
           <div style={{
-            backgroundColor: C.panelBg,
-            borderRadius: 12,
-            boxShadow: `inset 0px 0px 0px 1px rgba(200,155,69,0.14), ${PANEL_BEVEL}`,
-            padding: '12px 14px',
+            backgroundColor: 'rgba(18,19,22,0.85)',
+            borderRadius: dk ? 14 : 12,
+            border: `1px solid rgba(200,155,69,0.12)`,
+            boxShadow: PANEL_BEVEL,
+            padding: dk ? '16px 20px' : '12px 16px',
           }}>
-            <p style={{ margin: 0, fontSize: 9, fontWeight: 700,
+            <p style={{ margin: 0, fontSize: dk ? 10 : 9, fontWeight: 700,
               color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-              WHY
+              WHY THIS MATTERS
             </p>
-            <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 500,
-              color: C.textSub, lineHeight: 1.55, ...FONT_SMOOTH }}>
-              {step.why}
-            </p>
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {step.why.split('. ').filter(Boolean).map((sentence, i, arr) => (
+                <p key={i} style={{
+                  margin: 0,
+                  fontSize: dk ? 14 : 12,
+                  fontWeight: i === 0 ? 600 : 400,
+                  color: i === 0 ? C.textPrimary : C.textSub,
+                  lineHeight: 1.55,
+                  ...FONT_SMOOTH,
+                }}>
+                  {sentence}{i < arr.length - 1 ? '.' : ''}
+                </p>
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      <CoachingPanel coach={step.coach} variant="learning" />
+      <CoachingDisclosure coach={step.coach} variant="learning" />
     </>
   );
 }
@@ -1504,7 +2249,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
 // ─── Reference photo with per-step catchlight / key-light overlays ─────────
 // Role-aware: Photographer gets minimal clinical markers; Learning gets
 // labeled educational annotations. Assistant never renders a photo at all.
-function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300 }) {
+function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300, fullWidth = false, heightDisplay = '—', modName = '' }) {
   const imgDim = result?._raw?.image_dimensions
     || result?._raw?.description?.size
     || { width: 1177, height: 1592 };
@@ -1557,13 +2302,74 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   })();
   const primaryKey = primaryIdx >= 0 ? catchlights[primaryIdx] : null;
 
+  // ── Snap catchlight anchor to nearest eye center ──────────────────────
+  // Engine catchlight detection can land ~10-15px from the actual iris
+  // center. When a catchlight is within SNAP_THRESHOLD of an eye center,
+  // snap the rendering anchor to the eye center so the ring sits
+  // precisely on the catchlight reflection the photographer sees.
+  // When no catchlights are detected, snappedAnchor is null and the
+  // overlay arrows do not render — we never synthesize a fake anchor
+  // from face geometry because that would present inferred data as
+  // observed catchlight evidence.
+  const SNAP_THRESHOLD = 35; // px in original image space
+  const snappedAnchor = (() => {
+    if (!primaryKey) return null;
+    const cx = primaryKey.abs_cx;
+    const cy = primaryKey.abs_cy;
+    const eyes = [];
+    if (faceGeom.left_eye_center) eyes.push(faceGeom.left_eye_center);
+    if (faceGeom.right_eye_center) eyes.push(faceGeom.right_eye_center);
+    if (eyes.length === 0) return { x: cx, y: cy };
+    let nearest = null;
+    let nearestDist = Infinity;
+    for (const eye of eyes) {
+      const d = Math.hypot(cx - eye[0], cy - eye[1]);
+      if (d < nearestDist) { nearestDist = d; nearest = eye; }
+    }
+    if (nearestDist <= SNAP_THRESHOLD && nearest) {
+      return { x: nearest[0], y: nearest[1] };
+    }
+    return { x: cx, y: cy };
+  })();
+
   // Clock string → unit vector (SVG screen coords, y-down; 12 = up)
   // Parse hour portion (e.g. "1 o'clock" or "1:30 o'clock")
-  const clockHour = (() => {
+  const catchlightClockHr = (() => {
     const m = (position || '').match(/(\d+)(?::(\d+))?\s*o'?clock/i);
-    if (!m) return 1;
+    if (!m) return null;
     return parseInt(m[1]) + (m[2] ? parseInt(m[2]) / 60 : 0);
   })();
+
+  // Resolution guard: when the iris is < 15px radius, the catchlight
+  // centroid is at its positioning floor — a 1–2px shift flips the clock
+  // direction.  Fall back to angleDeg (shadow-geometry-derived, robust at
+  // any resolution).  Also cross-check: if catchlight clock and angleDeg
+  // disagree by > 90°, prefer angleDeg.
+  const _eyeDist = Math.hypot(rightEye[0] - leftEye[0], rightEye[1] - leftEye[1]) || (W * 0.18);
+  const irisR = primaryKey?.enc_r_px
+    ? primaryKey.enc_r_px / (primaryKey.size_ratio || 0.15)
+    : _eyeDist * 0.22;
+  const lowResIris = irisR < 15;
+
+  const angleClockHr = (() => {
+    if (typeof angleDeg !== 'number') return null;
+    const h = (12 - angleDeg / 30 + 12) % 12;
+    return h === 0 ? 12 : h;
+  })();
+
+  const clockHour = (() => {
+    // If no catchlight clock available, use angleDeg-derived
+    if (catchlightClockHr == null) return angleClockHr ?? 1;
+    // Low-res iris: trust shadow geometry over catchlight position
+    if (lowResIris && angleClockHr != null) return angleClockHr;
+    // Cross-check: catchlight vs shadow geometry
+    if (angleClockHr != null) {
+      const diff = Math.abs(((catchlightClockHr - angleClockHr + 6) % 12) - 6);
+      if (diff > 3) return angleClockHr; // >90° disagreement → prefer shadow
+    }
+    return catchlightClockHr;
+  })();
+
   const clockVec = (() => {
     const angle = ((clockHour % 12) * 30 - 90) * Math.PI / 180;
     return { dx: Math.cos(angle), dy: Math.sin(angle) };
@@ -1572,14 +2378,14 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // Face centroid (used for sizing & fallback arrow origin)
   const faceCx = (leftEye[0] + rightEye[0]) / 2;
   const faceCy = (foreheadTop[1] + chin[1]) / 2 - (chin[1] - foreheadTop[1]) * 0.25;
-  const padding = Math.min(W, H) * 0.06;
+  const padding = Math.min(W, H) * 0.12;
 
   // Key-light arrow ANCHORS AT THE CATCHLIGHT (not face center).
   // This visually communicates: the catchlight in the eye IS the observable
   // evidence of where the key light is coming from. The arrow shows the
   // direction the light travels OUTWARD from that reflection point.
-  const anchorX = primaryKey ? primaryKey.abs_cx : faceCx;
-  const anchorY = primaryKey ? primaryKey.abs_cy : faceCy;
+  const anchorX = snappedAnchor ? snappedAnchor.x : faceCx;
+  const anchorY = snappedAnchor ? snappedAnchor.y : faceCy;
 
   const maxArrowLen = Math.min(
     clockVec.dx > 0 ? (W - padding - anchorX) / Math.max(0.001, clockVec.dx) : Infinity,
@@ -1587,19 +2393,23 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
     clockVec.dy > 0 ? (H - padding - anchorY) / Math.max(0.001, clockVec.dy) : Infinity,
     clockVec.dy < 0 ? (anchorY - padding - Math.min(W, H) * 0.08) / Math.max(0.001, -clockVec.dy) : Infinity
   );
-  const arrowLen = Math.min(Math.min(W, H) * 0.38, maxArrowLen);
+  const arrowLen = Math.min(Math.min(W, H) * 0.28, maxArrowLen);
   // Arrow starts AT the primary catchlight center so the visual anchor is
   // unambiguous. The bright dot + ring render on top of the line, so the
   // overlap reads as "the line emerges from this catchlight."
   const arrowStartX = anchorX;
   const arrowStartY = anchorY;
-  const arrowEndX = anchorX + clockVec.dx * arrowLen;
-  const arrowEndY = anchorY + clockVec.dy * arrowLen;
+  // Clamp arrow endpoint to stay well within viewBox
+  const _margin = padding * 2.5;
+  const arrowEndX = Math.max(_margin, Math.min(W - _margin, anchorX + clockVec.dx * arrowLen));
+  const arrowEndY = Math.max(_margin, Math.min(H - _margin, anchorY + clockVec.dy * arrowLen));
 
   // Nose shadow: opposite direction of light, shorter
   const shadowLen = Math.min(W, H) * 0.14;
-  const shadowEndX = noseTip ? noseTip[0] - clockVec.dx * shadowLen : 0;
-  const shadowEndY = noseTip ? noseTip[1] - clockVec.dy * shadowLen + shadowLen * 0.5 : 0;
+  const _rawShadowEndX = noseTip ? noseTip[0] - clockVec.dx * shadowLen : 0;
+  const _rawShadowEndY = noseTip ? noseTip[1] - clockVec.dy * shadowLen + shadowLen * 0.5 : 0;
+  const shadowEndX = Math.max(_margin, Math.min(W - _margin, _rawShadowEndX));
+  const shadowEndY = Math.max(_margin, Math.min(H - _margin, _rawShadowEndY));
 
   const isLearning = mode === 'learning';
 
@@ -1610,9 +2420,17 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   const keyColor = KEY_ACCENT;
   const distColor = '#48ba88';
   const shadowColor = '#6ea8d1';
-  const strokeBase = isLearning ? 7 : 6;
-  const fontBase = isLearning ? 40 : 36;
-  const ringR = isLearning ? 22 : 18;
+
+  // ── Face-relative sizing ───────────────────────────────────────────────
+  // Scale all overlay elements to interocular distance so the ring fits
+  // the eye whether the source image is 236px or 4000px wide.
+  const iod = _eyeDist;
+  // Face-relative sizing — scale to interocular distance so overlays fit
+  // the eye proportionally across image sizes. Capped to prevent runaway
+  // label sizes on upscaled images (IOD 300-500px after 2048px upscale).
+  const strokeBase = Math.min(5,  Math.max(2, iod * 0.022));
+  const fontBase   = Math.min(56, Math.max(14, iod * 0.18));
+  const ringR      = Math.min(22, Math.max(6, iod * 0.07));
 
   const showKey = stepKey === 'position' || stepKey === 'capture';
   const showDist = stepKey === 'distance' || stepKey === 'capture';
@@ -1620,34 +2438,85 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   // On the capture step every overlay system renders at once, so suppress
   // text labels to avoid stacking four callouts on one face. Visual markers
   // (rings, arrows) remain.
-  const showLabels = isLearning && stepKey !== 'capture';
+  const showLabels = isLearning;
 
-  // Aspect-preserving container sizes: height first, width derived
+  // Container matches the VF height from Home/Results. For landscape images
+  // the width may exceed the screen — the parent's overflow:hidden clips it
+  // and objectFit:cover + xMidYMid slice keep image & SVG aligned.
+  // For portrait images, width < maxHeight so everything fits naturally.
   const containerH = maxHeight;
   const containerW = containerH * (W / H);
 
   return (
     <div style={{
       position: 'relative',
-      width: containerW, height: containerH,
-      borderRadius: 12, overflow: 'hidden',
-      backgroundColor: C.slotBg,
-      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+      width: fullWidth ? '100%' : Math.min(containerW, 390),
+      height: fullWidth ? '100%' : containerH,
+      borderRadius: fullWidth ? 0 : 12, overflow: 'hidden',
+      backgroundColor: '#000',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <img src={imagePreview} alt="Reference"
-        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice"
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'hidden' }}>
         <defs>
-          <marker id={`kar-${mode}`} viewBox="0 0 10 10" refX="8" refY="5"
+          <clipPath id={`vb-${mode}`}><rect x={-fontBase * 1.5} y={-fontBase * 1.5} width={W + fontBase * 3} height={H + fontBase * 3} /></clipPath>
+          <marker id={`kar-${mode}`} viewBox="0 0 10 10" refX="9" refY="5"
             markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0,0 L10,5 L0,10 z" fill={keyColor} />
+            <path d="M1,1 L10,5 L1,9 z" fill={keyColor} opacity="0.95" />
           </marker>
-          <marker id={`sar-${mode}`} viewBox="0 0 10 10" refX="8" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto">
-            <path d="M0,0 L10,5 L0,10 z" fill={shadowColor} />
+          <marker id={`sar-${mode}`} viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="4.5" markerHeight="4.5" orient="auto">
+            <path d="M1,1 L10,5 L1,9 z" fill={shadowColor} opacity="0.85" />
           </marker>
+          {/* Catchlight glow — tight bloom */}
+          <filter id={`cg-${mode}`} x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation={ringR * 0.5} />
+          </filter>
+          {/* Shadow soft edge */}
+          <filter id={`sb-${mode}`} x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation={strokeBase * 0.4} />
+          </filter>
+          {/* Key arrow gradient — fades like light falloff */}
+          <linearGradient id={`kag-${mode}`}
+            x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
+            gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor={keyColor} stopOpacity="1.0" />
+            <stop offset="70%" stopColor={keyColor} stopOpacity="0.65" />
+            <stop offset="100%" stopColor={keyColor} stopOpacity="0.35" />
+          </linearGradient>
+          {/* Text drop shadow filter */}
+          <filter id={`ts-${mode}`} x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy={fontBase * 0.06} stdDeviation={fontBase * 0.08}
+              floodColor="#000" floodOpacity="0.7" />
+          </filter>
+          {/* Shadow stroke falloff gradient — fades like real shadow softens */}
+          {noseTip && (
+            <linearGradient id={`sfg-${mode}`}
+              x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
+              gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stopColor={shadowColor} stopOpacity="0.9" />
+              <stop offset="50%" stopColor={shadowColor} stopOpacity="0.45" />
+              <stop offset="100%" stopColor={shadowColor} stopOpacity="0.1" />
+            </linearGradient>
+          )}
+          <style>{`
+            @keyframes catchlightPulse-${mode} {
+              0%, 100% { opacity: 0.3; }
+              50% { opacity: 0.5; }
+            }
+            @keyframes keyArrowFlow-${mode} {
+              0% { stroke-dashoffset: 0; }
+              100% { stroke-dashoffset: ${iod * 0.17}; }
+            }
+            @keyframes overlayIn-${mode} {
+              0% { opacity: 0; transform: scale(0.96); }
+              100% { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
         </defs>
+        <g clipPath={`url(#vb-${mode})`}>
 
         {/* Step 1 / 4:
             CATCHLIGHT POSITION — bright dot + ring on each eye (the reflection)
@@ -1655,63 +2524,110 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
                                  catchlight, extending outward toward the light */}
         {showKey && catchlights.map((c, i) => {
           const isPrimary = c === primaryKey;
+          // Use snapped eye-center coords for primary catchlight rendering
+          const cx = isPrimary && snappedAnchor ? snappedAnchor.x : c.abs_cx;
+          const cy = isPrimary && snappedAnchor ? snappedAnchor.y : c.abs_cy;
           return (
-            <g key={`c${i}`}>
-              {/* Inner bright dot = the actual catchlight highlight */}
-              <circle cx={c.abs_cx} cy={c.abs_cy} r={strokeBase * 0.9}
-                fill={catchColor} opacity={isPrimary ? 1 : 0.7} />
-              {/* Ring marker around it */}
-              <circle cx={c.abs_cx} cy={c.abs_cy} r={ringR}
-                fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.55}
-                opacity={isPrimary ? 0.95 : 0.5} />
+            <g key={`c${i}`} style={stepKey === 'capture' ? { opacity: 0.8 } : undefined}>
+              {isPrimary && (
+                <circle cx={cx} cy={cy} r={ringR * 0.9}
+                  fill={catchColor} filter={`url(#cg-${mode})`}
+                  style={{ animation: `catchlightPulse-${mode} 2.8s ease-in-out infinite` }} />
+              )}
+              <circle cx={cx} cy={cy} r={strokeBase * 0.8}
+                fill={catchColor} opacity={isPrimary ? 1 : 0.8} />
+              <circle cx={cx} cy={cy} r={ringR}
+                fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.6}
+                opacity={isPrimary ? 0.95 : 0.6} />
               {isLearning && isPrimary && !showDist && (
-                <circle cx={c.abs_cx} cy={c.abs_cy} r={ringR * 1.7}
-                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.3}
-                  opacity="0.3" />
+                <circle cx={cx} cy={cy} r={ringR * 1.4}
+                  fill="none" stroke={catchColor} strokeWidth={strokeBase * 0.18}
+                  opacity="0.18" />
               )}
             </g>
           );
         })}
         {showKey && (
-          <g>
-            {/* KEY LIGHT ANGLE arrow — anchored at the catchlight, pointing outward */}
+          <g style={stepKey === 'capture' ? { opacity: 0.75 } : undefined}>
             <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
-              stroke={keyColor} strokeWidth={strokeBase * 1.3} opacity="0.92"
-              markerEnd={`url(#kar-${mode})`} strokeDasharray={isLearning ? '20 12' : '14 8'}
-              strokeLinecap="round" />
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 2}
+              opacity="0.18" filter={`url(#cg-${mode})`} strokeLinecap="round" />
+            <line x1={arrowStartX} y1={arrowStartY} x2={arrowEndX} y2={arrowEndY}
+              stroke={`url(#kag-${mode})`} strokeWidth={strokeBase * 1}
+              markerEnd={`url(#kar-${mode})`}
+              strokeDasharray={isLearning ? `${iod * 0.10} ${iod * 0.07}` : `${iod * 0.07} ${iod * 0.04}`}
+              strokeLinecap="round"
+              style={isLearning ? { animation: `keyArrowFlow-${mode} 6s linear infinite` } : undefined} />
             {showLabels && (() => {
-              // KEY LIGHT ANGLE label — near the arrow tip, clamped inside image
-              const labelX = Math.max(padding, Math.min(W - padding, arrowEndX - fontBase * 0.3));
-              const labelY = Math.max(padding + fontBase, arrowEndY + fontBase * 1.0);
+              // ── Zone-based label placement ──────────────────────────────
+              // The arrow extends from the catchlight outward. Place the KEY
+              // label stack in the CORNER nearest the arrow tip so it stays
+              // clear of the face. Use the arrow direction to pick the corner.
+              const arrowGoesRight = clockVec.dx >= 0;
+              const arrowGoesDown  = clockVec.dy >= 0;
+              // Anchor in the corner the arrow points toward
+              const cornerX = arrowGoesRight ? W - padding : padding;
+              const cornerY = arrowGoesDown  ? H - padding * 1.5 : padding * 2.5;
+              const anchor  = arrowGoesRight ? 'end' : 'start';
+
               const primary = angleDeg != null ? `KEY · ${Math.round(angleDeg)}°` : 'KEY LIGHT';
               const tr = targetRangeFor(pattern);
               const secondary = tr
                 ? `${(pattern || '').toUpperCase()} TARGET ${tr}`
                 : `FROM ${(position || '').toUpperCase()}`;
+              const heightLabel = heightDisplay && heightDisplay !== '—' ? `↕ ${heightDisplay.toUpperCase()}` : null;
+
+              // On capture step compress to single line (all overlays visible)
+              const isCapture = stepKey === 'capture';
+
+              // Stack direction: labels grow DOWN from top corners, UP from bottom
+              const stackDir = arrowGoesDown ? -1 : 1;
+              const _ly = arrowGoesDown
+                ? Math.min(H - padding, cornerY)
+                : Math.max(padding + fontBase, cornerY);
+
               return (
                 <>
-                  <text x={labelX} y={labelY} textAnchor="end"
-                    fontSize={fontBase} fontWeight="900" fill={keyColor}
-                    letterSpacing="2" fontFamily="Inter, system-ui, sans-serif"
-                    style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 8 }}>
+                  <text x={cornerX} y={_ly} textAnchor={anchor}
+                    fontSize={fontBase * (isCapture ? 0.7 : 1)} fontWeight="900" fill={keyColor}
+                    letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
+                    filter={`url(#ts-${mode})`}>
                     {primary}
                   </text>
-                  <text x={labelX} y={labelY + fontBase * 0.62} textAnchor="end"
-                    fontSize={fontBase * 0.44} fontWeight="700" fill={keyColor}
-                    letterSpacing="1.2" fontFamily="Inter, system-ui, sans-serif"
-                    style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 5 }}>
-                    {secondary}
-                  </text>
+                  {!isCapture && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * 0.52} textAnchor={anchor}
+                      fontSize={fontBase * 0.42} fontWeight="700" fill={keyColor}
+                      letterSpacing="1" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {secondary}
+                    </text>
+                  )}
+                  {!isCapture && heightLabel && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * 0.92} textAnchor={anchor}
+                      fontSize={fontBase * 0.38} fontWeight="700" fill={steel(0.7)}
+                      letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {heightLabel}
+                    </text>
+                  )}
+                  {!isCapture && modName && modName !== 'Modifier' && (
+                    <text x={cornerX} y={_ly + stackDir * fontBase * (heightLabel ? 1.28 : 0.92)} textAnchor={anchor}
+                      fontSize={fontBase * 0.36} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      {modName.toUpperCase()}
+                    </text>
+                  )}
                 </>
               );
             })()}
             {/* CATCHLIGHT POSITION label — tags the reflection in the eye */}
-            {showLabels && primaryKey && !showDist && (
-              <text x={primaryKey.abs_cx - ringR * 1.4} y={primaryKey.abs_cy - ringR * 1.9}
+            {showLabels && primaryKey && !showDist && stepKey !== 'capture' && (
+              <text x={anchorX - ringR * 1.2} y={anchorY - ringR * 1.6}
                 textAnchor="end"
-                fontSize={fontBase * 0.62} fontWeight="800" fill={catchColor}
-                letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.78)', strokeWidth: 6 }}>
+                fontSize={fontBase * 0.42} fontWeight="800" fill={catchColor}
+                letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                filter={`url(#ts-${mode})`}>
                 CATCHLIGHT @ {position || ''}
               </text>
             )}
@@ -1720,42 +2636,83 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
 
         {/* Step 2 / 4: distance rings at primary catchlight */}
         {showDist && primaryKey && (
-          <g>
-            <circle cx={primaryKey.abs_cx} cy={primaryKey.abs_cy}
-              r={ringR * 2.5} fill="none" stroke={distColor}
-              strokeWidth={strokeBase * 0.7} opacity="0.85" />
-            <circle cx={primaryKey.abs_cx} cy={primaryKey.abs_cy}
-              r={ringR * 3.6} fill="none" stroke={distColor}
-              strokeWidth={strokeBase * 0.4} opacity="0.45" strokeDasharray="10 8" />
-            {showLabels && (
-              <text x={primaryKey.abs_cx + ringR * 4.0} y={primaryKey.abs_cy + 14}
-                fontSize={fontBase * 0.9} fontWeight="800" fill={distColor}
-                letterSpacing="1.5" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.6)', strokeWidth: 6 }}>
-                {distance || 'DIST'}
-              </text>
-            )}
+          <g style={stepKey === 'capture' ? { opacity: 0.7 } : undefined}>
+            <circle cx={anchorX} cy={anchorY}
+              r={ringR * 2.2} fill="none" stroke={distColor}
+              strokeWidth={strokeBase * 0.5} opacity="0.92"
+              style={{ mixBlendMode: 'lighten' }} />
+            <circle cx={anchorX} cy={anchorY}
+              r={ringR * 3.2} fill="none" stroke={distColor}
+              strokeWidth={strokeBase * 0.3} opacity="0.45"
+              strokeDasharray={`${iod * 0.08} ${iod * 0.05}`} />
+            {showLabels && (() => {
+              // Place distance label on the OPPOSITE side from the key arrow
+              // so they never collide. If key arrow goes right, distance goes left.
+              const keyGoesRight = clockVec.dx >= 0;
+              const _dx = keyGoesRight
+                ? Math.max(padding, anchorX - ringR * 4)
+                : Math.min(W - padding, anchorX + ringR * 4);
+              const _anchor = keyGoesRight ? 'end' : 'start';
+              const _dy = Math.max(fontBase * 1.5, Math.min(H - fontBase * 2, anchorY + ringR * 0.5));
+              const isCapture = stepKey === 'capture';
+              return (
+                <>
+                  <text x={_dx} y={_dy} textAnchor={_anchor}
+                    fontSize={fontBase * (isCapture ? 0.52 : 0.72)} fontWeight="800" fill={distColor}
+                    letterSpacing="1" fontFamily="Inter, system-ui, sans-serif"
+                    filter={`url(#ts-${mode})`}>
+                    {distance || 'DIST'}
+                  </text>
+                  {!isCapture && result?.sections?.modifier?.optDist && (
+                    <text x={_dx} y={_dy + fontBase * 0.44} textAnchor={_anchor}
+                      fontSize={fontBase * 0.34} fontWeight="600" fill={steel(0.55)}
+                      letterSpacing="0.6" fontFamily="Inter, system-ui, sans-serif"
+                      filter={`url(#ts-${mode})`}>
+                      SWEET SPOT {result.sections.modifier.optDist.toUpperCase()}
+                    </text>
+                  )}
+                </>
+              );
+            })()}
           </g>
         )}
 
         {/* Step 3 / 4: nose shadow vector */}
         {showShadow && noseTip && (
-          <g>
+          <g style={stepKey === 'capture' ? { opacity: 0.65 } : undefined}>
             <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
-              stroke={shadowColor} strokeWidth={strokeBase} opacity="0.9"
-              markerEnd={`url(#sar-${mode})`} strokeLinecap="round" />
-            <circle cx={noseTip[0]} cy={noseTip[1]} r={strokeBase * 0.9}
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 1.2} opacity="0.22"
+              filter={`url(#sb-${mode})`} strokeLinecap="round" />
+            <line x1={noseTip[0]} y1={noseTip[1]} x2={shadowEndX} y2={shadowEndY}
+              stroke={`url(#sfg-${mode})`} strokeWidth={strokeBase * 0.7} opacity="0.90"
+              markerEnd={`url(#sar-${mode})`} strokeLinecap="round"
+              style={{ mixBlendMode: 'multiply' }} />
+            <circle cx={noseTip[0]} cy={noseTip[1]} r={ringR * 0.5}
+              fill={shadowColor} opacity="0.08" filter={`url(#sb-${mode})`} />
+            <circle cx={noseTip[0]} cy={noseTip[1]} r={strokeBase * 0.6}
               fill={shadowColor} />
-            {showLabels && (
-              <text x={shadowEndX + 12} y={shadowEndY + 14}
-                fontSize={fontBase * 0.75} fontWeight="800" fill={shadowColor}
-                letterSpacing="1.4" fontFamily="Inter, system-ui, sans-serif"
-                style={{ paintOrder: 'stroke', stroke: 'rgba(0,0,0,0.6)', strokeWidth: 5 }}>
-                NOSE SHADOW
-              </text>
-            )}
+            {showLabels && (() => {
+              // Place nose shadow label below the shadow endpoint, on the
+              // opposite horizontal side from the key arrow to avoid collision.
+              const keyGoesRight = clockVec.dx >= 0;
+              const _sx = keyGoesRight
+                ? Math.max(padding, shadowEndX - fontBase * 0.2)
+                : Math.min(W - padding, shadowEndX + fontBase * 0.2);
+              const _sAnchor = keyGoesRight ? 'end' : 'start';
+              const _sy = Math.min(H - padding * 0.5, shadowEndY + fontBase * 0.6);
+              const isCapture = stepKey === 'capture';
+              return (
+                <text x={_sx} y={_sy} textAnchor={_sAnchor}
+                  fontSize={fontBase * (isCapture ? 0.38 : 0.48)} fontWeight="800" fill={shadowColor}
+                  letterSpacing="0.8" fontFamily="Inter, system-ui, sans-serif"
+                  filter={`url(#ts-${mode})`}>
+                  NOSE SHADOW
+                </text>
+              );
+            })()}
           </g>
         )}
+        </g>{/* end clipPath group */}
       </svg>
     </div>
   );

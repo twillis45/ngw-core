@@ -5,33 +5,65 @@
     "category": "classic",
     "description": "Classic 45/45 with triangle patch on shadow cheek.",
     "geometry": {
-      "key_direction_range_deg": [30, 60],
-      "key_height_range_deg": [15, 45],
+      "key_direction_range_deg": [
+        30,
+        60
+      ],
+      "key_height_range_deg": [
+        15,
+        45
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "short_light"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["beauty_dish", "softbox_octa", "softbox_rect"],
+    "modifiers": [
+      "beauty_dish",
+      "softbox_octa",
+      "softbox_rect"
+    ],
     "shadow_signature": {
       "contrast": "medium_high",
-      "softness_range": [0.2, 0.6],
+      "softness_range": [
+        0.2,
+        0.6
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "strong",
       "triangle_patch": true
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["portrait", "headshot", "editorial"],
-    "example_photographers": ["Yousuf Karsh", "Greg Heisler"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "portrait",
+      "headshot",
+      "editorial"
+    ],
+    "example_photographers": [
+      "Yousuf Karsh",
+      "Greg Heisler"
+    ],
     "scoring_weights": {
       "key_direction": 0.25,
       "shadow_signature": 0.25,
-      "modifier_match": 0.20,
+      "modifier_match": 0.2,
       "environment": 0.15,
       "fill_strategy": 0.15
     }
@@ -42,33 +74,65 @@
     "category": "beauty",
     "description": "Key directly above camera, fill below chin. Even, flattering light with minimal shadows.",
     "geometry": {
-      "key_direction_range_deg": [0, 15],
-      "key_height_range_deg": [20, 40],
+      "key_direction_range_deg": [
+        0,
+        15
+      ],
+      "key_height_range_deg": [
+        20,
+        40
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "center"
     },
     "lights": {
       "min_lights": 2,
       "max_lights": 3,
-      "typical_roles": ["key", "fill", "hair"]
+      "typical_roles": [
+        "key",
+        "fill",
+        "hair"
+      ]
     },
-    "modifiers": ["softbox_rect", "softbox_octa", "beauty_dish"],
+    "modifiers": [
+      "softbox_rect",
+      "softbox_octa",
+      "beauty_dish"
+    ],
     "shadow_signature": {
       "contrast": "low",
-      "softness_range": [0.5, 1.0],
+      "softness_range": [
+        0.5,
+        1.0
+      ],
       "nose_shadow": "directly_below",
       "cheek_shadow": "minimal",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 6],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["beauty", "headshot", "fashion"],
-    "example_photographers": ["Peter Hurley", "Mario Testino"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      6
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "beauty",
+      "headshot",
+      "fashion"
+    ],
+    "example_photographers": [
+      "Peter Hurley",
+      "Mario Testino"
+    ],
     "scoring_weights": {
-      "key_direction": 0.30,
-      "shadow_signature": 0.20,
-      "modifier_match": 0.20,
+      "key_direction": 0.3,
+      "shadow_signature": 0.2,
+      "modifier_match": 0.2,
       "environment": 0.15,
       "fill_strategy": 0.15
     }
@@ -79,31 +143,64 @@
     "category": "classic",
     "description": "Key 20-45 degrees, creates small loop-shaped nose shadow without triangle patch.",
     "geometry": {
-      "key_direction_range_deg": [20, 45],
-      "key_height_range_deg": [15, 35],
+      "key_direction_range_deg": [
+        20,
+        45
+      ],
+      "key_height_range_deg": [
+        15,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "broad_or_short"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["softbox_octa", "softbox_rect", "beauty_dish", "umbrella"],
+    "modifiers": [
+      "softbox_octa",
+      "softbox_rect",
+      "beauty_dish",
+      "umbrella"
+    ],
     "shadow_signature": {
       "contrast": "medium",
-      "softness_range": [0.3, 0.7],
+      "softness_range": [
+        0.3,
+        0.7
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["portrait", "headshot", "corporate"],
-    "example_photographers": ["Annie Leibovitz", "Peter Hurley"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "portrait",
+      "headshot",
+      "corporate"
+    ],
+    "example_photographers": [
+      "Annie Leibovitz",
+      "Peter Hurley"
+    ],
     "scoring_weights": {
-      "key_direction": 0.30,
+      "key_direction": 0.3,
       "shadow_signature": 0.25,
       "modifier_match": 0.15,
       "environment": 0.15,
@@ -116,34 +213,66 @@
     "category": "dramatic",
     "description": "Key at 90 degrees, illuminating exactly half the face.",
     "geometry": {
-      "key_direction_range_deg": [75, 105],
-      "key_height_range_deg": [0, 20],
+      "key_direction_range_deg": [
+        75,
+        105
+      ],
+      "key_height_range_deg": [
+        0,
+        20
+      ],
       "key_height": "eye_level",
       "camera_relation": "side"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "rim"]
+      "typical_roles": [
+        "key",
+        "rim"
+      ]
     },
-    "modifiers": ["softbox_rect", "stripbox", "bare_bulb"],
+    "modifiers": [
+      "softbox_rect",
+      "stripbox",
+      "bare_bulb"
+    ],
     "shadow_signature": {
       "contrast": "high",
-      "softness_range": [0.1, 0.5],
+      "softness_range": [
+        0.1,
+        0.5
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "deep",
       "triangle_patch": false
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["dramatic_portrait", "editorial", "film_noir"],
-    "example_photographers": ["Greg Heisler", "Dan Winters"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "dramatic_portrait",
+      "editorial",
+      "film_noir"
+    ],
+    "example_photographers": [
+      "Greg Heisler",
+      "Dan Winters"
+    ],
     "scoring_weights": {
       "key_direction": 0.35,
       "shadow_signature": 0.25,
       "modifier_match": 0.15,
-      "environment": 0.10,
+      "environment": 0.1,
       "fill_strategy": 0.15
     }
   },
@@ -153,34 +282,64 @@
     "category": "beauty",
     "description": "Key directly above and in front of subject, creating butterfly-shaped shadow under nose.",
     "geometry": {
-      "key_direction_range_deg": [0, 15],
-      "key_height_range_deg": [30, 50],
+      "key_direction_range_deg": [
+        0,
+        15
+      ],
+      "key_height_range_deg": [
+        30,
+        50
+      ],
       "key_height": "high",
       "camera_relation": "center"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["beauty_dish", "softbox_octa"],
+    "modifiers": [
+      "beauty_dish",
+      "softbox_octa"
+    ],
     "shadow_signature": {
       "contrast": "medium",
-      "softness_range": [0.3, 0.7],
+      "softness_range": [
+        0.3,
+        0.7
+      ],
       "nose_shadow": "directly_below",
       "cheek_shadow": "cheekbone_accent",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 6],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["beauty", "glamour", "fashion"],
-    "example_photographers": ["George Hurrell", "Richard Avedon"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      6
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "beauty",
+      "glamour",
+      "fashion"
+    ],
+    "example_photographers": [
+      "George Hurrell",
+      "Richard Avedon"
+    ],
     "scoring_weights": {
       "key_direction": 0.25,
-      "shadow_signature": 0.30,
-      "modifier_match": 0.20,
-      "environment": 0.10,
+      "shadow_signature": 0.3,
+      "modifier_match": 0.2,
+      "environment": 0.1,
       "fill_strategy": 0.15
     }
   },
@@ -190,32 +349,61 @@
     "category": "classic",
     "description": "Key illuminates the side of face turned toward camera, widening apparent face shape.",
     "geometry": {
-      "key_direction_range_deg": [20, 60],
-      "key_height_range_deg": [10, 35],
+      "key_direction_range_deg": [
+        20,
+        60
+      ],
+      "key_height_range_deg": [
+        10,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "broad_light"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["softbox_rect", "softbox_octa", "umbrella"],
+    "modifiers": [
+      "softbox_rect",
+      "softbox_octa",
+      "umbrella"
+    ],
     "shadow_signature": {
       "contrast": "medium",
-      "softness_range": [0.3, 0.7],
+      "softness_range": [
+        0.3,
+        0.7
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["portrait", "corporate", "headshot"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "portrait",
+      "corporate",
+      "headshot"
+    ],
     "example_photographers": [],
     "scoring_weights": {
       "key_direction": 0.25,
-      "shadow_signature": 0.20,
+      "shadow_signature": 0.2,
       "modifier_match": 0.15,
       "environment": 0.15,
       "fill_strategy": 0.25
@@ -227,69 +415,130 @@
     "category": "classic",
     "description": "Key illuminates the side of face turned away from camera, slimming apparent face shape.",
     "geometry": {
-      "key_direction_range_deg": [20, 60],
-      "key_height_range_deg": [10, 35],
+      "key_direction_range_deg": [
+        20,
+        60
+      ],
+      "key_height_range_deg": [
+        10,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "short_light"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["softbox_rect", "softbox_octa", "beauty_dish"],
+    "modifiers": [
+      "softbox_rect",
+      "softbox_octa",
+      "beauty_dish"
+    ],
     "shadow_signature": {
       "contrast": "medium_high",
-      "softness_range": [0.2, 0.6],
+      "softness_range": [
+        0.2,
+        0.6
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "strong",
       "triangle_patch": false
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["portrait", "headshot", "editorial"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "portrait",
+      "headshot",
+      "editorial"
+    ],
     "example_photographers": [],
     "scoring_weights": {
       "key_direction": 0.25,
-      "shadow_signature": 0.20,
+      "shadow_signature": 0.2,
       "modifier_match": 0.15,
       "environment": 0.15,
       "fill_strategy": 0.25
     }
   },
   {
-    "pattern_id": "rim_only",
-    "name": "Rim / Edge Light Only",
+    "pattern_id": "rim",
+    "name": "Rim / Edge Light",
     "category": "dramatic",
     "description": "Subject lit primarily from behind, creating bright edge with dark face.",
     "geometry": {
-      "key_direction_range_deg": [120, 180],
-      "key_height_range_deg": [10, 40],
+      "key_direction_range_deg": [
+        120,
+        180
+      ],
+      "key_height_range_deg": [
+        10,
+        40
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "back"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 3,
-      "typical_roles": ["rim", "rim", "fill"]
+      "typical_roles": [
+        "rim",
+        "rim",
+        "fill"
+      ]
     },
-    "modifiers": ["stripbox", "bare_bulb", "grid"],
+    "modifiers": [
+      "stripbox",
+      "bare_bulb",
+      "grid"
+    ],
     "shadow_signature": {
       "contrast": "very_high",
-      "softness_range": [0.1, 0.5],
+      "softness_range": [
+        0.1,
+        0.5
+      ],
       "nose_shadow": "none",
       "cheek_shadow": "none",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [4, 10],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["dramatic_portrait", "editorial", "silhouette"],
-    "example_photographers": ["Albert Watson", "Dan Winters"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      4,
+      10
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "dramatic_portrait",
+      "editorial",
+      "silhouette"
+    ],
+    "example_photographers": [
+      "Albert Watson",
+      "Dan Winters"
+    ],
     "scoring_weights": {
       "key_direction": 0.35,
-      "shadow_signature": 0.20,
+      "shadow_signature": 0.2,
       "modifier_match": 0.15,
       "environment": 0.15,
       "fill_strategy": 0.15
@@ -301,35 +550,69 @@
     "category": "commercial",
     "description": "Even, low-contrast lighting with bright background. Minimal shadows.",
     "geometry": {
-      "key_direction_range_deg": [0, 45],
-      "key_height_range_deg": [15, 35],
+      "key_direction_range_deg": [
+        0,
+        45
+      ],
+      "key_height_range_deg": [
+        15,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "front"
     },
     "lights": {
       "min_lights": 2,
       "max_lights": 4,
-      "typical_roles": ["key", "fill", "background", "hair"]
+      "typical_roles": [
+        "key",
+        "fill",
+        "background",
+        "hair"
+      ]
     },
-    "modifiers": ["softbox_rect", "softbox_octa", "umbrella"],
+    "modifiers": [
+      "softbox_rect",
+      "softbox_octa",
+      "umbrella"
+    ],
     "shadow_signature": {
       "contrast": "very_low",
-      "softness_range": [0.7, 1.0],
+      "softness_range": [
+        0.7,
+        1.0
+      ],
       "nose_shadow": "minimal",
       "cheek_shadow": "minimal",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["beauty", "commercial", "fashion", "headshot"],
-    "example_photographers": ["Mario Testino", "Patrick Demarchelier"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "beauty",
+      "commercial",
+      "fashion",
+      "headshot"
+    ],
+    "example_photographers": [
+      "Mario Testino",
+      "Patrick Demarchelier"
+    ],
     "scoring_weights": {
-      "key_direction": 0.10,
-      "shadow_signature": 0.30,
-      "modifier_match": 0.20,
-      "environment": 0.20,
-      "fill_strategy": 0.20
+      "key_direction": 0.1,
+      "shadow_signature": 0.3,
+      "modifier_match": 0.2,
+      "environment": 0.2,
+      "fill_strategy": 0.2
     }
   },
   {
@@ -338,72 +621,137 @@
     "category": "dramatic",
     "description": "Dramatic, high-contrast lighting with predominantly dark tones.",
     "geometry": {
-      "key_direction_range_deg": [30, 90],
-      "key_height_range_deg": [0, 25],
+      "key_direction_range_deg": [
+        30,
+        90
+      ],
+      "key_height_range_deg": [
+        0,
+        25
+      ],
       "key_height": "eye_level",
       "camera_relation": "side"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "negative_fill"]
+      "typical_roles": [
+        "key",
+        "negative_fill"
+      ]
     },
-    "modifiers": ["grid", "stripbox", "bare_bulb", "snoot"],
+    "modifiers": [
+      "grid",
+      "stripbox",
+      "bare_bulb",
+      "snoot"
+    ],
     "shadow_signature": {
       "contrast": "very_high",
-      "softness_range": [0.1, 0.4],
+      "softness_range": [
+        0.1,
+        0.4
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "deep",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["dramatic_portrait", "editorial", "film_noir"],
-    "example_photographers": ["Yousuf Karsh", "Albert Watson"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "dramatic_portrait",
+      "editorial",
+      "film_noir"
+    ],
+    "example_photographers": [
+      "Yousuf Karsh",
+      "Albert Watson"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
-      "shadow_signature": 0.30,
-      "modifier_match": 0.20,
+      "key_direction": 0.2,
+      "shadow_signature": 0.3,
+      "modifier_match": 0.2,
       "environment": 0.15,
       "fill_strategy": 0.15
     }
   },
   {
-    "pattern_id": "flat_fashion",
-    "name": "Flat Fashion Lighting",
+    "pattern_id": "flat",
+    "name": "Flat Lighting",
     "category": "fashion",
     "description": "On-axis, even illumination minimizing shadows for clean commercial look.",
     "geometry": {
-      "key_direction_range_deg": [0, 20],
-      "key_height_range_deg": [0, 15],
+      "key_direction_range_deg": [
+        0,
+        20
+      ],
+      "key_height_range_deg": [
+        0,
+        15
+      ],
       "key_height": "eye_level",
       "camera_relation": "front"
     },
     "lights": {
       "min_lights": 2,
       "max_lights": 4,
-      "typical_roles": ["key", "fill", "background"]
+      "typical_roles": [
+        "key",
+        "fill",
+        "background"
+      ]
     },
-    "modifiers": ["softbox_rect", "ring_light", "softbox_octa"],
+    "modifiers": [
+      "softbox_rect",
+      "ring_light",
+      "softbox_octa"
+    ],
     "shadow_signature": {
       "contrast": "very_low",
-      "softness_range": [0.7, 1.0],
+      "softness_range": [
+        0.7,
+        1.0
+      ],
       "nose_shadow": "minimal",
       "cheek_shadow": "minimal",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [4, 10],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["fashion", "beauty", "commercial", "e_commerce"],
-    "example_photographers": ["Terry Richardson", "Juergen Teller"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      4,
+      10
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "fashion",
+      "beauty",
+      "commercial",
+      "e_commerce"
+    ],
+    "example_photographers": [
+      "Terry Richardson",
+      "Juergen Teller"
+    ],
     "scoring_weights": {
       "key_direction": 0.25,
-      "shadow_signature": 0.30,
-      "modifier_match": 0.20,
+      "shadow_signature": 0.3,
+      "modifier_match": 0.2,
       "environment": 0.15,
-      "fill_strategy": 0.10
+      "fill_strategy": 0.1
     }
   },
   {
@@ -412,109 +760,65 @@
     "category": "natural",
     "description": "Natural window light as key, soft directional quality with gentle falloff.",
     "geometry": {
-      "key_direction_range_deg": [30, 90],
-      "key_height_range_deg": [0, 20],
+      "key_direction_range_deg": [
+        30,
+        90
+      ],
+      "key_height_range_deg": [
+        0,
+        20
+      ],
       "key_height": "eye_level",
       "camera_relation": "side"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 1,
-      "typical_roles": ["key"]
+      "typical_roles": [
+        "key"
+      ]
     },
-    "modifiers": ["window", "sheer_curtain"],
+    "modifiers": [
+      "window",
+      "sheer_curtain"
+    ],
     "shadow_signature": {
       "contrast": "medium",
-      "softness_range": [0.4, 0.8],
+      "softness_range": [
+        0.4,
+        0.8
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["window_light"],
-    "distance_range_ft": [2, 6],
-    "color_temperature_range_k": [5000, 7000],
-    "use_cases": ["portrait", "lifestyle", "boudoir", "editorial"],
-    "example_photographers": ["Sue Bryce", "Emily Soto"],
+    "environment": [
+      "window_light"
+    ],
+    "distance_range_ft": [
+      2,
+      6
+    ],
+    "color_temperature_range_k": [
+      5000,
+      7000
+    ],
+    "use_cases": [
+      "portrait",
+      "lifestyle",
+      "boudoir",
+      "editorial"
+    ],
+    "example_photographers": [
+      "Sue Bryce",
+      "Emily Soto"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
-      "shadow_signature": 0.20,
+      "key_direction": 0.2,
+      "shadow_signature": 0.2,
       "modifier_match": 0.15,
-      "environment": 0.30,
+      "environment": 0.3,
       "fill_strategy": 0.15
-    }
-  },
-  {
-    "pattern_id": "golden_hour",
-    "name": "Golden Hour / Magic Hour",
-    "category": "natural",
-    "description": "Warm, low-angle direct sun creating long shadows and golden tones.",
-    "geometry": {
-      "key_direction_range_deg": [30, 90],
-      "key_height_range_deg": [-10, 15],
-      "key_height": "below_eye_level",
-      "camera_relation": "side"
-    },
-    "lights": {
-      "min_lights": 1,
-      "max_lights": 1,
-      "typical_roles": ["key"]
-    },
-    "modifiers": ["sun", "reflector"],
-    "shadow_signature": {
-      "contrast": "medium_high",
-      "softness_range": [0.2, 0.5],
-      "nose_shadow": "opposite_key",
-      "cheek_shadow": "long",
-      "triangle_patch": false
-    },
-    "environment": ["direct_sun"],
-    "distance_range_ft": [0, 0],
-    "color_temperature_range_k": [2500, 4000],
-    "use_cases": ["portrait", "lifestyle", "engagement", "editorial"],
-    "example_photographers": ["Jose Villa", "Elizabeth Messina"],
-    "scoring_weights": {
-      "key_direction": 0.15,
-      "shadow_signature": 0.15,
-      "modifier_match": 0.10,
-      "environment": 0.35,
-      "fill_strategy": 0.25
-    }
-  },
-  {
-    "pattern_id": "overcast_natural",
-    "name": "Overcast Natural Light",
-    "category": "natural",
-    "description": "Diffuse, even natural light from overcast sky. Very soft shadows.",
-    "geometry": {
-      "key_direction_range_deg": [0, 180],
-      "key_height_range_deg": [45, 90],
-      "key_height": "high",
-      "camera_relation": "any"
-    },
-    "lights": {
-      "min_lights": 1,
-      "max_lights": 1,
-      "typical_roles": ["key"]
-    },
-    "modifiers": ["sky", "scrim"],
-    "shadow_signature": {
-      "contrast": "very_low",
-      "softness_range": [0.7, 1.0],
-      "nose_shadow": "minimal",
-      "cheek_shadow": "minimal",
-      "triangle_patch": false
-    },
-    "environment": ["overcast"],
-    "distance_range_ft": [0, 0],
-    "color_temperature_range_k": [6000, 8000],
-    "use_cases": ["portrait", "lifestyle", "fashion", "editorial"],
-    "example_photographers": ["Peter Lindbergh", "Paolo Roversi"],
-    "scoring_weights": {
-      "key_direction": 0.05,
-      "shadow_signature": 0.25,
-      "modifier_match": 0.10,
-      "environment": 0.40,
-      "fill_strategy": 0.20
     }
   },
   {
@@ -523,35 +827,61 @@
     "category": "beauty",
     "description": "On-axis ring-shaped light creating signature circular catchlights and even illumination.",
     "geometry": {
-      "key_direction_range_deg": [0, 10],
-      "key_height_range_deg": [0, 10],
+      "key_direction_range_deg": [
+        0,
+        10
+      ],
+      "key_height_range_deg": [
+        0,
+        10
+      ],
       "key_height": "eye_level",
       "camera_relation": "center"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 1,
-      "typical_roles": ["key"]
+      "typical_roles": [
+        "key"
+      ]
     },
-    "modifiers": ["ring_light"],
+    "modifiers": [
+      "ring_light"
+    ],
     "shadow_signature": {
       "contrast": "low",
-      "softness_range": [0.5, 0.8],
+      "softness_range": [
+        0.5,
+        0.8
+      ],
       "nose_shadow": "directly_below",
       "cheek_shadow": "even",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [2, 5],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["beauty", "fashion", "social_media", "headshot"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      2,
+      5
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "beauty",
+      "fashion",
+      "social_media",
+      "headshot"
+    ],
     "example_photographers": [],
     "scoring_weights": {
-      "key_direction": 0.20,
-      "shadow_signature": 0.20,
+      "key_direction": 0.2,
+      "shadow_signature": 0.2,
       "modifier_match": 0.35,
       "environment": 0.15,
-      "fill_strategy": 0.10
+      "fill_strategy": 0.1
     }
   },
   {
@@ -560,34 +890,65 @@
     "category": "editorial",
     "description": "Hard, direct light from bare/undiffused source. Sharp shadows, high contrast.",
     "geometry": {
-      "key_direction_range_deg": [20, 70],
-      "key_height_range_deg": [10, 35],
+      "key_direction_range_deg": [
+        20,
+        70
+      ],
+      "key_height_range_deg": [
+        10,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "broad_or_short"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "rim"]
+      "typical_roles": [
+        "key",
+        "rim"
+      ]
     },
-    "modifiers": ["bare_bulb", "fresnel", "point_source"],
+    "modifiers": [
+      "bare_bulb",
+      "fresnel",
+      "point_source"
+    ],
     "shadow_signature": {
       "contrast": "very_high",
-      "softness_range": [0.0, 0.2],
+      "softness_range": [
+        0.0,
+        0.2
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "hard_edge",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [4, 12],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["editorial", "fashion", "dramatic_portrait"],
-    "example_photographers": ["Terry Richardson", "Steven Meisel"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      4,
+      12
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "editorial",
+      "fashion",
+      "dramatic_portrait"
+    ],
+    "example_photographers": [
+      "Terry Richardson",
+      "Steven Meisel"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
-      "shadow_signature": 0.30,
+      "key_direction": 0.2,
+      "shadow_signature": 0.3,
       "modifier_match": 0.25,
-      "environment": 0.10,
+      "environment": 0.1,
       "fill_strategy": 0.15
     }
   },
@@ -597,35 +958,67 @@
     "category": "editorial",
     "description": "Narrow stripbox creating thin band of light, often used as accent or dramatic key.",
     "geometry": {
-      "key_direction_range_deg": [45, 90],
-      "key_height_range_deg": [0, 20],
+      "key_direction_range_deg": [
+        45,
+        90
+      ],
+      "key_height_range_deg": [
+        0,
+        20
+      ],
       "key_height": "eye_level",
       "camera_relation": "side"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 3,
-      "typical_roles": ["key", "rim", "fill"]
+      "typical_roles": [
+        "key",
+        "rim",
+        "fill"
+      ]
     },
-    "modifiers": ["stripbox", "grid"],
+    "modifiers": [
+      "stripbox",
+      "grid"
+    ],
     "shadow_signature": {
       "contrast": "high",
-      "softness_range": [0.2, 0.5],
+      "softness_range": [
+        0.2,
+        0.5
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "narrow_band",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 8],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["editorial", "fashion", "dramatic_portrait", "fitness"],
-    "example_photographers": ["Peter Lindbergh", "Albert Watson"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      8
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "editorial",
+      "fashion",
+      "dramatic_portrait",
+      "fitness"
+    ],
+    "example_photographers": [
+      "Peter Lindbergh",
+      "Albert Watson"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
-      "shadow_signature": 0.20,
-      "modifier_match": 0.30,
-      "environment": 0.10,
-      "fill_strategy": 0.20
+      "key_direction": 0.2,
+      "shadow_signature": 0.2,
+      "modifier_match": 0.3,
+      "environment": 0.1,
+      "fill_strategy": 0.2
     }
   },
   {
@@ -634,34 +1027,70 @@
     "category": "fashion",
     "description": "Key lighting from short side (away from camera) with fill, common in editorial fashion.",
     "geometry": {
-      "key_direction_range_deg": [30, 60],
-      "key_height_range_deg": [15, 45],
+      "key_direction_range_deg": [
+        30,
+        60
+      ],
+      "key_height_range_deg": [
+        15,
+        45
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "short_light"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 3,
-      "typical_roles": ["key", "negative_fill", "rim"]
+      "typical_roles": [
+        "key",
+        "negative_fill",
+        "rim"
+      ]
     },
-    "modifiers": ["octa", "parabolic_umbrella", "beauty_dish", "softbox_octa", "softbox_rect"],
+    "modifiers": [
+      "octa",
+      "parabolic_umbrella",
+      "beauty_dish",
+      "softbox_octa",
+      "softbox_rect"
+    ],
     "shadow_signature": {
       "contrast": "medium_high",
-      "softness_range": [0.3, 0.7],
+      "softness_range": [
+        0.3,
+        0.7
+      ],
       "nose_shadow": "visible",
       "cheek_shadow": "strong",
       "triangle_patch": false
     },
-    "environment": ["studio", "window_light"],
-    "distance_range_ft": [4, 8],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["editorial_fashion", "athletic_portrait", "dramatic_portrait"],
-    "example_photographers": ["Patrick Demarchelier", "Annie Leibovitz", "Steven Meisel"],
+    "environment": [
+      "studio",
+      "window_light"
+    ],
+    "distance_range_ft": [
+      4,
+      8
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "editorial_fashion",
+      "athletic_portrait",
+      "dramatic_portrait"
+    ],
+    "example_photographers": [
+      "Patrick Demarchelier",
+      "Annie Leibovitz",
+      "Steven Meisel"
+    ],
     "scoring_weights": {
       "key_direction": 0.25,
-      "shadow_signature": 0.20,
-      "modifier_match": 0.20,
-      "environment": 0.10,
+      "shadow_signature": 0.2,
+      "modifier_match": 0.2,
+      "environment": 0.1,
       "fill_strategy": 0.25
     }
   },
@@ -671,31 +1100,64 @@
     "category": "editorial",
     "description": "Large soft source close to subject, creating wrapped editorial look with moderate shadows.",
     "geometry": {
-      "key_direction_range_deg": [20, 50],
-      "key_height_range_deg": [10, 35],
+      "key_direction_range_deg": [
+        20,
+        50
+      ],
+      "key_height_range_deg": [
+        10,
+        35
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "broad_or_short"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 2,
-      "typical_roles": ["key", "fill"]
+      "typical_roles": [
+        "key",
+        "fill"
+      ]
     },
-    "modifiers": ["softbox_octa", "parabolic_umbrella", "softbox_rect"],
+    "modifiers": [
+      "softbox_octa",
+      "parabolic_umbrella",
+      "softbox_rect"
+    ],
     "shadow_signature": {
       "contrast": "medium",
-      "softness_range": [0.5, 0.8],
+      "softness_range": [
+        0.5,
+        0.8
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [3, 6],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["editorial", "fashion", "magazine", "catalog_premium"],
-    "example_photographers": ["Peter Lindbergh", "Steven Meisel", "Paolo Roversi"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      3,
+      6
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "editorial",
+      "fashion",
+      "magazine",
+      "catalog_premium"
+    ],
+    "example_photographers": [
+      "Peter Lindbergh",
+      "Steven Meisel",
+      "Paolo Roversi"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
+      "key_direction": 0.2,
       "shadow_signature": 0.25,
       "modifier_match": 0.25,
       "environment": 0.15,
@@ -708,33 +1170,66 @@
     "category": "editorial",
     "description": "Rim-dominant lighting with subtle key fill. Strong edge separation against dark background.",
     "geometry": {
-      "key_direction_range_deg": [120, 170],
-      "key_height_range_deg": [15, 45],
+      "key_direction_range_deg": [
+        120,
+        170
+      ],
+      "key_height_range_deg": [
+        15,
+        45
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "back"
     },
     "lights": {
       "min_lights": 2,
       "max_lights": 3,
-      "typical_roles": ["rim", "kicker", "key"]
+      "typical_roles": [
+        "rim",
+        "kicker",
+        "key"
+      ]
     },
-    "modifiers": ["stripbox", "grid", "bare_bulb"],
+    "modifiers": [
+      "stripbox",
+      "grid",
+      "bare_bulb"
+    ],
     "shadow_signature": {
       "contrast": "high",
-      "softness_range": [0.1, 0.4],
+      "softness_range": [
+        0.1,
+        0.4
+      ],
       "nose_shadow": "minimal",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [5, 10],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["editorial", "athletic_portrait", "dramatic_portrait", "album_cover"],
-    "example_photographers": ["Albert Watson", "Mark Seliger"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      5,
+      10
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "editorial",
+      "athletic_portrait",
+      "dramatic_portrait",
+      "album_cover"
+    ],
+    "example_photographers": [
+      "Albert Watson",
+      "Mark Seliger"
+    ],
     "scoring_weights": {
-      "key_direction": 0.30,
-      "shadow_signature": 0.20,
-      "modifier_match": 0.20,
+      "key_direction": 0.3,
+      "shadow_signature": 0.2,
+      "modifier_match": 0.2,
       "environment": 0.15,
       "fill_strategy": 0.15
     }
@@ -745,34 +1240,66 @@
     "category": "product",
     "description": "Overhead softbox angled onto product surface. Controlled gradients and reflections.",
     "geometry": {
-      "key_direction_range_deg": [30, 60],
-      "key_height_range_deg": [40, 80],
+      "key_direction_range_deg": [
+        30,
+        60
+      ],
+      "key_height_range_deg": [
+        40,
+        80
+      ],
       "key_height": "high",
       "camera_relation": "front"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 3,
-      "typical_roles": ["key", "fill", "background"]
+      "typical_roles": [
+        "key",
+        "fill",
+        "background"
+      ]
     },
-    "modifiers": ["softbox_rect", "scrim", "diffusion_panel"],
+    "modifiers": [
+      "softbox_rect",
+      "scrim",
+      "diffusion_panel"
+    ],
     "shadow_signature": {
       "contrast": "low",
-      "softness_range": [0.6, 0.9],
+      "softness_range": [
+        0.6,
+        0.9
+      ],
       "nose_shadow": "null",
       "cheek_shadow": "null",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [1, 3],
-    "color_temperature_range_k": [5000, 6000],
-    "use_cases": ["product_photography", "e_commerce", "still_life", "food"],
-    "example_photographers": ["Karl Taylor"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      1,
+      3
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6000
+    ],
+    "use_cases": [
+      "product_photography",
+      "e_commerce",
+      "still_life",
+      "food"
+    ],
+    "example_photographers": [
+      "Karl Taylor"
+    ],
     "scoring_weights": {
       "key_direction": 0.15,
       "shadow_signature": 0.25,
       "modifier_match": 0.25,
-      "environment": 0.20,
+      "environment": 0.2,
       "fill_strategy": 0.15
     }
   },
@@ -782,34 +1309,67 @@
     "category": "product",
     "description": "Backlit translucent product with edge rim lights defining shape.",
     "geometry": {
-      "key_direction_range_deg": [150, 180],
-      "key_height_range_deg": [0, 10],
+      "key_direction_range_deg": [
+        150,
+        180
+      ],
+      "key_height_range_deg": [
+        0,
+        10
+      ],
       "key_height": "eye_level",
       "camera_relation": "back"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 3,
-      "typical_roles": ["backlight", "rim", "rim"]
+      "typical_roles": [
+        "backlight",
+        "rim",
+        "rim"
+      ]
     },
-    "modifiers": ["stripbox", "snoot", "bare_bulb"],
+    "modifiers": [
+      "stripbox",
+      "snoot",
+      "bare_bulb"
+    ],
     "shadow_signature": {
       "contrast": "high",
-      "softness_range": [0.2, 0.5],
+      "softness_range": [
+        0.2,
+        0.5
+      ],
       "nose_shadow": "null",
       "cheek_shadow": "null",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [1, 4],
-    "color_temperature_range_k": [5000, 6500],
-    "use_cases": ["beverage", "wine", "perfume", "spirits"],
-    "example_photographers": ["Karl Taylor", "Rob Grimm"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      1,
+      4
+    ],
+    "color_temperature_range_k": [
+      5000,
+      6500
+    ],
+    "use_cases": [
+      "beverage",
+      "wine",
+      "perfume",
+      "spirits"
+    ],
+    "example_photographers": [
+      "Karl Taylor",
+      "Rob Grimm"
+    ],
     "scoring_weights": {
-      "key_direction": 0.30,
+      "key_direction": 0.3,
       "shadow_signature": 0.15,
-      "modifier_match": 0.20,
-      "environment": 0.20,
+      "modifier_match": 0.2,
+      "environment": 0.2,
       "fill_strategy": 0.15
     }
   },
@@ -819,33 +1379,66 @@
     "category": "athletic",
     "description": "Dual rim/edge lighting sculpting athletic form with optional low-power key.",
     "geometry": {
-      "key_direction_range_deg": [120, 170],
-      "key_height_range_deg": [15, 40],
+      "key_direction_range_deg": [
+        120,
+        170
+      ],
+      "key_height_range_deg": [
+        15,
+        40
+      ],
       "key_height": "above_eye_level",
       "camera_relation": "back"
     },
     "lights": {
       "min_lights": 2,
       "max_lights": 3,
-      "typical_roles": ["rim", "kicker", "key"]
+      "typical_roles": [
+        "rim",
+        "kicker",
+        "key"
+      ]
     },
-    "modifiers": ["stripbox", "grid", "softbox_rect"],
+    "modifiers": [
+      "stripbox",
+      "grid",
+      "softbox_rect"
+    ],
     "shadow_signature": {
       "contrast": "high",
-      "softness_range": [0.1, 0.4],
+      "softness_range": [
+        0.1,
+        0.4
+      ],
       "nose_shadow": "minimal",
       "cheek_shadow": "moderate",
       "triangle_patch": false
     },
-    "environment": ["studio"],
-    "distance_range_ft": [5, 12],
-    "color_temperature_range_k": [4500, 6500],
-    "use_cases": ["athletic_portrait", "fitness", "sports_marketing", "gym_promo"],
-    "example_photographers": ["Walter Iooss Jr", "Tim Tadder"],
+    "environment": [
+      "studio"
+    ],
+    "distance_range_ft": [
+      5,
+      12
+    ],
+    "color_temperature_range_k": [
+      4500,
+      6500
+    ],
+    "use_cases": [
+      "athletic_portrait",
+      "fitness",
+      "sports_marketing",
+      "gym_promo"
+    ],
+    "example_photographers": [
+      "Walter Iooss Jr",
+      "Tim Tadder"
+    ],
     "scoring_weights": {
-      "key_direction": 0.30,
-      "shadow_signature": 0.20,
-      "modifier_match": 0.20,
+      "key_direction": 0.3,
+      "shadow_signature": 0.2,
+      "modifier_match": 0.2,
       "environment": 0.15,
       "fill_strategy": 0.15
     }
@@ -856,34 +1449,65 @@
     "category": "natural",
     "description": "Window light with black v-flat on shadow side for deeper contrast and editorial mood.",
     "geometry": {
-      "key_direction_range_deg": [40, 90],
-      "key_height_range_deg": [0, 20],
+      "key_direction_range_deg": [
+        40,
+        90
+      ],
+      "key_height_range_deg": [
+        0,
+        20
+      ],
       "key_height": "eye_level",
       "camera_relation": "side"
     },
     "lights": {
       "min_lights": 1,
       "max_lights": 1,
-      "typical_roles": ["key", "negative_fill"]
+      "typical_roles": [
+        "key",
+        "negative_fill"
+      ]
     },
-    "modifiers": ["window", "sheer_curtain"],
+    "modifiers": [
+      "window",
+      "sheer_curtain"
+    ],
     "shadow_signature": {
       "contrast": "medium_high",
-      "softness_range": [0.3, 0.7],
+      "softness_range": [
+        0.3,
+        0.7
+      ],
       "nose_shadow": "opposite_key",
       "cheek_shadow": "strong",
       "triangle_patch": false
     },
-    "environment": ["window_light"],
-    "distance_range_ft": [2, 6],
-    "color_temperature_range_k": [5000, 7000],
-    "use_cases": ["portrait", "editorial", "fine_art", "moody_lifestyle"],
-    "example_photographers": ["Sue Bryce", "Jerry Ghionis"],
+    "environment": [
+      "window_light"
+    ],
+    "distance_range_ft": [
+      2,
+      6
+    ],
+    "color_temperature_range_k": [
+      5000,
+      7000
+    ],
+    "use_cases": [
+      "portrait",
+      "editorial",
+      "fine_art",
+      "moody_lifestyle"
+    ],
+    "example_photographers": [
+      "Sue Bryce",
+      "Jerry Ghionis"
+    ],
     "scoring_weights": {
-      "key_direction": 0.20,
+      "key_direction": 0.2,
       "shadow_signature": 0.25,
-      "modifier_match": 0.10,
-      "environment": 0.30,
+      "modifier_match": 0.1,
+      "environment": 0.3,
       "fill_strategy": 0.15
     }
   }

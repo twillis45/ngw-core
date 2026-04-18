@@ -20,6 +20,9 @@ htmlcov/
 .vscode/
 .idea/
 
+# Claude Code worktrees
+.claude/worktrees/
+
 # Benchmark run artifacts
 benchmarks/results/
 

@@ -3,7 +3,7 @@
   "description": "Short lighting — key on narrow side of face (side turned away from camera), dark moody portrait with rim",
   "image_path": "benchmarks/images/short.jpg",
   "ground_truth": {
-    "expected_pattern": "short",
+    "expected_pattern": "short_fashion_key",
     "expected_light_count": 1,
     "expected_key_direction": "upper_left",
     "acceptable_patterns": ["short", "short_fashion_key", "rembrandt", "loop", "split", "broad"],

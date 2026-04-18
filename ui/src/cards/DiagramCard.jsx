@@ -606,6 +606,7 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup, activeRol
 
     let labelX = lx + offsets[0].x;
     let labelY = ly + offsets[0].y;
+    let labelPlaced = false;
 
     for (const off of offsets) {
       const tx = lx + off.x;
@@ -614,13 +615,15 @@ function drawTopView(canvas, spec, units, highlightRole, twoHostSetup, activeRol
         if (boxFits(tx, ty, boxW, boxH)) {
           labelX = tx;
           labelY = ty;
+          labelPlaced = true;
           break;
         }
       }
     }
 
     ctx.save();
-    ctx.globalAlpha = isActive ? 1.0 : 0.28;
+    // If no clean position found, render at reduced opacity to signal overlap
+    ctx.globalAlpha = isActive ? (labelPlaced ? 1.0 : 0.45) : 0.28;
     ctx.fillStyle = color;
     ctx.font = `bold ${Math.round(12 * fs)}px ${FONT_STACK}`;
     ctx.textAlign = 'center';
@@ -1490,7 +1493,17 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
 
     function onResize() { draw(canvasRef.current); }
     window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    // Orientation changes on mobile/tablet/foldable need a delayed redraw
+    // because viewport dimensions may not be final when the event fires.
+    const onOrient = () => setTimeout(onResize, 150);
+    window.addEventListener('orientationchange', onOrient);
+    const soApi = window.screen?.orientation;
+    if (soApi) soApi.addEventListener('change', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onOrient);
+      if (soApi) soApi.removeEventListener('change', onResize);
+    };
   }, [effectiveSpec, view, units, spaceCheck, roomDimensions, highlightRole, activeLight]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!spec) return null;

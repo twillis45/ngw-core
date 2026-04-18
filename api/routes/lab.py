@@ -659,6 +659,8 @@ async def lab_analyze(
             "authoritative_confidence_label": getattr(ar, "pattern_confidence_label", "weak"),
             # OD-3: source_context coexists with pattern (window_portrait → window, etc.)
             "source_context":               getattr(ar, "source_context", None),
+            # Geometric base preserved when tonal specialty (low_key, high_key) overrides
+            "geometric_base":               getattr(ar, "geometric_base", None),
             "analyzed_by": user.get("email"),
             "analyzed_at": time.time(),
             "stage_timings": getattr(ar, "stage_timings", {}),

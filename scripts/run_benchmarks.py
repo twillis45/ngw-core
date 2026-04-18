@@ -199,11 +199,15 @@ def run_single_benchmark(
             detected_light_count = geo_lc
         # Trust deduped cue_inference geometry when it significantly
         # disagrees with raw catchlight count (difference >= 2) and
-        # has high confidence (>= 0.6).  The deduped reflection_architecture
-        # removes floor reflections and groups nearby positions, making
-        # it more reliable than raw catchlight counting for multi-source
-        # setups that under-count and single-source setups that over-count.
-        elif geo_lc > 0 and geo_conf >= 0.6 and abs(detected_light_count - geo_lc) >= 2:
+        # has high confidence (>= 0.6).  Only for multi-source patterns
+        # where catchlight dedup is known to under-count (high_key).
+        # Triangle and clamshell now have engine-level definitive counts.
+        # Single-key patterns (loop, rembrandt, split, butterfly) trust
+        # catchlight physics — the VLM geometry estimate systematically
+        # over-counts for these.
+        elif (geo_lc > 0 and geo_conf >= 0.6
+              and abs(detected_light_count - geo_lc) >= 2
+              and detected_pattern in ("high_key", "flat")):
             detected_light_count = geo_lc
         # Key direction: use cue_inference geometry when catchlights gave no side
         if detected_key_side == "unknown":

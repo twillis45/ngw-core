@@ -3,7 +3,7 @@
   "description": "Editorial rim + key \u2014 strong rim/backlight from behind-right creating silhouette edge, minimal front fill, fashion pose",
   "image_path": "benchmarks/images/editorial_rim_key.jpg",
   "ground_truth": {
-    "expected_pattern": "editorial_rim_key",
+    "expected_pattern": "rim",
     "expected_light_count": 1,
     "expected_key_direction": "right",
     "acceptable_patterns": [

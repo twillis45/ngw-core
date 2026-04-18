@@ -11,9 +11,12 @@ import { saveSetting, loadSettings, resetSettings, applySettings,
 import { loadMode, saveMode } from '../../../data/modeStore';
 import { isEnabled, setFlag } from '../../../modes/featureFlags';
 import useMode from '../../../hooks/useMode';
-import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN } from '../../../theme/studioMatte';
+import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN, KEY_ACCENT } from '../../../theme/studioMatte';
 import { Panel, Divider, SectionLabel, NavRow, ToggleRow, InfoRow, ScreenHeader, HomeIndicator }
   from '../_core/components';
+import MatteBackground from '../_shared/MatteBackground';
+import usePlan from '../../../hooks/usePlan';
+import { PLAN_LABELS } from '../../../data/planStore';
 
 const SUPPORT_EMAIL = 'hello@noguesswork.com';
 const HELP_URL      = 'https://noguessworksystems.com/help';
@@ -42,26 +45,30 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="subdued" />
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
       <ScreenHeader title="Preferences" onBack={onBack} />
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
         <SectionLabel label="APPEARANCE" />
         <Panel>
-          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} />
+          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} tooltip="Vibration feedback on taps and interactions. Turn off for silent operation." />
           <Divider />
-          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} />
+          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} tooltip="Simplify animations for accessibility or to reduce visual distraction." />
           <Divider />
           <NavRow
             label="Font size"
             value={(FONT_SIZES.find(f => f.id === settings.fontSize) || FONT_SIZES[2]).label}
             onClick={() => cycleOption('fontSize', FONT_SIZES)}
+            tooltip="Adjust text size across all screens for readability."
           />
           <Divider />
           <NavRow
             label="Unit system"
             value={settings.units === 'metric' ? 'Metric' : 'Imperial'}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+            tooltip="Switch between feet/inches and meters for distance and height measurements."
           />
         </Panel>
 
@@ -75,6 +82,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
               update('confidenceDisplay', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How confidence is shown on results. Simple: strong/partial. Numeric: percentage. Detailed: both with signal breakdown."
           />
           <Divider />
           <NavRow
@@ -85,12 +93,14 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
               update('patternSensitivity', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How strictly the engine matches patterns. Strict: only calls a pattern when evidence is strong. Flexible: calls with less evidence. Balanced: default."
           />
           <Divider />
           <ToggleRow
             label="Show confidence score"
             value={!!settings.showConfidenceScore}
             onChange={v => update('showConfidenceScore', v)}
+            tooltip="Display the engine's confidence percentage on results. Useful for understanding ambiguous reads."
           />
           <Divider />
           <NavRow
@@ -101,6 +111,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.explanationDepth || 'standard');
               update('explanationDepth', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="How much detail the cockpit coaching provides. Brief: just the key action. Standard: action + why. Technical: full signal breakdown."
           />
         </Panel>
 
@@ -114,12 +125,14 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
               const idx = opts.indexOf(settings.comparisonPrompts || 'auto');
               update('comparisonPrompts', opts[(idx + 1) % opts.length]);
             }}
+            tooltip="When to prompt you to compare your shot against the reference. Auto: after every capture. Low conf: only when the match is uncertain."
           />
           <Divider />
           <NavRow
             label="Power readout"
             value={(POWER_DISPLAY_OPTIONS.find(p => p.id === settings.powerDisplay) || POWER_DISPLAY_OPTIONS[0]).label}
             onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
+            tooltip="How strobe power is displayed in the cockpit. Stops: photographer standard (f-stop relative). Watts: absolute power. Ratio: key-to-fill ratio."
           />
         </Panel>
 
@@ -129,12 +142,14 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
             label="Allow analytics"
             value={settings.allowAnalytics !== false}
             onChange={v => update('allowAnalytics', v)}
+            tooltip="Anonymous usage data helps improve the engine. No images are ever sent — only interaction patterns."
           />
           <Divider />
           <NavRow
             label="Image handling"
             value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
             onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
+            tooltip="Whether uploaded photos are stored for history or deleted immediately after analysis. Delete: maximum privacy. Store: enables result recall."
           />
         </Panel>
 
@@ -148,6 +163,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
 
       </div>
     </div>
+    </div>
   );
 }
 
@@ -155,6 +171,13 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
 function AccountScreen({ user, onBack, onLogout }) {
   const [resetSent, setResetSent] = useState(false);
   const displayEmail = user?.email || user?.username || '';
+  const { plan, setPlan, isPaid, isAdmin } = usePlan(displayEmail);
+  const planLabel = PLAN_LABELS[plan] || plan;
+
+  // Plan accent colors
+  const planAccent = isPaid
+    ? { bg: 'rgba(72,186,136,0.10)', border: 'rgba(72,186,136,0.25)', color: GREEN, label: 'ACTIVE' }
+    : { bg: 'rgba(200,155,60,0.08)', border: 'rgba(200,155,60,0.20)', color: KEY_ACCENT, label: 'FREE' };
 
   async function handlePasswordReset() {
     if (!displayEmail) return;
@@ -168,31 +191,150 @@ function AccountScreen({ user, onBack, onLogout }) {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="subdued" />
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
       <ScreenHeader title="Account" onBack={onBack} />
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
-        {/* Plan card */}
+        {/* Plan card — machined instrument panel with LED status indicator */}
         <div style={{
           backgroundColor: '#0c0e14',
-          borderRadius: 14, padding: '18px 20px',
+          borderRadius: 14, padding: '20px 22px',
           boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-          border: '0.5px solid rgba(72,186,136,0.15)',
           marginTop: 8,
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.textPrimary, ...FS }}>Pro Plan</p>
-              <p style={{ margin: '4px 0 0', fontSize: 12, color: steel(0.55), ...FS }}>Active subscription</p>
+              <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: C.textPrimary, letterSpacing: '-0.2px', ...FS }}>{planLabel} Plan</p>
+              <p style={{ margin: '5px 0 0', fontSize: 12, color: steel(0.50), ...FS }}>
+                {isPaid ? 'Active subscription' : 'Free tier — limited analyses'}
+              </p>
             </div>
+            {/* LED status indicator — machined well with glowing dot */}
             <div style={{
-              backgroundColor: 'rgba(72,186,136,0.12)', border: '0.5px solid rgba(72,186,136,0.3)',
-              borderRadius: 8, padding: '5px 10px',
+              display: 'flex', alignItems: 'center', gap: 8,
             }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: GREEN, letterSpacing: '0.8px', ...FS }}>ACTIVE</span>
+              {/* Status dot in recessed well */}
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 50%, transparent 80%)',
+                boxShadow: [
+                  'inset 3px 3px 6px rgba(0,0,0,0.80)',
+                  'inset 1px 1px 3px rgba(0,0,0,0.55)',
+                  'inset -1px -1px 2px rgba(255,255,255,0.015)',
+                  '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+                  '1px 2px 4px rgba(0,0,0,0.40)',
+                  // LED glow trapped in well
+                  isPaid ? 'inset 0 0 6px rgba(72,186,136,0.12)' : 'inset 0 0 4px rgba(200,155,60,0.08)',
+                ].join(', '),
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: isPaid
+                    ? 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.85) 60%, rgba(40,120,85,0.75) 100%)'
+                    : `radial-gradient(circle at 35% 30%, rgba(255,220,160,0.85) 0%, rgba(200,155,60,0.70) 60%, rgba(140,100,30,0.60) 100%)`,
+                  boxShadow: isPaid
+                    ? '0 0 6px rgba(72,186,136,0.50), 0 0 2px rgba(140,230,190,0.30)'
+                    : '0 0 5px rgba(200,155,60,0.40), 0 0 2px rgba(255,200,100,0.20)',
+                }} />
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: '1.2px', textTransform: 'uppercase',
+                color: isPaid ? 'rgba(140,225,180,0.70)' : 'rgba(200,155,60,0.60)',
+                ...FS,
+              }}>{planAccent.label}</span>
             </div>
           </div>
         </div>
+
+        {/* Admin — plan switcher for testing free vs paid experience */}
+        {isAdmin && (
+          <>
+            <SectionLabel label="ADMIN — SUBSCRIPTION TESTING" />
+            <Panel>
+              <p style={{ margin: 0, padding: '10px 20px 6px', fontSize: 11, color: steel(0.38), ...FS }}>
+                Switch tiers to test paywall and feature gates.
+              </p>
+              <div style={{ display: 'flex', gap: 8, padding: '10px 20px 16px', flexWrap: 'nowrap' }}>
+                {['free', 'paid', 'pro', 'enterprise'].map(tier => {
+                  const active = plan === tier;
+                  const isFreeTier = tier === 'free';
+                  const accentColor = isFreeTier ? 'rgba(200,155,60,' : 'rgba(72,186,136,';
+                  return (
+                    <div key={tier} style={{ position: 'relative' }}>
+                      {/* Well cavity behind each button */}
+                      <div style={{
+                        position: 'absolute', inset: -1.5, borderRadius: 9,
+                        boxShadow: [
+                          'inset 4px 4px 10px rgba(0,0,0,0.80)',
+                          'inset 2px 2px 5px rgba(0,0,0,0.60)',
+                          'inset -1px -1px 2px rgba(255,255,255,0.012)',
+                          '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
+                          '2px 3px 8px rgba(0,0,0,0.45)',
+                          active ? `inset 0 0 6px ${accentColor}0.08)` : '',
+                        ].filter(Boolean).join(', '),
+                        pointerEvents: 'none',
+                      }} />
+                      {/* Button face */}
+                      <button onClick={() => { setPlan(tier, { force: true }); softClickSound(); selectHaptic(); }}
+                        style={{
+                          position: 'relative',
+                          background: active
+                            ? `linear-gradient(141.71deg, ${isFreeTier ? '#2a2218' : '#1a2a22'} 0%, ${isFreeTier ? '#1c1810' : '#122018'} 100%)`
+                            : 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+                          border: 'none', borderRadius: 7, padding: '5px 10px', cursor: 'pointer',
+                          boxShadow: [
+                            '6px 6px 16px rgba(0,0,0,0.65)',
+                            '3px 3px 7px rgba(0,0,0,0.48)',
+                            '1px 1px 3px rgba(0,0,0,0.32)',
+                            '-1px -1px 1px rgba(255,255,255,0.05)',
+                            'inset 0 1.5px 0 rgba(255,255,255,0.09)',
+                            'inset 1px 0 0 rgba(255,255,255,0.04)',
+                            'inset -1px -1px 0 rgba(0,0,0,0.30)',
+                            active ? `0 0 0 1px ${accentColor}0.30)` : '',
+                            active ? `0 0 10px ${accentColor}0.10)` : '',
+                          ].filter(Boolean).join(', '),
+                          WebkitTapHighlightColor: 'transparent',
+                          transition: 'transform 0.15s ease',
+                          transform: active ? 'translateY(-1px)' : 'none',
+                        }}
+                      >
+                        {/* Active LED dot */}
+                        {active && (
+                          <div style={{
+                            position: 'absolute', top: -3, right: -3,
+                            width: 8, height: 8, borderRadius: '50%',
+                            background: isFreeTier
+                              ? 'radial-gradient(circle at 35% 30%, rgba(255,220,160,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+                              : 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+                            boxShadow: isFreeTier
+                              ? '0 0 6px rgba(200,155,60,0.50)'
+                              : '0 0 6px rgba(72,186,136,0.50)',
+                          }} />
+                        )}
+                        <span style={{
+                          fontSize: 10.5, fontWeight: active ? 700 : 600,
+                          letterSpacing: '0.8px', textTransform: 'uppercase',
+                          color: active
+                            ? `${accentColor}0.88)`
+                            : steel(0.45),
+                          textShadow: active ? `0 0 8px ${accentColor}0.20)` : 'none',
+                          ...FS,
+                        }}>{PLAN_LABELS[tier]}</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <Divider />
+              <InfoRow label="Current tier" value={planLabel} />
+              <Divider />
+              <InfoRow label="Is paid" value={isPaid ? 'Yes' : 'No'} />
+            </Panel>
+          </>
+        )}
 
         <SectionLabel label="ACCOUNT" />
         <Panel>
@@ -207,8 +349,15 @@ function AccountScreen({ user, onBack, onLogout }) {
         <SectionLabel label="BILLING" />
         <Panel>
           <NavRow
-            label="Manage billing & invoices"
-            onClick={() => window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank')}
+            label={isPaid ? 'Manage billing & invoices' : 'Upgrade to Pro'}
+            onClick={() => {
+              if (isPaid) {
+                window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank');
+              } else {
+                // TODO: link to Stripe checkout
+                softClickSound();
+              }
+            }}
           />
         </Panel>
 
@@ -224,11 +373,12 @@ function AccountScreen({ user, onBack, onLogout }) {
 
       </div>
     </div>
+    </div>
   );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function Day1SettingsScreen({ user, onBack, onLogout }) {
+export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
   const [subScreen, setSubScreen] = useState('main');
   const [settings, setSettings]   = useState(loadSettings);
   const mode = useMode();
@@ -246,6 +396,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
     softClickSound(); tapHaptic();
   }
 
+  const [labEnabled, setLabEnabled] = useState(() => isEnabled('enable_lab'));
   const handleVersionTap = useCallback(() => {
     const now  = Date.now();
     const taps = tapTimestamps.current;
@@ -253,13 +404,16 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
     while (taps.length && taps[0] < now - DEV_TAP_WINDOW) taps.shift();
     if (taps.length >= DEV_TAP_COUNT) {
       taps.length = 0;
-      const was = isEnabled('enable_lab');
-      setFlag('enable_lab', !was);
+      const next = !isEnabled('enable_lab');
+      setFlag('enable_lab', next);
+      setLabEnabled(next);
+      tapHaptic();
     }
   }, []);
 
   const displayName  = user?.username || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || user?.username || '';
+  const { plan: mainPlan, isPaid: mainIsPaid } = usePlan(displayEmail);
 
   if (subScreen === 'preferences') {
     return (
@@ -285,10 +439,12 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
   // ── MAIN ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="subdued" />
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: C.bg, zIndex: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', zIndex: 10 }}>
         <button
           onClick={() => { navSlideSound(); navHaptic(); onBack?.(); }}
           style={{ backgroundColor: 'transparent', border: 'none', cursor: 'pointer', fontSize: 16, color: steel(0.65), padding: '4px 0', WebkitTapHighlightColor: 'transparent', minWidth: 64, textAlign: 'left', ...FS }}
@@ -297,7 +453,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
         <div style={{ minWidth: 64 }} />
       </div>
 
-      <div style={{ padding: '8px 20px 48px' }}>
+      <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
         {/* ── User card (taps → account) ── */}
         <button
@@ -328,15 +484,45 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
               <p style={{ margin: '3px 0 0', fontSize: 12, color: steel(0.5), ...FS }}>{displayEmail}</p>
             )}
           </div>
-          {/* Pro badge + chevron */}
+          {/* Plan badge — dynamic, reads from actual plan tier */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              backgroundColor: 'rgba(72,186,136,0.1)', border: '0.5px solid rgba(72,186,136,0.2)',
-              borderRadius: 6, padding: '3px 8px',
-            }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: GREEN, letterSpacing: '0.8px', ...FS }}>PRO</span>
-            </div>
-            <span style={{ fontSize: 16, color: steel(0.3), lineHeight: 1 }}>›</span>
+            {(() => {
+              const isFree = mainPlan === 'free';
+              const accentC = isFree ? 'rgba(200,155,60,' : 'rgba(72,186,136,';
+              const bgGrad = isFree
+                ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                : 'linear-gradient(141.71deg, #1a2a22 0%, #122018 100%)';
+              return (
+                <div style={{
+                  background: bgGrad,
+                  borderRadius: 8, padding: '5px 12px',
+                  boxShadow: [
+                    '4px 4px 10px rgba(0,0,0,0.55)',
+                    '2px 2px 5px rgba(0,0,0,0.40)',
+                    '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+                    `inset 0 1px 0 ${accentC}0.10)`,
+                    'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                    `0 0 0 0.5px ${accentC}0.20)`,
+                    `0 0 8px ${accentC}0.06)`,
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: isFree
+                      ? 'radial-gradient(circle at 35% 30%, rgba(255,220,160,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+                      : 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+                    boxShadow: isFree ? '0 0 4px rgba(200,155,60,0.50)' : '0 0 4px rgba(72,186,136,0.50)',
+                  }} />
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '1px',
+                    color: isFree ? 'rgba(200,155,60,0.80)' : 'rgba(140,225,180,0.80)',
+                    ...FS,
+                  }}>{PLAN_LABELS[mainPlan]?.toUpperCase() || 'FREE'}</span>
+                </div>
+              );
+            })()}
+            <span style={{ fontSize: 16, color: steel(0.40), lineHeight: 1 }}>›</span>
           </div>
         </button>
 
@@ -353,7 +539,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
         >
           <div style={{
             width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            backgroundColor: 'rgba(95,124,150,0.12)',
+            backgroundColor: 'rgba(132, 158, 184,0.12)',
             boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
@@ -379,17 +565,20 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
             label="Units"
             value={settings.units === 'metric' ? 'Metric' : 'Imperial'}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+            tooltip="Switch between feet/inches and meters for all distance and height measurements."
           />
           <Divider />
           <ToggleRow
             label="Analysis auto-save"
             value={settings.sessionStorage === 'auto'}
             onChange={v => update('sessionStorage', v ? 'auto' : 'manual')}
+            tooltip="Automatically save each analysis to your session history. When off, results are only available during the current session."
           />
           <Divider />
           <NavRow
             label="Preferences"
             onClick={() => { navSlideSound(); tapHaptic(); setSubScreen('preferences'); }}
+            tooltip="Analysis settings, display options, shoot mode, and privacy controls."
           />
         </Panel>
 
@@ -421,18 +610,28 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
           </>
         )}
 
+        {/* Lab access — visible when dev mode is enabled */}
+        {labEnabled && onLab && (
+          <div style={{ padding: '12px 0 0' }}>
+            <Panel>
+              <NavRow label="Open Lab" onClick={() => { onLab(); softClickSound(); tapHaptic(); }} tooltip="Engine workbench — signals, benchmarks, gold set, diagnostics" />
+            </Panel>
+          </div>
+        )}
+
         {/* ── Version tap (hidden dev mode trigger) ── */}
         <div
           onClick={handleVersionTap}
           style={{ textAlign: 'center', padding: '28px 0 8px', cursor: 'default' }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: steel(0.28), ...FS }}>No Guesswork Lighting</p>
-          <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.22), ...FS }}>{APP_VERSION}</p>
+          <p style={{ margin: 0, fontSize: 11, color: steel(0.40), ...FS }}>No Guesswork Lighting</p>
+          <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.35), ...FS }}>{APP_VERSION}</p>
         </div>
 
       </div>
 
       <HomeIndicator />
+    </div>
     </div>
   );
 }

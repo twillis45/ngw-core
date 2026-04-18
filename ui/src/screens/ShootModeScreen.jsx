@@ -275,6 +275,9 @@ export default function ShootModeScreen() {
   const [showTeamShare, setShowTeamShare] = useState(false);
   const [teamCopied, setTeamCopied] = useState(false);
 
+  // SM-1: "More" menu — surfaces Team, Role Switch, Save from ••• button
+  const [moreOpen, setMoreOpen] = useState(false);
+
   // Feedback presentation mode — reactive to Settings changes
   const _persistedMode = useMode();
   const [modeOverride, setModeOverride] = useState(null);
@@ -724,40 +727,16 @@ export default function ShootModeScreen() {
           </div>
         )}
 
-        {/* Setup Header — cockpit header zone, not a content card */}
+        {/* Setup Header — clean hero: setup name + pattern only.
+            SM-1+SM-2: Live (already in bottom bar), Team, and Role Switch
+            moved out of header. Team/Role accessible via ••• bottom bar button. */}
         <div className="shoot-mode__cockpit-header">
           <div className="shoot-mode__summary">
-            <span className="shoot-mode__active-label">Active Setup</span>
             <h2 className="shoot-mode__setup-name">{bestMatch.name}</h2>
-            {bestMatch.lightingPattern && (
-              <span className="shoot-mode__pattern">{bestMatch.lightingPattern} Pattern</span>
-            )}
-          </div>
-          <div className="shoot-mode__header-actions">
-            {wakeLockActive && (
-              <span className="shoot-mode__awake-badge" title="Screen stays awake">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
-              </span>
-            )}
-            <button
-              className={`shoot-mode__liveview-btn${!effectiveIsPaid ? ' shoot-mode__liveview-btn--tease' : ''}`}
-              onClick={handleLiveView}
-              type="button"
-              title={effectiveIsPaid ? 'Live View — camera overlay with light placement guidance' : 'Unlock live guidance'}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0118 0"/><path d="M3 15a9 9 0 0018 0"/></svg>
-              Live
-            </button>
-            {!teamSession && (
-              <button className="shoot-mode__team-btn" onClick={handleStartTeam} type="button" title="Start Team Mode">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-                Team
-              </button>
-            )}
-            <button className="shoot-mode__role-switch" onClick={handleChangeRole}>
-              Photographer
-              <span className="shoot-mode__role-switch-cta">{'\u2192'} Switch</span>
-            </button>
+            <span className="shoot-mode__pattern">
+              {bestMatch.lightingPattern ? `${bestMatch.lightingPattern} Pattern` : ''}
+              {wakeLockActive && ' · Screen Awake'}
+            </span>
           </div>
         </div>
 
@@ -835,10 +814,11 @@ export default function ShootModeScreen() {
             {/* Feedback mode toggle */}
             <ModeToggle mode={mode} onChange={handleModeChange} />
 
-            {/* Progress Bar */}
+            {/* SM-4: Minimal progress — step fraction + thin bar only */}
             <div className="shoot-mode__progress">
               <div className="shoot-mode__progress-text">
-                Step {currentStep + 1} of {totalCount} &middot; {progressPct}% complete
+                Step {currentStep + 1} of {totalCount}
+                {matchLocked && <span className="shoot-mode__progress-signal shoot-mode__progress-signal--done"> · Locked</span>}
               </div>
               <div className="shoot-mode__progress-track">
                 <div
@@ -846,17 +826,6 @@ export default function ShootModeScreen() {
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
-              {metadata?.estimatedMinutes && (
-                <div className="shoot-mode__progress-time">
-                  ~{metadata.estimatedMinutes} min estimated
-                </div>
-              )}
-              {!matchLocked && progressPct >= 75 && progressPct < 100 && (
-                <div className="shoot-mode__progress-signal">Final adjustments — setup nearly complete.</div>
-              )}
-              {matchLocked && (
-                <div className="shoot-mode__progress-signal shoot-mode__progress-signal--done">Lighting locked — this will hold across shots.</div>
-              )}
             </div>
 
         {/* Before You Start checklist */}
@@ -933,42 +902,77 @@ export default function ShootModeScreen() {
           </div>{/* end sm-split__panel */}
         </div>{/* end sm-split */}
 
-        {/* Cockpit Bottom Bar — matches Figma */}
-        <div className="sm-bottom-bar">
-          <button
-            className="sm-bottom-bar__live"
-            onClick={handleLiveView}
-            type="button"
-          >
-            Live
-          </button>
-          <button
-            className="sm-bottom-bar__center"
-            onClick={() => {
-              if (testShotMode) {
-                handleTestShotRetest();
-              } else if (matchLocked) {
-                dispatch({ type: 'GO_BACK' });
-              } else if (isChecklistMode || currentStep >= steps.length - 1) {
-                handleShotMatch();
-              } else {
-                goToStep(currentStep + 1);
-              }
-            }}
-            disabled={loading || (!testShotMode && !matchLocked && steps.length === 0)}
-            type="button"
-          >
-            {testShotMode ? 'Retest' : matchLocked ? 'Close' : (!isChecklistMode && currentStep < steps.length - 1) ? 'Next' : 'Verify'}
-          </button>
-          <button
-            className="sm-bottom-bar__more"
-            onClick={handleSave}
-            type="button"
-            aria-label="More options"
-          >
-            •••
-          </button>
-        </div>
+        {/* SM-3: Context-specific bottom bars — each state gets its own
+            clear layout instead of one button with 4 swapping labels. */}
+        {testShotMode && !matchLocked && (
+          <div className="sm-bottom-bar sm-bottom-bar--test">
+            <button className="sm-bottom-bar__secondary" onClick={() => { setTestShotMode(false); setTestShotChecks(new Set()); }} type="button">
+              Cancel
+            </button>
+            <button className="sm-bottom-bar__center" onClick={handleTestShotRetest} type="button">
+              Retest
+            </button>
+            <div style={{ width: 48 }} />
+          </div>
+        )}
+        {matchLocked && (
+          <div className="sm-bottom-bar sm-bottom-bar--locked">
+            <button className="sm-bottom-bar__center sm-bottom-bar__center--done" onClick={() => dispatch({ type: 'GO_BACK' })} type="button">
+              Done
+            </button>
+          </div>
+        )}
+        {!testShotMode && !matchLocked && (
+          <div className="sm-bottom-bar">
+            <button className="sm-bottom-bar__live" onClick={handleLiveView} type="button">
+              Live
+            </button>
+            <button
+              className="sm-bottom-bar__center"
+              onClick={() => {
+                if (isChecklistMode || currentStep >= steps.length - 1) {
+                  handleShotMatch();
+                } else {
+                  goToStep(currentStep + 1);
+                }
+              }}
+              disabled={loading || steps.length === 0}
+              type="button"
+            >
+              {(!isChecklistMode && currentStep < steps.length - 1) ? 'Next Step' : 'Test Shot'}
+            </button>
+            <button className="sm-bottom-bar__more" onClick={() => setMoreOpen(o => !o)} type="button" aria-label="More options">
+              •••
+            </button>
+          </div>
+        )}
+
+        {/* SM-1: More menu — Team, Role Switch, Save actions */}
+        {moreOpen && (
+          <div className="sm-more-menu" onClick={() => setMoreOpen(false)}>
+            <div className="sm-more-menu__sheet" onClick={e => e.stopPropagation()}>
+              <button className="sm-more-menu__item" onClick={() => { handleSave(); setMoreOpen(false); }} type="button">
+                {saved ? '✓ Saved' : 'Save Setup'}
+              </button>
+              {!teamSession && (
+                <button className="sm-more-menu__item" onClick={() => { handleStartTeam(); setMoreOpen(false); }} type="button">
+                  Start Team Mode
+                </button>
+              )}
+              {teamSession && (
+                <button className="sm-more-menu__item" onClick={() => { handleEndTeam(); setMoreOpen(false); }} type="button">
+                  End Team Mode
+                </button>
+              )}
+              <button className="sm-more-menu__item" onClick={() => { handleChangeRole(); setMoreOpen(false); }} type="button">
+                Switch Role
+              </button>
+              <button className="sm-more-menu__item sm-more-menu__item--cancel" onClick={() => setMoreOpen(false)} type="button">
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Bottom spacer for bottom bar */}
         <div style={{ height: 72 }} />
