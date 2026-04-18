@@ -4375,10 +4375,12 @@ def analyze_image(
         _tri_hs_sym = getattr(_tri_hs, "symmetry_score", 0.0) if _tri_hs else 0.0
         _tri_cls = result.classification or {}
         _tri_bright = _tri_cls.get("brightness", "") in ("high", "very_high")
-        _tri_env = result.cue_inference_result.get("environment") if isinstance(result.cue_inference_result, dict) else None
-        _tri_natural = getattr(_tri_env, "is_natural_light", False) if _tri_env else False
+        # No natural-light guard needed: the combination of 3+ lights +
+        # bright/blown background + high highlight symmetry is physically
+        # impossible outdoors.  The VLM env classifier can misread studio
+        # white-seamless as "natural" (e.g. hurley_triangle benchmark).
         if (_tri_raw_lc >= 3 and _tri_bg_bright and _tri_bright
-                and _tri_hs_sym > 0.85 and not _tri_natural):
+                and _tri_hs_sym > 0.85):
             _upgrade_pattern("triangle")
             pc.primary.supporting_cues.append("hurley_triangle_upgrade")
 
@@ -4664,6 +4666,15 @@ def analyze_image(
         if result.authoritative_pattern == "clamshell":
             result.lighting_intel.light_count = 2
 
+    # ── Triangle: exactly 3 lights ──────────────────────────────────
+    # Hurley triangle is defined by 3 positioned lights (key + 2 fills).
+    # VLM over-counts (reports 4) because it reads the bright background
+    # as a separate source.  The triangle upgrade already confirmed the
+    # 3-point setup; force the physically correct count.
+    if result.lighting_intel is not None:
+        if result.authoritative_pattern == "triangle":
+            result.lighting_intel.light_count = 3
+
     # ── Ring light: always a single source ────────────────────────────
     # Ring lights produce multiple catchlight reflections (the ring
     # shape creates several bright spots) but it's physically one light.
@@ -4732,7 +4743,7 @@ def analyze_image(
             and _ls is not None
             and getattr(_ls, "shadow_density", 0.5) < 0.1
         )
-        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell", "flat") or _hk_cap_fired or _hk_sd_low
+        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell", "flat", "triangle") or _hk_cap_fired or _hk_sd_low
         if _vlm_bg_light is True and not _bg_exempt:
             _cur_lc_bg = getattr(result.lighting_intel, "light_count", 0)
             if 0 < _cur_lc_bg < 4:
