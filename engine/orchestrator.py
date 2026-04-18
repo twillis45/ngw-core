@@ -910,7 +910,11 @@ def _signal_contradiction_score(
         # Rembrandt: tri_iso ≥ 0.12–0.30 (lit cheek against shadow).
         # Guard: 0.15 is well above the noise floor so soft butterfly fill
         # that spills onto the cheek (tri_iso ≈ 0.09–0.12) doesn't falsely fire.
-        if tri_iso > 0.15:
+        # Shadow density guard: a Rembrandt triangle requires shadows. When
+        # shadow_density < 0.20, high tri_iso is from natural cheek brightness
+        # variation (e.g. turned face in symmetric light), not a shadow triangle.
+        # Measured: butterfly benchmark tri_iso=1.221, shadow_den=0.087 → false.
+        if tri_iso > 0.15 and shadow_den > 0.20:
             score += 0.45  # lit cheek triangle → directional key, definitively not butterfly
             cues.append("triangle_isolation")
         # LightStructure pattern agreement: if the shadow-geometry CV classifier
@@ -935,7 +939,20 @@ def _signal_contradiction_score(
             # the catchlight is strictly at 12 o'clock (unambiguous overhead
             # key).  11 or 1 is inside the detection noise band and is not a
             # strong enough signal to override CV shadow geometry.
-            if not (_has_cl_bfly and _pk_on_axis_strict):
+            # Highlight symmetry guard: when bilateral highlights are near-
+            # perfect (hs_sym > 0.85), the lighting IS symmetric even if CV
+            # shadow geometry reads directional. A turned face under centered
+            # butterfly light produces asymmetric nose shadow geometry but
+            # symmetric highlight distribution — trust the highlights.
+            # Only applies with 1-2 lights: multi-light setups (3+) naturally
+            # produce symmetric highlights regardless of pattern — e.g. a
+            # Hurley triangle with 4 lights has hs_sym ≈ 0.90+ but is NOT
+            # butterfly.  The symmetry is from fill-wrapping, not on-axis key.
+            # Measured: butterfly benchmark hs_sym=0.937, li.light_count=1.
+            #   hurley_triangle hs_sym≈0.90, li.light_count=4.
+            _li_lc_bfly = getattr(getattr(result, "lighting_intel", None), "light_count", 0) or 0
+            _hs_guard_bfly = _hs_sym_bfly > 0.85 and _li_lc_bfly <= 2
+            if not (_has_cl_bfly and _pk_on_axis_strict) and not _hs_guard_bfly:
                 score += 0.65  # CV shadow geometry explicitly shows directional → not butterfly
                 cues.append("pattern_name")
         # Off-axis catchlight (≥ 2 clock hours from 12) physically contradicts
