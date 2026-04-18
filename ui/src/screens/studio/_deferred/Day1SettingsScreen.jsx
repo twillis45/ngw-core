@@ -406,6 +406,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
 
   const displayName  = user?.username || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || user?.username || '';
+  const { plan: mainPlan, isPaid: mainIsPaid } = usePlan(displayEmail);
 
   if (subScreen === 'preferences') {
     return (
@@ -475,30 +476,44 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
               <p style={{ margin: '3px 0 0', fontSize: 12, color: steel(0.5), ...FS }}>{displayEmail}</p>
             )}
           </div>
-          {/* Plan badge — machined pill with LED glow + chevron */}
+          {/* Plan badge — dynamic, reads from actual plan tier */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{
-              background: 'linear-gradient(141.71deg, #1a2a22 0%, #122018 100%)',
-              borderRadius: 8, padding: '5px 12px',
-              boxShadow: [
-                '4px 4px 10px rgba(0,0,0,0.55)',
-                '2px 2px 5px rgba(0,0,0,0.40)',
-                '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
-                'inset 0 1px 0 rgba(140,225,180,0.10)',
-                'inset -1px -1px 0 rgba(0,0,0,0.25)',
-                '0 0 0 0.5px rgba(72,186,136,0.20)',
-                '0 0 8px rgba(72,186,136,0.06)',
-              ].join(', '),
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              {/* LED dot */}
-              <div style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
-                boxShadow: '0 0 4px rgba(72,186,136,0.50)',
-              }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(140,225,180,0.80)', letterSpacing: '1px', ...FS }}>PRO</span>
-            </div>
+            {(() => {
+              const isFree = mainPlan === 'free';
+              const accentC = isFree ? 'rgba(200,155,60,' : 'rgba(72,186,136,';
+              const bgGrad = isFree
+                ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                : 'linear-gradient(141.71deg, #1a2a22 0%, #122018 100%)';
+              return (
+                <div style={{
+                  background: bgGrad,
+                  borderRadius: 8, padding: '5px 12px',
+                  boxShadow: [
+                    '4px 4px 10px rgba(0,0,0,0.55)',
+                    '2px 2px 5px rgba(0,0,0,0.40)',
+                    '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+                    `inset 0 1px 0 ${accentC}0.10)`,
+                    'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                    `0 0 0 0.5px ${accentC}0.20)`,
+                    `0 0 8px ${accentC}0.06)`,
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <div style={{
+                    width: 6, height: 6, borderRadius: '50%',
+                    background: isFree
+                      ? 'radial-gradient(circle at 35% 30%, rgba(255,220,160,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+                      : 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+                    boxShadow: isFree ? '0 0 4px rgba(200,155,60,0.50)' : '0 0 4px rgba(72,186,136,0.50)',
+                  }} />
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '1px',
+                    color: isFree ? 'rgba(200,155,60,0.80)' : 'rgba(140,225,180,0.80)',
+                    ...FS,
+                  }}>{PLAN_LABELS[mainPlan]?.toUpperCase() || 'FREE'}</span>
+                </div>
+              );
+            })()}
             <span style={{ fontSize: 16, color: steel(0.40), lineHeight: 1 }}>›</span>
           </div>
         </button>
