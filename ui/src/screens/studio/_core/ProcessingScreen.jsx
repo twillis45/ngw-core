@@ -245,31 +245,50 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         )}
       </div>
 
-      {/* ── Desktop overlay — centered status (matches HomeScreen pattern) ── */}
-      {isDesktop && (
+      {/* ── Desktop overlay — glass + bottom-anchored status ── */}
+      {isDesktop && (<>
+        {/* Glass overlay on the photo — same as HomeScreen loaded state */}
         <div style={{
           gridColumn: '1 / -1', gridRow: '1 / -1',
-          position: 'relative', zIndex: 10,
+          position: 'relative', zIndex: 11, pointerEvents: 'none',
+        }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+            background: GLASS_REFLECTION, opacity: 0.4,
+            transform: glassReflectionTransform(tilt), willChange: 'transform',
+          }} />
+          <div style={{ position: 'absolute', inset: 0, boxShadow: VIEWFINDER_INNER_SHADOW }} />
+        </div>
+
+        {/* Status overlay */}
+        <div style={{
+          gridColumn: '1 / -1', gridRow: '1 / -1',
+          position: 'relative', zIndex: 12,
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
         }}>
           {/* Top bar — wordmark + cancel */}
           <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0,
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '20px 36px', pointerEvents: 'auto',
-            background: 'linear-gradient(180deg, rgba(6,7,10,0.70) 0%, transparent 100%)',
+            background: 'linear-gradient(180deg, rgba(6,7,10,0.75) 0%, rgba(6,7,10,0.30) 60%, transparent 100%)',
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>No Guesswork</p>
               <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
             </div>
             {onCancel && !analysisComplete && (
-              <button onClick={onCancel} style={{
+              <button onClick={onCancel} className="sm-btn-lift" style={{
                 background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
                 border: 'none', borderRadius: 8, cursor: 'pointer', padding: '6px 16px',
-                boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -1px -1px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
+                boxShadow: [
+                  '4px 4px 12px rgba(0,0,0,0.55)',
+                  '2px 2px 5px rgba(0,0,0,0.40)',
+                  '-1px -1px 1px rgba(255,255,255,0.04)',
+                  'inset 0 1px 0 rgba(255,255,255,0.07)',
+                  'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                ].join(', '),
                 WebkitTapHighlightColor: 'transparent',
               }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px', ...FS }}>Cancel</span>
@@ -277,111 +296,126 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             )}
           </div>
 
-          {/* Centered analysis status */}
-          {!analysisComplete && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 22, pointerEvents: 'none' }}>
-              {/* Pulsing ring — machined well */}
-              <div style={{
-                width: 72, height: 72, borderRadius: '50%',
-                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
-                boxShadow: [
-                  'inset 6px 6px 14px rgba(0,0,0,0.85)',
-                  'inset 3px 3px 7px rgba(0,0,0,0.65)',
-                  'inset 0 0 8px rgba(72,186,136,0.08)',
-                  '-1px -1px 1px rgba(255,255,255,0.04)',
-                  '3px 4px 10px rgba(0,0,0,0.50)',
-                  `0 0 0 1.5px rgba(72,186,136,0.35)`,
-                  `0 0 16px rgba(72,186,136,0.10)`,
-                ].join(', '),
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                animation: 'ringAnalyzeGlow 2.0s linear infinite',
-              }}>
+          {/* Spacer — pushes status to bottom */}
+          <div style={{ flex: 1 }} />
+
+          {/* Bottom dock — gradient scrim + EXIF + status */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            padding: '0 0 44px', pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.45) 25%, rgba(4,5,7,0.78) 60%, rgba(4,5,7,0.90) 100%)',
+          }}>
+            {/* EXIF strip */}
+            <ExifStrip exifData={exifData} style={{
+              opacity: (analysisComplete && result?.pattern) ? 0 : 0.80,
+              transition: 'opacity 0.4s ease', marginBottom: 20,
+            }} />
+
+            {/* Analyzing state */}
+            {!analysisComplete && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                {/* Pulsing ring in well */}
                 <div style={{
-                  width: 10, height: 10, borderRadius: '50%',
-                  background: 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.90) 0%, rgba(72,186,136,0.80) 60%, rgba(40,120,85,0.70) 100%)',
-                  boxShadow: '0 0 10px rgba(72,186,136,0.55), 0 0 3px rgba(140,230,190,0.30)',
-                }} />
-              </div>
+                  width: 64, height: 64, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                  boxShadow: [
+                    'inset 5px 5px 12px rgba(0,0,0,0.85)',
+                    'inset 2px 2px 5px rgba(0,0,0,0.60)',
+                    'inset 0 0 6px rgba(72,186,136,0.08)',
+                    '-1px -1px 1px rgba(255,255,255,0.04)',
+                    '2px 3px 8px rgba(0,0,0,0.45)',
+                    '0 0 0 1.5px rgba(72,186,136,0.30)',
+                    '0 0 14px rgba(72,186,136,0.08)',
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  animation: 'ringAnalyzeGlow 2.0s linear infinite',
+                }}>
+                  <div style={{
+                    width: 10, height: 10, borderRadius: '50%',
+                    background: 'radial-gradient(circle at 35% 30%, rgba(180,255,220,0.90) 0%, rgba(72,186,136,0.80) 60%, rgba(40,120,85,0.70) 100%)',
+                    boxShadow: '0 0 10px rgba(72,186,136,0.55), 0 0 3px rgba(140,230,190,0.30)',
+                  }} />
+                </div>
 
-              <p style={{
-                margin: 0, fontWeight: 700, fontSize: 13, letterSpacing: '3.5px',
-                color: 'rgba(140,225,180,0.78)', textTransform: 'uppercase',
-                textShadow: '0 0 10px rgba(72,186,136,0.20), 0 2px 8px rgba(0,0,0,0.5)',
-                ...FS,
-              }}>Analyzing</p>
-
-              <p style={{
-                margin: 0, fontWeight: 500, fontSize: 15, lineHeight: '22px',
-                color: 'rgba(235,240,245,0.72)', letterSpacing: '0.1px', textAlign: 'center',
-                textShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                ...FS, opacity: stageFade,
-                transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
-                transition: 'opacity 0.35s ease, transform 0.35s ease',
-                minHeight: 22,
-              }}>{currentStage.label}</p>
-
-              {/* Progress bar — machined track */}
-              <div style={{
-                width: 260, height: 4, borderRadius: 2,
-                background: '#0a0b0e',
-                boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.60), inset -1px -1px 2px rgba(255,255,255,0.015), 1px 1px 3px rgba(0,0,0,0.35)',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  width: `${progress}%`, height: '100%', borderRadius: 2,
-                  background: 'linear-gradient(90deg, rgba(72,186,136,0.30), rgba(72,186,136,0.65))',
-                  boxShadow: '0 0 8px rgba(72,186,136,0.25)',
-                  transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
-                }} />
-              </div>
-            </div>
-          )}
-
-          {/* Pattern tease — completion */}
-          {analysisComplete && result?.pattern && (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-              animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
-              pointerEvents: 'none',
-            }}>
-              <div style={{
-                width: 64, height: 64, borderRadius: '50%',
-                background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
-                boxShadow: [
-                  'inset 4px 4px 10px rgba(0,0,0,0.75)',
-                  `0 0 0 1.5px rgba(140,225,180,0.45)`,
-                  `0 0 20px rgba(72,186,136,0.18)`,
-                  '-1px -1px 1px rgba(255,255,255,0.04)',
-                  '3px 4px 10px rgba(0,0,0,0.45)',
-                ].join(', '),
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <span style={{ fontSize: 26, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
-              </div>
-
-              <p style={{
-                margin: 0, fontSize: 32, fontWeight: 700,
-                color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.4px', textAlign: 'center',
-                textShadow: '0 0 20px rgba(245,190,72,0.25), 0 3px 12px rgba(0,0,0,0.6)',
-                ...FS,
-              }}>
-                {prettify(result.pattern, { title: true })}
-              </p>
-              {result.confidence != null && (
                 <p style={{
-                  margin: 0, fontSize: 13, fontWeight: 600,
-                  color: result.confidence >= 70 ? 'rgba(140,225,180,0.80)' : 'rgba(250,210,130,0.80)',
-                  letterSpacing: '1.2px', textTransform: 'uppercase',
+                  margin: 0, fontWeight: 700, fontSize: 12, letterSpacing: '3.5px',
+                  color: 'rgba(140,225,180,0.75)', textTransform: 'uppercase',
+                  textShadow: '0 0 10px rgba(72,186,136,0.20), 0 2px 8px rgba(0,0,0,0.5)',
+                  ...FS,
+                }}>Analyzing</p>
+
+                <p style={{
+                  margin: 0, fontWeight: 500, fontSize: 14, lineHeight: '20px',
+                  color: 'rgba(235,240,245,0.70)', textAlign: 'center',
                   textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                  ...FS, opacity: stageFade,
+                  transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
+                  transition: 'opacity 0.35s ease, transform 0.35s ease',
+                  minHeight: 20,
+                }}>{currentStage.label}</p>
+
+                {/* Progress bar — machined inset track */}
+                <div style={{
+                  width: 280, height: 4, borderRadius: 2,
+                  background: '#0a0b0e',
+                  boxShadow: 'inset 2px 2px 5px rgba(0,0,0,0.65), inset -1px -1px 2px rgba(255,255,255,0.015), 1px 1px 3px rgba(0,0,0,0.35)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${progress}%`, height: '100%', borderRadius: 2,
+                    background: 'linear-gradient(90deg, rgba(72,186,136,0.30), rgba(72,186,136,0.65))',
+                    boxShadow: '0 0 8px rgba(72,186,136,0.25)',
+                    transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {/* Pattern tease */}
+            {analysisComplete && result?.pattern && (
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+              }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, transparent 68%)',
+                  boxShadow: [
+                    'inset 4px 4px 10px rgba(0,0,0,0.70)',
+                    '0 0 0 1.5px rgba(140,225,180,0.40)',
+                    '0 0 18px rgba(72,186,136,0.15)',
+                    '-1px -1px 1px rgba(255,255,255,0.04)',
+                    '2px 3px 8px rgba(0,0,0,0.40)',
+                  ].join(', '),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <span style={{ fontSize: 24, color: 'rgba(140,225,180,0.85)', lineHeight: 1 }}>✓</span>
+                </div>
+
+                <p style={{
+                  margin: 0, fontSize: 30, fontWeight: 700,
+                  color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.4px', textAlign: 'center',
+                  textShadow: '0 0 20px rgba(245,190,72,0.25), 0 3px 12px rgba(0,0,0,0.6)',
                   ...FS,
                 }}>
-                  {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
+                  {prettify(result.pattern, { title: true })}
                 </p>
-              )}
-            </div>
-          )}
+                {result.confidence != null && (
+                  <p style={{
+                    margin: 0, fontSize: 12, fontWeight: 600,
+                    color: result.confidence >= 70 ? 'rgba(140,225,180,0.78)' : 'rgba(250,210,130,0.78)',
+                    letterSpacing: '1.2px', textTransform: 'uppercase',
+                    textShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    ...FS,
+                  }}>
+                    {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      </>)}
 
       {/* ── Mobile-only: button trough, well, dome, ring, label ── */}
       {!isDesktop && <>
