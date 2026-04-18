@@ -2855,7 +2855,16 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
                 "medium", "high", "very_high",
             )
             if is_soft and (contrast_ok or graded):
-                # Overcast is source context (→ source_context=overcast); geometry is flat.
+                # Overcast is source context (→ source_context=overcast).
+                # When the base pattern has significant directionality
+                # (lr_asym > 0.18), the overcast light is coming from one
+                # side (e.g. open sky from camera-right) and the base
+                # geometry (broad, loop, rembrandt) should be preserved.
+                # Only promote to flat when the light is truly non-directional.
+                # Measured: overcast_natural lr=0.25 → directional, keep broad.
+                _oc_lr = getattr(_ls_data, "left_right_asymmetry", 0.0) if _ls_data else 0.0
+                if _oc_lr > 0.18 and base in ("broad", "loop", "rembrandt", "short"):
+                    return base  # directional overcast → preserve geometry
                 return "flat"
 
     # ── Editorial rim key: loop + no face shadow + very narrow highlight ──
@@ -2913,6 +2922,50 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         ls_data = getattr(cr, "light_structure", None) if cr else None
         _rl_hl = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
         if not is_natural and _rl_hl >= 0.15 and base in ("broad", "butterfly", "loop", "clamshell"):
+            return "ring_light"
+
+    # ── Ring light symmetry fallback: no donut shape detected ─────────
+    # When the vision pipeline can't detect the donut shape (common in
+    # B&W images or tight crops), use physical symmetry signatures.
+    # Ring lights are uniquely characterized by:
+    #   - Butterfly/clamshell base (on-axis centered key)
+    #   - Near-zero LR asymmetry (< 0.05) — more symmetric than any
+    #     other modifier because light comes from ALL directions equally
+    #   - High fill ratio (> 0.95) — uniform wrap from ring geometry
+    #   - On-axis catchlight at 12 o'clock
+    # These signals together are diagnostic — no other modifier produces
+    # this combination.  Beauty dishes have lr > 0.05, softboxes have
+    # lower fill ratio, and butterfly setups from a single overhead key
+    # produce more shadow (sd > 0.20).
+    # Measured: ring_light lr=0.019, fr=0.985, sd=0.183, catchlight=12.
+    #   butterfly lr=0.433 → excluded by lr threshold.
+    if not _has_ring and base in ("butterfly", "clamshell"):
+        _rl_ls = getattr(cr, "light_structure", None) if cr else None
+        _rl_lr = getattr(_rl_ls, "left_right_asymmetry", 1.0) if _rl_ls else 1.0
+        _rl_fr = getattr(cr, "fill_ratio", None) if cr else None
+        _rl_fr_ratio = getattr(_rl_fr, "ratio", 0.0) if _rl_fr else 0.0
+        _rl_ci = getattr(li, "catchlight_intelligence", None) or {}
+        _rl_pk = _rl_ci.get("primary_key") or {}
+        _rl_pk_pos = _rl_pk.get("position", "")
+        # On-axis: 11, 12, or 1 o'clock — all near-overhead positions
+        # consistent with ring light centered above/around the camera.
+        # Extract hour number to avoid substring false matches
+        # ("1 " would match "11 o'clock").
+        try:
+            _rl_hour = int(_rl_pk_pos.split()[0])
+        except (ValueError, IndexError):
+            _rl_hour = None
+        _rl_on_axis = _rl_hour in (11, 12, 1)
+        _rl_natural = getattr(env, "is_natural_light", False) if env else False
+        # Clamshell guard: when catchlights show distinct key+fill sources
+        # (fill_bilateral or light_count_from_catchlights >= 2), the setup
+        # is clamshell (key above + fill below), not ring_light.  Ring light
+        # produces a single ring reflection, not separate key/fill catchlights.
+        _rl_bilateral = _rl_ci.get("fill_bilateral", False)
+        _rl_cl_count = _rl_ci.get("light_count_from_catchlights", 0)
+        _rl_is_clamshell = _rl_bilateral or _rl_cl_count >= 2
+        if (_rl_lr < 0.05 and _rl_fr_ratio > 0.95 and _rl_on_axis
+                and not _rl_natural and not _rl_is_clamshell):
             return "ring_light"
 
     # ── Low-key: mood=low_key + dramatic base + very narrow highlight ──
@@ -4131,6 +4184,15 @@ def analyze_image(
         # clamshell, the "extra lights" are likely hair/background lights.
         if _clam_sd < 0.12 and _clam_lr < 0.05:
             _clam_shadow_ok = False  # butterfly-level signals — not clamshell
+        # High LR asymmetry guard: clamshell is inherently symmetric (key
+        # above + fill below, both on-axis).  Strong left-right asymmetry
+        # (> 0.30) means the lighting is directional — incompatible with
+        # clamshell.  The extra catchlight is from a reflector or ambient
+        # bounce on one side, not a dedicated below-key fill.
+        # Measured: butterfly lr=0.433 → directional, not clamshell.
+        #   clamshell_clean lr≈0.05 → symmetric, correct clamshell.
+        if _clam_lr > 0.30:
+            _clam_shadow_ok = False  # directional → not on-axis clamshell
     # Extreme-bilateral guard: when hs.symmetry is near-perfect (> 0.95)
     # AND fill is flat (> 0.90) AND shadow_density is significant (> 0.40),
     # the combination is paradoxical — a single strong directional key
