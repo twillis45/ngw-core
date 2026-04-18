@@ -28,54 +28,33 @@ export default function StudioLabWrapper({ onBack }) {
       position: 'fixed', inset: 0,
       backgroundColor: C.bg,
       fontFamily: 'Inter, system-ui, sans-serif',
-      display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
       <MatteBackground variant="subdued" />
 
-      {/* ── Studio Matte top bar ── */}
+      {/* Back button — fixed position overlay, doesn't interfere with Lab layout */}
+      <button
+        onClick={() => { onBack?.(); navSlideSound(); navHaptic(); }}
+        style={{
+          position: 'fixed', top: 10, left: 10, zIndex: 9999,
+          background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+          border: 'none', borderRadius: 8, padding: '5px 14px', cursor: 'pointer',
+          boxShadow: [
+            '4px 4px 12px rgba(0,0,0,0.60)',
+            '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+            'inset 0 1px 0 rgba(255,255,255,0.07)',
+          ].join(', '),
+          WebkitTapHighlightColor: 'transparent',
+          ...FS,
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px' }}>← Exit Lab</span>
+      </button>
+
+      {/* Legacy Lab — fills entire viewport, no wrapper chrome */}
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 24px',
-        position: 'relative', zIndex: 10,
-        background: 'linear-gradient(180deg, rgba(6,7,10,0.80) 0%, rgba(6,7,10,0.40) 60%, transparent 100%)',
-        borderBottom: `1px solid ${steel(0.05)}`,
-        flexShrink: 0,
-      }}>
-        {/* Back button — machined */}
-        <button
-          onClick={() => { onBack?.(); navSlideSound(); navHaptic(); }}
-          style={{
-            background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
-            border: 'none', borderRadius: 8, padding: '6px 16px', cursor: 'pointer',
-            boxShadow: [
-              '4px 4px 12px rgba(0,0,0,0.55)',
-              '2px 2px 5px rgba(0,0,0,0.40)',
-              '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
-              'inset 0 1px 0 rgba(255,255,255,0.07)',
-              'inset -1px -1px 0 rgba(0,0,0,0.25)',
-            ].join(', '),
-            WebkitTapHighlightColor: 'transparent',
-            ...FS,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px' }}>← Back</span>
-        </button>
-
-        {/* Title */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <span style={{ fontSize: 15, fontWeight: 800, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>Lab</span>
-          <span style={{ fontSize: 8.5, fontWeight: 700, color: steel(0.30), letterSpacing: '3px', ...FS }}>WORKBENCH</span>
-        </div>
-
-        {/* Spacer to balance back button */}
-        <div style={{ width: 80 }} />
-      </div>
-
-      {/* ── Legacy Lab content — fills remaining space ── */}
-      <div style={{
-        flex: 1, overflow: 'hidden',
         position: 'relative', zIndex: 1,
+        height: '100%', overflow: 'auto',
       }}>
         <Suspense fallback={
           <div style={{
@@ -86,11 +65,25 @@ export default function StudioLabWrapper({ onBack }) {
             Loading Lab...
           </div>
         }>
-          <div style={{ height: '100%', overflow: 'auto' }}>
-            <LegacyLab />
-          </div>
+          <LegacyLab />
         </Suspense>
       </div>
+
+      {/* Nuke ALL width constraints in the Lab — fill the viewport */}
+      <style>{`
+        .screen, .screen > *, .lab-content, .lab-screen,
+        .lab-screen > *, .lab-wb-layout, .lab-back,
+        .lab-status, .lab-workbench, .lab-tabs-wrap {
+          max-width: none !important;
+          margin-inline: 0 !important;
+        }
+        .screen.lab-screen { padding-top: 0 !important; width: 100% !important; }
+        .lab-content { padding-inline: 28px !important; }
+        .lab-header { padding-inline: 28px !important; }
+        .lab-nav { padding-inline: 28px !important; }
+        .lab-subnav { padding-inline: 28px !important; }
+        .lab-wb-layout { padding-inline: 0 !important; }
+      `}</style>
     </div>
   );
 }

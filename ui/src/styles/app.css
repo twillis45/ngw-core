@@ -16566,9 +16566,31 @@ body {
   background: rgba(132,158,184,0.08);
 }
 
-/* Lab screen root */
+/* Lab screen root — fill entire viewport on Studio Matte */
 [data-theme="studio"] .screen.lab-screen {
   background: #000001;
+}
+/* Remove ALL max-width constraints inside the Lab */
+[data-theme="studio"] .lab-screen > *,
+[data-theme="studio"] .lab-screen > .lab-content,
+[data-theme="studio"] .lab-screen > .lab-back,
+[data-theme="studio"] .lab-screen > .lab-status,
+[data-theme="studio"] .lab-screen .lab-wb-layout,
+[data-theme="studio"] .screen > * {
+  max-width: none !important;
+  width: 100% !important;
+  margin-inline: 0 !important;
+}
+/* Restore reasonable padding */
+[data-theme="studio"] .lab-screen > .lab-content {
+  padding-inline: 28px !important;
+}
+[data-theme="studio"] .lab-header {
+  padding-inline: 28px !important;
+}
+/* Section nav fills width */
+[data-theme="studio"] .lab-nav {
+  padding-inline: 28px !important;
 }
 
 /* Input fields — machined inset */
