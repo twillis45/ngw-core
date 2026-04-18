@@ -1864,6 +1864,13 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           },
         ];
         const s = spotlights[teachStep] || spotlights[0];
+        // Clamp tooltip to viewport — prevent clipping on short screens
+        const CARD_H = 80;
+        const maxTipY = stableVH - safeBottom - CARD_H - 8;
+        const minTipY = safeBottom + 8;
+        s.tipY = Math.max(minTipY, Math.min(maxTipY, s.tipY));
+        s.y = Math.max(0, Math.min(stableVH - safeBottom - s.h, s.y));
+
         // Spotlight center for radial clip
         const cx = s.x + s.w / 2;
         const cy = s.y + s.h / 2;

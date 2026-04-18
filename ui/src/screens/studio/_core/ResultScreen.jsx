@@ -3239,6 +3239,16 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           },
         ];
         const s = steps[resultTeachStep] || steps[0];
+        // Clamp tooltip to viewport — prevent clipping on short screens.
+        // Card height is ~72px. Ensure tipY + 72 stays within viewport,
+        // and tipY stays above the safe area bottom.
+        const CARD_H = 80;
+        const maxTipY = stableVH - safeBottom - CARD_H - 8;
+        const minTipY = safeBottom + 8;
+        s.tipY = Math.max(minTipY, Math.min(maxTipY, s.tipY));
+        // Also clamp spotlight Y to stay in viewport
+        s.y = Math.max(0, Math.min(stableVH - safeBottom - s.h, s.y));
+
         const cx = s.x + s.w / 2;
         const cy = s.y + s.h / 2;
         const rx = s.w / 2 + 14;
