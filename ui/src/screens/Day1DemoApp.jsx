@@ -1459,32 +1459,30 @@ export default function Day1DemoApp() {
     }
     case 'mykit': {
       const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const mkDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const mkEl = <MyKitScreen onBack={() => setScreen('home')} onRecipes={handleRecipes} />;
+      if (!mkMobile) return mkEl;
       return (
-        <FitToViewport
-          designWidth={mkMobile ? 430 : 1180}
-          designHeight={mkMobile ? 932 : mkDesktopVH}
-          minScale={mkMobile ? 0.8 : 0.5}
-          maxScale={mkMobile ? 1.9 : 2.0}
-          tightness={mkMobile ? 0.96 : 1}
-        >
-          <MyKitScreen
-            onBack={() => setScreen('home')}
-            onRecipes={handleRecipes}
-          />
+        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+          {mkEl}
         </FitToViewport>
       );
     }
-    case 'settings':
+    case 'settings': {
+      const settingsMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const settingsEl = (
+        <Day1SettingsScreen
+          user={user}
+          onBack={() => setScreen('home')}
+          onLogout={() => { clearAuth(); setUser(null); setScreen('home'); }}
+        />
+      );
+      if (!settingsMobile) return settingsEl;
       return (
-        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
-          <Day1SettingsScreen
-            user={user}
-            onBack={() => setScreen('home')}
-            onLogout={() => { clearAuth(); setUser(null); setScreen('home'); }}
-          />
+        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>
+          {settingsEl}
         </FitToViewport>
       );
+    }
     case 'error':
       return (
         <FallbackReveal
