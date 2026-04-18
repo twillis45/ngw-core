@@ -4483,6 +4483,25 @@ def analyze_image(
         if _corr_pat == "butterfly" and _corr_sd < 0.15 and _corr_lr < 0.10 and _corr_lc > 1:
             result.lighting_intel.light_count = 1
 
+    # ── Single-key patterns: passive fill is not a light source ────────
+    # Loop, rembrandt, split, broad, and short are single-key setups
+    # where the "fill" is typically a reflector, bounce card, or ambient
+    # room light — NOT a second strobe/continuous source.  When the
+    # catchlight analysis identifies the fill as passive ("Reflector fill",
+    # "Ambient fill"), the light_count should be 1.  The reflector
+    # produces a catchlight reflection but is not an independent source.
+    _SINGLE_KEY_PATTERNS = {"loop", "rembrandt", "split", "broad", "short",
+                            "window_portrait", "window_negative_fill"}
+    if result.lighting_intel is not None:
+        _sk_pat = result.authoritative_pattern
+        _sk_lc = getattr(result.lighting_intel, "light_count", 0)
+        if _sk_pat in _SINGLE_KEY_PATTERNS and _sk_lc > 1:
+            _sk_ci = getattr(result.lighting_intel, "catchlight_intelligence", None) or {}
+            _sk_fill_label = (_sk_ci.get("fill_source_label") or "").lower()
+            _sk_passive = any(w in _sk_fill_label for w in ("reflector", "bounce", "ambient"))
+            if _sk_passive:
+                result.lighting_intel.light_count = 1
+
     # ── High-key / flat catchlight-based light_count floor ─────────────
     # High-key and flat setups inherently use multiple lights
     # (key + fill + background minimum).  When catchlights confirm
@@ -4514,12 +4533,14 @@ def analyze_image(
     # sources.  Cap at 2 (key + fill) when the shadow analysis confirms even
     # illumination (sd < 0.1).  This corrects over-counting from specular
     # reflections in beauty/editorial high-key lighting.
+    _hk_cap_fired = False
     if result.lighting_intel is not None and result.authoritative_pattern == "high_key":
         _hk_cap_lc = getattr(result.lighting_intel, "light_count", 0)
         if _hk_cap_lc > 2 and _ls is not None:
             _hk_cap_sd = getattr(_ls, "shadow_density", 0.5)
             if _hk_cap_sd < 0.1:
                 result.lighting_intel.light_count = 2
+                _hk_cap_fired = True
 
     # ── Athletic rim sculpt: 2-strip minimum ───────────────────────────
     # Athletic rim sculpting physically requires at least 2 edge/strip
@@ -4530,16 +4551,17 @@ def analyze_image(
             if getattr(result.lighting_intel, "light_count", 0) < 2:
                 result.lighting_intel.light_count = 2
 
-    # ── Clamshell: 2-light minimum ──────────────────────────────────
+    # ── Clamshell: exactly 2 lights ─────────────────────────────────
     # Clamshell is *defined* by two lights: key above + fill below.
     # Catchlight counting under-reports when the fill light's catchlight
     # is too dim or occluded (common with beauty dishes / large softboxes
-    # used as fill).  The pattern resolution already confirmed clamshell,
-    # so the physics require ≥ 2.
+    # used as fill).  Over-reports when specular reflections from the
+    # beauty dish surface or v-flats create extra catchlights.
+    # The pattern resolution already confirmed clamshell, so the physics
+    # require exactly 2.
     if result.lighting_intel is not None:
         if result.authoritative_pattern == "clamshell":
-            if getattr(result.lighting_intel, "light_count", 0) < 2:
-                result.lighting_intel.light_count = 2
+            result.lighting_intel.light_count = 2
 
     # ── Ring light: always a single source ────────────────────────────
     # Ring lights produce multiple catchlight reflections (the ring
@@ -4573,9 +4595,12 @@ def analyze_image(
     #     no face shadow is correctly picked up here.
     if result.lighting_intel is not None and result.vision_data:
         _cl_auth = result.authoritative_pattern
-        # Exempt patterns whose light count was set by definitive signature —
-        # the catchlight floor must not override physics-grounded counts.
-        _cl_exempt = {"ring_light"} | set(_DEFINITIVE_LIGHT_COUNTS.keys())
+        # Exempt patterns whose light count was set by definitive signature
+        # or pattern-specific caps — the catchlight floor must not override
+        # physics-grounded or cap-corrected counts.
+        # high_key: capped at 2 above (specular reflections ≠ sources)
+        # clamshell: fixed at 2 above (2-light definition)
+        _cl_exempt = {"ring_light", "high_key", "clamshell"} | set(_DEFINITIVE_LIGHT_COUNTS.keys())
         if _cl_auth not in _cl_exempt:
             _cl_raw = result.vision_data.get("catchlights", {})
             _cl_inferred = _cl_raw.get("inferred", {}) if isinstance(_cl_raw, dict) else {}
@@ -4597,7 +4622,10 @@ def analyze_image(
             if _vlm_bg_sigs else None
         _vlm_bg_light = getattr(_vlm_recon_bg, "background_light_present", None) \
             if _vlm_recon_bg else None
-        if _vlm_bg_light is True and result.authoritative_pattern != "ring_light":
+        # Exempt ring_light (single source), clamshell (fixed at 2), and
+        # high_key when the sd-based cap fired (specular reflections ≠ sources).
+        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell") or _hk_cap_fired
+        if _vlm_bg_light is True and not _bg_exempt:
             _cur_lc_bg = getattr(result.lighting_intel, "light_count", 0)
             if 0 < _cur_lc_bg < 4:
                 result.lighting_intel.light_count = _cur_lc_bg + 1
