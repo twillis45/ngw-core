@@ -1844,7 +1844,30 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
     if ref_candidates:
         ref_c = ref_candidates[0]
         contradiction_score, _contra_cues = _signal_contradiction_score(ref_c.pattern, result, _paradox_flags)
-        if contradiction_score >= _CONTRADICTION_DEMOTION_THRESHOLD:
+        # Two-source agreement shield: when cue_inference independently
+        # agrees with reference_read on the same pattern AND the VLM
+        # (lighting_inference) has low confidence (< 0.35), two physics-
+        # based classifiers have converged against a weak VLM hint.
+        # VLM is hinting, not ground truth (guardrail VL).  Raise the
+        # demotion threshold so two agreeing sources resist demotion
+        # by weak contradictions amplified from a low-confidence VLM.
+        # VLM confidence gate: only shield when VLM is uncertain. When
+        # VLM has moderate+ confidence (≥ 0.35), its disagreement is
+        # meaningful and the standard threshold applies.
+        # Measured: butterfly VLM=0.27 (shield), rembrandt_classic
+        #   VLM=0.45 (no shield), beauty_dish_clean VLM=0.75 (no shield).
+        _ci_agrees = any(
+            c.source == "cue_inference" and c.pattern == ref_c.pattern
+            for c in candidates
+        )
+        _li_conf_for_shield = 0.0
+        _li_cands = [c for c in candidates if c.source == "lighting_inference"]
+        if _li_cands:
+            _li_conf_for_shield = _li_cands[0].confidence
+        _effective_threshold = _CONTRADICTION_DEMOTION_THRESHOLD
+        if _ci_agrees and _li_conf_for_shield < 0.35:
+            _effective_threshold = min(1.20, _CONTRADICTION_DEMOTION_THRESHOLD + 0.40)
+        if contradiction_score >= _effective_threshold:
             # Demote reference_read: shift priority to 2 (same as cue_inference)
             # and halve confidence.  This lets competing candidates that are
             # consistent with signals win the ranking.
