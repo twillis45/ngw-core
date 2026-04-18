@@ -263,7 +263,7 @@ function AccountScreen({ user, onBack, onLogout }) {
                     <div key={tier} style={{ position: 'relative' }}>
                       {/* Well cavity behind each button */}
                       <div style={{
-                        position: 'absolute', inset: -3, borderRadius: 13,
+                        position: 'absolute', inset: -2, borderRadius: 10,
                         boxShadow: [
                           'inset 4px 4px 10px rgba(0,0,0,0.80)',
                           'inset 2px 2px 5px rgba(0,0,0,0.60)',
@@ -281,7 +281,7 @@ function AccountScreen({ user, onBack, onLogout }) {
                           background: active
                             ? `linear-gradient(141.71deg, ${isFreeTier ? '#2a2218' : '#1a2a22'} 0%, ${isFreeTier ? '#1c1810' : '#122018'} 100%)`
                             : 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
-                          border: 'none', borderRadius: 10, padding: '9px 14px', cursor: 'pointer',
+                          border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer',
                           boxShadow: [
                             '6px 6px 16px rgba(0,0,0,0.65)',
                             '3px 3px 7px rgba(0,0,0,0.48)',

@@ -13,6 +13,8 @@ import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
+import usePlan from '../hooks/usePlan';
+import { PLAN_LABELS } from '../data/planStore';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
 import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
@@ -629,6 +631,7 @@ export default function Day1DemoApp() {
   const [user, setUser] = useState(() => getUser());
   const [lastAnalysisTime, setLastAnalysisTime] = useState(null);
   const [shootMode, setShootMode] = useState('photographer');
+  const { plan: appPlan, isAdmin: appIsAdmin } = usePlan(user?.email);
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
 
@@ -1511,9 +1514,39 @@ export default function Day1DemoApp() {
     }
   })();
 
+  // Admin testing indicator — shows when plan is overridden from default
+  const showTestingBadge = appIsAdmin && appPlan !== 'enterprise';
+
   return (
-    <div key={screen} style={{ animation: 'screenFadeIn 0.2s ease both' }}>
+    <div key={screen} style={{ animation: 'screenFadeIn 0.2s ease both', position: 'relative' }}>
       {screenContent}
+      {/* Admin tier testing indicator — fixed bottom-right corner */}
+      {showTestingBadge && (
+        <div style={{
+          position: 'fixed', bottom: 12, right: 12, zIndex: 9999,
+          padding: '4px 10px', borderRadius: 6,
+          background: appPlan === 'free'
+            ? 'linear-gradient(141.71deg, rgba(40,32,18,0.90) 0%, rgba(28,22,12,0.90) 100%)'
+            : 'linear-gradient(141.71deg, rgba(20,34,28,0.90) 0%, rgba(14,26,20,0.90) 100%)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', gap: 5,
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            width: 5, height: 5, borderRadius: '50%',
+            background: appPlan === 'free'
+              ? 'radial-gradient(circle, rgba(255,200,100,0.95) 0%, rgba(200,155,60,0.80) 100%)'
+              : 'radial-gradient(circle, rgba(180,255,220,0.95) 0%, rgba(72,186,136,0.80) 100%)',
+            boxShadow: appPlan === 'free' ? '0 0 4px rgba(200,155,60,0.50)' : '0 0 4px rgba(72,186,136,0.50)',
+          }} />
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+            color: appPlan === 'free' ? 'rgba(200,155,60,0.75)' : 'rgba(140,225,180,0.70)',
+            WebkitFontSmoothing: 'antialiased',
+          }}>Testing as {PLAN_LABELS[appPlan]}</span>
+        </div>
+      )}
       <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
     </div>
   );
