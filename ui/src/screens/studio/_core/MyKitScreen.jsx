@@ -20,6 +20,7 @@ import MatteBackground from '../_shared/MatteBackground';
 import { loadKit, saveKit, clearKit, subscribeKit } from '../../../data/kitStore';
 import { LIGHT_CATALOG, getLightDetails } from '../../../data/lightCatalog';
 import { MODIFIER_CATALOG, getModifierDetails } from '../../../data/modifierCatalog';
+import { ACCESSORY_CATALOG, ACCESSORY_CATEGORIES } from '../../../data/accessoryCatalog';
 import { RECIPES } from '../../../data/recipes';
 
 // ─── Category labels ────────────────────────────────────────────────────────
@@ -390,6 +391,16 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
   );
   const [tab, setTab] = useState('lights');
   const [search, setSearch] = useState('');
+  const [selectedAccessories, setSelectedAccessories] = useState(() =>
+    (kit?.support || []).map(s => typeof s === 'string' ? s : s.type)
+  );
+
+  function toggleAccessory(value) {
+    segmentPressSound(); tapHaptic();
+    setSelectedAccessories(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+  }
 
   function toggleLight(value) {
     segmentPressSound(); tapHaptic();
@@ -409,12 +420,12 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
     const newKit = {
       lights: selectedLights.map(v => ({ type: v, qty: 1 })),
       modifiers: selectedMods.map(v => ({ type: v, qty: 1 })),
-      support: kit?.support || [],
+      support: selectedAccessories.map(v => ({ type: v, qty: 1 })),
     };
     onSave(newKit);
   }
 
-  const totalSelected = selectedLights.length + selectedMods.length;
+  const totalSelected = selectedLights.length + selectedMods.length + selectedAccessories.length;
 
   return (
     <div style={{
@@ -459,39 +470,42 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
         padding: isDesktop ? '0 40px 14px' : '0 22px 14px',
         position: 'relative', zIndex: 2,
       }}>
-        {['lights', 'modifiers'].map(t => (
+        {[
+          { key: 'lights', label: 'Lights', count: selectedLights.length },
+          { key: 'modifiers', label: 'Modifiers', count: selectedMods.length },
+          { key: 'accessories', label: 'Accessories', count: selectedAccessories.length },
+        ].map(t => (
           <button
-            key={t}
-            onClick={() => { setTab(t); segmentPressSound(); tapHaptic(); }}
+            key={t.key}
+            onClick={() => { setTab(t.key); setSearch(''); segmentPressSound(); tapHaptic(); }}
             style={{
-              flex: 1, padding: '10px 0', borderRadius: 10,
+              flex: 1, padding: '9px 0', borderRadius: 8,
               border: 'none',
-              background: tab === t
+              background: tab === t.key
                 ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
                 : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
               cursor: 'pointer',
-              fontSize: isDesktop ? 13 : 12, fontWeight: tab === t ? 700 : 600,
-              color: tab === t ? KEY_ACCENT : steel(0.50),
-              letterSpacing: '0.5px',
-              boxShadow: tab === t
+              fontSize: isDesktop ? 12 : 11, fontWeight: tab === t.key ? 700 : 600,
+              color: tab === t.key ? KEY_ACCENT : steel(0.45),
+              letterSpacing: '0.3px',
+              boxShadow: tab === t.key
                 ? [
-                    '4px 4px 12px rgba(0,0,0,0.55)',
-                    '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+                    '4px 4px 10px rgba(0,0,0,0.50)',
                     `0 0 0 0.5px ${accent(0.25)}`,
                     `inset 0 1px 0 ${accent(0.10)}`,
-                    'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.22)',
                   ].join(', ')
                 : [
-                    '3px 3px 8px rgba(0,0,0,0.45)',
+                    '2px 2px 6px rgba(0,0,0,0.40)',
                     'inset 0 1px 0 rgba(255,255,255,0.03)',
-                    'inset -1px -1px 0 rgba(0,0,0,0.20)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.18)',
                   ].join(', '),
               transition: 'all 0.15s ease',
               WebkitTapHighlightColor: 'transparent',
               ...FONT_SMOOTH,
             }}
           >
-            {t === 'lights' ? `Lights (${selectedLights.length})` : `Modifiers (${selectedMods.length})`}
+            {t.label}{t.count > 0 ? ` (${t.count})` : ''}
           </button>
         ))}
       </div>
@@ -503,7 +517,11 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
       }}>
         <input
           type="text"
-          placeholder={tab === 'lights' ? 'Search lights — Profoto, Godox, Canon...' : 'Search modifiers — softbox, beauty dish, umbrella...'}
+          placeholder={
+            tab === 'lights' ? 'Search lights — Profoto, Godox, Canon...'
+            : tab === 'modifiers' ? 'Search modifiers — softbox, beauty dish, umbrella...'
+            : 'Search accessories — C-stand, trigger, gel, meter...'
+          }
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
@@ -531,14 +549,14 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
         position: 'relative', zIndex: 1,
       }}>
         {/* Selected items pinned at top */}
-        {((tab === 'lights' && selectedLights.length > 0) || (tab === 'modifiers' && selectedMods.length > 0)) && (
+        {((tab === 'lights' && selectedLights.length > 0) || (tab === 'modifiers' && selectedMods.length > 0) || (tab === 'accessories' && selectedAccessories.length > 0)) && (
           <div style={{ marginBottom: 20 }}>
             <p style={{
               margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 700,
               color: KEY_ACCENT, letterSpacing: '1.2px', textTransform: 'uppercase',
               ...FONT_SMOOTH,
             }}>
-              YOUR {tab === 'lights' ? 'LIGHTS' : 'MODIFIERS'}
+              YOUR {tab === 'lights' ? 'LIGHTS' : tab === 'modifiers' ? 'MODIFIERS' : 'ACCESSORIES'}
             </p>
             <div style={{
               display: 'flex', flexWrap: 'wrap', gap: 6,
@@ -546,25 +564,16 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
               {tab === 'lights'
                 ? selectedLights.map(v => {
                     const cat = LIGHT_CATEGORIES.flatMap(c => c.items).find(i => i.value === v);
-                    return (
-                      <CatalogChip
-                        key={v}
-                        label={cat ? `${cat.vendor} ${cat.model}` : v}
-                        selected
-                        onClick={() => toggleLight(v)}
-                      />
-                    );
+                    return <CatalogChip key={v} label={cat ? `${cat.vendor} ${cat.model}` : v} selected onClick={() => toggleLight(v)} />;
                   })
-                : selectedMods.map(v => {
+                : tab === 'modifiers'
+                ? selectedMods.map(v => {
                     const item = MODIFIER_CATALOG.find(m => m.value === v);
-                    return (
-                      <CatalogChip
-                        key={v}
-                        label={item?.label || v}
-                        selected
-                        onClick={() => toggleMod(v)}
-                      />
-                    );
+                    return <CatalogChip key={v} label={item?.label || v} selected onClick={() => toggleMod(v)} />;
+                  })
+                : selectedAccessories.map(v => {
+                    const item = ACCESSORY_CATALOG.find(a => a.value === v);
+                    return <CatalogChip key={v} label={item?.label || v} selected onClick={() => toggleAccessory(v)} />;
                   })
               }
             </div>
@@ -604,7 +613,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
               </div>
             );
           })
-        ) : (
+        ) : tab === 'modifiers' ? (
           MOD_CATEGORIES.map(cat => {
             const q = search.toLowerCase().trim();
             const filtered = q ? cat.items.filter(i =>
@@ -626,12 +635,35 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
                   gap: 6,
                 }}>
                   {filtered.map(item => (
-                    <CatalogChip
-                      key={item.value}
-                      label={item.label}
-                      selected={selectedMods.includes(item.value)}
-                      onClick={() => toggleMod(item.value)}
-                    />
+                    <CatalogChip key={item.value} label={item.label} selected={selectedMods.includes(item.value)} onClick={() => toggleMod(item.value)} />
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          ACCESSORY_CATEGORIES.map(cat => {
+            const q = search.toLowerCase().trim();
+            const filtered = q ? cat.items.filter(i =>
+              i.label.toLowerCase().includes(q) || (i.vendor || '').toLowerCase().includes(q) || (i.value || '').toLowerCase().includes(q)
+            ) : cat.items;
+            if (!filtered.length) return null;
+            return (
+              <div key={cat.category} style={{ marginBottom: 18 }}>
+                <p style={{
+                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
+                  ...FONT_SMOOTH,
+                }}>
+                  {cat.label}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(170px, 1fr))' : 'repeat(2, 1fr)',
+                  gap: 6,
+                }}>
+                  {filtered.map(item => (
+                    <CatalogChip key={item.value} label={item.label} selected={selectedAccessories.includes(item.value)} onClick={() => toggleAccessory(item.value)} />
                   ))}
                 </div>
               </div>
