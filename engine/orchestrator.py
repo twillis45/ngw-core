@@ -2665,9 +2665,23 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # Overfill guard: shadow_density near zero + fill_ratio extreme = multi-source
     # flat with too much fill, not high_key.  Mood classifier can confuse the
     # two because both have even wrap, but overfill retains a neutral background
-    # while high_key has a blown-white one.  At sd < 0.03 + fr > 0.95 the
-    # image is physically diagnostic of overfill, not high_key.
-    _hk_is_overfill = _hk_shadow_den < 0.03 and _hk_fr_ratio > 0.95
+    # while high_key has a blown-white one.
+    # Tight thresholds: sd ≤ 0.03 (near-zero shadow) + fr > 0.95 (near-unity
+    # fill).  Broader thresholds (0.05/0.90) catch legitimate directional
+    # patterns like broad (sd=0.031, fr=0.914).
+    # Additional signal: non-bright background distinguishes overfill from
+    # genuine high-key (which requires blown-white background).
+    # Measured: overfill_flat sd=0.03, fr=0.98, bg_bright=False.
+    #   broad sd=0.031, fr=0.914 — correctly excluded by tight thresholds.
+    _hk_is_overfill = (
+        _hk_shadow_den <= 0.03 and _hk_fr_ratio > 0.95
+        and not bg_bright
+    )
+    # Overfill images should become "flat" — they're multi-source setups
+    # where fill cancels all key shadows.  Without this, the base pattern
+    # (often butterfly or loop from the shadow-less geometry) persists.
+    if _hk_is_overfill and base in ("butterfly", "loop", "unknown"):
+        return "flat"
 
     # When mood classifier explicitly says high_key, use a LENIENT shadow
     # guard — mood=high_key is a strong signal (VLM + brightness + palette).
