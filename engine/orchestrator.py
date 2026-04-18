@@ -4587,21 +4587,13 @@ def analyze_image(
         _hk_pat = result.authoritative_pattern
         _hk_lc = getattr(result.lighting_intel, "light_count", 0)
         if _hk_pat in ("high_key", "flat") and _hk_lc < 2:
-            _ra = getattr(result.cue_report, "reflection_architecture", None) if result.cue_report else None
-            if _ra and _ra.per_eye_counts:
-                _hk_left = _ra.per_eye_counts.get("left", 0)
-                _hk_right = _ra.per_eye_counts.get("right", 0)
-                # Symmetric ≥2 per eye, or total ≥3 with at least 1 per eye
-                if (_hk_left >= 2 and _hk_right >= 2) or \
-                   (_ra.total_catchlights >= 3 and _hk_left >= 1 and _hk_right >= 1):
-                    result.lighting_intel.light_count = 2
-            # Flat-fashion with mood=high_key but zero catchlights (common in
-            # overfill setups where specular highlights wash out): the pattern
-            # itself is the strongest evidence of multi-source lighting.
-            if _hk_pat == "flat" and _hk_lc < 2:
-                _hk_mood = (result.classification.get("mood", "") or "").lower() if result.classification else ""
-                if _hk_mood == "high_key":
-                    result.lighting_intel.light_count = 2
+            # High-key and flat are definitionally multi-source setups.
+            # High-key requires at minimum key + fill to produce the
+            # near-shadowless wrap; flat requires even multi-directional
+            # coverage.  When catchlights under-count (common in high-key
+            # where specular highlights wash out catchlight detail), trust
+            # the pattern classification — it already confirmed multi-source.
+            result.lighting_intel.light_count = 2
 
     # ── High-key light_count cap when shadow evidence is absent ────────
     # In high-key setups with near-zero shadow density, multiple catchlights
@@ -4676,7 +4668,7 @@ def analyze_image(
         # physics-grounded or cap-corrected counts.
         # high_key: capped at 2 above (specular reflections ≠ sources)
         # clamshell: fixed at 2 above (2-light definition)
-        _cl_exempt = {"ring_light", "high_key", "clamshell"} | set(_DEFINITIVE_LIGHT_COUNTS.keys())
+        _cl_exempt = {"ring_light", "high_key", "clamshell", "flat"} | set(_DEFINITIVE_LIGHT_COUNTS.keys())
         if _cl_auth not in _cl_exempt:
             _cl_raw = result.vision_data.get("catchlights", {})
             _cl_inferred = _cl_raw.get("inferred", {}) if isinstance(_cl_raw, dict) else {}
@@ -4698,9 +4690,10 @@ def analyze_image(
             if _vlm_bg_sigs else None
         _vlm_bg_light = getattr(_vlm_recon_bg, "background_light_present", None) \
             if _vlm_recon_bg else None
-        # Exempt ring_light (single source), clamshell (fixed at 2), and
-        # high_key when the sd-based cap fired (specular reflections ≠ sources).
-        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell") or _hk_cap_fired
+        # Exempt ring_light (single source), clamshell (fixed at 2),
+        # flat (floor-set at 2 — overfill VLM bg is specular, not a source),
+        # and high_key when the sd-based cap fired (specular reflections ≠ sources).
+        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell", "flat") or _hk_cap_fired
         if _vlm_bg_light is True and not _bg_exempt:
             _cur_lc_bg = getattr(result.lighting_intel, "light_count", 0)
             if 0 < _cur_lc_bg < 4:
