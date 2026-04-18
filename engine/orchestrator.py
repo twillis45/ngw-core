@@ -2448,6 +2448,7 @@ class AnalysisResult:
         "vlm_semantic_hint", "vlm_disagreements",
         "analysis_id", "stage_timings",
         "source_context",  # OD-3: SourceContext machine value (window, golden_hour, etc.)
+        "geometric_base",    # Base geometric pattern BEFORE tonal overlay (e.g. "rembrandt" when authoritative is "low_key")
         # Expert Deconstruction Order fields
         "mode_flags",        # Layer 0: {no_face, is_bw, is_hcg, scene_type}
         "definitive_pattern",  # Stage 1: pattern short-circuit (ring_light, silhouette_key)
@@ -2486,6 +2487,7 @@ class AnalysisResult:
         self.analysis_id: str = ""
         self.stage_timings: Dict[str, float] = {}
         self.source_context: Optional[str] = None  # OD-3: SourceContext value (window, golden_hour, etc.)
+        self.geometric_base: Optional[str] = None  # Base geometric pattern before tonal overlay
         # Expert Deconstruction Order
         self.mode_flags: Dict[str, Any] = {}      # Layer 0: mode pre-read flags
         self.definitive_pattern: Optional[str] = None  # Stage 1: short-circuit pattern
@@ -4560,6 +4562,15 @@ def analyze_image(
     # specialty name becomes the authoritative pattern.
     specialty = _apply_specialty_pattern(result)
     if specialty:
+        # Preserve geometric base when a tonal specialty (low_key, high_key)
+        # overrides a geometric pattern (rembrandt, loop, split, etc.).
+        # This lets blueprints and diagrams use the geometry while the
+        # pattern card shows the tonal classification.
+        _TONAL_SPECIALTIES = {"low_key", "high_key", "flat"}
+        _GEOMETRIC_BASES = {"rembrandt", "loop", "split", "butterfly", "broad",
+                            "short", "clamshell", "triangle"}
+        if specialty in _TONAL_SPECIALTIES and result.authoritative_pattern in _GEOMETRIC_BASES:
+            result.geometric_base = result.authoritative_pattern
         result.authoritative_pattern = specialty
         result.authoritative_pattern_source = f"specialty:{result.authoritative_pattern_source}"
 
