@@ -6268,12 +6268,16 @@ def reconstruction_pass(
         notes.append(f"key_height from shadow_vertical: {shd_vert}°")
 
     # ── Chin/head pitch correction for height estimate ──────────────────
+    # cat_pos may not have been assigned if the primary clock-based
+    # catchlight parsing succeeded (the fallback at line ~6199 is inside
+    # an `if not weighted_angles` block).  Use cat dict directly.
+    _cat_pos_h = cat.get("catchlight_position", "")
     if has_pose:
         chin_pitch = pose.get("chin_pitch", "neutral")
         if chin_pitch in ("down", "slightly_down") and key_height == "high":
             # Chin down makes shadows LOOK like they come from higher.
             # Moderate confidence in "high" unless catchlights confirm it.
-            if not (cat_pos and "upper" in cat_pos.lower()):
+            if not (_cat_pos_h and "upper" in _cat_pos_h.lower()):
                 key_height = "eye_level"
                 notes.append(
                     "height downgraded: chin_down mimics high-light shadow"
