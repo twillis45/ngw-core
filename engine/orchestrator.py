@@ -914,7 +914,7 @@ def _signal_contradiction_score(
         # shadow_density < 0.20, high tri_iso is from natural cheek brightness
         # variation (e.g. turned face in symmetric light), not a shadow triangle.
         # Measured: butterfly benchmark tri_iso=1.221, shadow_den=0.087 → false.
-        if tri_iso > 0.15 and shadow_den > 0.20:
+        if tri_iso > 0.15 and shadow_den > 0.15:
             score += 0.45  # lit cheek triangle → directional key, definitively not butterfly
             cues.append("triangle_isolation")
         # LightStructure pattern agreement: if the shadow-geometry CV classifier
@@ -4361,6 +4361,27 @@ def analyze_image(
             _upgrade_pattern("rembrandt")
             pc.primary.supporting_cues.append("shadow_continuity_triangle_rescue")
 
+    # ── Short/loop → Rembrandt triangle rescue via tri_iso ─────────────
+    # When the base pattern is "short" or "loop" but light_structure
+    # triangle_isolation is definitive (> 0.80) with sufficient shadow
+    # density (> 0.15), the Rembrandt triangle IS present — upgrade.
+    # Short + visible triangle = Rembrandt (the triangle is the defining
+    # feature regardless of which cheek the key illuminates).
+    # Loop + strong triangle = Rembrandt (loop that went far enough for
+    # the nose shadow to connect to cheek shadow).
+    # Guard: hs_sym < 0.70 — bilateral highlights would mean the
+    # "triangle" is ambient/makeup, not a shadow-enclosed light patch.
+    # Measured: 0aec889 (dark skin) has base=short, tri=3.028, sd=0.699.
+    if pc.authoritative_pattern in ("short", "loop", "split"):
+        _ls_tri_r = getattr(_cr, "light_structure", None) if _cr else None
+        _tri_iso_r = getattr(_ls_tri_r, "triangle_isolation", 0.0) if _ls_tri_r else 0.0
+        _sd_r = getattr(_ls_tri_r, "shadow_density", 0.0) if _ls_tri_r else 0.0
+        _hs_tri_r = getattr(_cr, "highlight_symmetry", None) if _cr else None
+        _hs_sym_tri_r = getattr(_hs_tri_r, "symmetry_score", 0.5) if _hs_tri_r else 0.5
+        if _tri_iso_r > 0.80 and _sd_r > 0.15 and _hs_sym_tri_r < 0.70:
+            _upgrade_pattern("rembrandt")
+            pc.primary.supporting_cues.append("tri_iso_rembrandt_rescue")
+
     # ── Hurley triangle upgrade: catchlight-first, VLM fallback ─────────
     # The Hurley triangle is a 3-point lighting setup (key + two fills/accents)
     # defined by its catchlight pattern: 3 distinct catchlights forming a
@@ -4475,12 +4496,17 @@ def analyze_image(
                 pc.primary.pattern, _ks_norm, _fo_broad, _fo_yaw,
             )
         elif _ks_norm == _fo_short:
-            _upgrade_pattern("short")
-            pc.primary.supporting_cues.append("pose_resolver:short")
-            logger.info(
-                "[pose_resolver] %s → short  (key_side=%s, short_side=%s, yaw=%.3f)",
-                pc.primary.pattern, _ks_norm, _fo_short, _fo_yaw,
-            )
+            # Guard: when tri_iso rescue confirmed a definitive Rembrandt
+            # triangle, do NOT downgrade to short. The triangle IS the
+            # defining feature — short-side Rembrandt is still Rembrandt.
+            _tri_rescued_pr = "tri_iso_rembrandt_rescue" in getattr(pc.primary, "supporting_cues", [])
+            if not _tri_rescued_pr:
+                _upgrade_pattern("short")
+                pc.primary.supporting_cues.append("pose_resolver:short")
+                logger.info(
+                    "[pose_resolver] %s → short  (key_side=%s, short_side=%s, yaw=%.3f)",
+                    pc.primary.pattern, _ks_norm, _fo_short, _fo_yaw,
+                )
 
     # Legacy yaw-magnitude rules (kept for split→broad edge cases not
     # caught by the pose resolver above due to key_side being unknown).
@@ -4489,7 +4515,14 @@ def analyze_image(
         if pc.authoritative_pattern == "split" and _abs_yaw > 0.2:
             _upgrade_pattern("broad")
         elif pc.authoritative_pattern == "rembrandt" and _abs_yaw > 0.5:
-            _upgrade_pattern("short")
+            # Guard: when tri_iso rescue confirmed a definitive Rembrandt
+            # triangle (supporting cue present), do NOT downgrade to short.
+            # The triangle IS the defining feature — calling it "short"
+            # loses the most important diagnostic information.
+            # Short-side Rembrandt is still Rembrandt.
+            _tri_rescued = "tri_iso_rembrandt_rescue" in getattr(pc.primary, "supporting_cues", [])
+            if not _tri_rescued:
+                _upgrade_pattern("short")
 
     # ── Specialty pattern post-classification ───────────────────────
     # Check environmental/tonal signals to upgrade geometric patterns
