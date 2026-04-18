@@ -186,9 +186,16 @@ function LightCard({ light, isDesktop }) {
       display: 'flex', alignItems: 'center', gap: isDesktop ? 16 : 14,
       padding: isDesktop ? '14px 18px' : '12px 14px',
       borderRadius: 12,
-      background: `linear-gradient(135deg, ${steel(0.07)}, ${steel(0.04)})`,
-      border: `1px solid ${steel(0.10)}`,
-      boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+      background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0e0f14 100%)',
+      border: 'none',
+      boxShadow: [
+        '6px 6px 16px rgba(0,0,0,0.60)',
+        '3px 3px 7px rgba(0,0,0,0.45)',
+        '1px 1px 3px rgba(0,0,0,0.30)',
+        '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+        'inset 0 1px 0 rgba(255,255,255,0.06)',
+        'inset -1px -1px 0 rgba(0,0,0,0.25)',
+      ].join(', '),
       ...FONT_SMOOTH,
     }}>
       {/* Icon */}
@@ -253,15 +260,22 @@ function ModifierCard({ mod, isDesktop }) {
       display: 'flex', alignItems: 'center', gap: isDesktop ? 14 : 12,
       padding: isDesktop ? '12px 18px' : '10px 14px',
       borderRadius: 10,
-      background: steel(0.04),
-      border: `1px solid ${steel(0.08)}`,
+      background: 'linear-gradient(141.71deg, #18191f 0%, #121316 50%, #0c0d10 100%)',
+      border: 'none',
+      boxShadow: [
+        '5px 5px 14px rgba(0,0,0,0.55)',
+        '2px 2px 6px rgba(0,0,0,0.40)',
+        '-0.5px -0.5px 1px rgba(255,255,255,0.035)',
+        'inset 0 1px 0 rgba(255,255,255,0.05)',
+        'inset -1px -1px 0 rgba(0,0,0,0.22)',
+      ].join(', '),
       ...FONT_SMOOTH,
     }}>
-      {/* Gold dot */}
+      {/* Gold LED dot in mini well */}
       <div style={{
-        width: 8, height: 8, borderRadius: 4, flexShrink: 0,
-        background: KEY_ACCENT,
-        boxShadow: `0 0 6px ${accent(0.3)}`,
+        width: 10, height: 10, borderRadius: 5, flexShrink: 0,
+        background: `radial-gradient(circle at 35% 30%, rgba(255,220,140,0.95) 0%, ${KEY_ACCENT} 60%, rgba(140,100,30,0.70) 100%)`,
+        boxShadow: `0 0 5px ${accent(0.35)}, 0 0 2px ${accent(0.20)}`,
       }} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -450,12 +464,27 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
             onClick={() => { setTab(t); segmentPressSound(); tapHaptic(); }}
             style={{
               flex: 1, padding: '10px 0', borderRadius: 10,
-              border: `1px solid ${tab === t ? accent(0.4) : steel(0.10)}`,
-              background: tab === t ? accent(0.12) : steel(0.04),
+              border: 'none',
+              background: tab === t
+                ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
               cursor: 'pointer',
-              fontSize: isDesktop ? 13 : 12, fontWeight: 600,
-              color: tab === t ? KEY_ACCENT : steel(0.55),
-              letterSpacing: '0.3px',
+              fontSize: isDesktop ? 13 : 12, fontWeight: tab === t ? 700 : 600,
+              color: tab === t ? KEY_ACCENT : steel(0.50),
+              letterSpacing: '0.5px',
+              boxShadow: tab === t
+                ? [
+                    '4px 4px 12px rgba(0,0,0,0.55)',
+                    '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+                    `0 0 0 0.5px ${accent(0.25)}`,
+                    `inset 0 1px 0 ${accent(0.10)}`,
+                    'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                  ].join(', ')
+                : [
+                    '3px 3px 8px rgba(0,0,0,0.45)',
+                    'inset 0 1px 0 rgba(255,255,255,0.03)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.20)',
+                  ].join(', '),
               transition: 'all 0.15s ease',
               WebkitTapHighlightColor: 'transparent',
               ...FONT_SMOOTH,
@@ -740,10 +769,17 @@ export default function MyKitScreen({ onBack, onRecipes }) {
           <button
             onClick={() => { setEditing(true); tapHaptic(); softClickSound(); }}
             style={{
-              background: 'none', border: `1px solid ${steel(0.12)}`,
-              borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-              fontSize: isDesktop ? 12 : 11, fontWeight: 600,
-              color: KEY_ACCENT, letterSpacing: '0.3px',
+              background: 'linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)',
+              border: 'none', borderRadius: 8, padding: '7px 16px', cursor: 'pointer',
+              fontSize: isDesktop ? 12 : 11, fontWeight: 700,
+              color: KEY_ACCENT, letterSpacing: '0.5px',
+              boxShadow: [
+                '4px 4px 12px rgba(0,0,0,0.55)',
+                '2px 2px 5px rgba(0,0,0,0.40)',
+                '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+                'inset 0 1px 0 rgba(255,255,255,0.07)',
+                'inset -1px -1px 0 rgba(0,0,0,0.25)',
+              ].join(', '),
               WebkitTapHighlightColor: 'transparent',
               ...FONT_SMOOTH,
             }}
@@ -883,10 +919,12 @@ export default function MyKitScreen({ onBack, onRecipes }) {
         </div>
       )}
 
-      {/* iOS home indicator */}
-      <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1, flexShrink: 0 }}>
-        <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: C.homeBar }} />
-      </div>
+      {/* iOS home indicator — hidden on desktop */}
+      {!isDesktop && (
+        <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1, flexShrink: 0 }}>
+          <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: C.homeBar }} />
+        </div>
+      )}
 
       {/* ── Gear Picker Overlay ── */}
       {editing && (
