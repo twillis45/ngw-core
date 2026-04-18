@@ -378,7 +378,7 @@ function AccountScreen({ user, onBack, onLogout }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function Day1SettingsScreen({ user, onBack, onLogout }) {
+export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
   const [subScreen, setSubScreen] = useState('main');
   const [settings, setSettings]   = useState(loadSettings);
   const mode = useMode();
@@ -396,6 +396,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
     softClickSound(); tapHaptic();
   }
 
+  const [labEnabled, setLabEnabled] = useState(() => isEnabled('enable_lab'));
   const handleVersionTap = useCallback(() => {
     const now  = Date.now();
     const taps = tapTimestamps.current;
@@ -403,8 +404,10 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
     while (taps.length && taps[0] < now - DEV_TAP_WINDOW) taps.shift();
     if (taps.length >= DEV_TAP_COUNT) {
       taps.length = 0;
-      const was = isEnabled('enable_lab');
-      setFlag('enable_lab', !was);
+      const next = !isEnabled('enable_lab');
+      setFlag('enable_lab', next);
+      setLabEnabled(next);
+      tapHaptic();
     }
   }, []);
 
@@ -605,6 +608,15 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
               <NavRow label="Sign Out" danger onClick={onLogout} />
             </Panel>
           </>
+        )}
+
+        {/* Lab access — visible when dev mode is enabled */}
+        {labEnabled && onLab && (
+          <div style={{ padding: '12px 0 0' }}>
+            <Panel>
+              <NavRow label="Open Lab" onClick={() => { onLab(); softClickSound(); tapHaptic(); }} tooltip="Engine workbench — signals, benchmarks, gold set, diagnostics" />
+            </Panel>
+          </div>
         )}
 
         {/* ── Version tap (hidden dev mode trigger) ── */}
