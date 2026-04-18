@@ -1698,7 +1698,7 @@ function ModifierDetail({ modifier }) {
   );
 }
 
-export default function ResultScreen({ result, imagePreview, onSetup, onRetry }) {
+export default function ResultScreen({ result, imagePreview, onSetup, onRetry, isPaid = true, plan = 'enterprise' }) {
   const isDesktop = useIsDesktop();
   const tilt = useDeviceTilt();
   // Hero column: 430 on mobile, 540 on desktop — the wider column lets the
@@ -2740,7 +2740,26 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             are the rebuild blueprint — never hide them behind a toggle.
             ═══════════════════════════════════════════════════════════════ */}
         {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
-          <SectionPanel label="THE SETUP">
+          <SectionPanel label={isPaid ? 'THE SETUP' : 'THE SETUP — UPGRADE TO UNLOCK'}>
+            {/* Free tier: show locked state instead of full setup */}
+            {!isPaid && (
+              <div style={{
+                padding: '24px 20px', display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 12, textAlign: 'center',
+              }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(200,155,60,0.55)" strokeWidth="1.6" strokeLinecap="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0110 0v4" />
+                </svg>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'rgba(200,155,60,0.75)', ...FONT_SMOOTH }}>
+                  Full setup details
+                </p>
+                <p style={{ margin: 0, fontSize: 12, color: steel(0.40), lineHeight: '17px', ...FONT_SMOOTH }}>
+                  Modifier type, distance, height, catchlight analysis, and lighting diagram are available on paid plans.
+                </p>
+              </div>
+            )}
+            {!isPaid ? null : (<>  {/* paid content below */}
             {/* ── Twin instruments: Catchlight + Modifier side-by-side ──
                 Two visual anchors in one shared well so they read as a
                 paired instrument panel, not two orphaned widgets. */}
@@ -2815,6 +2834,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 {sections.catchlightModifier}
               </p>
             )}
+          </>)}
           </SectionPanel>
         )}
 
@@ -3143,7 +3163,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
         }}>
           {(
             <button
-              onClick={() => { segmentPressSound(); tapHaptic(); onSetup(); }}
+              onClick={() => { if (!isPaid) return; segmentPressSound(); tapHaptic(); onSetup(); }}
               style={{
                 display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
@@ -3168,7 +3188,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
                 pointerEvents: 'none',
                 ...FONT_SMOOTH,
               }}>
-                Build This Light
+                {isPaid ? 'Build This Light' : 'Upgrade to Build'}
               </span>
             </button>
           )}

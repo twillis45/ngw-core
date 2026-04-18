@@ -631,7 +631,7 @@ export default function Day1DemoApp() {
   const [user, setUser] = useState(() => getUser());
   const [lastAnalysisTime, setLastAnalysisTime] = useState(null);
   const [shootMode, setShootMode] = useState('photographer');
-  const { plan: appPlan, isAdmin: appIsAdmin } = usePlan(user?.email);
+  const { plan: appPlan, isPaid: appIsPaid, isAdmin: appIsAdmin } = usePlan(user?.email);
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
 
@@ -1343,6 +1343,8 @@ export default function Day1DemoApp() {
           imagePreview={imagePreview}
           onSetup={handleSetup}
           onRetry={handleRetry}
+          isPaid={appIsPaid}
+          plan={appPlan}
         />
       );
       if (!resultMobile) return resultEl;
@@ -1363,6 +1365,8 @@ export default function Day1DemoApp() {
           onSave={handleSetupSave}
           onCancel={handleSetupCancel}
           onStartCockpit={handleStartCockpit}
+          isPaid={appIsPaid}
+          plan={appPlan}
         />
       );
       if (!setupMobile) return setupEl;

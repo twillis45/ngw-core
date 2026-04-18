@@ -497,7 +497,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
   );
 }
 
-export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit }) {
+export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit, isPaid = true, plan = 'enterprise' }) {
   const isDesktop = useIsDesktop();
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
