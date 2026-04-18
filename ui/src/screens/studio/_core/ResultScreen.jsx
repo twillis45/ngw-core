@@ -2091,7 +2091,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
     </div>
   );
 
-  const { pattern, confidence = 0, meta, mood, sections: _sections } = result;
+  const { pattern, geometricBase, confidence = 0, meta, mood, sections: _sections } = result;
   const sections = _sections || {};
   const raw = result?._raw || {};
   const signalDiag = raw.signal_diagnostics || {};
@@ -2476,6 +2476,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 ...FONT_SMOOTH,
                 textShadow: TEXT_SHADOW_ENGRAVED,
               }}>{prettify(pattern, { title: true })}</p>
+              {geometricBase && (
+                <p style={{
+                  margin: '2px 0 0', fontWeight: 600,
+                  fontSize: isDesktop ? 13 : 11, lineHeight: '1.2',
+                  color: steel(0.40), letterSpacing: '0.3px',
+                  ...FONT_SMOOTH,
+                }}>{prettify(geometricBase, { title: true })} geometry</p>
+              )}
               <p style={{
                 margin: 0,
                 fontWeight: 700, fontSize: isDesktop ? 28 : 20, lineHeight: '1.1',

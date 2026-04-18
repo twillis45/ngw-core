@@ -167,6 +167,10 @@ function mapApiResult(data) {
   // Confidence: API returns 0–1 float → display as 0–100 int
   const confidence = Math.round((data.authoritative_confidence || 0) * 100);
   const pattern = displayPattern(data.authoritative_pattern);
+  // Compound pattern: when a tonal overlay (low_key, high_key) overrides
+  // a geometric base, show the geometry as a subtitle so photographers
+  // see both classification levels (e.g. "Low Key · Rembrandt geometry").
+  const geometricBase = data.geometric_base ? displayPattern(data.geometric_base) : null;
 
   // Meta pills — short descriptors from lighting inference.  Pattern/modifier
   // display rule: Title Case, no underscores.
@@ -594,6 +598,7 @@ function mapApiResult(data) {
 
   return {
     pattern,
+    geometricBase,
     confidence,
     meta,
     mood,

@@ -149,7 +149,10 @@ export default function LightingDiagram({ result, compact = false, fluid = false
     // No standard portrait pattern (loop, rembrandt, split, butterfly,
     // broad, short) places the key behind the subject. Rim/accent lights
     // can go past 90°, but those are rendered as separate markers.
-    const _pat = (raw.authoritative_pattern || '').toLowerCase();
+    // Use geometric_base when available — it preserves the key geometry
+    // even when a tonal overlay (low_key, high_key) is the authoritative pattern.
+    // e.g. auth=low_key + geometric_base=rembrandt → use rembrandt for diagram.
+    const _pat = (raw.geometric_base || raw.authoritative_pattern || '').toLowerCase();
     const isStandardPortrait = ['loop','rembrandt','butterfly','split','broad','short','clamshell','paramount'].some(p => _pat.includes(p));
     const clamped = isStandardPortrait ? Math.min(reconKeyDeg, 85) : reconKeyDeg;
     kAngleDeg = sign * clamped;
