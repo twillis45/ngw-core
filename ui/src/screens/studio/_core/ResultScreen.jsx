@@ -1726,6 +1726,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // Only the DETAIL section (scene + colors + confidence) collapses.
   const [detailOpen, setDetailOpen] = useState(false);
   const [diagramView, setDiagramView] = useState('top');
+  const [diagramZoomed, setDiagramZoomed] = useState(false);
   // lightExpanded state removed — THE LIGHT now shows only the pattern
   // answer (shadow analysis moved to DETAIL), so no clip is needed.
   // Daylight brightness boost — persisted across screens via settings store.
@@ -3664,7 +3665,29 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
               display: 'flex', justifyContent: 'center', alignItems: 'stretch',
               zIndex: 1,
             }}>
-              <LightingDiagram result={result} fluid />
+              {diagramView === 'top' ? (
+                <LightingDiagram result={result} fluid />
+              ) : (
+                <SideViewDiagram result={result} fluid />
+              )}
+            </div>
+            {/* View toggle in zoomed overlay */}
+            <div style={{ position: 'absolute', top: 16, right: 16, zIndex: 11, display: 'flex' }} onClick={e => e.stopPropagation()}>
+              {['top', 'side'].map(v => (
+                <button key={v} onClick={() => { setDiagramView(v); tapHaptic(); }} style={{
+                  padding: '5px 14px', border: 'none', cursor: 'pointer',
+                  background: diagramView === v
+                    ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                    : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
+                  borderRadius: v === 'top' ? '7px 0 0 7px' : '0 7px 7px 0',
+                  boxShadow: diagramView === v
+                    ? `3px 3px 8px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(200,155,60,0.25), inset 0 1px 0 rgba(200,155,60,0.10)`
+                    : '2px 2px 5px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.8px',
+                  color: diagramView === v ? '#c89b45' : steel(0.35),
+                  ...FONT_SMOOTH,
+                }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
+              ))}
             </div>
             {/* Glass reflection + lens vignette overlay */}
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none', zIndex: 9 }}>

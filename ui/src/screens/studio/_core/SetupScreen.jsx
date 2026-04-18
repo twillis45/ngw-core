@@ -11,6 +11,7 @@
  *   6. Viewfinder overlay — glass panel with diagram + specs (nav icon)
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { tapHaptic, successHaptic, navHaptic, longPressHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
@@ -511,6 +512,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const [selectedMode, setSelectedMode] = useState('photographer');
   const [saved, setSaved] = useState(false);
   const [diagramView, setDiagramView] = useState('top'); // 'top' | 'side'
+  const [diagramZoomed, setDiagramZoomed] = useState(false);
 
   const flipHero = () => { setHeroFlipped(p => !p); softClickSound(); tapHaptic(); };
   const openThumb = () => { setThumbZoomed(true); panelToggleSound(); tapHaptic(); };
@@ -1093,14 +1095,16 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </div>
             </div>
 
-            {/* Diagram well — LARGE, fills the column width */}
+            {/* Diagram well — LARGE, fills the column width. Click to zoom. */}
             {result._raw && (
-              <div style={{
+              <div
+                onClick={() => { setDiagramZoomed(true); tapHaptic(); }}
+                style={{
                 position: 'relative', width: '100%',
                 aspectRatio: '16 / 9', maxHeight: 280,
                 borderRadius: 14, backgroundColor: '#070709',
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
-                overflow: 'hidden',
+                overflow: 'hidden', cursor: 'zoom-in',
               }}>
                 <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
                   {diagramView === 'top' ? (
@@ -1548,6 +1552,50 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
     )}
 
     {/* ── Mode picker bottom sheet ── */}
+    {/* Diagram zoom overlay — fullscreen portal */}
+    {diagramZoomed && result._raw && createPortal(
+      <div
+        onClick={() => setDiagramZoomed(false)}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          backgroundColor: 'rgba(4,5,7,0.92)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          cursor: 'zoom-out', padding: 40,
+        }}
+      >
+        {/* Toggle in zoomed view */}
+        <div style={{ display: 'flex', marginBottom: 16 }} onClick={e => e.stopPropagation()}>
+          {['top', 'side'].map(v => (
+            <button key={v} onClick={() => { setDiagramView(v); tapHaptic(); }} style={{
+              padding: '6px 18px', border: 'none', cursor: 'pointer',
+              background: diagramView === v
+                ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
+              borderRadius: v === 'top' ? '8px 0 0 8px' : '0 8px 8px 0',
+              boxShadow: diagramView === v
+                ? `3px 3px 8px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(200,155,60,0.25), inset 0 1px 0 rgba(200,155,60,0.10)`
+                : '2px 2px 5px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03)',
+              fontSize: 11, fontWeight: 700, letterSpacing: '1px',
+              color: diagramView === v ? KEY_ACCENT : steel(0.35),
+              ...FONT_SMOOTH,
+            }}>{v === 'top' ? 'TOP DOWN' : 'SIDE VIEW'}</button>
+          ))}
+        </div>
+        {/* Diagram — large */}
+        <div style={{ width: '100%', maxWidth: 800, maxHeight: '70vh', aspectRatio: diagramView === 'top' ? '300/220' : '300/150' }} onClick={e => e.stopPropagation()}>
+          {diagramView === 'top' ? (
+            <LightingDiagram result={result} fluid />
+          ) : (
+            <SideViewDiagram result={result} fluid />
+          )}
+        </div>
+        <p style={{ marginTop: 16, fontSize: 11, color: steel(0.30), ...FONT_SMOOTH }}>Tap anywhere to close</p>
+      </div>,
+      document.body
+    )}
+
     <ModePickerSheet
       open={modeSheetOpen}
       selectedMode={selectedMode}
