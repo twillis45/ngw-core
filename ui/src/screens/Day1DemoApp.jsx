@@ -1331,47 +1331,41 @@ export default function Day1DemoApp() {
       );
     }
     case 'result': {
-      // Mobile: use 430-wide design with width-only scaling so the result
-      // scrolls vertically at near-native size instead of scaling 1300px
-      // down to 50%. Desktop: use innerHeight so scaled box matches viewport.
+      // Desktop: bypass FitToViewport — ResultScreen manages its own layout.
+      // Mobile: 430-wide with width-only scaling.
       const resultMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const resultDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const resultEl = (
+        <ResultScreen
+          result={result}
+          imagePreview={imagePreview}
+          onSetup={handleSetup}
+          onRetry={handleRetry}
+        />
+      );
+      if (!resultMobile) return resultEl;
       return (
-        <FitToViewport
-          designWidth={resultMobile ? 430 : 1600}
-          designHeight={resultMobile ? undefined : undefined}
-          fitMode="width"
-          minScale={resultMobile ? 1 : 0.5}
-          maxScale={resultMobile ? 1.3 : 1.5}
-          tightness={resultMobile ? 0.96 : 1}
-        >
-          <ResultScreen
-            result={result}
-            imagePreview={imagePreview}
-            onSetup={handleSetup}
-            onRetry={handleRetry}
-          />
+        <FitToViewport designWidth={430} fitMode="width" minScale={1} maxScale={1.3} tightness={0.96}>
+          {resultEl}
         </FitToViewport>
       );
     }
     case 'setup': {
+      // Desktop: bypass FitToViewport — SetupScreen manages its own layout.
+      // Mobile: 430×932 with standard scaling.
       const setupMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const setupDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
+      const setupEl = (
+        <SetupScreen
+          result={result}
+          imagePreview={imagePreview}
+          onSave={handleSetupSave}
+          onCancel={handleSetupCancel}
+          onStartCockpit={handleStartCockpit}
+        />
+      );
+      if (!setupMobile) return setupEl;
       return (
-        <FitToViewport
-          designWidth={setupMobile ? 430 : 1400}
-          designHeight={setupMobile ? 932 : setupDesktopVH}
-          minScale={setupMobile ? 0.8 : 0.5}
-          maxScale={setupMobile ? 1.9 : 2.0}
-          tightness={setupMobile ? 0.96 : 1}
-        >
-          <SetupScreen
-            result={result}
-            imagePreview={imagePreview}
-            onSave={handleSetupSave}
-            onCancel={handleSetupCancel}
-            onStartCockpit={handleStartCockpit}
-          />
+        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+          {setupEl}
         </FitToViewport>
       );
     }
