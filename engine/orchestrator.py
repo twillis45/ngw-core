@@ -3121,6 +3121,35 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         if _is_product_mood and _not_natural and _not_high_key_mood and _bg_neutral:
             return "tabletop_soft_product"
 
+    # ── Projected pattern: gobo / projection shadow on subject ───────────────
+    # A geometric or blinds occlusion pattern on the subject means a gobo or
+    # projection disc was used to cast a shaped shadow/light pattern.  This is
+    # physically independent of the key geometry — a gobo can produce a
+    # cross-shaped shadow regardless of whether the base pattern is split,
+    # loop, or rembrandt.  We promote to "projected" when:
+    #   1. projected_pattern_shape (from occlusion_shadow_pass) is "blinds" or
+    #      "geometric" — meaning a regular, periodic or geometric shadow pattern
+    #      was detected on the subject.
+    #   2. The base pattern is a standard directional key (split, loop,
+    #      rembrandt, unknown) — i.e., not already a specialty.
+    # The occlusion confidence gate (> 0.5) is enforced in
+    # enrich_cue_report_from_pipeline before projected_pattern_shape is set,
+    # so we trust any non-None value here.
+    # Accept both occlusion-FFT types ("blinds", "geometric") and
+    # mask-shape heuristic types ("cross", "slit", "bars") — both are
+    # independent evidence of projected/gobo light patterns.
+    # Brightness guard: gobo/projection setups are dramatic (brightness=low
+    # or medium) — the selective illumination creates dark surrounding areas.
+    # Bright images (brightness=high/very_high) with "cross" shapes are
+    # product shots where the geometry comes from the subject, not a gobo.
+    # Measured: gobo brightness=low; tabletop_soft_product brightness=high.
+    _proj_shape = getattr(cr, "projected_pattern_shape", None) if cr else None
+    _PROJECTED_SHAPES = {"blinds", "geometric", "cross", "slit", "bars"}
+    if _proj_shape in _PROJECTED_SHAPES:
+        if base in ("split", "loop", "rembrandt", "unknown"):
+            if brightness not in ("high", "very_high"):
+                return "projected"
+
     # ── Tabletop soft product: dappled foliage shadows → outdoor product ──
     # Tabletop product or beauty shots outdoors or near foliage produce
     # distinctive dappled shadow patterns from leaves/branches.  The

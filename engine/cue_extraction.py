@@ -2838,6 +2838,22 @@ def enrich_cue_report_from_pipeline(
         except Exception:
             pass  # best-effort enrichment
 
+    # ── Occlusion shadow (gobo / projection pattern detection) ──
+    # occlusion_shadow_pass() detects high-frequency shadow patterns on the
+    # subject (blinds, geometric gobos, foliage).  When the pass detects a
+    # regular or geometric pattern (blinds | geometric), store the occlusion
+    # type in projected_pattern_shape so _apply_specialty_pattern can promote
+    # the base geometric pattern to "projected".
+    occlusion_data = pipeline_results.get("occlusion")
+    if isinstance(occlusion_data, dict) and occlusion_data.get("ok"):
+        try:
+            occ_type = occlusion_data.get("occlusion_type", "none")
+            occ_conf = occlusion_data.get("occlusion_confidence", 0.0)
+            if occ_type in ("blinds", "geometric") and occ_conf > 0.5:
+                report.projected_pattern_shape = occ_type
+        except Exception:
+            pass  # best-effort enrichment
+
     # ── Shadow penumbra ──
     # shadow_penumbra_pass() runs in the extended pipeline and outputs
     # penumbra_width_ratio + apparent_source_size.  Wire the result into
