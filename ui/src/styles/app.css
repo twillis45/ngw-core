@@ -16416,121 +16416,170 @@ body {
   color: var(--color-bg, #0f1117);
 }
 
-/* ── Studio Matte Lab depth overrides ─────────────── */
-/* Machined depth treatment on Lab elements when Studio theme is active.
-   Cards, tabs, buttons, and panels get the 141.71° directional shadow
-   + inner bevel treatment matching the Day1 screens. */
+/* ── Studio Matte Lab — Full Depth Treatment ─────── */
+/* Every Lab surface gets the machined instrument language:
+   141.71° directional gradients, multi-layer shadows, inner bevels,
+   steel-tinted typography, amber accents, glass viewfinder on images.
+   
+   Design principles applied:
+   - Directional light from 141.71° (upper-left key)
+   - Every raised surface: outer drop shadow + top-left chamfer catch
+   - Every inset surface: inner shadow + bottom-right fill bounce
+   - Active states: amber (#c89b45) LED ring + inner glow
+   - Typography: steel-tinted (132,158,184) secondary text
+   - No flat borders — depth replaces borders everywhere */
 
-[data-theme="studio"] .lab-card {
-  background: linear-gradient(141.71deg, #16181e 0%, #10121800 100%);
+/* ── 1. HEADER — instrument strip ── */
+[data-theme="studio"] .lab-header {
+  background: linear-gradient(180deg, rgba(8,9,12,0.85) 0%, rgba(6,7,10,0.50) 70%, transparent 100%);
+  border-bottom: 1px solid rgba(132,158,184,0.06);
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+[data-theme="studio"] .lab-header__brand-sep {
+  background: rgba(132,158,184,0.10);
+  height: 18px;
+}
+[data-theme="studio"] .lab-header__title {
+  letter-spacing: -0.3px;
+}
+[data-theme="studio"] .lab-header__status {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
   border: none;
-  box-shadow:
-    4px 4px 12px rgba(0,0,0,0.50),
-    2px 2px 5px rgba(0,0,0,0.35),
-    -0.5px -0.5px 1px rgba(255,255,255,0.03),
-    inset 0 1px 0 rgba(255,255,255,0.05),
-    inset -1px -1px 0 rgba(0,0,0,0.20);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+  padding: 4px 10px;
+  border-radius: 6px;
 }
-[data-theme="studio"] .lab-card:hover {
-  box-shadow:
-    5px 5px 14px rgba(0,0,0,0.55),
-    2px 2px 6px rgba(0,0,0,0.40),
-    -0.5px -0.5px 1px rgba(255,255,255,0.04),
-    inset 0 1px 0 rgba(255,255,255,0.06),
-    inset -1px -1px 0 rgba(0,0,0,0.22),
-    0 0 0 0.5px rgba(200,155,69,0.20);
+[data-theme="studio"] .lab-header__status--online {
+  background: linear-gradient(141.71deg, #142218 0%, #0e1810 100%);
+  box-shadow: 2px 2px 6px rgba(0,0,0,0.35), 0 0 0 0.5px rgba(72,186,136,0.20), inset 0 1px 0 rgba(72,186,136,0.08);
 }
-[data-theme="studio"] .lab-card--selected {
-  background: linear-gradient(141.71deg, #1e1c14 0%, #141210 100%);
-  box-shadow:
-    4px 4px 12px rgba(0,0,0,0.50),
-    0 0 0 0.5px rgba(200,155,69,0.25),
-    0 0 8px rgba(200,155,69,0.06),
-    inset 0 1px 0 rgba(200,155,69,0.08),
-    inset -1px -1px 0 rgba(0,0,0,0.22);
+[data-theme="studio"] .lab-header__dot {
+  box-shadow: 0 0 4px currentColor;
+}
+[data-theme="studio"] .lab-header__divider {
+  background: rgba(132,158,184,0.05);
 }
 
-/* Tabs — machined pill buttons */
+/* ── 2. SECTION NAV — machined underline tabs ── */
+[data-theme="studio"] .lab-nav {
+  gap: 4px;
+  border-bottom: 1px solid rgba(132,158,184,0.04);
+  padding-bottom: 0;
+}
+[data-theme="studio"] .lab-nav__tab {
+  padding: 10px 16px;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  transition: all 0.15s ease;
+}
+[data-theme="studio"] .lab-nav__tab:hover:not(.lab-nav__tab--active) {
+  color: rgba(132,158,184,0.70);
+}
+[data-theme="studio"] .lab-nav__tab--active {
+  color: #c89b45;
+  border-bottom-color: #c89b45;
+  text-shadow: 0 0 8px rgba(200,155,69,0.18);
+}
+
+/* ── 3. SUB-NAV — machined pill buttons ── */
+[data-theme="studio"] .lab-subnav {
+  border-bottom: none;
+  gap: 6px;
+}
+[data-theme="studio"] .lab-subnav__tab,
 [data-theme="studio"] .lab-tab {
   background: linear-gradient(141.71deg, #16181e 0%, #0e1014 100%);
   border: none;
+  border-radius: 8px;
   box-shadow:
     3px 3px 8px rgba(0,0,0,0.40),
     1px 1px 3px rgba(0,0,0,0.28),
-    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.035),
     inset -1px -1px 0 rgba(0,0,0,0.18);
+  transition: all 0.15s ease;
 }
+[data-theme="studio"] .lab-subnav__tab:hover:not(.lab-subnav__tab--active),
+[data-theme="studio"] .lab-tab:hover:not(.lab-tab--active) {
+  transform: translateY(-1px);
+  box-shadow:
+    4px 4px 10px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+[data-theme="studio"] .lab-subnav__tab--active,
 [data-theme="studio"] .lab-tab--active {
   background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
   color: #c89b45;
   box-shadow:
     4px 4px 10px rgba(0,0,0,0.45),
     0 0 0 0.5px rgba(200,155,69,0.25),
+    0 0 8px rgba(200,155,69,0.06),
     inset 0 1px 0 rgba(200,155,69,0.10),
     inset -1px -1px 0 rgba(0,0,0,0.22);
 }
-[data-theme="studio"] .lab-tab:hover:not(.lab-tab--active) {
-  box-shadow:
-    4px 4px 10px rgba(0,0,0,0.45),
-    inset 0 1px 0 rgba(255,255,255,0.04);
-  transform: translateY(-1px);
-}
 
-/* Section nav — machined underline tabs */
-[data-theme="studio"] .lab-nav__tab {
-  border-bottom-width: 2px;
-}
-[data-theme="studio"] .lab-nav__tab--active {
-  color: #c89b45;
-  border-bottom-color: #c89b45;
-  text-shadow: 0 0 8px rgba(200,155,69,0.20);
-}
-
-/* Sub-nav tabs */
-[data-theme="studio"] .lab-subnav__tab {
-  background: linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%);
+/* ── 4. CARDS — machined panels ── */
+[data-theme="studio"] .lab-card {
+  background: linear-gradient(141.71deg, #16181e 0%, #101214 50%, #0c0d10 100%);
   border: none;
+  border-radius: 10px;
   box-shadow:
+    5px 5px 14px rgba(0,0,0,0.50),
     2px 2px 6px rgba(0,0,0,0.35),
-    inset 0 1px 0 rgba(255,255,255,0.025);
+    -0.5px -0.5px 1px rgba(255,255,255,0.035),
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    inset -1px -1px 0 rgba(0,0,0,0.20);
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
 }
-[data-theme="studio"] .lab-subnav__tab--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
+[data-theme="studio"] .lab-card:hover {
+  transform: translateY(-1px);
   box-shadow:
-    3px 3px 8px rgba(0,0,0,0.40),
-    0 0 0 0.5px rgba(200,155,69,0.22),
-    inset 0 1px 0 rgba(200,155,69,0.08);
+    6px 6px 16px rgba(0,0,0,0.55),
+    2px 2px 7px rgba(0,0,0,0.40),
+    -1px -1px 2px rgba(255,255,255,0.04),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 0 0 0.5px rgba(200,155,69,0.18);
+}
+[data-theme="studio"] .lab-card--selected {
+  background: linear-gradient(141.71deg, #221e14 0%, #181410 100%);
+  box-shadow:
+    5px 5px 14px rgba(0,0,0,0.50),
+    0 0 0 0.5px rgba(200,155,69,0.28),
+    0 0 10px rgba(200,155,69,0.06),
+    inset 0 1px 0 rgba(200,155,69,0.10);
 }
 
-/* Sections */
-[data-theme="studio"] .lab-section {
-  border-color: rgba(132,158,184,0.06);
-}
-
-/* Action buttons — machined depth */
-[data-theme="studio"] .lab-wb__action-btn {
+/* ── 5. BUTTONS — machined well + dome ── */
+[data-theme="studio"] .lab-wb__action-btn,
+[data-theme="studio"] button[class*="lab-"][class*="btn"],
+[data-theme="studio"] .bm-section-btn {
   background: linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%);
   border: none;
+  border-radius: 8px;
   box-shadow:
     4px 4px 12px rgba(0,0,0,0.50),
     2px 2px 5px rgba(0,0,0,0.35),
     -0.5px -0.5px 1px rgba(255,255,255,0.04),
     inset 0 1px 0 rgba(255,255,255,0.06),
     inset -1px -1px 0 rgba(0,0,0,0.22);
+  transition: transform 0.12s ease, box-shadow 0.15s ease, filter 0.12s ease;
 }
-[data-theme="studio"] .lab-wb__action-btn:hover:not(:disabled) {
+[data-theme="studio"] .lab-wb__action-btn:hover:not(:disabled),
+[data-theme="studio"] .bm-section-btn:hover {
   transform: translateY(-1px);
-  box-shadow:
-    5px 5px 14px rgba(0,0,0,0.55),
-    2px 2px 6px rgba(0,0,0,0.40),
-    -1px -1px 2px rgba(255,255,255,0.05),
-    inset 0 1px 0 rgba(255,255,255,0.07),
-    inset -1px -1px 0 rgba(0,0,0,0.25);
+  filter: brightness(1.06);
 }
-[data-theme="studio"] .lab-wb__action-btn--primary {
+[data-theme="studio"] .lab-wb__action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.92);
+  box-shadow:
+    1px 1px 3px rgba(0,0,0,0.40),
+    inset 0 2px 5px rgba(0,0,0,0.60);
+}
+[data-theme="studio"] .lab-wb__action-btn--primary,
+[data-theme="studio"] .bm-section-btn--active {
   background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  border: none;
   color: #c89b45;
   box-shadow:
     4px 4px 12px rgba(0,0,0,0.50),
@@ -16539,253 +16588,216 @@ body {
     inset 0 1px 0 rgba(200,155,69,0.10),
     inset -1px -1px 0 rgba(0,0,0,0.22);
 }
-
-/* Log table — subtle depth on rows */
-[data-theme="studio"] .lab-log__table tr {
-  border-bottom-color: rgba(132,158,184,0.04);
-}
-[data-theme="studio"] .lab-log__table tr:hover {
-  background: rgba(132,158,184,0.03);
-}
-
-/* Image thumbnails — glass treatment */
-[data-theme="studio"] .lab-card img,
-[data-theme="studio"] .lab-wb__thumb {
+[data-theme="studio"] .lab-wb__action-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(141.71deg, #322818 0%, #241e12 100%);
   box-shadow:
-    inset 2px 2px 6px rgba(0,0,0,0.50),
-    inset -1px -1px 2px rgba(255,255,255,0.02);
-  border-radius: 6px;
+    5px 5px 14px rgba(0,0,0,0.55),
+    0 0 0 0.5px rgba(200,155,69,0.30),
+    0 0 12px rgba(200,155,69,0.08),
+    inset 0 1px 0 rgba(200,155,69,0.12);
 }
 
-/* Lab header — machined instrument strip */
-[data-theme="studio"] .lab-header {
-  border-bottom: 1px solid rgba(132,158,184,0.05);
-  background: linear-gradient(180deg, rgba(6,7,10,0.60) 0%, transparent 100%);
-}
-[data-theme="studio"] .lab-header__brand-sep {
-  background: rgba(132,158,184,0.08);
-}
-
-/* Lab screen root — fill entire viewport on Studio Matte */
-[data-theme="studio"] .screen.lab-screen {
-  background: #000001;
-}
-/* Remove ALL max-width constraints inside the Lab */
-[data-theme="studio"] .lab-screen > *,
-[data-theme="studio"] .lab-screen > .lab-content,
-[data-theme="studio"] .lab-screen > .lab-back,
-[data-theme="studio"] .lab-screen > .lab-status,
-[data-theme="studio"] .lab-screen .lab-wb-layout,
-[data-theme="studio"] .screen > * {
-  max-width: none !important;
-  width: 100% !important;
-  margin-inline: 0 !important;
-}
-/* Restore reasonable padding */
-[data-theme="studio"] .lab-screen > .lab-content {
-  padding-inline: 28px !important;
-}
-[data-theme="studio"] .lab-header {
-  padding-inline: 28px !important;
-}
-/* Section nav fills width */
-[data-theme="studio"] .lab-nav {
-  padding-inline: 28px !important;
-}
-
-/* Input fields — machined inset */
-[data-theme="studio"] input[type="text"],
-[data-theme="studio"] input[type="search"],
-[data-theme="studio"] textarea,
-[data-theme="studio"] select {
-  background: linear-gradient(141.71deg, #0c0d12 0%, #08090c 100%) !important;
-  border: none !important;
-  box-shadow:
-    inset 2px 2px 5px rgba(0,0,0,0.50),
-    inset -1px -1px 2px rgba(255,255,255,0.012),
-    1px 1px 3px rgba(0,0,0,0.25) !important;
-}
-
-/* Scrollbar — thin, matte */
-[data-theme="studio"] ::-webkit-scrollbar {
-  width: 6px; height: 6px;
-}
-[data-theme="studio"] ::-webkit-scrollbar-track {
-  background: transparent;
-}
-[data-theme="studio"] ::-webkit-scrollbar-thumb {
-  background: rgba(132,158,184,0.12);
-  border-radius: 3px;
-}
-[data-theme="studio"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(132,158,184,0.22);
-}
-
-/* Workbench layout — wider grid on studio */
-[data-theme="studio"] .lab-wb-layout {
-  gap: 24px;
-}
-[data-theme="studio"] .lab-wb-layout__left {
-  border-right-color: rgba(132,158,184,0.06);
-}
-[data-theme="studio"] .lab-wb-layout__right-empty {
-  background: linear-gradient(141.71deg, #0c0d12 0%, #080910 100%);
-  border-color: rgba(132,158,184,0.10);
-  min-height: 300px;
-}
-/* Widen the drop zone on desktop */
-[data-theme="studio"] .lab-workbench__preview {
-  min-height: 350px;
-}
-/* Wider grid proportions for studio */
-@media (min-width: 820px) {
-  [data-theme="studio"] .lab-wb-layout {
-    grid-template-columns: 48fr 52fr;
-  }
-}
-@media (min-width: 1400px) {
-  [data-theme="studio"] .lab-wb-layout {
-    grid-template-columns: 45fr 55fr;
-    gap: 32px;
-  }
-}
-
-/* Workbench image shell — glass viewfinder treatment */
+/* ── 6. WORKBENCH — glass viewfinder on images ── */
 [data-theme="studio"] .lab-workbench__img-shell {
+  border-radius: 10px;
   box-shadow:
     inset 4px 4px 12px rgba(0,0,0,0.65),
     inset 2px 2px 5px rgba(0,0,0,0.45),
     inset -1px -1px 2px rgba(255,255,255,0.02),
     2px 3px 8px rgba(0,0,0,0.40);
+  overflow: hidden;
+}
+[data-theme="studio"] .lab-workbench__preview {
+  background: linear-gradient(180deg, #060810 0%, #040507 100%);
+  border-radius: 10px;
+}
+[data-theme="studio"] .lab-wb-layout__right-empty {
+  background: linear-gradient(141.71deg, #0c0d12 0%, #080910 100%);
+  border: 1px dashed rgba(132,158,184,0.10);
+  border-radius: 10px;
+  min-height: 280px;
+}
+@media (min-width: 820px) {
+  [data-theme="studio"] .lab-wb-layout { grid-template-columns: 48fr 52fr; gap: 24px; }
+}
+@media (min-width: 1400px) {
+  [data-theme="studio"] .lab-wb-layout { grid-template-columns: 45fr 55fr; gap: 32px; }
 }
 
-/* Status cards — machined panels */
+/* ── 7. INPUTS — machined inset wells ── */
+[data-theme="studio"] .lab-screen input[type="text"],
+[data-theme="studio"] .lab-screen input[type="search"],
+[data-theme="studio"] .lab-screen textarea,
+[data-theme="studio"] .lab-screen select {
+  background: #0a0b0e !important;
+  border: none !important;
+  border-radius: 8px;
+  box-shadow:
+    inset 3px 3px 7px rgba(0,0,0,0.55),
+    inset 1px 1px 3px rgba(0,0,0,0.38),
+    inset -1px -1px 2px rgba(255,255,255,0.012),
+    1px 1px 3px rgba(0,0,0,0.25) !important;
+  color: var(--sm-text-primary) !important;
+  padding: 8px 12px;
+}
+[data-theme="studio"] .lab-screen input::placeholder {
+  color: rgba(132,158,184,0.30);
+}
+
+/* ── 8. TABLES — steel-tinted ── */
+[data-theme="studio"] .lab-log__table {
+  border-color: rgba(132,158,184,0.04);
+}
+[data-theme="studio"] .lab-log__table th {
+  background: linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%);
+  border-bottom: 1px solid rgba(132,158,184,0.08);
+  color: rgba(132,158,184,0.50);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+[data-theme="studio"] .lab-log__table td {
+  border-bottom-color: rgba(132,158,184,0.03);
+}
+[data-theme="studio"] .lab-log__table tr:hover {
+  background: rgba(132,158,184,0.025);
+}
+
+/* ── 9. STATUS CARDS ── */
 [data-theme="studio"] .lab-status__card {
   background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
   border: none;
+  border-radius: 10px;
   box-shadow:
     4px 4px 12px rgba(0,0,0,0.50),
     2px 2px 5px rgba(0,0,0,0.35),
     -0.5px -0.5px 1px rgba(255,255,255,0.03),
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    inset -1px -1px 0 rgba(0,0,0,0.18);
+    inset 0 1px 0 rgba(255,255,255,0.04);
 }
-
-/* Status section labels */
 [data-theme="studio"] .lab-status__section-label {
-  color: rgba(132,158,184,0.40);
+  color: rgba(132,158,184,0.35);
+  letter-spacing: 1.5px;
+  font-size: 9px;
 }
 
-/* Log table */
-[data-theme="studio"] .lab-log__table {
-  border-color: rgba(132,158,184,0.05);
+/* ── 10. OVERLAYS + MODALS ── */
+[data-theme="studio"] .lab-overlay-lightbox {
+  background: rgba(0,0,1,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-[data-theme="studio"] .lab-log__table th {
-  background: linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%);
-  border-bottom-color: rgba(132,158,184,0.08);
-  color: rgba(132,158,184,0.50);
-}
-[data-theme="studio"] .lab-log__table td {
-  border-bottom-color: rgba(132,158,184,0.04);
-}
-
-/* Gold set / reference cards */
-[data-theme="studio"] .lab-gold__card,
-[data-theme="studio"] .lab-ref__card {
-  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
-  border: none;
-  box-shadow:
-    3px 3px 10px rgba(0,0,0,0.45),
-    1px 1px 4px rgba(0,0,0,0.30),
-    inset 0 1px 0 rgba(255,255,255,0.04),
-    inset -1px -1px 0 rgba(0,0,0,0.18);
-}
-
-/* Sub-nav — machined pills */
-[data-theme="studio"] .lab-subnav {
-  border-bottom-color: rgba(132,158,184,0.05);
-}
-[data-theme="studio"] .lab-subnav__tab {
-  background: linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%);
-  border: none;
-  box-shadow:
-    2px 2px 6px rgba(0,0,0,0.35),
-    inset 0 1px 0 rgba(255,255,255,0.025);
-  transition: all 0.15s ease;
-}
-[data-theme="studio"] .lab-subnav__tab--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
-  box-shadow:
-    3px 3px 8px rgba(0,0,0,0.40),
-    0 0 0 0.5px rgba(200,155,69,0.22),
-    inset 0 1px 0 rgba(200,155,69,0.08);
-}
-
-/* Overlay panels (solver, signals) */
 [data-theme="studio"] .lab-overlay-solver-scroll,
 [data-theme="studio"] .lab-overlay-controls {
   background: linear-gradient(180deg, #0a0b0e 0%, #060710 100%);
   border-color: rgba(132,158,184,0.06);
 }
-
-/* Filter/search bars in workbench */
-[data-theme="studio"] .lab-workbench__filter,
-[data-theme="studio"] .lab-search {
-  background: linear-gradient(141.71deg, #0c0d12 0%, #08090c 100%);
-  border: none;
-  box-shadow:
-    inset 2px 2px 5px rgba(0,0,0,0.50),
-    inset -1px -1px 2px rgba(255,255,255,0.012),
-    1px 1px 3px rgba(0,0,0,0.25);
-}
-
-/* Benchmark section buttons */
-[data-theme="studio"] .bm-section-btn {
-  background: linear-gradient(141.71deg, #16181e 0%, #0e1014 100%);
-  border: none;
-  box-shadow:
-    3px 3px 8px rgba(0,0,0,0.40),
-    inset 0 1px 0 rgba(255,255,255,0.03);
-}
-[data-theme="studio"] .bm-section-btn--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
-  box-shadow:
-    3px 3px 8px rgba(0,0,0,0.40),
-    0 0 0 0.5px rgba(200,155,69,0.22),
-    inset 0 1px 0 rgba(200,155,69,0.08);
-}
-
-/* Lightbox overlay */
-[data-theme="studio"] .lab-overlay-lightbox {
-  background: rgba(0,0,1,0.92);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-/* Help modal */
 [data-theme="studio"] .lab-help-modal {
   background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
   border: none;
+  border-radius: 14px;
   box-shadow:
     8px 8px 28px rgba(0,0,0,0.70),
     4px 4px 12px rgba(0,0,0,0.50),
+    -1px -1px 2px rgba(255,255,255,0.04),
     inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
-/* General borders and dividers */
+/* ── 11. IMAGE THUMBNAILS ── */
+[data-theme="studio"] .lab-card img,
+[data-theme="studio"] .lab-wb__thumb {
+  border-radius: 6px;
+  box-shadow:
+    inset 2px 2px 6px rgba(0,0,0,0.50),
+    inset -1px -1px 2px rgba(255,255,255,0.02);
+}
+
+/* ── 12. GOLD SET + REFERENCE CARDS ── */
+[data-theme="studio"] .lab-gold__card,
+[data-theme="studio"] .lab-ref__card {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+  border: none;
+  border-radius: 10px;
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.48),
+    2px 2px 5px rgba(0,0,0,0.32),
+    -0.5px -0.5px 1px rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+/* ── 13. SCROLLBARS ── */
+[data-theme="studio"] ::-webkit-scrollbar { width: 6px; height: 6px; }
+[data-theme="studio"] ::-webkit-scrollbar-track { background: transparent; }
+[data-theme="studio"] ::-webkit-scrollbar-thumb { background: rgba(132,158,184,0.12); border-radius: 3px; }
+[data-theme="studio"] ::-webkit-scrollbar-thumb:hover { background: rgba(132,158,184,0.22); }
+
+/* ── 14. SECTIONS + DIVIDERS ── */
+[data-theme="studio"] .lab-section {
+  border-color: rgba(132,158,184,0.05);
+}
+[data-theme="studio"] .lab-section__title {
+  color: rgba(132,158,184,0.50);
+  letter-spacing: 0.5px;
+}
 [data-theme="studio"] hr,
 [data-theme="studio"] .lab-divider {
-  border-color: rgba(132,158,184,0.06);
+  border-color: rgba(132,158,184,0.05);
 }
 
-/* Badges and pills */
+/* ── 15. BADGES + PILLS ── */
 [data-theme="studio"] .lab-badge,
-[data-theme="studio"] .lab-pill {
+[data-theme="studio"] .lab-pill,
+[data-theme="studio"] .lab-tab__metric {
   box-shadow: 1px 1px 3px rgba(0,0,0,0.30);
+  border-radius: 5px;
 }
 
+/* ── 16. LAB ROOT — full viewport ── */
+[data-theme="studio"] .screen.lab-screen {
+  background: #000001;
+}
+[data-theme="studio"] .lab-screen > *,
+[data-theme="studio"] .lab-screen > .lab-content,
+[data-theme="studio"] .lab-screen > .lab-back,
+[data-theme="studio"] .lab-screen > .lab-status {
+  max-width: none !important;
+  margin-inline: 0 !important;
+}
+[data-theme="studio"] .lab-content { padding-inline: 28px; }
+[data-theme="studio"] .lab-header { padding-inline: 28px; }
+[data-theme="studio"] .lab-nav { padding-inline: 28px; }
+[data-theme="studio"] .lab-subnav { padding-inline: 28px; }
+
+/* ── 17. CHECKBOXES — styled for dark surfaces ── */
+[data-theme="studio"] .lab-card__checkbox input[type="checkbox"] {
+  accent-color: #c89b45;
+}
+
+/* ── 18. FILTER CHIPS ── */
+[data-theme="studio"] .lab-filter-chip,
+[data-theme="studio"] .lab-tag {
+  background: linear-gradient(141.71deg, #16181e 0%, #0e1014 100%);
+  border: none;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.025);
+  border-radius: 6px;
+}
+[data-theme="studio"] .lab-filter-chip--active,
+[data-theme="studio"] .lab-tag--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  color: #c89b45;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.30), 0 0 0 0.5px rgba(200,155,69,0.22);
+}
+
+/* ── 19. AUTH GATE ── */
+[data-theme="studio"] .lab-auth-gate {
+  color: rgba(132,158,184,0.45);
+}
+[data-theme="studio"] .lab-auth-gate button {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%) !important;
+  color: #c89b45 !important;
+  border: none !important;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(200,155,69,0.25), inset 0 1px 0 rgba(200,155,69,0.10) !important;
+}
 /* ── Room Planner rp-* layout ────────────────────── */
 .rp-header {
   display: flex;
