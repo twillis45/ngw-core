@@ -4357,32 +4357,48 @@ def analyze_image(
             _upgrade_pattern("rembrandt")
             pc.primary.supporting_cues.append("shadow_continuity_triangle_rescue")
 
-    # ── Hurley triangle upgrade: loop/butterfly + 3+ lights + bright bg ──
+    # ── Hurley triangle upgrade: catchlight-first, VLM fallback ─────────
     # The Hurley triangle is a 3-point lighting setup (key + two fills/accents)
-    # that produces even, wrapped illumination.  The individual key reads as
-    # loop or butterfly (single-key geometry), but the additional lights create
-    # symmetric highlight coverage that's distinct from single-key setups.
-    # Signals: VLM detects 3+ lights, bright/blown background (typical for
-    # triangle setups), high highlight symmetry (even wrap from multiple
-    # sources), and no natural light.
-    # Guard: hs > 0.85 required — single-key loop with rim/hair lights has
-    # lower symmetry because the key-lit side dominates.
+    # defined by its catchlight pattern: 3 distinct catchlights forming a
+    # triangular arrangement in the eyes (analysis-order: catchlights before
+    # pattern).
+    #
+    # Primary path: 3+ distinct catchlight sources from reflection_architecture
+    # (deduped, per-eye).  This is the definitive signal — the triangle
+    # arrangement IS the pattern.
+    #
+    # Fallback path: when catchlights are undetectable (small eyes, bright bg
+    # washout, B&W), use VLM light_count + physical signals.  This is a
+    # SEMANTIC HINT (guardrail VL) — weaker than catchlight evidence but
+    # the only available signal when CV catchlight detection fails.
+    # Requires: 3+ VLM lights + bright bg + high brightness + hs > 0.85.
     if pc.authoritative_pattern in ("loop", "butterfly"):
-        _tri_raw_lc = getattr(result.lighting_intel, "light_count", 0) if result.lighting_intel else 0
+        _tri_ra = getattr(_cr, "reflection_architecture", None) if _cr else None
+        _tri_cl_total = getattr(_tri_ra, "total_catchlights", 0) if _tri_ra else 0
         _tri_bg = getattr(_cr, "background_illumination", None) if _cr else None
         _tri_bg_bright = _tri_bg and getattr(_tri_bg, "brightness_relative", "") == "brighter"
         _tri_hs = getattr(_cr, "highlight_symmetry", None) if _cr else None
         _tri_hs_sym = getattr(_tri_hs, "symmetry_score", 0.0) if _tri_hs else 0.0
         _tri_cls = result.classification or {}
         _tri_bright = _tri_cls.get("brightness", "") in ("high", "very_high")
-        # No natural-light guard needed: the combination of 3+ lights +
-        # bright/blown background + high highlight symmetry is physically
-        # impossible outdoors.  The VLM env classifier can misread studio
-        # white-seamless as "natural" (e.g. hurley_triangle benchmark).
-        if (_tri_raw_lc >= 3 and _tri_bg_bright and _tri_bright
-                and _tri_hs_sym > 0.85):
+        _tri_raw_lc = getattr(result.lighting_intel, "light_count", 0) if result.lighting_intel else 0
+
+        # Primary: catchlight-based triangle detection (analysis-order:
+        # catchlights before pattern). Requires 3+ deduped catchlights
+        # AND bright background AND high symmetry — raw count alone is
+        # insufficient (specular noise from B&W, ring lights, etc.).
+        _tri_catchlight_ok = _tri_cl_total >= 3 and _tri_bg_bright and _tri_hs_sym > 0.85
+
+        # Fallback: VLM + physical signals when catchlights unavailable
+        _tri_vlm_ok = (
+            _tri_raw_lc >= 3 and _tri_bg_bright and _tri_bright
+            and _tri_hs_sym > 0.85 and _tri_cl_total < 3  # only when catchlights fail
+        )
+
+        if _tri_catchlight_ok or _tri_vlm_ok:
             _upgrade_pattern("triangle")
-            pc.primary.supporting_cues.append("hurley_triangle_upgrade")
+            _src = "catchlight_triangle" if _tri_catchlight_ok else "vlm_triangle_fallback"
+            pc.primary.supporting_cues.append(_src)
 
     # ── Layer 4: Corrective / context layer ─────────────────────────
     # Pose-relative correction (spec Stage 13): loop→broad, rembrandt→short.
