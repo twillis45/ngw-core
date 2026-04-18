@@ -1038,14 +1038,14 @@ def _signal_contradiction_score(
             cues.append("fill_detected")
         # Triangle isolation contradicts split: split has NO connected cheek
         # triangle — the shadow side is uniformly dark with no bright patch.
-        # A Rembrandt triangle (tri_iso > 0.40) means the shadow side has
-        # a defined bright region, which is physically incompatible with
-        # true split lighting. High lr_asym + high tri_iso = Rembrandt.
+        # Threshold raised to 0.70 (was 0.40) — many legitimate images have
+        # moderate triangle_isolation from normal cheek brightness variation.
+        # Only fire when the triangle evidence is strong enough to be definitive.
         if tri_iso > 0.80:
             score += 0.60  # definitive triangle → Rembrandt, not split
             cues.append("triangle_isolation")
-        elif tri_iso > 0.40:
-            score += 0.40  # moderate triangle → likely Rembrandt
+        elif tri_iso > 0.70:
+            score += 0.35  # strong triangle evidence
             cues.append("triangle_isolation")
 
     elif pattern == "loop":
@@ -1117,11 +1117,21 @@ def _signal_contradiction_score(
         # shadow_continuity uses connected-component analysis; triangle_isolation
         # uses percentile brightness spread. Both detect the Rembrandt triangle
         # but via different methods, so neither should gate the other.
-        if tri_iso > 0.80:
+        # Threshold raised to 0.70 (was 0.40) to prevent false demotions
+        # of legitimate loop patterns. The cue_extraction ok-fix unlocked
+        # light_structure data for ALL images — 0.40 was catching normal
+        # cheek brightness variation as false Rembrandt evidence.
+        # Shadow density guard: a Rembrandt triangle REQUIRES shadows — the
+        # lit triangle is defined by shadow surrounding it. When shadow_density
+        # is low (< 0.20), a high tri_iso is from the normal key highlight on
+        # the cheek, not a shadow-enclosed Rembrandt triangle. Measured:
+        #   loop_standard: tri_iso=0.918, shadow_den=0.114 → false positive
+        #   rembrandt_classic: tri_iso≥0.80, shadow_den≥0.30 → true positive
+        if tri_iso > 0.80 and shadow_den > 0.20:
             score += 0.70
             cues.append("triangle_isolation")
-        elif tri_iso > 0.40:
-            score += 0.45
+        elif tri_iso > 0.70 and shadow_den > 0.20:
+            score += 0.40
             cues.append("triangle_isolation")
         _fr_loop = getattr(cr, "fill_ratio", None)
         _fr_ratio_loop = getattr(_fr_loop, "ratio", 0.5) if _fr_loop else 0.5
@@ -1204,23 +1214,42 @@ def _signal_contradiction_score(
             score += 0.2  # extreme asymmetry → split
             cues.append("left_right_asymmetry")
 
-    # ── HURLEY TRIANGLE contradiction block — commented out pending pipeline cleanup ──
-    # elif pattern == "triangle":
-    #     _ct = getattr(cr, "catchlight_topology", None) if cr else None
-    #     _cl_count = getattr(_ct, "catchlight_count", 0) if _ct else 0
-    #     _cl_cluster = getattr(_ct, "cluster_geometry", "unknown") if _ct else "unknown"
-    #     if _cl_count < 2:
-    #         score += 0.40
-    #         cues.append("catchlight_count")
-    #     elif _cl_count == 2 and _cl_cluster not in ("bilateral", "triangular"):
-    #         score += 0.20
-    #         cues.append("catchlight_topology")
-    #     if shadow_den > 0.40:
-    #         score += 0.35
-    #         cues.append("shadow_density")
-    #     if lr_asym > 0.30:
-    #         score += 0.30
-    #         cues.append("left_right_asymmetry")
+    elif pattern == "triangle":
+        # Hurley triangle = 3-point lighting setup with key, fill, and
+        # accent/kicker creating a triangle of illumination.  Requires:
+        #   - At least 3 distinct light sources (the defining feature)
+        #   - Some shadow structure (tri_iso or shadow_density)
+        # Without these, "triangle" is a VLM hallucination — the image
+        # is likely clamshell, butterfly, or flat.
+        #
+        # Zero triangle_isolation + near-zero shadow_density means no
+        # triangle of light exists on the face.  The Hurley triangle is
+        # DEFINED by three positioned lights creating visible facial
+        # geometry — without any shadow/highlight structure, the pattern
+        # cannot physically exist.
+        # Measured: beauty_dish_clean has tri_iso=0.0, sd=0.002,
+        #   ls.pattern_name="clamshell" → false "triangle" from VLM.
+        if tri_iso < 0.02 and shadow_den < 0.05:
+            score += 0.70  # no triangle geometry + no shadows = not triangle
+            cues.append("triangle_isolation")
+            cues.append("shadow_density")
+        # Light_structure pattern: when CV explicitly says clamshell or
+        # butterfly (on-axis setups), that directly contradicts the
+        # off-axis multi-point triangle setup.
+        _ls_pat_tri = getattr(ls, "pattern_name", None)
+        if _ls_pat_tri in ("clamshell", "butterfly", "flat"):
+            score += 0.45  # CV says on-axis → not multi-point triangle
+            cues.append("pattern_name")
+        # Catchlight count from deduped reflection_architecture: triangle
+        # requires 3 distinct sources. Only 1-2 catchlights contradicts.
+        _ra_tri = getattr(cr, "reflection_architecture", None) if cr else None
+        _ra_count_tri = getattr(_ra_tri, "total_catchlights", 0) if _ra_tri else 0
+        _ci_tri = getattr(getattr(result, "lighting_intel", None),
+                          "catchlight_intelligence", None) or {}
+        _cl_count_tri = _ci_tri.get("light_count_from_catchlights", 0)
+        if _cl_count_tri > 0 and _cl_count_tri < 3:
+            score += 0.30  # fewer than 3 catchlight sources → not 3-point
+            cues.append("catchlight_count")
 
     elif pattern == "flat":
         # Flat = even, non-directional light with minimal shadow.
@@ -2575,6 +2604,20 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     if _hk_deduped is not None:
         _hk_li_count = _hk_deduped
     _is_3light_setup = _hk_li_count == 3 and _hk_li_conf >= 0.5
+    # Multi-light offaxis guard: 4+ lights with a directional key from
+    # light_structure is a multi-point portrait setup (e.g. Hurley triangle
+    # + rim), not high-key.  Multiple lights can drive shadow metrics to
+    # near-zero by filling each other's shadows, making the standard shadow
+    # guard ineffective.  Trust the CV pattern_name directional signal
+    # even when shadow_den/lr_asym are zero.
+    # Uses RAW li.light_count, not deduped catchlight count — rim/hair
+    # lights don't produce catchlights but still indicate a multi-point
+    # setup.  The deduped count can collapse 4 sources to 1.
+    # Measured: hurley_triangle has li.light_count=3 (raw, before post-
+    #   processing bumps to 4), ra.total_catchlights=1,
+    #   ls.pattern_name="loop", shadow_den=0.0, lr_asym=0.0.
+    _hk_raw_count = getattr(li, "light_count", 0) if li else 0
+    _is_multi_offaxis = _hk_raw_count >= 3 and _hk_offaxis_key
 
     # Pre-compute fill ratio for overfill guard (used by multiple paths).
     _hk_fr = getattr(cr, "fill_ratio", None) if cr else None
@@ -2586,8 +2629,15 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # image is physically diagnostic of overfill, not high_key.
     _hk_is_overfill = _hk_shadow_den < 0.03 and _hk_fr_ratio > 0.95
 
-    if mood == "high_key" and base not in ("unknown", "clamshell") and not _is_3light_setup:
-        if not _hk_has_directional_shadow and not _hk_is_overfill:
+    # When mood classifier explicitly says high_key, use a LENIENT shadow
+    # guard — mood=high_key is a strong signal (VLM + brightness + palette).
+    # Raised thresholds: shadow_den > 0.35 or lr_asym > 0.50 (was 0.20).
+    # The standard guard is too strict: a slightly turned head in a high-key
+    # setup can produce lr_asym 0.30-0.45 without being directional lighting.
+    _hk_mood_directional = (_hk_shadow_den > 0.35 or _hk_lr_asym > 0.50)
+    if mood == "high_key" and base not in ("unknown", "clamshell") \
+       and not _is_3light_setup and not _is_multi_offaxis:
+        if not _hk_mood_directional and not _hk_is_overfill:
             return "high_key"
 
     # ── High-key fallback: bright background + high brightness + soft base
@@ -2605,7 +2655,7 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
     # 3-light guard: count=3 → triangle setup, not diffuse high-key.
     if bg_bright and brightness in ("high", "very_high") and \
        base in ("loop", "butterfly", "broad") and not _hk_has_directional_shadow \
-       and not _is_3light_setup:
+       and not _is_3light_setup and not _is_multi_offaxis:
         return "high_key"
     # Clamshell in a bright high-key environment (beauty dish editorial) can
     # also be high_key, but requires an additional guard: the catchlight
@@ -2830,6 +2880,41 @@ def _apply_specialty_pattern(result: "AnalysisResult") -> Optional[str]:
         hl_w = getattr(ls_data, "highlight_width_ratio", 1.0) if ls_data else 1.0
         if hl_w < 0.15:
             return "low_key"
+
+    # ── No-face low-key: product shots on dark background ─────────────
+    # When no face is detected, the highlight_width_ratio guard above is
+    # unreliable — it's computed from the full image, not a face crop.
+    # For no-face images, mood=low_key + dark background + low brightness
+    # is sufficient evidence.  This catches product photography (backlit
+    # bottles, still life on black) where the shadow geometry classifiers
+    # default to "loop" but the actual setup is low-key studio lighting.
+    # Measured: bottle_backlight has mood=low_key, brightness=low,
+    #   bg=darker, controlled_background, no face → hl_w=0.288 (global).
+    if mood == "low_key" and not _face_detected and bg_dark \
+       and brightness == "low":
+        return "low_key"
+
+    # ── Cinematic extreme low-key: mood="cinematic" + extreme shadow ──
+    # Extreme low-key fashion/editorial shots often have mood="cinematic"
+    # (not "low_key") because the VLM reads the dramatic intent rather than
+    # the lighting technique.  When shadow_density > 0.85, the shadow
+    # geometry classifiers are unreliable — there's so little lit area that
+    # they default to loop/butterfly/split based on minimal visible
+    # highlights, not actual shadow pattern geometry.
+    # bg_dark may be unavailable (bg=None) on extreme-low-key images
+    # because background_read can't distinguish bg from the mostly-dark
+    # foreground.  Use controlled_background env hint as studio proxy.
+    # Measured: short_fashion_key has mood=cinematic, shadow_den=0.972,
+    #   controlled_background=True, all classifiers default to "loop".
+    if mood == "cinematic" and base in ("split", "rembrandt", "loop", "butterfly"):
+        _esc_cin = getattr(cr, "environmental_shadow_continuity", None) if cr else None
+        _hints_cin = getattr(_esc_cin, "environment_hints", []) if _esc_cin else []
+        _cin_controlled = "controlled_background" in _hints_cin
+        if bg_dark or _cin_controlled:
+            ls_data = getattr(cr, "light_structure", None) if cr else None
+            _sd_cin = getattr(ls_data, "shadow_density", 0.0) if ls_data else 0.0
+            if _sd_cin > 0.85:
+                return "low_key"
 
     # ── Athletic rim sculpt: split-like rim from two strip lights ──────
     # Athletic/fitness rim sculpting uses two strip lights (or gridded
@@ -4514,6 +4599,39 @@ def analyze_image(
             implied = _PATTERN_IMPLIED_SIDE.get(pc.authoritative_pattern)
             if implied:
                 _intel.key_side = implied
+
+    # ── Key direction reconciliation: shadow geometry vs VLM ─────────
+    # When cue_inference shadow geometry gives a confident directional
+    # read that conflicts with the VLM's key_side, prefer the shadow
+    # geometry.  Shadow direction is physics-based (nose shadow centroid
+    # displacement) while VLM key_side is a semantic guess that can be
+    # wrong when the subject faces away from the key (window light,
+    # short lighting setups where the lit side isn't camera-facing).
+    # Only fire when:
+    #   - cue_inference geometry has a definite direction (not "unknown")
+    #   - cue_inference confidence >= 0.5 (reliable geometry)
+    #   - the two sides genuinely conflict (left vs right)
+    # Measured: window_soft_side has VLM key_side="left" but shadow
+    #   geometry key_dir="upper_right" → window clearly on camera-right.
+    if result.lighting_intel is not None:
+        _rk_intel = result.lighting_intel
+        _rk_vml_side = getattr(_rk_intel, "key_side", "unknown") or "unknown"
+        _rk_geo = None
+        if isinstance(result.cue_inference_result, dict):
+            _rk_geo = result.cue_inference_result.get("geometry")
+        _rk_geo_dir = getattr(_rk_geo, "key_light_direction", "unknown") if _rk_geo else "unknown"
+        _rk_geo_conf = getattr(_rk_geo, "confidence", 0.0) if _rk_geo else 0.0
+        if _rk_geo_dir and _rk_geo_dir != "unknown" and _rk_geo_conf >= 0.5:
+            # Normalize both to left/right for conflict check
+            _rk_vml_lr = "left" if "left" in _rk_vml_side else ("right" if "right" in _rk_vml_side else "")
+            _rk_geo_lr = "left" if "left" in _rk_geo_dir else ("right" if "right" in _rk_geo_dir else "")
+            if _rk_vml_lr and _rk_geo_lr and _rk_vml_lr != _rk_geo_lr:
+                logger.info(
+                    "[key_reconcile] shadow geometry '%s' (conf=%.2f) overrides "
+                    "VLM key_side '%s' — physics over semantics",
+                    _rk_geo_dir, _rk_geo_conf, _rk_vml_side,
+                )
+                _rk_intel.key_side = _rk_geo_dir
 
     # ── Sync truth source: authoritative_pattern → all cards ─────────
     # pattern_candidates is the single source of truth.  Write it back to
