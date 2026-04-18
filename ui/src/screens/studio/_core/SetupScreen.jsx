@@ -510,6 +510,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState('photographer');
   const [saved, setSaved] = useState(false);
+  const [diagramView, setDiagramView] = useState('top'); // 'top' | 'side'
 
   const flipHero = () => { setHeroFlipped(p => !p); softClickSound(); tapHaptic(); };
   const openThumb = () => { setThumbZoomed(true); panelToggleSound(); tapHaptic(); };
@@ -1101,13 +1102,30 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
                 overflow: 'hidden',
               }}>
-                <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'stretch', gap: 4, zIndex: 1 }}>
-                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+                <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
+                  {diagramView === 'top' ? (
                     <LightingDiagram result={result} fluid />
-                  </div>
-                  <div style={{ flexShrink: 0 }}>
-                    <SideViewDiagram result={result} fluid compact />
-                  </div>
+                  ) : (
+                    <SideViewDiagram result={result} fluid />
+                  )}
+                </div>
+                {/* View toggle — machined pill in top-right corner */}
+                <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 11, display: 'flex', pointerEvents: 'auto' }}>
+                  {['top', 'side'].map(v => (
+                    <button key={v} onClick={() => { setDiagramView(v); tapHaptic(); softClickSound(); }} style={{
+                      padding: '4px 10px', border: 'none', cursor: 'pointer',
+                      background: diagramView === v
+                        ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                        : 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+                      borderRadius: v === 'top' ? '6px 0 0 6px' : '0 6px 6px 0',
+                      boxShadow: diagramView === v
+                        ? `inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)`
+                        : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                      color: diagramView === v ? KEY_ACCENT : steel(0.35),
+                      WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                    }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
+                  ))}
                 </div>
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
                   <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />

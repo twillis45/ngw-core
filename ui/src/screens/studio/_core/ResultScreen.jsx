@@ -1725,6 +1725,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
   // Single detail drawer — THE LIGHT and THE SETUP are always visible.
   // Only the DETAIL section (scene + colors + confidence) collapses.
   const [detailOpen, setDetailOpen] = useState(false);
+  const [diagramView, setDiagramView] = useState('top');
   // lightExpanded state removed — THE LIGHT now shows only the pattern
   // answer (shadow analysis moved to DETAIL), so no clip is needed.
   // Daylight brightness boost — persisted across screens via settings store.
@@ -2829,13 +2830,30 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             }}
             title="Click to expand diagram"
           >
-            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'stretch', gap: 2, zIndex: 1 }}>
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
+              {diagramView === 'top' ? (
                 <LightingDiagram result={result} fluid />
-              </div>
-              <div style={{ flexShrink: 0 }}>
-                <SideViewDiagram result={result} fluid compact />
-              </div>
+              ) : (
+                <SideViewDiagram result={result} fluid />
+              )}
+            </div>
+            {/* View toggle */}
+            <div style={{ position: 'absolute', top: 8, right: 10, zIndex: 11, display: 'flex' }}>
+              {['top', 'side'].map(v => (
+                <button key={v} onClick={() => setDiagramView(v)} style={{
+                  padding: '3px 8px', border: 'none', cursor: 'pointer',
+                  background: diagramView === v
+                    ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                    : 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+                  borderRadius: v === 'top' ? '5px 0 0 5px' : '0 5px 5px 0',
+                  boxShadow: diagramView === v
+                    ? 'inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                  fontSize: 8, fontWeight: 700, letterSpacing: '0.6px',
+                  color: diagramView === v ? '#c89b45' : steel(0.30),
+                  WebkitTapHighlightColor: 'transparent',
+                }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
+              ))}
             </div>
           </div>
         )}
