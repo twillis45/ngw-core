@@ -1144,10 +1144,14 @@ def _signal_contradiction_score(
         # the cheek, not a shadow-enclosed Rembrandt triangle. Measured:
         #   loop_standard: tri_iso=0.918, shadow_den=0.114 → false positive
         #   rembrandt_classic: tri_iso≥0.80, shadow_den≥0.30 → true positive
-        if tri_iso > 0.80 and shadow_den > 0.20:
+        #   rembrandt_fashion_latex: tri_iso=0.898, shadow_den=0.189 → true positive
+        # Threshold lowered to 0.15 (from 0.20): sd=0.189 IS sufficient shadow
+        # for a visible Rembrandt triangle; loop_standard sd=0.114 is still
+        # protected (key highlight without surrounding shadow).
+        if tri_iso > 0.80 and shadow_den > 0.15:
             score += 0.70
             cues.append("triangle_isolation")
-        elif tri_iso > 0.70 and shadow_den > 0.20:
+        elif tri_iso > 0.70 and shadow_den > 0.15:
             score += 0.40
             cues.append("triangle_isolation")
         _fr_loop = getattr(cr, "fill_ratio", None)
