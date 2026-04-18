@@ -16416,6 +16416,189 @@ body {
   color: var(--color-bg, #0f1117);
 }
 
+/* ── Studio Matte Lab depth overrides ─────────────── */
+/* Machined depth treatment on Lab elements when Studio theme is active.
+   Cards, tabs, buttons, and panels get the 141.71° directional shadow
+   + inner bevel treatment matching the Day1 screens. */
+
+[data-theme="studio"] .lab-card {
+  background: linear-gradient(141.71deg, #16181e 0%, #10121800 100%);
+  border: none;
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.50),
+    2px 2px 5px rgba(0,0,0,0.35),
+    -0.5px -0.5px 1px rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    inset -1px -1px 0 rgba(0,0,0,0.20);
+}
+[data-theme="studio"] .lab-card:hover {
+  box-shadow:
+    5px 5px 14px rgba(0,0,0,0.55),
+    2px 2px 6px rgba(0,0,0,0.40),
+    -0.5px -0.5px 1px rgba(255,255,255,0.04),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset -1px -1px 0 rgba(0,0,0,0.22),
+    0 0 0 0.5px rgba(200,155,69,0.20);
+}
+[data-theme="studio"] .lab-card--selected {
+  background: linear-gradient(141.71deg, #1e1c14 0%, #141210 100%);
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.50),
+    0 0 0 0.5px rgba(200,155,69,0.25),
+    0 0 8px rgba(200,155,69,0.06),
+    inset 0 1px 0 rgba(200,155,69,0.08),
+    inset -1px -1px 0 rgba(0,0,0,0.22);
+}
+
+/* Tabs — machined pill buttons */
+[data-theme="studio"] .lab-tab {
+  background: linear-gradient(141.71deg, #16181e 0%, #0e1014 100%);
+  border: none;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    1px 1px 3px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.03),
+    inset -1px -1px 0 rgba(0,0,0,0.18);
+}
+[data-theme="studio"] .lab-tab--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  color: #c89b45;
+  box-shadow:
+    4px 4px 10px rgba(0,0,0,0.45),
+    0 0 0 0.5px rgba(200,155,69,0.25),
+    inset 0 1px 0 rgba(200,155,69,0.10),
+    inset -1px -1px 0 rgba(0,0,0,0.22);
+}
+[data-theme="studio"] .lab-tab:hover:not(.lab-tab--active) {
+  box-shadow:
+    4px 4px 10px rgba(0,0,0,0.45),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+  transform: translateY(-1px);
+}
+
+/* Section nav — machined underline tabs */
+[data-theme="studio"] .lab-nav__tab {
+  border-bottom-width: 2px;
+}
+[data-theme="studio"] .lab-nav__tab--active {
+  color: #c89b45;
+  border-bottom-color: #c89b45;
+  text-shadow: 0 0 8px rgba(200,155,69,0.20);
+}
+
+/* Sub-nav tabs */
+[data-theme="studio"] .lab-subnav__tab {
+  background: linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%);
+  border: none;
+  box-shadow:
+    2px 2px 6px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.025);
+}
+[data-theme="studio"] .lab-subnav__tab--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  color: #c89b45;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    0 0 0 0.5px rgba(200,155,69,0.22),
+    inset 0 1px 0 rgba(200,155,69,0.08);
+}
+
+/* Sections */
+[data-theme="studio"] .lab-section {
+  border-color: rgba(132,158,184,0.06);
+}
+
+/* Action buttons — machined depth */
+[data-theme="studio"] .lab-wb__action-btn {
+  background: linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%);
+  border: none;
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.50),
+    2px 2px 5px rgba(0,0,0,0.35),
+    -0.5px -0.5px 1px rgba(255,255,255,0.04),
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    inset -1px -1px 0 rgba(0,0,0,0.22);
+}
+[data-theme="studio"] .lab-wb__action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    5px 5px 14px rgba(0,0,0,0.55),
+    2px 2px 6px rgba(0,0,0,0.40),
+    -1px -1px 2px rgba(255,255,255,0.05),
+    inset 0 1px 0 rgba(255,255,255,0.07),
+    inset -1px -1px 0 rgba(0,0,0,0.25);
+}
+[data-theme="studio"] .lab-wb__action-btn--primary {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  border: none;
+  color: #c89b45;
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.50),
+    0 0 0 0.5px rgba(200,155,69,0.25),
+    0 0 8px rgba(200,155,69,0.06),
+    inset 0 1px 0 rgba(200,155,69,0.10),
+    inset -1px -1px 0 rgba(0,0,0,0.22);
+}
+
+/* Log table — subtle depth on rows */
+[data-theme="studio"] .lab-log__table tr {
+  border-bottom-color: rgba(132,158,184,0.04);
+}
+[data-theme="studio"] .lab-log__table tr:hover {
+  background: rgba(132,158,184,0.03);
+}
+
+/* Image thumbnails — glass treatment */
+[data-theme="studio"] .lab-card img,
+[data-theme="studio"] .lab-wb__thumb {
+  box-shadow:
+    inset 2px 2px 6px rgba(0,0,0,0.50),
+    inset -1px -1px 2px rgba(255,255,255,0.02);
+  border-radius: 6px;
+}
+
+/* Lab header — machined instrument strip */
+[data-theme="studio"] .lab-header {
+  border-bottom: 1px solid rgba(132,158,184,0.05);
+  background: linear-gradient(180deg, rgba(6,7,10,0.60) 0%, transparent 100%);
+}
+[data-theme="studio"] .lab-header__brand-sep {
+  background: rgba(132,158,184,0.08);
+}
+
+/* Lab screen root */
+[data-theme="studio"] .screen.lab-screen {
+  background: #000001;
+}
+
+/* Input fields — machined inset */
+[data-theme="studio"] input[type="text"],
+[data-theme="studio"] input[type="search"],
+[data-theme="studio"] textarea,
+[data-theme="studio"] select {
+  background: linear-gradient(141.71deg, #0c0d12 0%, #08090c 100%) !important;
+  border: none !important;
+  box-shadow:
+    inset 2px 2px 5px rgba(0,0,0,0.50),
+    inset -1px -1px 2px rgba(255,255,255,0.012),
+    1px 1px 3px rgba(0,0,0,0.25) !important;
+}
+
+/* Scrollbar — thin, matte */
+[data-theme="studio"] ::-webkit-scrollbar {
+  width: 6px; height: 6px;
+}
+[data-theme="studio"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="studio"] ::-webkit-scrollbar-thumb {
+  background: rgba(132,158,184,0.12);
+  border-radius: 3px;
+}
+[data-theme="studio"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(132,158,184,0.22);
+}
+
 /* ── Room Planner rp-* layout ────────────────────── */
 .rp-header {
   display: flex;
