@@ -897,6 +897,77 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
                 "enc_r_px": round(enc_r, 1),
             })
 
+        # ── Peak-finding fallback for bright eye crops ─────────────────
+        # When the contour-based detector finds < 3 catchlights AND the
+        # eye crop is bright (v_mean > 150), the bright background likely
+        # merged individual catchlights into one large contour.  Fall back
+        # to local maxima detection: find the N brightest peaks on the V
+        # channel within the iris area, separated by at least 0.4× radius.
+        # This catches positioned catchlights in Hurley triangle setups
+        # where contour detection fails due to bg washout.
+        # Compute proximity limit for peak-finding (same formula as contour filter)
+        _pk_prox_base = (CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT_BW if _is_bw_like
+                         else CATCHLIGHT.IRIS_PROXIMITY_MAX_MULT)
+        _pk_prox_limit = _pk_prox_base + (0.4 if radius < 30 else 0)
+        if len(results) < 3 and _v_mean > 150 and radius > 5:
+            _pk_region = v_chan.copy().astype(float)
+            # Mask outside iris area
+            _pk_mask = np.zeros_like(_pk_region, dtype=np.uint8)
+            _iris_cx_l = int(cx - x0)
+            _iris_cy_l = int(cy - y0)
+            cv2.circle(_pk_mask, (_iris_cx_l, _iris_cy_l), int(radius * 1.2), 255, -1)
+            _pk_region[_pk_mask == 0] = 0
+            # Find local maxima using cv2.dilate (equivalent to maximum_filter)
+            _pk_size = max(3, int(radius * 0.4))
+            _pk_kernel = np.ones((_pk_size, _pk_size), dtype=np.uint8)
+            _pk_max = cv2.dilate(_pk_region.astype(np.uint8), _pk_kernel)
+            _pk_thresh = max(v_threshold, _v_p99 * 0.85)
+            _pk_locs = np.argwhere(
+                (_pk_region == _pk_max) &
+                (_pk_region > _pk_thresh) &
+                (_pk_mask > 0)
+            )
+            # Deduplicate peaks within 0.4× radius
+            _pk_deduped = []
+            _pk_min_sep = radius * 0.4
+            for py, px in _pk_locs:
+                too_close = any(
+                    math.hypot(px - ex, py - ey) < _pk_min_sep
+                    for ex, ey in _pk_deduped
+                )
+                if not too_close:
+                    _pk_deduped.append((px, py))
+            # Add peaks not already covered by contour results
+            for pkx, pky in _pk_deduped:
+                _pk_dx = pkx - _iris_cx_l
+                _pk_dy = pky - _iris_cy_l
+                _pk_dist = math.hypot(_pk_dx, _pk_dy)
+                if _pk_dist > _pk_prox_limit * radius:
+                    continue
+                # Check if this peak is near an existing contour result
+                _pk_dup = any(
+                    math.hypot((r["abs_cx"] - x0) - pkx, (r["abs_cy"] - y0) - pky) < radius * 0.3
+                    for r in results
+                )
+                if _pk_dup:
+                    continue
+                _pk_pos = clock_position(float(_pk_dx), float(_pk_dy))
+                _pk_int = float(_pk_region[int(pky), int(pkx)] / 255.0)
+                _pk_elev = round(-_pk_dy / radius, 3) if radius > 0 else 0.0
+                results.append({
+                    "eye": eye_label,
+                    "position": _pk_pos,
+                    "intensity": round(_pk_int, 2),
+                    "shape": "point",  # peak-detected, no contour shape info
+                    "size_ratio": 0.05,  # minimal — point source
+                    "elevation_ratio": _pk_elev,
+                    "abs_cx": int(x0 + pkx),
+                    "abs_cy": int(y0 + pky),
+                    "enc_r_px": 2.0,
+                })
+                _vp_logger.debug("[catchlight-peak] eye=%s pos=%s int=%.3f at (%d,%d)",
+                                 eye_label, _pk_pos, _pk_int, int(pkx), int(pky))
+
         return results
 
     # Only analyze an eye if it appears to be open.
