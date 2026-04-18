@@ -268,32 +268,17 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           display: 'flex', flexDirection: 'column',
           pointerEvents: 'none',
         }}>
-          {/* Top bar — wordmark + cancel */}
+          {/* Top bar — wordmark only (no cancel button on desktop — the
+              hero image should be clean; cancel is available via browser back) */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '20px 36px', pointerEvents: 'auto',
+            padding: '20px 36px',
             background: 'linear-gradient(180deg, rgba(6,7,10,0.75) 0%, rgba(6,7,10,0.30) 60%, transparent 100%)',
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>No Guesswork</p>
               <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
             </div>
-            {onCancel && !analysisComplete && (
-              <button onClick={onCancel} className="sm-btn-lift" style={{
-                background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
-                border: 'none', borderRadius: 8, cursor: 'pointer', padding: '6px 16px',
-                boxShadow: [
-                  '4px 4px 12px rgba(0,0,0,0.55)',
-                  '2px 2px 5px rgba(0,0,0,0.40)',
-                  '-1px -1px 1px rgba(255,255,255,0.04)',
-                  'inset 0 1px 0 rgba(255,255,255,0.07)',
-                  'inset -1px -1px 0 rgba(0,0,0,0.25)',
-                ].join(', '),
-                WebkitTapHighlightColor: 'transparent',
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px', ...FS }}>Cancel</span>
-              </button>
-            )}
           </div>
 
           {/* Spacer — pushes status to bottom */}
