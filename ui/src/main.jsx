@@ -35,8 +35,19 @@ Sentry.init({
   },
 });
 
-/* Apply saved theme and settings before first paint */
-applyTheme(loadTheme());
+/* Apply saved theme and settings before first paint.
+   Studio Matte flow forces 'studio' theme for the deeper carbon-black palette. */
+const _savedTheme = loadTheme();
+try {
+  if (sessionStorage.getItem('ngw_studio_active') === '1' ||
+      localStorage.getItem('ngw_studio_persist') === '1') {
+    applyTheme('studio');
+  } else {
+    applyTheme(_savedTheme);
+  }
+} catch {
+  applyTheme(_savedTheme);
+}
 applySettings();
 
 /* URL param shortcuts — dev builds only */
