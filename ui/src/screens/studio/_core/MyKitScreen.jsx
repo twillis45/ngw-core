@@ -437,6 +437,25 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
     + Object.values(modQty).reduce((s, n) => s + n, 0)
     + Object.values(accQty).reduce((s, n) => s + n, 0);
 
+  // Collapsible accordion state — categories start collapsed
+  const [openSections, setOpenSections] = useState({});
+  const toggleSection = (key) => {
+    tapHaptic(); softClickSound();
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Build unified catalog based on active tab
+  const activeCatalog = tab === 'lights' ? LIGHT_CATEGORIES : tab === 'modifiers' ? MOD_CATEGORIES : ACCESSORY_CATEGORIES;
+  const activeQty = tab === 'lights' ? lightQty : tab === 'modifiers' ? modQty : accQty;
+  const activeSetFn = tab === 'lights' ? setLightQty : tab === 'modifiers' ? setModQty : setAccQty;
+  const activeSelected = tab === 'lights' ? selectedLights : tab === 'modifiers' ? selectedMods : selectedAccessories;
+  const q = search.toLowerCase().trim();
+
+  const labelForItem = (item) => tab === 'lights' ? `${item.vendor} ${item.model}` : item.label;
+  const filterItem = (item) => !q || labelForItem(item).toLowerCase().includes(q) || (item.vendor || '').toLowerCase().includes(q) || (item.value || '').toLowerCase().includes(q);
+
+  const pad = isDesktop ? '0 40px' : '0 22px';
+
   return (
     <div style={{
       position: 'absolute', inset: 0, zIndex: 20,
@@ -453,251 +472,149 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button aria-label="Cancel" onClick={() => { navHaptic(); navSlideSound(); onCancel(); }} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '10px 12px 10px 0', display: 'flex', alignItems: 'center',
+            background: 'linear-gradient(141.71deg, #1a1c22 0%, #0e0f14 100%)',
+            border: 'none', borderRadius: 8, cursor: 'pointer',
+            padding: '6px 14px',
+            boxShadow: '4px 4px 10px rgba(0,0,0,0.50), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)',
             WebkitTapHighlightColor: 'transparent',
-            minWidth: 44, minHeight: 44,
           }}>
-            <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>&lsaquo;</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px', ...FONT_SMOOTH }}>Cancel</span>
           </button>
-          <p style={{
-            margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-            color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH,
-          }}>
-            EDIT KIT
+          <p style={{ margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 700, color: C.textPrimary, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
+            Edit Kit
           </p>
         </div>
-        <span style={{
-          fontSize: isDesktop ? 13 : 11, fontWeight: 500, color: steel(0.4), ...FONT_SMOOTH,
-        }}>
-          {totalSelected} selected
+        <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.35), ...FONT_SMOOTH }}>
+          {totalItems} {totalItems === 1 ? 'item' : 'items'}
         </span>
       </div>
 
-      {/* Tab bar */}
-      <div style={{
-        display: 'flex', gap: 8,
-        padding: isDesktop ? '0 40px 14px' : '0 22px 14px',
-        position: 'relative', zIndex: 2,
-      }}>
+      {/* Tab bar — compact */}
+      <div style={{ display: 'flex', gap: 6, padding: `0 ${isDesktop ? '40px' : '22px'} 10px`, position: 'relative', zIndex: 2 }}>
         {[
           { key: 'lights', label: 'Lights', count: selectedLights.length },
           { key: 'modifiers', label: 'Modifiers', count: selectedMods.length },
           { key: 'accessories', label: 'Accessories', count: selectedAccessories.length },
         ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => { setTab(t.key); setSearch(''); segmentPressSound(); tapHaptic(); }}
+          <button key={t.key}
+            onClick={() => { setTab(t.key); setSearch(''); setOpenSections({}); segmentPressSound(); tapHaptic(); }}
             style={{
-              flex: 1, padding: '9px 0', borderRadius: 8,
-              border: 'none',
-              background: tab === t.key
-                ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
-                : 'linear-gradient(141.71deg, #16181e 0%, #0e1014 100%)',
+              flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
+              background: tab === t.key ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)' : 'linear-gradient(141.71deg, #15171d 0%, #0d0e12 100%)',
               cursor: 'pointer',
-              fontSize: isDesktop ? 12 : 11, fontWeight: tab === t.key ? 700 : 600,
-              color: tab === t.key ? KEY_ACCENT : steel(0.45),
+              fontSize: 11, fontWeight: tab === t.key ? 700 : 600,
+              color: tab === t.key ? KEY_ACCENT : steel(0.40),
               letterSpacing: '0.3px',
               boxShadow: tab === t.key
-                ? [
-                    '4px 4px 10px rgba(0,0,0,0.50)',
-                    `0 0 0 0.5px ${accent(0.25)}`,
-                    `inset 0 1px 0 ${accent(0.10)}`,
-                    'inset -1px -1px 0 rgba(0,0,0,0.22)',
-                  ].join(', ')
-                : [
-                    '2px 2px 6px rgba(0,0,0,0.40)',
-                    'inset 0 1px 0 rgba(255,255,255,0.03)',
-                    'inset -1px -1px 0 rgba(0,0,0,0.18)',
-                  ].join(', '),
-              transition: 'all 0.15s ease',
-              WebkitTapHighlightColor: 'transparent',
-              ...FONT_SMOOTH,
+                ? `3px 3px 8px rgba(0,0,0,0.45), 0 0 0 0.5px ${accent(0.22)}, inset 0 1px 0 ${accent(0.08)}`
+                : '2px 2px 5px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.02)',
+              WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
             }}
-          >
-            {t.label}{t.count > 0 ? ` (${t.count})` : ''}
-          </button>
+          >{t.label}{t.count > 0 ? ` · ${t.count}` : ''}</button>
         ))}
       </div>
 
-      {/* Search bar */}
-      <div style={{
-        padding: isDesktop ? '0 40px 12px' : '0 22px 12px',
-        position: 'relative', zIndex: 2,
-      }}>
-        <input
-          type="text"
-          placeholder={
-            tab === 'lights' ? 'Search lights — Profoto, Godox, Canon...'
-            : tab === 'modifiers' ? 'Search modifiers — softbox, beauty dish, umbrella...'
-            : 'Search accessories — C-stand, trigger, gel, meter...'
-          }
-          value={search}
-          onChange={e => setSearch(e.target.value)}
+      {/* Search */}
+      <div style={{ padding: `0 ${isDesktop ? '40px' : '22px'} 10px`, position: 'relative', zIndex: 2 }}>
+        <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
           style={{
-            width: '100%', padding: '10px 14px', borderRadius: 10,
-            border: 'none',
-            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
-            boxShadow: [
-              'inset 3px 3px 8px rgba(0,0,0,0.60)',
-              'inset 1px 1px 3px rgba(0,0,0,0.40)',
-              'inset -1px -1px 2px rgba(255,255,255,0.015)',
-              '-0.5px -0.5px 1px rgba(255,255,255,0.03)',
-              '1px 1px 3px rgba(0,0,0,0.30)',
-            ].join(', '),
-            fontSize: 13, fontWeight: 500, color: C.textPrimary,
-            outline: 'none', WebkitAppearance: 'none',
-            ...FONT_SMOOTH,
+            width: '100%', padding: '9px 14px', borderRadius: 8, border: 'none',
+            background: '#0a0b0e',
+            boxShadow: 'inset 2px 2px 6px rgba(0,0,0,0.55), inset -1px -1px 2px rgba(255,255,255,0.012), 1px 1px 3px rgba(0,0,0,0.25)',
+            fontSize: 12, fontWeight: 500, color: C.textPrimary, outline: 'none', WebkitAppearance: 'none', ...FONT_SMOOTH,
           }}
         />
       </div>
 
-      {/* Catalog list */}
+      {/* Scrollable content — desktop: two columns (selected left, catalog right) */}
       <div style={{
         flex: 1, overflowY: 'auto',
         padding: isDesktop ? '0 40px 120px' : '0 22px 120px',
         position: 'relative', zIndex: 1,
+        ...(isDesktop && activeSelected.length > 0 ? {
+          display: 'grid', gridTemplateColumns: '280px 1fr', gap: 24, alignItems: 'start',
+        } : {}),
       }}>
-        {/* Selected items pinned at top */}
-        {((tab === 'lights' && selectedLights.length > 0) || (tab === 'modifiers' && selectedMods.length > 0) || (tab === 'accessories' && selectedAccessories.length > 0)) && (
-          <div style={{ marginBottom: 20 }}>
-            <p style={{
-              margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 700,
-              color: KEY_ACCENT, letterSpacing: '1.2px', textTransform: 'uppercase',
-              ...FONT_SMOOTH,
-            }}>
-              YOUR {tab === 'lights' ? 'LIGHTS' : tab === 'modifiers' ? 'MODIFIERS' : 'ACCESSORIES'}
+        {/* Left column (desktop) / top section (mobile): selected items */}
+        {activeSelected.length > 0 && (
+          <div style={{ ...(isDesktop ? { position: 'sticky', top: 0 } : { marginBottom: 16 }) }}>
+            <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.5px', ...FONT_SMOOTH }}>
+              IN YOUR KIT
             </p>
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 6,
-            }}>
-              {tab === 'lights'
-                ? selectedLights.map(v => {
-                    const cat = LIGHT_CATEGORIES.flatMap(c => c.items).find(i => i.value === v);
-                    return <CatalogChip key={v} label={cat ? `${cat.vendor} ${cat.model}` : v} selected qty={lightQty[v]} onAdd={() => addItem(setLightQty, v)} onMinus={() => decItem(setLightQty, v)} onRemove={() => removeItem(setLightQty, v)} />;
-                  })
-                : tab === 'modifiers'
-                ? selectedMods.map(v => {
-                    const item = MODIFIER_CATALOG.find(m => m.value === v);
-                    return <CatalogChip key={v} label={item?.label || v} selected qty={modQty[v]} onAdd={() => addItem(setModQty, v)} onMinus={() => decItem(setModQty, v)} onRemove={() => removeItem(setModQty, v)} />;
-                  })
-                : selectedAccessories.map(v => {
-                    const item = ACCESSORY_CATALOG.find(a => a.value === v);
-                    return <CatalogChip key={v} label={item?.label || v} selected qty={accQty[v]} onAdd={() => addItem(setAccQty, v)} onMinus={() => decItem(setAccQty, v)} onRemove={() => removeItem(setAccQty, v)} />;
-                  })
-              }
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {activeSelected.map(v => {
+                const allItems = activeCatalog.flatMap(c => c.items);
+                const item = allItems.find(i => i.value === v);
+                return (
+                  <CatalogChip key={v} label={item ? labelForItem(item) : v} selected qty={activeQty[v]}
+                    onAdd={() => addItem(activeSetFn, v)} onMinus={() => decItem(activeSetFn, v)} onRemove={() => removeItem(activeSetFn, v)} />
+                );
+              })}
             </div>
           </div>
         )}
 
-        {tab === 'lights' ? (
-          LIGHT_CATEGORIES.map(cat => {
-            const q = search.toLowerCase().trim();
-            const filtered = q ? cat.items.filter(i =>
-              `${i.vendor} ${i.model}`.toLowerCase().includes(q)
-            ) : cat.items;
+        {/* Right column (desktop) / main (mobile): collapsible accordion */}
+        <div>
+          {activeCatalog.map(cat => {
+            const filtered = q ? cat.items.filter(filterItem) : cat.items;
             if (!filtered.length) return null;
+            const catKey = `${tab}_${cat.category}`;
+            const isOpen = openSections[catKey] || !!q; // auto-expand when searching
+            const selectedInCat = filtered.filter(i => activeQty[i.value]).length;
             return (
-              <div key={cat.category} style={{ marginBottom: 18 }}>
-                <p style={{
-                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
-                  ...FONT_SMOOTH,
+              <div key={cat.category} style={{ marginBottom: 4 }}>
+                {/* Accordion header — machined panel */}
+                <button onClick={() => toggleSection(catKey)} style={{
+                  width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(141.71deg, #15171d 0%, #0e1014 100%)',
+                  boxShadow: '3px 3px 8px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.03)',
+                  WebkitTapHighlightColor: 'transparent',
                 }}>
-                  {LIGHT_CAT_LABEL[cat.category] || cat.label}
-                </p>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(200px, 1fr))' : 'repeat(2, 1fr)',
-                  gap: 6,
-                }}>
-                  {filtered.map(item => (
-                    <CatalogChip
-                      key={item.value}
-                      label={`${item.vendor} ${item.model}`}
-                      selected={!!lightQty[item.value]}
-                      qty={lightQty[item.value] || 0}
-                      onAdd={() => addItem(setLightQty, item.value)}
-                      onMinus={() => decItem(setLightQty, item.value)}
-                      onRemove={() => removeItem(setLightQty, item.value)}
-                    />
-                  ))}
-                </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: steel(0.40), lineHeight: 1, transition: 'transform 0.2s ease', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>›</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>
+                      {tab === 'lights' ? (LIGHT_CAT_LABEL[cat.category] || cat.label) : cat.label}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {selectedInCat > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: KEY_ACCENT, ...FONT_SMOOTH }}>{selectedInCat} selected</span>
+                    )}
+                    <span style={{ fontSize: 10, color: steel(0.30), ...FONT_SMOOTH }}>{filtered.length}</span>
+                  </div>
+                </button>
+                {/* Accordion body */}
+                {isOpen && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(200px, 1fr))' : 'repeat(2, 1fr)',
+                    gap: 5, padding: '8px 4px 12px',
+                  }}>
+                    {filtered.map(item => (
+                      <CatalogChip key={item.value} label={labelForItem(item)}
+                        selected={!!activeQty[item.value]} qty={activeQty[item.value] || 0}
+                        onAdd={() => addItem(activeSetFn, item.value)}
+                        onMinus={() => decItem(activeSetFn, item.value)}
+                        onRemove={() => removeItem(activeSetFn, item.value)} />
+                    ))}
+                  </div>
+                )}
               </div>
             );
-          })
-        ) : tab === 'modifiers' ? (
-          MOD_CATEGORIES.map(cat => {
-            const q = search.toLowerCase().trim();
-            const filtered = q ? cat.items.filter(i =>
-              i.label.toLowerCase().includes(q) || (i.value || '').toLowerCase().includes(q)
-            ) : cat.items;
-            if (!filtered.length) return null;
-            return (
-              <div key={cat.category} style={{ marginBottom: 18 }}>
-                <p style={{
-                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
-                  ...FONT_SMOOTH,
-                }}>
-                  {cat.label}
-                </p>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(180px, 1fr))' : 'repeat(2, 1fr)',
-                  gap: 6,
-                }}>
-                  {filtered.map(item => (
-                    <CatalogChip key={item.value} label={item.label} selected={!!modQty[item.value]} qty={modQty[item.value] || 0} onAdd={() => addItem(setModQty, item.value)} onMinus={() => decItem(setModQty, item.value)} onRemove={() => removeItem(setModQty, item.value)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          ACCESSORY_CATEGORIES.map(cat => {
-            const q = search.toLowerCase().trim();
-            const filtered = q ? cat.items.filter(i =>
-              i.label.toLowerCase().includes(q) || (i.vendor || '').toLowerCase().includes(q) || (i.value || '').toLowerCase().includes(q)
-            ) : cat.items;
-            if (!filtered.length) return null;
-            return (
-              <div key={cat.category} style={{ marginBottom: 18 }}>
-                <p style={{
-                  margin: '0 0 8px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
-                  color: steel(0.50), letterSpacing: '1.2px', textTransform: 'uppercase',
-                  ...FONT_SMOOTH,
-                }}>
-                  {cat.label}
-                </p>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isDesktop ? 'repeat(auto-fill, minmax(170px, 1fr))' : 'repeat(2, 1fr)',
-                  gap: 6,
-                }}>
-                  {filtered.map(item => (
-                    <CatalogChip key={item.value} label={item.label} selected={!!accQty[item.value]} qty={accQty[item.value] || 0} onAdd={() => addItem(setAccQty, item.value)} onMinus={() => decItem(setAccQty, item.value)} onRemove={() => removeItem(setAccQty, item.value)} />
-                  ))}
-                </div>
-              </div>
-            );
-          })
-        )}
+          })}
+        </div>
       </div>
 
-      {/* Sticky save bar */}
+      {/* Save bar */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: isDesktop ? '16px 40px 24px' : '16px 22px 34px',
         background: `linear-gradient(transparent, ${SCREEN_BG}f2 30%)`,
         zIndex: 10,
       }}>
-        <CTA
-          label={`SAVE KIT (${totalItems} items)`}
-          disabled={totalSelected === 0}
-          onClick={handleSave}
-          isDesktop={isDesktop}
-        />
+        <CTA label={`SAVE KIT · ${totalItems} items`} disabled={totalSelected === 0} onClick={handleSave} isDesktop={isDesktop} />
       </div>
     </div>
   );
