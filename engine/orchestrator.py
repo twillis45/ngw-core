@@ -4275,8 +4275,16 @@ def analyze_image(
             and _clam_sd < 0.03
         )
 
-        if (li_count >= 2 and _clam_shadow_ok) or _fill_ratio_clamshell:
-            _upgrade_pattern("clamshell")
+        # Catchlight position gate (analysis-order rule: catchlights before
+        # pattern).  Clamshell requires an ON-AXIS key (catchlight at 11/12/1).
+        # An off-axis catchlight (e.g. 10 o'clock) means the key is offset —
+        # that's loop-with-fill, not clamshell, regardless of fill_ratio or
+        # light_count.  When no catchlight is detected, allow the upgrade
+        # (can't confirm or deny on-axis).
+        _pk_off_axis_clam = _pk_h_clam is not None and _pk_h_clam not in (11, 12, 1)
+        if not _pk_off_axis_clam:
+            if (li_count >= 2 and _clam_shadow_ok) or _fill_ratio_clamshell:
+                _upgrade_pattern("clamshell")
 
     # ── Rembrandt contradiction guard ────────────────────────────────
     # Demote rembrandt → loop when CV evidence contradicts it.
@@ -4348,6 +4356,31 @@ def analyze_image(
         ):
             _upgrade_pattern("rembrandt")
             pc.primary.supporting_cues.append("shadow_continuity_triangle_rescue")
+
+    # ── Hurley triangle upgrade: loop/butterfly + 3+ lights + bright bg ──
+    # The Hurley triangle is a 3-point lighting setup (key + two fills/accents)
+    # that produces even, wrapped illumination.  The individual key reads as
+    # loop or butterfly (single-key geometry), but the additional lights create
+    # symmetric highlight coverage that's distinct from single-key setups.
+    # Signals: VLM detects 3+ lights, bright/blown background (typical for
+    # triangle setups), high highlight symmetry (even wrap from multiple
+    # sources), and no natural light.
+    # Guard: hs > 0.85 required — single-key loop with rim/hair lights has
+    # lower symmetry because the key-lit side dominates.
+    if pc.authoritative_pattern in ("loop", "butterfly"):
+        _tri_raw_lc = getattr(result.lighting_intel, "light_count", 0) if result.lighting_intel else 0
+        _tri_bg = getattr(_cr, "background_illumination", None) if _cr else None
+        _tri_bg_bright = _tri_bg and getattr(_tri_bg, "brightness_relative", "") == "brighter"
+        _tri_hs = getattr(_cr, "highlight_symmetry", None) if _cr else None
+        _tri_hs_sym = getattr(_tri_hs, "symmetry_score", 0.0) if _tri_hs else 0.0
+        _tri_cls = result.classification or {}
+        _tri_bright = _tri_cls.get("brightness", "") in ("high", "very_high")
+        _tri_env = result.cue_inference_result.get("environment") if isinstance(result.cue_inference_result, dict) else None
+        _tri_natural = getattr(_tri_env, "is_natural_light", False) if _tri_env else False
+        if (_tri_raw_lc >= 3 and _tri_bg_bright and _tri_bright
+                and _tri_hs_sym > 0.85 and not _tri_natural):
+            _upgrade_pattern("triangle")
+            pc.primary.supporting_cues.append("hurley_triangle_upgrade")
 
     # ── Layer 4: Corrective / context layer ─────────────────────────
     # Pose-relative correction (spec Stage 13): loop→broad, rembrandt→short.

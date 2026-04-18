@@ -72,13 +72,13 @@ Light Count Post-Processing        (inline, after perception layer)
 0.  mode pre-read
 1.  definitive signature checks
 2.  global tonal / environment read
-3.  key direction
-4.  key elevation
-5.  core facial pattern resolution
-6.  multi-light structure
+3.  catchlight position → key direction   ← catchlights are PRIMARY for direction
+4.  catchlight shape → key elevation
+5.  core facial pattern resolution        ← informed by catchlight-confirmed direction
+6.  multi-light structure (catchlight count + topology)
 7.  fill analysis
-8.  light quality / modifier evidence
-9.  catchlight audit
+8.  light quality / modifier evidence (catchlight shape + size)
+9.  catchlight cross-audit                ← formal consistency check vs shadow/highlight
 10. separation / accent lights
 11. background treatment
 12. source_context / environment
@@ -88,11 +88,17 @@ Light Count Post-Processing        (inline, after perception layer)
 ```
 
 **Permanent ordering rules:**
+- **Catchlights before pattern**: catchlight position determines key direction;
+  key direction determines pattern. A catchlight at 10 o'clock = off-axis key = loop,
+  not butterfly/clamshell. Never resolve pattern without checking catchlight position first.
 - Geometry first; semantic hints only after physical grounding
 - Pattern before `setup_family`; pattern before `source_context`
 - Broad/short requires pose confidence ≥ 0.65 (face_orientation.confidence)
 - Unknown direction is not on-axis
 - Upper catchlights support key elevation; lower catchlights are fill/reflector evidence
+- Catchlight position is the strongest single key-direction signal — it overrides
+  shadow-geometry direction when they conflict (shadow geometry can be confused by
+  face angle; catchlights reflect physical light position directly)
 
 ---
 

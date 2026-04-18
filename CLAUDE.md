@@ -108,13 +108,13 @@ When working on image analysis, CV, VLM, replay, Workbench, or results logic, al
 0.  mode pre-read
 1.  definitive signature checks
 2.  global tonal / environment read
-3.  key direction
-4.  key elevation
-5.  core facial pattern resolution
-6.  multi-light structure
+3.  catchlight position → key direction
+4.  catchlight shape → key elevation
+5.  core facial pattern resolution (informed by catchlight-confirmed direction)
+6.  multi-light structure (catchlight count + topology)
 7.  fill analysis
-8.  light quality / modifier evidence
-9.  catchlight audit
+8.  light quality / modifier evidence (catchlight shape + size)
+9.  catchlight cross-audit (consistency check vs shadow/highlight)
 10. separation / accent lights
 11. background treatment
 12. source_context / environment
@@ -124,6 +124,7 @@ When working on image analysis, CV, VLM, replay, Workbench, or results logic, al
 ```
 
 **Permanent rules:**
+- **Catchlights before pattern** — catchlight position is the strongest key-direction signal; never resolve pattern without checking catchlight position first
 - Geometry first
 - Pattern before `setup_family`
 - Pattern before `source_context`
@@ -132,6 +133,7 @@ When working on image analysis, CV, VLM, replay, Workbench, or results logic, al
 - Unknown direction is not on-axis
 - Upper catchlights support key elevation
 - Lower catchlights are fill/reflector evidence
+- Catchlight position overrides shadow-geometry direction when they conflict
 
 Never violate this ordering casually. See `docs/ENGINE_TRUTH.md` §8 for the authoritative version.
 
