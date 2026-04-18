@@ -831,10 +831,11 @@ export default function MyKitScreen({ onBack, onRecipes }) {
 
   return (
     <div style={{
-      position: 'relative', width: '100%', height: '100%',
+      position: 'fixed', inset: 0,
       display: 'flex', flexDirection: 'column',
       backgroundColor: SCREEN_BG,
       overflow: 'hidden',
+      fontFamily: 'Inter, system-ui, sans-serif',
     }}>
       <MatteBackground />
 
