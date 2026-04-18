@@ -1397,65 +1397,28 @@ export default function Day1DemoApp() {
     }
     case 'build': {
       const buildMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const buildDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
-      return (
-        <FitToViewport
-          designWidth={buildMobile ? 430 : 1180}
-          designHeight={buildMobile ? 932 : buildDesktopVH}
-          minScale={buildMobile ? 0.8 : 0.5}
-          maxScale={buildMobile ? 1.9 : 2.0}
-          tightness={buildMobile ? 0.96 : 1}
-        >
-          <BuildWizardScreen
-            onComplete={handleBuildComplete}
-            onBack={() => setScreen('home')}
-          />
-        </FitToViewport>
-      );
+      const buildEl = <BuildWizardScreen onComplete={handleBuildComplete} onBack={() => setScreen('home')} />;
+      if (!buildMobile) return buildEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{buildEl}</FitToViewport>;
     }
     case 'saved': {
       const savedMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const savedDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
-      return (
-        <FitToViewport
-          designWidth={savedMobile ? 430 : 1180}
-          designHeight={savedMobile ? 932 : savedDesktopVH}
-          minScale={savedMobile ? 0.8 : 0.5}
-          maxScale={savedMobile ? 1.9 : 2.0}
-          tightness={savedMobile ? 0.96 : 1}
-        >
-          <SavedSetupsScreen
-            onSelect={handleSavedSetupSelect}
-            onBack={() => setScreen('home')}
-            onBuild={() => setScreen('recipes')}
-            onShoot={(setup) => {
-              if (setup.result) {
-                setResult(setup.result);
-                handleStartCockpit('photographer');
-              }
-            }}
-          />
-        </FitToViewport>
+      const savedEl = (
+        <SavedSetupsScreen
+          onSelect={handleSavedSetupSelect}
+          onBack={() => setScreen('home')}
+          onBuild={() => setScreen('recipes')}
+          onShoot={(setup) => { if (setup.result) { setResult(setup.result); handleStartCockpit('photographer'); } }}
+        />
       );
+      if (!savedMobile) return savedEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{savedEl}</FitToViewport>;
     }
     case 'recipes': {
       const recipesMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const recipesDesktopVH = typeof window !== 'undefined' ? window.innerHeight : 800;
-      return (
-        <FitToViewport
-          designWidth={recipesMobile ? 430 : 1180}
-          designHeight={recipesMobile ? 932 : recipesDesktopVH}
-          minScale={recipesMobile ? 0.8 : 0.5}
-          maxScale={recipesMobile ? 1.9 : 2.0}
-          tightness={recipesMobile ? 0.96 : 1}
-        >
-          <RecipeScreen
-            onSelect={handleRecipeSelect}
-            onBack={() => setScreen('home')}
-            onBuild={handleBuildWizard}
-          />
-        </FitToViewport>
-      );
+      const recipesEl = <RecipeScreen onSelect={handleRecipeSelect} onBack={() => setScreen('home')} onBuild={handleBuildWizard} />;
+      if (!recipesMobile) return recipesEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
     }
     case 'mykit': {
       const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
@@ -1491,24 +1454,18 @@ export default function Day1DemoApp() {
           onHome={handleRetry}
         />
       );
-    default:
-      return (
-        <FitToViewport designWidth={430} designHeight={932} maxScale={1.9}>
-          <HomeScreen
-            onAnalyze={handleAnalyze}
-            hasLastResult={!!lastResult}
-            onViewLastResult={handleViewLastResult}
-            user={user}
-            onLogout={() => { clearAuth(); setUser(null); }}
-            onSettings={handleSettings}
-            onRecipes={handleRecipes}
-            onSavedSetups={handleSavedSetups}
-            onBuildWizard={handleBuildWizard}
-            onMyKit={handleMyKit}
-            lastAnalysisTime={lastAnalysisTime}
-          />
-        </FitToViewport>
+    default: {
+      // Fallback to home — same bypass pattern
+      const defMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const defEl = (
+        <HomeScreen onAnalyze={handleAnalyze} hasLastResult={!!lastResult} onViewLastResult={handleViewLastResult}
+          user={user} onLogout={() => { clearAuth(); setUser(null); }} onSettings={handleSettings}
+          onRecipes={handleRecipes} onSavedSetups={handleSavedSetups} onBuildWizard={handleBuildWizard}
+          onMyKit={handleMyKit} lastAnalysisTime={lastAnalysisTime} />
       );
+      if (!defMobile) return defEl;
+      return <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>{defEl}</FitToViewport>;
+    }
     }
   })();
 

@@ -673,7 +673,7 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
 
   return (
     <div style={{
-      position: 'relative', width: '100%', height: '100%',
+      position: 'fixed', inset: 0,
       display: 'flex', flexDirection: 'column',
       backgroundColor: SCREEN_BG,
       overflow: 'hidden',
