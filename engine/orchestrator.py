@@ -4690,10 +4690,16 @@ def analyze_image(
             if _vlm_bg_sigs else None
         _vlm_bg_light = getattr(_vlm_recon_bg, "background_light_present", None) \
             if _vlm_recon_bg else None
-        # Exempt ring_light (single source), clamshell (fixed at 2),
-        # flat (floor-set at 2 — overfill VLM bg is specular, not a source),
-        # and high_key when the sd-based cap fired (specular reflections ≠ sources).
-        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell", "flat") or _hk_cap_fired
+        # Exempt patterns with fixed/capped light counts — the VLM bg bump
+        # should not override floor/cap logic that already set the correct count.
+        # High_key: exempt when sd-based cap fired (specular noise) OR when
+        # sd < 0.1 (same threshold as cap — even if count was already ≤ 2).
+        _hk_sd_low = (
+            result.authoritative_pattern == "high_key"
+            and _ls is not None
+            and getattr(_ls, "shadow_density", 0.5) < 0.1
+        )
+        _bg_exempt = result.authoritative_pattern in ("ring_light", "clamshell", "flat") or _hk_cap_fired or _hk_sd_low
         if _vlm_bg_light is True and not _bg_exempt:
             _cur_lc_bg = getattr(result.lighting_intel, "light_count", 0)
             if 0 < _cur_lc_bg < 4:
