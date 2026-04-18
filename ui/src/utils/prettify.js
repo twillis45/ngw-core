@@ -18,7 +18,10 @@ const SMALLS = new Set([
 
 export default function prettify(str, { upper = false, title = false } = {}) {
   if (str == null) return '';
-  const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
+  // Replace underscores with spaces but preserve hyphens — they appear
+  // in numeric ranges ("3-4x"), compound terms ("camera-right"), and
+  // ratio notation that should stay intact for photographers.
+  const cleaned = String(str).replace(/_+/g, ' ').trim();
   if (upper) return cleaned.toUpperCase();
   if (title) {
     return cleaned.split(/\s+/).map((w, i) => {

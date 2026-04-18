@@ -803,14 +803,14 @@ function buildSteps({ pattern, confidence, modName, position, distance,
       lead: _p === 'butterfly' || _p === 'clamshell'
         ? `Place your ${modName} directly in front of your subject, centered with the camera. The light should come from straight ahead.`
         : _p === 'split'
-          ? `Move your ${modName} to the ${_pos} — all the way to 90 degrees, perpendicular to the face. You want it lighting exactly one half.`
+          ? `Move your ${modName} to the ${_pos} — all the way to 90°, perpendicular to the face. You want it lighting exactly one half.`
           : _p === 'rembrandt'
-            ? `Swing your ${modName} to the ${_pos} — about 45 degrees from the camera. You're looking for that sweet spot where the nose shadow just reaches the far cheek.`
+            ? `Swing your ${modName} to the ${_pos} — about 45° from the camera. You're looking for that sweet spot where the nose shadow just reaches the far cheek.`
             : `Move your ${modName} to the ${_pos}. The angle creates the ${_v.signature} — further to the side means more dramatic shadows, closer to center means flatter light.`,
       why: _p === 'butterfly' || _p === 'clamshell'
         ? `Centered light eliminates side shadows completely. That's why it's so flattering for beauty work — no unflattering shadows under cheekbones or along the jawline. The only shadow you'll see is a small ${_v.signature} directly under the nose.`
         : _p === 'split'
-          ? `At 90 degrees, the nose acts like a wall — light can't wrap around to the other side. That's what creates the clean vertical division. Even a few degrees off will start to let light leak onto the shadow side.`
+          ? `At 90°, the nose acts like a wall — light can't wrap around to the other side. That's what creates the clean vertical division. Even a few degrees off will start to let light leak onto the shadow side.`
           : _p === 'rembrandt'
             ? `The magic angle for Rembrandt is where the nose shadow extends just far enough to connect with the cheek shadow — creating a small triangle of light on the shadow-side cheek. If you can't see the triangle, move the light further to the side. If the shadow side goes completely dark, you've gone too far.`
             : `The position of your light relative to the face is what creates the specific shadow shape. Think of it like sunlight through a window — where the window is determines where the shadows fall.`,

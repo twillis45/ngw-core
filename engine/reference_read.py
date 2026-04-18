@@ -115,10 +115,10 @@ _MODIFIER_TO_PRACTICAL = {
 }
 
 _DIRECTION_TO_TEXT = {
-    "upper_left": "camera-left, ~45 degrees, elevated",
-    "upper_right": "camera-right, ~45 degrees, elevated",
-    "left": "camera-left, ~90 degrees",
-    "right": "camera-right, ~90 degrees",
+    "upper_left": "camera-left, ~45°, elevated",
+    "upper_right": "camera-right, ~45°, elevated",
+    "left": "camera-left, ~90°",
+    "right": "camera-right, ~90°",
     "top_center": "directly above, centred",
     "lower_left": "camera-left, slightly below eye level",
     "lower_right": "camera-right, slightly below eye level",
@@ -1163,7 +1163,7 @@ def _derive_fill_strategy(
         elif fill_presence in ("moderate", "strong"):
             return "second softbox or beauty dish below key at ~1.5:1 ratio (clamshell fill)"
     if fill_presence == "subtle":
-        return "white bounce card or reflector opposite key at 3-4x key distance"
+        return "white bounce card or reflector opposite key, pulled back for subtle fill (~4:1 ratio)"
     if fill_presence == "moderate":
         return "fill light or large reflector opposite key at ~2:1 ratio"
     if fill_presence == "strong":
@@ -3018,11 +3018,11 @@ def build_lighting_read(
         # else: leave as-is (unknown consumer can handle it)
 
     # Clamshell direction correction: the standard direction mapping produces
-    # "camera-left, ~45 degrees, elevated" (or right) for any upper_left/right
+    # "camera-left, ~45°, elevated" (or right) for any upper_left/right
     # direction, but clamshell has the key more overhead than lateral.  The
     # catchlights show the key is above with slight lateral offset — describe
     # this as "above subject, slightly camera-left/right" rather than "~45°".
-    if "clamshell" in shadow_pattern.lower() and direction_text and "~45 degrees" in direction_text:
+    if "clamshell" in shadow_pattern.lower() and direction_text and "~45°" in direction_text:
         if "camera-left" in direction_text:
             direction_text = "above subject, slightly camera-left"
         elif "camera-right" in direction_text:

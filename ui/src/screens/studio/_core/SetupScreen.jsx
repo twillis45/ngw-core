@@ -59,7 +59,10 @@ const RING_ACTIVE_SHADOW = '0px 2px 6px 0px rgba(0,0,0,0.6), 0px 1px 2px 0px rgb
 // optionally uppercase for caps display copy.
 function prettify(str, { upper = false } = {}) {
   if (str == null) return '';
-  const cleaned = String(str).replace(/[_-]+/g, ' ').trim();
+  // Replace underscores with spaces but preserve hyphens — they appear
+  // in numeric ranges ("3-4x"), compound terms ("camera-right"), and
+  // ratio notation ("2:1") that should stay intact.
+  const cleaned = String(str).replace(/_+/g, ' ').trim();
   return upper ? cleaned.toUpperCase() : cleaned;
 }
 

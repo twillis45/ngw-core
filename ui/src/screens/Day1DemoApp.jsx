@@ -750,7 +750,7 @@ export default function Day1DemoApp() {
           },
           reference_analysis: {
             recreation_setup: {
-              key_placement: 'Camera left, 45 degrees off axis, raised high',
+              key_placement: 'Camera-left, 45° off axis, raised high',
               fill_strategy: 'Negative fill — V-flat camera right',
               background_strategy: 'Medium grey seamless, 6–8 ft behind subject. No background light.',
               focal_length: '85–135mm',
