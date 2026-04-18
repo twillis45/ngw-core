@@ -736,6 +736,14 @@ def _detect_catchlights(img_bgr: np.ndarray, face_box: Optional[Tuple[int, int, 
             else:
                 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CATCHLIGHT.MORPH_KERNEL_COLOR, CATCHLIGHT.MORPH_KERNEL_COLOR))
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        elif _v_mean > 150:
+            # Small irises in bright images: the bright background reflects
+            # into the iris, creating large merged contours that swallow
+            # individual catchlights.  Light erosion breaks these apart so
+            # distinct catchlight peaks can be found as separate contours.
+            _ero_k = max(2, int(radius * 0.15))
+            _ero_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (_ero_k, _ero_k))
+            mask = cv2.erode(mask, _ero_kernel, iterations=1)
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         _vp_logger.debug("[catchlight] eye=%s contours=%d morph_skipped=%s",
