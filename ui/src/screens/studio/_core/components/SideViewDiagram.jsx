@@ -50,14 +50,20 @@ export default function SideViewDiagram({ result, compact = false, fluid = false
   // Floor line
   const floorY = bodyBottom + 4;
 
-  // Key light — positioned by angle + distance from subject
-  const kDist = compact ? 75 : 95;
+  // Key light — positioned at a fixed horizontal offset, vertical set by angle.
+  // The modifier sits at a known X position and its Y is computed from the
+  // elevation angle relative to eye level, scaled to fit the canvas.
+  const kX = compact ? W * 0.78 : W * 0.80;
   const kRad = angle * Math.PI / 180;
-  // Side view: X offset = distance (horizontal), Y offset = distance × tan(elevation)
-  const kX = subX + kDist;
-  const kY = eyeY - kDist * Math.tan(kRad);
-  // Clamp to canvas
-  const kYClamped = Math.max(8, Math.min(floorY - 8, kY));
+  // Vertical range: modifier can go from near the top (high) to below eyes (low).
+  // Map the angle to the available vertical space above and below eye level.
+  const maxAbove = eyeY - 12;   // leave 12px top margin
+  const maxBelow = floorY - eyeY - 8;
+  // Scale: 75° uses full maxAbove, -15° uses full maxBelow
+  const kY = angle >= 0
+    ? eyeY - Math.min(maxAbove, maxAbove * (angle / 75))
+    : eyeY + Math.min(maxBelow, maxBelow * (Math.abs(angle) / 20));
+  const kYClamped = Math.max(10, Math.min(floorY - 6, kY));
 
   // Beam cone from modifier to subject eye area
   const beamSpread = compact ? 12 : 16;

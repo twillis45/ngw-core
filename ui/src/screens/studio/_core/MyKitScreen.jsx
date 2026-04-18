@@ -664,36 +664,51 @@ function CatalogChip({ label, selected, qty = 0, onAdd, onMinus, onRemove, onCli
         <div
           onClick={e => e.stopPropagation()}
           style={{
-            display: 'flex', alignItems: 'center', gap: 2,
-            marginLeft: 6, flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 3,
+            marginLeft: 8, flexShrink: 0,
           }}
         >
-          {/* Minus button */}
+          {/* Minus — machined inset button */}
           <button
             onClick={(e) => { e.stopPropagation(); onMinus?.(); }}
             style={{
-              width: 18, height: 18, borderRadius: 4, border: 'none',
-              background: 'rgba(0,0,0,0.35)', cursor: 'pointer',
+              width: 22, height: 22, borderRadius: 5, border: 'none',
+              background: 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+              cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, color: steel(0.55), lineHeight: 1,
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
+              fontSize: 14, fontWeight: 700, color: steel(0.50), lineHeight: 1,
+              boxShadow: [
+                'inset 2px 2px 4px rgba(0,0,0,0.50)',
+                'inset -0.5px -0.5px 1px rgba(255,255,255,0.02)',
+                '1px 1px 3px rgba(0,0,0,0.30)',
+              ].join(', '),
               WebkitTapHighlightColor: 'transparent',
             }}
           >−</button>
-          {/* Count */}
-          <span style={{
-            minWidth: 18, textAlign: 'center',
-            fontSize: 11, fontWeight: 700, color: KEY_ACCENT,
-          }}>{qty}</span>
-          {/* Plus button */}
+          {/* Count — amber, tappable for remove */}
+          <span
+            onClick={(e) => { e.stopPropagation(); onRemove?.(); }}
+            title="Click to remove"
+            style={{
+              minWidth: 22, textAlign: 'center', cursor: 'pointer',
+              fontSize: 12, fontWeight: 800, color: KEY_ACCENT,
+              letterSpacing: '-0.3px',
+            }}
+          >{qty}</span>
+          {/* Plus — machined inset button */}
           <button
             onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
             style={{
-              width: 18, height: 18, borderRadius: 4, border: 'none',
-              background: 'rgba(0,0,0,0.35)', cursor: 'pointer',
+              width: 22, height: 22, borderRadius: 5, border: 'none',
+              background: 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+              cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, fontWeight: 700, color: steel(0.55), lineHeight: 1,
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
+              fontSize: 14, fontWeight: 700, color: steel(0.50), lineHeight: 1,
+              boxShadow: [
+                'inset 2px 2px 4px rgba(0,0,0,0.50)',
+                'inset -0.5px -0.5px 1px rgba(255,255,255,0.02)',
+                '1px 1px 3px rgba(0,0,0,0.30)',
+              ].join(', '),
               WebkitTapHighlightColor: 'transparent',
             }}
           >+</button>
