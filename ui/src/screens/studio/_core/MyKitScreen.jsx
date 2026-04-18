@@ -383,49 +383,59 @@ function UpgradeHint({ hint, isDesktop }) {
 // ─── Gear Picker (edit mode) ────────────────────────────────────────────────
 
 function GearPicker({ kit, onSave, onCancel, isDesktop }) {
-  const [selectedLights, setSelectedLights] = useState(() =>
-    (kit?.lights || []).map(l => l.type || l.id)
-  );
-  const [selectedMods, setSelectedMods] = useState(() =>
-    (kit?.modifiers || []).map(m => typeof m === 'string' ? m : m.type)
-  );
+  // Qty maps: { value: count }. Tap adds/increments, minus decrements, remove clears.
+  const [lightQty, setLightQty] = useState(() => {
+    const m = {};
+    (kit?.lights || []).forEach(l => { const k = l.type || l.id; m[k] = (m[k] || 0) + (l.qty || 1); });
+    return m;
+  });
+  const [modQty, setModQty] = useState(() => {
+    const m = {};
+    (kit?.modifiers || []).forEach(mod => { const k = typeof mod === 'string' ? mod : mod.type; m[k] = (m[k] || 0) + ((typeof mod === 'object' ? mod.qty : null) || 1); });
+    return m;
+  });
+  const [accQty, setAccQty] = useState(() => {
+    const m = {};
+    (kit?.support || []).forEach(s => { const k = typeof s === 'string' ? s : s.type; m[k] = (m[k] || 0) + ((typeof s === 'object' ? s.qty : null) || 1); });
+    return m;
+  });
   const [tab, setTab] = useState('lights');
   const [search, setSearch] = useState('');
-  const [selectedAccessories, setSelectedAccessories] = useState(() =>
-    (kit?.support || []).map(s => typeof s === 'string' ? s : s.type)
-  );
 
-  function toggleAccessory(value) {
+  function addItem(setFn, value) {
     segmentPressSound(); tapHaptic();
-    setSelectedAccessories(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
+    setFn(prev => ({ ...prev, [value]: (prev[value] || 0) + 1 }));
+  }
+  function decItem(setFn, value) {
+    segmentPressSound(); tapHaptic();
+    setFn(prev => {
+      const cur = prev[value] || 0;
+      if (cur <= 1) { const n = { ...prev }; delete n[value]; return n; }
+      return { ...prev, [value]: cur - 1 };
+    });
+  }
+  function removeItem(setFn, value) {
+    segmentPressSound(); tapHaptic();
+    setFn(prev => { const n = { ...prev }; delete n[value]; return n; });
   }
 
-  function toggleLight(value) {
-    segmentPressSound(); tapHaptic();
-    setSelectedLights(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
-  }
-
-  function toggleMod(value) {
-    segmentPressSound(); tapHaptic();
-    setSelectedMods(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
-  }
+  const selectedLights = Object.keys(lightQty);
+  const selectedMods = Object.keys(modQty);
+  const selectedAccessories = Object.keys(accQty);
 
   function handleSave() {
     const newKit = {
-      lights: selectedLights.map(v => ({ type: v, qty: 1 })),
-      modifiers: selectedMods.map(v => ({ type: v, qty: 1 })),
-      support: selectedAccessories.map(v => ({ type: v, qty: 1 })),
+      lights: Object.entries(lightQty).map(([type, qty]) => ({ type, qty })),
+      modifiers: Object.entries(modQty).map(([type, qty]) => ({ type, qty })),
+      support: Object.entries(accQty).map(([type, qty]) => ({ type, qty })),
     };
     onSave(newKit);
   }
 
   const totalSelected = selectedLights.length + selectedMods.length + selectedAccessories.length;
+  const totalItems = Object.values(lightQty).reduce((s, n) => s + n, 0)
+    + Object.values(modQty).reduce((s, n) => s + n, 0)
+    + Object.values(accQty).reduce((s, n) => s + n, 0);
 
   return (
     <div style={{
@@ -564,16 +574,16 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
               {tab === 'lights'
                 ? selectedLights.map(v => {
                     const cat = LIGHT_CATEGORIES.flatMap(c => c.items).find(i => i.value === v);
-                    return <CatalogChip key={v} label={cat ? `${cat.vendor} ${cat.model}` : v} selected onClick={() => toggleLight(v)} />;
+                    return <CatalogChip key={v} label={cat ? `${cat.vendor} ${cat.model}` : v} selected qty={lightQty[v]} onAdd={() => addItem(setLightQty, v)} onMinus={() => decItem(setLightQty, v)} onRemove={() => removeItem(setLightQty, v)} />;
                   })
                 : tab === 'modifiers'
                 ? selectedMods.map(v => {
                     const item = MODIFIER_CATALOG.find(m => m.value === v);
-                    return <CatalogChip key={v} label={item?.label || v} selected onClick={() => toggleMod(v)} />;
+                    return <CatalogChip key={v} label={item?.label || v} selected qty={modQty[v]} onAdd={() => addItem(setModQty, v)} onMinus={() => decItem(setModQty, v)} onRemove={() => removeItem(setModQty, v)} />;
                   })
                 : selectedAccessories.map(v => {
                     const item = ACCESSORY_CATALOG.find(a => a.value === v);
-                    return <CatalogChip key={v} label={item?.label || v} selected onClick={() => toggleAccessory(v)} />;
+                    return <CatalogChip key={v} label={item?.label || v} selected qty={accQty[v]} onAdd={() => addItem(setAccQty, v)} onMinus={() => decItem(setAccQty, v)} onRemove={() => removeItem(setAccQty, v)} />;
                   })
               }
             </div>
@@ -605,8 +615,11 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
                     <CatalogChip
                       key={item.value}
                       label={`${item.vendor} ${item.model}`}
-                      selected={selectedLights.includes(item.value)}
-                      onClick={() => toggleLight(item.value)}
+                      selected={!!lightQty[item.value]}
+                      qty={lightQty[item.value] || 0}
+                      onAdd={() => addItem(setLightQty, item.value)}
+                      onMinus={() => decItem(setLightQty, item.value)}
+                      onRemove={() => removeItem(setLightQty, item.value)}
                     />
                   ))}
                 </div>
@@ -635,7 +648,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
                   gap: 6,
                 }}>
                   {filtered.map(item => (
-                    <CatalogChip key={item.value} label={item.label} selected={selectedMods.includes(item.value)} onClick={() => toggleMod(item.value)} />
+                    <CatalogChip key={item.value} label={item.label} selected={!!modQty[item.value]} qty={modQty[item.value] || 0} onAdd={() => addItem(setModQty, item.value)} onMinus={() => decItem(setModQty, item.value)} onRemove={() => removeItem(setModQty, item.value)} />
                   ))}
                 </div>
               </div>
@@ -663,7 +676,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
                   gap: 6,
                 }}>
                   {filtered.map(item => (
-                    <CatalogChip key={item.value} label={item.label} selected={selectedAccessories.includes(item.value)} onClick={() => toggleAccessory(item.value)} />
+                    <CatalogChip key={item.value} label={item.label} selected={!!accQty[item.value]} qty={accQty[item.value] || 0} onAdd={() => addItem(setAccQty, item.value)} onMinus={() => decItem(setAccQty, item.value)} onRemove={() => removeItem(setAccQty, item.value)} />
                   ))}
                 </div>
               </div>
@@ -680,7 +693,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
         zIndex: 10,
       }}>
         <CTA
-          label={`SAVE KIT (${totalSelected} items)`}
+          label={`SAVE KIT (${totalItems} items)`}
           disabled={totalSelected === 0}
           onClick={handleSave}
           isDesktop={isDesktop}
@@ -690,13 +703,16 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
   );
 }
 
-function CatalogChip({ label, selected, onClick }) {
+function CatalogChip({ label, selected, qty = 0, onAdd, onMinus, onRemove, onClick }) {
+  const handleClick = onAdd || onClick;
   return (
-    <button
-      onClick={onClick}
+    <div
+      onClick={handleClick}
+      onContextMenu={onRemove ? (e) => { e.preventDefault(); onRemove(); } : undefined}
       style={{
         padding: '8px 12px', minHeight: 40,
-        borderRadius: 8, border: 'none',
+        borderRadius: 8, border: 'none', cursor: 'pointer',
+        position: 'relative',
         // Studio Matte depth — machined chip with amber LED when selected
         background: selected
           ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
@@ -725,9 +741,48 @@ function CatalogChip({ label, selected, onClick }) {
         ...FONT_SMOOTH,
       }}
     >
-      {selected && <span style={{ marginRight: 4, fontSize: 10 }}>&#10003;</span>}
-      {label}
-    </button>
+      <span style={{ flex: 1 }}>{label}</span>
+      {/* Qty badge — shows count when > 0 */}
+      {qty > 0 && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 2,
+            marginLeft: 6, flexShrink: 0,
+          }}
+        >
+          {/* Minus button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onMinus?.(); }}
+            style={{
+              width: 18, height: 18, borderRadius: 4, border: 'none',
+              background: 'rgba(0,0,0,0.35)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, color: steel(0.55), lineHeight: 1,
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >−</button>
+          {/* Count */}
+          <span style={{
+            minWidth: 18, textAlign: 'center',
+            fontSize: 11, fontWeight: 700, color: KEY_ACCENT,
+          }}>{qty}</span>
+          {/* Plus button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onAdd?.(); }}
+            style={{
+              width: 18, height: 18, borderRadius: 4, border: 'none',
+              background: 'rgba(0,0,0,0.35)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, fontWeight: 700, color: steel(0.55), lineHeight: 1,
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4)',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >+</button>
+        </div>
+      )}
+    </div>
   );
 }
 
