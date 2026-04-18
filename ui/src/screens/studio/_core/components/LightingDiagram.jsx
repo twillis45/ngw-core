@@ -303,14 +303,19 @@ export default function LightingDiagram({ result, compact = false, fluid = false
   keyLabelX = Math.max(compact ? 4 : 6, Math.min(W - (compact ? 4 : 6), keyLabelX));
   // Push key label Y away from camera zone and subject
   const _keyLabelBaseY = kY;
+  // Full-mode label stack height: KEY + angle + elevation + clock + modifier
+  // = up to ~45px.  Compact: KEY + angle + elevation + distance = ~35px.
+  const _labelStackH = compact ? 35 : 48;
   const _keyLabelY = (() => {
     let y = _keyLabelBaseY;
-    // If label overlaps camera zone, push up
-    if (y > camY - (compact ? 20 : 28)) y = camY - (compact ? 20 : 28);
+    // If label stack bottom overlaps camera zone, push up
+    if (y + _labelStackH > camY - 8) y = camY - 8 - _labelStackH;
     // If label overlaps subject, push away vertically
     if (Math.abs(y - subY) < (compact ? 24 : 30) && Math.abs(kX - subX) < (compact ? 40 : 50)) {
       y = kY < subY ? subY - (compact ? 28 : 34) : subY + subR + (compact ? 16 : 20);
     }
+    // Clamp to canvas top
+    y = Math.max(compact ? 2 : 4, y);
     return y;
   })();
 
@@ -537,20 +542,23 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         let lx = sTipX + dx * 10;
         let ly = sTipY + dy * 10 + 2;
         // Collision avoidance — if the label would land near the KEY
-        // marker, push it perpendicular away from the key so the two
-        // annotations can never stack on top of one another.
-        const distToKey = Math.hypot(lx - kX, ly - kY);
-        if (distToKey < (compact ? 22 : 28)) {
-          // Perpendicular to shadow direction — choose the side further
-          // from the key light.
-          const px = -dy;
-          const py = dx;
-          const dot = px * (lx - kX) + py * (ly - kY);
-          const sign = dot >= 0 ? 1 : -1;
-          const off = compact ? 16 : 20;
-          lx += sign * px * off;
-          ly += sign * py * off;
-        }
+        // marker or FILL marker, push it perpendicular so annotations
+        // never stack on top of one another.
+        const _pushAway = (targetX, targetY, threshold) => {
+          const dist = Math.hypot(lx - targetX, ly - targetY);
+          if (dist < threshold) {
+            const px = -dy;
+            const py = dx;
+            const dot = px * (lx - targetX) + py * (ly - targetY);
+            const sign = dot >= 0 ? 1 : -1;
+            const off = compact ? 16 : 20;
+            lx += sign * px * off;
+            ly += sign * py * off;
+          }
+        };
+        _pushAway(kX, kY, compact ? 22 : 28);       // KEY marker
+        _pushAway(fillX, fillY, compact ? 18 : 22);  // FILL marker
+        _pushAway(rimX, rimY, compact ? 16 : 20);    // RIM marker
         const anchor = dx >= 0.2 ? 'start' : dx <= -0.2 ? 'end' : 'middle';
         // Shadow label — direction is visually conveyed by the arrow itself;
         // the angle number was adding noise and colliding with the FILL marker.
