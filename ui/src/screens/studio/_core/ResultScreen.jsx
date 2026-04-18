@@ -28,6 +28,7 @@ import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
+import SideViewDiagram from './components/SideViewDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import PullTabDrawer from '../_shared/PullTabDrawer';
 import ModifierSilhouette from '../_shared/ModifierSilhouette';
@@ -2828,8 +2829,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry })
             }}
             title="Click to expand diagram"
           >
-            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
-              <LightingDiagram result={result} fluid />
+            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'stretch', gap: 2, zIndex: 1 }}>
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+                <LightingDiagram result={result} fluid />
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                <SideViewDiagram result={result} fluid compact />
+              </div>
             </div>
           </div>
         )}

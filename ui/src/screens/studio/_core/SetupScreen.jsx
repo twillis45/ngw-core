@@ -21,6 +21,7 @@ import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import LightingDiagram from './components/LightingDiagram';
+import SideViewDiagram from './components/SideViewDiagram';
 import {
   OtherSetupsCard, SubstitutionsCard, QuickFixesCard, WhatToLookForCard,
 } from './components/ResultCards';
@@ -1100,8 +1101,13 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
                 overflow: 'hidden',
               }}>
-                <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
-                  <LightingDiagram result={result} fluid />
+                <div style={{ position: 'absolute', inset: 0, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'stretch', gap: 4, zIndex: 1 }}>
+                  <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'stretch' }}>
+                    <LightingDiagram result={result} fluid />
+                  </div>
+                  <div style={{ flexShrink: 0 }}>
+                    <SideViewDiagram result={result} fluid compact />
+                  </div>
                 </div>
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
                   <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
