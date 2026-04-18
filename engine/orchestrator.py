@@ -4413,6 +4413,25 @@ def analyze_image(
             _upgrade_pattern("rembrandt")
             pc.primary.supporting_cues.append("tri_iso_rembrandt_rescue")
 
+    # ── Split rescue via light_structure + lr_asym ─────────────────────
+    # When the VLM classifies as loop or rembrandt but light_structure
+    # (CV shadow geometry) says "split" AND lr_asym > 0.55, the physical
+    # evidence is definitive — split has the most extreme LR asymmetry
+    # of any portrait pattern (face literally half lit, half dark).
+    # Guard: hs_sym < 0.60 — bilateral highlights would mean the face is
+    # evenly lit (not split).
+    # Measured: Tier 1 Split dir has 4/7 with ls=split, lr>0.60 but VLM
+    #   says loop/rembrandt → misclassified.
+    if pc.authoritative_pattern in ("loop", "rembrandt"):
+        _ls_split_r = getattr(_cr, "light_structure", None) if _cr else None
+        _ls_pat_split = getattr(_ls_split_r, "pattern_name", None) if _ls_split_r else None
+        _lr_split = getattr(_ls_split_r, "left_right_asymmetry", 0.0) if _ls_split_r else 0.0
+        _hs_split = getattr(_cr, "highlight_symmetry", None) if _cr else None
+        _hs_sym_split = getattr(_hs_split, "symmetry_score", 0.5) if _hs_split else 0.5
+        if _ls_pat_split == "split" and _lr_split > 0.55 and _hs_sym_split < 0.60:
+            _upgrade_pattern("split")
+            pc.primary.supporting_cues.append("split_lr_rescue")
+
     # ── Hurley triangle upgrade: catchlight-first, VLM fallback ─────────
     # The Hurley triangle is a 3-point lighting setup (key + two fills/accents)
     # defined by its catchlight pattern: 3 distinct catchlights forming a
