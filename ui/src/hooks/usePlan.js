@@ -31,10 +31,25 @@ export default function usePlan(userEmail) {
     }
   }, [isAdmin]);
 
+  // Cross-component sync: when another usePlan instance writes to localStorage,
+  // this instance picks up the change. Also handles custom 'ngw_plan_change'
+  // events for same-tab sync (storage events only fire cross-tab).
+  useEffect(() => {
+    const sync = () => setPlanState(loadPlan());
+    window.addEventListener('storage', sync);
+    window.addEventListener('ngw_plan_change', sync);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener('ngw_plan_change', sync);
+    };
+  }, []);
+
   const setPlan = useCallback((p, { force = false } = {}) => {
-    if (isAdmin && !force) return; // admin cannot be downgraded (unless force=true for testing)
+    if (isAdmin && !force) return;
     savePlan(p);
     setPlanState(p);
+    // Dispatch custom event for same-tab sync
+    window.dispatchEvent(new Event('ngw_plan_change'));
   }, [isAdmin]);
 
   const isPaid       = meetsPlan(plan, 'paid');
