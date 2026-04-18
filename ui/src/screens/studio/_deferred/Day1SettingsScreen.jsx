@@ -45,7 +45,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
       <MatteBackground variant="subdued" />
       <ScreenHeader title="Preferences" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
@@ -189,7 +189,7 @@ function AccountScreen({ user, onBack, onLogout }) {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
       <MatteBackground variant="subdued" />
       <ScreenHeader title="Account" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
@@ -432,7 +432,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout }) {
   // ── MAIN ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto' }}>
+    <div style={{ minHeight: '100dvh', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
       <MatteBackground variant="subdued" />
 
       {/* Header */}
