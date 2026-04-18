@@ -11,9 +11,8 @@ import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
-import StudioLabScreen from './studio/_core/StudioLabScreen';
 import { lazy, Suspense } from 'react';
-const LegacyLabScreen = lazy(() => import('./LabScreen'));
+const LabScreen = lazy(() => import('./LabScreen'));
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
@@ -1475,7 +1474,7 @@ export default function Day1DemoApp() {
               Loading Lab...
             </div>
           }>
-            <LegacyLabScreen />
+            <LabScreen />
           </Suspense>
         </div>
       );

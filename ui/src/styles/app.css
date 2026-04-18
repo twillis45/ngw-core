@@ -16599,6 +16599,150 @@ body {
   background: rgba(132,158,184,0.22);
 }
 
+/* Workbench layout */
+[data-theme="studio"] .lab-wb-layout__left {
+  border-right-color: rgba(132,158,184,0.06);
+}
+[data-theme="studio"] .lab-wb-layout__right-empty {
+  background: linear-gradient(141.71deg, #0c0d12 0%, #080910 100%);
+}
+
+/* Workbench image shell — glass viewfinder treatment */
+[data-theme="studio"] .lab-workbench__img-shell {
+  box-shadow:
+    inset 4px 4px 12px rgba(0,0,0,0.65),
+    inset 2px 2px 5px rgba(0,0,0,0.45),
+    inset -1px -1px 2px rgba(255,255,255,0.02),
+    2px 3px 8px rgba(0,0,0,0.40);
+}
+
+/* Status cards — machined panels */
+[data-theme="studio"] .lab-status__card {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+  border: none;
+  box-shadow:
+    4px 4px 12px rgba(0,0,0,0.50),
+    2px 2px 5px rgba(0,0,0,0.35),
+    -0.5px -0.5px 1px rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset -1px -1px 0 rgba(0,0,0,0.18);
+}
+
+/* Status section labels */
+[data-theme="studio"] .lab-status__section-label {
+  color: rgba(132,158,184,0.40);
+}
+
+/* Log table */
+[data-theme="studio"] .lab-log__table {
+  border-color: rgba(132,158,184,0.05);
+}
+[data-theme="studio"] .lab-log__table th {
+  background: linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%);
+  border-bottom-color: rgba(132,158,184,0.08);
+  color: rgba(132,158,184,0.50);
+}
+[data-theme="studio"] .lab-log__table td {
+  border-bottom-color: rgba(132,158,184,0.04);
+}
+
+/* Gold set / reference cards */
+[data-theme="studio"] .lab-gold__card,
+[data-theme="studio"] .lab-ref__card {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+  border: none;
+  box-shadow:
+    3px 3px 10px rgba(0,0,0,0.45),
+    1px 1px 4px rgba(0,0,0,0.30),
+    inset 0 1px 0 rgba(255,255,255,0.04),
+    inset -1px -1px 0 rgba(0,0,0,0.18);
+}
+
+/* Sub-nav — machined pills */
+[data-theme="studio"] .lab-subnav {
+  border-bottom-color: rgba(132,158,184,0.05);
+}
+[data-theme="studio"] .lab-subnav__tab {
+  background: linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%);
+  border: none;
+  box-shadow:
+    2px 2px 6px rgba(0,0,0,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.025);
+  transition: all 0.15s ease;
+}
+[data-theme="studio"] .lab-subnav__tab--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  color: #c89b45;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    0 0 0 0.5px rgba(200,155,69,0.22),
+    inset 0 1px 0 rgba(200,155,69,0.08);
+}
+
+/* Overlay panels (solver, signals) */
+[data-theme="studio"] .lab-overlay-solver-scroll,
+[data-theme="studio"] .lab-overlay-controls {
+  background: linear-gradient(180deg, #0a0b0e 0%, #060710 100%);
+  border-color: rgba(132,158,184,0.06);
+}
+
+/* Filter/search bars in workbench */
+[data-theme="studio"] .lab-workbench__filter,
+[data-theme="studio"] .lab-search {
+  background: linear-gradient(141.71deg, #0c0d12 0%, #08090c 100%);
+  border: none;
+  box-shadow:
+    inset 2px 2px 5px rgba(0,0,0,0.50),
+    inset -1px -1px 2px rgba(255,255,255,0.012),
+    1px 1px 3px rgba(0,0,0,0.25);
+}
+
+/* Benchmark section buttons */
+[data-theme="studio"] .bm-section-btn {
+  background: linear-gradient(141.71deg, #16181e 0%, #0e1014 100%);
+  border: none;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    inset 0 1px 0 rgba(255,255,255,0.03);
+}
+[data-theme="studio"] .bm-section-btn--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  color: #c89b45;
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    0 0 0 0.5px rgba(200,155,69,0.22),
+    inset 0 1px 0 rgba(200,155,69,0.08);
+}
+
+/* Lightbox overlay */
+[data-theme="studio"] .lab-overlay-lightbox {
+  background: rgba(0,0,1,0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Help modal */
+[data-theme="studio"] .lab-help-modal {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+  border: none;
+  box-shadow:
+    8px 8px 28px rgba(0,0,0,0.70),
+    4px 4px 12px rgba(0,0,0,0.50),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* General borders and dividers */
+[data-theme="studio"] hr,
+[data-theme="studio"] .lab-divider {
+  border-color: rgba(132,158,184,0.06);
+}
+
+/* Badges and pills */
+[data-theme="studio"] .lab-badge,
+[data-theme="studio"] .lab-pill {
+  box-shadow: 1px 1px 3px rgba(0,0,0,0.30);
+}
+
 /* ── Room Planner rp-* layout ────────────────────── */
 .rp-header {
   display: flex;
