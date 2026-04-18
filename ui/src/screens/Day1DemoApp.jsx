@@ -11,8 +11,7 @@ import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
-import { lazy, Suspense } from 'react';
-const LabScreen = lazy(() => import('./LabScreen'));
+import StudioLabScreen from './studio/_core/StudioLabScreen';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
@@ -1455,9 +1454,10 @@ export default function Day1DemoApp() {
     }
     case 'lab':
       return (
-        <Suspense fallback={<div style={{ position: 'fixed', inset: 0, background: '#000001', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(132,158,184,0.5)', fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif' }}>Loading Lab...</div>}>
-          <LabScreen />
-        </Suspense>
+        <StudioLabScreen
+          onBack={() => setScreen('settings')}
+          lastResult={lastResult || result}
+        />
       );
     case 'error':
       return (
