@@ -11,8 +11,7 @@ import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
-import { lazy, Suspense } from 'react';
-const LabScreen = lazy(() => import('./LabScreen'));
+import StudioLabWrapper from './studio/_core/StudioLabWrapper';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
@@ -1454,30 +1453,7 @@ export default function Day1DemoApp() {
       );
     }
     case 'lab':
-      return (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50 }}>
-          {/* Back button overlay — sits on top of the Lab */}
-          <button
-            onClick={() => { setScreen('settings'); navSlideSound(); }}
-            style={{
-              position: 'fixed', top: 12, left: 12, zIndex: 9999,
-              background: 'linear-gradient(141.71deg, #1a1c22 0%, #0e0f14 100%)',
-              border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
-              boxShadow: '4px 4px 12px rgba(0,0,0,0.60), -1px -1px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.06)',
-              fontSize: 12, fontWeight: 600, color: 'rgba(132,158,184,0.50)',
-              WebkitTapHighlightColor: 'transparent',
-              fontFamily: 'Inter, system-ui, sans-serif',
-            }}
-          >← Back to Settings</button>
-          <Suspense fallback={
-            <div style={{ position: 'fixed', inset: 0, background: '#000001', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(132,158,184,0.5)', fontSize: 13, fontFamily: 'Inter, system-ui, sans-serif' }}>
-              Loading Lab...
-            </div>
-          }>
-            <LabScreen />
-          </Suspense>
-        </div>
-      );
+      return <StudioLabWrapper onBack={() => setScreen('settings')} />;
     case 'error':
       return (
         <FallbackReveal
