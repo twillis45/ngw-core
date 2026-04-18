@@ -423,6 +423,36 @@
   --color-accent-subtle-border: rgba(200, 155, 69, 0.22);
   --color-icon:            #c89b45;
   --color-cta:             #c89b45;
+
+  /* ── Typography — Studio Matte instrument typography ──
+     Slightly smaller, tighter sizes matching the Day1 screens.
+     Inter at antialiased rendering with geometric precision. */
+  --font-family: "Inter Variable", "Inter", "SF Pro Display", -apple-system, system-ui, sans-serif;
+
+  /* Tighter font scale — instrument labels, not editorial text */
+  --text-2xs:  10px;   /* data readouts, mono labels */
+  --text-xs:   11.5px; /* captions, metadata, tab labels */
+  --text-sm:   13px;   /* labels, tags, body */
+  --text-md:   16px;   /* section headings */
+  --text-lg:   20px;   /* screen titles */
+  --text-xl:   26px;   /* hero headings */
+
+  /* Weights — Studio Matte uses bolder weights for instrument readability */
+  --weight-normal:   500;  /* raised from 400 — 400 is too light on OLED */
+  --weight-medium:   600;  /* raised from 500 */
+  --weight-semibold: 700;  /* raised from 600 */
+  --weight-bold:     800;  /* raised from 700 — instrument lettering */
+
+  /* Letter spacing — tighter for instrument feel */
+  --tracking-tight: -0.3px;
+  --tracking-normal: 0;
+  --tracking-wide: 0.5px;
+  --tracking-caps: 1.2px; /* uppercase section labels */
+
+  /* Line height — compact for data density */
+  --leading-tight: 1.2;
+  --leading-normal: 1.4;
+  --leading-relaxed: 1.6;
 }
 
 /* photoshop and daynote themes removed — dark/light/studio only */
