@@ -12,6 +12,7 @@ import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
+import RoomPlannerWrapper from './studio/_core/RoomPlannerWrapper';
 import OnboardingScreen from './studio/_adjacent/OnboardingScreen';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth, loadPreferences } from '../data/authApi';
@@ -1165,6 +1166,7 @@ export default function Day1DemoApp() {
   const handleSavedSetups = () => setScreen('saved');
   const handleBuildWizard = () => setScreen('build');
   const handleMyKit = () => setScreen('mykit');
+  const handleRoomPlanner = () => setScreen('roomplanner');
   const handleBuildComplete = (payload) => {
     // Build a result object from wizard payload so SetupScreen can render it
     const wizardResult = {
@@ -1465,6 +1467,8 @@ export default function Day1DemoApp() {
       if (!recipesMobile) return recipesEl;
       return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
     }
+    case 'roomplanner':
+      return <RoomPlannerWrapper result={result} onBack={() => setScreen(result ? 'setup' : 'home')} />;
     case 'mykit': {
       const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const mkEl = <MyKitScreen onBack={() => setScreen('home')} onRecipes={handleRecipes} />;
