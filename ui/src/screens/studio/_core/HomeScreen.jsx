@@ -766,7 +766,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           }}>See how any portrait was lit.</p>
           <p style={{
             margin: '0 0 30px', fontWeight: 500, fontSize: 14, lineHeight: '20px',
-            color: steel(0.35), letterSpacing: '0.1px',
+            color: steel(0.50), letterSpacing: '0.1px',
             textAlign: 'center', ...FONT_SMOOTH,
           }}>Reverse-engineer the lighting. Rebuild it in your studio.</p>
 
@@ -916,8 +916,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               }}
               className="sm-btn-lift"
               >
-                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1px', color: steel(0.78), ...FONT_SMOOTH }}>
-                  {sampleLoading ? 'Loading...' : 'Try a Sample Photo'}
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1px', color: steel(0.78), display: 'flex', alignItems: 'center', gap: 8, ...FONT_SMOOTH }}>
+                  {sampleLoading ? 'Loading...' : (<>
+                    Try a Sample Photo
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(200,155,69,0.65)', letterSpacing: '0.5px' }}>→</span>
+                  </>)}
                 </span>
               </button>
             </div>
@@ -1317,13 +1320,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           animation: viewfinderShake ? 'vfShake 0.4s ease' : 'none',
         }}
       >
-        {/* 0 — LCD panel backlight — desktop hides when no photo (overlay VF handles empty state) */}
-        {(!isDesktop || hasImage) && (
+        {/* 0 — LCD panel backlight — always visible. Even empty VF should read as a powered-off screen. */}
         <div style={{
           position: 'absolute', inset: 0,
-          background: [
+          background: hasImage ? [
             'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
             'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
+          ].join(', ') : [
+            // Empty state: faint IPS backlight glow — reads as powered-off LCD, not flat div
+            'radial-gradient(ellipse 100% 80% at 50% 45%, rgba(90,115,155,0.035) 0%, rgba(70,95,135,0.015) 50%, transparent 80%)',
+            'linear-gradient(180deg, rgba(85,110,150,0.012) 0%, transparent 25%, transparent 75%, rgba(70,95,135,0.010) 100%)',
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
@@ -1394,23 +1400,37 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               transition: 'opacity 1.2s ease',
               pointerEvents: 'none', zIndex: 7,
             }}>
-              {!isUrlFetching && (
-                /* Import glyph — camera viewfinder bracket icon, photography-native metaphor */
-                <svg width="42" height="42" viewBox="0 0 38 38" fill="none" style={{ opacity: 0.80 }}>
-                  {/* Corner brackets — viewfinder crop marks */}
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.65)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.65)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.65)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.65)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  {/* Center crosshair dot */}
-                  <circle cx="19" cy="19" r="1.5" fill={steel(0.60)} />
+              {!isUrlFetching && (<>
+                {/* Ghost portrait silhouette — photography DNA. Faint human outline
+                    hints at "this is where your portrait goes" without words. */}
+                <svg width="60" height="72" viewBox="0 0 60 72" fill="none" style={{
+                  opacity: 0.06, position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -55%)',
+                }}>
+                  {/* Head */}
+                  <ellipse cx="30" cy="22" rx="12" ry="14" fill={steel(1)} />
+                  {/* Shoulders */}
+                  <path d="M10 72 Q10 48 30 44 Q50 48 50 72" fill={steel(1)} />
                 </svg>
+                {/* Viewfinder bracket icon — breathing animation for alive feel */}
+                <svg width="42" height="42" viewBox="0 0 38 38" fill="none" style={{
+                  opacity: 0.75,
+                  animation: 'vfBreathe 3.2s ease-in-out infinite',
+                }}>
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <circle cx="19" cy="19" r="1.5" fill={steel(0.50)} />
+                </svg>
+              </>)}
+              {isUrlFetching && (
+                <p style={{
+                  margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '2px',
+                  color: steel(0.70),
+                  WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
+                }}>LOADING…</p>
               )}
-              <p style={{
-                margin: 0, fontSize: 12, fontWeight: 700, letterSpacing: '2px',
-                color: isUrlFetching ? steel(0.70) : steel(0.65),
-                WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-              }}>{isUrlFetching ? 'LOADING…' : 'IMPORT'}</p>
             </div>
           )
         )}
@@ -1478,21 +1498,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           }} />
         )}
 
-        {/* 9 — Glass panel overlay — desktop: only when photo loaded (overlay VF handles empty state) */}
-        {(!isDesktop || hasImage) && (
-        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9 }}>
-          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+        {/* 9 — Glass panel overlay — always visible. Empty VF reads as powered-off glass instrument. */}
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, opacity: hasImage ? 1 : 0.6 }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: hasImage ? 0.62 : 0.30, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
-        )}
 
-        {/* 10 — Inner shadow — desktop: only when photo loaded */}
-        {(!isDesktop || hasImage) && (
+        {/* 10 — Inner shadow — always visible. Glass edge catch even on empty VF. */}
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+          opacity: hasImage ? 1 : 0.65,
         }} />
-        )}
 
         {/* 11 — Teach glow — first-session pulsing edge glow to draw the eye to the VF.
              Gentle steel-blue inner border that breathes, says "this is where your photo goes"

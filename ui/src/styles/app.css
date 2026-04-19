@@ -18959,6 +18959,12 @@ body {
 /* ── End Case Replay Panel ───────────────────────────────── */
 
 /* ── Hero image zoom — slow Ken Burns settle on mount ───────────────── */
+/* VF crosshair breathing — alive instrument feel on empty state */
+@keyframes vfBreathe {
+  0%, 100% { opacity: 0.75; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.96); }
+}
+
 @keyframes heroZoomIn {
   from { transform: scale(1.08); }
   to   { transform: scale(1.0);  }
