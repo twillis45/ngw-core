@@ -12,7 +12,7 @@
  *   - EXIF strip persists from HomeScreen (continuity)
  */
 import { useState, useEffect, useRef } from 'react';
-import { successHaptic }        from '../../../utils/haptics';
+import { successHaptic, tapHaptic, grainHaptic } from '../../../utils/haptics';
 import { processingPulseSound } from '../../../utils/sounds';
 import { loadSettings }         from '../../../data/settingsStore';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
@@ -131,11 +131,17 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
     <div
+      onClick={(e) => { if (e.target === e.currentTarget) tapHaptic(); }}
+      onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
+      onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
       style={{
       position: 'relative',
       width: '100%',
+      maxWidth: isDesktop ? undefined : 430,
       height: '100%',
+      margin: '0 auto',
       backgroundColor: C.bg,
+      boxShadow: isDesktop ? undefined : '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
       filter: daylightMode ? 'brightness(1.15)' : undefined,
