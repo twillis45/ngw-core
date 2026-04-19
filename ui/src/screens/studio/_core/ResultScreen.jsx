@@ -2720,35 +2720,15 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             THE LIGHT — always visible.  The core answer: what pattern,
             how confident.
             ═══════════════════════════════════════════════════════════════ */}
-        <SectionPanel label="THE LIGHT">
-          {/* R-9: THE LIGHT shows ONLY the pattern answer. Signal, Components,
-              Direction, and Read all moved to DETAIL drawer under "Shadow Analysis"
-              so the photographer gets THE answer, not a wall of widgets. */}
-          <div>
-            <PatternBars
-              candidates={sections.patternCandidates}
-              isHighConf={isHighConf}
-              shadowSide={(() => {
-                const q = (sections.shadowDirection && sections.shadowDirection.shadowQuadrant) || '';
-                if (/left$/.test(q)) return 'left';
-                if (/right$/.test(q)) return 'right';
-                return undefined;
-              })()}
-              onSelectSetup={(patternName) => {
-                segmentPressSound(); tapHaptic();
-                onSetup(patternName);
-              }}
-            />
-          </div>
-        </SectionPanel>
-
         {/* ═══════════════════════════════════════════════════════════════
-            THE SETUP — always visible.  What modifier created this light,
-            and how would you recreate it?  Catchlight + modifier together
-            are the rebuild blueprint — never hide them behind a toggle.
+            YOUR SETUP — single section replacing THE LIGHT + THE SETUP.
+            Apple simplicity: one answer, not two sections competing.
+            Pattern is already shown in the hero overlay (big text).
+            This section shows the actionable blueprint: modifier + catchlight.
+            PatternBars (alternate candidates) moved to DETAIL drawer.
             ═══════════════════════════════════════════════════════════════ */}
         {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
-          <SectionPanel label={isPaid ? 'THE SETUP' : 'THE SETUP — UPGRADE TO UNLOCK'}>
+          <SectionPanel label={isPaid ? 'YOUR SETUP' : 'YOUR SETUP — UPGRADE TO UNLOCK'}>
             {/* Free tier: show locked state instead of full setup */}
             {!isPaid && (
               <div style={{
@@ -2895,6 +2875,27 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             ═══════════════════════════════════════════════════════════════ */}
         {(sections.sceneDescription || sections.vlmNarrative || sections.colorPalette || sections.signalQuality) && (
           <PullTabDrawer label="DETAIL" summary={detailSummary} open={detailOpen} onToggle={toggleDetail}>
+
+            {/* ── Pattern Candidates (moved from THE LIGHT) ──────────── */}
+            {sections.patternCandidates?.length > 0 && (
+              <>
+                <SubLabel>Pattern Analysis</SubLabel>
+                <PatternBars
+                  candidates={sections.patternCandidates}
+                  isHighConf={isHighConf}
+                  shadowSide={(() => {
+                    const q = (sections.shadowDirection && sections.shadowDirection.shadowQuadrant) || '';
+                    if (/left$/.test(q)) return 'left';
+                    if (/right$/.test(q)) return 'right';
+                    return undefined;
+                  })()}
+                  onSelectSetup={(patternName) => {
+                    segmentPressSound(); tapHaptic();
+                    onSetup(patternName);
+                  }}
+                />
+              </>
+            )}
 
             {/* ── Shadow Analysis (R-9: moved from THE LIGHT) ─────────── */}
             {(rawSignals.nose_shadow_angle_deg != null || sections.shadowComponents || sections.shadowDirection || sections.shadowAnalysis) && (
