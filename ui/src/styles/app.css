@@ -6120,6 +6120,61 @@ body {
    Tablet 820px+: 2-column grid, left column sticky.
    Desktop 1080px+: wider gap, taller preview.
    ─────────────────────────────────────────────────────────────────────── */
+
+/* ── Analysis History Strip ── */
+.lab-wb-history { margin-bottom: var(--space-sm); }
+.lab-wb-history__strip {
+  display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 8px;
+  scrollbar-width: thin;
+}
+.lab-wb-history__strip::-webkit-scrollbar { height: 4px; }
+.lab-wb-history__strip::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+.lab-wb-history__item {
+  flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  transition: all 0.15s ease; min-width: 72px; max-width: 100px;
+}
+.lab-wb-history__item:hover { border-color: var(--color-accent); }
+.lab-wb-history__item--active {
+  border-color: var(--color-accent);
+  background: var(--color-surface-elevated);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+.lab-wb-history__thumb {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 4px;
+}
+.lab-wb-history__label {
+  font-size: 9px; font-weight: 600; text-transform: capitalize;
+  color: var(--color-text); text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80px;
+}
+.lab-wb-history__conf {
+  font-size: 9px; font-family: var(--font-mono); color: var(--color-text-secondary);
+}
+
+/* Studio theme — machined history items */
+[data-theme="studio"] .lab-wb-history__item {
+  background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+  border: none;
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 1px 1px 3px rgba(0,0,0,0.28),
+    inset 0 1px 0 rgba(255,255,255,0.035);
+}
+[data-theme="studio"] .lab-wb-history__item:hover {
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(200,155,69,0.22);
+}
+[data-theme="studio"] .lab-wb-history__item--active {
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(200,155,69,0.30),
+    0 0 8px rgba(200,155,69,0.06), inset 0 1px 0 rgba(200,155,69,0.08);
+}
+[data-theme="studio"] .lab-wb-history__label { color: rgba(132,158,184,0.65); }
+[data-theme="studio"] .lab-wb-history__item--active .lab-wb-history__label { color: #c89b45; }
+[data-theme="studio"] .lab-wb-history__conf { color: rgba(132,158,184,0.40); }
+[data-theme="studio"] .lab-wb-history__thumb {
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.40);
+}
+
 .lab-wb-layout {
   display: flex;
   flex-direction: column;
@@ -16461,25 +16516,36 @@ body {
   background: rgba(132,158,184,0.05);
 }
 
-/* ── 2. SECTION NAV — machined underline tabs ── */
+/* ── 2. SECTION NAV — machined pill tabs ── */
 [data-theme="studio"] .lab-nav {
-  gap: 4px;
+  gap: 6px;
   border-bottom: 1px solid rgba(132,158,184,0.04);
-  padding-bottom: 0;
+  padding-bottom: 6px;
 }
 [data-theme="studio"] .lab-nav__tab {
-  padding: 10px 16px;
-  border-bottom: 2px solid transparent;
+  padding: 8px 18px;
+  border-bottom: none;
+  border-radius: 8px;
   font-weight: 600;
   letter-spacing: 0.2px;
+  background: transparent;
   transition: all 0.15s ease;
 }
 [data-theme="studio"] .lab-nav__tab:hover:not(.lab-nav__tab--active) {
   color: rgba(132,158,184,0.70);
+  background: rgba(132,158,184,0.04);
 }
 [data-theme="studio"] .lab-nav__tab--active {
   color: #c89b45;
-  border-bottom-color: #c89b45;
+  border-bottom: none;
+  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  box-shadow:
+    3px 3px 8px rgba(0,0,0,0.40),
+    1px 1px 3px rgba(0,0,0,0.28),
+    0 0 0 0.5px rgba(200,155,69,0.22),
+    0 0 8px rgba(200,155,69,0.05),
+    inset 0 1px 0 rgba(200,155,69,0.08),
+    inset -1px -1px 0 rgba(0,0,0,0.18);
   text-shadow: 0 0 8px rgba(200,155,69,0.18);
 }
 
@@ -16664,7 +16730,34 @@ body {
   background: rgba(132,158,184,0.025);
 }
 
-/* ── 9. STATUS CARDS ── */
+/* ── 9. STATUS KPIs — machined wells ── */
+[data-theme="studio"] .lab-status__kpi {
+  background: linear-gradient(141.71deg, #10121a 0%, #0a0c10 100%);
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow:
+    inset 3px 3px 8px rgba(0,0,0,0.55),
+    inset 1px 1px 3px rgba(0,0,0,0.38),
+    inset -1px -1px 2px rgba(255,255,255,0.012),
+    1px 1px 3px rgba(0,0,0,0.25);
+}
+[data-theme="studio"] .lab-status__kpi-label {
+  color: rgba(132,158,184,0.45);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+[data-theme="studio"] .lab-status__kpi-value {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+}
+[data-theme="studio"] .lab-status__kpi-sub {
+  color: rgba(132,158,184,0.35);
+}
+
+/* ── 9b. STATUS CARDS ── */
 [data-theme="studio"] .lab-status__card {
   background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
   border: none;
@@ -16676,9 +16769,11 @@ body {
     inset 0 1px 0 rgba(255,255,255,0.04);
 }
 [data-theme="studio"] .lab-status__section-label {
-  color: rgba(132,158,184,0.35);
-  letter-spacing: 1.5px;
-  font-size: 9px;
+  color: rgba(132,158,184,0.50);
+  letter-spacing: 1.8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  text-shadow: 0 0 6px rgba(132,158,184,0.08);
 }
 
 /* ── 10. OVERLAYS + MODALS ── */
@@ -16804,7 +16899,13 @@ body {
   font-weight: 700;
   letter-spacing: -0.2px;
 }
-[data-theme="studio"] .lab-card__sub,
+[data-theme="studio"] .lab-card__sub {
+  color: rgba(132,158,184,0.38);
+  font-weight: 500;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 10px;
+  letter-spacing: 0.2px;
+}
 [data-theme="studio"] .lab-card__meta {
   color: rgba(132,158,184,0.45);
   font-weight: 500;
@@ -16812,10 +16913,11 @@ body {
 [data-theme="studio"] .lab-section__title,
 [data-theme="studio"] .lab-status__section-label {
   font-weight: 700;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.8px;
   font-size: 9.5px;
   text-transform: uppercase;
-  color: rgba(132,158,184,0.35);
+  color: rgba(132,158,184,0.50);
+  text-shadow: 0 0 6px rgba(132,158,184,0.08);
 }
 [data-theme="studio"] .lab-nav__tab {
   font-weight: 600;
@@ -16857,6 +16959,74 @@ body {
   border: none !important;
   box-shadow: 4px 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(200,155,69,0.25), inset 0 1px 0 rgba(200,155,69,0.10) !important;
 }
+
+/* ── 21. DROP ZONE — machined inset well ── */
+[data-theme="studio"] .lab-wb-empty__drop {
+  background: linear-gradient(180deg, #060810 0%, #040507 100%) !important;
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow:
+    inset 4px 4px 14px rgba(0,0,0,0.65),
+    inset 2px 2px 6px rgba(0,0,0,0.45),
+    inset -1px -1px 2px rgba(255,255,255,0.015),
+    2px 3px 8px rgba(0,0,0,0.40),
+    0 0 0 0.5px rgba(132,158,184,0.06) !important;
+}
+[data-theme="studio"] .lab-wb-empty__drop::after {
+  background: none !important;
+}
+[data-theme="studio"] .lab-wb-empty__drop::before {
+  border-color: rgba(132,158,184,0.06) !important;
+}
+[data-theme="studio"] .lab-wb-empty__drop--active {
+  box-shadow:
+    inset 4px 4px 14px rgba(0,0,0,0.65),
+    inset 2px 2px 6px rgba(0,0,0,0.45),
+    2px 3px 8px rgba(0,0,0,0.40),
+    0 0 0 1px rgba(200,155,69,0.35),
+    0 0 12px rgba(200,155,69,0.08) !important;
+  border: none !important;
+}
+[data-theme="studio"] .lab-wb-empty__drop-icon svg {
+  color: rgba(132,158,184,0.25) !important;
+}
+[data-theme="studio"] .lab-wb-empty__drop-text {
+  color: rgba(132,158,184,0.55) !important;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
+[data-theme="studio"] .lab-wb-empty__drop-hint {
+  color: rgba(132,158,184,0.28) !important;
+  letter-spacing: 1px;
+}
+
+/* ── 22. BACK TO HOME — hidden in Studio (Exit Lab button handles it) ── */
+[data-theme="studio"] .lab-back {
+  display: none !important;
+}
+
+/* ── 23. FEATURE LIST — depth treatment ── */
+[data-theme="studio"] .lab-content__features {
+  color: rgba(132,158,184,0.50);
+}
+[data-theme="studio"] .lab-content__features strong {
+  color: rgba(132,158,184,0.75);
+  font-weight: 700;
+  letter-spacing: -0.1px;
+}
+
+/* ── 24. EMPTY STATES — machined placeholder ── */
+[data-theme="studio"] .lab-content__placeholder {
+  color: rgba(132,158,184,0.40);
+}
+[data-theme="studio"] .lab-content__placeholder h3 {
+  color: rgba(132,158,184,0.55);
+  letter-spacing: -0.2px;
+}
+[data-theme="studio"] .lab-content__placeholder svg {
+  color: rgba(132,158,184,0.18);
+}
+
 /* ── Room Planner rp-* layout ────────────────────── */
 .rp-header {
   display: flex;

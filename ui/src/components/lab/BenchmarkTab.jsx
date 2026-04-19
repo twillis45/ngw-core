@@ -28,6 +28,7 @@ import {
   getDriftConfig,
   getGoldSetImageUrl,
   labFetchBlob,
+  getConfusionMatrix,
 } from '../../data/labApi';
 import { pct, ts, relTime } from '../../lib/formatters';
 import { C, STATUS_COLORS, pctColor } from '../../lib/statusColors';
@@ -1267,6 +1268,123 @@ function CaseList({ cases, onRefresh }) {
 
 // ── Main BenchmarkTab component ───────────────────────────────────────────────
 
+// ── Confusion Matrix ─────────────────────────────────────────────────────────
+
+function ConfusionMatrixPanel() {
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getConfusionMatrix()
+      .then(d => { setData(d); setError(null); })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ padding: 20, color: 'var(--color-text-dim)', fontSize: 'var(--text-sm)' }}>Loading confusion matrix…</div>;
+  if (error) return <div style={{ padding: 20, color: 'var(--color-error)', fontSize: 'var(--text-sm)' }}>Error: {error}</div>;
+  if (!data || !data.patterns || data.patterns.length === 0) {
+    return <div style={{ padding: 20, color: 'var(--color-text-dim)', fontSize: 'var(--text-sm)' }}>No benchmark data. Run a benchmark first.</div>;
+  }
+
+  const { patterns, matrix, mismatches, total } = data;
+  const maxCount = Math.max(1, ...patterns.flatMap(exp => patterns.map(pred => (matrix[exp]?.[pred] || 0))));
+
+  return (
+    <div>
+      <div style={{ marginBottom: 'var(--space-md)' }}>
+        <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>Confusion Matrix</h3>
+        <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+          Expected (rows) vs Predicted (columns). {total} cases. Diagonal = correct. Off-diagonal = misclassifications.
+        </p>
+      </div>
+
+      {/* Heatmap grid */}
+      <div style={{ overflowX: 'auto', marginBottom: 'var(--space-lg)' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+          <thead>
+            <tr>
+              <th style={{ padding: '4px 8px', textAlign: 'right', color: 'var(--color-text-dim)', fontSize: 9, letterSpacing: '0.5px' }}>EXPECTED ↓ / PREDICTED →</th>
+              {patterns.map(p => (
+                <th key={p} style={{ padding: '4px 6px', textAlign: 'center', fontWeight: 600, textTransform: 'capitalize', fontSize: 10, writingMode: patterns.length > 8 ? 'vertical-rl' : undefined, maxWidth: 60 }}>
+                  {p}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {patterns.map(expected => (
+              <tr key={expected}>
+                <td style={{ padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize', fontSize: 11, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {expected}
+                </td>
+                {patterns.map(predicted => {
+                  const count = matrix[expected]?.[predicted] || 0;
+                  const isDiag = expected === predicted;
+                  const intensity = count / maxCount;
+                  const bg = isDiag
+                    ? `rgba(34,197,94,${0.1 + intensity * 0.5})`
+                    : count > 0
+                      ? `rgba(239,68,68,${0.1 + intensity * 0.6})`
+                      : 'transparent';
+                  return (
+                    <td key={predicted} style={{
+                      padding: '4px 6px', textAlign: 'center',
+                      background: bg, fontFamily: 'var(--font-mono)',
+                      fontWeight: count > 0 ? 700 : 400,
+                      color: count > 0 ? 'var(--color-text)' : 'var(--color-text-dim)',
+                      border: '1px solid var(--color-border)',
+                      minWidth: 36,
+                    }}>
+                      {count || '·'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mismatches list */}
+      {mismatches && mismatches.length > 0 && (
+        <div>
+          <h4 style={{ margin: '0 0 8px', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+            Misclassifications ({mismatches.length})
+          </h4>
+          <table className="lab-log__table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Expected</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Predicted</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Confidence</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Image</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mismatches.map((m, i) => (
+                <tr key={i}>
+                  <td style={{ padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize' }}>{m.expected}</td>
+                  <td style={{ padding: '4px 8px', color: 'var(--color-error)', fontWeight: 600, textTransform: 'capitalize' }}>{m.predicted}</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                    {m.confidence_score != null ? `${Math.round(m.confidence_score)}%` : '—'}
+                  </td>
+                  <td style={{ padding: '4px 8px', fontSize: 10, fontFamily: 'var(--font-mono)', maxWidth: 250, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {m.image_path || '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
 export default function BenchmarkTab({ onNavigateTo }) {
   const [summary,   setSummary]   = useState(null);
   const [metrics,   setMetrics]   = useState(null);
@@ -1378,6 +1496,7 @@ export default function BenchmarkTab({ onNavigateTo }) {
       <div className="bm-sections">
         {[
           { id: 'overview', label: 'Overview' },
+          { id: 'confusion', label: 'Confusion Matrix' },
           { id: 'cases',    label: `Cases (${cases.length})` },
         ].map(s => (
           <button
@@ -1585,6 +1704,9 @@ export default function BenchmarkTab({ onNavigateTo }) {
           )}
         </>
       )}
+
+      {/* ───────────── CONFUSION MATRIX ───────────── */}
+      {section === 'confusion' && <ConfusionMatrixPanel />}
 
       {/* ───────────── CASES ───────────── */}
       {section === 'cases' && (

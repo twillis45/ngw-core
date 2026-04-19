@@ -502,3 +502,58 @@ async def get_drift_config(user: Dict = Depends(get_dev_user)):
             "Thresholds are looser than CI — used for trend detection only, not blocking."
         ),
     }
+
+
+# ── Confusion Matrix ─────────────────────────────────────────────────────────
+
+@router.get("/confusion-matrix")
+async def confusion_matrix(
+    run_id: Optional[str] = Query(None, description="Specific run ID, or latest if omitted"),
+    user: Dict = Depends(get_dev_user),
+):
+    """Build a confusion matrix from benchmark results — expected vs predicted pattern."""
+    from db.database import get_db
+
+    # Resolve run_id
+    if not run_id:
+        runs = get_benchmark_runs(limit=1)
+        if not runs:
+            return {"matrix": {}, "patterns": [], "total": 0, "message": "No benchmark runs found"}
+        run_id = runs[0]["id"]
+
+    run = get_benchmark_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Benchmark run not found")
+
+    results = get_run_results(run_id)
+    cases = {c["id"]: c for c in get_benchmark_cases(limit=500)}
+
+    # Build matrix: matrix[expected][predicted] = count
+    matrix: Dict[str, Dict[str, int]] = {}
+    mismatches = []
+    for r in results:
+        case = cases.get(r["case_id"])
+        if not case:
+            continue
+        expected = case.get("pattern_id", "unknown")
+        predicted = r.get("predicted_pattern", "unknown") or "unknown"
+        matrix.setdefault(expected, {})
+        matrix[expected][predicted] = matrix[expected].get(predicted, 0) + 1
+        if expected != predicted:
+            mismatches.append({
+                "case_id": r["case_id"],
+                "expected": expected,
+                "predicted": predicted,
+                "image_path": case.get("image_path"),
+                "confidence_score": r.get("confidence_score"),
+            })
+
+    patterns = sorted(set(list(matrix.keys()) + [p for row in matrix.values() for p in row.keys()]))
+
+    return {
+        "run_id": run_id,
+        "patterns": patterns,
+        "matrix": matrix,
+        "mismatches": mismatches[:50],
+        "total": len(results),
+    }

@@ -41,6 +41,7 @@ from db.database import (
     create_gold_set_entry,
     get_gold_set_entries,
     update_gold_set_entry,
+    log_admin_change,
 )
 from db.learning import (
     get_failure_clusters,
@@ -194,19 +195,27 @@ async def scheduler_start(body: SchedulerStartRequest, user=Depends(get_dev_user
     Runs first pass immediately (no warmup delay).
     """
     from engine.scheduler import start_scheduler
-    return start_scheduler(
+    result = start_scheduler(
         interval_hours=body.interval_hours,
         window_days=body.window_days,
         warmup_secs=0,
         started_by="api",
     )
+    log_admin_change("scheduler", "scheduler", "start", {
+        "by": user.get("email", "unknown"),
+        "interval_hours": body.interval_hours,
+        "window_days": body.window_days,
+    })
+    return result
 
 
 @router.post("/scheduler/stop")
 async def scheduler_stop(user=Depends(get_dev_user)):
     """Stop the running scheduler. No-op if not running."""
     from engine.scheduler import stop_scheduler
-    return stop_scheduler()
+    result = stop_scheduler()
+    log_admin_change("scheduler", "scheduler", "stop", {"by": user.get("email", "unknown")})
+    return result
 
 
 @router.patch("/scheduler")
@@ -217,10 +226,16 @@ async def scheduler_configure(body: SchedulerConfigRequest, user=Depends(get_dev
     If not running, saves config for next start.
     """
     from engine.scheduler import configure_scheduler
-    return configure_scheduler(
+    result = configure_scheduler(
         interval_hours=body.interval_hours,
         window_days=body.window_days,
     )
+    log_admin_change("scheduler", "scheduler", "configure", {
+        "by": user.get("email", "unknown"),
+        "interval_hours": body.interval_hours,
+        "window_days": body.window_days,
+    })
+    return result
 
 
 @router.post("/scheduler/run-now")
@@ -230,7 +245,9 @@ async def scheduler_run_now(user=Depends(get_dev_user)):
     If the scheduler is not running, starts it first.
     """
     from engine.scheduler import trigger_run_now
-    return trigger_run_now()
+    result = trigger_run_now()
+    log_admin_change("scheduler", "scheduler", "run_now", {"by": user.get("email", "unknown")})
+    return result
 
 
 # ── Ingestion ──────────────────────────────────────────────────────────────────

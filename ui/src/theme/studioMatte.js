@@ -189,15 +189,30 @@ export const GLASS_REFLECTION = [
   'rgba(255,255,255,0) 86%)',
 ].join(' ');
 
-export const LENS_VIGNETTE = 'radial-gradient(ellipse 100% 90% at center, transparent 52%, rgba(0,0,0,0.08) 76%, rgba(0,0,0,0.22) 100%)';
+// Lens vignette — ultra-smooth falloff with 8 stops to prevent visible edge.
+// The transition zone spans 40–100% so there's no sharp ring.
+export const LENS_VIGNETTE = 'radial-gradient(ellipse 110% 95% at center, transparent 38%, rgba(0,0,0,0.01) 48%, rgba(0,0,0,0.03) 55%, rgba(0,0,0,0.06) 62%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.15) 78%, rgba(0,0,0,0.20) 88%, rgba(0,0,0,0.25) 100%)';
 
 // ─── VF dither noise layer ──────────────────────────────────────────────────
 // Subtle high-frequency noise breaks up gradient banding in LENS_VIGNETTE and
-// GLASS_REFLECTION. Render as a `<div>` with this as `backgroundImage` inside
-// the glass overlay container, `position: absolute; inset: 0; opacity: 0.28;
-// mixBlendMode: 'overlay'`. The SVG encodes a 200×200 feTurbulence tile that
-// repeats seamlessly. Tiny footprint (~250 bytes), zero network requests.
+// GLASS_REFLECTION. The SVG encodes a 200×200 feTurbulence tile that repeats
+// seamlessly. Tiny footprint (~250 bytes), zero network requests.
 export const VF_DITHER_NOISE = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`;
+
+// ─── Dither style — apply to a sibling div alongside any vignette/gradient ──
+// Usage: <div style={DITHER_STYLE} />  placed right after the vignette div.
+// This is the single source of truth for anti-banding across all screens.
+// Dither confined to vignette edges — transparent center, noise only where
+// gradient banding is visible (outer 40%). Uses a radial mask so the hero
+// photo center stays clean.
+export const DITHER_STYLE = {
+  position: 'absolute', inset: 0,
+  backgroundImage: VF_DITHER_NOISE, backgroundSize: '200px 200px',
+  opacity: 0.28, mixBlendMode: 'overlay',
+  pointerEvents: 'none',
+  maskImage: 'radial-gradient(ellipse 110% 95% at center, transparent 45%, black 75%)',
+  WebkitMaskImage: 'radial-gradient(ellipse 110% 95% at center, transparent 45%, black 75%)',
+};
 
 // ─── Metallic chevron (glossy embossed icon treatment) ────────────────────────
 export const METALLIC_CHEVRON = {
@@ -241,6 +256,45 @@ export const BTN_RECESSED_DOWN = [
   'inset 0px 3px 7px 0px rgba(0,0,0,0.7)',
   'inset 0px 1px 3px 0px rgba(0,0,0,0.5)',
 ].join(', ');
+
+// ─── Nav / Dock tokens ──────────────────────────────────────────────────────
+// Ghost nav links — recede until hover. Used for desktop dock on Home,
+// secondary nav on Settings, and any discoverable-on-hover navigation.
+export const NAV_GHOST = {
+  color: steel(0.25),
+  hoverColor: steel(0.55),
+  fontSize: 11,
+  fontWeight: 600,
+  letterSpacing: '0.3px',
+};
+
+// Machined nav button — raised dome for settings/gear buttons.
+// Consistent across Home top-bar, Settings header, Lab Exit.
+export const NAV_BTN = {
+  bg: 'linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)',
+  borderRadius: 10,
+  padding: '8px 16px',
+  shadow: '5px 5px 14px rgba(0,0,0,0.55), 2px 2px 6px rgba(0,0,0,0.40), -1px -1px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07), inset -1px -1px 0 rgba(0,0,0,0.25)',
+  iconSize: 13,
+  iconColor: steel(0.45),
+  labelSize: 11.5,
+  labelColor: steel(0.50),
+};
+
+// Identity badge — inset well showing username. Used on Home desktop header.
+export const IDENTITY_BADGE = {
+  bg: 'linear-gradient(141.71deg, #0e1014 0%, #0a0b0e 100%)',
+  shadow: 'inset 2px 2px 5px rgba(0,0,0,0.55), inset -0.5px -0.5px 1px rgba(255,255,255,0.015), 1px 1px 3px rgba(0,0,0,0.30)',
+  padding: '5px 12px',
+  borderRadius: 6,
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: '1.5px',
+  color: steel(0.28),
+};
+
+// Dot separator for ghost nav
+export const NAV_DOT = { color: steel(0.12), fontSize: 10 };
 
 // ─── Green toggle (settings toggles) ─────────────────────────────────────────
 export const GREEN        = 'rgba(72,186,136,0.9)';

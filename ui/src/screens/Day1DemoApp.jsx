@@ -12,6 +12,7 @@ import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
+import OnboardingScreen from './studio/_adjacent/OnboardingScreen';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
@@ -21,6 +22,7 @@ import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
 import { softClickSound, navSlideSound } from '../utils/sounds';
 import { LAYOUT_DESKTOP_MIN } from '../utils/useIsDesktop';
+import { applyTheme } from '../data/themeStore';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -640,6 +642,25 @@ export default function Day1DemoApp() {
   const { plan: appPlan, isPaid: appIsPaid, isAdmin: appIsAdmin } = usePlan(user?.email);
   const abortRef = useRef(null);
   const wakeLockRef = useRef(null);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
+  // Force studio theme so [data-theme="studio"] CSS overrides apply everywhere
+  useEffect(() => { applyTheme('studio'); }, []);
+
+  // Check if onboarding is needed (first login, no photographer_profile)
+  useEffect(() => {
+    if (!user) return;
+    try {
+      if (localStorage.getItem('ngw_onboarding_skipped') === '1') return;
+      if (localStorage.getItem('ngw_onboarding_done') === '1') return;
+    } catch { return; }
+    // Check server preferences
+    import('../data/authApi').then(({ loadPreferences }) => {
+      loadPreferences().then(prefs => {
+        if (!prefs?.photographer_profile) setNeedsOnboarding(true);
+      }).catch(() => {});
+    });
+  }, [user]);
 
   // ── Dev: ?day1_screen=result jumps straight to the result screen with a
   // canned Rembrandt result so layout + typography can be reviewed instantly.
@@ -1292,6 +1313,14 @@ export default function Day1DemoApp() {
   // the in-studio login screen.)
   if (!user) {
     return <StudioLoginScreen onLogin={(u) => setUser(u)} />;
+  }
+
+  // Onboarding gate — first-run profiling wizard
+  if (needsOnboarding) {
+    return <OnboardingScreen onComplete={() => {
+      setNeedsOnboarding(false);
+      try { localStorage.setItem('ngw_onboarding_done', '1'); } catch {}
+    }} />;
   }
 
   // ── Screen crossfade — each screen fades in on mount (200ms) ──

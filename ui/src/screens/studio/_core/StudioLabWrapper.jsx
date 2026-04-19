@@ -69,7 +69,21 @@ export default function StudioLabWrapper({ onBack }) {
         </Suspense>
       </div>
 
+      {/* Ambient DNA — oscilloscope waveform (Lab identity) */}
+      <div className="lab-dna-waveform" aria-hidden="true" />
+
       {/* Nuke ALL width constraints in the Lab — fill the viewport */}
+      <style>{`
+        .lab-dna-waveform {
+          position: fixed; bottom: 50px; right: 40px;
+          width: 400px; height: 100px; z-index: 9998;
+          pointer-events: none;
+          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 200' fill='none' stroke='rgba(132,158,184,0.055)' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M0,100 Q50,100 80,100 T120,60 T180,140 T220,40 T280,160 T340,80 T400,120 T460,50 T520,150 T580,70 T640,130 T700,90 T760,100 T800,100'/%3E%3Cline x1='0' y1='100' x2='800' y2='100' stroke-dasharray='4 8' stroke-width='0.8'/%3E%3Cline x1='200' y1='20' x2='200' y2='180' stroke-width='0.5' stroke-dasharray='2 6'/%3E%3Cline x1='400' y1='20' x2='400' y2='180' stroke-width='0.5' stroke-dasharray='2 6'/%3E%3Cline x1='600' y1='20' x2='600' y2='180' stroke-width='0.5' stroke-dasharray='2 6'/%3E%3C/svg%3E");
+          background-repeat: no-repeat;
+          background-size: contain;
+        }
+        @media (max-width: 600px) { .lab-dna-waveform { display: none; } }
+      `}</style>
       <style>{`
         .screen, .screen > *, .lab-content, .lab-screen,
         .lab-screen > *, .lab-wb-layout, .lab-back,

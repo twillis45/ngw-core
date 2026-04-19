@@ -35,9 +35,10 @@ export default function MatteBackground({ variant = 'default' }) {
     ? `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.008 * m).toFixed(3)}) 0%, transparent 65%)`
     : `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.010 * m).toFixed(3)}) 0%, transparent 65%)`;
 
-  // Layer 3 — edge vignette — smoothed with extra stops to prevent visible oval edge
-  const va = isWide ? 0.55 : 0.45;
-  const vignette = `radial-gradient(ellipse 120% 90% at 50% 50%, transparent 40%, rgba(0,0,0,${(va * 0.05).toFixed(3)}) 52%, rgba(0,0,0,${(va * 0.15).toFixed(3)}) 60%, rgba(0,0,0,${(va * 0.35).toFixed(3)}) 72%, rgba(0,0,0,${(va * 0.65).toFixed(3)}) 85%, rgba(0,0,0,${va}) 100%)`;
+  // Layer 3 — edge vignette — ultra-wide ellipse pushes edges off-screen.
+  // 12 stops for imperceptible transition. No visible oval.
+  const va = isWide ? 0.45 : 0.35;
+  const vignette = `radial-gradient(ellipse 160% 130% at 50% 50%, transparent 30%, rgba(0,0,0,${(va * 0.01).toFixed(4)}) 38%, rgba(0,0,0,${(va * 0.03).toFixed(4)}) 44%, rgba(0,0,0,${(va * 0.06).toFixed(4)}) 50%, rgba(0,0,0,${(va * 0.10).toFixed(4)}) 56%, rgba(0,0,0,${(va * 0.16).toFixed(4)}) 62%, rgba(0,0,0,${(va * 0.24).toFixed(4)}) 68%, rgba(0,0,0,${(va * 0.35).toFixed(4)}) 74%, rgba(0,0,0,${(va * 0.50).toFixed(4)}) 80%, rgba(0,0,0,${(va * 0.68).toFixed(4)}) 86%, rgba(0,0,0,${(va * 0.85).toFixed(4)}) 93%, rgba(0,0,0,${va}) 100%)`;
 
   // Layer 4 — top specular edge (141.71° key light catch)
   const specularEdge = subdued
@@ -56,6 +57,14 @@ export default function MatteBackground({ variant = 'default' }) {
       <div style={{ position: 'absolute', inset: 0, background: warmLift }} />
       {/* Edge vignette — anchors the frame */}
       <div style={{ position: 'absolute', inset: 0, background: vignette }} />
+      {/* Anti-banding dither on vignette — confined to edges via radial mask */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: grainUrl, backgroundSize: '128px 128px',
+        opacity: 0.18, mixBlendMode: 'overlay',
+        maskImage: 'radial-gradient(ellipse 160% 130% at 50% 50%, transparent 40%, black 70%)',
+        WebkitMaskImage: 'radial-gradient(ellipse 160% 130% at 50% 50%, transparent 40%, black 70%)',
+      }} />
       {/* Top specular edge — ceiling light hit at 141.71° */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: isWide ? 2 : 1, background: specularEdge }} />
       {/* Layer 5 — grain: desktop only, on body surface, never on VFs/panels.

@@ -213,6 +213,9 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_vlm_calls_at ON vlm_call_metrics(called_at DESC);
 
+            -- ── VLM cost columns (added post-launch) ─────────────────────
+            -- ALTER TABLE is not idempotent in SQLite, handled in _migrate_vlm_cost_columns()
+
             -- ── Revenue simulation history ────────────────────────────────
             -- One row per completed simulation run.  Keeps full projections +
             -- summary as JSON so the frontend can restore any past run.
@@ -347,6 +350,16 @@ def init_db():
     init_provenance_table()
     from db.distillation_reviews import init_distillation_reviews_table
     init_distillation_reviews_table()
+
+    # Migrate VLM cost columns (idempotent)
+    with get_db() as conn:
+        vlm_cols = [r[1] for r in conn.execute("PRAGMA table_info(vlm_call_metrics)").fetchall()]
+        if "input_tokens" not in vlm_cols:
+            conn.execute("ALTER TABLE vlm_call_metrics ADD COLUMN input_tokens INTEGER")
+        if "output_tokens" not in vlm_cols:
+            conn.execute("ALTER TABLE vlm_call_metrics ADD COLUMN output_tokens INTEGER")
+        if "cost_usd" not in vlm_cols:
+            conn.execute("ALTER TABLE vlm_call_metrics ADD COLUMN cost_usd REAL")
 
 
 # ── User CRUD ──────────────────────────────────────────────
@@ -1315,15 +1328,17 @@ def get_latest_api_health(provider: str) -> Optional[Dict[str, Any]]:
 # ── VLM call metrics ──────────────────────────────────────────────────────────
 
 def log_vlm_call(provider: str, model: str, latency_ms: float, ok: bool,
-                 caller: str = None, error: str = None) -> None:
-    """Record a single VLM API call with timing and outcome."""
+                 caller: str = None, error: str = None,
+                 input_tokens: int = None, output_tokens: int = None,
+                 cost_usd: float = None) -> None:
+    """Record a single VLM API call with timing, outcome, and cost."""
     cid = uuid.uuid4().hex
     now = time.time()
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO vlm_call_metrics (id, called_at, provider, model, latency_ms, ok, caller, error) "
-            "VALUES (?,?,?,?,?,?,?,?)",
-            (cid, now, provider, model, latency_ms, 1 if ok else 0, caller, error),
+            "INSERT INTO vlm_call_metrics (id, called_at, provider, model, latency_ms, ok, caller, error, input_tokens, output_tokens, cost_usd) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (cid, now, provider, model, latency_ms, 1 if ok else 0, caller, error, input_tokens, output_tokens, cost_usd),
         )
 
 
@@ -1365,6 +1380,22 @@ def get_vlm_call_stats(hours: int = 24) -> Dict[str, Any]:
         for h in range(n_buckets)
     ]
 
+    # Cost aggregation
+    total_input  = sum(c.get("input_tokens") or 0 for c in calls)
+    total_output = sum(c.get("output_tokens") or 0 for c in calls)
+    total_cost   = sum(c.get("cost_usd") or 0.0 for c in calls)
+
+    # Cost per day (for trend chart)
+    cost_buckets: Dict[int, float] = {}
+    for c in calls:
+        day_idx = int((now - c["called_at"]) // 86400)
+        cost_buckets[day_idx] = cost_buckets.get(day_idx, 0.0) + (c.get("cost_usd") or 0.0)
+    n_days = max(hours // 24, 1)
+    daily_cost = [
+        {"days_ago": d, "cost_usd": round(cost_buckets.get(d, 0.0), 4)}
+        for d in range(n_days)
+    ]
+
     return {
         "window_hours":   hours,
         "total":          total,
@@ -1375,6 +1406,10 @@ def get_vlm_call_stats(hours: int = 24) -> Dict[str, Any]:
         "p95_latency_ms": p95_latency,
         "hourly":         hourly,
         "recent":         calls[:10],
+        "total_input_tokens":  total_input,
+        "total_output_tokens": total_output,
+        "total_cost_usd":      round(total_cost, 4),
+        "daily_cost":          daily_cost,
     }
 
 

@@ -43,6 +43,8 @@ import {
   createGoldSetEntry,
   listDistillationReviews,
   patchDistillationReview,
+  getAuditLog,
+  getL1Stream,
 } from '../../data/labApi';
 import { C, EVENT_COLORS, okColor, pctColor } from '../../lib/statusColors';
 
@@ -1149,6 +1151,8 @@ function RecentActivityCard({ onNavigateTo }) {
 // VLM CALL METRICS CARD
 // ─────────────────────────────────────────────────────────────────────────────
 
+const _COST_BUDGET_KEY = 'ngw_daily_cost_budget';
+
 function VlmMetricsCard() {
   const [hours, setHours] = useState(24);
   const [data, setData] = useState(null);
@@ -1156,6 +1160,11 @@ function VlmMetricsCard() {
   const [err, setErr] = useState(null);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [expandedCall, setExpandedCall] = useState(null);
+  const [costBudget, setCostBudget] = useState(() => {
+    try { return parseFloat(localStorage.getItem(_COST_BUDGET_KEY)) || null; } catch { return null; }
+  });
+  const [editingBudget, setEditingBudget] = useState(false);
+  const [budgetInput, setBudgetInput] = useState('');
 
   const fetchData = useCallback(() => {
     setLoading(true);
@@ -1253,6 +1262,70 @@ function VlmMetricsCard() {
               color={data.p95_latency_ms > 10000 ? C.amber : 'var(--color-text)'} />
           </div>
 
+          {/* Cost metrics row */}
+          {(data.total_cost_usd > 0 || data.total_input_tokens > 0) && (() => {
+            const todayCost = data.daily_cost?.[0]?.cost_usd ?? 0;
+            const overBudget = costBudget && todayCost > costBudget;
+            return (<>
+            <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <Stat label="Total cost" value={`$${data.total_cost_usd?.toFixed(4) ?? '0'}`}
+                color={data.total_cost_usd > 1 ? C.amber : C.green} />
+              <Stat label="Input tokens" value={(data.total_input_tokens ?? 0).toLocaleString()} />
+              <Stat label="Output tokens" value={(data.total_output_tokens ?? 0).toLocaleString()} />
+              <Stat label="Avg cost/call" value={data.total > 0 ? `$${(data.total_cost_usd / data.total).toFixed(4)}` : '—'} />
+              <Stat label="Today" value={`$${todayCost.toFixed(4)}`} color={overBudget ? C.red : C.green} />
+              {/* Budget threshold */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {editingBudget ? (
+                  <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                    <span style={{ fontSize: 9, color: 'var(--color-text-dim)' }}>Budget: $</span>
+                    <input type="number" step="0.01" value={budgetInput} onChange={e => setBudgetInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { const v = parseFloat(budgetInput); if (v > 0) { setCostBudget(v); localStorage.setItem(_COST_BUDGET_KEY, String(v)); } setEditingBudget(false); } }}
+                      style={{ width: 60, fontSize: 10, padding: '2px 4px', borderRadius: 3, border: '1px solid var(--color-border)', background: 'var(--color-surface-elevated)', color: 'var(--color-text)' }}
+                      autoFocus />
+                    <button onClick={() => { const v = parseFloat(budgetInput); if (v > 0) { setCostBudget(v); localStorage.setItem(_COST_BUDGET_KEY, String(v)); } setEditingBudget(false); }}
+                      style={{ fontSize: 9, background: 'none', border: 'none', color: C.green, cursor: 'pointer' }}>✓</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setBudgetInput(costBudget ? String(costBudget) : ''); setEditingBudget(true); }}
+                    style={{ fontSize: 9, background: 'none', border: 'none', cursor: 'pointer', color: costBudget ? 'var(--color-text-dim)' : 'var(--color-accent)', padding: 0 }}>
+                    {costBudget ? `Budget: $${costBudget}/day` : '+ Set budget'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {overBudget && (
+              <div style={{
+                padding: '6px 12px', marginBottom: 'var(--space-md)', borderRadius: 6,
+                background: C.red + '15', border: `1px solid ${C.red}33`,
+                fontSize: 11, color: C.red, fontWeight: 600,
+              }}>
+                ⚠ Daily cost ${todayCost.toFixed(4)} exceeds budget ${costBudget.toFixed(2)}/day
+              </div>
+            )}
+            </>);
+          })()}
+
+          {/* Daily cost chart */}
+          {data.daily_cost && data.daily_cost.some(d => d.cost_usd > 0) && (() => {
+            const maxCost = Math.max(...data.daily_cost.map(d => d.cost_usd), 0.001);
+            const bars = [...data.daily_cost].reverse();
+            return (
+              <div style={{ marginBottom: 'var(--space-md)' }}>
+                <SectionTitle>Cost per day (oldest → newest)</SectionTitle>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 40 }}>
+                  {bars.map((d, i) => (
+                    <div key={i} title={`${d.days_ago}d ago: $${d.cost_usd.toFixed(4)}`} style={{
+                      flex: 1, height: `${Math.max(2, (d.cost_usd / maxCost) * 40)}px`,
+                      background: d.cost_usd > 0 ? '#c89b45aa' : 'var(--color-border)',
+                      borderRadius: 1, transition: 'height 0.2s',
+                    }} />
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Hourly sparkline (mini bar chart) */}
           {data.hourly && data.hourly.length > 0 && (() => {
             const max = Math.max(...data.hourly.map(b => b.count), 1);
@@ -1288,6 +1361,8 @@ function VlmMetricsCard() {
                     <th style={{ textAlign: 'left', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Time</th>
                     <th style={{ textAlign: 'left', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Provider</th>
                     <th style={{ textAlign: 'right', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Latency</th>
+                    <th style={{ textAlign: 'right', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Tokens</th>
+                    <th style={{ textAlign: 'right', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Cost</th>
                     <th style={{ textAlign: 'center', padding: '4px 6px', fontWeight: 'var(--weight-medium)' }}>Status</th>
                   </tr>
                 </thead>
@@ -1313,6 +1388,12 @@ function VlmMetricsCard() {
                           </td>
                           <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
                             {c.latency_ms != null ? `${Math.round(c.latency_ms)}ms` : '—'}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                            {c.input_tokens ? `${c.input_tokens}/${c.output_tokens ?? '?'}` : '—'}
+                          </td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                            {c.cost_usd ? `$${c.cost_usd.toFixed(4)}` : '—'}
                           </td>
                           <td style={{ padding: '4px 6px', textAlign: 'center' }}>
                             {c.ok ? (
@@ -2339,6 +2420,165 @@ function PaywallSection({ onNavigateTo, onCCSection }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// CUSTOMER LOOKUP CARD
+// ─────────────────────────────────────────────────────────────────────────────
+
+function CustomerLookupCard({ onNavigateTo }) {
+  const [query, setQuery]       = useState('');
+  const [results, setResults]   = useState(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState(null);
+  const [expanded, setExpanded] = useState(null);
+
+  async function doSearch() {
+    if (!query.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await getL1Stream(50, { userEmail: query.trim(), search: query.trim() });
+      setResults(data.records || data);
+    } catch (e) {
+      setError(e.message);
+      setResults(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const fmtTime = ts => {
+    if (!ts) return '—';
+    const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <Card title="Customer Session Lookup"
+      description="Search by email, user ID, or analysis ID to view a customer's analysis history.">
+      <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-sm)' }}>
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && doSearch()}
+          placeholder="Email, user ID, or analysis ID…"
+          style={{
+            flex: 1, padding: '6px 10px', fontSize: 'var(--text-sm)',
+            background: 'var(--color-surface-elevated)', color: 'var(--color-text)',
+            border: '1px solid var(--color-border)', borderRadius: 'var(--radius-sm)',
+          }}
+        />
+        <button className="btn btn--ghost btn--sm" onClick={doSearch} disabled={loading}>
+          {loading ? '…' : '🔍 Search'}
+        </button>
+      </div>
+
+      {error && <div style={{ color: C.red, fontSize: 'var(--text-xs)', marginBottom: 8 }}>{error}</div>}
+
+      {results && results.length === 0 && (
+        <div style={{ color: 'var(--color-text-dim)', fontSize: 'var(--text-xs)', padding: 'var(--space-md)', textAlign: 'center' }}>
+          No analyses found for "{query}"
+        </div>
+      )}
+
+      {results && results.length > 0 && (
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', marginBottom: 6 }}>
+            {results.length} analyses found
+          </div>
+          <table className="lab-log__table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Time</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Pattern</th>
+                <th style={{ textAlign: 'right', padding: '6px 8px' }}>Conf</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Source</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>Flags</th>
+                <th style={{ textAlign: 'left', padding: '6px 8px' }}>User</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.map((r, i) => (
+                <React.Fragment key={r.analysis_id || i}>
+                  <tr onClick={() => setExpanded(expanded === i ? null : i)}
+                    style={{ cursor: 'pointer', borderBottom: expanded === i ? 'none' : undefined }}>
+                    <td style={{ padding: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: 10 }}>
+                      {fmtTime(r.created_at)}
+                    </td>
+                    <td style={{ padding: '4px 8px', fontWeight: 600, textTransform: 'capitalize' }}>
+                      {r.pattern || '—'}
+                    </td>
+                    <td style={{ padding: '4px 8px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>
+                      {r.confidence != null ? `${r.confidence}%` : '—'}
+                    </td>
+                    <td style={{ padding: '4px 8px', fontSize: 10 }}>
+                      {r.source || '—'}
+                    </td>
+                    <td style={{ padding: '4px 8px' }}>
+                      {(r.flags || []).map((f, j) => (
+                        <span key={j} style={{
+                          fontSize: 9, padding: '1px 4px', borderRadius: 3, marginRight: 3,
+                          background: f === 'review' ? C.amber + '22' : f === 'contradiction' ? C.red + '22' : 'var(--color-surface-elevated)',
+                          color: f === 'review' ? C.amber : f === 'contradiction' ? C.red : 'var(--color-text-dim)',
+                        }}>{f}</span>
+                      ))}
+                    </td>
+                    <td style={{ padding: '4px 8px', fontSize: 10, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {r.user_email || '—'}
+                    </td>
+                  </tr>
+                  {expanded === i && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '8px', background: 'var(--color-surface)' }}>
+                        <div style={{ display: 'flex', gap: 16 }}>
+                          {/* Image thumbnail */}
+                          {r.analysis_id && (
+                            <div style={{ flexShrink: 0, width: 80, height: 80, borderRadius: 6, overflow: 'hidden', background: 'var(--color-surface-elevated)' }}>
+                              <img
+                                src={`/api/lab/analysis/${r.analysis_id}/image?token=${encodeURIComponent(getToken() || '')}`}
+                                alt=""
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                onError={e => { e.target.style.display = 'none'; }}
+                              />
+                            </div>
+                          )}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 11 }}>
+                              <div><strong>Analysis ID:</strong> <code style={{ fontSize: 10 }}>{r.analysis_id}</code></div>
+                              <div><strong>Image:</strong> <span style={{ fontSize: 10 }}>{r.image_path || '—'}</span></div>
+                              {r.timing_ms != null && <div><strong>Processing:</strong> {r.timing_ms}ms</div>}
+                              {r.light_count != null && <div><strong>Light count:</strong> {r.light_count}</div>}
+                              {r.edge_case_flags && r.edge_case_flags.length > 0 && (
+                                <div style={{ gridColumn: '1 / -1' }}><strong>Edge cases:</strong> {r.edge_case_flags.join(', ')}</div>
+                              )}
+                            </div>
+                            <div style={{ marginTop: 8, display: 'flex', gap: 6 }}>
+                              <button className="btn btn--ghost btn--sm" onClick={() => onNavigateTo?.({ tab: 'workbench', analysisId: r.analysis_id })}>
+                                → Open in Workbench
+                              </button>
+                              <button className="btn btn--ghost btn--sm" onClick={() => {
+                                // Re-analyze: navigate to workbench with the image path for re-analysis
+                                onNavigateTo?.({ tab: 'workbench', reanalyze: r.analysis_id });
+                              }}>
+                                ↻ Re-analyze
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SUPPORT SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2414,6 +2654,9 @@ function SupportSection({ onNavigateTo }) {
           ))}
         </div>
       </Card>
+
+      {/* Customer Session Lookup */}
+      <CustomerLookupCard onNavigateTo={onNavigateTo} />
 
       {/* Recalibration Hints */}
       <Card
@@ -3213,12 +3456,123 @@ const ALERT_RULES = [
 const ALERT_COLORS = { ok: C.green, warn: C.amber, alert: C.red, unknown: 'var(--color-text-dim)' };
 const ALERT_LABELS = { ok: 'OK', warn: 'Warning', alert: 'ALERT', unknown: 'No data' };
 
+// Persistent threshold overrides — merged with defaults at render time
+const _ALERT_OVERRIDES_KEY = 'ngw_alert_thresholds';
+const _CUSTOM_RULES_KEY = 'ngw_custom_alert_rules';
+const _ALERT_HISTORY_KEY = 'ngw_alert_history';
+
+function _loadAlertOverrides() {
+  try { return JSON.parse(localStorage.getItem(_ALERT_OVERRIDES_KEY) || '{}'); } catch { return {}; }
+}
+function _saveAlertOverrides(overrides) {
+  try { localStorage.setItem(_ALERT_OVERRIDES_KEY, JSON.stringify(overrides)); } catch {}
+}
+function _loadCustomRules() {
+  try { return JSON.parse(localStorage.getItem(_CUSTOM_RULES_KEY) || '[]'); } catch { return []; }
+}
+function _saveCustomRules(rules) {
+  try { localStorage.setItem(_CUSTOM_RULES_KEY, JSON.stringify(rules)); } catch {}
+}
+function _loadAlertHistory() {
+  try { return JSON.parse(localStorage.getItem(_ALERT_HISTORY_KEY) || '[]'); } catch { return []; }
+}
+function _appendAlertHistory(entry) {
+  try {
+    const h = _loadAlertHistory();
+    h.unshift({ ...entry, ts: Date.now() });
+    if (h.length > 100) h.length = 100;
+    localStorage.setItem(_ALERT_HISTORY_KEY, JSON.stringify(h));
+    return h;
+  } catch { return []; }
+}
+
+// Custom rule metric options (things we can read from metricsCompat)
+const CUSTOM_METRIC_OPTIONS = [
+  { id: 'error_rate', label: 'Error Rate', format: v => v == null ? '—' : `${(v * 100).toFixed(1)}%`, unit: '(0-1)' },
+  { id: 'total', label: 'Total Calls', format: v => v == null ? '—' : `${v} calls`, unit: '(count)' },
+  { id: 'p95_latency_ms', label: 'p95 Latency', format: v => v == null ? '—' : `${(v/1000).toFixed(1)}s`, unit: '(ms)' },
+];
+
+// Apply overrides to rules + append custom rules
+function _getEffectiveRules(overrides, customRules = []) {
+  const builtIn = ALERT_RULES.map(r => ({
+    ...r,
+    threshold: overrides[r.id]?.threshold ?? r.threshold,
+    muted: overrides[r.id]?.muted ?? false,
+  }));
+  const custom = customRules.map(cr => ({
+    id: cr.id,
+    label: cr.label,
+    desc: cr.desc || 'Custom rule',
+    threshold: overrides[cr.id]?.threshold ?? cr.threshold,
+    muted: overrides[cr.id]?.muted ?? false,
+    getValue: m => m?.[cr.metricId] ?? null,
+    evaluate: (v, t) => v === null ? 'unknown' : v >= t ? 'alert' : v >= t * 0.6 ? 'warn' : 'ok',
+    format: CUSTOM_METRIC_OPTIONS.find(o => o.id === cr.metricId)?.format || (v => v == null ? '—' : String(v)),
+    isCustom: true,
+  }));
+  return [...builtIn, ...custom];
+}
+
 function MonitoringSection({ onNavigateTo, onCCSection }) {
   const [stats, setStats]         = useState(null);
   const [mLoading, setMLoading]   = useState(true);
   const [errors, setErrors]       = useState([..._errorLog]);
   const [filterType, setFilterType] = useState('all');
   const [tick, setTick]           = useState(0);
+  const [alertOverrides, setAlertOverrides] = useState(_loadAlertOverrides);
+  const [customRules, setCustomRules]       = useState(_loadCustomRules);
+  const [alertHistory, setAlertHistory]     = useState(_loadAlertHistory);
+  const [editingRule, setEditingRule]       = useState(null);
+  const [editThreshold, setEditThreshold]  = useState('');
+  const [showAddRule, setShowAddRule]       = useState(false);
+  const [newRule, setNewRule]               = useState({ label: '', metricId: 'error_rate', threshold: '' });
+  const [showHistory, setShowHistory]       = useState(false);
+  const prevStatesRef = useRef({});
+
+  const effectiveRules = _getEffectiveRules(alertOverrides, customRules);
+
+  function saveThresholdEdit(ruleId) {
+    const val = parseFloat(editThreshold);
+    if (isNaN(val)) { setEditingRule(null); return; }
+    const next = { ...alertOverrides, [ruleId]: { ...(alertOverrides[ruleId] || {}), threshold: val } };
+    setAlertOverrides(next);
+    _saveAlertOverrides(next);
+    setEditingRule(null);
+  }
+
+  function toggleMute(ruleId) {
+    const next = { ...alertOverrides, [ruleId]: { ...(alertOverrides[ruleId] || {}), muted: !(alertOverrides[ruleId]?.muted) } };
+    setAlertOverrides(next);
+    _saveAlertOverrides(next);
+  }
+
+  function resetRuleDefaults() {
+    setAlertOverrides({});
+    _saveAlertOverrides({});
+  }
+
+  function addCustomRule() {
+    if (!newRule.label.trim() || !newRule.threshold) return;
+    const rule = {
+      id: `custom_${Date.now()}`,
+      label: newRule.label.trim(),
+      metricId: newRule.metricId,
+      threshold: parseFloat(newRule.threshold),
+      desc: `Custom: alert if ${newRule.metricId} ≥ ${newRule.threshold}`,
+    };
+    const next = [...customRules, rule];
+    setCustomRules(next);
+    _saveCustomRules(next);
+    setNewRule({ label: '', metricId: 'error_rate', threshold: '' });
+    setShowAddRule(false);
+  }
+
+  function deleteCustomRule(ruleId) {
+    const next = customRules.filter(r => r.id !== ruleId);
+    setCustomRules(next);
+    _saveCustomRules(next);
+  }
 
   // Register for new error notifications
   useEffect(() => {
@@ -3256,10 +3610,30 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
     p95_latency_ms: null, // not returned from monitoring-stats; alert will show "No data"
   } : null;
 
+  // Track alert state transitions for history
+  useEffect(() => {
+    if (!metricsCompat) return;
+    const prevStates = prevStatesRef.current;
+    effectiveRules.filter(r => !r.muted).forEach(r => {
+      const val = r.getValue(metricsCompat);
+      const state = r.evaluate(val, r.threshold);
+      const prev = prevStates[r.id];
+      if (prev && prev !== state && (state === 'alert' || state === 'warn')) {
+        const h = _appendAlertHistory({
+          ruleId: r.id, label: r.label, from: prev, to: state,
+          value: r.format(val), threshold: r.threshold,
+        });
+        setAlertHistory(h);
+      }
+      prevStates[r.id] = state;
+    });
+    prevStatesRef.current = prevStates;
+  }, [metricsCompat]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = filterType === 'all' ? errors : errors.filter(e => e.type === filterType);
   const typeSet  = [...new Set(errors.map(e => e.type))];
   const alertCounts = { ok: 0, warn: 0, alert: 0, unknown: 0 };
-  ALERT_RULES.forEach(r => { alertCounts[r.evaluate(r.getValue(metricsCompat), r.threshold)]++; });
+  effectiveRules.filter(r => !r.muted).forEach(r => { alertCounts[r.evaluate(r.getValue(metricsCompat), r.threshold)]++; });
 
   const sparkline  = stats?.sparkline  ?? [];
   const funnel     = stats?.funnel     ?? {};
@@ -3311,11 +3685,16 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
           ))}
         </div>
 
-        {/* Rule table */}
+        {/* Rule table — editable thresholds */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {ALERT_RULES.map(rule => {
+          {Object.keys(alertOverrides).length > 0 && (
+            <div style={{ textAlign: 'right', marginBottom: 4 }}>
+              <button className="btn btn--ghost" onClick={resetRuleDefaults} style={{ fontSize: 10, padding: '2px 8px' }}>Reset to defaults</button>
+            </div>
+          )}
+          {effectiveRules.map(rule => {
             const val   = rule.getValue(metricsCompat);
-            const state = rule.evaluate(val, rule.threshold);
+            const state = rule.muted ? 'unknown' : rule.evaluate(val, rule.threshold);
             const color = ALERT_COLORS[state];
             return (
               <div key={rule.id} style={{
@@ -3340,17 +3719,106 @@ function MonitoringSection({ onNavigateTo, onCCSection }) {
                     {rule.desc}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-bold)', color }}>
-                    {mLoading ? '…' : rule.format(val)}
+                <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--weight-bold)', color, opacity: rule.muted ? 0.4 : 1 }}>
+                      {mLoading ? '…' : rule.format(val)}
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>
+                      {rule.muted ? 'Muted' : ALERT_LABELS[state]}
+                      {alertOverrides[rule.id]?.threshold != null && ' (custom)'}
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--color-text-dim)', marginTop: 1 }}>
-                    {ALERT_LABELS[state]}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {editingRule === rule.id ? (
+                      <div style={{ display: 'flex', gap: 3 }}>
+                        <input type="number" step="any" value={editThreshold}
+                          onChange={e => setEditThreshold(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && saveThresholdEdit(rule.id)}
+                          style={{ width: 60, fontSize: 10, padding: '1px 4px', borderRadius: 3, border: '1px solid var(--color-border)', background: 'var(--color-surface-elevated)', color: 'var(--color-text)' }}
+                          autoFocus
+                        />
+                        <button onClick={() => saveThresholdEdit(rule.id)} style={{ fontSize: 9, cursor: 'pointer', background: 'none', border: 'none', color: C.green }}>✓</button>
+                        <button onClick={() => setEditingRule(null)} style={{ fontSize: 9, cursor: 'pointer', background: 'none', border: 'none', color: 'var(--color-text-dim)' }}>✗</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setEditingRule(rule.id); setEditThreshold(String(rule.threshold)); }}
+                        style={{ fontSize: 9, cursor: 'pointer', background: 'none', border: 'none', color: 'var(--color-text-dim)', padding: 0 }}
+                        title="Edit threshold">⚙</button>
+                    )}
+                    <button onClick={() => toggleMute(rule.id)}
+                      style={{ fontSize: 9, cursor: 'pointer', background: 'none', border: 'none', color: rule.muted ? C.amber : 'var(--color-text-dim)', padding: 0 }}
+                      title={rule.muted ? 'Unmute' : 'Mute'}>{rule.muted ? '🔇' : '🔔'}</button>
+                    {rule.isCustom && (
+                      <button onClick={() => deleteCustomRule(rule.id)}
+                        style={{ fontSize: 9, cursor: 'pointer', background: 'none', border: 'none', color: C.red, padding: 0 }}
+                        title="Delete rule">✕</button>
+                    )}
                   </div>
                 </div>
               </div>
             );
           })}
+
+          {/* Add / Delete custom rules */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+            <button className="btn btn--ghost btn--sm" onClick={() => setShowAddRule(!showAddRule)} style={{ fontSize: 10 }}>
+              {showAddRule ? '✕ Cancel' : '+ Add Rule'}
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => setShowHistory(!showHistory)} style={{ fontSize: 10 }}>
+              {showHistory ? '✕ Hide History' : `📋 History (${alertHistory.length})`}
+            </button>
+          </div>
+
+          {/* Add rule form */}
+          {showAddRule && (
+            <div style={{ marginTop: 8, padding: 12, background: 'var(--color-surface-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <input type="text" placeholder="Rule name" value={newRule.label} onChange={e => setNewRule({ ...newRule, label: e.target.value })}
+                  style={{ flex: '1 1 120px', fontSize: 11, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }} />
+                <select value={newRule.metricId} onChange={e => setNewRule({ ...newRule, metricId: e.target.value })}
+                  style={{ fontSize: 11, padding: '4px 6px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }}>
+                  {CUSTOM_METRIC_OPTIONS.map(m => <option key={m.id} value={m.id}>{m.label} {m.unit}</option>)}
+                </select>
+                <span style={{ fontSize: 10, color: 'var(--color-text-dim)' }}>≥</span>
+                <input type="number" step="any" placeholder="Threshold" value={newRule.threshold} onChange={e => setNewRule({ ...newRule, threshold: e.target.value })}
+                  style={{ width: 80, fontSize: 11, padding: '4px 8px', borderRadius: 4, border: '1px solid var(--color-border)', background: 'var(--color-surface)', color: 'var(--color-text)' }} />
+                <button className="btn btn--primary btn--sm" onClick={addCustomRule} disabled={!newRule.label.trim() || !newRule.threshold} style={{ fontSize: 10 }}>Create</button>
+              </div>
+            </div>
+          )}
+
+          {/* Alert history */}
+          {showHistory && (
+            <div style={{ marginTop: 8, maxHeight: 200, overflowY: 'auto' }}>
+              {alertHistory.length === 0 ? (
+                <div style={{ padding: 12, fontSize: 11, color: 'var(--color-text-dim)', textAlign: 'center' }}>No alert transitions recorded yet.</div>
+              ) : (
+                <table className="lab-log__table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10 }}>
+                  <thead><tr>
+                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Time</th>
+                    <th style={{ textAlign: 'left', padding: '4px 6px' }}>Rule</th>
+                    <th style={{ textAlign: 'center', padding: '4px 6px' }}>Transition</th>
+                    <th style={{ textAlign: 'right', padding: '4px 6px' }}>Value</th>
+                  </tr></thead>
+                  <tbody>
+                    {alertHistory.map((h, i) => (
+                      <tr key={i}>
+                        <td style={{ padding: '3px 6px', fontFamily: 'var(--font-mono)' }}>{new Date(h.ts).toLocaleTimeString()}</td>
+                        <td style={{ padding: '3px 6px', fontWeight: 600 }}>{h.label}</td>
+                        <td style={{ padding: '3px 6px', textAlign: 'center' }}>
+                          <span style={{ color: ALERT_COLORS[h.from] }}>{ALERT_LABELS[h.from]}</span>
+                          {' → '}
+                          <span style={{ color: ALERT_COLORS[h.to], fontWeight: 700 }}>{ALERT_LABELS[h.to]}</span>
+                        </td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{h.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -4011,6 +4479,139 @@ function DistillationReviewSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// AUDIT LOG SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ENTITY_LABELS = {
+  gold_set: 'Gold Set', candidate: 'Candidate', reference: 'Reference',
+  lighting_system: 'Lighting System', image_label: 'Image Label',
+};
+const ACTION_COLORS = {
+  create: '#22c55e', update: '#3b82f6', delete: '#ef4444',
+  approve: '#22c55e', reject: '#ef4444', merge: '#8b5cf6',
+};
+
+function AuditLogSection() {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filterType, setFilterType] = useState('all');
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    setLoading(true);
+    getAuditLog({ limit: 200 })
+      .then(d => { setEntries(d.entries || []); setError(null); })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = filterType === 'all' ? entries : entries.filter(e => e.entity_type === filterType);
+  const entityTypes = [...new Set(entries.map(e => e.entity_type))];
+
+  const fmtTime = ts => {
+    if (!ts) return '—';
+    const d = new Date(ts < 1e12 ? ts * 1000 : ts);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+      <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 700 }}>Audit Log</h3>
+      <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+        All admin actions — gold set, candidates, references, system operations. {filtered.length} entries.
+      </p>
+
+      {/* Filter chips */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button className={`lab-tab${filterType === 'all' ? ' lab-tab--active' : ''}`}
+          onClick={() => setFilterType('all')}>All</button>
+        {entityTypes.map(t => (
+          <button key={t} className={`lab-tab${filterType === t ? ' lab-tab--active' : ''}`}
+            onClick={() => setFilterType(t)}>{ENTITY_LABELS[t] || t}</button>
+        ))}
+      </div>
+
+      {loading && <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>Loading audit log…</p>}
+      {error && <p style={{ color: 'var(--color-error)', fontSize: 'var(--text-sm)' }}>Error: {error}</p>}
+
+      {!loading && !error && filtered.length === 0 && (
+        <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
+          No audit entries yet. Actions will appear here as gold set, candidate, and reference operations are performed.
+        </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <table className="lab-log__table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>Time</th>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>Entity</th>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>Action</th>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>ID</th>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>By</th>
+              <th style={{ textAlign: 'left', padding: '8px 12px' }}>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(entry => (
+              <React.Fragment key={entry.id}>
+                <tr onClick={() => setExpanded(expanded === entry.id ? null : entry.id)}
+                  style={{ cursor: 'pointer' }}>
+                  <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                    {fmtTime(entry.created_at)}
+                  </td>
+                  <td style={{ padding: '6px 12px' }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px',
+                      padding: '2px 6px', borderRadius: 4,
+                      background: 'var(--color-surface-elevated)', color: 'var(--color-text-secondary)',
+                    }}>
+                      {ENTITY_LABELS[entry.entity_type] || entry.entity_type}
+                    </span>
+                  </td>
+                  <td style={{ padding: '6px 12px' }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700,
+                      color: ACTION_COLORS[entry.action] || 'var(--color-text)',
+                    }}>
+                      {entry.action}
+                    </span>
+                  </td>
+                  <td style={{ padding: '6px 12px', fontFamily: 'var(--font-mono)', fontSize: 10, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {entry.entity_id}
+                  </td>
+                  <td style={{ padding: '6px 12px', fontSize: 11 }}>
+                    {entry.diff?.by || '—'}
+                  </td>
+                  <td style={{ padding: '6px 12px', fontSize: 10, color: 'var(--color-text-secondary)' }}>
+                    {expanded === entry.id ? '▾' : '▸'} {Object.keys(entry.diff || {}).filter(k => k !== 'by').length} fields
+                  </td>
+                </tr>
+                {expanded === entry.id && (
+                  <tr>
+                    <td colSpan={6} style={{ padding: '8px 12px 12px 24px', background: 'var(--color-surface)' }}>
+                      <pre style={{
+                        margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)',
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                        color: 'var(--color-text-secondary)',
+                      }}>
+                        {JSON.stringify(entry.diff, null, 2)}
+                      </pre>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN TAB
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -4020,6 +4621,7 @@ const SECTIONS = [
   { id: 'paywall',      label: 'Paywall',         icon: Icons.paywall },
   { id: 'support',      label: 'Support',         icon: Icons.support },
   { id: 'monitoring',   label: 'Monitoring',      icon: Icons.monitoring },
+  { id: 'audit',        label: 'Audit Log',       icon: Icons.system },
 ];
 
 const SECTION_DESC = {
@@ -4028,6 +4630,7 @@ const SECTION_DESC = {
   paywall:      'Adaptive pricing value state map, paywall type reference, and live pricing test.',
   support:      'Recalibration hints, VLM correction audit, and gold-set promotion suggestions.',
   monitoring:   'Frontend error console, VLM alert rules, and live metric watchpoints.',
+  audit:        'Unified audit trail of all admin actions — gold set, candidates, references, scheduler.',
 };
 
 const CC_HELP = {
@@ -4133,8 +4736,8 @@ const CC_HELP = {
 
 const CC_ORDER_KEY = 'ngw_cc_section_order';
 
-export default function ControlCenterTab({ user, onNavigateTo }) {
-  const [section, setSection]     = useState('system');
+export default function ControlCenterTab({ user, onNavigateTo, initialSection }) {
+  const [section, setSection]     = useState(initialSection || 'system');
   const [sectionOrder, setSectionOrder] = useState(() => {
     try { const s = localStorage.getItem(CC_ORDER_KEY); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -4166,8 +4769,8 @@ export default function ControlCenterTab({ user, onNavigateTo }) {
   return (
     <div style={{ paddingBottom: 'var(--space-2xl)' }}>
 
-      {/* Section nav — draggable to reorder */}
-      <div style={{ marginBottom: 'var(--space-lg)' }}>
+      {/* Section nav — draggable to reorder (hidden when launched as dedicated tab) */}
+      <div style={{ marginBottom: 'var(--space-lg)', display: initialSection ? 'none' : undefined }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}>
           <div className="lab-tabs" style={{ flex: 1, marginBottom: 0 }}>
             {sections.map(s => (
@@ -4211,9 +4814,11 @@ export default function ControlCenterTab({ user, onNavigateTo }) {
         </div>
 
         {/* Inline description */}
+        {!initialSection && (
         <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-dim)', margin: 'var(--space-xs) 0 0 2px' }}>
           {SECTION_DESC[section]}
         </p>
+        )}
 
         {/* Expandable help panel */}
         {ccHelpOpen && CC_HELP[section] && (() => {
@@ -4292,6 +4897,7 @@ export default function ControlCenterTab({ user, onNavigateTo }) {
       {section === 'paywall'      && <PaywallSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
       {section === 'support'      && <SupportSection onNavigateTo={onNavigateTo} />}
       {section === 'monitoring'   && <MonitoringSection onNavigateTo={onNavigateTo} onCCSection={setSection} />}
+      {section === 'audit'        && <AuditLogSection />}
     </div>
   );
 }

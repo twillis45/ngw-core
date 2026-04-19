@@ -1561,7 +1561,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         onClick={() => setDiagramZoomed(false)}
         style={{
           position: 'fixed', inset: 0, zIndex: 9999,
-          backgroundColor: 'rgba(4,5,7,0.92)',
+          backgroundColor: 'rgba(11,11,12,0.92)',
           backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',

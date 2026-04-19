@@ -21,7 +21,7 @@ import useStableViewport        from '../../../utils/useStableViewport';
 import analyzeTrackAlive      from '../../../assets/day1/analyze-track-alive.svg';
 import ellipseBg              from '../../../assets/day1/ellipse-bg.svg';
 
-import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW } from '../../../theme/studioMatte';
+import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW, SCREEN_BG } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
@@ -129,7 +129,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
   const FS = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
     <div
       onClick={(e) => { if (e.target === e.currentTarget) tapHaptic(); }}
       onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
@@ -140,7 +140,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
       maxWidth: isDesktop ? undefined : 430,
       height: '100%',
       margin: '0 auto',
-      backgroundColor: C.bg,
+      backgroundColor: SCREEN_BG,
       boxShadow: isDesktop ? undefined : '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
@@ -253,7 +253,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '48px 24px 22px',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.55) 40%, rgba(4,5,7,0.88) 100%)',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.55) 40%, rgba(11,11,12,0.88) 100%)',
             zIndex: 7, pointerEvents: 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
           }}>
@@ -272,7 +272,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '36px 20px 18px',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.70) 40%, rgba(4,5,7,0.92) 100%)',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.70) 40%, rgba(11,11,12,0.92) 100%)',
             zIndex: 7, animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
           }}>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.3px', textAlign: 'center', textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)', ...FS }}>
@@ -378,7 +378,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
             padding: '0 0 44px', pointerEvents: 'none',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.30) 40%, rgba(4,5,7,0.70) 80%, rgba(4,5,7,0.85) 100%)',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.30) 40%, rgba(11,11,12,0.70) 80%, rgba(11,11,12,0.85) 100%)',
           }}>
             <ExifStrip exifData={exifData} style={{
               opacity: (analysisComplete && result?.pattern) ? 0 : 0.65,

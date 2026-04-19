@@ -45,6 +45,8 @@ from db.database import (
     get_rule_candidate,
     update_rule_candidate,
     delete_rule_candidate,
+    log_admin_change,
+    get_admin_changelog,
 )
 
 router = APIRouter(prefix="/lab", tags=["lab"])
@@ -1476,6 +1478,11 @@ async def create_gold_set(body: GoldSetCreate, user: Dict = Depends(get_dev_user
         setup_family=body.setup_family,
         provenance=body.provenance,
     )
+    log_admin_change("gold_set", entry["id"], "create", {
+        "by": user.get("email", "unknown"),
+        "image_path": body.image_path,
+        "status": body.status,
+    })
     return entry
 
 
@@ -1495,6 +1502,10 @@ async def update_gold_set(
         return existing
 
     entry = update_gold_set_entry(entry_id, **updates)
+    log_admin_change("gold_set", entry_id, "update", {
+        "by": user.get("email", "unknown"),
+        "fields": list(updates.keys()),
+    })
     return entry
 
 
@@ -1524,6 +1535,7 @@ async def delete_gold_set(entry_id: str, user: Dict = Depends(get_dev_user)):
     deleted = delete_gold_set_entry(entry_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Gold set entry not found")
+    log_admin_change("gold_set", entry_id, "delete", {"by": user.get("email", "unknown")})
     return {"status": "deleted", "id": entry_id}
 
 
@@ -1619,6 +1631,11 @@ async def create_candidate(body: RuleCandidateCreate, user: Dict = Depends(get_d
         status=body.status,
         created_by=user.get("email", "unknown"),
     )
+    log_admin_change("candidate", candidate["id"], "create", {
+        "by": user.get("email", "unknown"),
+        "title": body.title,
+        "status": body.status,
+    })
     return candidate
 
 
@@ -1638,6 +1655,10 @@ async def update_candidate(
         return existing
 
     candidate = update_rule_candidate(candidate_id, **updates)
+    log_admin_change("candidate", candidate_id, "update", {
+        "by": user.get("email", "unknown"),
+        "fields": list(updates.keys()),
+    })
     return candidate
 
 
@@ -1647,6 +1668,7 @@ async def delete_candidate(candidate_id: str, user: Dict = Depends(get_dev_user)
     deleted = delete_rule_candidate(candidate_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Rule candidate not found")
+    log_admin_change("candidate", candidate_id, "delete", {"by": user.get("email", "unknown")})
     return {"status": "deleted", "id": candidate_id}
 
 
@@ -2320,6 +2342,9 @@ async def approve_dataset_entry(
             pattern_id, reference_id,
             approved_by=user.get("email", "unknown"),
         )
+        log_admin_change("reference", f"{pattern_id}/{reference_id}", "approve", {
+            "by": user.get("email", "unknown"),
+        })
         return {"status": "approved", "metadata": meta}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -2337,9 +2362,26 @@ async def reject_dataset_entry(
 
     try:
         meta = reject_entry(pattern_id, reference_id, reason=reason)
+        log_admin_change("reference", f"{pattern_id}/{reference_id}", "reject", {
+            "by": user.get("email", "unknown"),
+            "reason": reason,
+        })
         return {"status": "rejected", "metadata": meta}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/audit-log")
+async def get_audit_log(
+    limit: int = Query(100, ge=1, le=500),
+    entity_type: Optional[str] = Query(None, description="Filter by entity type"),
+    user: Dict = Depends(get_dev_user),
+):
+    """Unified audit log — all admin actions across gold set, candidates, references, etc."""
+    entries = get_admin_changelog(limit=limit)
+    if entity_type:
+        entries = [e for e in entries if e["entity_type"] == entity_type]
+    return {"entries": entries, "count": len(entries)}
 
 
 @router.get("/vlm-corrections")

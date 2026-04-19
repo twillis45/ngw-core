@@ -9,6 +9,8 @@
  * All data from props — no hardcoded sample values.
  */
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { startStripeCheckout } from '../../../data/stripeCheckout';
+import { saveSetup } from '../../../data/setupStore';
 import { createPortal } from 'react-dom';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
@@ -1431,7 +1433,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           onClick={() => setZoomedPattern(null)}
           style={{
             position: 'fixed', inset: 0,
-            backgroundColor: 'rgba(4,5,7,0.94)',
+            backgroundColor: 'rgba(11,11,12,0.94)',
             backdropFilter: 'blur(6px)',
             WebkitBackdropFilter: 'blur(6px)',
             display: 'flex', flexDirection: 'column',
@@ -1727,6 +1729,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   const [detailOpen, setDetailOpen] = useState(false);
   const [diagramView, setDiagramView] = useState('top');
   const [diagramZoomed, setDiagramZoomed] = useState(false);
+  const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
+  const [setupSaved, setSetupSaved] = useState(false);
   // lightExpanded state removed — THE LIGHT now shows only the pattern
   // answer (shadow analysis moved to DETAIL), so no clip is needed.
   // Daylight brightness boost — persisted across screens via settings store.
@@ -2157,6 +2161,29 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   // visible; only the DETAIL section collapses.
   const toggleDetail = () => setDetailOpen(prev => !prev);
 
+  // ── Outcome capture — feeds the learning pipeline ──────────────────────
+  const handleOutcome = useCallback((outcome) => {
+    setOutcomeRecorded(outcome);
+    tapHaptic();
+    // Fire signal to backend
+    const _pattern = result?.pattern || result?.authoritative_pattern || result?.bestMatch?.lightingPattern || 'unknown';
+    const _conf = result?.confidence ?? result?.match_confidence ?? null;
+    try {
+      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('ngw_auth_token') : null;
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      fetch('/api/signals/record', {
+        method: 'POST', headers,
+        body: JSON.stringify({
+          pattern_id: _pattern,
+          confidence_score: _conf,
+          outcome,
+          input_method: 'reference_photo',
+        }),
+      }).catch(() => {});
+    } catch { /* fire-and-forget */ }
+  }, [result]);
+
   // Summary for the collapsed DETAIL drawer
   const detailSummary = [
     sections.vlmNarrative?.fields?.[0]?.value || sections.sceneDescription?.split('.')[0],
@@ -2458,7 +2485,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
             padding: '48px 20px 16px',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.65) 50%, rgba(4,5,7,0.88) 100%)',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.65) 50%, rgba(11,11,12,0.88) 100%)',
             zIndex: 7, pointerEvents: 'none',
           }}>
             <div style={{
@@ -2513,7 +2540,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 // details still wash the photo so the explanation reads.
                 background: chipDetail.label === 'Blown Highlights'
                   ? 'transparent'
-                  : 'linear-gradient(180deg, rgba(4,5,7,0.35) 0%, rgba(4,5,7,0.78) 55%, rgba(4,5,7,0.92) 100%)',
+                  : 'linear-gradient(180deg, rgba(11,11,12,0.35) 0%, rgba(11,11,12,0.78) 55%, rgba(11,11,12,0.92) 100%)',
                 backdropFilter: chipDetail.label === 'Blown Highlights' ? undefined : 'blur(4px)',
                 WebkitBackdropFilter: chipDetail.label === 'Blown Highlights' ? undefined : 'blur(4px)',
                 display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
@@ -2735,10 +2762,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             {/* Free tier: blurred preview — show what they'd GET, not what they can't see.
                 Creates desire through partial reveal, not deprivation through a lock wall. */}
             {!isPaid && (
-              <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 10 }}>
+              <div
+                onClick={() => { tapHaptic(); startStripeCheckout().catch(() => {}) }}
+                style={{ position: 'relative', overflow: 'hidden', borderRadius: 10, cursor: 'pointer' }}
+              >
                 {/* Blurred preview of setup content */}
                 <div style={{
-                  padding: '16px 10px', filter: 'blur(6px)', opacity: 0.45,
+                  padding: '16px 10px', filter: 'blur(8px)', opacity: 0.35,
                   pointerEvents: 'none', userSelect: 'none',
                 }}>
                   <div style={{
@@ -2764,13 +2794,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 <div style={{
                   position: 'absolute', inset: 0,
                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                  gap: 8, background: 'rgba(4,5,8,0.35)',
+                  gap: 6, background: 'rgba(4,5,8,0.45)',
                 }}>
-                  <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'rgba(200,155,60,0.90)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                  {/* Lock + PRO badge */}
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
+                    padding: '3px 10px', borderRadius: 4,
+                    background: 'rgba(200,155,60,0.15)', border: '1px solid rgba(200,155,60,0.30)',
+                    color: 'rgba(200,155,60,0.90)', ...FONT_SMOOTH,
+                  }}>
+                    🔒 PRO
+                  </span>
+                  <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'rgba(200,155,60,0.90)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
                     Unlock the full blueprint
                   </p>
                   <p style={{ margin: 0, fontSize: 11, color: steel(0.55), ...FONT_SMOOTH }}>
                     Modifier · Distance · Height · Catchlight · Diagram
+                  </p>
+                  <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 600, color: steel(0.40), ...FONT_SMOOTH }}>
+                    From $39/mo
                   </p>
                 </div>
               </div>
@@ -3178,6 +3220,83 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           </PullTabDrawer>
         )}
 
+        {/* ── Outcome capture — feeds the learning pipeline ── */}
+        {isPaid && !outcomeRecorded && (
+          <div style={{
+            margin: '16px 0 8px', padding: '16px 14px',
+            borderRadius: 12,
+            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
+            boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
+          }}>
+            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: steel(0.40), textAlign: 'center', ...FONT_SMOOTH }}>
+              DID YOU GET THE SHOT?
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              {[
+                { id: 'nailed_it', label: 'Nailed It', icon: '✓', color: C.confHigh },
+                { id: 'close',     label: 'Almost',    icon: '~', color: C.confLow },
+                { id: 'failed',    label: 'Off',       icon: '✕', color: C.textDanger },
+              ].map(o => (
+                <button key={o.id} onClick={() => handleOutcome(o.id)}
+                  className="sm-btn-lift"
+                  style={{
+                    flex: 1, padding: '12px 8px', border: 'none', borderRadius: 10, cursor: 'pointer',
+                    background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+                    boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                    WebkitTapHighlightColor: 'transparent',
+                  }}>
+                  <span style={{ fontSize: 18, color: o.color, ...FONT_SMOOTH }}>{o.icon}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>{o.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {isPaid && outcomeRecorded && (
+          <div style={{
+            margin: '16px 0 8px', padding: '14px',
+            borderRadius: 12, textAlign: 'center',
+            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
+            boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
+          }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: outcomeRecorded === 'nailed_it' ? C.confHigh : outcomeRecorded === 'close' ? C.confLow : C.textDanger, ...FONT_SMOOTH }}>
+              {outcomeRecorded === 'nailed_it' ? 'Nailed it. Pattern confirmed.' : outcomeRecorded === 'close' ? 'Almost — we\'ll tune it.' : 'Logged. We\'ll fix it.'}
+            </p>
+            <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.35), ...FONT_SMOOTH }}>
+              This feeds the learning engine
+            </p>
+          </div>
+        )}
+
+        {/* ── Save setup — quick save without navigating to SetupScreen ── */}
+        {isPaid && !setupSaved && (
+          <button onClick={() => {
+            tapHaptic(); softClickSound();
+            saveSetup({ name: result?.pattern || result?.authoritative_pattern || 'Setup', tag: 'auto', result });
+            setSetupSaved(true);
+          }}
+            className="sm-btn-lift"
+            style={{
+              width: '100%', padding: '13px 0', margin: '8px 0',
+              borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+              boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              WebkitTapHighlightColor: 'transparent',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 5v14l7-5 7 5V5" />
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.5px', color: steel(0.50), ...FONT_SMOOTH }}>Save This Setup</span>
+          </button>
+        )}
+        {isPaid && setupSaved && (
+          <div style={{ margin: '8px 0', padding: '12px', textAlign: 'center', borderRadius: 10, background: 'linear-gradient(141.71deg, #142218 0%, #0e1810 100%)', boxShadow: PANEL_SHADOW }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: C.confHigh, letterSpacing: '0.3px', ...FONT_SMOOTH }}>✓ Saved to your setups</span>
+          </div>
+        )}
+
         {/* Mobile CTA spacer — reserves room at bottom of scroll content
             so the floating CTA bar doesn't occlude the last drawer items. */}
         {!isDesktop && <div style={{ height: 72 }} />}
@@ -3205,7 +3324,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
         }}>
           {(
             <button
-              onClick={() => { if (!isPaid) return; segmentPressSound(); tapHaptic(); onSetup(); }}
+              onClick={() => {
+                if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
+                else { tapHaptic(); startStripeCheckout().catch(() => {}) }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
@@ -3214,8 +3336,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 margin: isDesktop ? '0 auto' : undefined,
                 height: isDesktop ? 54 : 48,
                 borderRadius: 24,
-                background: CTA_BG,
-                boxShadow: `${CTA_SHADOW}, ${CTA_BEVEL}`,
+                background: isPaid ? CTA_BG : 'linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%)',
+                boxShadow: isPaid
+                  ? `${CTA_SHADOW}, ${CTA_BEVEL}`
+                  : '4px 4px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.30), 0 0 12px rgba(200,155,69,0.08), inset 0 1px 0 rgba(200,155,69,0.12)',
                 border: 'none', cursor: 'pointer',
                 WebkitTapHighlightColor: 'transparent',
                 overflow: 'hidden',
@@ -3224,14 +3348,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             >
               <span style={{
                 fontSize: isDesktop ? 13 : 11, fontWeight: 700,
-                color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.90)',
+                color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
                 letterSpacing: isDesktop ? '3px' : '2.5px',
                 textTransform: 'uppercase',
                 pointerEvents: 'none',
-                textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.25)',
+                textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.30)',
                 ...FONT_SMOOTH,
               }}>
-                {isPaid ? 'Build This Light' : 'Upgrade to Build'}
+                {isPaid ? 'Build This Light' : 'Upgrade · From $39/mo'}
               </span>
             </button>
           )}
@@ -3258,17 +3382,21 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             tipY: M_TOP_END - 40,
             arrow: 'down',
           },
-          { // Step 2: THE SETUP section
+          { // Step 2: THE SETUP section (different copy for free vs paid)
             x: 20, y: M_TOP_END + 200, w: COL_W - 40, h: 140, r: 12,
-            title: 'Your rebuild blueprint',
-            desc: 'Modifier, catchlight, distance, height — everything to recreate it.',
+            title: isPaid ? 'Your rebuild blueprint' : 'Your rebuild blueprint',
+            desc: isPaid
+              ? 'Modifier, catchlight, distance, height — everything to recreate it.'
+              : 'Modifier, catchlight, anywhere to continue distance, height — upgrade to unlock the full breakdown.',
             tipY: M_TOP_END + 80,
             arrow: 'down',
           },
           { // Step 3: Build This Light CTA
             x: 25, y: stableVH - safeBottom - 68, w: COL_W - 50, h: 48, r: 24,
-            title: 'Ready to build it?',
-            desc: 'Step-by-step cockpit to match this light in your studio.',
+            title: isPaid ? 'Ready to build it?' : 'Upgrade to unlock',
+            desc: isPaid
+              ? 'Step-by-step cockpit to match this light in your studio.'
+              : 'Get the full blueprint + step-by-step setup cockpit.',
             tipY: stableVH - safeBottom - 186,
             arrow: 'down',
           },
@@ -3689,7 +3817,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           onClick={() => setDiagramFullscreen(false)}
           style={{
             position: 'fixed', inset: 0,
-            backgroundColor: 'rgba(4,5,7,0.92)',
+            backgroundColor: 'rgba(11,11,12,0.92)',
             backdropFilter: 'blur(6px)',
             WebkitBackdropFilter: 'blur(6px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',

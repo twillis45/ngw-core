@@ -4,7 +4,7 @@
  * Three button states: idle (no image) → alive (image ready) → pressed (analyzing)
  * All colors and pixel positions from Figma Token Palette — Studio Matte
  */
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { Fragment, useRef, useState, useEffect, useCallback } from 'react';
 import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPressHaptic, grainHaptic } from '../../../utils/haptics';
 import { analyzeClickSound, softClickSound, imageDropSound, powerOnSound, navSlideSound, panelToggleSound } from '../../../utils/sounds';
 import { loadSettings } from '../../../data/settingsStore';
@@ -12,7 +12,8 @@ import { fetchImageFromUrl } from '../../../data/labApi';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import useStableViewport from '../../../utils/useStableViewport';
 import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
-         PANEL_SHADOW, PANEL_BEVEL, CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
+         PANEL_SHADOW, PANEL_BEVEL, CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT, SCREEN_BG,
+         NAV_GHOST, NAV_BTN, NAV_DOT, IDENTITY_BADGE, VF_DITHER_NOISE, DITHER_STYLE } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
@@ -718,38 +719,50 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         background: 'linear-gradient(180deg, rgba(6,7,10,0.80) 0%, rgba(6,7,10,0.40) 60%, transparent 100%)',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>No Guesswork</p>
-          <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FONT_SMOOTH }}>LIGHTING</p>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
+            No Guesswork <span style={{ fontWeight: 500, color: steel(0.40) }}>Lighting</span>
+          </p>
         </div>
         {user && (
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            {/* Settings — machined button */}
-            <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
-              className="sm-btn-lift"
-              style={{
-                background: `linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)`,
-                border: 'none', borderRadius: 8, cursor: 'pointer',
-                padding: '6px 14px',
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {/* User initial — machined monogram disc (matches home button style) */}
+            <div style={{ position: 'relative' }}>
+              {/* Well cavity */}
+              <div style={{
+                position: 'absolute', inset: -4, borderRadius: '50%',
                 boxShadow: [
-                  '4px 4px 12px rgba(0,0,0,0.55)',
-                  '2px 2px 5px rgba(0,0,0,0.40)',
-                  '-1px -1px 1px rgba(255,255,255,0.04)',
-                  'inset 0 1px 0 rgba(255,255,255,0.07)',
-                  'inset -1px -1px 0 rgba(0,0,0,0.25)',
+                  'inset 4px 4px 10px rgba(0,0,0,0.85)',
+                  'inset 2px 2px 5px rgba(0,0,0,0.65)',
+                  'inset -1px -1px 2px rgba(255,255,255,0.012)',
+                  '-1px -1px 1px rgba(255,255,255,0.03)',
+                  '2px 3px 8px rgba(0,0,0,0.45)',
                 ].join(', '),
-                WebkitTapHighlightColor: 'transparent',
-              }}>
-              {/* Gear icon */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={steel(0.40)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-                </svg>
-                <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.38), letterSpacing: '0.5px', ...FONT_SMOOTH }}>Settings</span>
-              </div>
-            </button>
-            {/* User name — plain text, not a button */}
-            <span style={{ fontSize: 10, fontWeight: 500, color: steel(0.22), ...FONT_SMOOTH }}>{user.username || user.email}</span>
+                pointerEvents: 'none',
+              }} />
+              <button onClick={() => { onSettings?.(); softClickSound(); tapHaptic(); }}
+                className="sm-btn-lift"
+                title={(user.username || user.email || '')}
+                style={{
+                  position: 'relative',
+                  width: 36, height: 36, borderRadius: '50%',
+                  background: CTA_BG, border: 'none', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: [
+                    '8px 8px 22px rgba(0,0,0,0.72)',
+                    '4px 4px 10px rgba(0,0,0,0.55)',
+                    '1px 2px 4px rgba(0,0,0,0.38)',
+                    '-1px -1px 2px rgba(255,255,255,0.06)',
+                    'inset 0 1.5px 0 rgba(255,255,255,0.14)',
+                    'inset 1px 0 0 rgba(255,255,255,0.07)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.40)',
+                  ].join(', '),
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.3px', color: steel(0.65), ...FONT_SMOOTH }}>
+                  {(user.username || user.email || 'U')[0].toUpperCase()}
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -836,6 +849,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             {/* Glass panel overlay — lens vignette + directional key reflection */}
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
               <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+              <div style={DITHER_STYLE} />
               <div style={{
                 position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
                 background: GLASS_REFLECTION, opacity: 0.62,
@@ -974,6 +988,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
         }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          {/* Dither noise — breaks vignette gradient banding on 8-bit displays */}
+          <div style={DITHER_STYLE} />
           <div style={{
             position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
             background: GLASS_REFLECTION, opacity: 0.4,
@@ -987,7 +1003,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 12,
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           padding: '0 0 40px', pointerEvents: 'auto',
-          background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.50) 30%, rgba(4,5,7,0.82) 70%, rgba(4,5,7,0.92) 100%)',
+          background: `linear-gradient(to bottom, transparent 0%, ${SCREEN_BG}80 30%, ${SCREEN_BG}d1 70%, ${SCREEN_BG}eb 100%)`,
         }}>
           <ExifStrip exifData={exifData} style={{ marginBottom: 18, opacity: 0.85 }} />
           {/* CTA — Studio Matte canonical button: directional gradient + chamfer + LED ring */}
@@ -1052,75 +1068,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         </div>
       </>)}
 
-      {/* ── Bottom dock — studio tools with icons ── */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        // Hidden on desktop (tools available in profile dropdown) and when
-        // image is loaded (CTA replaces dock).
-        display: (hasImage || isDesktop) ? 'none' : 'flex',
-        justifyContent: 'center', alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 6, padding: '0 20px 22px',
-        pointerEvents: 'auto',
-      }}>
-        {[
-          { label: 'Recipes', icon: 'M4 6h16M4 12h10M4 18h14', action: onRecipes },
-          { label: 'Saved', icon: 'M5 5v14l7-5 7 5V5', action: onSavedSetups },
-          { label: 'Build', icon: 'M12 2L2 7l10 5 10-5M2 17l10 5 10-5M2 12l10 5 10-5', action: onBuildWizard },
-          { label: 'My Kit', icon: 'M20 7H4a2 2 0 00-2 2v6a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM6 12h.01M12 12h.01M18 12h.01', action: onMyKit },
-        ].map(item => (
-          <div key={item.label} style={{ position: 'relative' }}>
-            {/* Well cavity — recessed behind each dock button */}
-            <div style={{
-              position: 'absolute', inset: -3,
-              borderRadius: 13,
-              boxShadow: [
-                'inset 4px 4px 10px rgba(0,0,0,0.85)',
-                'inset 2px 2px 5px rgba(0,0,0,0.65)',
-                'inset 1px 1px 2px rgba(0,0,0,0.45)',
-                'inset -1px -1px 2px rgba(255,255,255,0.012)',
-                '-1px -1px 1px rgba(255,255,255,0.03)',
-                '2px 3px 8px rgba(0,0,0,0.45)',
-              ].join(', '),
-              pointerEvents: 'none',
-            }} />
-            <button onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
-              style={{
-                position: 'relative',
-                background: `linear-gradient(141.71deg, #1e2028 0%, #151720 50%, #0e0f14 100%)`,
-                border: 'none', borderRadius: 10, cursor: 'pointer',
-                padding: '11px 22px',
-                display: 'flex', alignItems: 'center', gap: 9,
-                boxShadow: [
-                  // Outer drop — face floats above well
-                  '8px 8px 22px rgba(0,0,0,0.72)',
-                  '4px 4px 10px rgba(0,0,0,0.55)',
-                  '1px 2px 4px rgba(0,0,0,0.38)',
-                  // Chamfer — 141.71° key catch
-                  '-1px -1px 2px rgba(255,255,255,0.06)',
-                  // Inner bevel — machined face
-                  'inset 0 1.5px 0 rgba(255,255,255,0.10)',
-                  'inset 1.5px 0 0 rgba(255,255,255,0.05)',
-                  'inset -1px -1px 0 rgba(0,0,0,0.35)',
-                ].join(', '),
-                WebkitTapHighlightColor: 'transparent',
-                transition: 'transform 0.12s ease, box-shadow 0.15s ease',
-              }}
-              className="sm-btn-lift"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.52)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d={item.icon} />
-              </svg>
-              <span style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.3px', color: steel(0.60), ...FONT_SMOOTH }}>{item.label}</span>
-            </button>
-          </div>
-        ))}
-      </div>
     </div>
   ) : null;
 
   return (
-    <div ref={rootRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: '#000', overflow: 'hidden', overscrollBehavior: 'none' }}>
+    <div ref={rootRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: SCREEN_BG, overflow: 'hidden', overscrollBehavior: 'none' }}>
     <div
       onClick={handleBodyTap}
       onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
@@ -1130,7 +1082,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         width: '100%',
         height: '100%',
         margin: '0 auto',
-        backgroundColor: C.bg,
+        backgroundColor: SCREEN_BG,
         boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
         overflow: 'hidden',
         fontFamily: 'Inter, system-ui, sans-serif',
@@ -1333,7 +1285,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
-        )}
 
         {/* 1 — Ellipse depth oval — desktop hides when no photo */}
         {(!isDesktop || hasImage) && (
@@ -1805,7 +1756,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           onClick={loadSample}
           style={{
             position: 'absolute',
-            top: BTN_TOP + BTN_D + 14,
+            top: BTN_TOP + BTN_D + 10,
             left: 0, right: 0,
             display: 'flex', justifyContent: 'center', alignItems: 'center',
             gap: showTeach ? 5 : 6,
@@ -2202,6 +2153,44 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
       {/* ── Desktop right panel ── */}
       {desktopRightPanel}
+
+      {/* ── Desktop dock — ghost text links (token: NAV_GHOST) ── */}
+      {!hasImage && isDesktop && (
+        <div style={{
+          position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          display: 'flex', alignItems: 'center',
+          gap: 6, pointerEvents: 'auto', zIndex: 9,
+        }}>
+          {[
+            { label: 'Recipes', action: onRecipes },
+            { label: 'Saved Setups', action: onSavedSetups },
+            { label: 'Build a Setup', action: onBuildWizard },
+            { label: 'My Kit', action: onMyKit },
+          ].map((item, i) => (
+            <Fragment key={item.label}>
+              {i > 0 && (
+                <span style={{ color: NAV_DOT.color, fontSize: NAV_DOT.fontSize, userSelect: 'none' }}>·</span>
+              )}
+              <button onClick={() => { item.action?.(); softClickSound(); tapHaptic(); }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '6px 10px',
+                  fontSize: NAV_GHOST.fontSize, fontWeight: NAV_GHOST.fontWeight,
+                  letterSpacing: NAV_GHOST.letterSpacing,
+                  color: NAV_GHOST.color,
+                  transition: 'color 0.2s ease',
+                  WebkitTapHighlightColor: 'transparent',
+                  ...FONT_SMOOTH,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = NAV_GHOST.hoverColor; }}
+                onMouseLeave={e => { e.currentTarget.style.color = NAV_GHOST.color; }}
+              >
+                {item.label}
+              </button>
+            </Fragment>
+          ))}
+        </div>
+      )}
 
       {/* ── State animation keyframes ── */}
       <style>{`

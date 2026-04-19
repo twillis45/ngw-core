@@ -26,6 +26,7 @@ from db.database import (
     create_password_reset_token, consume_password_reset_token, update_user_password,
     delete_user_account,
     get_active_subscription, get_subscription_by_stripe_session,
+    log_admin_change,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -105,6 +106,10 @@ def login(body: LoginBody, request: Request):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     token = create_access_token(user["id"])
     logger.info("[login] success user_id=%s email=%s", user["id"], body.email)
+    try:
+        log_admin_change("auth", user["id"], "login", {"email": body.email})
+    except Exception:
+        pass
     return {"token": token, "user": _user_public(user)}
 
 

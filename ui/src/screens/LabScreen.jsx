@@ -873,6 +873,8 @@ export default function LabScreen() {
       handleTabSwitch(activeIntelTab);
     } else if (sectionId === 'system') {
       switchTab(activeSystemTab);
+    } else if (sectionId === 'support') {
+      switchTab('control_center'); // Support uses ControlCenterTab with support section pre-selected
     }
     // 'status' and 'logs' — content renders inline; no legacy tab needed
   }
@@ -927,17 +929,19 @@ export default function LabScreen() {
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div className="lab-nav" style={{ flex: 1 }}>
           {[
-            { id: 'status',       label: 'Status' },
-            { id: 'logs',         label: 'Logs' },
+            { id: 'status',       label: 'Dashboard' },
             { id: 'workbench',    label: 'Workbench' },
+            { id: 'logs',         label: 'Logs' },
             { id: 'training',     label: 'Training' },
             { id: 'intelligence', label: 'Intel' },
-            { id: 'system',       label: 'System' },
+            { id: 'system',       label: 'Operations' },
+            { id: 'support',      label: 'Support' },
           ].map(section => {
             const sectionAlerts = {
               training:     ['gold_set', 'ref_dataset', 'candidates'],
               intelligence: ['signals', 'learning', 'benchmarks'],
               system:       ['control_center'],
+              support:      [],
             }[section.id] || [];
             const hasError = sectionAlerts.some(k => tabMetrics[k]?.color === 'red');
             return (
@@ -1006,13 +1010,11 @@ export default function LabScreen() {
       {activeSection === 'training' && (
         <div className="lab-subnav">
           {[
-            { id: 'queue',       label: 'Intake Queue' },
+            { id: 'queue',       label: 'Pipeline'     },
             { id: 'goldset',     label: '★ Gold Set'   },
-            { id: 'qc',          label: 'QC'           },
-            { id: 'coverage',    label: 'Coverage'     },
-            { id: 'reviews',     label: 'Review Queue' },
-            { id: 'ref_dataset', label: 'Ref Library'  },
+            { id: 'ref_dataset', label: 'References'   },
             { id: 'candidates',  label: 'Candidates'   },
+            { id: 'reviews',     label: 'Review Queue' },
           ].map(sub => (
             <button
               key={sub.id}
@@ -1046,7 +1048,7 @@ export default function LabScreen() {
         </div>
       )}
 
-      {/* ── System sub-nav (Figma: flat underline tabs) ── */}
+      {/* ── Operations sub-nav ── */}
       {activeSection === 'system' && (
         <div className="lab-subnav">
           {[
@@ -1064,6 +1066,8 @@ export default function LabScreen() {
           ))}
         </div>
       )}
+
+      {/* ── Support — no sub-nav needed, single view ── */}
 
       {/* ── Help Panel ── */}
       {showHelp && (
@@ -1199,7 +1203,7 @@ export default function LabScreen() {
         </div>
       )}
 
-      <div className="lab-content" style={{ display: (activeSection === 'status' || activeSection === 'logs') ? 'none' : undefined }}>
+      <div className="lab-content" style={{ display: (activeSection === 'status' || activeSection === 'logs') ? 'none' : undefined, position: 'relative' }}>
         {mountedTabs.has('workbench') && (
           <div style={{ display: activeTab === 'workbench' ? 'block' : 'none' }}>
             <WorkbenchTab
@@ -1217,7 +1221,7 @@ export default function LabScreen() {
             <GoldSetTab
               prefill={goldSetPrefill}
               onPrefillConsumed={() => setGoldSetPrefill(null)}
-              activeGoldTab={['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(activeTrainingTab) ? activeTrainingTab : 'goldset'}
+              activeGoldTab={['queue', 'goldset', 'qc', 'coverage', 'reviews'].includes(activeTrainingTab) ? activeTrainingTab : (activeTrainingTab === 'pipeline' ? 'queue' : 'goldset')}
               onGoldTabChange={(tab) => setActiveTrainingTab(tab)}
             />
           </div>
@@ -1251,8 +1255,13 @@ export default function LabScreen() {
           </div>
         )}
         {mountedTabs.has('control_center') && (
-          <div style={{ display: activeTab === 'control_center' ? 'block' : 'none' }}>
+          <div style={{ display: activeTab === 'control_center' && activeSection !== 'support' ? 'block' : 'none' }}>
             <ControlCenterTab user={user} onNavigateTo={handleNavigateTo} />
+          </div>
+        )}
+        {activeSection === 'support' && (
+          <div>
+            <ControlCenterTab user={user} onNavigateTo={handleNavigateTo} initialSection="support" key="support-cc" />
           </div>
         )}
         {mountedTabs.has('user') && (
@@ -1343,6 +1352,7 @@ function L1StreamPanel({ onNavigateTo }) {
   const [error, setError]       = useState(null);
   const [loading, setLoading]   = useState(true);
   const [filters, setFilters]   = useState({ userEmail: '', search: '', pattern: '', flags: '' });
+  const [expandedRow, setExpandedRow] = useState(null);
 
   function fetch_(f = filters) {
     setLoading(true);
@@ -1442,8 +1452,10 @@ function L1StreamPanel({ onNavigateTo }) {
                 const confVariant = (r.confidence ?? 0) >= 0.8 ? 't-green' : (r.confidence ?? 0) >= 0.5 ? 't-amber' : 't-red';
                 const shortId = r.analysis_id ? r.analysis_id.slice(0, 8) : '—';
                 const imgFile = r.image_path ? r.image_path.split('/').pop() : '—';
+                const isExpanded = expandedRow === r.analysis_id;
                 return (
-                  <tr key={r.analysis_id} className={hasIssue ? 't-flagged' : ''}>
+                  <React.Fragment key={r.analysis_id}>
+                  <tr className={hasIssue ? 't-flagged' : ''} onClick={() => setExpandedRow(isExpanded ? null : r.analysis_id)} style={{ cursor: 'pointer' }}>
                     <td className="t-nowrap t-mono">{fmtDT(r.created_at)}</td>
                     <td className="t-nowrap" title={r.user_email || ''}>
                       {r.user_email ? r.user_email.split('@')[0] : <span className="t-dim">—</span>}
@@ -1467,11 +1479,72 @@ function L1StreamPanel({ onNavigateTo }) {
                     </td>
                     <td className="t-actions">
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <ActionBtn label="Workbench ↗" onClick={() => onNavigateTo?.({ tab: 'workbench' })} variant="blue" />
-                        {hasIssue && <ActionBtn label="→ Review" onClick={() => onNavigateTo?.({ tab: 'reviews' })} variant="amber" />}
+                        <ActionBtn label="Workbench ↗" onClick={(ev) => { ev.stopPropagation(); onNavigateTo?.({ tab: 'workbench' }); }} variant="blue" />
+                        {hasIssue && <ActionBtn label="→ Review" onClick={(ev) => { ev.stopPropagation(); onNavigateTo?.({ tab: 'reviews' }); }} variant="amber" />}
                       </div>
                     </td>
                   </tr>
+                  {isExpanded && (
+                    <tr>
+                      <td colSpan={9} style={{ padding: '10px 12px', background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px 16px', fontSize: 11, marginBottom: 8 }}>
+                          <div><strong>Analysis ID:</strong> <code style={{ fontSize: 10, wordBreak: 'break-all' }}>{r.analysis_id}</code></div>
+                          <div><strong>Image:</strong> <span style={{ fontSize: 10 }}>{r.image_path || '—'}</span></div>
+                          <div><strong>User:</strong> {r.user_email || '—'}</div>
+                          <div><strong>Source:</strong> {r.source || '—'}</div>
+                          <div><strong>Light count:</strong> {r.light_count ?? '—'}</div>
+                          <div><strong>Processing:</strong> {r.total_time_s != null ? `${r.total_time_s.toFixed(2)}s` : '—'}</div>
+                        </div>
+                        {/* Stage timings */}
+                        {r.stage_timings && Object.keys(r.stage_timings).length > 0 && (
+                          <div style={{ marginBottom: 8 }}>
+                            <strong style={{ fontSize: 10, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Pipeline stages</strong>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4 }}>
+                              {Object.entries(r.stage_timings).map(([stage, ms]) => (
+                                <span key={stage} style={{
+                                  fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px',
+                                  background: 'var(--color-surface-elevated)', borderRadius: 4,
+                                  color: ms > 2 ? 'var(--color-status-amber)' : 'var(--color-text-secondary)',
+                                }}>{stage}: {typeof ms === 'number' ? `${ms.toFixed(2)}s` : ms}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Contradictions detail */}
+                        {r.contradictions?.length > 0 && (
+                          <div style={{ marginBottom: 8 }}>
+                            <strong style={{ fontSize: 10, color: 'var(--color-status-red)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Contradictions</strong>
+                            <ul style={{ margin: '4px 0 0', paddingLeft: 16, fontSize: 11, color: 'var(--color-status-red)' }}>
+                              {r.contradictions.map((c, i) => <li key={i}>{c}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {/* Paradoxes detail */}
+                        {r.active_paradoxes?.length > 0 && (
+                          <div style={{ marginBottom: 8 }}>
+                            <strong style={{ fontSize: 10, color: 'var(--color-status-red)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Signal paradoxes</strong>
+                            <ul style={{ margin: '4px 0 0', paddingLeft: 16, fontSize: 11, color: 'var(--color-status-amber)' }}>
+                              {r.active_paradoxes.map((p, i) => <li key={i}>{p}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {/* Edge cases */}
+                        {r.active_edge_cases?.length > 0 && (
+                          <div>
+                            <strong style={{ fontSize: 10, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Edge case flags</strong>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                              {r.active_edge_cases.map((e, i) => (
+                                <span key={i} style={{ fontSize: 10, padding: '2px 6px', background: 'var(--color-status-amber-bg2)', color: 'var(--color-status-amber)', borderRadius: 4 }}>
+                                  {e.replace(/_/g, ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -2313,6 +2386,15 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
   const [loading,   setLoading]   = useState(false);
   const [result,    setResult]    = useState(null);
   const [error,     setError]     = useState(null);
+  // ── Analysis history ──────────────────────────────────────────────
+  const [analysisHistory, setAnalysisHistory] = useState([]);
+  const [historyIdx,      setHistoryIdx]      = useState(-1);
+  // ── Batch analysis ─────────────────────────────────────────────────
+  const [batchMode,    setBatchMode]    = useState(false);
+  const [batchFiles,   setBatchFiles]   = useState([]);   // File[]
+  const [batchResults, setBatchResults] = useState([]);   // [{file,pattern,confidence,error,elapsed}]
+  const [batchRunning, setBatchRunning] = useState(false);
+  const [batchIdx,     setBatchIdx]     = useState(-1);   // current file index being processed
   const [viewMode,       setViewMode]       = useState('formatted'); // 'formatted' | 'compare' | 'json' | 'overlay'
   const [vlmDirty,       setVlmDirty]       = useState(false);       // true after any VLM accept
   const [debugMode,      setDebugMode]      = useState(false);        // generate debug overlay
@@ -2422,6 +2504,14 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
       setOverlayLayers(null);
       setOverlayRegenError(null);
       onWorkbenchChange?.({ file, preview, imagePath: data.image_path || null, result: data });
+      // Push to analysis history
+      setAnalysisHistory(prev => [...prev.slice(-19), {
+        fileName: file.name, preview, result: data,
+        timestamp: Date.now(),
+        pattern: data.pattern || data.pattern_id || '—',
+        confidence: data.confidence ?? data.match_confidence ?? null,
+      }]);
+      setHistoryIdx(-1);
     } catch (err) {
       if (err.name === 'AbortError' || controller.signal.aborted) {
         setError('Analysis cancelled.');
@@ -2557,12 +2647,143 @@ function WorkbenchTab({ onSaveToGoldSet, onProposeRule, pendingImage, onPendingC
             </div>
           </div>
         ))}
+
+        {/* Batch mode toggle */}
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <button className="btn btn--ghost btn--sm" onClick={() => setBatchMode(!batchMode)}>
+            {batchMode ? '← Single mode' : '⚡ Batch Analysis'}
+          </button>
+        </div>
+
+        {/* Batch mode UI */}
+        {batchMode && (
+          <div style={{ marginTop: 16, padding: '16px', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-surface)', maxWidth: 440, width: '100%' }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: 'var(--text-sm)', fontWeight: 700 }}>Batch Analysis</h4>
+            <p style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', margin: '0 0 12px' }}>
+              Select multiple images. Results appear as each completes.
+            </p>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+              <input type="file" accept="image/*" multiple onChange={handleBatchFiles} style={{ fontSize: 'var(--text-xs)', flex: 1 }} />
+              <button className="btn btn--primary btn--sm" onClick={runBatch} disabled={batchRunning || batchFiles.length === 0}>
+                {batchRunning ? `${batchIdx + 1}/${batchFiles.length}…` : `Run ${batchFiles.length}`}
+              </button>
+            </div>
+            {batchRunning && (
+              <div style={{ height: 4, background: 'var(--color-border)', borderRadius: 2, marginBottom: 12, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${((batchIdx + 1) / batchFiles.length) * 100}%`, background: 'var(--color-accent)', transition: 'width 0.3s' }} />
+              </div>
+            )}
+            {batchResults.length > 0 && (
+              <table className="lab-log__table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead><tr>
+                  <th style={{ textAlign: 'left', padding: '4px 6px' }}>File</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px' }}>Pattern</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>Conf</th>
+                  <th style={{ textAlign: 'right', padding: '4px 6px' }}>Time</th>
+                  <th style={{ textAlign: 'center', padding: '4px 6px' }}>OK</th>
+                </tr></thead>
+                <tbody>
+                  {batchResults.map((r, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '3px 6px', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.fileName}</td>
+                      <td style={{ padding: '3px 6px', fontWeight: 600, textTransform: 'capitalize' }}>{r.pattern}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r.confidence != null ? `${Math.round(r.confidence)}%` : '—'}</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{r.elapsed}s</td>
+                      <td style={{ padding: '3px 6px', textAlign: 'center' }}>
+                        {r.error ? <span style={{ color: 'var(--color-error)' }}>✗</span> : <span style={{ color: 'var(--color-success)' }}>✓</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {batchResults.length > 0 && !batchRunning && (
+              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--color-text-secondary)', display: 'flex', gap: 12 }}>
+                <span>{batchResults.length} total</span>
+                <span style={{ color: 'var(--color-success)' }}>{batchResults.filter(r => !r.error).length} pass</span>
+                <span style={{ color: 'var(--color-error)' }}>{batchResults.filter(r => r.error).length} fail</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
 
+  // ── Batch analysis logic ───────────────────────────────────────────
+  function handleBatchFiles(e) {
+    const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+    setBatchFiles(files);
+    setBatchResults([]);
+    setBatchIdx(-1);
+  }
+
+  async function runBatch() {
+    if (!batchFiles.length) return;
+    setBatchRunning(true);
+    setBatchResults([]);
+    const results = [];
+    for (let i = 0; i < batchFiles.length; i++) {
+      setBatchIdx(i);
+      const f = batchFiles[i];
+      const t0 = Date.now();
+      try {
+        const data = await analyzeImage(f, { debug: false });
+        results.push({
+          fileName: f.name, pattern: data.pattern || data.authoritative_pattern || '—',
+          confidence: data.confidence ?? data.match_confidence ?? null,
+          source: data.source_context || '—', error: null,
+          elapsed: ((Date.now() - t0) / 1000).toFixed(1),
+        });
+      } catch (err) {
+        results.push({
+          fileName: f.name, pattern: '—', confidence: null, source: '—',
+          error: err.message || 'Failed', elapsed: ((Date.now() - t0) / 1000).toFixed(1),
+        });
+      }
+      setBatchResults([...results]);
+    }
+    setBatchRunning(false);
+    setBatchIdx(-1);
+  }
+
+  // Restore a history entry into the live workbench state
+  function restoreHistoryEntry(idx) {
+    const entry = analysisHistory[idx];
+    if (!entry) return;
+    setPreview(entry.preview);
+    setResult(entry.result);
+    setError(null);
+    setHistoryIdx(idx);
+    setViewMode('formatted');
+    setVlmDirty(false);
+  }
+
   return (
     <div className="lab-workbench">
+      {/* ── Analysis History Strip ── */}
+      {analysisHistory.length > 0 && (
+        <div className="lab-wb-history">
+          <span className="lab-status__section-label" style={{ marginBottom: 6 }}>ANALYSIS HISTORY</span>
+          <div className="lab-wb-history__strip">
+            {analysisHistory.map((entry, i) => (
+              <button
+                key={i}
+                className={`lab-wb-history__item${historyIdx === i ? ' lab-wb-history__item--active' : ''}`}
+                onClick={() => restoreHistoryEntry(i)}
+                title={`${entry.pattern} — ${entry.confidence != null ? entry.confidence + '%' : '—'}\n${entry.fileName}\n${new Date(entry.timestamp).toLocaleTimeString()}`}
+              >
+                {entry.preview && <img src={entry.preview} alt="" className="lab-wb-history__thumb" />}
+                <span className="lab-wb-history__label">{entry.pattern}</span>
+                {entry.confidence != null && (
+                  <span className="lab-wb-history__conf">{entry.confidence}%</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className={`lab-wb-layout${viewMode === 'overlay' && result ? ' lab-wb-layout--wide-overlay' : ''}`}>
 
         {/* ── LEFT: image + controls (sticky on desktop) ── */}

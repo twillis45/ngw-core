@@ -538,6 +538,12 @@ export async function getBenchmarkSummary() {
   return labFetch('/benchmarks/summary');
 }
 
+/** Confusion matrix — expected vs predicted pattern from a benchmark run. */
+export async function getConfusionMatrix(runId = null) {
+  const qs = runId ? `?run_id=${encodeURIComponent(runId)}` : '';
+  return labFetch(`/benchmarks/confusion-matrix${qs}`);
+}
+
 /** Trigger a nightly-style drift detection run from the Lab UI. */
 export async function triggerDriftCheck() {
   return labFetch('/benchmarks/drift-check', { method: 'POST' });
@@ -856,6 +862,13 @@ export async function exportServerLogs() {
 export async function getDiagnostics(pattern = null) {
   const qs = pattern ? `?pattern=${encodeURIComponent(pattern)}` : '';
   return coreFetch(`/diagnostics${qs}`);
+}
+
+/** Fetch unified audit log — all admin actions. */
+export async function getAuditLog({ limit = 100, entityType = null } = {}) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (entityType) params.set('entity_type', entityType);
+  return labFetch(`/audit-log?${params}`);
 }
 
 

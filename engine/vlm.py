@@ -21,9 +21,13 @@ import base64
 import json
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+# Thread-local storage for last VLM call token/cost info
+_vlm_usage = threading.local()
 
 from engine.image_analysis_models import (
     VLMDescription,
@@ -260,6 +264,36 @@ def _guess_mime(image_path: str) -> str:
 # ── Retry helper ─────────────────────────────────────────────────────────
 
 _RETRY_DELAYS = (2, 5, 15)  # seconds between attempts (3 retries = 4 total attempts)
+
+# ── Cost estimation (per 1M tokens, USD) ─────────────────────────────────
+_OPENAI_PRICING = {
+    # model_prefix: (input_per_1M, output_per_1M)
+    "gpt-4.1":   (2.00, 8.00),
+    "gpt-4o":    (2.50, 10.00),
+    "gpt-4-":    (10.00, 30.00),    # gpt-4-turbo etc
+    "gpt-4":     (30.00, 60.00),
+}
+_ANTHROPIC_PRICING = {
+    "claude-sonnet": (3.00, 15.00),
+    "claude-haiku":  (0.25, 1.25),
+    "claude-opus":   (15.00, 75.00),
+}
+
+def _estimate_openai_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    if not input_tokens or not output_tokens:
+        return 0.0
+    for prefix, (inp, outp) in _OPENAI_PRICING.items():
+        if model and model.startswith(prefix):
+            return round(input_tokens * inp / 1_000_000 + output_tokens * outp / 1_000_000, 6)
+    return 0.0
+
+def _estimate_anthropic_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    if not input_tokens or not output_tokens:
+        return 0.0
+    for prefix, (inp, outp) in _ANTHROPIC_PRICING.items():
+        if model and prefix in model:
+            return round(input_tokens * inp / 1_000_000 + output_tokens * outp / 1_000_000, 6)
+    return 0.0
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:
@@ -515,6 +549,12 @@ def _call_openai(image_path: str) -> Dict[str, Any]:
             getattr(response, "model", _VLM_MODEL),
         )
         raw_text = response.choices[0].message.content or "{}"
+        # Stash token counts for cost tracking
+        _in = int(prompt_tokens) if isinstance(prompt_tokens, int) else None
+        _out = int(completion_tokens) if isinstance(completion_tokens, int) else None
+        _vlm_usage.input_tokens = _in
+        _vlm_usage.output_tokens = _out
+        _vlm_usage.cost_usd = _estimate_openai_cost(_VLM_MODEL, _in, _out)
         return json.loads(raw_text)
 
     return _call_with_retry(_do_call, image_path, "OpenAI")
@@ -586,6 +626,12 @@ def _call_anthropic(image_path: str) -> Dict[str, Any]:
             lines = raw_text.split("\n")
             lines = [l for l in lines if not l.strip().startswith("```")]
             raw_text = "\n".join(lines)
+        # Stash token counts for cost tracking
+        _in = int(input_tokens) if isinstance(input_tokens, int) else None
+        _out = int(output_tokens) if isinstance(output_tokens, int) else None
+        _vlm_usage.input_tokens = _in
+        _vlm_usage.output_tokens = _out
+        _vlm_usage.cost_usd = _estimate_anthropic_cost(_VLM_MODEL, _in, _out)
         return json.loads(raw_text)
 
     return _call_with_retry(_do_call, image_path, "Anthropic")
@@ -680,7 +726,10 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         latency_ms = (time.time() - t0) * 1000
         try:
             from db.database import log_vlm_call
-            log_vlm_call(used_provider, _VLM_MODEL, latency_ms, ok=True, caller="analyze_image")
+            log_vlm_call(used_provider, _VLM_MODEL, latency_ms, ok=True, caller="analyze_image",
+                         input_tokens=getattr(_vlm_usage, 'input_tokens', None),
+                         output_tokens=getattr(_vlm_usage, 'output_tokens', None),
+                         cost_usd=getattr(_vlm_usage, 'cost_usd', None))
         except Exception:
             pass  # metrics logging must never break analysis
 
