@@ -291,6 +291,20 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_pwd_reset_token ON password_reset_tokens(token);
             CREATE INDEX IF NOT EXISTS idx_pwd_reset_email ON password_reset_tokens(email);
 
+            -- ── Alert state (production alerting) ────────────────────────
+            -- Persists alert transitions so they survive server restarts.
+            -- One row per rule state change (ok→warn, warn→alert, etc.)
+            CREATE TABLE IF NOT EXISTS alert_events (
+                id          TEXT PRIMARY KEY,
+                rule_id     TEXT NOT NULL,
+                prev_state  TEXT NOT NULL,
+                new_state   TEXT NOT NULL,
+                value       TEXT,
+                threshold   TEXT,
+                fired_at    REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_alert_events_at ON alert_events(fired_at DESC);
+
             -- ── Build 3A: Analysis replay blobs ──────────────────────────
             -- Stores trimmed JSON snapshots of each AnalysisResult for later
             -- case replay. Only available for analyses run after Build 3A
@@ -825,6 +839,32 @@ def get_all_user_preferences(user_id: str) -> Dict[str, Any]:
             (user_id,),
         ).fetchall()
     return {r["pref_key"]: json.loads(r["pref_value"]) for r in rows}
+
+
+# ── Alert Events ──────────────────────────────────────────
+
+def log_alert_event(rule_id: str, prev_state: str, new_state: str,
+                    value: str = None, threshold: str = None) -> Dict[str, Any]:
+    """Persist an alert state transition."""
+    eid = uuid.uuid4().hex
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO alert_events (id, rule_id, prev_state, new_state, value, threshold, fired_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (eid, rule_id, prev_state, new_state, value, threshold, now),
+        )
+    return {"id": eid, "rule_id": rule_id, "prev_state": prev_state,
+            "new_state": new_state, "fired_at": now}
+
+
+def get_alert_events(limit: int = 50) -> List[Dict[str, Any]]:
+    """Return recent alert events, newest first."""
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM alert_events ORDER BY fired_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── Admin Changelog ───────────────────────────────────────

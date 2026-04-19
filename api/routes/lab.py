@@ -2385,6 +2385,111 @@ async def get_audit_log(
     return {"entries": entries, "count": len(entries)}
 
 
+@router.get("/alert-check")
+async def check_alerts(
+    hours: int = Query(24, ge=1, le=168),
+    user: Dict = Depends(get_dev_user),
+):
+    """Evaluate production alert rules against current metrics. Persists state transitions."""
+    from db.database import get_vlm_call_stats, log_alert_event, get_alert_events, get_db
+    import json as _json
+
+    stats = get_vlm_call_stats(hours=hours)
+
+    # Count analyses needing review
+    with get_db() as conn:
+        cutoff = __import__('time').time() - hours * 3600
+        total_analyses = conn.execute(
+            "SELECT COUNT(*) FROM analysis_results WHERE created_at > ?", (cutoff,)
+        ).fetchone()[0]
+        # Count review flags from result_json
+        review_rows = conn.execute(
+            "SELECT result_json FROM analysis_results WHERE created_at > ?", (cutoff,)
+        ).fetchall()
+    review_count = 0
+    paradox_count = 0
+    for row in review_rows:
+        try:
+            rj = _json.loads(row["result_json"]) if row["result_json"] else {}
+            if rj.get("needs_review"):
+                review_count += 1
+            notes = rj.get("notes") or []
+            for n in notes:
+                if isinstance(n, str) and "paradox" in n.lower():
+                    paradox_count += 1
+                    break
+        except Exception:
+            pass
+
+    review_rate = review_count / max(total_analyses, 1)
+    paradox_rate = paradox_count / max(total_analyses, 1)
+    today_cost = stats.get("daily_cost", [{}])[0].get("cost_usd", 0) if stats.get("daily_cost") else 0
+
+    # ── Production alert rules ──
+    RULES = [
+        {"id": "vlm_error_rate",   "label": "VLM Error Rate",    "value": stats.get("error_rate", 0),     "warn": 0.08, "alert": 0.15},
+        {"id": "vlm_no_calls",     "label": "VLM Call Volume",   "value": stats.get("total", 0),          "warn": 5,    "alert": 0,    "invert": True},
+        {"id": "vlm_p95_latency",  "label": "VLM p95 Latency",   "value": stats.get("p95_latency_ms"),    "warn": 3600, "alert": 6000},
+        {"id": "vlm_avg_latency",  "label": "VLM Avg Latency",   "value": stats.get("avg_latency_ms"),    "warn": 2000, "alert": 3000},
+        {"id": "daily_cost",       "label": "Daily VLM Cost",     "value": today_cost,                     "warn": 30,   "alert": 50},
+        {"id": "review_rate",      "label": "Review Rate",        "value": round(review_rate, 4),          "warn": 0.05, "alert": 0.10},
+        {"id": "paradox_rate",     "label": "Paradox Rate",       "value": round(paradox_rate, 4),          "warn": 0.01, "alert": 0.02},
+        {"id": "total_analyses",   "label": "Analysis Volume",    "value": total_analyses,                  "warn": 1,    "alert": 0,    "invert": True},
+    ]
+
+    # Evaluate each rule
+    results = []
+    for rule in RULES:
+        v = rule["value"]
+        if v is None:
+            state = "unknown"
+        elif rule.get("invert"):
+            # Lower is worse (e.g., call volume)
+            state = "alert" if v <= rule["alert"] else "warn" if v <= rule["warn"] else "ok"
+        else:
+            state = "alert" if v >= rule["alert"] else "warn" if v >= rule["warn"] else "ok"
+
+        results.append({
+            "id": rule["id"], "label": rule["label"],
+            "value": v, "state": state,
+            "warn_threshold": rule["warn"], "alert_threshold": rule["alert"],
+        })
+
+    # Load previous states and persist transitions
+    prev_events = get_alert_events(limit=100)
+    prev_states = {}
+    for ev in prev_events:
+        if ev["rule_id"] not in prev_states:
+            prev_states[ev["rule_id"]] = ev["new_state"]
+
+    transitions = []
+    for r in results:
+        prev = prev_states.get(r["id"], "ok")
+        if prev != r["state"] and r["state"] in ("warn", "alert"):
+            log_alert_event(r["id"], prev, r["state"],
+                           value=str(r["value"]), threshold=str(r["alert_threshold"]))
+            transitions.append({"rule": r["label"], "from": prev, "to": r["state"], "value": r["value"]})
+
+    return {
+        "rules": results,
+        "transitions": transitions,
+        "total_analyses": total_analyses,
+        "review_count": review_count,
+        "paradox_count": paradox_count,
+        "window_hours": hours,
+    }
+
+
+@router.get("/alert-history")
+async def alert_history(
+    limit: int = Query(50, ge=1, le=200),
+    user: Dict = Depends(get_dev_user),
+):
+    """Return persisted alert event history."""
+    from db.database import get_alert_events
+    return {"events": get_alert_events(limit=limit)}
+
+
 @router.get("/vlm-corrections")
 async def vlm_corrections(user: Dict = Depends(get_dev_user)):
     """Summary of VLM overrides/enrichments vs CV — reveals systematic CV gaps."""

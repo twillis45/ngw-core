@@ -864,6 +864,16 @@ export async function getDiagnostics(pattern = null) {
   return coreFetch(`/diagnostics${qs}`);
 }
 
+/** Run server-side alert check — evaluates all production rules + persists transitions. */
+export async function checkAlerts(hours = 24) {
+  return labFetch(`/alert-check?hours=${hours}`);
+}
+
+/** Fetch persisted alert event history from backend. */
+export async function getAlertHistory(limit = 50) {
+  return labFetch(`/alert-history?limit=${limit}`);
+}
+
 /** Fetch unified audit log — all admin actions. */
 export async function getAuditLog({ limit = 100, entityType = null } = {}) {
   const params = new URLSearchParams({ limit: String(limit) });
