@@ -785,8 +785,10 @@ function EmptyState({ onAdd, isDesktop }) {
               width: 28, height: 28, borderRadius: 8,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 13, lineHeight: 1,
-              background: accent(0.10), color: KEY_ACCENT,
-              border: `1px solid ${accent(0.18)}`,
+              background: `linear-gradient(141.71deg, ${accent(0.14)} 0%, ${accent(0.06)} 100%)`,
+              color: KEY_ACCENT,
+              border: 'none',
+              boxShadow: `0 0 0 1px ${accent(0.22)}, 0 2px 6px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.06)`,
               flexShrink: 0, ...FONT_SMOOTH,
             }}>{item.icon}</span>
             <span style={{ fontSize: 13, color: steel(0.55), textAlign: 'left', ...FONT_SMOOTH }}>

@@ -47,7 +47,7 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
       <MatteBackground variant="subdued" />
-    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
       <ScreenHeader title="Preferences" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
@@ -193,7 +193,7 @@ function AccountScreen({ user, onBack, onLogout }) {
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
       <MatteBackground variant="subdued" />
-    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
       <ScreenHeader title="Account" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
@@ -441,7 +441,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
       <MatteBackground variant="subdued" />
-    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 640, margin: '0 auto' }}>
+    <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', zIndex: 10 }}>

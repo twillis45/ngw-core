@@ -337,12 +337,17 @@ function EmptyState({ onBuild }) {
         ].map(step => (
           <div key={step.num} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{
-              width: 24, height: 24, borderRadius: '50%',
+              width: 26, height: 26, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 11, fontWeight: 700, lineHeight: 1,
-              background: step.gold ? accent(0.18) : steel(0.08),
-              color: step.gold ? KEY_ACCENT : steel(0.5),
-              border: `1px solid ${step.gold ? accent(0.25) : steel(0.12)}`,
+              background: step.gold
+                ? `linear-gradient(141.71deg, ${accent(0.22)} 0%, ${accent(0.12)} 100%)`
+                : 'linear-gradient(141.71deg, rgba(26,28,34,1) 0%, rgba(14,15,18,1) 100%)',
+              color: step.gold ? KEY_ACCENT : steel(0.55),
+              border: 'none',
+              boxShadow: step.gold
+                ? `0 0 0 1px ${accent(0.30)}, 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`
+                : 'inset 2px 2px 5px rgba(0,0,0,0.55), inset -0.5px -0.5px 1px rgba(255,255,255,0.03), 1px 2px 4px rgba(0,0,0,0.30)',
               flexShrink: 0, ...FONT_SMOOTH,
             }}>{step.num}</span>
             <span style={{ fontSize: 13, color: steel(0.55), textAlign: 'left', ...FONT_SMOOTH }}>

@@ -144,10 +144,13 @@ function PillButton({ label, active, onClick }) {
         flexShrink: 0,
         padding: isDesktop ? '8px 16px' : '8px 14px', minHeight: 36, borderRadius: 999,
         border: 'none', cursor: 'pointer',
-        backgroundColor: active ? accent(0.15) : (hover ? steel(0.08) : C.divider),
+        background: active
+          ? `linear-gradient(141.71deg, ${accent(0.20)} 0%, ${accent(0.10)} 100%)`
+          : hover ? 'linear-gradient(141.71deg, rgba(132,158,184,0.10) 0%, rgba(132,158,184,0.04) 100%)'
+          : 'linear-gradient(141.71deg, rgba(22,24,30,1) 0%, rgba(16,17,20,1) 100%)',
         boxShadow: active
-          ? `inset 0 0 0 1px ${accent(0.4)}, 0 1px 3px rgba(0,0,0,0.3)`
-          : `inset 0 0 0 1px ${hover && !active ? steel(0.18) : steel(0.12)}, 0 1px 2px rgba(0,0,0,0.2)`,
+          ? `0 0 0 1px ${accent(0.45)}, 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`
+          : `0 2px 5px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04), inset -1px -1px 0 rgba(0,0,0,0.20)`,
         fontSize: isDesktop ? 12 : 11, fontWeight: active ? 700 : 600,
         color: active ? KEY_ACCENT : steel(0.65),
         letterSpacing: '0.5px',
