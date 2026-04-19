@@ -40,7 +40,7 @@ import { trackEvent } from '../../../data/analytics';
 // reach for steel(0.42) directly.
 const C = {
   ...SM_C,
-  fieldBg: '#0a0b0d',
+  fieldBg: C.slotBg,
   textDim:  'rgba(184,191,199,0.66)',
   textMeta: '#b8bec7',
 };
@@ -1077,7 +1077,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               {mod?.family && (
                 <div style={{
                   width: 56, height: 48, flexShrink: 0,
-                  borderRadius: 10, backgroundColor: '#121316',
+                  borderRadius: 10, backgroundColor: C.panelBg,
                   boxShadow: 'inset 0 -1px 2px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,255,255,0.04)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   overflow: 'hidden',
