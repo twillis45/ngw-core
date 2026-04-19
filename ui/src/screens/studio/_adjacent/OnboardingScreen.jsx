@@ -66,10 +66,10 @@ const STEPS = [
   },
 ];
 
-function Chip({ label, selected, onClick }) {
+function Chip({ label, selected, onClick, large }) {
   return (
     <button onClick={onClick} style={{
-      padding: '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
+      padding: large ? '12px 26px' : '10px 20px', borderRadius: 10, border: 'none', cursor: 'pointer',
       background: selected
         ? `linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)`
         : `linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)`,
@@ -80,7 +80,7 @@ function Chip({ label, selected, onClick }) {
       transition: 'all 0.15s ease',
     }}>
       <span style={{
-        fontSize: 12, fontWeight: selected ? 700 : 600,
+        fontSize: large ? 13 : 12, fontWeight: selected ? 700 : 600,
         color: selected ? KEY_ACCENT : steel(0.55),
         letterSpacing: '0.3px', ...FONT_SMOOTH,
       }}>{label}</span>
@@ -124,10 +124,12 @@ export default function OnboardingScreen({ onComplete }) {
     onComplete?.();
   }
 
+  const isWide = typeof window !== 'undefined' && window.innerWidth >= 820;
+
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
       <MatteBackground variant="subdued" />
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 440, padding: '0 24px' }}>
+      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: isWide ? 600 : 440, padding: isWide ? '0 40px' : '0 24px' }}>
         {/* Step indicator */}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 28 }}>
           {STEPS.map((_, i) => (
@@ -140,10 +142,10 @@ export default function OnboardingScreen({ onComplete }) {
         </div>
 
         {/* Title */}
-        <h2 style={{ margin: '0 0 8px', fontSize: 28, fontWeight: 800, color: 'rgba(245,247,250,0.95)', letterSpacing: '-0.5px', textAlign: 'center', lineHeight: 1.2, textShadow: '0 1px 3px rgba(0,0,0,0.5)', ...FONT_SMOOTH }}>
+        <h2 style={{ margin: '0 0 8px', fontSize: isWide ? 34 : 28, fontWeight: 800, color: 'rgba(245,247,250,0.95)', letterSpacing: '-0.5px', textAlign: 'center', lineHeight: 1.2, textShadow: '0 1px 3px rgba(0,0,0,0.5)', ...FONT_SMOOTH }}>
           {currentStep.title}
         </h2>
-        <p style={{ margin: '0 0 32px', fontSize: 13, fontWeight: 500, color: steel(0.50), textAlign: 'center', letterSpacing: '0.1px', ...FONT_SMOOTH }}>
+        <p style={{ margin: '0 0 32px', fontSize: isWide ? 15 : 13, fontWeight: 500, color: steel(0.50), textAlign: 'center', letterSpacing: '0.1px', ...FONT_SMOOTH }}>
           {currentStep.subtitle}
         </p>
 
@@ -158,6 +160,7 @@ export default function OnboardingScreen({ onComplete }) {
                 <Chip
                   key={opt.value}
                   label={opt.label}
+                  large={isWide}
                   selected={section.multi
                     ? (Array.isArray(profile[section.key]) && profile[section.key].includes(opt.value))
                     : profile[section.key] === opt.value}

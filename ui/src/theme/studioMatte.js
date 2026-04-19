@@ -47,6 +47,8 @@ export const C = {
   // ── Surface ──
   bg:          '#000001',           // --sm-bg
   slotBg:      '#08080a',           // --sm-surface-slot
+  wellBg:      '#050507',           // --sm-surface-well (ring tracks, deep insets)
+  trackBg:     '#08090c',           // --sm-surface-track (scroll tracks, secondary wells)
   panelBg:     '#121316',           // --sm-surface  (Figma: Soft Black)
   pillBg:      '#070709',           // --sm-surface-pill
   ctaFrom:     '#3d404d',           // --sm-surface-cta-from
@@ -295,6 +297,19 @@ export const IDENTITY_BADGE = {
 
 // Dot separator for ghost nav
 export const NAV_DOT = { color: steel(0.12), fontSize: 10 };
+
+// ─── Machined surface gradients ──────────────────────────────────────────────
+// 141.71° directional gradient — the signature Studio Matte depth direction.
+// Used on buttons, chips, panels, docks, and any raised surface.
+export const MACHINED_BG = 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)';
+export const MACHINED_PANEL_BG = 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)';
+export const MACHINED_SHADOW = [
+  '4px 4px 12px rgba(0,0,0,0.55)',
+  '2px 2px 5px rgba(0,0,0,0.40)',
+  '-0.5px -0.5px 1px rgba(255,255,255,0.04)',
+  'inset 0 1px 0 rgba(255,255,255,0.07)',
+  'inset -1px -1px 0 rgba(0,0,0,0.25)',
+].join(', ');
 
 // ─── Green toggle (settings toggles) ─────────────────────────────────────────
 export const GREEN        = 'rgba(72,186,136,0.9)';

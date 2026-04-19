@@ -27,6 +27,7 @@ import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_
          READOUT_FG, READOUT_GLOW, READOUT_LABEL,
          DRAWER_RADIUS,
          BTN_RAISED_UP, BTN_RAISED_DOWN, BTN_RECESSED_UP, BTN_RECESSED_DOWN,
+         MACHINED_BG, MACHINED_PANEL_BG, MACHINED_SHADOW, SCREEN_BG,
           } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
@@ -332,7 +333,7 @@ function ShadowSignature({ angleDeg, density }) {
             flex: '0 0 auto', width: 140,
             padding: '10px 10px 8px',
             borderRadius: 10,
-            backgroundColor: '#070709',
+            backgroundColor: C.pillBg,
             boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
             cursor: 'zoom-in',
           }}
@@ -385,7 +386,7 @@ function ShadowSignature({ angleDeg, density }) {
           flex: 1, minWidth: 0,
           padding: '10px 14px 10px',
           borderRadius: 10,
-          backgroundColor: '#070709',
+          backgroundColor: C.pillBg,
           boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
@@ -508,7 +509,7 @@ function SceneField({ label, value }) {
     <div style={{
       padding: '10px 12px',
       borderRadius: 10,
-      backgroundColor: '#08090c',
+      backgroundColor: C.trackBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
       minWidth: 0,
     }}>
@@ -551,7 +552,7 @@ function SignalGauge({ label, value, display, mode, accentColor }) {
       flex: '1 1 calc(50% - 5px)', minWidth: 130,
       padding: '10px 12px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -866,7 +867,7 @@ function LightComponentChips({ components }) {
       flex: 1, minWidth: 0,
       padding: '8px 10px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -952,7 +953,7 @@ function DirectionalCompass({ direction }) {
       display: 'flex', alignItems: 'center', gap: 14,
       padding: '10px 12px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
       marginBottom: 12,
     }}>
@@ -1012,7 +1013,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
       marginTop: 6, marginBottom: 14,
       padding: '12px 14px 10px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
@@ -1249,7 +1250,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
               style={{
                 width: 56, height: 56,
                 borderRadius: 10,
-                backgroundColor: '#070709',
+                backgroundColor: C.pillBg,
                 boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'zoom-in',
@@ -1333,7 +1334,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
                   style={{
                     width: 56, height: 56,
                     borderRadius: 10,
-                    backgroundColor: '#070709',
+                    backgroundColor: C.pillBg,
                     boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     cursor: 'zoom-in',
@@ -1454,7 +1455,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           <div style={{
             width: 'min(72vw, 320px)', height: 'min(72vw, 320px)',
             borderRadius: 24,
-            backgroundColor: '#070709',
+            backgroundColor: C.pillBg,
             boxShadow: 'inset 0px 3px 10px 0px rgba(0,0,0,0.7), inset 0px 1px 3px 0px rgba(0,0,0,0.5), 0 18px 60px rgba(0,0,0,0.6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 24,
@@ -1559,7 +1560,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
       marginTop: 10, marginBottom: 10,
       padding: '10px 12px 8px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
@@ -2657,7 +2658,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             width: 'calc(100% - 50px)',
             aspectRatio: '300 / 175',
             borderRadius: 12,
-            backgroundColor: '#070709',
+            backgroundColor: C.pillBg,
             boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
             overflow: 'hidden',
             cursor: 'zoom-in',
@@ -2764,7 +2765,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 }}>
                   <div style={{
                     display: 'flex', gap: 10, alignItems: 'stretch',
-                    padding: '10px', borderRadius: 10, backgroundColor: '#070709',
+                    padding: '10px', borderRadius: 10, backgroundColor: C.pillBg,
                   }}>
                     <div style={{ flex: 1, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <CatchlightEye clockHour={catchlightClockHour} clockHours={catchlightClockHour ? [String(catchlightClockHour)] : []} angleDeg={rawSignals.nose_shadow_angle_deg} compact />
@@ -2816,7 +2817,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               display: 'flex', gap: 10, alignItems: 'stretch',
               padding: '10px 10px 8px',
               borderRadius: 10,
-              backgroundColor: '#070709',
+              backgroundColor: C.pillBg,
               boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
             }}>
               {/* Catchlight dial — icon container fixed 80px tall so label aligns with modifier label */}
@@ -3216,7 +3217,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           <div style={{
             margin: '16px 0 8px', padding: '16px 14px',
             borderRadius: 12,
-            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
+            background: MACHINED_PANEL_BG,
             boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
           }}>
             <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: steel(0.40), textAlign: 'center', ...FONT_SMOOTH }}>
@@ -3232,7 +3233,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   className="sm-btn-lift"
                   style={{
                     flex: 1, padding: '12px 8px', border: 'none', borderRadius: 10, cursor: 'pointer',
-                    background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+                    background: MACHINED_BG,
                     boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
                     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
                     WebkitTapHighlightColor: 'transparent',
@@ -3248,7 +3249,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           <div style={{
             margin: '16px 0 8px', padding: '14px',
             borderRadius: 12, textAlign: 'center',
-            background: 'linear-gradient(141.71deg, #12141a 0%, #0c0d12 100%)',
+            background: MACHINED_PANEL_BG,
             boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
           }}>
             <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: outcomeRecorded === 'nailed_it' ? C.confHigh : outcomeRecorded === 'close' ? C.confLow : C.textDanger, ...FONT_SMOOTH }}>
@@ -3271,7 +3272,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             style={{
               width: '100%', padding: '13px 0', margin: '8px 0',
               borderRadius: 10, border: 'none', cursor: 'pointer',
-              background: 'linear-gradient(141.71deg, #1a1c22 0%, #131518 50%, #0c0d10 100%)',
+              background: MACHINED_BG,
               boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
               WebkitTapHighlightColor: 'transparent',
@@ -3845,7 +3846,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               width: 'min(92vw, calc(88vh * 300/220))',
               height: 'min(88vh, calc(92vw * 220/300))',
               borderRadius: 20,
-              backgroundColor: '#070709',
+              backgroundColor: C.pillBg,
               boxShadow: 'inset 0px 3px 10px 0px rgba(0,0,0,0.7), inset 0px 1px 3px 0px rgba(0,0,0,0.5), inset 1px 0px 3px 0px rgba(0,0,0,0.4), inset -1px 0px 3px 0px rgba(0,0,0,0.4), 0 24px 80px rgba(0,0,0,0.7)',
               overflow: 'hidden',
               cursor: 'zoom-out',

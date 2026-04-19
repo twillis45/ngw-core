@@ -312,7 +312,7 @@ function LightRoleStrip({ roles }) {
   return (
     <div style={{
       borderRadius: 8, padding: '6px 6px',
-      backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW,
+      backgroundColor: C.wellBg, boxShadow: RING_TRACK_SHADOW,
       position: 'relative',
     }}>
       <div style={{
@@ -339,7 +339,7 @@ function WarningStrip({ warnings }) {
   return (
     <div style={{
       borderRadius: 10, padding: '8px 10px',
-      backgroundColor: '#050507', boxShadow: RING_TRACK_SHADOW,
+      backgroundColor: C.wellBg, boxShadow: RING_TRACK_SHADOW,
       position: 'relative',
     }}>
       <div style={{
@@ -366,7 +366,7 @@ function DesktopSpec({ label, value, hint, hintColor }) {
     <div style={{
       padding: '12px 14px',
       borderRadius: 10,
-      backgroundColor: '#08090c',
+      backgroundColor: C.trackBg,
       boxShadow: 'inset 1px 1px 3px 0px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px 0px rgba(255,255,255,0.035)',
       minWidth: 0,
     }}>
@@ -431,7 +431,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
       marginTop: 10, marginBottom: 10,
       padding: '10px 12px 8px',
       borderRadius: 10,
-      backgroundColor: '#070709',
+      backgroundColor: C.pillBg,
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
@@ -1105,7 +1105,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 style={{
                 position: 'relative', width: '100%',
                 aspectRatio: '16 / 9', maxHeight: 280,
-                borderRadius: 14, backgroundColor: '#070709',
+                borderRadius: 14, backgroundColor: C.pillBg,
                 boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
                 overflow: 'hidden', cursor: 'zoom-in',
               }}>
@@ -1229,7 +1229,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           if (chips.length === 0) return null;
           return (
             <div style={{
-              borderRadius: 8, backgroundColor: '#050507',
+              borderRadius: 8, backgroundColor: C.wellBg,
               boxShadow: RING_TRACK_SHADOW, padding: '5px 4px',
               overflow: 'hidden',
             }}>

@@ -1130,7 +1130,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           color: C.textPrimary, letterSpacing: '-0.3px',
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
           textShadow: '0 0 1px rgba(245,247,250,0.12)',
-        }}>No Guesswork</p>
+        }}>No Guesswork <span style={{ fontWeight: 500, color: steel(0.40) }}>Lighting</span></p>
         <p style={{
           margin: '3px 0 0 1px',
           fontWeight: 700, fontSize: 12, lineHeight: '15px',
