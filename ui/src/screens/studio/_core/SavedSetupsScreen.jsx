@@ -190,6 +190,15 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {setup.tag && setup.tag !== 'auto' && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+              color: steel(0.40), padding: '1px 6px', borderRadius: 4,
+              background: steel(0.06), ...FONT_SMOOTH,
+            }}>
+              {setup.tag}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: steel(0.35), ...FONT_SMOOTH }}>
             {formatDate(setup.timestamp ?? setup.created_at)}
           </span>
