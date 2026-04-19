@@ -2468,9 +2468,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 // Dynamic font size: long pattern names (e.g. "Butterfly (Paramount)")
                 // scale down so they never wrap to a second line on mobile.
                 fontSize: isDesktop
-                  ? (pattern.length > 18 ? 28 : pattern.length > 12 ? 36 : 42)
+                  ? (pattern.length > 18 ? 36 : pattern.length > 12 ? 48 : 56)
                   : (pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32),
-                lineHeight: isDesktop ? '1.1' : (pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px'),
+                lineHeight: isDesktop ? '1.05' : (pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px'),
                 color: C.textPrimary,
                 letterSpacing: '-0.5px',
                 ...FONT_SMOOTH,
@@ -2478,10 +2478,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               }}>{prettify(pattern, { title: true })}</p>
               {geometricBase && (
                 <p style={{
-                  margin: '2px 0 0', fontWeight: 600,
-                  fontSize: isDesktop ? 13 : 11, lineHeight: '1.2',
-                  color: steel(0.40), letterSpacing: '0.3px',
+                  margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
+                  fontSize: isDesktop ? 16 : 11, lineHeight: '1.2',
+                  color: steel(0.55), letterSpacing: '0.5px',
                   ...FONT_SMOOTH,
+                  textShadow: TEXT_SHADOW_ENGRAVED,
                 }}>{prettify(geometricBase, { title: true })} geometry</p>
               )}
               <p style={{
@@ -2729,22 +2730,47 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             ═══════════════════════════════════════════════════════════════ */}
         {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
           <SectionPanel label={isPaid ? 'YOUR SETUP' : 'YOUR SETUP — UPGRADE TO UNLOCK'}>
-            {/* Free tier: show locked state instead of full setup */}
+            {/* Free tier: blurred preview — show what they'd GET, not what they can't see.
+                Creates desire through partial reveal, not deprivation through a lock wall. */}
             {!isPaid && (
-              <div style={{
-                padding: '24px 20px', display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 12, textAlign: 'center',
-              }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(200,155,60,0.55)" strokeWidth="1.6" strokeLinecap="round">
-                  <rect x="3" y="11" width="18" height="11" rx="2" />
-                  <path d="M7 11V7a5 5 0 0110 0v4" />
-                </svg>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: 'rgba(200,155,60,0.75)', ...FONT_SMOOTH }}>
-                  Full setup details
-                </p>
-                <p style={{ margin: 0, fontSize: 12, color: steel(0.40), lineHeight: '17px', ...FONT_SMOOTH }}>
-                  Modifier type, distance, height, catchlight analysis, and lighting diagram are available on paid plans.
-                </p>
+              <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 10 }}>
+                {/* Blurred preview of setup content */}
+                <div style={{
+                  padding: '16px 10px', filter: 'blur(6px)', opacity: 0.45,
+                  pointerEvents: 'none', userSelect: 'none',
+                }}>
+                  <div style={{
+                    display: 'flex', gap: 10, alignItems: 'stretch',
+                    padding: '10px', borderRadius: 10, backgroundColor: '#070709',
+                  }}>
+                    <div style={{ flex: 1, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CatchlightEye clockHour={catchlightClockHour} clockHours={catchlightClockHour ? [String(catchlightClockHour)] : []} angleDeg={rawSignals.nose_shadow_angle_deg} compact />
+                    </div>
+                    {sections.modifier?.family && (
+                      <div style={{ flex: 1, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ModifierEmission family={sections.modifier.family} size={100} />
+                      </div>
+                    )}
+                  </div>
+                  {sections.modifier?.family && (
+                    <p style={{ margin: '12px 0 0', fontSize: 18, fontWeight: 700, color: C.textPrimary, textAlign: 'center', ...FONT_SMOOTH }}>
+                      {sections.modifier.sizeLabel} {sections.modifier.family}
+                    </p>
+                  )}
+                </div>
+                {/* Overlay CTA */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 8, background: 'rgba(4,5,8,0.35)',
+                }}>
+                  <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'rgba(200,155,60,0.90)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                    Unlock the full blueprint
+                  </p>
+                  <p style={{ margin: 0, fontSize: 11, color: steel(0.55), ...FONT_SMOOTH }}>
+                    Modifier · Distance · Height · Catchlight · Diagram
+                  </p>
+                </div>
               </div>
             )}
             {!isPaid ? null : (<>  {/* paid content below */}
@@ -2832,7 +2858,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
             style={{
               position: 'relative', width: '100%',
-              height: 'clamp(180px, 30vh, 320px)',
+              height: 'clamp(220px, 38vh, 420px)',
               borderRadius: 12, backgroundColor: '#0a0c0e',
               boxShadow: 'inset 0px 1px 3px 0px rgba(0,0,0,0.35)',
               overflow: 'hidden', cursor: 'zoom-in',
@@ -3190,11 +3216,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               }}
             >
               <span style={{
-                fontSize: 11, fontWeight: 600,
-                color: 'rgba(245,247,250,0.92)',
-                letterSpacing: '2.5px',
+                fontSize: isDesktop ? 13 : 11, fontWeight: 700,
+                color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.90)',
+                letterSpacing: isDesktop ? '3px' : '2.5px',
                 textTransform: 'uppercase',
                 pointerEvents: 'none',
+                textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.25)',
                 ...FONT_SMOOTH,
               }}>
                 {isPaid ? 'Build This Light' : 'Upgrade to Build'}
