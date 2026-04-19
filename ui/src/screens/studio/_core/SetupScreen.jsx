@@ -40,7 +40,7 @@ import { trackEvent } from '../../../data/analytics';
 // reach for steel(0.42) directly.
 const C = {
   ...SM_C,
-  fieldBg: C.slotBg,
+  fieldBg: SM_C.slotBg,
   textDim:  'rgba(184,191,199,0.66)',
   textMeta: '#b8bec7',
 };
