@@ -443,6 +443,19 @@ export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
       <MatteBackground variant="subdued" />
     <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
 
+      {/* Ambient gear silhouette — desktop only, photography DNA */}
+      <svg viewBox="0 0 200 260" fill="none" style={{
+        position: 'fixed', bottom: '10%', right: '8%', width: 160, height: 210,
+        opacity: 0.018, pointerEvents: 'none', zIndex: 0,
+      }}>
+        <circle cx="100" cy="60" r="35" stroke={steel(1)} strokeWidth="1.5" fill="none" />
+        <circle cx="100" cy="60" r="15" stroke={steel(1)} strokeWidth="0.8" fill="none" />
+        <line x1="100" y1="95" x2="100" y2="220" stroke={steel(1)} strokeWidth="1.2" />
+        <line x1="65" y1="220" x2="135" y2="220" stroke={steel(1)} strokeWidth="1" />
+        <line x1="75" y1="220" x2="100" y2="195" stroke={steel(1)} strokeWidth="0.8" />
+        <line x1="125" y1="220" x2="100" y2="195" stroke={steel(1)} strokeWidth="0.8" />
+      </svg>
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px 8px', position: 'sticky', top: 0, backgroundColor: 'rgba(8,9,12,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', zIndex: 10 }}>
         <button

@@ -281,16 +281,34 @@ function EmptyState({ onBuild }) {
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      padding: '40px 32px',
+      padding: '40px 32px', position: 'relative',
       textAlign: 'center',
       ...FONT_SMOOTH,
     }}>
+      {/* Ambient photography silhouette — DNA element */}
+      <svg viewBox="0 0 200 200" fill="none" style={{
+        position: 'absolute', top: '10%', right: '5%', width: 140, height: 140,
+        opacity: 0.02, pointerEvents: 'none',
+      }}>
+        <circle cx="100" cy="80" r="40" stroke={steel(1)} strokeWidth="1.5" fill="none" />
+        <circle cx="40" cy="30" r="12" stroke={steel(1)} strokeWidth="1" fill="none" />
+        <line x1="50" y1="38" x2="70" y2="55" stroke={steel(1)} strokeWidth="0.8" />
+        <rect x="80" y="160" width="40" height="20" rx="4" stroke={steel(1)} strokeWidth="1" fill="none" />
+      </svg>
+
       {/* Icon */}
       <div style={{
         position: 'relative', marginBottom: 20,
         width: 56, height: 56, borderRadius: 16,
-        background: `linear-gradient(135deg, ${steel(0.08)}, ${steel(0.04)})`,
-        border: `1px solid ${steel(0.10)}`,
+        background: 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+        border: 'none',
+        boxShadow: [
+          'inset 4px 4px 10px rgba(0,0,0,0.70)',
+          'inset 2px 2px 4px rgba(0,0,0,0.50)',
+          'inset -1px -1px 2px rgba(255,255,255,0.025)',
+          '-1px -1px 1px rgba(255,255,255,0.04)',
+          '3px 4px 10px rgba(0,0,0,0.45)',
+        ].join(', '),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {/* Lighting diagram silhouette — photography-native empty state */}

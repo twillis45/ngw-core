@@ -726,16 +726,38 @@ function EmptyState({ onAdd, isDesktop }) {
     <div style={{
       flex: 1, display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center',
-      padding: '40px 32px',
+      padding: '40px 32px', position: 'relative',
       textAlign: 'center',
       ...FONT_SMOOTH,
     }}>
+      {/* Ambient modifier silhouette — photography DNA */}
+      <svg viewBox="0 0 180 220" fill="none" style={{
+        position: 'absolute', top: '8%', left: '5%', width: 120, height: 150,
+        opacity: 0.02, pointerEvents: 'none',
+      }}>
+        {/* Softbox */}
+        <rect x="25" y="10" width="130" height="100" rx="10" stroke={steel(1)} strokeWidth="1.5" fill="none" />
+        <rect x="45" y="30" width="90" height="60" rx="5" stroke={steel(1)} strokeWidth="0.8" fill="none" />
+        {/* Stand */}
+        <line x1="90" y1="110" x2="90" y2="200" stroke={steel(1)} strokeWidth="1.2" />
+        <line x1="60" y1="200" x2="120" y2="200" stroke={steel(1)} strokeWidth="1" />
+        <line x1="70" y1="200" x2="90" y2="180" stroke={steel(1)} strokeWidth="0.8" />
+        <line x1="110" y1="200" x2="90" y2="180" stroke={steel(1)} strokeWidth="0.8" />
+      </svg>
+
       {/* Gear case icon */}
       <div style={{
         position: 'relative', marginBottom: 24,
         width: 72, height: 72, borderRadius: 20,
-        background: `linear-gradient(135deg, ${steel(0.08)}, ${steel(0.04)})`,
-        border: `1px solid ${steel(0.10)}`,
+        background: 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+        border: 'none',
+        boxShadow: [
+          'inset 5px 5px 12px rgba(0,0,0,0.75)',
+          'inset 2px 2px 5px rgba(0,0,0,0.55)',
+          'inset -1px -1px 2px rgba(255,255,255,0.025)',
+          '-1px -1px 1px rgba(255,255,255,0.04)',
+          '4px 5px 12px rgba(0,0,0,0.50)',
+        ].join(', '),
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
