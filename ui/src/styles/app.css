@@ -6161,15 +6161,15 @@ body {
     inset 0 1px 0 rgba(255,255,255,0.035);
 }
 [data-theme="studio"] .lab-wb-history__item:hover {
-  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(200,155,69,0.22);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(132,158,184,0.22);
 }
 [data-theme="studio"] .lab-wb-history__item--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(200,155,69,0.30),
-    0 0 8px rgba(200,155,69,0.06), inset 0 1px 0 rgba(200,155,69,0.08);
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.40), 0 0 0 0.5px rgba(132,158,184,0.30),
+    0 0 8px rgba(132,158,184,0.06), inset 0 1px 0 rgba(132,158,184,0.08);
 }
 [data-theme="studio"] .lab-wb-history__label { color: rgba(132,158,184,0.65); }
-[data-theme="studio"] .lab-wb-history__item--active .lab-wb-history__label { color: #c89b45; }
+[data-theme="studio"] .lab-wb-history__item--active .lab-wb-history__label { color: #849eb8; }
 [data-theme="studio"] .lab-wb-history__conf { color: rgba(132,158,184,0.40); }
 [data-theme="studio"] .lab-wb-history__thumb {
   box-shadow: inset 2px 2px 4px rgba(0,0,0,0.40);
@@ -16480,7 +16480,7 @@ body {
    - Directional light from 141.71° (upper-left key)
    - Every raised surface: outer drop shadow + top-left chamfer catch
    - Every inset surface: inner shadow + bottom-right fill bounce
-   - Active states: amber (#c89b45) LED ring + inner glow
+   - Active states: amber (#849eb8) LED ring + inner glow
    - Typography: steel-tinted (132,158,184) secondary text
    - No flat borders — depth replaces borders everywhere */
 
@@ -16536,17 +16536,17 @@ body {
   background: rgba(132,158,184,0.04);
 }
 [data-theme="studio"] .lab-nav__tab--active {
-  color: #c89b45;
+  color: #849eb8;
   border-bottom: none;
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%);
   box-shadow:
     3px 3px 8px rgba(0,0,0,0.40),
     1px 1px 3px rgba(0,0,0,0.28),
-    0 0 0 0.5px rgba(200,155,69,0.22),
-    0 0 8px rgba(200,155,69,0.05),
-    inset 0 1px 0 rgba(200,155,69,0.08),
+    0 0 0 0.5px rgba(132,158,184,0.22),
+    0 0 8px rgba(132,158,184,0.05),
+    inset 0 1px 0 rgba(132,158,184,0.08),
     inset -1px -1px 0 rgba(0,0,0,0.18);
-  text-shadow: 0 0 8px rgba(200,155,69,0.18);
+  text-shadow: 0 0 8px rgba(132,158,184,0.18);
 }
 
 /* ── 3. SUB-NAV — machined pill buttons ── */
@@ -16575,13 +16575,13 @@ body {
 }
 [data-theme="studio"] .lab-subnav__tab--active,
 [data-theme="studio"] .lab-tab--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%);
+  color: #849eb8;
   box-shadow:
     4px 4px 10px rgba(0,0,0,0.45),
-    0 0 0 0.5px rgba(200,155,69,0.25),
-    0 0 8px rgba(200,155,69,0.06),
-    inset 0 1px 0 rgba(200,155,69,0.10),
+    0 0 0 0.5px rgba(132,158,184,0.25),
+    0 0 8px rgba(132,158,184,0.06),
+    inset 0 1px 0 rgba(132,158,184,0.10),
     inset -1px -1px 0 rgba(0,0,0,0.22);
 }
 
@@ -16605,15 +16605,15 @@ body {
     2px 2px 7px rgba(0,0,0,0.40),
     -1px -1px 2px rgba(255,255,255,0.04),
     inset 0 1px 0 rgba(255,255,255,0.06),
-    0 0 0 0.5px rgba(200,155,69,0.18);
+    0 0 0 0.5px rgba(132,158,184,0.18);
 }
 [data-theme="studio"] .lab-card--selected {
   background: linear-gradient(141.71deg, #221e14 0%, #181410 100%);
   box-shadow:
     5px 5px 14px rgba(0,0,0,0.50),
-    0 0 0 0.5px rgba(200,155,69,0.28),
-    0 0 10px rgba(200,155,69,0.06),
-    inset 0 1px 0 rgba(200,155,69,0.10);
+    0 0 0 0.5px rgba(132,158,184,0.28),
+    0 0 10px rgba(132,158,184,0.06),
+    inset 0 1px 0 rgba(132,158,184,0.10);
 }
 
 /* ── 5. BUTTONS — machined well + dome ── */
@@ -16645,22 +16645,22 @@ body {
 }
 [data-theme="studio"] .lab-wb__action-btn--primary,
 [data-theme="studio"] .bm-section-btn--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%);
+  color: #849eb8;
   box-shadow:
     4px 4px 12px rgba(0,0,0,0.50),
-    0 0 0 0.5px rgba(200,155,69,0.25),
-    0 0 8px rgba(200,155,69,0.06),
-    inset 0 1px 0 rgba(200,155,69,0.10),
+    0 0 0 0.5px rgba(132,158,184,0.25),
+    0 0 8px rgba(132,158,184,0.06),
+    inset 0 1px 0 rgba(132,158,184,0.10),
     inset -1px -1px 0 rgba(0,0,0,0.22);
 }
 [data-theme="studio"] .lab-wb__action-btn--primary:hover:not(:disabled) {
-  background: linear-gradient(141.71deg, #322818 0%, #241e12 100%);
+  background: linear-gradient(141.71deg, #1e2a38 0%, #141c28 100%);
   box-shadow:
     5px 5px 14px rgba(0,0,0,0.55),
-    0 0 0 0.5px rgba(200,155,69,0.30),
-    0 0 12px rgba(200,155,69,0.08),
-    inset 0 1px 0 rgba(200,155,69,0.12);
+    0 0 0 0.5px rgba(132,158,184,0.30),
+    0 0 12px rgba(132,158,184,0.08),
+    inset 0 1px 0 rgba(132,158,184,0.12);
 }
 
 /* ── 6. WORKBENCH — glass viewfinder on images ── */
@@ -16865,7 +16865,7 @@ body {
 
 /* ── 17. CHECKBOXES — styled for dark surfaces ── */
 [data-theme="studio"] .lab-card__checkbox input[type="checkbox"] {
-  accent-color: #c89b45;
+  accent-color: #849eb8;
 }
 
 /* ── 18. FILTER CHIPS ── */
@@ -16878,9 +16878,9 @@ body {
 }
 [data-theme="studio"] .lab-filter-chip--active,
 [data-theme="studio"] .lab-tag--active {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%);
-  color: #c89b45;
-  box-shadow: 2px 2px 5px rgba(0,0,0,0.30), 0 0 0 0.5px rgba(200,155,69,0.22);
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%);
+  color: #849eb8;
+  box-shadow: 2px 2px 5px rgba(0,0,0,0.30), 0 0 0 0.5px rgba(132,158,184,0.22);
 }
 
 /* ── 19. TYPOGRAPHY — instrument rendering ── */
@@ -16954,10 +16954,10 @@ body {
   color: rgba(132,158,184,0.45);
 }
 [data-theme="studio"] .lab-auth-gate button {
-  background: linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%) !important;
-  color: #c89b45 !important;
+  background: linear-gradient(141.71deg, #1a2230 0%, #141c28 100%) !important;
+  color: #849eb8 !important;
   border: none !important;
-  box-shadow: 4px 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(200,155,69,0.25), inset 0 1px 0 rgba(200,155,69,0.10) !important;
+  box-shadow: 4px 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(132,158,184,0.25), inset 0 1px 0 rgba(132,158,184,0.10) !important;
 }
 
 /* ── 21. DROP ZONE — machined inset well ── */
@@ -16983,8 +16983,8 @@ body {
     inset 4px 4px 14px rgba(0,0,0,0.65),
     inset 2px 2px 6px rgba(0,0,0,0.45),
     2px 3px 8px rgba(0,0,0,0.40),
-    0 0 0 1px rgba(200,155,69,0.35),
-    0 0 12px rgba(200,155,69,0.08) !important;
+    0 0 0 1px rgba(132,158,184,0.35),
+    0 0 12px rgba(132,158,184,0.08) !important;
   border: none !important;
 }
 [data-theme="studio"] .lab-wb-empty__drop-icon svg {

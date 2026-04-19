@@ -1317,7 +1317,7 @@ function VlmMetricsCard() {
                   {bars.map((d, i) => (
                     <div key={i} title={`${d.days_ago}d ago: $${d.cost_usd.toFixed(4)}`} style={{
                       flex: 1, height: `${Math.max(2, (d.cost_usd / maxCost) * 40)}px`,
-                      background: d.cost_usd > 0 ? '#c89b45aa' : 'var(--color-border)',
+                      background: d.cost_usd > 0 ? '#849eb8aa' : 'var(--color-border)',
                       borderRadius: 1, transition: 'height 0.2s',
                     }} />
                   ))}
