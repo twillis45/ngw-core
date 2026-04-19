@@ -23,7 +23,7 @@ export default function MatteBackground({ variant = 'default' }) {
   // they vanish into pure black. Desktop multiplier lifts all layers ~2× while
   // keeping the same relative hierarchy.
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const m = isWide ? 0.8 : 1; // desktop intensity multiplier — keep dark, subtle texture only
+  const m = isWide ? 0.5 : 0.7; // desktop intensity multiplier — near-black, barely perceptible texture
 
   // Layer 1 — cool ambient key wash
   const ambientWash = subdued
@@ -37,7 +37,7 @@ export default function MatteBackground({ variant = 'default' }) {
 
   // Layer 3 — edge vignette — ultra-wide ellipse pushes edges off-screen.
   // 12 stops for imperceptible transition. No visible oval.
-  const va = isWide ? 0.45 : 0.35;
+  const va = isWide ? 0.25 : 0.20;
   const vignette = `radial-gradient(ellipse 160% 130% at 50% 50%, transparent 30%, rgba(0,0,0,${(va * 0.01).toFixed(4)}) 38%, rgba(0,0,0,${(va * 0.03).toFixed(4)}) 44%, rgba(0,0,0,${(va * 0.06).toFixed(4)}) 50%, rgba(0,0,0,${(va * 0.10).toFixed(4)}) 56%, rgba(0,0,0,${(va * 0.16).toFixed(4)}) 62%, rgba(0,0,0,${(va * 0.24).toFixed(4)}) 68%, rgba(0,0,0,${(va * 0.35).toFixed(4)}) 74%, rgba(0,0,0,${(va * 0.50).toFixed(4)}) 80%, rgba(0,0,0,${(va * 0.68).toFixed(4)}) 86%, rgba(0,0,0,${(va * 0.85).toFixed(4)}) 93%, rgba(0,0,0,${va}) 100%)`;
 
   // Layer 4 — top specular edge (141.71° key light catch)
@@ -65,7 +65,7 @@ export default function MatteBackground({ variant = 'default' }) {
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: grainUrl, backgroundSize: isWide ? '96px 96px' : '128px 128px',
-        opacity: isWide ? 0.06 : 0.04,
+        opacity: isWide ? 0.03 : 0.02,
         mixBlendMode: 'overlay',
         pointerEvents: 'none',
       }} />
@@ -82,7 +82,7 @@ export default function MatteBackground({ variant = 'default' }) {
           and dark noise without shifting the overall tone. */}
       <div style={{
         position: 'absolute', inset: 0,
-        opacity: isWide ? 0.05 : 0.03,
+        opacity: isWide ? 0.03 : 0.02,
         mixBlendMode: 'overlay',
         backgroundImage: grainUrl, backgroundSize: '64px 64px',
         pointerEvents: 'none',
@@ -91,7 +91,7 @@ export default function MatteBackground({ variant = 'default' }) {
       {isWide && (
         <div style={{
           position: 'absolute', inset: 0,
-          opacity: 0.10, mixBlendMode: 'multiply',
+          opacity: 0.04, mixBlendMode: 'multiply',
           backgroundImage: grainUrl, backgroundSize: '128px 128px',
         }} />
       )}
