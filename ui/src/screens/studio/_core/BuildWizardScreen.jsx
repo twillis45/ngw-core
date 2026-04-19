@@ -200,10 +200,15 @@ function OptionChip({ label, hint, selected, onClick, icon }) {
         padding: hint ? '10px 14px' : '10px 14px',
         minHeight: 44,
         borderRadius: 10,
-        border: `1px solid ${selected ? KEY_ACCENT : steel(hover ? 0.15 : 0.10)}`,
+        border: 'none',
         background: selected
-          ? accent(0.12)
-          : hover ? steel(0.06) : steel(0.03),
+          ? `linear-gradient(141.71deg, ${accent(0.15)} 0%, ${accent(0.08)} 100%)`
+          : hover
+            ? 'linear-gradient(141.71deg, rgba(132,158,184,0.08) 0%, rgba(132,158,184,0.04) 100%)'
+            : 'linear-gradient(141.71deg, rgba(26,28,34,1) 0%, rgba(19,21,24,1) 50%, rgba(12,13,16,1) 100%)',
+        boxShadow: selected
+          ? `0 0 0 1px ${KEY_ACCENT}40, 0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)`
+          : `0 2px 6px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.05), inset -1px -1px 0 rgba(0,0,0,0.25)`,
         cursor: 'pointer',
         display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
         justifyContent: 'center',

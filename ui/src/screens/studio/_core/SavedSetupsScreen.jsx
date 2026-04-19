@@ -293,10 +293,15 @@ function EmptyState({ onBuild }) {
         border: `1px solid ${steel(0.10)}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
+        {/* Lighting diagram silhouette — photography-native empty state */}
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke={steel(0.4)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="4" y1="6" x2="20" y2="6" />
-          <line x1="4" y1="12" x2="20" y2="12" />
-          <line x1="4" y1="18" x2="14" y2="18" />
+          {/* Subject circle */}
+          <circle cx="12" cy="12" r="4" />
+          {/* Key light */}
+          <circle cx="4" cy="4" r="2" fill={steel(0.25)} stroke="none" />
+          <line x1="5.5" y1="5.5" x2="9" y2="9" />
+          {/* Camera */}
+          <rect x="9" y="19" width="6" height="3" rx="1" />
         </svg>
         <span style={{
           position: 'absolute', bottom: -3, right: -3,
