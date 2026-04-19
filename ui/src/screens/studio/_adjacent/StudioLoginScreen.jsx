@@ -285,6 +285,24 @@ export default function StudioLoginScreen({ onLogin }) {
           <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
         </div>
 
+        {/* ── Photography DNA — faint modifier silhouette in the background.
+             A softbox outline at 3% opacity says "this was made for photographers"
+             without competing with the form. Positioned upper-right to balance
+             the left-aligned wordmark. ── */}
+        <svg viewBox="0 0 200 240" fill="none" style={{
+          position: 'fixed', top: '8%', right: '6%', width: 180, height: 220,
+          opacity: 0.025, pointerEvents: 'none', zIndex: 0,
+        }}>
+          {/* Softbox outline — the universal studio photography icon */}
+          <rect x="30" y="20" width="140" height="160" rx="12" stroke={steel(1)} strokeWidth="1.5" fill="none" />
+          <rect x="50" y="40" width="100" height="120" rx="6" stroke={steel(1)} strokeWidth="0.8" fill="none" />
+          {/* Speed ring */}
+          <circle cx="100" cy="200" r="18" stroke={steel(1)} strokeWidth="1" fill="none" />
+          <line x1="100" y1="180" x2="100" y2="182" stroke={steel(1)} strokeWidth="0.8" />
+          {/* Mount stem */}
+          <line x1="100" y1="218" x2="100" y2="240" stroke={steel(1)} strokeWidth="1.2" />
+        </svg>
+
         {/* ── Wordmark — original order: "No Guesswork" hero with "LIGHTING"
              small caps directly underneath, plus tagline ── */}
         <div style={{ position: 'relative', zIndex: 1, padding: 'max(28px, 5vh) 28px 0' }}>

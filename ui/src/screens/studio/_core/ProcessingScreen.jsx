@@ -345,6 +345,8 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                 backdropFilter: 'blur(12px)',
                 WebkitBackdropFilter: 'blur(12px)',
                 boxShadow: '0 8px 40px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04)',
+                border: '1px solid rgba(72,186,136,0.08)',
+                animation: 'procCardBorder 3.2s ease-in-out infinite',
               }}>
                 {/* Pulsing dot — alive indicator */}
                 <div style={{
@@ -564,6 +566,10 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         @keyframes procDotPulse {
           0%, 100% { opacity: 0.6; transform: scale(1); }
           50%      { opacity: 1.0; transform: scale(1.3); }
+        }
+        @keyframes procCardBorder {
+          0%, 100% { border-color: rgba(72,186,136,0.06); box-shadow: 0 8px 40px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04); }
+          50%      { border-color: rgba(72,186,136,0.18); box-shadow: 0 8px 40px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04), 0 0 20px rgba(72,186,136,0.06); }
         }
         @keyframes completePulse {
           0%   { filter: brightness(1.0); }
