@@ -57,13 +57,17 @@ export default function MatteBackground({ variant = 'default' }) {
       <div style={{ position: 'absolute', inset: 0, background: warmLift }} />
       {/* Edge vignette — anchors the frame */}
       <div style={{ position: 'absolute', inset: 0, background: vignette }} />
-      {/* Anti-banding dither on vignette — confined to edges via radial mask */}
+      {/* Anti-banding dither — full surface noise at low opacity.
+          On desktop 8-bit displays, dark gradient transitions create visible
+          color steps. This noise layer adds per-pixel variation that breaks
+          up the quantization. Covers entire surface (not just edges) because
+          banding appears wherever gradients exist. */}
       <div style={{
         position: 'absolute', inset: 0,
-        backgroundImage: grainUrl, backgroundSize: '128px 128px',
-        opacity: 0.18, mixBlendMode: 'overlay',
-        maskImage: 'radial-gradient(ellipse 160% 130% at 50% 50%, transparent 40%, black 70%)',
-        WebkitMaskImage: 'radial-gradient(ellipse 160% 130% at 50% 50%, transparent 40%, black 70%)',
+        backgroundImage: grainUrl, backgroundSize: isWide ? '96px 96px' : '128px 128px',
+        opacity: isWide ? 0.28 : 0.15,
+        mixBlendMode: 'overlay',
+        pointerEvents: 'none',
       }} />
       {/* Top specular edge — ceiling light hit at 141.71° */}
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: isWide ? 2 : 1, background: specularEdge }} />
@@ -78,7 +82,7 @@ export default function MatteBackground({ variant = 'default' }) {
           and dark noise without shifting the overall tone. */}
       <div style={{
         position: 'absolute', inset: 0,
-        opacity: isWide ? 0.12 : 0.08,
+        opacity: isWide ? 0.20 : 0.10,
         mixBlendMode: 'overlay',
         backgroundImage: grainUrl, backgroundSize: '64px 64px',
         pointerEvents: 'none',
