@@ -261,7 +261,8 @@ export default function StudioLoginScreen({ onLogin }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden',
+      position: 'fixed', inset: 0, backgroundColor: '#000',
+      overflow: 'auto',
       fontFamily: 'Inter, system-ui, sans-serif',
     }}>
       <div
@@ -286,7 +287,7 @@ export default function StudioLoginScreen({ onLogin }) {
 
         {/* ── Wordmark — original order: "No Guesswork" hero with "LIGHTING"
              small caps directly underneath, plus tagline ── */}
-        <div style={{ position: 'relative', zIndex: 1, padding: '52px 28px 0' }}>
+        <div style={{ position: 'relative', zIndex: 1, padding: 'max(28px, 5vh) 28px 0' }}>
           <p style={{
             margin: 0, fontWeight: 800, fontSize: 30, lineHeight: '34px',
             color: 'rgba(245,247,250,0.94)', letterSpacing: '-0.6px',
@@ -306,7 +307,7 @@ export default function StudioLoginScreen({ onLogin }) {
         </div>
 
         {/* ── Content ── */}
-        <div style={{ flex: 1, padding: '40px 25px 32px', position: 'relative', zIndex: 1 }}>
+        <div style={{ flex: 1, padding: 'max(20px, 3vh) 25px 32px', position: 'relative', zIndex: 1 }}>
 
           {/* Heading */}
           <p style={{
