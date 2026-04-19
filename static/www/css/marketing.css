@@ -3,34 +3,34 @@
 
 /* ── Tokens ────────────────────────────────────────── */
 :root {
-  --bg:           #0E0F12;
-  --surface:      #17191F;
-  --elevated:     #1E2129;
-  --text:         #F4F6F8;
-  --text-dim:     #A9AFBB;
-  --border:       #2A2E38;
-  --accent:       #4DA3FF;
-  --accent-hover: #3B8EE6;
-  --accent-subtle:rgba(77,163,255,0.12);
-  --success:      #39D98A;
+  /* Studio Matte tokens — Carbon Black + Steel Blue + Amber */
+  --bg:           #0b0b0c;
+  --surface:      #121316;
+  --elevated:     #1a1c22;
+  --text:         rgba(245,247,250,0.95);
+  --text-dim:     rgba(132,158,184,0.55);
+  --border:       rgba(132,158,184,0.08);
+  --accent:       #c89b45;
+  --accent-hover: #b08838;
+  --accent-subtle:rgba(200,155,69,0.10);
+  --success:      rgba(72,186,136,0.90);
   --warning:      #F5B041;
-  --error:        #FF5D5D;
-  --creative:     #9B7CFF;
+  --error:        #f87171;
+  --creative:     rgba(132,158,184,0.75);
 
-  --color-key:    #F5B041;
-  --color-fill:   #4DA3FF;
-  --color-rim:    #9B7CFF;
+  --color-key:    #c89b45;
+  --color-fill:   rgba(132,158,184,0.65);
+  --color-rim:    rgba(132,158,184,0.45);
 
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display",
-          "Segoe UI", Roboto, sans-serif;
-  --mono: "SF Mono", "Fira Code", monospace;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 
   --radius-sm:  8px;
   --radius-md:  12px;
   --radius-lg:  16px;
   --radius-xl:  20px;
 
-  --max-w: 1120px;
+  --max-w: 1080px;
 }
 
 /* ── Reset ─────────────────────────────────────────── */
@@ -43,13 +43,27 @@ html {
   color: var(--text);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
   scroll-behavior: smooth;
 }
 
-body { min-height: 100vh; overflow-x: hidden; }
+body {
+  min-height: 100vh; overflow-x: hidden;
+}
+/* Grain texture on background */
+body::after {
+  content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+  opacity: 0.06; mix-blend-mode: overlay;
+}
 
-a { color: var(--accent); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
 a:hover { color: var(--accent-hover); }
+
+/* Ensure content sits above grain */
+main, section, nav, header, footer, .container { position: relative; z-index: 1; }
 
 img, svg { display: block; max-width: 100%; }
 
