@@ -184,20 +184,56 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: isDesktop ? 'contain' : 'cover',
             objectPosition: isDesktop ? '50% 50%' : '50% 25%',
-            opacity: 0.78, zIndex: 1,
+            opacity: analysisComplete ? 0.88 : 0.72, zIndex: 1,
             animation: 'heroZoomIn 12s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
+            transition: 'opacity 0.8s ease',
           }} />
         )}
         <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
           <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
         </div>
         <ViewfinderHUD dimmed />
+
+        {/* ── Scan line — sweeps top-to-bottom showing the engine reading the image.
+            Visible on all viewports. Green-tinted to match analyzing accent. ── */}
+        {!analysisComplete && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              position: 'absolute', left: 0, right: 0, height: isDesktop ? 3 : 2,
+              background: `linear-gradient(90deg, transparent 0%, rgba(72,186,136,0.45) 30%, rgba(72,186,136,0.65) 50%, rgba(72,186,136,0.45) 70%, transparent 100%)`,
+              boxShadow: '0 0 20px rgba(72,186,136,0.30), 0 0 60px rgba(72,186,136,0.10)',
+              animation: 'procScanLine 3.2s ease-in-out infinite',
+            }} />
+            {/* Trailing glow beneath scan line */}
+            <div style={{
+              position: 'absolute', left: 0, right: 0, height: isDesktop ? 80 : 50,
+              background: 'linear-gradient(to bottom, rgba(72,186,136,0.06) 0%, transparent 100%)',
+              animation: 'procScanGlow 3.2s ease-in-out infinite',
+            }} />
+          </div>
+        )}
+
+        {/* ── Pulsing edge glow — ambient energy showing the machine is alive ── */}
+        {!analysisComplete && (
+          <div style={{
+            position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+            boxShadow: [
+              'inset 0 0 60px rgba(72,186,136,0.04)',
+              'inset 0 0 120px rgba(72,186,136,0.02)',
+            ].join(', '),
+            animation: 'procEdgePulse 2.4s ease-in-out infinite',
+          }} />
+        )}
+
         {/* Progress — green glow at bottom edge */}
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: isDesktop ? 3 : 4,
-          background: 'linear-gradient(90deg, rgba(72,186,136,0.0) 0%, rgba(72,186,136,0.40) 50%, rgba(72,186,136,0.75) 100%)',
-          boxShadow: '0 0 12px rgba(72,186,136,0.30), 0 0 4px rgba(72,186,136,0.45)',
+          position: 'absolute', bottom: 0, left: 0, width: `${progress}%`, height: isDesktop ? 4 : 4,
+          background: 'linear-gradient(90deg, rgba(72,186,136,0.0) 0%, rgba(72,186,136,0.50) 40%, rgba(72,186,136,0.85) 100%)',
+          boxShadow: '0 0 16px rgba(72,186,136,0.40), 0 0 6px rgba(72,186,136,0.55)',
           transition: analysisComplete ? 'width 0.08s ease' : 'width 0.35s ease',
           zIndex: 4,
         }} />
@@ -290,64 +326,101 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           {/* Spacer — pushes status to bottom */}
           <div style={{ flex: 1 }} />
 
-          {/* ── Desktop status: clean overlay typography on the photo.
-              No well, no dome, no ring — the photo IS the hero.
-              Stage text + EXIF sit in a bottom gradient scrim.
-              Pattern tease appears centered on completion. ── */}
+          {/* ── Desktop status: confident center-screen readout.
+              Stage text is the hero during processing — large, centered,
+              reads like a monitoring instrument. Photo + scan line show
+              the engine working. Pattern tease appears centered on done. ── */}
+
+          {/* Center stage — analyzing readout */}
+          {!analysisComplete && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none',
+            }}>
+              <div style={{
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+                padding: '32px 48px', borderRadius: 20,
+                background: 'rgba(4,5,8,0.55)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.40), inset 0 1px 0 rgba(255,255,255,0.04)',
+              }}>
+                {/* Pulsing dot — alive indicator */}
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: 'rgba(72,186,136,0.85)',
+                  boxShadow: '0 0 12px rgba(72,186,136,0.50), 0 0 4px rgba(140,230,190,0.30)',
+                  animation: 'procDotPulse 1.6s ease-in-out infinite',
+                }} />
+                <p style={{
+                  margin: 0, fontWeight: 600, fontSize: 22, lineHeight: '28px',
+                  color: 'rgba(235,240,245,0.90)', textAlign: 'center',
+                  letterSpacing: '0.3px',
+                  ...FS, opacity: stageFade,
+                  transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
+                  transition: 'opacity 0.4s ease, transform 0.4s ease',
+                  minHeight: 28,
+                }}>{currentStage.label}</p>
+                {/* Percentage readout */}
+                <p style={{
+                  margin: 0, fontWeight: 700, fontSize: 11, letterSpacing: '2px',
+                  color: 'rgba(72,186,136,0.65)', textTransform: 'uppercase',
+                  ...FS,
+                }}>{Math.round(progress)}%</p>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom dock — EXIF + gradient */}
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center',
-            padding: '0 0 48px', pointerEvents: 'none',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.35) 30%, rgba(4,5,7,0.72) 70%, rgba(4,5,7,0.88) 100%)',
+            padding: '0 0 44px', pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.30) 40%, rgba(4,5,7,0.70) 80%, rgba(4,5,7,0.85) 100%)',
           }}>
-            {/* EXIF strip */}
             <ExifStrip exifData={exifData} style={{
-              opacity: (analysisComplete && result?.pattern) ? 0 : 0.70,
-              transition: 'opacity 0.4s ease', marginBottom: 24,
+              opacity: (analysisComplete && result?.pattern) ? 0 : 0.65,
+              transition: 'opacity 0.4s ease',
             }} />
+          </div>
 
-            {/* Analyzing state — typography only */}
-            {!analysisComplete && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <p style={{
-                  margin: 0, fontWeight: 500, fontSize: 16, lineHeight: '22px',
-                  color: 'rgba(235,240,245,0.80)', textAlign: 'center',
-                  textShadow: '0 2px 12px rgba(0,0,0,0.6)',
-                  ...FS, opacity: stageFade,
-                  transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
-                  transition: 'opacity 0.35s ease, transform 0.35s ease',
-                  minHeight: 22,
-                }}>{currentStage.label}</p>
-              </div>
-            )}
-
-            {/* Pattern tease — centered over photo */}
-            {analysisComplete && result?.pattern && (
+          {/* Pattern tease — centered on completion */}
+          {analysisComplete && result?.pattern && (
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none',
+              animation: 'patternTeaseIn 0.6s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+            }}>
               <div style={{
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+                padding: '36px 56px', borderRadius: 24,
+                background: 'rgba(4,5,8,0.60)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                boxShadow: '0 12px 48px rgba(0,0,0,0.50), inset 0 1px 0 rgba(255,255,255,0.05)',
               }}>
                 <p style={{
-                  margin: 0, fontSize: 38, fontWeight: 700,
-                  color: 'rgba(245,247,250,0.94)', letterSpacing: '-0.5px', textAlign: 'center',
-                  textShadow: '0 0 24px rgba(245,190,72,0.30), 0 4px 16px rgba(0,0,0,0.7)',
+                  margin: 0, fontSize: 44, fontWeight: 700,
+                  color: 'rgba(245,247,250,0.95)', letterSpacing: '-0.6px', textAlign: 'center',
+                  textShadow: '0 0 28px rgba(245,190,72,0.35), 0 4px 20px rgba(0,0,0,0.7)',
                   ...FS,
                 }}>
                   {prettify(result.pattern, { title: true })}
                 </p>
                 {result.confidence != null && (
                   <p style={{
-                    margin: 0, fontSize: 13, fontWeight: 600,
-                    color: result.confidence >= 70 ? 'rgba(140,225,180,0.80)' : 'rgba(250,210,130,0.80)',
-                    letterSpacing: '1.5px', textTransform: 'uppercase',
-                    textShadow: '0 2px 10px rgba(0,0,0,0.6)',
+                    margin: 0, fontSize: 14, fontWeight: 600,
+                    color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)',
+                    letterSpacing: '2px', textTransform: 'uppercase',
                     ...FS,
                   }}>
                     {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
                   </p>
                 )}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </>)}
 
@@ -473,8 +546,24 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           100% { opacity: 0.7; }
         }
         @keyframes patternTeaseIn {
-          0%   { opacity: 0; transform: translateY(12px); }
-          100% { opacity: 1; transform: translateY(0); }
+          0%   { opacity: 0; transform: translateY(12px) scale(0.96); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes procScanLine {
+          0%   { top: -2%; }
+          100% { top: 102%; }
+        }
+        @keyframes procScanGlow {
+          0%   { top: -2%; }
+          100% { top: 102%; }
+        }
+        @keyframes procEdgePulse {
+          0%, 100% { opacity: 0.4; }
+          50%      { opacity: 1.0; }
+        }
+        @keyframes procDotPulse {
+          0%, 100% { opacity: 0.6; transform: scale(1); }
+          50%      { opacity: 1.0; transform: scale(1.3); }
         }
         @keyframes completePulse {
           0%   { filter: brightness(1.0); }
