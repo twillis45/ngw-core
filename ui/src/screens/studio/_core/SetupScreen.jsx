@@ -500,7 +500,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
   );
 }
 
-export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit, isPaid = true, plan = 'enterprise' }) {
+export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit, onRoomPlanner, isPaid = true, plan = 'enterprise' }) {
   const isDesktop = useIsDesktop();
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
@@ -1361,7 +1361,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           }}
         >
           <span style={{ fontSize: isDesktop ? 15 : 14, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '1.5px', textTransform: 'uppercase', pointerEvents: 'none', ...FONT_SMOOTH }}>
-            Build This Light
+            Start Shooting
           </span>
         </button>
 
@@ -1413,6 +1413,20 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </>
             )}
           </button>
+
+          {onRoomPlanner && (
+            <button onClick={() => { onRoomPlanner(); softClickSound(); tapHaptic(); }} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: 500, color: steel(0.45),
+              padding: 0, display: 'flex', alignItems: 'center', gap: 5,
+              WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/>
+              </svg>
+              Plan Room
+            </button>
+          )}
         </div>
         </div>{/* end CTA dock */}
       </div>

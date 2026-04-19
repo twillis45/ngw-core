@@ -348,13 +348,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                 border: '1px solid rgba(72,186,136,0.08)',
                 animation: 'procCardBorder 3.2s ease-in-out infinite',
               }}>
-                {/* Pulsing dot — alive indicator */}
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%',
-                  background: 'rgba(72,186,136,0.85)',
-                  boxShadow: '0 0 12px rgba(72,186,136,0.50), 0 0 4px rgba(140,230,190,0.30)',
-                  animation: 'procDotPulse 1.6s ease-in-out infinite',
-                }} />
+                {/* Status indicator removed — scan line + edge glow provide enough visual activity */}
                 <p style={{
                   margin: 0, fontWeight: 600, fontSize: 22, lineHeight: '28px',
                   color: 'rgba(235,240,245,0.90)', textAlign: 'center',

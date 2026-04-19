@@ -1408,6 +1408,7 @@ export default function Day1DemoApp() {
           onSave={handleSetupSave}
           onCancel={handleSetupCancel}
           onStartCockpit={handleStartCockpit}
+          onRoomPlanner={handleRoomPlanner}
           isPaid={appIsPaid}
           plan={appPlan}
         />
