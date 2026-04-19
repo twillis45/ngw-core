@@ -23,7 +23,7 @@ export default function MatteBackground({ variant = 'default' }) {
   // they vanish into pure black. Desktop multiplier lifts all layers ~2× while
   // keeping the same relative hierarchy.
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const m = isWide ? 1.2 : 1; // desktop intensity multiplier (was 1.8 — too bright, washed out Carbon Black)
+  const m = isWide ? 0.8 : 1; // desktop intensity multiplier — keep dark, subtle texture only
 
   // Layer 1 — cool ambient key wash
   const ambientWash = subdued
@@ -65,7 +65,7 @@ export default function MatteBackground({ variant = 'default' }) {
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: grainUrl, backgroundSize: isWide ? '96px 96px' : '128px 128px',
-        opacity: isWide ? 0.14 : 0.08,
+        opacity: isWide ? 0.06 : 0.04,
         mixBlendMode: 'overlay',
         pointerEvents: 'none',
       }} />
@@ -82,7 +82,7 @@ export default function MatteBackground({ variant = 'default' }) {
           and dark noise without shifting the overall tone. */}
       <div style={{
         position: 'absolute', inset: 0,
-        opacity: isWide ? 0.10 : 0.06,
+        opacity: isWide ? 0.05 : 0.03,
         mixBlendMode: 'overlay',
         backgroundImage: grainUrl, backgroundSize: '64px 64px',
         pointerEvents: 'none',
