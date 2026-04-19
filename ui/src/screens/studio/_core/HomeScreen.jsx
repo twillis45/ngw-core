@@ -720,7 +720,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
           <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
-            No Guesswork <span style={{ fontWeight: 500, color: steel(0.40) }}>Lighting</span>
+            No Guesswork <span style={{ fontWeight: 300, fontSize: '0.95em', letterSpacing: '0.08em', color: steel(0.55), fontStyle: 'italic' }}>Lighting</span>
           </p>
         </div>
         {user && (
@@ -1136,7 +1136,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           color: C.textPrimary, letterSpacing: '-0.3px',
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
           textShadow: '0 0 1px rgba(245,247,250,0.12)',
-        }}>No Guesswork <span style={{ fontWeight: 500, color: steel(0.40) }}>Lighting</span></p>
+        }}>No Guesswork <span style={{ fontWeight: 300, fontSize: '0.95em', letterSpacing: '0.08em', color: steel(0.55), fontStyle: 'italic' }}>Lighting</span></p>
         <p style={{
           margin: '3px 0 0 1px',
           fontWeight: 700, fontSize: 12, lineHeight: '15px',
