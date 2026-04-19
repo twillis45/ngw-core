@@ -45,7 +45,7 @@ export const SCREEN_BG = '#0b0b0c';
 // ─── Color palette ────────────────────────────────────────────────────────────
 export const C = {
   // ── Surface ──
-  bg:          '#000001',           // --sm-bg
+  bg:          '#0b0b0c',           // --sm-bg — Carbon Black (matches SCREEN_BG)
   slotBg:      '#08080a',           // --sm-surface-slot
   wellBg:      '#050507',           // --sm-surface-well (ring tracks, deep insets)
   trackBg:     '#08090c',           // --sm-surface-track (scroll tracks, secondary wells)
