@@ -1052,9 +1052,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       {/* ── Bottom dock — studio tools with icons ── */}
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        display: hasImage ? 'none' : 'flex',
+        // Hidden on desktop (tools available in profile dropdown) and when
+        // image is loaded (CTA replaces dock).
+        display: (hasImage || isDesktop) ? 'none' : 'flex',
         justifyContent: 'center', alignItems: 'center',
-        gap: 6, padding: '0 48px 22px',
+        flexWrap: 'wrap',
+        gap: 6, padding: '0 20px 22px',
         pointerEvents: 'auto',
       }}>
         {[
