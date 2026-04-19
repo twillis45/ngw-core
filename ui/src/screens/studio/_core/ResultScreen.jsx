@@ -2461,12 +2461,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,7,0.65) 50%, rgba(4,5,7,0.88) 100%)',
             zIndex: 7, pointerEvents: 'none',
           }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <div style={{
+              display: 'flex', flexDirection: isDesktop ? 'row' : 'row',
+              alignItems: 'baseline', gap: isDesktop ? 16 : 8,
+            }}>
               <p style={{
                 margin: 0,
                 fontWeight: 800,
-                // Dynamic font size: long pattern names (e.g. "Butterfly (Paramount)")
-                // scale down so they never wrap to a second line on mobile.
                 fontSize: isDesktop
                   ? (pattern.length > 18 ? 36 : pattern.length > 12 ? 48 : 56)
                   : (pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32),
@@ -2476,23 +2477,24 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 ...FONT_SMOOTH,
                 textShadow: TEXT_SHADOW_ENGRAVED,
               }}>{prettify(pattern, { title: true })}</p>
-              {geometricBase && (
-                <p style={{
-                  margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
-                  fontSize: isDesktop ? 16 : 11, lineHeight: '1.2',
-                  color: steel(0.55), letterSpacing: '0.5px',
-                  ...FONT_SMOOTH,
-                  textShadow: TEXT_SHADOW_ENGRAVED,
-                }}>{prettify(geometricBase, { title: true })} geometry</p>
-              )}
+              {/* Confidence inline with pattern — one confident statement */}
               <p style={{
                 margin: 0,
-                fontWeight: 700, fontSize: isDesktop ? 28 : 20, lineHeight: '1.1',
+                fontWeight: 700, fontSize: isDesktop ? 32 : 20, lineHeight: '1.1',
                 color: confColor,
                 ...FONT_SMOOTH,
-                textShadow: `0 1px 4px rgba(0,0,0,0.5), 0 0 2px ${confColor}`,
+                textShadow: `0 0 16px ${confColor}40, 0 2px 6px rgba(0,0,0,0.5)`,
               }}>{confidence}%</p>
             </div>
+            {geometricBase && (
+              <p style={{
+                margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
+                fontSize: isDesktop ? 15 : 11, lineHeight: '1.2',
+                color: steel(0.55), letterSpacing: '0.5px',
+                ...FONT_SMOOTH,
+                textShadow: TEXT_SHADOW_ENGRAVED,
+              }}>{prettify(geometricBase, { title: true })} geometry</p>
+            )}
             {/* R-7: Removed VF overlay second line (modifier silhouette +
                 meta pill + source attribution). Pattern + confidence is
                 the hero — everything else lives below the drag handle. */}
@@ -2860,7 +2862,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               position: 'relative', width: '100%',
               height: 'clamp(220px, 38vh, 420px)',
               borderRadius: 12, backgroundColor: '#0a0c0e',
-              boxShadow: 'inset 0px 1px 3px 0px rgba(0,0,0,0.35)',
+              border: '1px solid rgba(132,158,184,0.06)',
+              boxShadow: [
+                'inset 0px 1px 3px 0px rgba(0,0,0,0.35)',
+                'inset 0 0 20px rgba(0,0,0,0.20)',
+                '0 4px 16px rgba(0,0,0,0.30)',
+              ].join(', '),
               overflow: 'hidden', cursor: 'zoom-in',
             }}
             title="Click to expand diagram"
