@@ -3,409 +3,314 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Early Access — No Guesswork</title>
-  <meta name="description" content="Be among the first photographers to use NGW — AI-powered lighting analysis that tells you exactly what's in any photo and how to recreate it."/>
-  <meta property="og:title" content="No Guesswork — Early Access"/>
+  <title>Early Access — No Guesswork Lighting</title>
+  <meta name="description" content="Be among the first photographers to use No Guesswork Lighting — AI-powered lighting analysis that tells you exactly what's in any photo and how to recreate it."/>
+  <meta property="og:title" content="No Guesswork Lighting — Early Access"/>
   <meta property="og:description" content="AI-powered lighting analysis for photographers. See what's really in any photo. Recreate it exactly."/>
   <meta property="og:type" content="website"/>
-  <link rel="stylesheet" href="/www/css/marketing.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <style>
-    /* ── Early Access page overrides ───────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* Full-bleed hero with cinematic gradient */
+    :root {
+      --bg: #0b0b0c;
+      --surface: #121316;
+      --elevated: #1a1c22;
+      --border: rgba(132,158,184,0.08);
+      --text: rgba(245,247,250,0.95);
+      --text-sub: rgba(184,191,199,0.65);
+      --text-dim: rgba(132,158,184,0.45);
+      --accent: #c89b45;
+      --accent-hover: #b08838;
+      --accent-subtle: rgba(200,155,69,0.10);
+      --steel: rgba(132,158,184,0.55);
+      --success: rgba(72,186,136,0.90);
+      --error: #f87171;
+      --grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: geometricPrecision;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* ── Grain texture ── */
+    body::after {
+      content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      background-image: var(--grain); background-size: 128px 128px;
+      opacity: 0.08; mix-blend-mode: overlay;
+    }
+
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* ── Nav ── */
+    .nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(11,11,12,0.80);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav__inner { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+    .nav__brand {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--text); text-decoration: none;
+      font-weight: 800; font-size: 15px; letter-spacing: -0.3px;
+    }
+    .nav__brand span { font-weight: 500; color: var(--text-dim); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: none; border-radius: 10px; cursor: pointer;
+      font-family: inherit; font-weight: 700; letter-spacing: 0.3px;
+      transition: all 0.15s ease; text-decoration: none;
+    }
+    .btn--primary {
+      background: linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%);
+      color: var(--accent); padding: 8px 20px; font-size: 13px;
+      box-shadow: 4px 4px 12px rgba(0,0,0,0.50), 0 0 0 0.5px rgba(200,155,69,0.25),
+                  inset 0 1px 0 rgba(200,155,69,0.10);
+    }
+    .btn--primary:hover { background: linear-gradient(141.71deg, #443828 0%, #342a1c 50%, #241e14 100%); }
+
+    /* ── Hero ── */
     .ea-hero {
-      position: relative;
-      min-height: 100svh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 80px 20px 60px;
-      overflow: hidden;
+      min-height: 100svh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center;
+      padding: 100px 24px 60px; position: relative;
     }
     .ea-hero::before {
-      content: '';
-      position: absolute; inset: 0;
+      content: ''; position: absolute; inset: 0; pointer-events: none;
       background:
-        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(77,163,255,0.12) 0%, transparent 70%),
-        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(155,124,255,0.08) 0%, transparent 60%);
-      pointer-events: none;
+        radial-gradient(ellipse 160% 130% at 50% 50%, transparent 30%, rgba(0,0,0,0.15) 70%, rgba(0,0,0,0.35) 100%),
+        radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.025) 0%, transparent 72%),
+        radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%);
     }
 
     .ea-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: rgba(77,163,255,0.12);
-      border: 1px solid rgba(77,163,255,0.25);
-      color: var(--accent);
-      font-size: 0.8125rem; font-weight: 600;
-      letter-spacing: 0.04em; text-transform: uppercase;
-      padding: 6px 14px; border-radius: 999px;
-      margin-bottom: 28px;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(200,155,69,0.08);
+      border: 1px solid rgba(200,155,69,0.20);
+      color: var(--accent); font-size: 9px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 6px 16px; border-radius: 6px; margin-bottom: 32px;
     }
     .ea-badge::before {
-      content: '';
-      width: 6px; height: 6px;
-      background: var(--accent);
-      border-radius: 50%;
+      content: ''; width: 5px; height: 5px; background: var(--accent);
+      border-radius: 50%; box-shadow: 0 0 8px rgba(200,155,69,0.40);
       animation: pulse 2s infinite;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%       { opacity: 0.5; transform: scale(0.85); }
-    }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
 
     .ea-hero__headline {
-      font-size: clamp(2.5rem, 6vw, 4.5rem);
-      font-weight: 800;
-      line-height: 1.05;
-      letter-spacing: -0.03em;
-      max-width: 820px;
-      margin-bottom: 20px;
+      font-size: clamp(2.2rem, 5vw, 3.8rem); font-weight: 800;
+      line-height: 1.08; letter-spacing: -0.03em; max-width: 700px; margin-bottom: 18px;
     }
     .ea-hero__headline span { color: var(--accent); }
 
     .ea-hero__sub {
-      font-size: clamp(1rem, 2vw, 1.25rem);
-      color: var(--text-dim);
-      max-width: 560px;
-      line-height: 1.6;
-      margin-bottom: 48px;
+      font-size: clamp(0.9rem, 1.8vw, 1.1rem); color: var(--text-sub);
+      max-width: 520px; line-height: 1.7; margin-bottom: 44px;
     }
 
-    /* ── Form card ──────────────────────────────────── */
+    /* ── Form card — machined well ── */
     .ea-form-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 32px;
-      width: 100%;
-      max-width: 480px;
-      position: relative;
-      z-index: 1;
+      background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+      border: none; border-radius: 16px; padding: 36px;
+      width: 100%; max-width: 440px; position: relative; z-index: 1;
+      box-shadow:
+        8px 8px 24px rgba(0,0,0,0.55),
+        3px 3px 8px rgba(0,0,0,0.40),
+        -1px -1px 2px rgba(255,255,255,0.03),
+        inset 0 1px 0 rgba(255,255,255,0.05);
     }
+    .ea-form-card__title { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 4px; }
+    .ea-form-card__sub { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; }
 
-    .ea-form-card__title {
-      font-size: 1.125rem;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .ea-form-card__sub {
-      font-size: 0.875rem;
-      color: var(--text-dim);
-      margin-bottom: 24px;
-    }
-
-    .ea-form__group {
-      display: flex; flex-direction: column; gap: 8px;
-      margin-bottom: 16px;
-    }
+    .ea-form__group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
     .ea-form__label {
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--text-dim);
-      letter-spacing: 0.02em;
+      font-size: 9px; font-weight: 700; color: var(--text-dim);
+      letter-spacing: 1.2px; text-transform: uppercase;
     }
-    .ea-form__label .optional {
-      font-weight: 400;
-      color: #6B7280;
-      margin-left: 4px;
-    }
-    .ea-form__input,
-    .ea-form__select {
-      width: 100%;
-      background: var(--elevated);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--text);
-      font-size: 0.9375rem;
-      padding: 11px 14px;
-      transition: border-color 0.15s;
-      outline: none;
-      -webkit-appearance: none;
-      appearance: none;
-    }
-    .ea-form__input:focus,
-    .ea-form__select:focus {
-      border-color: var(--accent);
-    }
-    .ea-form__input::placeholder { color: #4B5563; }
+    .ea-form__label .optional { font-weight: 500; color: rgba(132,158,184,0.30); margin-left: 4px; text-transform: none; letter-spacing: 0; }
 
-    .ea-form__select-wrap {
-      position: relative;
+    .ea-form__input, .ea-form__select {
+      width: 100%; background: #08090c; border: none; border-radius: 10px;
+      color: var(--text); font-size: 14px; padding: 12px 16px;
+      box-shadow: inset 3px 3px 7px rgba(0,0,0,0.55), inset 1px 1px 3px rgba(0,0,0,0.38),
+                  inset -1px -1px 2px rgba(255,255,255,0.012), 1px 1px 3px rgba(0,0,0,0.25);
+      outline: none; transition: box-shadow 0.15s;
+      -webkit-appearance: none; appearance: none;
+      font-family: inherit;
     }
+    .ea-form__input:focus, .ea-form__select:focus {
+      box-shadow: inset 3px 3px 7px rgba(0,0,0,0.55), inset 1px 1px 3px rgba(0,0,0,0.38),
+                  0 0 0 1px rgba(200,155,69,0.30), 0 0 8px rgba(200,155,69,0.08);
+    }
+    .ea-form__input::placeholder { color: rgba(132,158,184,0.25); }
+
+    .ea-form__select-wrap { position: relative; }
     .ea-form__select-wrap::after {
-      content: '';
-      position: absolute; right: 14px; top: 50%;
-      transform: translateY(-50%);
-      width: 0; height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-top: 5px solid var(--text-dim);
-      pointer-events: none;
+      content: ''; position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+      width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent;
+      border-top: 4px solid var(--text-dim); pointer-events: none;
     }
 
     .ea-form__submit {
-      width: 100%;
-      background: var(--accent);
-      color: #fff;
-      font-size: 1rem; font-weight: 700;
-      padding: 13px 24px;
-      border-radius: 8px;
+      width: 100%; padding: 14px 24px; border: none; border-radius: 12px;
+      font-family: inherit; font-size: 12px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
       margin-top: 8px;
-      transition: background 0.2s, transform 0.15s, opacity 0.2s;
-      cursor: pointer;
-      border: none;
+      background: linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%);
+      color: var(--accent);
+      box-shadow: 5px 5px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.25),
+                  0 0 8px rgba(200,155,69,0.06), inset 0 1px 0 rgba(200,155,69,0.10);
+      transition: all 0.15s ease;
     }
-    .ea-form__submit:hover:not(:disabled) { background: var(--accent-hover); }
+    .ea-form__submit:hover:not(:disabled) {
+      background: linear-gradient(141.71deg, #443828 0%, #342a1c 50%, #241e14 100%);
+      box-shadow: 6px 6px 16px rgba(0,0,0,0.60), 0 0 0 0.5px rgba(200,155,69,0.30),
+                  0 0 12px rgba(200,155,69,0.10), inset 0 1px 0 rgba(200,155,69,0.12);
+    }
     .ea-form__submit:active:not(:disabled) { transform: scale(0.98); }
-    .ea-form__submit:disabled { opacity: 0.6; cursor: not-allowed; }
+    .ea-form__submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
-    /* ── States ─────────────────────────────────────── */
     .ea-form__error {
-      background: rgba(255,93,93,0.1);
-      border: 1px solid rgba(255,93,93,0.3);
-      color: var(--error);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.875rem;
-      margin-top: 12px;
-      display: none;
+      background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.20);
+      color: var(--error); border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; margin-top: 12px; display: none;
     }
     .ea-form__error.visible { display: block; }
 
-    .ea-success {
-      display: none;
-      text-align: center;
-      padding: 8px 0;
-    }
+    .ea-success { display: none; text-align: center; padding: 8px 0; }
     .ea-success.visible { display: block; }
     .ea-success__icon {
-      width: 48px; height: 48px;
-      background: rgba(57,217,138,0.12);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 16px;
+      width: 48px; height: 48px; background: rgba(72,186,136,0.10);
+      border: 1px solid rgba(72,186,136,0.20);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 16px; color: var(--success);
     }
-    .ea-success__title {
-      font-size: 1.25rem; font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .ea-success__body {
-      font-size: 0.9375rem; color: var(--text-dim);
-      line-height: 1.6;
-    }
+    .ea-success__title { font-size: 20px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.3px; }
+    .ea-success__body { font-size: 14px; color: var(--text-sub); line-height: 1.6; }
 
-    /* ── Social proof bar ───────────────────────────── */
     .ea-proof {
-      display: flex; align-items: center; gap: 8px;
-      justify-content: center;
-      margin-top: 20px;
-      font-size: 0.8125rem; color: var(--text-dim);
+      display: flex; align-items: center; gap: 8px; justify-content: center;
+      margin-top: 20px; font-size: 11px; color: var(--text-dim);
     }
-    .ea-proof__dot { width: 4px; height: 4px; background: var(--border); border-radius: 50%; }
+    .ea-proof__dot { width: 3px; height: 3px; background: rgba(132,158,184,0.15); border-radius: 50%; }
 
-    /* ── Features strip ─────────────────────────────── */
-    .ea-features {
-      padding: 80px 0;
-      border-top: 1px solid var(--border);
-    }
+    /* ── Features — machined cards ── */
+    .ea-features { padding: 80px 0; border-top: 1px solid var(--border); }
     .ea-features__eyebrow {
-      text-align: center;
-      font-size: 0.8125rem; font-weight: 600;
-      letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--accent); margin-bottom: 16px;
+      text-align: center; font-size: 9px; font-weight: 700;
+      letter-spacing: 1.8px; text-transform: uppercase;
+      color: var(--accent); margin-bottom: 14px;
     }
     .ea-features__heading {
-      text-align: center;
-      font-size: clamp(1.75rem, 3vw, 2.5rem);
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      margin-bottom: 56px;
+      text-align: center; font-size: clamp(1.5rem, 3vw, 2.2rem);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 48px;
     }
-
-    .ea-features__grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 24px;
-    }
-    @media (min-width: 640px) {
-      .ea-features__grid { grid-template-columns: 1fr 1fr; }
-    }
-    @media (min-width: 960px) {
-      .ea-features__grid { grid-template-columns: repeat(3, 1fr); }
-    }
+    .ea-features__grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 640px) { .ea-features__grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 960px) { .ea-features__grid { grid-template-columns: repeat(3, 1fr); } }
 
     .ea-feature-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 24px;
-      transition: border-color 0.2s;
+      background: linear-gradient(141.71deg, #14161c 0%, #0e1014 100%);
+      border: none; border-radius: 14px; padding: 28px;
+      box-shadow: 5px 5px 14px rgba(0,0,0,0.50), 2px 2px 6px rgba(0,0,0,0.35),
+                  -0.5px -0.5px 1px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.04);
+      transition: transform 0.12s ease, box-shadow 0.15s ease;
     }
-    .ea-feature-card:hover { border-color: rgba(77,163,255,0.35); }
-
+    .ea-feature-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 6px 6px 16px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.15),
+                  inset 0 1px 0 rgba(255,255,255,0.05);
+    }
     .ea-feature-card__icon {
       width: 40px; height: 40px;
-      background: var(--accent-subtle);
-      border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
-      margin-bottom: 16px;
-      color: var(--accent);
+      background: linear-gradient(141.71deg, #0c0d12 0%, #08090e 100%);
+      box-shadow: inset 2px 2px 5px rgba(0,0,0,0.55), inset -0.5px -0.5px 1px rgba(255,255,255,0.015);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px; color: var(--accent);
     }
-    .ea-feature-card__title {
-      font-size: 1rem; font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .ea-feature-card__body {
-      font-size: 0.875rem; color: var(--text-dim);
-      line-height: 1.65;
-    }
+    .ea-feature-card__title { font-size: 15px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.2px; }
+    .ea-feature-card__body { font-size: 13px; color: var(--text-sub); line-height: 1.7; }
 
-    /* ── "What you get" ─────────────────────────────── */
-    .ea-tiers {
-      padding: 80px 0;
-      border-top: 1px solid var(--border);
-    }
+    /* ── Checklist ── */
+    .ea-tiers { padding: 80px 0; border-top: 1px solid var(--border); }
     .ea-tiers__eyebrow {
-      text-align: center;
-      font-size: 0.8125rem; font-weight: 600;
-      letter-spacing: 0.06em; text-transform: uppercase;
-      color: var(--creative); margin-bottom: 16px;
+      text-align: center; font-size: 9px; font-weight: 700;
+      letter-spacing: 1.8px; text-transform: uppercase;
+      color: var(--steel); margin-bottom: 14px;
     }
     .ea-tiers__heading {
-      text-align: center;
-      font-size: clamp(1.75rem, 3vw, 2.5rem);
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      margin-bottom: 48px;
+      text-align: center; font-size: clamp(1.5rem, 3vw, 2.2rem);
+      font-weight: 800; letter-spacing: -0.03em; margin-bottom: 44px;
     }
-
-    .ea-checklist {
-      max-width: 580px; margin: 0 auto;
-      display: flex; flex-direction: column; gap: 16px;
-    }
-    .ea-checklist__item {
-      display: flex; align-items: flex-start; gap: 14px;
-    }
+    .ea-checklist { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    .ea-checklist__item { display: flex; align-items: flex-start; gap: 12px; }
     .ea-checklist__icon {
-      flex-shrink: 0;
-      width: 22px; height: 22px;
-      background: rgba(57,217,138,0.12);
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin-top: 1px;
+      flex-shrink: 0; width: 20px; height: 20px;
+      background: rgba(72,186,136,0.08); border: 1px solid rgba(72,186,136,0.15);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 2px;
     }
     .ea-checklist__icon svg { color: var(--success); }
-    .ea-checklist__text { font-size: 0.9375rem; line-height: 1.6; }
+    .ea-checklist__text { font-size: 14px; line-height: 1.6; }
     .ea-checklist__text strong { color: var(--text); }
-    .ea-checklist__text span  { color: var(--text-dim); }
+    .ea-checklist__text span { color: var(--text-sub); }
 
-    /* ── Footer CTA ─────────────────────────────────── */
-    .ea-footer-cta {
-      padding: 80px 0;
-      border-top: 1px solid var(--border);
-      text-align: center;
-    }
-    .ea-footer-cta h2 {
-      font-size: clamp(1.75rem, 3vw, 2.5rem);
-      font-weight: 800;
-      letter-spacing: -0.025em;
-      margin-bottom: 16px;
-    }
-    .ea-footer-cta p {
-      color: var(--text-dim);
-      font-size: 1rem;
-      margin-bottom: 36px;
-    }
+    /* ── Footer CTA ── */
+    .ea-footer-cta { padding: 80px 0; border-top: 1px solid var(--border); text-align: center; }
+    .ea-footer-cta h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 14px; }
+    .ea-footer-cta p { color: var(--text-sub); font-size: 14px; margin-bottom: 32px; }
 
-    /* ── Site footer ────────────────────────────────── */
     .site-footer {
-      border-top: 1px solid var(--border);
-      padding: 32px 20px;
-      text-align: center;
-      font-size: 0.8125rem;
-      color: var(--text-dim);
+      border-top: 1px solid var(--border); padding: 28px 20px;
+      text-align: center; font-size: 11px; color: var(--text-dim);
     }
-    .site-footer a { color: var(--text-dim); }
+    .site-footer a { color: var(--text-dim); text-decoration: none; }
     .site-footer a:hover { color: var(--accent); }
   </style>
 </head>
 <body>
 
-<!-- ── Nav ──────────────────────────────────────────── -->
 <nav class="nav">
   <div class="container nav__inner">
-    <a href="/" class="nav__brand">
-      <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-        <rect x="4" y="4" width="40" height="40" rx="12" stroke="currentColor" stroke-width="2" fill="none"/>
-        <path d="M18 14 L24 34 L30 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-        <circle cx="24" cy="14" r="3" fill="currentColor"/>
-      </svg>
-      No Guesswork
-    </a>
-    <div class="nav__cta">
-      <a href="#waitlist" class="btn btn--primary" style="padding:8px 18px;font-size:.875rem">Join Waitlist</a>
-    </div>
+    <a href="/" class="nav__brand">No Guesswork <span>Lighting</span></a>
+    <a href="#waitlist" class="btn btn--primary">Join Waitlist</a>
   </div>
 </nav>
 
-<!-- ── Hero ─────────────────────────────────────────── -->
 <section class="ea-hero" id="top">
-  <div class="ea-badge">Early Access — Limited Spots</div>
+  <div class="ea-badge">Early Access</div>
+  <h1 class="ea-hero__headline">See the light.<br/><span>Not just the photo.</span></h1>
+  <p class="ea-hero__sub">Upload any reference image. Get the exact lighting setup — pattern, modifier, position, distance. Recreate it in your studio, first try.</p>
 
-  <h1 class="ea-hero__headline">
-    See the light.<br/>
-    <span>Not just the photo.</span>
-  </h1>
-
-  <p class="ea-hero__sub">
-    NGW analyzes any reference image and tells you exactly what lighting was used —
-    and how to recreate it in your studio. No more guessing from shadows.
-  </p>
-
-  <!-- Form card -->
   <div class="ea-form-card" id="waitlist">
     <div id="ea-form-inner">
       <div class="ea-form-card__title">Get early access</div>
       <div class="ea-form-card__sub">Join the waitlist. First 500 get 3 months free.</div>
-
       <form id="waitlist-form" novalidate>
         <div class="ea-form__group">
-          <label class="ea-form__label" for="first_name">
-            First name <span class="optional">optional</span>
-          </label>
-          <input
-            class="ea-form__input"
-            type="text"
-            id="first_name"
-            name="first_name"
-            placeholder="Alex"
-            autocomplete="given-name"
-          />
+          <label class="ea-form__label" for="first_name">First name <span class="optional">optional</span></label>
+          <input class="ea-form__input" type="text" id="first_name" name="first_name" placeholder="Alex" autocomplete="given-name"/>
         </div>
-
         <div class="ea-form__group">
           <label class="ea-form__label" for="email">Email address</label>
-          <input
-            class="ea-form__input"
-            type="email"
-            id="email"
-            name="email"
-            placeholder="you@studio.com"
-            required
-            autocomplete="email"
-          />
+          <input class="ea-form__input" type="email" id="email" name="email" placeholder="you@studio.com" required autocomplete="email"/>
         </div>
-
         <div class="ea-form__group">
-          <label class="ea-form__label" for="shoot_type">
-            What do you shoot? <span class="optional">optional</span>
-          </label>
+          <label class="ea-form__label" for="shoot_type">What do you shoot? <span class="optional">optional</span></label>
           <div class="ea-form__select-wrap">
             <select class="ea-form__select" id="shoot_type" name="shoot_type">
               <option value="">Choose one…</option>
-              <option value="portraits_headshots">Portraits &amp; headshots</option>
+              <option value="portraits_headshots">Portraits & headshots</option>
               <option value="studio">Studio / editorial</option>
               <option value="events">Events</option>
               <option value="content_social">Content / social</option>
@@ -414,270 +319,156 @@
             </select>
           </div>
         </div>
-
-        <button type="submit" class="ea-form__submit" id="submit-btn">
-          Request Early Access
-        </button>
-
+        <button type="submit" class="ea-form__submit" id="submit-btn">Request Early Access</button>
         <div class="ea-form__error" id="form-error"></div>
       </form>
     </div>
-
-    <!-- Success state (hidden until submit) -->
     <div class="ea-success" id="ea-success">
       <div class="ea-success__icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       <div class="ea-success__title">You're on the list.</div>
-      <div class="ea-success__body">
-        Check your inbox — a confirmation is on its way.<br/>
-        We'll reach out when your spot is ready.
-      </div>
+      <div class="ea-success__body">Check your inbox — a confirmation is on its way.<br/>We'll reach out when your spot is ready.</div>
     </div>
   </div>
 
   <div class="ea-proof">
-    <span>Free to join</span>
-    <span class="ea-proof__dot"></span>
-    <span>No credit card required</span>
-    <span class="ea-proof__dot"></span>
+    <span>Free to join</span><span class="ea-proof__dot"></span>
+    <span>No credit card</span><span class="ea-proof__dot"></span>
     <span>Unsubscribe anytime</span>
   </div>
 </section>
 
-<!-- ── Features ─────────────────────────────────────── -->
 <section class="ea-features">
   <div class="container">
-    <div class="ea-features__eyebrow">What NGW does</div>
+    <div class="ea-features__eyebrow">What you get</div>
     <h2 class="ea-features__heading">Your second pair of eyes on every photo.</h2>
-
     <div class="ea-features__grid">
-
       <div class="ea-feature-card">
         <div class="ea-feature-card__icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </div>
         <div class="ea-feature-card__title">35+ Vision Passes</div>
-        <div class="ea-feature-card__body">
-          Shadow geometry, catchlight topology, highlight axis, specular classification,
-          penumbra gradients — all from a single reference image.
-        </div>
+        <div class="ea-feature-card__body">Shadow geometry, catchlight topology, highlight axis, specular classification — all from a single reference image.</div>
       </div>
-
       <div class="ea-feature-card">
         <div class="ea-feature-card__icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-            <polyline points="2 17 12 22 22 17"/>
-            <polyline points="2 12 12 17 22 12"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
         </div>
-        <div class="ea-feature-card__title">Archetype Matching</div>
-        <div class="ea-feature-card__body">
-          Identifies the lighting style behind any photo — Hurley, Karsh, Penn,
-          Leibovitz, and more — with confidence scores and matched signals.
-        </div>
+        <div class="ea-feature-card__title">Pattern Matching</div>
+        <div class="ea-feature-card__body">Identifies the lighting archetype behind any photo — Rembrandt, butterfly, clamshell, and more — with confidence scores.</div>
       </div>
-
       <div class="ea-feature-card">
         <div class="ea-feature-card__icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         </div>
-        <div class="ea-feature-card__title">Actionable Diagrams</div>
-        <div class="ea-feature-card__body">
-          Get a precise lighting diagram — light positions, modifiers, power ratios,
-          distance — ready to hand to an assistant or walk into the studio with.
-        </div>
+        <div class="ea-feature-card__title">Setup Blueprint</div>
+        <div class="ea-feature-card__body">Precise lighting diagram — light positions, modifiers, power ratios, distance — ready for your studio.</div>
       </div>
-
       <div class="ea-feature-card">
         <div class="ea-feature-card__icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-            <line x1="4" y1="22" x2="4" y2="15"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18M12 3v18"/></svg>
         </div>
-        <div class="ea-feature-card__title">Shot Match</div>
-        <div class="ea-feature-card__body">
-          Upload your reference. Upload your attempt. NGW shows you exactly
-          where the lighting diverges and what to adjust.
-        </div>
+        <div class="ea-feature-card__title">Room Planner</div>
+        <div class="ea-feature-card__body">Plan your setup before you shoot. Enter room dimensions, place lights, verify everything fits.</div>
       </div>
-
       <div class="ea-feature-card">
         <div class="ea-feature-card__icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
         </div>
-        <div class="ea-feature-card__title">Build From Scratch</div>
-        <div class="ea-feature-card__body">
-          Tell NGW the look you want. It builds a full lighting plan calibrated
-          to your gear, space, and subject — step by step.
-        </div>
+        <div class="ea-feature-card__title">Recipe Library</div>
+        <div class="ea-feature-card__body">27 professional lighting recipes — from beauty clamshell to dramatic Caravaggio — with step-by-step setup guides.</div>
       </div>
-
       <div class="ea-feature-card">
-        <div class="ea-feature-card__icon" style="background:rgba(155,124,255,0.12); color:var(--creative)">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-          </svg>
+        <div class="ea-feature-card__icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
         </div>
-        <div class="ea-feature-card__title">Master Class Recipes</div>
-        <div class="ea-feature-card__body">
-          Guided recreations of legendary lighting setups — Caravaggio chiaroscuro,
-          Vermeer window light, Heisler adaptive — with live coaching.
-        </div>
+        <div class="ea-feature-card__title">Build from Scratch</div>
+        <div class="ea-feature-card__body">Describe the mood and framing. Get a custom lighting setup tailored to your gear and space.</div>
       </div>
-
     </div>
   </div>
 </section>
 
-<!-- ── What you get ──────────────────────────────────── -->
 <section class="ea-tiers">
   <div class="container">
     <div class="ea-tiers__eyebrow">Early access perks</div>
-    <h2 class="ea-tiers__heading">First 500 photographers get the full picture.</h2>
-
+    <h2 class="ea-tiers__heading">What early members get.</h2>
     <div class="ea-checklist">
-
       <div class="ea-checklist__item">
-        <div class="ea-checklist__icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="ea-checklist__text">
-          <strong>3 months free</strong>
-          <span> — full Pro access, no credit card required during the early access period.</span>
-        </div>
+        <div class="ea-checklist__icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="ea-checklist__text"><strong>3 months free Pro access</strong> <span>— unlimited analyses, full blueprints, all recipes</span></div>
       </div>
-
       <div class="ea-checklist__item">
-        <div class="ea-checklist__icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="ea-checklist__text">
-          <strong>Locked-in price</strong>
-          <span> — early access members keep 40% off for life when the paid plan launches.</span>
-        </div>
+        <div class="ea-checklist__icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="ea-checklist__text"><strong>Priority feature requests</strong> <span>— your feedback shapes what we build next</span></div>
       </div>
-
       <div class="ea-checklist__item">
-        <div class="ea-checklist__icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="ea-checklist__text">
-          <strong>Direct access to the builder</strong>
-          <span> — your feedback shapes the product. Feature requests get serious weight.</span>
-        </div>
+        <div class="ea-checklist__icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="ea-checklist__text"><strong>Locked-in founder pricing</strong> <span>— early access rate stays as long as you're subscribed</span></div>
       </div>
-
       <div class="ea-checklist__item">
-        <div class="ea-checklist__icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="ea-checklist__text">
-          <strong>All six core features</strong>
-          <span> — reference analysis, Shot Match, Build From Scratch, Recipe library, Shoot Mode, and Room Planner.</span>
-        </div>
+        <div class="ea-checklist__icon"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+        <div class="ea-checklist__text"><strong>Direct line to the founder</strong> <span>— I'm a working photographer building this for us</span></div>
       </div>
-
-      <div class="ea-checklist__item">
-        <div class="ea-checklist__icon">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </div>
-        <div class="ea-checklist__text">
-          <strong>Studio tier included</strong>
-          <span> — Master Class recipes, advanced archetypes, and Shot Match — no upgrade needed.</span>
-        </div>
-      </div>
-
     </div>
   </div>
 </section>
 
-<!-- ── Footer CTA ────────────────────────────────────── -->
 <section class="ea-footer-cta">
   <div class="container">
-    <h2>Stop losing shoots to lighting you can't read.</h2>
-    <p>Join photographers who want to see what's actually in the frame.</p>
-    <a href="#waitlist" class="btn btn--primary btn--large">Join the Waitlist</a>
+    <h2>Ready to see the light?</h2>
+    <p>Join photographers who are done guessing.</p>
+    <a href="#waitlist" class="btn btn--primary" style="padding:14px 40px;font-size:13px;letter-spacing:1.5px">JOIN THE WAITLIST</a>
   </div>
 </section>
 
-<!-- ── Site footer ───────────────────────────────────── -->
 <footer class="site-footer">
-  <div class="container">
-    © 2025 No Guesswork &nbsp;·&nbsp;
-    <a href="/features">Features</a> &nbsp;·&nbsp;
-    <a href="/pricing">Pricing</a> &nbsp;·&nbsp;
-    <a href="mailto:hello@noguessworksystems.com">Contact</a>
-  </div>
+  <p>&copy; 2026 No Guesswork Lighting · <a href="/static/ui/?studio=1">Launch App</a></p>
 </footer>
 
-<!-- ── Form JS ───────────────────────────────────────── -->
 <script>
-  const form   = document.getElementById('waitlist-form');
-  const btn    = document.getElementById('submit-btn');
-  const errEl  = document.getElementById('form-error');
-  const inner  = document.getElementById('ea-form-inner');
-  const succ   = document.getElementById('ea-success');
+(function() {
+  const form = document.getElementById('waitlist-form');
+  const btn = document.getElementById('submit-btn');
+  const errEl = document.getElementById('form-error');
+  const successEl = document.getElementById('ea-success');
+  const formInner = document.getElementById('ea-form-inner');
 
-  function showError(msg) {
-    errEl.textContent = msg;
-    errEl.classList.add('visible');
-  }
-  function clearError() { errEl.classList.remove('visible'); }
-
-  form.addEventListener('submit', async (e) => {
+  form.addEventListener('submit', async function(e) {
     e.preventDefault();
-    clearError();
-
-    const email     = form.email.value.trim();
-    const firstName = form.first_name.value.trim();
-    const shootType = form.shoot_type.value;
-
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      showError('Please enter a valid email address.');
-      form.email.focus();
+    errEl.classList.remove('visible');
+    const email = document.getElementById('email').value.trim();
+    if (!email || !email.includes('@')) {
+      errEl.textContent = 'Please enter a valid email address.';
+      errEl.classList.add('visible');
       return;
     }
-
     btn.disabled = true;
-    btn.textContent = 'Joining…';
-
+    btn.textContent = 'Submitting…';
     try {
+      const body = { email };
+      const firstName = document.getElementById('first_name').value.trim();
+      const shootType = document.getElementById('shoot_type').value;
+      if (firstName) body.first_name = firstName;
+      if (shootType) body.shoot_type = shootType;
       const res = await fetch('/api/waitlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, first_name: firstName, shoot_type: shootType }),
+        body: JSON.stringify(body),
       });
-
-      if (res.ok) {
-        inner.style.display = 'none';
-        succ.classList.add('visible');
-      } else {
-        const data = await res.json().catch(() => ({}));
-        showError(data.detail || 'Something went wrong. Please try again.');
-        btn.disabled = false;
-        btn.textContent = 'Request Early Access';
-      }
-    } catch {
-      showError('Network error. Please check your connection and try again.');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Something went wrong.');
+      formInner.style.display = 'none';
+      successEl.classList.add('visible');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.add('visible');
       btn.disabled = false;
       btn.textContent = 'Request Early Access';
     }
   });
+})();
 </script>
-
 </body>
 </html>
