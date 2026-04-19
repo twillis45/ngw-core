@@ -14,7 +14,7 @@ import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
 import OnboardingScreen from './studio/_adjacent/OnboardingScreen';
 import { analyzeImage, shootMatch } from '../data/labApi';
-import { getUser, clearAuth } from '../data/authApi';
+import { getUser, clearAuth, loadPreferences } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
 import { PLAN_LABELS } from '../data/planStore';
 import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
@@ -653,12 +653,18 @@ export default function Day1DemoApp() {
     try {
       if (localStorage.getItem('ngw_onboarding_skipped') === '1') return;
       if (localStorage.getItem('ngw_onboarding_done') === '1') return;
+      if (localStorage.getItem('ngw_photographer_profile')) return;
     } catch { return; }
-    // Check server preferences
-    import('../data/authApi').then(({ loadPreferences }) => {
-      loadPreferences().then(prefs => {
-        if (!prefs?.photographer_profile) setNeedsOnboarding(true);
-      }).catch(() => {});
+    // No local record — check server
+    loadPreferences().then(prefs => {
+      if (prefs?.photographer_profile) {
+        // Server has it, cache locally so we don't ask again
+        try { localStorage.setItem('ngw_onboarding_done', '1'); } catch {}
+      } else {
+        setNeedsOnboarding(true);
+      }
+    }).catch(() => {
+      // Server unreachable — don't block the user, skip onboarding
     });
   }, [user]);
 

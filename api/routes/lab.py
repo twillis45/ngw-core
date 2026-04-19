@@ -1404,7 +1404,8 @@ async def coverage_map(user: Dict = Depends(get_dev_user)):
         try:
             with open(manifest_path) as f:
                 manifest_data = _json.load(f)
-            gold_counts = manifest_data.get("pattern_coverage", {})
+            _gc = manifest_data.get("pattern_coverage", {})
+            gold_counts = _gc if isinstance(_gc, dict) else {}
         except Exception:
             pass
 

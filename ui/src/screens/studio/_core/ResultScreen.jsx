@@ -11,6 +11,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { startStripeCheckout } from '../../../data/stripeCheckout';
 import { saveSetup } from '../../../data/setupStore';
+import { postSignal } from '../../../data/signalsApi';
 import { createPortal } from 'react-dom';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
@@ -2165,23 +2166,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   const handleOutcome = useCallback((outcome) => {
     setOutcomeRecorded(outcome);
     tapHaptic();
-    // Fire signal to backend
-    const _pattern = result?.pattern || result?.authoritative_pattern || result?.bestMatch?.lightingPattern || 'unknown';
-    const _conf = result?.confidence ?? result?.match_confidence ?? null;
-    try {
-      const token = typeof localStorage !== 'undefined' ? localStorage.getItem('ngw_auth_token') : null;
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers.Authorization = `Bearer ${token}`;
-      fetch('/api/signals/record', {
-        method: 'POST', headers,
-        body: JSON.stringify({
-          pattern_id: _pattern,
-          confidence_score: _conf,
-          outcome,
-          input_method: 'reference_photo',
-        }),
-      }).catch(() => {});
-    } catch { /* fire-and-forget */ }
+    // Fire signal via postSignal (correct endpoint + auth)
+    postSignal({
+      pattern_id: result?.pattern || result?.authoritative_pattern || 'unknown',
+      confidence_score: result?.confidence ?? result?.match_confidence ?? null,
+      outcome,
+      input_method: 'reference_photo',
+    });
   }, [result]);
 
   // Summary for the collapsed DETAIL drawer
@@ -2763,7 +2754,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 Creates desire through partial reveal, not deprivation through a lock wall. */}
             {!isPaid && (
               <div
-                onClick={() => { tapHaptic(); startStripeCheckout().catch(() => {}) }}
+                onClick={() => { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }) }}
                 style={{ position: 'relative', overflow: 'hidden', borderRadius: 10, cursor: 'pointer' }}
               >
                 {/* Blurred preview of setup content */}
@@ -3326,7 +3317,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             <button
               onClick={() => {
                 if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
-                else { tapHaptic(); startStripeCheckout().catch(() => {}) }
+                else { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }) }
               }}
               style={{
                 display: 'flex',
