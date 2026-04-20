@@ -654,7 +654,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   // Apple muscle-memory rule: button bottom edge is always BTN_OFFSET_FROM_BOTTOM
   // above the OS safe area, regardless of screen height. The viewfinder above
   // stretches to fill available space — the button never moves.
-  const BTN_OFFSET_FROM_BOTTOM = 48;
+  const BTN_OFFSET_FROM_BOTTOM = 72;
   const BTN_CY = stableVH - safeBottom - BTN_OFFSET_FROM_BOTTOM - Math.round(BTN_D / 2);
   const BTN_TOP  = BTN_CY - BTN_D  / 2;
 
@@ -1067,7 +1067,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             <span style={{
               fontSize: 14, fontWeight: 700, letterSpacing: '3.5px', textTransform: 'uppercase',
               color: isPressed ? steel(0.30) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
-              textShadow: isPressed ? 'none' : `0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.30)`,
+              textShadow: isPressed ? 'none' : `0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.25)`,
               ...FONT_SMOOTH,
             }}>{analyzeLabel}</span>
           </button>
