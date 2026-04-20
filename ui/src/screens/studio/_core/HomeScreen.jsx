@@ -1178,8 +1178,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.10em', color: steel(0.50) }}>Lighting</span></p>
         <p style={{
           margin: '2px 0 0',
-          fontWeight: 600, fontSize: 11, lineHeight: '14px',
-          color: steel(0.32), letterSpacing: '0.3px',
+          fontWeight: 600, fontSize: 12, lineHeight: '15px',
+          color: steel(0.38), letterSpacing: '0.3px',
           ...FONT_SMOOTH,
         }}>Reverse-engineer any portrait lighting</p>
       </div>
@@ -1452,16 +1452,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
                   <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
                   <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  {/* Down arrow inside brackets — points toward the CTA below */}
-                  <path d="M19 14v8" stroke={steel(0.35)} strokeWidth="1.0" strokeLinecap="round" />
-                  <path d="M16 19l3 3 3-3" stroke={steel(0.35)} strokeWidth="1.0" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="19" cy="19" r="1.5" fill={steel(0.40)} />
                 </svg>
                 {/* VF copy — clear instruction, tightly spaced below brackets */}
                 <p style={{
-                  margin: '10px 0 0', fontSize: 18, fontWeight: 700, letterSpacing: '-0.2px',
-                  color: steel(0.48),
+                  margin: '10px 0 0', fontSize: 16, fontWeight: 700, letterSpacing: '-0.1px',
+                  color: steel(0.42),
                   textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
-                  textAlign: 'center', lineHeight: '22px',
+                  textAlign: 'center', lineHeight: '20px',
                   ...FONT_SMOOTH,
                 }}>Tap to load a portrait</p>
                 <p style={{
