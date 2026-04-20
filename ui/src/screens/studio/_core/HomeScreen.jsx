@@ -1391,37 +1391,38 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             }}>
               {!isUrlFetching && (<>
                 {/* Ghost portrait silhouette — photography DNA. Faint human outline
-                    hints at "this is where your portrait goes" without words. */}
-                <svg width="60" height="72" viewBox="0 0 60 72" fill="none" style={{
-                  opacity: 0.06, position: 'absolute', top: '38%', left: '50%',
-                  transform: 'translate(-50%, -55%)',
+                    hints at "this is where your portrait goes" without words.
+                    Scaled to ~40% of VF height so it reads as a clear silhouette. */}
+                <svg width="100" height="120" viewBox="0 0 60 72" fill="none" style={{
+                  opacity: 0.05, position: 'absolute', top: '32%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
                 }}>
                   {/* Head */}
                   <ellipse cx="30" cy="22" rx="12" ry="14" fill={steel(1)} />
                   {/* Shoulders */}
                   <path d="M10 72 Q10 48 30 44 Q50 48 50 72" fill={steel(1)} />
                 </svg>
-                {/* Viewfinder bracket icon — pulsing glow for alive feel */}
-                <svg width="42" height="42" viewBox="0 0 38 38" fill="none" style={{
+                {/* Viewfinder bracket icon — pulsing glow, proportionate to VF */}
+                <svg width="68" height="68" viewBox="0 0 38 38" fill="none" style={{
                   opacity: 0.80,
                   animation: 'vfPulseGlow 2.4s ease-in-out infinite',
-                  filter: `drop-shadow(0 0 6px ${steel(0.25)})`,
+                  filter: `drop-shadow(0 0 8px ${steel(0.30)})`,
                 }}>
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <circle cx="19" cy="19" r="1.5" fill={steel(0.55)} />
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  <circle cx="19" cy="19" r="1.8" fill={steel(0.55)} />
                 </svg>
-                {/* Mobile VF copy — proportionate to desktop hero */}
+                {/* Mobile VF copy — proportionate to VF, matches desktop hero intent */}
                 <p style={{
-                  margin: '8px 0 0', fontSize: 15, fontWeight: 700, letterSpacing: '-0.2px',
-                  color: steel(0.50), textAlign: 'center', lineHeight: '18px',
+                  margin: '12px 0 0', fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px',
+                  color: steel(0.55), textAlign: 'center', lineHeight: '24px',
                   ...FONT_SMOOTH,
                 }}>Load a portrait</p>
                 <p style={{
-                  margin: '3px 0 0', fontSize: 11, fontWeight: 500, letterSpacing: '0.1px',
-                  color: steel(0.28), textAlign: 'center', lineHeight: '14px',
+                  margin: '4px 0 0', fontSize: 14, fontWeight: 500, letterSpacing: '0.1px',
+                  color: steel(0.32), textAlign: 'center', lineHeight: '18px',
                   ...FONT_SMOOTH,
                 }}>See how it was lit</p>
               </>)}
@@ -1818,28 +1819,35 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {/* Always pill — consistent CTA shape for all users */}
+          {/* Machined pill CTA — premium tactile feel */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '8px 20px',
-            borderRadius: 20,
-            backgroundColor: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.10)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04), 0 2px 8px rgba(0,0,0,0.4)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            padding: '10px 24px',
+            borderRadius: 12,
+            background: CTA_BG,
+            boxShadow: [
+              '6px 6px 16px rgba(0,0,0,0.65)',
+              '3px 3px 8px rgba(0,0,0,0.45)',
+              '-1px -1px 2px rgba(255,255,255,0.05)',
+              `0 0 6px ${steel(0.06)}`,
+              'inset 0 1.5px 0 rgba(255,255,255,0.12)',
+              'inset 1px 0 0 rgba(255,255,255,0.06)',
+              'inset -0.5px -0.5px 0 rgba(0,0,0,0.35)',
+            ].join(', '),
           }}>
             <p style={{
               margin: 0,
-              fontSize: 13, fontWeight: 600, letterSpacing: '0.2px',
-              color: sampleLoading ? steel(0.55) : 'rgba(245,247,250,0.88)',
+              fontSize: 14, fontWeight: 700, letterSpacing: '0.8px',
+              color: sampleLoading ? steel(0.55) : steel(0.82),
               textShadow: '0 1px 2px rgba(0,0,0,0.7)',
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
               textRendering: 'geometricPrecision',
             }}>
-              {sampleLoading ? 'Loading…' : 'Try a Sample Photo'}
+              {sampleLoading ? 'Loading…' : 'Try a Sample'}
             </p>
             {!sampleLoading && (
               <span style={{
-                fontSize: 14, lineHeight: 1, color: 'rgba(245,247,250,0.70)',
+                fontSize: 15, lineHeight: 1, color: KEY_ACCENT, opacity: 0.65,
               }}>→</span>
             )}
           </div>
