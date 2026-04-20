@@ -20,14 +20,22 @@ export default function useStableViewport() {
   const [stableVH] = useState(() => {
     if (typeof window === 'undefined') return 932;
     const ih = window.innerHeight;
-    // Mobile: screen.height is the stable CSS viewport height that doesn't
-    // jump when browser chrome or the virtual keyboard shows/hides.
-    // Desktop: screen.height can be much larger than the browser window
-    // (e.g. 982 for a 1440p display with a browser viewport of 800),
-    // so always use innerHeight — no virtual keyboard to worry about.
-    if (ih >= DESKTOP_MIN_WIDTH && window.innerWidth >= DESKTOP_MIN_WIDTH) return ih; // desktop
-    const sh = window.screen?.height || 0;
-    return sh > 0 && sh <= ih * 1.4 ? sh : ih;
+    const iw = window.innerWidth;
+    // Desktop: always use innerHeight — no virtual keyboard, no browser chrome issues.
+    if (ih >= DESKTOP_MIN_WIDTH && iw >= DESKTOP_MIN_WIDTH) return ih;
+
+    // Mobile: use innerHeight (actual visible viewport) NOT screen.height.
+    // screen.height includes status bars, browser chrome, and system UI that
+    // the app cannot draw into — using it causes the analyze button to be
+    // positioned past the visible area on phones with browser chrome visible.
+    //
+    // Captured once at mount so the layout never jumps when mobile browser
+    // chrome shows/hides. The button stays anchored to where it was when
+    // the page loaded, which is always a visible position.
+    //
+    // On PWA / fullscreen (where chrome is hidden), innerHeight already
+    // matches the full screen — no loss vs screen.height.
+    return ih;
   });
 
   const [safeBottom, setSafeBottom] = useState(0);

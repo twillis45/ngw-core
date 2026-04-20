@@ -651,24 +651,48 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   const TRK_D   = isDesktop ? 174 : 142;
   // stableVH + safeBottom now provided by useStableViewport hook.
   // ── Bottom-anchored analyze button ─────────────────────────────────────────
-  // Apple muscle-memory rule: button bottom edge is always BTN_OFFSET_FROM_BOTTOM
-  // above the OS safe area, regardless of screen height. The viewfinder above
-  // stretches to fill available space — the button never moves.
-  const BTN_OFFSET_FROM_BOTTOM = 72;
-  const BTN_CY = stableVH - safeBottom - BTN_OFFSET_FROM_BOTTOM - Math.round(BTN_D / 2);
+  // The button bottom edge is always a protected distance above the OS safe area.
+  // On short phones (iPhone SE ≤667px), compress the offset so the button stays
+  // fully visible. On tall phones, use the full 72px breathing room.
+  //
+  // Protected safe zone (bottom-up):
+  //   1. safeBottom (OS home indicator / gesture area)
+  //   2. BTN_OFFSET_FROM_BOTTOM (breathing room — scales with viewport)
+  //   3. BTN_D (button diameter)
+  //   4. VF_GAP (16px breathing above button well)
+  //
+  // Everything above the button (viewfinder) is the flexible layer.
+  const BTN_OFFSET_FROM_BOTTOM = isDesktop ? 72
+    : stableVH <= 600 ? 28    // very short phones (iPhone SE landscape, small Android)
+    : stableVH <= 700 ? 40    // iPhone SE portrait (667px), compact phones
+    : stableVH <= 780 ? 52    // standard iPhone (812px with some chrome)
+    : 64;                     // tall modern phones (iPhone 15 Pro Max, S25 Ultra)
+  // Safety clamp: button center must leave at least BTN_D/2 + 8px visible at bottom.
+  // This prevents clipping even if stableVH measurement is slightly off.
+  const rawBtnCY = stableVH - safeBottom - BTN_OFFSET_FROM_BOTTOM - Math.round(BTN_D / 2);
+  const maxBtnCY = stableVH - safeBottom - BTN_D / 2 - 8; // absolute floor: 8px above safe area
+  const BTN_CY = Math.min(rawBtnCY, maxBtnCY);
   const BTN_TOP  = BTN_CY - BTN_D  / 2;
 
   // ── Fluid viewfinder — fills the space between header and button zone ─────
   // The VF stretches from below the header down to a comfortable gap above
-  // the button well. The button is bottom-anchored (Apple muscle-memory rule),
-  // and the VF takes whatever height remains — no fixed pixel height.
-  // On iPhone 15 (852pt + 34pt safe) this yields ~430px (matching Figma spec).
-  // Shorter screens shrink the VF; taller screens grow it. Floor of 280px
-  // prevents the VF from becoming unusably small on very short viewports.
-  const VF_TOP = 100;
+  // the button well. The button is bottom-anchored and the VF takes whatever
+  // height remains. No fixed pixel height.
+  //
+  // Priority order when vertical space is tight:
+  //   1. Button safe zone (protected, never clipped)
+  //   2. Viewfinder (flexible, shrinks to min 200px)
+  //   3. Header (compresses on very short phones)
+  //   4. VF_GAP (breathing room, compresses last)
+  //
+  // VF_TOP compresses on short phones to give the button more room.
+  const VF_TOP = isDesktop ? 100
+    : stableVH <= 600 ? 60    // very short
+    : stableVH <= 700 ? 72    // iPhone SE
+    : 88;                     // standard+
   const WELL_TOP = BTN_CY - WELL_D / 2;
-  const VF_GAP = 16; // breathing room between VF bottom and button well top
-  const VF_HEIGHT = Math.max(280, WELL_TOP - VF_GAP - VF_TOP);
+  const VF_GAP = stableVH <= 700 ? 10 : 16;
+  const VF_HEIGHT = Math.max(200, WELL_TOP - VF_GAP - VF_TOP);
   const VF_BOTTOM = VF_TOP + VF_HEIGHT;
   const TRK_TOP  = BTN_CY - TRK_D  / 2;
   const LBL_FONT = isDesktop ? 14 : 13;
