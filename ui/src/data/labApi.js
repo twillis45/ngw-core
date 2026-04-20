@@ -121,10 +121,13 @@ export async function analyzeImage(file, { debug = false, signal } = {}) {
   form.append('image', file);
   const params = new URLSearchParams();
   if (debug) params.set('debug', 'true');
-  // Respect imageHandling setting — delete uploaded image after analysis
+  // Respect user settings for analysis behavior
   try {
     const s = JSON.parse(localStorage.getItem('ngw_settings') || '{}');
     if (s.imageHandling === 'delete') params.set('delete_after', 'true');
+    if (s.patternSensitivity && s.patternSensitivity !== 'balanced') {
+      params.set('sensitivity', s.patternSensitivity);
+    }
   } catch { /* proceed without */ }
   const query = params.toString() ? `?${params}` : '';
   return labFetch(`/analyze${query}`, { method: 'POST', body: form, signal });

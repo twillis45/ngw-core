@@ -144,6 +144,7 @@ async def lab_analyze(
     image: UploadFile = File(...),
     debug: bool = Query(False, description="Generate debug overlay image"),
     delete_after: bool = Query(False, description="Delete uploaded image after analysis (privacy mode)"),
+    sensitivity: str = Query("balanced", description="Pattern sensitivity: strict, balanced, flexible"),
     user: Dict = Depends(get_dev_user),
 ):
     """Run full pipeline analysis on an uploaded image.
@@ -179,7 +180,8 @@ async def lab_analyze(
         future = loop.run_in_executor(
             None,
             partial(analyze_image, str(fpath), run_extended=True, run_vlm=True, debug=debug,
-                    analysis_id_override=analysis_id),
+                    analysis_id_override=analysis_id,
+                    sensitivity=sensitivity if sensitivity in ('strict', 'balanced', 'flexible') else 'balanced'),
         )
 
         # Register in-flight task for cancellation

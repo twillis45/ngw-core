@@ -3789,6 +3789,7 @@ def analyze_image(
     run_solver: bool = True,
     debug: bool = False,
     analysis_id_override: str | None = None,
+    sensitivity: str = "balanced",
 ) -> AnalysisResult:
     """Full analysis pipeline — single entry point for all image analysis.
 
@@ -4600,6 +4601,25 @@ def analyze_image(
     # values without needing to reach into pattern_candidates.
     if result.pattern_candidates and result.pattern_candidates.primary:
         result.pattern_confidence = result.pattern_candidates.primary.confidence
+        result.pattern_confidence_label = result.pattern_candidates.confidence_label
+
+    # ── Sensitivity adjustment ─────────────────────────────────────────
+    # Shift confidence thresholds based on user preference (admin setting).
+    # strict:   require more evidence → scale confidence DOWN by 10%
+    # balanced: no change (default)
+    # flexible: accept less evidence → scale confidence UP by 10%
+    # This affects the confidence_label tier (strong/partial/weak) which
+    # drives display copy ("STRONG READ" vs "PARTIAL READ").
+    if sensitivity == "strict" and result.pattern_confidence > 0:
+        result.pattern_confidence = max(0.0, result.pattern_confidence * 0.90)
+        if result.pattern_candidates and result.pattern_candidates.primary:
+            result.pattern_candidates.primary.confidence = result.pattern_confidence
+    elif sensitivity == "flexible" and result.pattern_confidence > 0:
+        result.pattern_confidence = min(1.0, result.pattern_confidence * 1.10)
+        if result.pattern_candidates and result.pattern_candidates.primary:
+            result.pattern_candidates.primary.confidence = result.pattern_confidence
+    # Re-sync label after adjustment
+    if result.pattern_candidates:
         result.pattern_confidence_label = result.pattern_candidates.confidence_label
 
     # ── Phase 1: conservative pattern_status assignment ──────────────
