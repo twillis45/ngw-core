@@ -1,17 +1,20 @@
-"""User data routes: kit, setups, feedback sync."""
+"""User data routes: kit, setups, feedback sync, setup sharing."""
 from __future__ import annotations
 
+import secrets
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth.security import get_current_user
+from auth.plan_guard import require_plan
 from db.database import (
     save_user_kit, get_user_kit, delete_user_kit,
     save_user_setup, get_user_setups, delete_user_setup,
     save_user_feedback, get_user_feedback,
     save_user_preference, get_all_user_preferences,
+    get_db,
 )
 
 router = APIRouter(prefix="/user", tags=["user-data"])
@@ -136,3 +139,33 @@ def sync_all(user=Depends(get_current_user)):
         "feedback": get_user_feedback(user["id"]),
         "preferences": get_all_user_preferences(user["id"]),
     }
+
+
+# ── Setup Sharing (Studio-tier) ──────────────────────────────
+
+@router.post("/setups/{setup_id}/share")
+def toggle_setup_sharing(setup_id: str, user=Depends(require_plan("studio"))):
+    """Toggle sharing for a saved setup. Returns the share URL or null."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT id, shared, share_token FROM user_setups WHERE id = ? AND user_id = ?",
+            (setup_id, user["id"]),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Setup not found")
+
+        if row["shared"]:
+            # Turn off sharing
+            conn.execute(
+                "UPDATE user_setups SET shared = 0, share_token = NULL WHERE id = ?",
+                (setup_id,),
+            )
+            return {"shared": False, "share_url": None}
+        else:
+            # Turn on sharing — generate token
+            token = secrets.token_urlsafe(16)
+            conn.execute(
+                "UPDATE user_setups SET shared = 1, share_token = ? WHERE id = ?",
+                (token, setup_id),
+            )
+            return {"shared": True, "share_token": token}

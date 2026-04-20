@@ -677,7 +677,7 @@ export default function ResultsScreenV2({ onShare } = {}) {
   const { result, error, roomDimensions, user } = useAppState();
   const dispatch = useDispatch();
   const userEmail = resolveUserEmail(user);
-  const { isPaid, unlock, isAdmin, analysisCount, incrementCount } = usePaywall(userEmail);
+  const { isPaid, unlock, isAdmin, isStudio, analysisCount, incrementCount } = usePaywall(userEmail);
   const { fireGate } = usePaywallTrigger({ isPaid, analysisCount });
   const [zoomSrc, setZoomSrc] = useState(null);
   const appMode = useMode();
@@ -862,6 +862,8 @@ export default function ResultsScreenV2({ onShare } = {}) {
             spaceCheck={result.spaceCheck}
             roomDimensions={roomDimensions}
             twoHostSetup={result.twoHostSetup}
+            isStudio={isStudio}
+            isAdmin={isAdmin}
             inline
           />
         )}
@@ -1023,6 +1025,8 @@ export default function ResultsScreenV2({ onShare } = {}) {
           spaceCheck={result.spaceCheck}
           roomDimensions={roomDimensions}
           twoHostSetup={result.twoHostSetup}
+          isStudio={isStudio}
+          isAdmin={isAdmin}
           legendCollapsed
           onItemSelect={setSelectedDiagramItem}
         />

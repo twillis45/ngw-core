@@ -322,6 +322,63 @@ def init_db():
                 ON analysis_results(image_path);
             CREATE INDEX IF NOT EXISTS idx_analysis_results_created_at
                 ON analysis_results(created_at);
+
+            CREATE TABLE IF NOT EXISTS batch_jobs (
+                id            TEXT PRIMARY KEY,
+                user_email    TEXT NOT NULL,
+                status        TEXT NOT NULL DEFAULT 'pending',
+                total_images  INTEGER NOT NULL,
+                completed     INTEGER NOT NULL DEFAULT 0,
+                results_json  TEXT,
+                created_at    REAL NOT NULL,
+                updated_at    REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_batch_jobs_user
+                ON batch_jobs(user_email);
+
+            CREATE TABLE IF NOT EXISTS reference_library (
+                id            TEXT PRIMARY KEY,
+                user_email    TEXT NOT NULL,
+                name          TEXT NOT NULL,
+                category      TEXT DEFAULT 'uncategorized',
+                image_path    TEXT NOT NULL,
+                analysis_id   TEXT,
+                notes         TEXT,
+                tags          TEXT,
+                created_at    REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_reflib_user
+                ON reference_library(user_email);
+
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id            TEXT PRIMARY KEY,
+                user_email    TEXT NOT NULL,
+                key_hash      TEXT UNIQUE NOT NULL,
+                key_prefix    TEXT NOT NULL,
+                name          TEXT DEFAULT 'Default',
+                created_at    REAL NOT NULL,
+                last_used     REAL,
+                revoked       INTEGER DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_api_keys_user
+                ON api_keys(user_email);
+            CREATE INDEX IF NOT EXISTS idx_api_keys_hash
+                ON api_keys(key_hash);
+
+            CREATE TABLE IF NOT EXISTS teams (
+                id            TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                owner_id      TEXT NOT NULL,
+                created_at    REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS team_members (
+                team_id       TEXT NOT NULL,
+                user_id       TEXT NOT NULL,
+                role          TEXT NOT NULL DEFAULT 'member',
+                invited_at    REAL NOT NULL,
+                PRIMARY KEY (team_id, user_id)
+            );
         """)
     # Migrate existing users table — add email_verified if missing
     with get_db() as conn:
@@ -374,6 +431,14 @@ def init_db():
             conn.execute("ALTER TABLE vlm_call_metrics ADD COLUMN output_tokens INTEGER")
         if "cost_usd" not in vlm_cols:
             conn.execute("ALTER TABLE vlm_call_metrics ADD COLUMN cost_usd REAL")
+
+    # Migrate user_setups — add sharing columns
+    with get_db() as conn:
+        setup_cols = [r[1] for r in conn.execute("PRAGMA table_info(user_setups)").fetchall()]
+        if "shared" not in setup_cols:
+            conn.execute("ALTER TABLE user_setups ADD COLUMN shared INTEGER DEFAULT 0")
+        if "share_token" not in setup_cols:
+            conn.execute("ALTER TABLE user_setups ADD COLUMN share_token TEXT")
 
 
 # ── User CRUD ──────────────────────────────────────────────
@@ -1594,3 +1659,192 @@ def get_feedback_calibration(
             params,
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── Batch Jobs ───────────────────────────────────────────────────────────────
+
+def create_batch_job(user_email: str, total_images: int) -> dict:
+    import uuid, time
+    job_id = str(uuid.uuid4())
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO batch_jobs (id, user_email, status, total_images, completed, results_json, created_at, updated_at)
+               VALUES (?, ?, 'pending', ?, 0, '[]', ?, ?)""",
+            (job_id, user_email.lower(), total_images, now, now),
+        )
+    return {"id": job_id, "status": "pending", "total_images": total_images, "completed": 0}
+
+
+def update_batch_job(job_id: str, *, status: str | None = None, completed: int | None = None, results_json: str | None = None):
+    import time
+    sets, params = [], []
+    if status is not None:
+        sets.append("status = ?"); params.append(status)
+    if completed is not None:
+        sets.append("completed = ?"); params.append(completed)
+    if results_json is not None:
+        sets.append("results_json = ?"); params.append(results_json)
+    sets.append("updated_at = ?"); params.append(time.time())
+    params.append(job_id)
+    with get_db() as conn:
+        conn.execute(f"UPDATE batch_jobs SET {', '.join(sets)} WHERE id = ?", params)
+
+
+def get_batch_job(job_id: str, user_email: str | None = None) -> dict | None:
+    with get_db() as conn:
+        if user_email:
+            row = conn.execute("SELECT * FROM batch_jobs WHERE id = ? AND user_email = ?", (job_id, user_email.lower())).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM batch_jobs WHERE id = ?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
+# ── Reference Library ────────────────────────────────────────────────────────
+
+def add_reference(user_email: str, name: str, image_path: str, analysis_id: str | None = None,
+                  category: str = "uncategorized", notes: str = "", tags: str = "") -> dict:
+    import uuid, time
+    ref_id = str(uuid.uuid4())
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO reference_library (id, user_email, name, category, image_path, analysis_id, notes, tags, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (ref_id, user_email.lower(), name, category, image_path, analysis_id, notes, tags, now),
+        )
+    return {"id": ref_id, "name": name, "category": category, "created_at": now}
+
+
+def list_references(user_email: str, category: str | None = None) -> list[dict]:
+    with get_db() as conn:
+        if category:
+            rows = conn.execute(
+                "SELECT * FROM reference_library WHERE user_email = ? AND category = ? ORDER BY created_at DESC",
+                (user_email.lower(), category),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM reference_library WHERE user_email = ? ORDER BY created_at DESC",
+                (user_email.lower(),),
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def delete_reference(ref_id: str, user_email: str) -> bool:
+    with get_db() as conn:
+        cur = conn.execute("DELETE FROM reference_library WHERE id = ? AND user_email = ?", (ref_id, user_email.lower()))
+    return cur.rowcount > 0
+
+
+# ── API Keys ─────────────────────────────────────────────────────────────────
+
+def create_api_key(user_email: str, name: str = "Default") -> dict:
+    import uuid, time, secrets, hashlib
+    key_id = str(uuid.uuid4())
+    raw_key = f"ngw_studio_{secrets.token_hex(24)}"
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    key_prefix = raw_key[:16]
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO api_keys (id, user_email, key_hash, key_prefix, name, created_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (key_id, user_email.lower(), key_hash, key_prefix, name, now),
+        )
+    return {"id": key_id, "key": raw_key, "prefix": key_prefix, "name": name}
+
+
+def list_api_keys(user_email: str) -> list[dict]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, key_prefix, name, created_at, last_used, revoked FROM api_keys WHERE user_email = ? AND revoked = 0 ORDER BY created_at DESC",
+            (user_email.lower(),),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def validate_api_key(raw_key: str) -> str | None:
+    """Validate an API key and return the associated user email, or None."""
+    import hashlib, time
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT user_email FROM api_keys WHERE key_hash = ? AND revoked = 0",
+            (key_hash,),
+        ).fetchone()
+        if row:
+            conn.execute("UPDATE api_keys SET last_used = ? WHERE key_hash = ?", (time.time(), key_hash))
+            return row["user_email"]
+    return None
+
+
+def revoke_api_key(key_id: str, user_email: str) -> bool:
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE api_keys SET revoked = 1 WHERE id = ? AND user_email = ?",
+            (key_id, user_email.lower()),
+        )
+    return cur.rowcount > 0
+
+
+# ── Teams ────────────────────────────────────────────────────────────────────
+
+def create_team(owner_id: str, name: str) -> dict:
+    import uuid, time
+    team_id = str(uuid.uuid4())
+    now = time.time()
+    with get_db() as conn:
+        conn.execute(
+            "INSERT INTO teams (id, name, owner_id, created_at) VALUES (?, ?, ?, ?)",
+            (team_id, name, owner_id, now),
+        )
+        conn.execute(
+            "INSERT INTO team_members (team_id, user_id, role, invited_at) VALUES (?, ?, 'owner', ?)",
+            (team_id, owner_id, now),
+        )
+    return {"id": team_id, "name": name, "owner_id": owner_id}
+
+
+def add_team_member(team_id: str, user_id: str, role: str = "member") -> bool:
+    import time
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO team_members (team_id, user_id, role, invited_at) VALUES (?, ?, ?, ?)",
+                (team_id, user_id, role, time.time()),
+            )
+        return True
+    except Exception:
+        return False
+
+
+def get_team_members(team_id: str) -> list[dict]:
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT tm.user_id, tm.role, tm.invited_at, u.email, u.username
+               FROM team_members tm LEFT JOIN users u ON tm.user_id = u.id
+               WHERE tm.team_id = ?""",
+            (team_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_user_teams(user_id: str) -> list[dict]:
+    with get_db() as conn:
+        rows = conn.execute(
+            """SELECT t.id, t.name, t.owner_id, t.created_at, tm.role
+               FROM teams t JOIN team_members tm ON t.id = tm.team_id
+               WHERE tm.user_id = ?""",
+            (user_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def remove_team_member(team_id: str, user_id: str) -> bool:
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM team_members WHERE team_id = ? AND user_id = ? AND role != 'owner'",
+            (team_id, user_id),
+        )
+    return cur.rowcount > 0

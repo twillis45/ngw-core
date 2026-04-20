@@ -6,7 +6,7 @@ import { getToken } from '../data/authApi';
 
 /**
  * Shot Match — compare a reference image vs user's attempt.
- * Studio-tier feature: requires planTier === 'studio'.
+ * Pro-tier feature: requires paid subscription (Pro and above).
  *
  * Entry points:
  *  - WelcomeScreen mode card (if enable_shot_match flag)
@@ -16,7 +16,7 @@ import { getToken } from '../data/authApi';
 export default function ShotMatchScreen() {
   const { referenceImage, referenceImages, result, user } = useAppState();
   const dispatch = useDispatch();
-  const { isStudio, isAdmin } = usePaywall(user?.email || user?.username || null);
+  const { isPaid, isAdmin } = usePaywall(user?.email || user?.username || null);
   const attemptRef = useRef(null);
   const refUploadRef = useRef(null);
 
@@ -154,8 +154,8 @@ export default function ShotMatchScreen() {
     dispatch({ type: 'GO_BACK' });
   }
 
-  // Studio-tier gate — admins always pass
-  if (!isStudio && !isAdmin) {
+  // Pro-tier gate — admins always pass
+  if (!isPaid && !isAdmin) {
     return (
       <div className="screen">
         <h2 className="screen-heading">Shot Match</h2>
@@ -166,20 +166,20 @@ export default function ShotMatchScreen() {
               <path d="M7 11V7a5 5 0 0110 0v4"/>
             </svg>
           </div>
-          <h3 className="shot-match__gate-title">Studio Plan Required</h3>
+          <h3 className="shot-match__gate-title">Pro Plan Required</h3>
           <p className="shot-match__gate-body">
-            Shot Match is a Studio-tier feature. Upload your attempt alongside a reference and get a
+            Shot Match is a Pro feature. Upload your attempt alongside a reference and get a
             precise breakdown of how closely your lighting matches — pattern, key position, modifier, and more.
           </p>
           <p className="shot-match__gate-sub">
-            Upgrade to Studio to unlock Shot Match and the full Creative recipe library.
+            Upgrade to Pro to unlock Shot Match, Shoot Mode, and the full recipe library.
           </p>
           <button
             className="btn btn--primary"
             style={{ width: '100%', marginBottom: 'var(--space-sm)' }}
             onClick={() => dispatch({ type: 'NAVIGATE', screen: 'upgrade' })}
           >
-            Upgrade to Studio
+            Upgrade to Pro
           </button>
           <button
             className="btn btn--ghost"

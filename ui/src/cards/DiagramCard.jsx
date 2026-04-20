@@ -1371,7 +1371,126 @@ function handlePrint(canvasEl, spec, title, view) {
   win.document.close();
 }
 
-export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole, twoHostSetup, onItemSelect }) {
+/**
+ * PNG export — direct download. Studio users get clean (no branding),
+ * Pro users get a subtle watermark.
+ */
+function handleExportPNG(canvasEl, spec, title, view, whiteLabel = false) {
+  if (!canvasEl) return;
+
+  // Create an offscreen canvas to optionally add branding
+  const w = canvasEl.width;
+  const h = canvasEl.height;
+  const brandH = whiteLabel ? 0 : 28;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = w;
+  offscreen.height = h + brandH;
+  const ctx = offscreen.getContext('2d');
+
+  // White background
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+
+  // Draw the diagram
+  ctx.drawImage(canvasEl, 0, 0);
+
+  // Brand footer for non-Studio
+  if (!whiteLabel) {
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(0, h, w, brandH);
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No Guesswork Lighting', w / 2, h + 18);
+  }
+
+  // Trigger download
+  const link = document.createElement('a');
+  const patternLabel = fmtPattern(spec?.pattern, '');
+  const filename = `${(title || 'diagram').replace(/\s+/g, '_')}${patternLabel ? '_' + patternLabel : ''}_${view}.png`;
+  link.download = filename;
+  link.href = offscreen.toDataURL('image/png');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * PDF export — single-page document with diagram + light legend.
+ * Uses jsPDF if available, falls back to PNG download.
+ */
+async function handleExportPDF(canvasEl, spec, title, view, whiteLabel = false) {
+  if (!canvasEl) return;
+
+  let jsPDF;
+  try {
+    const mod = await import('jspdf');
+    jsPDF = mod.jsPDF || mod.default;
+  } catch {
+    // jsPDF not installed — fall back to PNG
+    handleExportPNG(canvasEl, spec, title, view, whiteLabel);
+    return;
+  }
+
+  const imgData = canvasEl.toDataURL('image/png');
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+
+  // Title
+  pdf.setFontSize(16);
+  pdf.setFont(undefined, 'bold');
+  const heading = title || 'Lighting Diagram';
+  const patternLabel = fmtPattern(spec?.pattern, '');
+  pdf.text(`${heading}${patternLabel ? ' — ' + patternLabel : ''}`, 14, 16);
+
+  // Subtitle
+  pdf.setFontSize(9);
+  pdf.setFont(undefined, 'normal');
+  pdf.setTextColor(100);
+  pdf.text(`${view === 'side' ? 'Side view' : view === 'space' ? 'Floor plan' : 'Top-down view'}`, 14, 22);
+  pdf.setTextColor(0);
+
+  // Diagram image
+  const imgW = pageW - 28;
+  const imgH = Math.min(imgW * (canvasEl.height / canvasEl.width), pageH - 70);
+  pdf.addImage(imgData, 'PNG', 14, 26, imgW, imgH);
+
+  // Light legend below diagram
+  const lights = spec?.lights || [];
+  if (lights.length > 0) {
+    let y = 26 + imgH + 8;
+    pdf.setDrawColor(200);
+    pdf.line(14, y - 2, pageW - 14, y - 2);
+    pdf.setFontSize(8);
+    lights.forEach(l => {
+      if (y > pageH - 12) return;
+      const roleName = (l.label || l.role).replace(/_/g, ' ');
+      const modText = (l.modifier || '').replace(/_/g, ' ');
+      const dist = l.distance_m ? `${(l.distance_m * 3.281).toFixed(0)} ft` : '';
+      const angle = l.angle_deg != null ? `${Math.round(Math.abs(l.angle_deg))}\u00b0` : '';
+      const height = l.height_m ? `${(l.height_m * 3.281).toFixed(0)} ft high` : '';
+      const detail = [modText, dist, angle, height].filter(Boolean).join(' · ');
+      pdf.setFont(undefined, 'bold');
+      pdf.text(roleName.charAt(0).toUpperCase() + roleName.slice(1), 16, y);
+      pdf.setFont(undefined, 'normal');
+      pdf.text(` — ${detail}`, 16 + pdf.getTextWidth(roleName.charAt(0).toUpperCase() + roleName.slice(1)) + 2, y);
+      y += 5;
+    });
+  }
+
+  // Brand footer for non-Studio
+  if (!whiteLabel) {
+    pdf.setFontSize(7);
+    pdf.setTextColor(150);
+    pdf.text('No Guesswork Lighting', pageW / 2, pageH - 6, { align: 'center' });
+  }
+
+  const filename = `${(title || 'diagram').replace(/\s+/g, '_')}${patternLabel ? '_' + patternLabel : ''}.pdf`;
+  pdf.save(filename);
+}
+
+export default function DiagramCard({ spec, title, inline, cameraSettings, spaceCheck, roomDimensions, highlightRole, twoHostSetup, onItemSelect, isStudio, isAdmin }) {
   const canvasRef = useRef(null);
   const [view, setView] = useState('top');
   const [zoomSrc, setZoomSrc] = useState(null);
@@ -1545,6 +1664,33 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
             <rect x="6" y="14" width="12" height="8"/>
           </svg>
           Print
+        </button>
+        <button
+          className="diagram-print-btn"
+          onClick={() => handleExportPNG(canvasRef.current, spec, title, view, !!(isStudio || isAdmin))}
+          type="button"
+          title="Download PNG"
+          aria-label="Download diagram as PNG"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          PNG
+        </button>
+        <button
+          className="diagram-print-btn"
+          onClick={() => handleExportPDF(canvasRef.current, spec, title, view, !!(isStudio || isAdmin))}
+          type="button"
+          title={isStudio || isAdmin ? 'Download white-label PDF' : 'Download branded PDF'}
+          aria-label="Download diagram as PDF"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          PDF
         </button>
       </div>
       <div className="diagram-layout">

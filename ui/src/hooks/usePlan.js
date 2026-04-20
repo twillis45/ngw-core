@@ -1,9 +1,10 @@
 /**
  * usePlan — tier-aware plan state hook.
  *
- * plan = "free" | "paid" | "pro" | "enterprise"
+ * plan = "free" | "paid" | "pro" | "studio" | "enterprise"
  *   isPaid       — plan >= "paid"
  *   isPro        — plan >= "pro"
+ *   isStudio     — plan >= "studio"
  *   isEnterprise — plan >= "enterprise"
  *
  * Admin emails always get "enterprise".
@@ -54,11 +55,12 @@ export default function usePlan(userEmail) {
 
   const isPaid       = meetsPlan(plan, 'paid');
   const isPro        = meetsPlan(plan, 'pro');
+  const isStudio     = meetsPlan(plan, 'studio');
   const isEnterprise = meetsPlan(plan, 'enterprise');
 
   // Backward-compat shortcuts (mirrors usePaywall API)
   const unlock = useCallback(() => setPlan('paid'), [setPlan]);
   const lock   = useCallback(() => setPlan('free'), [setPlan]);
 
-  return { plan, setPlan, isPaid, isPro, isEnterprise, isAdmin, unlock, lock };
+  return { plan, setPlan, isPaid, isPro, isStudio, isEnterprise, isAdmin, unlock, lock };
 }

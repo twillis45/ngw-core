@@ -11,10 +11,12 @@ Endpoints:
       and records payment in the DB.
 
 Required env vars:
-  STRIPE_SECRET_KEY          sk_test_... / sk_live_...
-  STRIPE_PRICE_ID_MONTHLY    price_... (Pro monthly)
-  STRIPE_PRICE_ID_YEARLY     price_... (Pro yearly)
-  STRIPE_WEBHOOK_SECRET      whsec_... (webhook signature verification)
+  STRIPE_SECRET_KEY                sk_test_... / sk_live_...
+  STRIPE_PRICE_ID_MONTHLY          price_... (Pro monthly)
+  STRIPE_PRICE_ID_YEARLY           price_... (Pro yearly)
+  STRIPE_PRICE_ID_STUDIO_MONTHLY   price_... (Studio monthly)
+  STRIPE_PRICE_ID_STUDIO_YEARLY    price_... (Studio yearly)
+  STRIPE_WEBHOOK_SECRET            whsec_... (webhook signature verification)
 """
 
 from __future__ import annotations
@@ -50,9 +52,15 @@ def _get_stripe():
     return stripe
 
 
-PRICE_IDS: dict[str, Optional[str]] = {
-    'monthly': os.getenv('STRIPE_PRICE_ID_MONTHLY'),
-    'yearly':  os.getenv('STRIPE_PRICE_ID_YEARLY'),
+PRICE_IDS: dict[str, dict[str, Optional[str]]] = {
+    'pro': {
+        'monthly': os.getenv('STRIPE_PRICE_ID_MONTHLY'),
+        'yearly':  os.getenv('STRIPE_PRICE_ID_YEARLY'),
+    },
+    'studio': {
+        'monthly': os.getenv('STRIPE_PRICE_ID_STUDIO_MONTHLY'),
+        'yearly':  os.getenv('STRIPE_PRICE_ID_STUDIO_YEARLY'),
+    },
 }
 
 
@@ -104,7 +112,7 @@ async def create_checkout_session(
             detail="Authentication required to start checkout. Please log in first.",
         )
 
-    if body.plan != 'pro':
+    if body.plan not in ('pro', 'studio'):
         raise HTTPException(400, f'Unsupported plan: {body.plan}')
 
     # Validate success_url and cancel_url origins to prevent open-redirect abuse.
@@ -113,12 +121,13 @@ async def create_checkout_session(
             if not any(url.startswith(o) for o in _ALLOWED_ORIGINS):
                 raise HTTPException(400, 'Invalid redirect URL origin.')
 
-    price_id = PRICE_IDS.get(body.billing_period)
+    plan_prices = PRICE_IDS.get(body.plan, {})
+    price_id = plan_prices.get(body.billing_period)
     if not price_id:
         raise HTTPException(
             400,
-            f'No Stripe Price ID configured for billing_period="{body.billing_period}". '
-            f'Set STRIPE_PRICE_ID_MONTHLY / STRIPE_PRICE_ID_YEARLY in the environment.',
+            f'No Stripe Price ID configured for plan="{body.plan}" billing_period="{body.billing_period}". '
+            f'Set the corresponding STRIPE_PRICE_ID_* env var.',
         )
 
     _stripe = _get_stripe()
@@ -132,6 +141,7 @@ async def create_checkout_session(
             cancel_url=body.cancel_url,
             allow_promotion_codes=True,
             metadata={k: v for k, v in {
+                'plan':            body.plan,
                 'billing_period':  body.billing_period,
                 'ngw_session_id':  body.ngw_session_id,
                 'trigger_type':    body.trigger_type,
@@ -208,8 +218,11 @@ async def stripe_webhook(
             else getattr(session, 'metadata', {}) or {}
         )
         billing_period = metadata.get('billing_period', 'monthly')
+        plan = metadata.get('plan', 'pro')
+        if plan not in ('pro', 'studio'):
+            plan = 'pro'  # fallback for legacy sessions without plan metadata
 
-        logger.info('Checkout completed: session=%s email=%s', session_id, customer_email)
+        logger.info('Checkout completed: session=%s email=%s plan=%s', session_id, customer_email, plan)
 
         if session_id and customer_email:
             existing = get_subscription_by_stripe_session(session_id)
@@ -224,7 +237,7 @@ async def stripe_webhook(
                 create_subscription(
                     stripe_session_id=session_id,
                     customer_email=customer_email,
-                    plan='pro',
+                    plan=plan,
                     billing_period=billing_period,
                     stripe_customer_id=stripe_customer_id,
                     stripe_subscription_id=stripe_subscription_id,

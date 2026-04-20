@@ -15,6 +15,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { trackEvent, getSessionId } from '../data/analytics';
 import { getPaywallConfig } from '../data/pricingStore';
 import { authHeaders } from '../data/authApi';
+import { savePlan } from '../data/planStore';
 
 const STORAGE_KEY = 'ngw_paid';
 const COUNT_KEY = 'ngw_analysis_count';
@@ -149,6 +150,9 @@ export default function usePaywall(userEmail) {
           if (data.plan) {
             try { localStorage.setItem('ngw_subscription_plan', data.plan); } catch { /* ignore */ }
             setPlanTier(data.plan);
+            // Sync to planStore so usePlan hook picks up the confirmed tier
+            savePlan(data.plan);
+            window.dispatchEvent(new Event('ngw_plan_change'));
           }
           setIsPaid(true);
           // Session ID consumed — remove so we don't re-verify on every mount

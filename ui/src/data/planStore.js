@@ -8,14 +8,15 @@
 
 const PLAN_KEY = 'ngw_plan';
 const LEGACY_PAID_KEY = 'ngw_paid';
-const VALID_PLANS = ['free', 'paid', 'pro', 'enterprise'];
+const VALID_PLANS = ['free', 'paid', 'pro', 'studio', 'enterprise'];
 
-export const PLAN_ORDER = { free: 0, paid: 1, pro: 2, enterprise: 3 };
+export const PLAN_ORDER = { free: 0, paid: 1, pro: 2, studio: 3, enterprise: 4 };
 
 export const PLAN_LABELS = {
   free: 'Free',
   paid: 'Paid',
   pro: 'Pro',
+  studio: 'Studio',
   enterprise: 'Enterprise',
 };
 
