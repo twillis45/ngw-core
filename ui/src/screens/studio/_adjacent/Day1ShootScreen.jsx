@@ -962,13 +962,24 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
   // FitToViewport conflict zone.
   const isDesktop = _isDesktopGlobal
     || (typeof window !== 'undefined' && window.innerWidth >= 768);
-  const VF_TOP = 100;
+  // Scale layout for short phones (same strategy as HomeScreen)
+  const VF_TOP = isDesktop ? 100
+    : stableVH <= 600 ? 56
+    : stableVH <= 700 ? 68
+    : 88;
   const VF_BTN_D = 136;
   const VF_WELL_D = 146;
-  const VF_BTN_OFFSET = 48;
-  const VF_BTN_CY = stableVH - safeBottom - VF_BTN_OFFSET - Math.round(VF_BTN_D / 2);
+  const VF_BTN_OFFSET = isDesktop ? 48
+    : stableVH <= 600 ? 24
+    : stableVH <= 700 ? 32
+    : stableVH <= 780 ? 40
+    : 48;
+  const rawVfBtnCY = stableVH - safeBottom - VF_BTN_OFFSET - Math.round(VF_BTN_D / 2);
+  const maxVfBtnCY = stableVH - safeBottom - VF_BTN_D / 2 - 8;
+  const VF_BTN_CY = Math.min(rawVfBtnCY, maxVfBtnCY);
   const VF_WELL_TOP = VF_BTN_CY - VF_WELL_D / 2;
-  const VF_HEIGHT = Math.max(280, VF_WELL_TOP - 16 - VF_TOP);
+  const VF_GAP = stableVH <= 700 ? 10 : 16;
+  const VF_HEIGHT = Math.max(200, VF_WELL_TOP - VF_GAP - VF_TOP);
 
   const modeInfo = MODE_LABELS[mode] || MODE_LABELS.photographer;
   const isAssistant = mode === 'assistant';
