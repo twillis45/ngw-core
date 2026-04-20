@@ -1306,13 +1306,17 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           border: isDragOver ? `1.5px solid rgba(132, 158, 184,0.40)` : 'none',
           overflow: 'hidden',
           cursor: 'pointer',
-          // Transparent so the slot blends seamlessly into the matte surface in idle state.
-          // When an image loads it is covered by the photo (zIndex 8). Depth comes from
-          // VIEWFINDER_INNER_SHADOW at z-index 10, not the background fill.
-          backgroundColor: 'transparent',
-          // No outset shadow in normal state — slot edge is defined from inside.
-          // Drag-over: faint steel inner glow to signal accept.
-          boxShadow: isDragOver ? 'inset 0 0 40px rgba(132, 158, 184,0.15)' : 'none',
+          // LCD panel surface — slightly lighter than the body, with a cool shift.
+          // Real camera LCDs read as a distinct dark rectangle, not transparent.
+          backgroundColor: hasImage ? 'transparent' : '#050710',
+          // Recessed LCD bezel — the panel sits IN the body, not ON it.
+          boxShadow: isDragOver
+            ? 'inset 0 0 40px rgba(132, 158, 184,0.15)'
+            : hasImage ? 'none' : [
+                'inset 0 2px 6px rgba(0,0,0,0.7)',
+                'inset 0 1px 1px rgba(0,0,0,0.5)',
+                'inset 0 -1px 0 rgba(255,255,255,0.02)',
+              ].join(', '),
           WebkitTapHighlightColor: 'transparent',
           transition: 'box-shadow 0.2s ease, transform 0.08s ease',
           transform: viewfinderShake ? 'translateX(4px)' : 'translateX(0)',
@@ -1326,9 +1330,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
             'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
           ].join(', ') : [
-            // Empty state: faint IPS backlight glow — reads as powered-off LCD, not flat div
-            'radial-gradient(ellipse 100% 80% at 50% 45%, rgba(90,115,155,0.035) 0%, rgba(70,95,135,0.015) 50%, transparent 80%)',
-            'linear-gradient(180deg, rgba(85,110,150,0.012) 0%, transparent 25%, transparent 75%, rgba(70,95,135,0.010) 100%)',
+            // Empty state: IPS backlight glow — powered-off LCD with visible edge bleed.
+            // Stronger than before so the panel reads as a real LCD, not a blank div.
+            'radial-gradient(ellipse 100% 80% at 50% 45%, rgba(90,115,160,0.06) 0%, rgba(70,95,140,0.025) 50%, transparent 80%)',
+            'linear-gradient(180deg, rgba(85,110,155,0.025) 0%, transparent 20%, transparent 80%, rgba(70,95,140,0.018) 100%)',
+            // Edge-lit LED bleed — brighter at top/bottom edges (where LEDs are)
+            'linear-gradient(180deg, rgba(100,130,175,0.03) 0%, transparent 8%, transparent 92%, rgba(90,120,165,0.02) 100%)',
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
