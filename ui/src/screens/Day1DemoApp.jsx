@@ -1388,6 +1388,7 @@ export default function Day1DemoApp() {
           onRetry={handleRetry}
           isPaid={appIsPaid}
           plan={appPlan}
+          isAdmin={appIsAdmin}
         />
       );
       if (!resultMobile) return resultEl;

@@ -1708,7 +1708,7 @@ function ModifierDetail({ modifier }) {
   );
 }
 
-export default function ResultScreen({ result, imagePreview, onSetup, onRetry, isPaid = true, plan = 'enterprise' }) {
+export default function ResultScreen({ result, imagePreview, onSetup, onRetry, isPaid = true, plan = 'enterprise', isAdmin = false }) {
   const isDesktop = useIsDesktop();
   const tilt = useDeviceTilt();
   // Hero column: 430 on mobile, 540 on desktop — the wider column lets the
@@ -3214,6 +3214,24 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   </DiagnosticsDisclosure>
                 )}
               </>
+            )}
+
+            {/* ── Admin-only: raw engine data ── */}
+            {isAdmin && (
+              <div style={{ marginTop: 16, padding: '12px 0', borderTop: `1px solid ${C.divider}` }}>
+                <p style={{ margin: '0 0 8px', fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.35), ...FONT_SMOOTH }}>
+                  ENGINE DATA
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono, monospace)', color: steel(0.45), ...FONT_SMOOTH }}>
+                  {result?.analysis_id && <div><strong style={{ color: steel(0.55) }}>ID:</strong> {result.analysis_id}</div>}
+                  {result?.authoritative_pattern && <div><strong style={{ color: steel(0.55) }}>Pattern:</strong> {result.authoritative_pattern}</div>}
+                  {result?.authoritative_pattern_source && <div><strong style={{ color: steel(0.55) }}>Source:</strong> {result.authoritative_pattern_source}</div>}
+                  {result?.source_context && <div><strong style={{ color: steel(0.55) }}>Context:</strong> {result.source_context}</div>}
+                  {result?.geometric_base && <div><strong style={{ color: steel(0.55) }}>Geo base:</strong> {result.geometric_base}</div>}
+                  {result?.light_count != null && <div><strong style={{ color: steel(0.55) }}>Lights:</strong> {result.light_count}</div>}
+                  {result?.system_version && <div><strong style={{ color: steel(0.55) }}>Version:</strong> {result.system_version}</div>}
+                </div>
+              </div>
             )}
           </PullTabDrawer>
         )}
