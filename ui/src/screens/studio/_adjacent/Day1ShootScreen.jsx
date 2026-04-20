@@ -1341,7 +1341,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               >
                 ‹ Exit
               </button>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: steel(0.75),
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                 letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                 COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
                   {stepIndex + 1}/{steps.length}
@@ -1717,7 +1717,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                         ...FONT_SMOOTH,
                       }}>{_s.title}</p>
                       <p style={{
-                        margin: '3px 0 0', fontSize: 11, fontWeight: 500, lineHeight: '15px',
+                        margin: '3px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '17px',
                         color: 'rgba(184,191,199,0.50)',
                         ...FONT_SMOOTH,
                       }}>{_s.desc}</p>
@@ -1738,7 +1738,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       }}
                     >
                       <p style={{
-                        margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px',
+                        margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.3px',
                         color: _sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.82)' : '0.90)'),
                         ...FONT_SMOOTH,
                         whiteSpace: 'nowrap',
@@ -1765,7 +1765,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       }} />
                     </div>
                     <span style={{
-                      fontSize: 9, fontWeight: 600, letterSpacing: '0.5px',
+                      fontSize: 11, fontWeight: 600, letterSpacing: '0.5px',
                       color: _sc.replace(/[\d.]+\)$/, '0.35)'),
                       marginLeft: 8,
                       ...FONT_SMOOTH,
@@ -1776,7 +1776,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                         onClick={(e) => { e.stopPropagation(); skipCockpitTeach(); }}
                         style={{
                           background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0',
-                          fontSize: 10, fontWeight: 600,
+                          fontSize: 12, fontWeight: 600,
                           color: steel(0.24),
                           WebkitTapHighlightColor: 'transparent',
                           ...FONT_SMOOTH,
@@ -1942,7 +1942,7 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
               heightDisplay,
             ].filter(v => v && v !== '—').join(' · ')}
           </p>
-          <p style={{ margin: 0, fontSize: dk ? 14 : 12, fontWeight: 600,
+          <p style={{ margin: 0, fontSize: dk ? 14 : 13, fontWeight: 600,
             color: confidence >= 70 ? C.confHigh : C.confLow,
             letterSpacing: '0.5px', ...FONT_SMOOTH,
             flexShrink: 0, marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1984,7 +1984,7 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
           {step.lead}
         </p>
         {step.subLead && (
-          <p style={{ margin: dk ? '6px 0 0' : '4px 0 0', fontSize: dk ? 14 : 12, fontWeight: 500,
+          <p style={{ margin: dk ? '6px 0 0' : '4px 0 0', fontSize: dk ? 14 : 14, fontWeight: 500,
             color: C.textSub, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
             {step.subLead}
           </p>
@@ -2022,7 +2022,7 @@ function CoachingDisclosure({ coach, variant = 'photographer' }) {
         }}
       >
         <span style={{
-          fontSize: 10, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
           color: open ? 'rgba(214,123,78,0.9)' : steel(0.6),
           letterSpacing: '1px', ...FONT_SMOOTH,
           transition: 'color 0.2s ease',
@@ -2129,17 +2129,17 @@ function CoachingPanel({ coach, variant = 'photographer' }) {
 function SpecCell({ label, value, sub }) {
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 8, fontWeight: 600,
+      <p style={{ margin: 0, fontSize: 11, fontWeight: 600,
         color: steel(0.45), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
         {label}
       </p>
-      <p style={{ margin: '2px 0 0', fontSize: 12, fontWeight: 700,
+      <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700,
         color: C.textPrimary, letterSpacing: '-0.1px', ...FONT_SMOOTH,
         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {value}
       </p>
       {sub && (
-        <p style={{ margin: '1px 0 0', fontSize: 9, fontWeight: 500,
+        <p style={{ margin: '1px 0 0', fontSize: 11, fontWeight: 500,
           color: steel(0.45), letterSpacing: '0.1px', ...FONT_SMOOTH,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {sub}
@@ -2217,12 +2217,12 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
       )}
 
       <div style={{ padding: dk ? '22px 28px 0' : '18px 22px 0', position: 'relative', zIndex: 1 }}>
-        <p style={{ margin: 0, fontSize: dk ? 12 : 10, fontWeight: 700,
+        <p style={{ margin: 0, fontSize: dk ? 12 : 12, fontWeight: 700,
           color: steel(0.75), letterSpacing: '1.2px',
           textAlign: 'center', ...FONT_SMOOTH }}>
           {step.title}
         </p>
-        <p style={{ margin: dk ? '10px 0 0' : '8px 0 0', fontSize: dk ? 20 : 16, fontWeight: 700,
+        <p style={{ margin: dk ? '10px 0 0' : '8px 0 0', fontSize: dk ? 20 : 18, fontWeight: 700,
           color: C.textPrimary, letterSpacing: '-0.2px',
           lineHeight: 1.35, textAlign: 'center', ...FONT_SMOOTH }}>
           {step.lead}
@@ -2239,7 +2239,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             boxShadow: PANEL_BEVEL,
             padding: dk ? '16px 20px' : '12px 16px',
           }}>
-            <p style={{ margin: 0, fontSize: dk ? 10 : 9, fontWeight: 700,
+            <p style={{ margin: 0, fontSize: dk ? 12 : 11, fontWeight: 700,
               color: steel(0.75), letterSpacing: '1.4px', ...FONT_SMOOTH }}>
               WHY THIS MATTERS
             </p>
@@ -2247,7 +2247,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
               {step.why.split('. ').filter(Boolean).map((sentence, i, arr) => (
                 <p key={i} style={{
                   margin: 0,
-                  fontSize: dk ? 14 : 12,
+                  fontSize: dk ? 14 : 14,
                   fontWeight: i === 0 ? 600 : 400,
                   color: i === 0 ? C.textPrimary : C.textSub,
                   lineHeight: 1.55,
