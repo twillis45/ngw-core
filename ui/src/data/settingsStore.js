@@ -124,17 +124,20 @@ function _notify() {
   }).catch(() => {});
 }
 
-/** Save a single setting. */
+/** Save a single setting. Immediately applies DOM data-attributes so CSS responds. */
 export function saveSetting(key, value) {
   const settings = loadSettings();
   settings[key] = value;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  applySettings(settings);
   _notify();
 }
 
-/** Save all settings at once. */
+/** Save all settings at once. Immediately applies DOM data-attributes. */
 export function saveSettings(settings) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULTS, ...settings }));
+  const merged = { ...DEFAULTS, ...settings };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  applySettings(merged);
   _notify();
 }
 
@@ -145,13 +148,36 @@ export function resetSettings() {
   _notify();
 }
 
+/** Font-size → scale multiplier for Studio Matte screens (px-based).
+ *  Legacy screens use CSS variables; Studio Matte uses inline px so we
+ *  set a CSS custom property that components can multiply against. */
+const FONT_SCALE = { xs: 0.85, small: 0.92, medium: 1.0, large: 1.08, xl: 1.16 };
+
 /**
  * Apply settings to the DOM so CSS can respond.
- * Sets data-font-size, data-font-family, and data-density on <html>.
+ * Sets data-font-size, data-font-family, data-density on <html>.
+ * Also sets --font-scale CSS property for Studio Matte px-based scaling.
  */
 export function applySettings(settings) {
   const s = settings || loadSettings();
   document.documentElement.setAttribute('data-font-size', s.fontSize || 'medium');
   document.documentElement.setAttribute('data-font-family', s.fontFamily || 'system');
   document.documentElement.setAttribute('data-density', s.density || 'comfortable');
+  // Set font scale for Studio Matte inline-style screens (px-based).
+  // CSS zoom scales all px values proportionally — text, padding, margins.
+  // This is the only way to affect hardcoded px font sizes without touching
+  // every component. Supported in all modern browsers including mobile Safari.
+  const scale = FONT_SCALE[s.fontSize] || 1;
+  document.documentElement.style.setProperty('--font-scale', String(scale));
+  if (scale !== 1) {
+    document.documentElement.style.zoom = String(scale);
+  } else {
+    document.documentElement.style.zoom = '';
+  }
+}
+
+/** Get the current font scale multiplier. */
+export function getFontScale() {
+  const s = loadSettings();
+  return FONT_SCALE[s.fontSize] || 1;
 }
