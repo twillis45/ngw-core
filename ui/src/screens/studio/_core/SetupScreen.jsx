@@ -1373,8 +1373,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         }}>
           <button onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 12, fontWeight: 500, color: C.textMeta,
-            padding: 0,
+            fontSize: 11, fontWeight: 600, color: steel(0.40),
+            letterSpacing: '0.05em', padding: 0,
             WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
           }}>Cancel</button>
 
@@ -1384,10 +1384,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             style={{
               background: 'none', border: 'none',
               cursor: saved ? 'default' : 'pointer',
-              fontSize: 12, fontWeight: 600,
-              color: saved ? C.confHigh : steel(0.75),
-              padding: 0,
-              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 11, fontWeight: 600,
+              color: saved ? C.confHigh : steel(0.40),
+              letterSpacing: '0.05em', padding: 0,
+              display: 'flex', alignItems: 'center', gap: 5,
               WebkitTapHighlightColor: 'transparent',
               transition: 'color 0.2s ease',
               ...FONT_SMOOTH,
@@ -1395,7 +1395,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           >
             {saved ? (
               <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
@@ -1403,13 +1403,13 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               </>
             ) : (
               <>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
                   stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                   <polyline points="17 21 17 13 7 13 7 21"/>
                   <polyline points="7 3 7 8 15 8"/>
                 </svg>
-                Save Setup
+                Save
               </>
             )}
           </button>
@@ -1417,8 +1417,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           {onRoomPlanner && (
             <button onClick={() => { onRoomPlanner(); softClickSound(); tapHaptic(); }} style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, fontWeight: 500, color: steel(0.45),
-              padding: 0, display: 'flex', alignItems: 'center', gap: 5,
+              fontSize: 11, fontWeight: 600, color: steel(0.40),
+              letterSpacing: '0.05em', padding: 0,
+              display: 'flex', alignItems: 'center', gap: 5,
               WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
             }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
