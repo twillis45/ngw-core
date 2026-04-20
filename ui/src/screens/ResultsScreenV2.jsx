@@ -28,6 +28,8 @@ import BlueprintCard from '../cards/BlueprintCard';
 import SignalQualityCard from '../cards/SignalQualityCard';
 import ReferenceImageCard from '../cards/ReferenceImageCard';
 import DiagramCard from '../cards/DiagramCard';
+import SocialExportPanel from '../cards/SocialExportPanel';
+import GearRecommendCard from '../cards/GearRecommendCard';
 import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
 import QuickFixesCard from '../cards/QuickFixesCard';
@@ -1029,6 +1031,25 @@ export default function ResultsScreenV2({ onShare } = {}) {
           isAdmin={isAdmin}
           legendCollapsed
           onItemSelect={setSelectedDiagramItem}
+        />
+      )}
+
+      {/* ── Social Export Panel (Pro+) ── */}
+      {isPaid && hasDiagram && (
+        <SocialExportPanel
+          result={result}
+          imagePreview={referenceImage?.preview || referenceImages?.[0]?.preview || null}
+          diagramCanvas={null}
+          isStudio={isStudio}
+          isAdmin={isAdmin}
+        />
+      )}
+
+      {/* ── Gear Recommendations (Pro+) ── */}
+      {isPaid && result?.pattern && (
+        <GearRecommendCard
+          pattern={result.pattern || result.authoritative_pattern}
+          userKit={null}
         />
       )}
 

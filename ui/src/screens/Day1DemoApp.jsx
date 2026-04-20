@@ -10,6 +10,7 @@ import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import SessionLogScreen from './studio/_core/SessionLogScreen';
+import VideoFrameCapture from '../components/VideoFrameCapture';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
@@ -1169,6 +1170,8 @@ export default function Day1DemoApp() {
   const handleMyKit = () => setScreen('mykit');
   const handleRoomPlanner = () => setScreen('roomplanner');
   const handleSessionLog = () => setScreen('journal');
+  const [showVideoCapture, setShowVideoCapture] = useState(false);
+  const handleVideoCapture = () => setShowVideoCapture(true);
   const handleBuildComplete = (payload) => {
     // Build a result object from wizard payload so SetupScreen can render it
     const wizardResult = {
@@ -1354,6 +1357,7 @@ export default function Day1DemoApp() {
           onBuildWizard={handleBuildWizard}
           onMyKit={handleMyKit}
           onSessionLog={handleSessionLog}
+          onVideoCapture={handleVideoCapture}
           lastAnalysisTime={lastAnalysisTime}
         />
       );
@@ -1541,7 +1545,7 @@ export default function Day1DemoApp() {
         <HomeScreen onAnalyze={handleAnalyze} hasLastResult={!!lastResult} onViewLastResult={handleViewLastResult}
           user={user} onLogout={() => { clearAuth(); setUser(null); }} onSettings={handleSettings}
           onRecipes={handleRecipes} onSavedSetups={handleSavedSetups} onBuildWizard={handleBuildWizard}
-          onMyKit={handleMyKit} onSessionLog={handleSessionLog} lastAnalysisTime={lastAnalysisTime} />
+          onMyKit={handleMyKit} onSessionLog={handleSessionLog} onVideoCapture={handleVideoCapture} lastAnalysisTime={lastAnalysisTime} />
       );
       if (!defMobile) return defEl;
       return <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>{defEl}</FitToViewport>;
@@ -1583,6 +1587,21 @@ export default function Day1DemoApp() {
         </div>
       )}
       <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+      {showVideoCapture && (
+        <VideoFrameCapture
+          onCapture={(frameFile) => {
+            setShowVideoCapture(false);
+            // Feed captured frame into normal analysis flow
+            if (frameFile) {
+              const preview = URL.createObjectURL(frameFile);
+              setImageFile(frameFile);
+              setImagePreview(preview);
+              setScreen('home');
+            }
+          }}
+          onClose={() => setShowVideoCapture(false)}
+        />
+      )}
     </div>
   );
 }
