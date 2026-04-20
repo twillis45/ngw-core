@@ -263,11 +263,11 @@ export const BTN_RECESSED_DOWN = [
 // Ghost nav links — recede until hover. Used for desktop dock on Home,
 // secondary nav on Settings, and any discoverable-on-hover navigation.
 export const NAV_GHOST = {
-  color: steel(0.25),
-  hoverColor: steel(0.55),
+  color: steel(0.35),
+  hoverColor: steel(0.65),
   fontSize: 11,
   fontWeight: 600,
-  letterSpacing: '0.3px',
+  letterSpacing: '0.1em',
 };
 
 // Machined nav button — raised dome for settings/gear buttons.
