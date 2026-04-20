@@ -624,10 +624,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   // Once a photo is loaded (or returning user): "See the Light" — brand phrase.
   // A working pro picks up the meter and reads again; "Re-analyze" is software
   // language, not how a photographer thinks.
+  // Mobile button is 136px — keep labels short. Desktop is 168px — can fit more.
   const analyzeLabel = uiState === 'loading' ? 'Working…'
     : uiState === 'error'                     ? 'Retry'
-    : (!hasImage && showTeach)                 ? 'Load a Photo'
-    : 'See the Light';
+    : (!hasImage && showTeach)                 ? (isDesktop ? 'Load a Photo' : 'Load Photo')
+    : (isDesktop ? 'See the Light' : 'Analyze');
   const analyzeText = isPressed
     ? 'rgba(235,235,237,0.22)'  // deepest — face fully compressed, label in shadow
     : isHovered
@@ -900,14 +901,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               // Subtle text shadow simulates LCD sub-pixel glow
               textShadow: `0 0 6px ${steel(0.12)}`,
             }}>
-              <svg width="52" height="52" viewBox="0 0 38 38" fill="none" style={{ opacity: 0.50 }}>
-                <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.48)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+              <svg width="52" height="52" viewBox="0 0 38 38" fill="none" style={{
+                opacity: 0.65,
+                animation: 'vfPulseGlow 2.4s ease-in-out infinite',
+                filter: `drop-shadow(0 0 8px ${steel(0.20)})`,
+              }}>
+                <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
                 <g>
-                  <path d="M19 13v8" stroke={steel(0.40)} strokeWidth="1.2" strokeLinecap="round" />
-                  <path d="M16 18l3 3 3-3" stroke={steel(0.40)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M19 13v8" stroke={steel(0.45)} strokeWidth="1.2" strokeLinecap="round" />
+                  <path d="M16 18l3 3 3-3" stroke={steel(0.45)} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               </svg>
               <p style={{
@@ -1089,7 +1094,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               transition: 'background 0.15s ease',
             }} />
             <span style={{
-              fontSize: 14, fontWeight: 700, letterSpacing: '3.5px', textTransform: 'uppercase',
+              fontSize: isDesktop ? 14 : 12, fontWeight: 700, letterSpacing: isDesktop ? '3.5px' : '2.5px', textTransform: 'uppercase',
               color: isPressed ? steel(0.30) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
               textShadow: isPressed ? 'none' : `0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.25)`,
               ...FONT_SMOOTH,
@@ -1388,7 +1393,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 {/* Ghost portrait silhouette — photography DNA. Faint human outline
                     hints at "this is where your portrait goes" without words. */}
                 <svg width="60" height="72" viewBox="0 0 60 72" fill="none" style={{
-                  opacity: 0.06, position: 'absolute', top: '50%', left: '50%',
+                  opacity: 0.06, position: 'absolute', top: '38%', left: '50%',
                   transform: 'translate(-50%, -55%)',
                 }}>
                   {/* Head */}
@@ -1396,17 +1401,29 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   {/* Shoulders */}
                   <path d="M10 72 Q10 48 30 44 Q50 48 50 72" fill={steel(1)} />
                 </svg>
-                {/* Viewfinder bracket icon — breathing animation for alive feel */}
+                {/* Viewfinder bracket icon — pulsing glow for alive feel */}
                 <svg width="42" height="42" viewBox="0 0 38 38" fill="none" style={{
-                  opacity: 0.75,
-                  animation: 'vfBreathe 3.2s ease-in-out infinite',
+                  opacity: 0.80,
+                  animation: 'vfPulseGlow 2.4s ease-in-out infinite',
+                  filter: `drop-shadow(0 0 6px ${steel(0.25)})`,
                 }}>
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
-                  <circle cx="19" cy="19" r="1.5" fill={steel(0.50)} />
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.60)} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+                  <circle cx="19" cy="19" r="1.5" fill={steel(0.55)} />
                 </svg>
+                {/* Mobile VF copy — proportionate to desktop hero */}
+                <p style={{
+                  margin: '8px 0 0', fontSize: 15, fontWeight: 700, letterSpacing: '-0.2px',
+                  color: steel(0.50), textAlign: 'center', lineHeight: '18px',
+                  ...FONT_SMOOTH,
+                }}>Load a portrait</p>
+                <p style={{
+                  margin: '3px 0 0', fontSize: 11, fontWeight: 500, letterSpacing: '0.1px',
+                  color: steel(0.28), textAlign: 'center', lineHeight: '14px',
+                  ...FONT_SMOOTH,
+                }}>See how it was lit</p>
               </>)}
               {isUrlFetching && (
                 <p style={{
@@ -1729,8 +1746,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         position: 'absolute',
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: lblTransform,
-        margin: 0, fontWeight: 600, fontSize: isDesktop ? 14 : 14, lineHeight: '16px',
-        color: analyzeText, letterSpacing: '3px', textShadow: analyzeGlow,
+        margin: 0, fontWeight: 600, fontSize: isDesktop ? 14 : 11, lineHeight: '16px',
+        color: analyzeText, letterSpacing: isDesktop ? '3px' : '2px', textShadow: analyzeGlow,
         textTransform: 'uppercase',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
         transition: `color 0.18s ease, transform ${buttonState === 'pressed' ? '0.06s cubic-bezier(0.25,0.46,0.45,0.94)' : '0.22s cubic-bezier(0.34,1.56,0.64,1)'}`,
@@ -2354,6 +2371,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           45% { transform: translateX(3px); }
           60% { transform: translateX(-2px); }
           75% { transform: translateX(1px); }
+        }
+        @keyframes vfPulseGlow {
+          0%   { opacity: 0.50; filter: drop-shadow(0 0 4px rgba(132,158,184,0.15)); transform: scale(1); }
+          50%  { opacity: 0.95; filter: drop-shadow(0 0 10px rgba(132,158,184,0.35)); transform: scale(1.06); }
+          100% { opacity: 0.50; filter: drop-shadow(0 0 4px rgba(132,158,184,0.15)); transform: scale(1); }
         }
         @keyframes btnBreath {
           /* Shadow-only breath — diameter never changes, ring always fits flush.
