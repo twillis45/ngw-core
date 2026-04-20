@@ -1816,38 +1816,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {/* Machined pill CTA — premium tactile feel */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '10px 24px',
-            borderRadius: 12,
-            background: CTA_BG,
-            boxShadow: [
-              '6px 6px 16px rgba(0,0,0,0.65)',
-              '3px 3px 8px rgba(0,0,0,0.45)',
-              '-1px -1px 2px rgba(255,255,255,0.05)',
-              `0 0 6px ${steel(0.06)}`,
-              'inset 0 1.5px 0 rgba(255,255,255,0.12)',
-              'inset 1px 0 0 rgba(255,255,255,0.06)',
-              'inset -0.5px -0.5px 0 rgba(0,0,0,0.35)',
-            ].join(', '),
+          {/* Engraved instrument label — cohesive with the dome button above.
+              Reads as a secondary action on the same panel surface, not a separate UI element. */}
+          <p style={{
+            margin: 0,
+            fontSize: 11, fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase',
+            color: sampleLoading ? steel(0.30) : steel(0.38),
+            textShadow: '0 1px 1px rgba(0,0,0,0.8), 0 -1px 0 rgba(255,255,255,0.03)',
+            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+            textRendering: 'geometricPrecision',
           }}>
-            <p style={{
-              margin: 0,
-              fontSize: 14, fontWeight: 700, letterSpacing: '0.8px',
-              color: sampleLoading ? steel(0.55) : steel(0.82),
-              textShadow: '0 1px 2px rgba(0,0,0,0.7)',
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-              textRendering: 'geometricPrecision',
-            }}>
-              {sampleLoading ? 'Loading…' : 'Try a Sample'}
-            </p>
-            {!sampleLoading && (
-              <span style={{
-                fontSize: 15, lineHeight: 1, color: KEY_ACCENT, opacity: 0.65,
-              }}>→</span>
-            )}
-          </div>
+            {sampleLoading ? 'Loading…' : 'Or try a sample →'}
+          </p>
         </div>
       )}
 
