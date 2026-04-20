@@ -37,7 +37,7 @@ const ROLE_META = {
 };
 
 // ─── Preferences sub-screen ───────────────────────────────────────────────────
-function PreferencesScreen({ settings, update, onBack, mode }) {
+function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
   function cycleOption(key, options) {
     const idx = options.findIndex(o => o.id === settings[key]);
     const next = options[(idx + 1) % options.length];
@@ -51,107 +51,112 @@ function PreferencesScreen({ settings, update, onBack, mode }) {
       <ScreenHeader title="Preferences" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
 
+        {/* ── APPEARANCE — all users ────────────────────────────────────── */}
         <SectionLabel label="APPEARANCE" />
         <Panel>
-          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} tooltip="Vibration feedback on taps and interactions. Turn off for silent operation." />
+          <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} tooltip="Vibration feedback on taps and interactions." />
           <Divider />
-          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} tooltip="Simplify animations for accessibility or to reduce visual distraction." />
+          <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} tooltip="Disables animations for accessibility." />
           <Divider />
           <NavRow
             label="Font size"
             value={(FONT_SIZES.find(f => f.id === settings.fontSize) || FONT_SIZES[2]).label}
             onClick={() => cycleOption('fontSize', FONT_SIZES)}
-            tooltip="Adjust text size across all screens for readability."
+            tooltip="Adjust text size for readability."
           />
           <Divider />
           <NavRow
             label="Unit system"
             value={settings.units === 'metric' ? 'Metric' : 'Imperial'}
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
-            tooltip="Switch between feet/inches and meters for distance and height measurements."
+            tooltip="Feet/inches or meters for distances."
           />
         </Panel>
 
-        <SectionLabel label="ANALYSIS" />
-        <Panel>
-          <NavRow
-            label="Confidence display"
-            value={settings.confidenceDisplay === 'numeric' ? 'Numeric' : settings.confidenceDisplay === 'detailed' ? 'Detailed' : 'Simple'}
-            onClick={() => {
-              const opts = ['simple', 'numeric', 'detailed'];
-              const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
-              update('confidenceDisplay', opts[(idx + 1) % opts.length]);
-            }}
-            tooltip="How confidence is shown on results. Simple: strong/partial. Numeric: percentage. Detailed: both with signal breakdown."
-          />
-          <Divider />
-          <NavRow
-            label="Pattern sensitivity"
-            value={settings.patternSensitivity === 'strict' ? 'Strict' : settings.patternSensitivity === 'flexible' ? 'Flexible' : 'Balanced'}
-            onClick={() => {
-              const opts = ['strict', 'balanced', 'flexible'];
-              const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
-              update('patternSensitivity', opts[(idx + 1) % opts.length]);
-            }}
-            tooltip="How strictly the engine matches patterns. Strict: only calls a pattern when evidence is strong. Flexible: calls with less evidence. Balanced: default."
-          />
-          <Divider />
-          <ToggleRow
-            label="Show confidence score"
-            value={!!settings.showConfidenceScore}
-            onChange={v => update('showConfidenceScore', v)}
-            tooltip="Display the engine's confidence percentage on results. Useful for understanding ambiguous reads."
-          />
-          <Divider />
-          <NavRow
-            label="Explanation depth"
-            value={settings.explanationDepth === 'brief' ? 'Brief' : settings.explanationDepth === 'technical' ? 'Technical' : 'Standard'}
-            onClick={() => {
-              const opts = ['brief', 'standard', 'technical'];
-              const idx = opts.indexOf(settings.explanationDepth || 'standard');
-              update('explanationDepth', opts[(idx + 1) % opts.length]);
-            }}
-            tooltip="How much detail the cockpit coaching provides. Brief: just the key action. Standard: action + why. Technical: full signal breakdown."
-          />
-        </Panel>
-
+        {/* ── SHOOT MODE — all users ──────────────────────────────────── */}
         <SectionLabel label="SHOOT MODE" />
         <Panel>
-          <NavRow
-            label="Comparison prompts"
-            value={settings.comparisonPrompts === 'low_conf_only' ? 'Low conf' : settings.comparisonPrompts === 'off' ? 'Off' : 'Auto'}
-            onClick={() => {
-              const opts = ['auto', 'low_conf_only', 'off'];
-              const idx = opts.indexOf(settings.comparisonPrompts || 'auto');
-              update('comparisonPrompts', opts[(idx + 1) % opts.length]);
-            }}
-            tooltip="When to prompt you to compare your shot against the reference. Auto: after every capture. Low conf: only when the match is uncertain."
-          />
-          <Divider />
           <NavRow
             label="Power readout"
             value={(POWER_DISPLAY_OPTIONS.find(p => p.id === settings.powerDisplay) || POWER_DISPLAY_OPTIONS[0]).label}
             onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
-            tooltip="How strobe power is displayed in the cockpit. Stops: photographer standard (f-stop relative). Watts: absolute power. Ratio: key-to-fill ratio."
+            tooltip="How strobe power is displayed. Fraction: 1/4, 1/2. Stops: f-stop relative. Percent: 0–100%."
           />
         </Panel>
 
-        <SectionLabel label="PRIVACY" />
-        <Panel>
-          <ToggleRow
-            label="Allow analytics"
-            value={settings.allowAnalytics !== false}
-            onChange={v => update('allowAnalytics', v)}
-            tooltip="Anonymous usage data helps improve the engine. No images are ever sent — only interaction patterns."
-          />
-          <Divider />
-          <NavRow
-            label="Image handling"
-            value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
-            onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
-            tooltip="Whether uploaded photos are stored for history or deleted immediately after analysis. Delete: maximum privacy. Store: enables result recall."
-          />
-        </Panel>
+        {/* ── ADMIN — engine tuning, only shown for admin accounts ──── */}
+        {isAdmin && (<>
+          <SectionLabel label="ENGINE TUNING (ADMIN)" />
+          <Panel>
+            <NavRow
+              label="Confidence display"
+              value={settings.confidenceDisplay === 'numeric' ? 'Numeric' : settings.confidenceDisplay === 'detailed' ? 'Detailed' : 'Simple'}
+              onClick={() => {
+                const opts = ['simple', 'numeric', 'detailed'];
+                const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
+                update('confidenceDisplay', opts[(idx + 1) % opts.length]);
+              }}
+              tooltip="Simple: strong/partial. Numeric: percentage. Detailed: both + signal breakdown."
+            />
+            <Divider />
+            <NavRow
+              label="Pattern sensitivity"
+              value={settings.patternSensitivity === 'strict' ? 'Strict' : settings.patternSensitivity === 'flexible' ? 'Flexible' : 'Balanced'}
+              onClick={() => {
+                const opts = ['strict', 'balanced', 'flexible'];
+                const idx = opts.indexOf(settings.patternSensitivity || 'balanced');
+                update('patternSensitivity', opts[(idx + 1) % opts.length]);
+              }}
+              tooltip="How strictly the engine matches patterns."
+            />
+            <Divider />
+            <ToggleRow
+              label="Show confidence score"
+              value={!!settings.showConfidenceScore}
+              onChange={v => update('showConfidenceScore', v)}
+              tooltip="Display confidence percentage on results."
+            />
+            <Divider />
+            <NavRow
+              label="Explanation depth"
+              value={settings.explanationDepth === 'brief' ? 'Brief' : settings.explanationDepth === 'technical' ? 'Technical' : 'Standard'}
+              onClick={() => {
+                const opts = ['brief', 'standard', 'technical'];
+                const idx = opts.indexOf(settings.explanationDepth || 'standard');
+                update('explanationDepth', opts[(idx + 1) % opts.length]);
+              }}
+              tooltip="Cockpit coaching detail level."
+            />
+            <Divider />
+            <NavRow
+              label="Comparison prompts"
+              value={settings.comparisonPrompts === 'low_conf_only' ? 'Low conf' : settings.comparisonPrompts === 'off' ? 'Off' : 'Auto'}
+              onClick={() => {
+                const opts = ['auto', 'low_conf_only', 'off'];
+                const idx = opts.indexOf(settings.comparisonPrompts || 'auto');
+                update('comparisonPrompts', opts[(idx + 1) % opts.length]);
+              }}
+              tooltip="When to prompt shot comparison."
+            />
+          </Panel>
+
+          <SectionLabel label="PRIVACY (ADMIN)" />
+          <Panel>
+            <ToggleRow
+              label="Allow analytics"
+              value={settings.allowAnalytics !== false}
+              onChange={v => update('allowAnalytics', v)}
+              tooltip="Anonymous usage data for engine improvement."
+            />
+            <Divider />
+            <NavRow
+              label="Image handling"
+              value={settings.imageHandling === 'delete' ? 'Delete after' : 'Store'}
+              onClick={() => update('imageHandling', settings.imageHandling === 'delete' ? 'store' : 'delete')}
+              tooltip="Store photos for history or delete after analysis."
+            />
+          </Panel>
+        </>)}
 
         <div style={{ height: 1 }} />
         <Panel>
@@ -432,7 +437,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
 
   const displayName  = user?.username || user?.email?.split('@')[0] || 'User';
   const displayEmail = user?.email || user?.username || '';
-  const { plan: mainPlan, isPaid: mainIsPaid } = usePlan(displayEmail);
+  const { plan: mainPlan, isPaid: mainIsPaid, isAdmin: mainIsAdmin } = usePlan(displayEmail);
 
   if (subScreen === 'preferences') {
     return (
@@ -441,6 +446,7 @@ export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
         update={update}
         onBack={() => { navSlideSound(); setSubScreen('main'); }}
         mode={mode}
+        isAdmin={mainIsAdmin}
       />
     );
   }
