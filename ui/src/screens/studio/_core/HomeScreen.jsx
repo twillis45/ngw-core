@@ -1399,27 +1399,32 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               pointerEvents: 'none', zIndex: 7,
             }}>
               {!isUrlFetching && (<>
-                {/* Viewfinder bracket icon — pulsing glow, proportionate to VF */}
-                <svg width="68" height="68" viewBox="0 0 38 38" fill="none" style={{
-                  opacity: 0.80,
+                {/* Viewfinder bracket icon — strong pulse, fills the VF center */}
+                <svg width="90" height="90" viewBox="0 0 38 38" fill="none" style={{
                   animation: 'vfPulseGlow 2.4s ease-in-out infinite',
-                  filter: `drop-shadow(0 0 8px ${steel(0.30)})`,
+                  filter: `drop-shadow(0 0 12px ${steel(0.35)})`,
                 }}>
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.60)} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                  <circle cx="19" cy="19" r="1.8" fill={steel(0.55)} />
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <circle cx="19" cy="19" r="1.5" fill={steel(0.45)} />
                 </svg>
-                {/* Mobile VF copy — proportionate to VF, matches desktop hero intent */}
+                {/* Mobile VF copy — etched into the LCD surface.
+                    Text-shadow simulates laser-engraved lettering on dark glass:
+                    dark inset shadow above (cut into surface) + faint light catch below. */}
                 <p style={{
-                  margin: '12px 0 0', fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px',
-                  color: steel(0.55), textAlign: 'center', lineHeight: '24px',
+                  margin: '16px 0 0', fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px',
+                  color: steel(0.42),
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.04), 0 0 8px rgba(132,158,184,0.08)',
+                  textAlign: 'center', lineHeight: '30px',
                   ...FONT_SMOOTH,
                 }}>Load a portrait</p>
                 <p style={{
-                  margin: '4px 0 0', fontSize: 14, fontWeight: 500, letterSpacing: '0.1px',
-                  color: steel(0.32), textAlign: 'center', lineHeight: '18px',
+                  margin: '6px 0 0', fontSize: 16, fontWeight: 600, letterSpacing: '0.3px',
+                  color: steel(0.28),
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
+                  textAlign: 'center', lineHeight: '20px',
                   ...FONT_SMOOTH,
                 }}>See how it was lit</p>
               </>)}
@@ -2358,9 +2363,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           75% { transform: translateX(1px); }
         }
         @keyframes vfPulseGlow {
-          0%   { opacity: 0.50; filter: drop-shadow(0 0 4px rgba(132,158,184,0.15)); transform: scale(1); }
-          50%  { opacity: 0.95; filter: drop-shadow(0 0 10px rgba(132,158,184,0.35)); transform: scale(1.06); }
-          100% { opacity: 0.50; filter: drop-shadow(0 0 4px rgba(132,158,184,0.15)); transform: scale(1); }
+          0%   { opacity: 0.45; filter: drop-shadow(0 0 4px rgba(132,158,184,0.12)); transform: scale(1); }
+          50%  { opacity: 1.00; filter: drop-shadow(0 0 16px rgba(132,158,184,0.45)); transform: scale(1.10); }
+          100% { opacity: 0.45; filter: drop-shadow(0 0 4px rgba(132,158,184,0.12)); transform: scale(1); }
         }
         @keyframes btnBreath {
           /* Shadow-only breath — diameter never changes, ring always fits flush.
