@@ -637,7 +637,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   const analyzeLabel = uiState === 'loading' ? 'Working…'
     : uiState === 'error'                     ? 'Retry'
     : (!hasImage && showTeach)                 ? (isDesktop ? 'Load a Photo' : 'Load Photo')
-    : (isDesktop ? 'See the Light' : 'Analyze');
+    : (isDesktop ? 'See the Light' : 'Read Light');
   const analyzeText = isPressed
     ? 'rgba(235,235,237,0.22)'  // deepest — face fully compressed, label in shadow
     : isHovered
@@ -1179,7 +1179,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         <p style={{
           margin: '2px 0 0',
           fontWeight: 600, fontSize: 12, lineHeight: '15px',
-          color: steel(0.38), letterSpacing: '0.3px',
+          color: steel(0.42), letterSpacing: '0.3px',
           ...FONT_SMOOTH,
         }}>Reverse-engineer any portrait lighting</p>
       </div>
@@ -1454,7 +1454,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
                   <circle cx="19" cy="19" r="1.5" fill={steel(0.40)} />
                 </svg>
-                {/* VF copy — clear instruction, tightly spaced below brackets */}
+                {/* VF copy — instruction + specific deliverables + ghosted proof */}
                 <p style={{
                   margin: '10px 0 0', fontSize: 16, fontWeight: 700, letterSpacing: '-0.1px',
                   color: steel(0.42),
@@ -1462,13 +1462,25 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   textAlign: 'center', lineHeight: '20px',
                   ...FONT_SMOOTH,
                 }}>Tap to load a portrait</p>
+                {/* Specific deliverables — names what the user actually gets.
+                    This is proof the tool speaks photographer. */}
                 <p style={{
-                  margin: '4px 0 0', fontSize: 12, fontWeight: 600, letterSpacing: '0.3px',
-                  color: steel(0.25),
+                  margin: '6px 0 0', fontSize: 11, fontWeight: 600, letterSpacing: '1.5px',
+                  color: steel(0.22), textTransform: 'uppercase',
                   textShadow: '0 -1px 1px rgba(0,0,0,0.7)',
+                  textAlign: 'center', lineHeight: '14px',
+                  ...FONT_SMOOTH,
+                }}>Pattern · Modifier · Position · Diagram</p>
+                {/* Ghosted output preview — one believable result line.
+                    Shows WHAT you get, not just that you get something.
+                    Real terminology a photographer would respect. */}
+                <p style={{
+                  margin: '14px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.2px',
+                  color: steel(0.15),
+                  fontStyle: 'italic',
                   textAlign: 'center', lineHeight: '15px',
                   ...FONT_SMOOTH,
-                }}>We'll show you how it was lit</p>
+                }}>Rembrandt · 3:1 · 5′ octa · 45° camera-left</p>
               </>)}
               {isUrlFetching && (
                 <p style={{
