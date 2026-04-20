@@ -33,7 +33,7 @@ const C = {
   glassSheen:  'rgba(178,191,209,0.07)',
 };
 
-export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, onRecipes, onSavedSetups, onBuildWizard, onMyKit, onSessionLog, onVideoCapture, lastAnalysisTime }) {
+export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, onRecipes, onSavedSetups, onBuildWizard, onMyKit, onSessionLog, onLookLibrary, onVideoCapture, lastAnalysisTime }) {
   const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isPressed,    setIsPressed]    = useState(false);
@@ -1188,6 +1188,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               { label: 'Build from Scratch', action: onBuildWizard },
               { label: 'My Kit',           action: onMyKit },
               { label: 'Lighting Journal', action: onSessionLog },
+              { label: 'Look Library', action: onLookLibrary },
               { label: 'From Video', action: onVideoCapture },
             ].map(item => (
               <button key={item.label} onClick={() => { item.action?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
@@ -2175,6 +2176,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             { label: 'Build a Setup', action: onBuildWizard },
             { label: 'My Kit', action: onMyKit },
             { label: 'Journal', action: onSessionLog },
+            { label: 'Look Library', action: onLookLibrary },
             { label: 'From Video', action: onVideoCapture },
           ].map((item, i) => (
             <Fragment key={item.label}>

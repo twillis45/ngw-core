@@ -11,6 +11,7 @@ import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
 import SessionLogScreen from './studio/_core/SessionLogScreen';
 import VideoFrameCapture from '../components/VideoFrameCapture';
+import LookLibraryScreen from './studio/_core/LookLibraryScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
@@ -1172,6 +1173,7 @@ export default function Day1DemoApp() {
   const handleSessionLog = () => setScreen('journal');
   const [showVideoCapture, setShowVideoCapture] = useState(false);
   const handleVideoCapture = () => setShowVideoCapture(true);
+  const handleLookLibrary = () => setScreen('looklibrary');
   const handleBuildComplete = (payload) => {
     // Build a result object from wizard payload so SetupScreen can render it
     const wizardResult = {
@@ -1357,6 +1359,7 @@ export default function Day1DemoApp() {
           onBuildWizard={handleBuildWizard}
           onMyKit={handleMyKit}
           onSessionLog={handleSessionLog}
+          onLookLibrary={handleLookLibrary}
           onVideoCapture={handleVideoCapture}
           lastAnalysisTime={lastAnalysisTime}
         />
@@ -1499,6 +1502,12 @@ export default function Day1DemoApp() {
       if (!journalMobile) return journalEl;
       return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{journalEl}</FitToViewport>;
     }
+    case 'looklibrary': {
+      const llMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const llEl = <LookLibraryScreen onBack={() => setScreen('home')} />;
+      if (!llMobile) return llEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{llEl}</FitToViewport>;
+    }
     case 'roomplanner':
       return <RoomPlannerWrapper result={result} onBack={() => setScreen(result ? 'setup' : 'home')} />;
     case 'mykit': {
@@ -1545,7 +1554,7 @@ export default function Day1DemoApp() {
         <HomeScreen onAnalyze={handleAnalyze} hasLastResult={!!lastResult} onViewLastResult={handleViewLastResult}
           user={user} onLogout={() => { clearAuth(); setUser(null); }} onSettings={handleSettings}
           onRecipes={handleRecipes} onSavedSetups={handleSavedSetups} onBuildWizard={handleBuildWizard}
-          onMyKit={handleMyKit} onSessionLog={handleSessionLog} onVideoCapture={handleVideoCapture} lastAnalysisTime={lastAnalysisTime} />
+          onMyKit={handleMyKit} onSessionLog={handleSessionLog} onLookLibrary={handleLookLibrary} onVideoCapture={handleVideoCapture} lastAnalysisTime={lastAnalysisTime} />
       );
       if (!defMobile) return defEl;
       return <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>{defEl}</FitToViewport>;

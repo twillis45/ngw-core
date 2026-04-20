@@ -30,6 +30,7 @@ import ReferenceImageCard from '../cards/ReferenceImageCard';
 import DiagramCard from '../cards/DiagramCard';
 import SocialExportPanel from '../cards/SocialExportPanel';
 import GearRecommendCard from '../cards/GearRecommendCard';
+import GearPullSheetButton from '../cards/GearPullSheet';
 import SpaceCheckCard from '../cards/SpaceCheckCard';
 import CameraSubjectCard from '../cards/CameraSubjectCard';
 import QuickFixesCard from '../cards/QuickFixesCard';
@@ -682,6 +683,18 @@ export default function ResultsScreenV2({ onShare } = {}) {
   const { isPaid, unlock, isAdmin, isStudio, analysisCount, incrementCount } = usePaywall(userEmail);
   const { fireGate } = usePaywallTrigger({ isPaid, analysisCount });
   const [zoomSrc, setZoomSrc] = useState(null);
+  const [userKit, setUserKit] = useState(null);
+
+  // Load user's kit for gear substitution
+  useEffect(() => {
+    if (!isPaid) return;
+    import('../data/authApi').then(({ authHeaders }) => {
+      fetch('/api/user/kit', { headers: { ...authHeaders() } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => { if (data?.kit || data?.lights) setUserKit(data.kit || data); })
+        .catch(() => {});
+    });
+  }, [isPaid]);
   const appMode = useMode();
   const { units } = useSettings();
 
@@ -1045,11 +1058,23 @@ export default function ResultsScreenV2({ onShare } = {}) {
         />
       )}
 
-      {/* ── Gear Recommendations (Pro+) ── */}
+      {/* ── Gear Pull Sheet (Pro+) ── */}
+      {isPaid && hasDiagram && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, paddingRight: 4 }}>
+          <GearPullSheetButton
+            spec={result.diagram}
+            pattern={result.pattern || result.authoritative_pattern}
+            camera={result.cameraSettings}
+          />
+        </div>
+      )}
+
+      {/* ── Gear Readiness + Substitutions (Pro+) ── */}
       {isPaid && result?.pattern && (
         <GearRecommendCard
           pattern={result.pattern || result.authoritative_pattern}
-          userKit={null}
+          userKit={userKit}
+          diagramLights={result.diagram?.lights || []}
         />
       )}
 
