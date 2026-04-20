@@ -1306,9 +1306,10 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           border: isDragOver ? `1.5px solid rgba(132, 158, 184,0.40)` : 'none',
           overflow: 'hidden',
           cursor: 'pointer',
-          // LCD panel surface — real camera LCD: dark blue-black glass, distinctly
-          // different from the matte body. Not transparent, not pure black.
-          backgroundColor: hasImage ? 'transparent' : '#04060e',
+          // VF surface — transparent so it inherits the Carbon Black body
+          // through the MatteBackground. LCD realism comes from overlay layers,
+          // not a separate fill color.
+          backgroundColor: 'transparent',
           // Recessed LCD bezel — deep machined channel around the panel.
           // Top/left edges are dark (in shadow), bottom/right catch a faint highlight.
           boxShadow: isDragOver
