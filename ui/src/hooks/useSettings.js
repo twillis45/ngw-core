@@ -9,7 +9,7 @@
  * data-attribute approach in applySettings() instead.
  */
 import { useSyncExternalStore } from 'react';
-import { loadSettings } from '../data/settingsStore';
+import { loadSettings, getFontScale } from '../data/settingsStore';
 
 /** Simple version counter that bumps when saveSetting() is called from SettingsScreen. */
 let _version = 0;
@@ -32,5 +32,7 @@ function getSnapshot() {
 
 export default function useSettings() {
   useSyncExternalStore(subscribe, getSnapshot);
-  return loadSettings();
+  const settings = loadSettings();
+  settings.fontScale = getFontScale();
+  return settings;
 }

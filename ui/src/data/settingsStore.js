@@ -163,17 +163,18 @@ export function applySettings(settings) {
   document.documentElement.setAttribute('data-font-size', s.fontSize || 'medium');
   document.documentElement.setAttribute('data-font-family', s.fontFamily || 'system');
   document.documentElement.setAttribute('data-density', s.density || 'comfortable');
-  // Set font scale for Studio Matte inline-style screens (px-based).
-  // CSS zoom scales all px values proportionally — text, padding, margins.
-  // This is the only way to affect hardcoded px font sizes without touching
-  // every component. Supported in all modern browsers including mobile Safari.
+  // Reduce motion — disables animations globally via CSS
+  if (s.reduceMotion) {
+    document.documentElement.setAttribute('data-reduce-motion', '');
+  } else {
+    document.documentElement.removeAttribute('data-reduce-motion');
+  }
+  // Font scale for Studio Matte (px-based screens).
+  // Set as CSS custom property — components read it via getFontScale()
+  // or CSS var(--font-scale). NOT applied as global zoom because that
+  // breaks fixed-viewport layout (HomeScreen uses stableVH + position:fixed).
   const scale = FONT_SCALE[s.fontSize] || 1;
   document.documentElement.style.setProperty('--font-scale', String(scale));
-  if (scale !== 1) {
-    document.documentElement.style.zoom = String(scale);
-  } else {
-    document.documentElement.style.zoom = '';
-  }
 }
 
 /** Get the current font scale multiplier. */

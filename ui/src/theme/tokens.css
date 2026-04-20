@@ -605,3 +605,22 @@
                  "Palatino", serif;
 }
 
+/* ── Font Scale (Studio Matte) ──────────────────────── */
+/* Scrollable content screens opt in by adding zoom.     */
+/* Fixed-viewport screens (Home, Processing) do NOT use  */
+/* this — their layout depends on exact px geometry.     */
+.font-scaled {
+  zoom: var(--font-scale, 1);
+}
+
+/* ── Reduce Motion ──────────────────────────────────── */
+/* Controlled by data-reduce-motion attribute on <html>. */
+/* Disables all CSS animations and transitions globally. */
+[data-reduce-motion] *,
+[data-reduce-motion] *::before,
+[data-reduce-motion] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+

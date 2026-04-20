@@ -258,7 +258,7 @@ function AccountScreen({ user, onBack, onLogout }) {
                 Switch tiers to test paywall and feature gates.
               </p>
               <div style={{ display: 'flex', gap: 8, padding: '10px 20px 16px', flexWrap: 'nowrap' }}>
-                {['free', 'paid', 'pro', 'enterprise'].map(tier => {
+                {['free', 'paid', 'pro', 'studio', 'enterprise'].map(tier => {
                   const active = plan === tier;
                   const isFreeTier = tier === 'free';
                   const accentColor = isFreeTier ? 'rgba(200,155,60,' : 'rgba(72,186,136,';
@@ -350,13 +350,18 @@ function AccountScreen({ user, onBack, onLogout }) {
         <Panel>
           <NavRow
             label={isPaid ? 'Manage billing & invoices' : 'Upgrade to Pro'}
-            onClick={() => {
+            onClick={async () => {
               if (isPaid) {
                 window.open(`mailto:${SUPPORT_EMAIL}?subject=Billing%20%26%20Invoices`, '_blank');
               } else {
-                // TODO: link to Stripe checkout
-                softClickSound();
+                try {
+                  const { startStripeCheckout } = await import('../../../data/stripeCheckout');
+                  await startStripeCheckout({ plan: 'pro' });
+                } catch (err) {
+                  alert(err.message || 'Could not start checkout');
+                }
               }
+              softClickSound();
             }}
           />
         </Panel>
@@ -368,7 +373,21 @@ function AccountScreen({ user, onBack, onLogout }) {
 
         <div style={{ height: 8 }} />
         <Panel>
-          <NavRow label="Delete Account" danger onClick={() => {}} />
+          <NavRow label="Delete Account" danger onClick={async () => {
+            if (!confirm('Are you sure you want to permanently delete your account? This cannot be undone.')) return;
+            try {
+              const { authHeaders } = await import('../../../data/authApi');
+              const res = await fetch('/api/auth/me', {
+                method: 'DELETE',
+                headers: { ...authHeaders() },
+              });
+              if (!res.ok) throw new Error('Failed to delete account');
+              localStorage.clear();
+              window.location.href = '/';
+            } catch (err) {
+              alert(err.message || 'Could not delete account');
+            }
+          }} />
         </Panel>
 
       </div>
