@@ -23,7 +23,7 @@ export default function MatteBackground({ variant = 'default' }) {
   // they vanish into pure black. Desktop multiplier lifts all layers ~2× while
   // keeping the same relative hierarchy.
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const m = 0; // all gradient layers disabled — pure Carbon Black
+  const m = 0.15; // barely perceptible surface treatment — enough to break banding
 
   // Layer 1 — cool ambient key wash
   const ambientWash = subdued
@@ -37,7 +37,7 @@ export default function MatteBackground({ variant = 'default' }) {
 
   // Layer 3 — edge vignette — ultra-wide ellipse pushes edges off-screen.
   // 12 stops for imperceptible transition. No visible oval.
-  const va = 0; // vignette disabled — pure flat Carbon Black
+  const va = 0.08; // very subtle edge darkening — breaks flat monotone
   const vignette = `radial-gradient(ellipse 160% 130% at 50% 50%, transparent 30%, rgba(0,0,0,${(va * 0.01).toFixed(4)}) 38%, rgba(0,0,0,${(va * 0.03).toFixed(4)}) 44%, rgba(0,0,0,${(va * 0.06).toFixed(4)}) 50%, rgba(0,0,0,${(va * 0.10).toFixed(4)}) 56%, rgba(0,0,0,${(va * 0.16).toFixed(4)}) 62%, rgba(0,0,0,${(va * 0.24).toFixed(4)}) 68%, rgba(0,0,0,${(va * 0.35).toFixed(4)}) 74%, rgba(0,0,0,${(va * 0.50).toFixed(4)}) 80%, rgba(0,0,0,${(va * 0.68).toFixed(4)}) 86%, rgba(0,0,0,${(va * 0.85).toFixed(4)}) 93%, rgba(0,0,0,${va}) 100%)`;
 
   // Layer 4 — top specular edge (141.71° key light catch)
@@ -57,16 +57,25 @@ export default function MatteBackground({ variant = 'default' }) {
       <div style={{ position: 'absolute', inset: 0, background: warmLift }} />
       {/* Edge vignette — anchors the frame */}
       <div style={{ position: 'absolute', inset: 0, background: vignette }} />
-      {/* Anti-banding dither — full surface noise at low opacity.
-          On desktop 8-bit displays, dark gradient transitions create visible
-          color steps. This noise layer adds per-pixel variation that breaks
-          up the quantization. Covers entire surface (not just edges) because
-          banding appears wherever gradients exist. */}
+      {/* Anti-banding: 3 dither layers at different frequencies.
+          Uses soft-light blend to add variation without brightening.
+          Different tile sizes prevent moire patterns. */}
       <div style={{
         position: 'absolute', inset: 0,
-        backgroundImage: grainUrl, backgroundSize: isWide ? '96px 96px' : '128px 128px',
-        opacity: isWide ? 0.03 : 0.02,
-        mixBlendMode: 'overlay',
+        backgroundImage: grainUrl, backgroundSize: '200px 200px',
+        opacity: 0.06, mixBlendMode: 'soft-light',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: grainUrl, backgroundSize: '64px 64px',
+        opacity: 0.04, mixBlendMode: 'soft-light',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: grainUrl, backgroundSize: '128px 128px',
+        opacity: 0.03, mixBlendMode: 'multiply',
         pointerEvents: 'none',
       }} />
       {/* Top specular edge — ceiling light hit at 141.71° */}
@@ -80,19 +89,12 @@ export default function MatteBackground({ variant = 'default' }) {
           enough per-pixel variation to eliminate visible color steps.
           Uses 'overlay' blend at very low opacity so it adds both light
           and dark noise without shifting the overall tone. */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        opacity: isWide ? 0.03 : 0.02,
-        mixBlendMode: 'overlay',
-        backgroundImage: grainUrl, backgroundSize: '64px 64px',
-        pointerEvents: 'none',
-      }} />
-      {/* Tactile grain — desktop body texture (Profoto/Hasselblad surface feel) */}
+      {/* Tactile grain — desktop only, very subtle */}
       {isWide && (
         <div style={{
           position: 'absolute', inset: 0,
-          opacity: 0.04, mixBlendMode: 'multiply',
-          backgroundImage: grainUrl, backgroundSize: '128px 128px',
+          opacity: 0.02, mixBlendMode: 'soft-light',
+          backgroundImage: grainUrl, backgroundSize: '256px 256px',
         }} />
       )}
     </div>
