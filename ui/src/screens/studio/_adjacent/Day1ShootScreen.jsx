@@ -25,7 +25,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { navHaptic, tapHaptic, successHaptic, grainHaptic, longPressHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
+         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
 import { postSignal } from '../../../data/signalsApi';
 import useStableViewport from '../../../utils/useStableViewport';
@@ -876,6 +876,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
   const [framesCaptured, setFramesCaptured] = useState(0);
   const [justCaptured, setJustCaptured] = useState(false);
   const [heroZoomed, setHeroZoomed] = useState(false);
+  const [heroFitMode, setHeroFitMode] = useState('contain'); // 'contain' | 'cover'
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const outcomeSentRef = useRef(false);
 
@@ -1203,7 +1204,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   color: steel(0.65), fontSize: 15, padding: '4px 0',
                   WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
                 }}>‹ Exit</button>
-                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT,
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                   letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                   COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
                     {stepIndex + 1}/{steps.length}
@@ -1242,7 +1243,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                     onClick={() => { if (i !== stepIndex) { tapHaptic(); softClickSound(); setStepIndex(i); } }}
                     style={{
                       width: i === stepIndex ? 18 : 6, height: 6, borderRadius: 3,
-                      backgroundColor: i === stepIndex ? KEY_ACCENT : steel(0.18),
+                      backgroundColor: i === stepIndex ? steel(0.75) : steel(0.18),
                       transition: 'width 0.2s ease, background-color 0.2s ease',
                       cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                       padding: '8px 4px', margin: '-8px -4px',
@@ -1325,7 +1326,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               >
                 ‹ Exit
               </button>
-              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT,
+              <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: steel(0.75),
                 letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                 COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
                   {stepIndex + 1}/{steps.length}
@@ -1372,7 +1373,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                     onClick={() => { if (i !== stepIndex) { tapHaptic(); softClickSound(); setStepIndex(i); } }}
                     style={{
                       width: i === stepIndex ? 18 : 6, height: 6, borderRadius: 3,
-                      backgroundColor: i === stepIndex ? KEY_ACCENT : steel(0.18),
+                      backgroundColor: i === stepIndex ? steel(0.75) : steel(0.18),
                       transition: 'width 0.2s ease, background-color 0.2s ease',
                       cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
                       padding: '8px 4px', margin: '-8px -4px',
@@ -2141,7 +2142,7 @@ function AssistantBody({ step }) {
     }}>
       <p style={{
         margin: 0, fontSize: 12, fontWeight: 700,
-        color: KEY_ACCENT, letterSpacing: '2.0px', ...FONT_SMOOTH,
+        color: steel(0.75), letterSpacing: '2.0px', ...FONT_SMOOTH,
       }}>
         {step.verb}
       </p>
@@ -2198,7 +2199,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
 
       <div style={{ padding: dk ? '22px 28px 0' : '18px 22px 0', position: 'relative', zIndex: 1 }}>
         <p style={{ margin: 0, fontSize: dk ? 12 : 10, fontWeight: 700,
-          color: KEY_ACCENT, letterSpacing: '1.2px',
+          color: steel(0.75), letterSpacing: '1.2px',
           textAlign: 'center', ...FONT_SMOOTH }}>
           {step.title}
         </p>
@@ -2220,7 +2221,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             padding: dk ? '16px 20px' : '12px 16px',
           }}>
             <p style={{ margin: 0, fontSize: dk ? 10 : 9, fontWeight: 700,
-              color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+              color: steel(0.75), letterSpacing: '1.4px', ...FONT_SMOOTH }}>
               WHY THIS MATTERS
             </p>
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -2417,7 +2418,7 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
   //   catchColor — bright warm white; represents the reflection IN the eye
   //   keyColor   — amber; represents the inferred direction of the key light
   const catchColor = '#f5e4b8';
-  const keyColor = KEY_ACCENT;
+  const keyColor = steel(0.75);
   const distColor = '#48ba88';
   const shadowColor = '#6ea8d1';
 
@@ -2457,7 +2458,25 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <img src={imagePreview} alt="Reference"
-        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        style={{ width: '100%', height: '100%', objectFit: heroFitMode, display: 'block', transition: 'object-fit 0.3s ease' }}
+        onClick={() => { setHeroFitMode(f => f === 'contain' ? 'cover' : 'contain'); tapHaptic(); }}
+      />
+      {/* Fit mode toggle — bottom-right corner */}
+      <button onClick={(e) => { e.stopPropagation(); setHeroFitMode(f => f === 'contain' ? 'cover' : 'contain'); tapHaptic(); }}
+        style={{
+          position: 'absolute', bottom: 8, right: 8, zIndex: 10,
+          width: 28, height: 28, borderRadius: 6,
+          background: 'rgba(0,0,0,0.55)', border: 'none', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(245,247,250,0.70)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {heroFitMode === 'contain'
+            ? <><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></>
+            : <><path d="M4 14h6v6M14 4h6v6M10 14l-7 7M14 10l7-7"/></>
+          }
+        </svg>
+      </button>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'hidden' }}>
         <defs>
