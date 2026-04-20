@@ -1828,32 +1828,36 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {/* Backlit engraved label — cohesive with dome but stands out via glow.
-              Simulates a backlit label on a camera body: etched letters with faint
-              LED illumination bleeding through from behind. */}
-          <div style={{
-            padding: '10px 28px',
-            borderRadius: 10,
-            background: 'linear-gradient(141.71deg, rgba(132,158,184,0.06) 0%, rgba(132,158,184,0.03) 100%)',
-            border: `1px solid rgba(132,158,184,0.12)`,
+          {/* Machined secondary CTA ��� raised button in the trough below the dome.
+              Same 141.71° material as the dome but rectangular + smaller = clearly secondary.
+              Reads as a physical button you can press, not a label. */}
+          <button style={{
+            padding: '12px 32px',
+            borderRadius: 12,
+            border: 'none',
+            cursor: 'pointer',
+            background: `linear-gradient(141.71deg, #1e2430 0%, #141820 50%, #0a0c12 100%)`,
             boxShadow: [
-              'inset 0 1px 3px rgba(0,0,0,0.5)',
-              'inset 0 -1px 0 rgba(255,255,255,0.03)',
-              `0 0 8px rgba(132,158,184,0.06)`,
-              '0 2px 6px rgba(0,0,0,0.3)',
+              '8px 8px 20px rgba(0,0,0,0.70)',
+              '4px 4px 10px rgba(0,0,0,0.50)',
+              '2px 2px 5px rgba(0,0,0,0.35)',
+              '-1px -1px 2px rgba(255,255,255,0.06)',
+              `0 0 0 0.5px ${steel(0.18)}`,
+              'inset 0 1.5px 0 rgba(255,255,255,0.14)',
+              'inset 1px 0 0 rgba(255,255,255,0.07)',
+              'inset -0.5px -0.5px 0 rgba(0,0,0,0.40)',
             ].join(', '),
+            WebkitTapHighlightColor: 'transparent',
           }}>
-            <p style={{
-              margin: 0,
-              fontSize: 13, fontWeight: 700, letterSpacing: '1.8px', textTransform: 'uppercase',
-              color: sampleLoading ? steel(0.30) : steel(0.58),
-              textShadow: `0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.04), 0 0 8px ${steel(0.15)}`,
-              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-              textRendering: 'geometricPrecision',
+            <span style={{
+              fontSize: 14, fontWeight: 700, letterSpacing: '1.2px',
+              color: sampleLoading ? steel(0.40) : steel(0.75),
+              textShadow: `0 -1px 1px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.05), 0 0 10px ${steel(0.12)}`,
+              ...FONT_SMOOTH,
             }}>
-              {sampleLoading ? 'Loading…' : 'Try a sample →'}
-            </p>
-          </div>
+              {sampleLoading ? 'Loading…' : 'Try a Sample →'}
+            </span>
+          </button>
         </div>
       )}
 
