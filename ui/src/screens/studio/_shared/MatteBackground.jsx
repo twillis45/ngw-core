@@ -23,7 +23,7 @@ export default function MatteBackground({ variant = 'default' }) {
   // they vanish into pure black. Desktop multiplier lifts all layers ~2× while
   // keeping the same relative hierarchy.
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const m = 0.15; // barely perceptible surface treatment — enough to break banding
+  const m = 0.35; // perceptible surface treatment — warm ambient + specular give the machined metal feel
 
   // Layer 1 — cool ambient key wash (10 stops for smooth fade)
   const a = subdued ? 0.022 * m : 0.028 * m;
