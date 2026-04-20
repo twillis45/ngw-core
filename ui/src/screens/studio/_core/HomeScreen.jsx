@@ -1168,19 +1168,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           transition: 'opacity 0.6s ease',
         }}
       >
+        {/* Brand wordmark only — no tagline. The VF copy IS the value prop.
+            Wordmark is quiet so the viewfinder is the undisputed hero. */}
         <p style={{
           margin: 0,
-          fontWeight: 800, fontSize: 18, lineHeight: '22px',
-          color: C.textPrimary, letterSpacing: '-0.3px',
+          fontWeight: 800, fontSize: 15, lineHeight: '18px',
+          color: steel(0.55), letterSpacing: '-0.2px',
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-          textShadow: '0 0 1px rgba(245,247,250,0.12)',
-        }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.12em', color: steel(0.60) }}>Lighting</span></p>
-        <p style={{
-          margin: '3px 0 0 1px',
-          fontWeight: 700, fontSize: 14, lineHeight: '15px',
-          color: 'rgba(235,240,245,0.95)', letterSpacing: '0.1px',
-          WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-        }}>See how any photo was lit — and rebuild it.</p>
+        }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.12em', color: steel(0.38) }}>Lighting</span></p>
       </div>
       )}
 
@@ -1452,20 +1447,20 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   <circle cx="19" cy="19" r="1.5" fill={steel(0.45)} />
                 </svg>
                 {/* Mobile VF copy — etched into the LCD surface.
-                    Text-shadow simulates laser-engraved lettering on dark glass:
-                    dark inset shadow above (cut into surface) + faint light catch below. */}
+                    Instructional, not a headline. The brackets are the visual hero;
+                    copy supports with a quiet etched instruction. */}
                 <p style={{
-                  margin: '16px 0 0', fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px',
-                  color: steel(0.42),
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.04), 0 0 8px rgba(132,158,184,0.08)',
-                  textAlign: 'center', lineHeight: '30px',
+                  margin: '14px 0 0', fontSize: 15, fontWeight: 700, letterSpacing: '2px',
+                  color: steel(0.35), textTransform: 'uppercase',
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.03)',
+                  textAlign: 'center', lineHeight: '18px',
                   ...FONT_SMOOTH,
                 }}>Load a portrait</p>
                 <p style={{
-                  margin: '6px 0 0', fontSize: 16, fontWeight: 600, letterSpacing: '0.3px',
-                  color: steel(0.28),
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
-                  textAlign: 'center', lineHeight: '20px',
+                  margin: '5px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.5px',
+                  color: steel(0.22),
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.7)',
+                  textAlign: 'center', lineHeight: '15px',
                   ...FONT_SMOOTH,
                 }}>See how it was lit</p>
               </>)}
@@ -1634,24 +1629,19 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
            into the body panel, lit from 141.71°. Upper rim catches a thin key-light
            highlight (VF bottom rolls over it); interior is darker than the surrounding
            body; lower rim has a faint bounce from below. The well+button sit inside. */}
+      {/* Button trough — softer transition from VF to controls.
+           Less aggressive than before: gentle gradient, lighter shadows.
+           The VF and trough should feel like one continuous instrument. */}
       <div style={{
         position: 'absolute', left: 0, right: 0,
-        top: VF_BOTTOM + 10,
-        height: Math.max(stableVH - (VF_BOTTOM + 10), BTN_D + 80),
+        top: VF_BOTTOM + 4,
+        height: Math.max(stableVH - (VF_BOTTOM + 4), BTN_D + 80),
         pointerEvents: 'none',
-        // Interior gradient — slightly darker than surrounding body, with a subtle cool tint
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.22) 100%)',
+        background: 'linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.06) 50%, rgba(0,0,0,0.14) 100%)',
         boxShadow: [
-          // Top rim — hard dark carved edge (VF bottom rolls into the trough)
-          'inset 0 2px 4px rgba(0,0,0,0.78)',
-          'inset 0 1px 1px rgba(0,0,0,0.55)',
-          // Thin specular highlight just below the top edge — key-light chamfer catch
-          'inset 0 3px 0 rgba(255,255,255,0.025)',
-          // Side rim dark — left/right walls of the machined strip
-          'inset 6px 0 12px rgba(0,0,0,0.30)',
-          'inset -6px 0 12px rgba(0,0,0,0.20)',
-          // Bottom rim — faint steel-blue floor bounce
-          'inset 0 -2px 4px rgba(132,158,184,0.04)',
+          'inset 0 1px 3px rgba(0,0,0,0.55)',
+          'inset 0 2px 0 rgba(255,255,255,0.018)',
+          'inset 0 -1px 3px rgba(132,158,184,0.03)',
         ].join(', '),
       }} />
 
@@ -1865,33 +1855,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           {/* Machined secondary CTA ��� raised button in the trough below the dome.
               Same 141.71° material as the dome but rectangular + smaller = clearly secondary.
               Reads as a physical button you can press, not a label. */}
-          <button style={{
-            padding: '12px 32px',
-            borderRadius: 12,
-            border: 'none',
-            cursor: 'pointer',
-            background: `linear-gradient(141.71deg, #1e2430 0%, #141820 50%, #0a0c12 100%)`,
-            boxShadow: [
-              '8px 8px 20px rgba(0,0,0,0.70)',
-              '4px 4px 10px rgba(0,0,0,0.50)',
-              '2px 2px 5px rgba(0,0,0,0.35)',
-              '-1px -1px 2px rgba(255,255,255,0.06)',
-              `0 0 0 0.5px ${steel(0.18)}`,
-              'inset 0 1.5px 0 rgba(255,255,255,0.14)',
-              'inset 1px 0 0 rgba(255,255,255,0.07)',
-              'inset -0.5px -0.5px 0 rgba(0,0,0,0.40)',
-            ].join(', '),
-            WebkitTapHighlightColor: 'transparent',
+          {/* Engraved text link — not a competing button. The trough zone has ONE
+              control (the dome). This is a quiet secondary affordance etched into
+              the instrument surface. */}
+          <p style={{
+            margin: 0,
+            fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase',
+            color: sampleLoading ? steel(0.22) : steel(0.38),
+            textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
+            ...FONT_SMOOTH,
           }}>
-            <span style={{
-              fontSize: 14, fontWeight: 700, letterSpacing: '1.2px',
-              color: sampleLoading ? steel(0.40) : steel(0.75),
-              textShadow: `0 -1px 1px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.05), 0 0 10px ${steel(0.12)}`,
-              ...FONT_SMOOTH,
-            }}>
-              {sampleLoading ? 'Loading…' : 'Try a Sample →'}
-            </span>
-          </button>
+            {sampleLoading ? 'Loading…' : 'Or try a sample →'}
+          </p>
         </div>
       )}
 
