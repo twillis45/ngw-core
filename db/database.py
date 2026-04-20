@@ -643,17 +643,39 @@ def delete_user_account(user_id: str, email: str) -> None:
     password_reset_tokens) or without a FK constraint are cleaned up explicitly.
     """
     with get_db() as conn:
-        # Email-keyed tables
-        conn.execute("DELETE FROM subscriptions WHERE customer_email = ?", (email,))
-        conn.execute("DELETE FROM password_reset_tokens WHERE email = ?", (email,))
-        conn.execute("DELETE FROM session_analysis_counts WHERE email = ?", (email,))
-        conn.execute("DELETE FROM magic_link_tokens WHERE email = ?", (email,))
+        # Email-keyed tables (safe — ignores missing tables)
+        for tbl, col in [
+            ("subscriptions", "customer_email"),
+            ("analysis_results", "user_email"),
+            ("batch_jobs", "user_email"),
+            ("reference_library", "user_email"),
+            ("api_keys", "user_email"),
+        ]:
+            try:
+                conn.execute(f"DELETE FROM {tbl} WHERE {col} = ?", (email,))
+            except Exception:
+                pass  # table may not exist yet
+        # Session-keyed (session_analysis_counts uses "user:<id>" format)
+        try:
+            conn.execute("DELETE FROM session_analysis_counts WHERE session_id = ?", (f"user:{user_id}",))
+        except Exception:
+            pass
+        # Token tables (may or may not exist as separate tables)
+        for tbl in ("password_reset_tokens", "magic_link_tokens", "email_verifications"):
+            try:
+                conn.execute(f"DELETE FROM {tbl} WHERE user_id = ?", (user_id,))
+            except Exception:
+                try:
+                    conn.execute(f"DELETE FROM {tbl} WHERE email = ?", (email,))
+                except Exception:
+                    pass
         # user_id-keyed tables not covered by FK cascade
-        conn.execute("DELETE FROM user_kits WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM user_setups WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM user_feedback WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM user_preferences WHERE user_id = ?", (user_id,))
-        # Finally remove the account itself (cascades email_verifications)
+        for tbl in ("user_kits", "user_setups", "user_feedback", "user_preferences", "team_members"):
+            try:
+                conn.execute(f"DELETE FROM {tbl} WHERE user_id = ?", (user_id,))
+            except Exception:
+                pass
+        # Finally remove the account itself
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
     logger.info("[db] delete_user_account user_id=%s email=%s", user_id, email)
 
