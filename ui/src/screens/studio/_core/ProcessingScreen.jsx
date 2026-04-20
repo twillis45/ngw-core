@@ -228,23 +228,63 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         </div>
         <div style={{ position: 'absolute', inset: 0, borderRadius: 0, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 6 }} />
 
-        {/* Stage narrative — mobile overlay */}
+        {/* Stage narrative — mobile overlay.
+             Styled as a frosted glass readout panel, not floating text.
+             Stage copy is the hero, progress % is the instrument readout. */}
         {!isDesktop && !analysisComplete && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '48px 24px 22px',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.55) 40%, rgba(11,11,12,0.88) 100%)',
+            padding: '40px 20px 20px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,8,0.50) 30%, rgba(4,5,8,0.85) 100%)',
             zIndex: 7, pointerEvents: 'none',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
           }}>
-            <p style={{
-              margin: 0, fontWeight: 500, fontSize: 14, lineHeight: '20px',
-              color: 'rgba(235,240,245,0.88)', letterSpacing: '0.2px', textAlign: 'center',
-              textShadow: '0 1px 4px rgba(0,0,0,0.6), 0 0 16px rgba(72,186,136,0.15)',
-              ...FS, opacity: stageFade,
-              transform: stageFade === 1 ? 'translateY(0)' : 'translateY(6px)',
-              transition: 'opacity 0.35s ease, transform 0.35s ease',
-            }}>{currentStage.label}</p>
+            {/* Frosted glass readout card */}
+            <div style={{
+              padding: '14px 24px 12px',
+              borderRadius: 14,
+              background: 'rgba(8,10,16,0.55)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(72,186,136,0.10)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+              minWidth: 240,
+            }}>
+              {/* Stage label — the thought */}
+              <p style={{
+                margin: 0, fontWeight: 600, fontSize: 16, lineHeight: '22px',
+                color: 'rgba(235,240,245,0.92)', letterSpacing: '0.1px', textAlign: 'center',
+                textShadow: '0 0 12px rgba(72,186,136,0.20)',
+                ...FS, opacity: stageFade,
+                transform: stageFade === 1 ? 'translateY(0)' : 'translateY(4px)',
+                transition: 'opacity 0.35s ease, transform 0.35s ease',
+                minHeight: 22,
+              }}>{currentStage.label}</p>
+              {/* Progress readout — instrument style */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10, marginTop: 2,
+              }}>
+                {/* Thin progress bar */}
+                <div style={{
+                  width: 80, height: 2, borderRadius: 1,
+                  background: 'rgba(72,186,136,0.15)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${Math.round(progress)}%`, height: '100%',
+                    background: 'rgba(72,186,136,0.65)',
+                    borderRadius: 1,
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+                <p style={{
+                  margin: 0, fontWeight: 700, fontSize: 11, letterSpacing: '1.5px',
+                  color: 'rgba(72,186,136,0.55)', fontVariantNumeric: 'tabular-nums',
+                  ...FS,
+                }}>{Math.round(progress)}%</p>
+              </div>
+            </div>
           </div>
         )}
         {/* Pattern tease — mobile overlay */}
