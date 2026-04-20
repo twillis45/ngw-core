@@ -1131,6 +1131,8 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
       ? <LearningBody step={step} imagePreview={imagePreview}
           result={result} stepKey={step.key} position={position}
           angleDeg={angleDeg} distance={distance} pattern={pattern} mode={mode}
+          heightDisplay={heightDisplay} modName={modName}
+          heroFitMode={heroFitMode} onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
           heroPressHandlers={heroPressHandlers} vfHeight={VF_HEIGHT} hidePhoto={isDesktop} />
       : <PhotographerBody step={step} imagePreview={imagePreview}
           modName={modName} position={position} distance={distance}
@@ -2186,7 +2188,7 @@ function AssistantBody({ step }) {
 }
 
 // ─── Learning body — narrative lead + WHY callout + big reference ──────────
-function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode, heroPressHandlers, vfHeight, hidePhoto }) {
+function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode, heightDisplay, modName, heroFitMode, onToggleFit, heroPressHandlers, vfHeight, hidePhoto }) {
   const dk = hidePhoto; // desktop flag
   return (
     <>
@@ -2208,8 +2210,8 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             mode="learning"
             heightDisplay={heightDisplay}
             modName={modName}
-          heroFitMode={heroFitMode}
-          onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
+            heroFitMode={heroFitMode}
+            onToggleFit={onToggleFit}
           />
         </div>
       )}
