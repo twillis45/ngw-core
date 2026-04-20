@@ -1306,16 +1306,24 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           border: isDragOver ? `1.5px solid rgba(132, 158, 184,0.40)` : 'none',
           overflow: 'hidden',
           cursor: 'pointer',
-          // LCD panel surface — slightly lighter than the body, with a cool shift.
-          // Real camera LCDs read as a distinct dark rectangle, not transparent.
-          backgroundColor: hasImage ? 'transparent' : '#050710',
-          // Recessed LCD bezel — the panel sits IN the body, not ON it.
+          // LCD panel surface — real camera LCD: dark blue-black glass, distinctly
+          // different from the matte body. Not transparent, not pure black.
+          backgroundColor: hasImage ? 'transparent' : '#04060e',
+          // Recessed LCD bezel — deep machined channel around the panel.
+          // Top/left edges are dark (in shadow), bottom/right catch a faint highlight.
           boxShadow: isDragOver
             ? 'inset 0 0 40px rgba(132, 158, 184,0.15)'
             : hasImage ? 'none' : [
-                'inset 0 2px 6px rgba(0,0,0,0.7)',
-                'inset 0 1px 1px rgba(0,0,0,0.5)',
-                'inset 0 -1px 0 rgba(255,255,255,0.02)',
+                // Deep bezel channel — panel is recessed into the body
+                'inset 0 3px 8px rgba(0,0,0,0.85)',
+                'inset 2px 0 6px rgba(0,0,0,0.55)',
+                'inset 0 1px 1px rgba(0,0,0,0.70)',
+                // Bottom edge bounce — faint light catch on the lower bezel lip
+                'inset 0 -1px 0 rgba(255,255,255,0.035)',
+                // Right edge bounce
+                'inset -1px 0 0 rgba(255,255,255,0.02)',
+                // Outer lip highlight — the body surface around the bezel catches key light
+                '0 -1px 0 rgba(255,255,255,0.04)',
               ].join(', '),
           WebkitTapHighlightColor: 'transparent',
           transition: 'box-shadow 0.2s ease, transform 0.08s ease',
@@ -1330,15 +1338,40 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
             'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
           ].join(', ') : [
-            // Empty state: IPS backlight glow — powered-off LCD with visible edge bleed.
-            // Stronger than before so the panel reads as a real LCD, not a blank div.
-            'radial-gradient(ellipse 100% 80% at 50% 45%, rgba(90,115,160,0.06) 0%, rgba(70,95,140,0.025) 50%, transparent 80%)',
-            'linear-gradient(180deg, rgba(85,110,155,0.025) 0%, transparent 20%, transparent 80%, rgba(70,95,140,0.018) 100%)',
-            // Edge-lit LED bleed — brighter at top/bottom edges (where LEDs are)
-            'linear-gradient(180deg, rgba(100,130,175,0.03) 0%, transparent 8%, transparent 92%, rgba(90,120,165,0.02) 100%)',
+            // Empty state: IPS LCD panel — visible backlight pool + edge LED bleed.
+            // Three layers create the realistic powered-off camera LCD look:
+            // 1. Center backlight pool — diffuser panel is brightest at center
+            'radial-gradient(ellipse 90% 70% at 50% 46%, rgba(80,110,160,0.09) 0%, rgba(60,85,130,0.04) 45%, transparent 75%)',
+            // 2. Vertical edge bleed — LEDs along top and bottom edges leak through
+            'linear-gradient(180deg, rgba(90,120,170,0.04) 0%, rgba(70,100,145,0.015) 6%, transparent 15%, transparent 85%, rgba(60,90,135,0.012) 94%, rgba(80,110,160,0.03) 100%)',
+            // 3. Warm corner bleed — corner LEDs are slightly warmer (manufacturing reality)
+            'radial-gradient(circle at 0% 0%, rgba(110,130,165,0.03) 0%, transparent 25%)',
+            'radial-gradient(circle at 100% 100%, rgba(95,115,150,0.02) 0%, transparent 25%)',
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
+
+        {/* 0b — LCD sub-pixel texture — faint horizontal scan lines that make the
+             surface read as a real display panel, not a flat div. Subtle enough to
+             disappear when a photo loads but visible on the dark empty state. */}
+        {!hasImage && !isDesktop && (
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
+            backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.008) 2px, rgba(255,255,255,0.008) 3px)',
+            backgroundSize: '100% 3px',
+            mixBlendMode: 'overlay',
+            opacity: 0.6,
+          }} />
+        )}
+
+        {/* 0c — Glass surface reflection — the powered-off LCD still has a glass surface
+             that catches ambient light. Diagonal wipe matching 141.71° key direction. */}
+        {!hasImage && !isDesktop && (
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1,
+            background: 'linear-gradient(141.71deg, rgba(255,255,255,0.025) 0%, rgba(255,255,255,0.008) 25%, transparent 50%, transparent 80%, rgba(255,255,255,0.005) 100%)',
+          }} />
+        )}
 
         {/* 1 — Ellipse depth oval — desktop hides when no photo */}
         {(!isDesktop || hasImage) && (
