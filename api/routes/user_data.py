@@ -1,10 +1,11 @@
-"""User data routes: kit, setups, feedback sync, setup sharing."""
+"""User data routes: kit, setups, feedback sync, setup sharing, session log."""
 from __future__ import annotations
 
+import json
 import secrets
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from auth.security import get_current_user
@@ -14,6 +15,7 @@ from db.database import (
     save_user_setup, get_user_setups, delete_user_setup,
     save_user_feedback, get_user_feedback,
     save_user_preference, get_all_user_preferences,
+    get_user_analyses, get_analysis_by_id,
     get_db,
 )
 
@@ -138,6 +140,55 @@ def sync_all(user=Depends(get_current_user)):
         "setups": get_user_setups(user["id"]),
         "feedback": get_user_feedback(user["id"]),
         "preferences": get_all_user_preferences(user["id"]),
+    }
+
+
+# ── Session Log / Lighting Journal (Pro+) ────────────────────
+
+@router.get("/analyses")
+def analyses_list(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    pattern: Optional[str] = Query(None),
+    date_from: Optional[float] = Query(None),
+    date_to: Optional[float] = Query(None),
+    user=Depends(require_plan("pro")),
+):
+    """List the user's past analyses, newest first. Pro+ only."""
+    email = user.get("email", "")
+    offset = (page - 1) * per_page
+    analyses, total = get_user_analyses(
+        email, limit=per_page, offset=offset,
+        pattern=pattern, date_from=date_from, date_to=date_to,
+    )
+    return {
+        "analyses": analyses,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    }
+
+
+@router.get("/analyses/{analysis_id}")
+def analysis_detail(analysis_id: str, user=Depends(require_plan("pro"))):
+    """Get full analysis result for re-rendering. Pro+ only."""
+    email = user.get("email", "")
+    record = get_analysis_by_id(analysis_id, user_email=email)
+    if not record:
+        raise HTTPException(404, "Analysis not found.")
+
+    result = {}
+    try:
+        result = json.loads(record.get("result_json", "{}"))
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    return {
+        "analysis_id": record["analysis_id"],
+        "image_path": record.get("image_path"),
+        "system_version": record.get("system_version"),
+        "created_at": record.get("created_at"),
+        "result": result,
     }
 
 

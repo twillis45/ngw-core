@@ -1661,6 +1661,66 @@ def get_feedback_calibration(
     return [dict(r) for r in rows]
 
 
+# ── Session Log / Analysis History ───────────────────────────────────────────
+
+def get_user_analyses(
+    user_email: str,
+    limit: int = 20,
+    offset: int = 0,
+    pattern: str | None = None,
+    date_from: float | None = None,
+    date_to: float | None = None,
+) -> tuple[list[dict], int]:
+    """Return paginated list of a user's past analyses + total count."""
+    import json as _json
+    where = ["user_email = ?"]
+    params: list = [user_email.lower()]
+    if pattern:
+        where.append("json_extract(result_json, '$.authoritative_pattern') = ?")
+        params.append(pattern)
+    if date_from is not None:
+        where.append("created_at >= ?")
+        params.append(date_from)
+    if date_to is not None:
+        where.append("created_at <= ?")
+        params.append(date_to)
+    where_clause = " AND ".join(where)
+
+    with get_db() as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM analysis_results WHERE {where_clause}", params
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            f"""SELECT analysis_id, image_path, system_version, created_at,
+                       json_extract(result_json, '$.authoritative_pattern') AS pattern,
+                       json_extract(result_json, '$.pattern_confidence') AS confidence
+                FROM analysis_results
+                WHERE {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()
+
+    return [dict(r) for r in rows], total
+
+
+def get_analysis_by_id(analysis_id: str, user_email: str | None = None) -> dict | None:
+    """Return full analysis result by ID, optionally scoped to a user."""
+    with get_db() as conn:
+        if user_email:
+            row = conn.execute(
+                "SELECT * FROM analysis_results WHERE analysis_id = ? AND user_email = ?",
+                (analysis_id, user_email.lower()),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT * FROM analysis_results WHERE analysis_id = ?",
+                (analysis_id,),
+            ).fetchone()
+    return dict(row) if row else None
+
+
 # ── Batch Jobs ───────────────────────────────────────────────────────────────
 
 def create_batch_job(user_email: str, total_images: int) -> dict:

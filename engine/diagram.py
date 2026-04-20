@@ -27,6 +27,7 @@ class LightPlacement(BaseModel):
     distance_m: float
     modifier: str
     power_hint: str = ""       # e.g. "f/8", "1/2 power", "match key"
+    continuous_power_hint: str = ""  # e.g. "150W / 18k lm @ 5600K"
     ratio_hint: str = ""       # e.g. "2:1 key-to-fill"
     notes: List[str] = Field(default_factory=list)
 

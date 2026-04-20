@@ -9,6 +9,7 @@ import FitToViewport from './studio/_shared/FitToViewport';
 import Day1SettingsScreen from './studio/_deferred/Day1SettingsScreen';
 import RecipeScreen from './studio/_core/RecipeScreen';
 import SavedSetupsScreen from './studio/_core/SavedSetupsScreen';
+import SessionLogScreen from './studio/_core/SessionLogScreen';
 import BuildWizardScreen from './studio/_core/BuildWizardScreen';
 import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
@@ -1167,6 +1168,7 @@ export default function Day1DemoApp() {
   const handleBuildWizard = () => setScreen('build');
   const handleMyKit = () => setScreen('mykit');
   const handleRoomPlanner = () => setScreen('roomplanner');
+  const handleSessionLog = () => setScreen('journal');
   const handleBuildComplete = (payload) => {
     // Build a result object from wizard payload so SetupScreen can render it
     const wizardResult = {
@@ -1351,6 +1353,7 @@ export default function Day1DemoApp() {
           onSavedSetups={handleSavedSetups}
           onBuildWizard={handleBuildWizard}
           onMyKit={handleMyKit}
+          onSessionLog={handleSessionLog}
           lastAnalysisTime={lastAnalysisTime}
         />
       );
@@ -1469,6 +1472,29 @@ export default function Day1DemoApp() {
       if (!recipesMobile) return recipesEl;
       return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
     }
+    case 'journal': {
+      const journalMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const journalEl = (
+        <SessionLogScreen
+          onBack={() => setScreen('home')}
+          onSelectAnalysis={async (id) => {
+            try {
+              const { fetchAnalysisDetail } = await import('../data/sessionLogApi');
+              const data = await fetchAnalysisDetail(id);
+              if (data?.result) {
+                setResult(data.result);
+                setImagePreview(null);
+                setScreen('result');
+              }
+            } catch (err) {
+              console.error('Failed to load analysis:', err);
+            }
+          }}
+        />
+      );
+      if (!journalMobile) return journalEl;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{journalEl}</FitToViewport>;
+    }
     case 'roomplanner':
       return <RoomPlannerWrapper result={result} onBack={() => setScreen(result ? 'setup' : 'home')} />;
     case 'mykit': {
@@ -1515,7 +1541,7 @@ export default function Day1DemoApp() {
         <HomeScreen onAnalyze={handleAnalyze} hasLastResult={!!lastResult} onViewLastResult={handleViewLastResult}
           user={user} onLogout={() => { clearAuth(); setUser(null); }} onSettings={handleSettings}
           onRecipes={handleRecipes} onSavedSetups={handleSavedSetups} onBuildWizard={handleBuildWizard}
-          onMyKit={handleMyKit} lastAnalysisTime={lastAnalysisTime} />
+          onMyKit={handleMyKit} onSessionLog={handleSessionLog} lastAnalysisTime={lastAnalysisTime} />
       );
       if (!defMobile) return defEl;
       return <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>{defEl}</FitToViewport>;
