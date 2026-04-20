@@ -1168,14 +1168,20 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           transition: 'opacity 0.6s ease',
         }}
       >
-        {/* Brand wordmark only — no tagline. The VF copy IS the value prop.
-            Wordmark is quiet so the viewfinder is the undisputed hero. */}
+        {/* Brand + one-line story. Strong enough to anchor the top, quiet enough
+            to not compete with the VF. Two-line stack: brand name + what it does. */}
         <p style={{
           margin: 0,
-          fontWeight: 800, fontSize: 15, lineHeight: '18px',
-          color: steel(0.55), letterSpacing: '-0.2px',
-          WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
-        }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.12em', color: steel(0.38) }}>Lighting</span></p>
+          fontWeight: 800, fontSize: 17, lineHeight: '20px',
+          color: C.textPrimary, letterSpacing: '-0.3px',
+          ...FONT_SMOOTH,
+        }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.10em', color: steel(0.50) }}>Lighting</span></p>
+        <p style={{
+          margin: '2px 0 0',
+          fontWeight: 600, fontSize: 11, lineHeight: '14px',
+          color: steel(0.32), letterSpacing: '0.3px',
+          ...FONT_SMOOTH,
+        }}>Reverse-engineer any portrait lighting</p>
       </div>
       )}
 
@@ -1435,34 +1441,36 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               pointerEvents: 'none', zIndex: 7,
             }}>
               {!isUrlFetching && (<>
-                {/* Viewfinder bracket icon — strong pulse, fills the VF center */}
-                <svg width="90" height="90" viewBox="0 0 38 38" fill="none" style={{
+                {/* Tight content cluster: brackets + instruction + hint arrow.
+                    Grouped close together so the VF center has one cohesive element
+                    instead of scattered parts floating in empty space. */}
+                <svg width="72" height="72" viewBox="0 0 38 38" fill="none" style={{
                   animation: 'vfPulseGlow 2.4s ease-in-out infinite',
-                  filter: `drop-shadow(0 0 12px ${steel(0.35)})`,
+                  filter: `drop-shadow(0 0 10px ${steel(0.30)})`,
                 }}>
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.55)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <circle cx="19" cy="19" r="1.5" fill={steel(0.45)} />
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
+                  {/* Down arrow inside brackets — points toward the CTA below */}
+                  <path d="M19 14v8" stroke={steel(0.35)} strokeWidth="1.0" strokeLinecap="round" />
+                  <path d="M16 19l3 3 3-3" stroke={steel(0.35)} strokeWidth="1.0" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                {/* Mobile VF copy — etched into the LCD surface.
-                    Instructional, not a headline. The brackets are the visual hero;
-                    copy supports with a quiet etched instruction. */}
+                {/* VF copy — clear instruction, tightly spaced below brackets */}
                 <p style={{
-                  margin: '14px 0 0', fontSize: 15, fontWeight: 700, letterSpacing: '2px',
-                  color: steel(0.35), textTransform: 'uppercase',
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.9), 0 1px 0 rgba(255,255,255,0.03)',
-                  textAlign: 'center', lineHeight: '18px',
+                  margin: '10px 0 0', fontSize: 18, fontWeight: 700, letterSpacing: '-0.2px',
+                  color: steel(0.48),
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
+                  textAlign: 'center', lineHeight: '22px',
                   ...FONT_SMOOTH,
-                }}>Load a portrait</p>
+                }}>Tap to load a portrait</p>
                 <p style={{
-                  margin: '5px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.5px',
-                  color: steel(0.22),
+                  margin: '4px 0 0', fontSize: 12, fontWeight: 600, letterSpacing: '0.3px',
+                  color: steel(0.25),
                   textShadow: '0 -1px 1px rgba(0,0,0,0.7)',
                   textAlign: 'center', lineHeight: '15px',
                   ...FONT_SMOOTH,
-                }}>See how it was lit</p>
+                }}>We'll show you how it was lit</p>
               </>)}
               {isUrlFetching && (
                 <p style={{
@@ -1860,12 +1868,11 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               the instrument surface. */}
           <p style={{
             margin: 0,
-            fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase',
-            color: sampleLoading ? steel(0.22) : steel(0.38),
-            textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
+            fontSize: 12, fontWeight: 600, letterSpacing: '0.5px',
+            color: sampleLoading ? steel(0.22) : steel(0.35),
             ...FONT_SMOOTH,
           }}>
-            {sampleLoading ? 'Loading…' : 'Or try a sample →'}
+            {sampleLoading ? 'Loading…' : 'Try a sample photo →'}
           </p>
         </div>
       )}
