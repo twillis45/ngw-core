@@ -25,25 +25,22 @@ export default function MatteBackground({ variant = 'default' }) {
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
   const m = 0.15; // barely perceptible surface treatment — enough to break banding
 
-  // Layer 1 — cool ambient key wash
-  const ambientWash = subdued
-    ? `radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,${(0.022 * m).toFixed(3)}) 0%, rgba(132,158,184,${(0.008 * m).toFixed(3)}) 40%, transparent 72%)`
-    : `radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,${(0.028 * m).toFixed(3)}) 0%, rgba(132,158,184,${(0.010 * m).toFixed(3)}) 40%, transparent 72%)`;
+  // Layer 1 — cool ambient key wash (10 stops for smooth fade)
+  const a = subdued ? 0.022 * m : 0.028 * m;
+  const ambientWash = `radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,${a.toFixed(4)}) 0%, rgba(120,148,175,${(a*0.90).toFixed(4)}) 8%, rgba(120,148,175,${(a*0.75).toFixed(4)}) 16%, rgba(120,148,175,${(a*0.58).toFixed(4)}) 24%, rgba(125,153,180,${(a*0.42).toFixed(4)}) 32%, rgba(132,158,184,${(a*0.28).toFixed(4)}) 40%, rgba(132,158,184,${(a*0.18).toFixed(4)}) 48%, rgba(132,158,184,${(a*0.10).toFixed(4)}) 56%, rgba(132,158,184,${(a*0.04).toFixed(4)}) 64%, transparent 72%)`;
 
-  // Layer 2 — warm mid-frame lift
-  const warmLift = subdued
-    ? `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.008 * m).toFixed(3)}) 0%, transparent 65%)`
-    : `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${(0.010 * m).toFixed(3)}) 0%, transparent 65%)`;
+  // Layer 2 — warm mid-frame lift (8 stops)
+  const w = subdued ? 0.008 * m : 0.010 * m;
+  const warmLift = `radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,${w.toFixed(4)}) 0%, rgba(180,150,110,${(w*0.80).toFixed(4)}) 12%, rgba(180,150,110,${(w*0.55).toFixed(4)}) 25%, rgba(180,150,110,${(w*0.35).toFixed(4)}) 36%, rgba(180,150,110,${(w*0.20).toFixed(4)}) 45%, rgba(180,150,110,${(w*0.10).toFixed(4)}) 52%, rgba(180,150,110,${(w*0.04).toFixed(4)}) 58%, transparent 65%)`;
 
-  // Layer 3 — edge vignette — ultra-wide ellipse pushes edges off-screen.
-  // 12 stops for imperceptible transition. No visible oval.
-  const va = 0.08; // very subtle edge darkening — breaks flat monotone
-  const vignette = `radial-gradient(ellipse 160% 130% at 50% 50%, transparent 30%, rgba(0,0,0,${(va * 0.01).toFixed(4)}) 38%, rgba(0,0,0,${(va * 0.03).toFixed(4)}) 44%, rgba(0,0,0,${(va * 0.06).toFixed(4)}) 50%, rgba(0,0,0,${(va * 0.10).toFixed(4)}) 56%, rgba(0,0,0,${(va * 0.16).toFixed(4)}) 62%, rgba(0,0,0,${(va * 0.24).toFixed(4)}) 68%, rgba(0,0,0,${(va * 0.35).toFixed(4)}) 74%, rgba(0,0,0,${(va * 0.50).toFixed(4)}) 80%, rgba(0,0,0,${(va * 0.68).toFixed(4)}) 86%, rgba(0,0,0,${(va * 0.85).toFixed(4)}) 93%, rgba(0,0,0,${va}) 100%)`;
+  // Layer 3 — edge vignette — 20 stops for imperceptible transition
+  const va = 0.08;
+  const vignette = `radial-gradient(ellipse 160% 130% at 50% 50%, transparent 25%, rgba(0,0,0,${(va*0.003).toFixed(5)}) 30%, rgba(0,0,0,${(va*0.006).toFixed(5)}) 34%, rgba(0,0,0,${(va*0.01).toFixed(5)}) 38%, rgba(0,0,0,${(va*0.016).toFixed(5)}) 42%, rgba(0,0,0,${(va*0.024).toFixed(5)}) 46%, rgba(0,0,0,${(va*0.035).toFixed(5)}) 50%, rgba(0,0,0,${(va*0.05).toFixed(5)}) 54%, rgba(0,0,0,${(va*0.07).toFixed(5)}) 58%, rgba(0,0,0,${(va*0.095).toFixed(5)}) 62%, rgba(0,0,0,${(va*0.13).toFixed(5)}) 66%, rgba(0,0,0,${(va*0.17).toFixed(5)}) 70%, rgba(0,0,0,${(va*0.22).toFixed(5)}) 74%, rgba(0,0,0,${(va*0.30).toFixed(5)}) 78%, rgba(0,0,0,${(va*0.40).toFixed(5)}) 82%, rgba(0,0,0,${(va*0.52).toFixed(5)}) 86%, rgba(0,0,0,${(va*0.66).toFixed(5)}) 90%, rgba(0,0,0,${(va*0.82).toFixed(5)}) 94%, rgba(0,0,0,${(va*0.94).toFixed(5)}) 97%, rgba(0,0,0,${va}) 100%)`;
 
   // Layer 4 — top specular edge (141.71° key light catch)
-  const specularEdge = subdued
-    ? `linear-gradient(141.71deg, rgba(255,255,255,${(0.035 * m).toFixed(3)}) 0%, rgba(255,255,255,${(0.018 * m).toFixed(3)}) 40%, transparent 80%)`
-    : `linear-gradient(141.71deg, rgba(255,255,255,${(0.06 * m).toFixed(3)}) 0%, rgba(255,255,255,${(0.03 * m).toFixed(3)}) 40%, transparent 80%)`;
+  // Layer 4 — top specular edge (10 stops)
+  const s = subdued ? 0.035 * m : 0.06 * m;
+  const specularEdge = `linear-gradient(141.71deg, rgba(255,255,255,${s.toFixed(4)}) 0%, rgba(255,255,255,${(s*0.85).toFixed(4)}) 8%, rgba(255,255,255,${(s*0.68).toFixed(4)}) 16%, rgba(255,255,255,${(s*0.50).toFixed(4)}) 24%, rgba(255,255,255,${(s*0.36).toFixed(4)}) 32%, rgba(255,255,255,${(s*0.24).toFixed(4)}) 40%, rgba(255,255,255,${(s*0.14).toFixed(4)}) 50%, rgba(255,255,255,${(s*0.07).toFixed(4)}) 60%, rgba(255,255,255,${(s*0.02).toFixed(4)}) 70%, transparent 80%)`;
 
   // Layer 5 — grain texture on app body (desktop only — gives the matte surface
   // its characteristic tactile metal feel. NOT on panels/cards/VFs — only the body.)
