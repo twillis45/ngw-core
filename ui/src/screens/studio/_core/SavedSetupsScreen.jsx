@@ -172,7 +172,7 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {pattern && (
             <span style={{
-              fontSize: 11, fontWeight: 600, color: KEY_ACCENT,
+              fontSize: 13, fontWeight: 600, color: KEY_ACCENT,
               padding: '2px 8px', borderRadius: 6,
               background: accent(0.12),
               letterSpacing: '0.3px', ...FONT_SMOOTH,
@@ -182,7 +182,7 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
           )}
           {lightCount && (
             <span style={{
-              fontSize: 11, fontWeight: 500, color: steel(0.5), ...FONT_SMOOTH,
+              fontSize: 13, fontWeight: 500, color: steel(0.5), ...FONT_SMOOTH,
             }}>
               {lightCount === 1 ? '1 light' : `${lightCount} lights`}
             </span>
@@ -199,12 +199,12 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
               {setup.tag}
             </span>
           )}
-          <span style={{ fontSize: 11, color: steel(0.35), ...FONT_SMOOTH }}>
+          <span style={{ fontSize: 13, color: steel(0.35), ...FONT_SMOOTH }}>
             {formatDate(setup.timestamp ?? setup.created_at)}
           </span>
           {setup.note && (
             <span style={{
-              fontSize: 11, color: steel(0.4), fontStyle: 'italic',
+              fontSize: 13, color: steel(0.4), fontStyle: 'italic',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               maxWidth: 180, ...FONT_SMOOTH,
             }}>
@@ -475,7 +475,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
           <p style={{
-            margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+            margin: 0, fontSize: isDesktop ? 12 : 12, fontWeight: 600,
             color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH,
           }}>
             SAVED SETUPS
@@ -483,7 +483,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
         </div>
         {setups.length > 0 && (
           <p style={{
-            margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500,
+            margin: 0, fontSize: isDesktop ? 14 : 13, fontWeight: 500,
             color: steel(0.4), ...FONT_SMOOTH,
           }}>
             {setups.length} {setups.length === 1 ? 'setup' : 'setups'}

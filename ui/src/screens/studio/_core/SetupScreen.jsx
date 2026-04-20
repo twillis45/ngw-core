@@ -160,7 +160,7 @@ function estimateKeyHeightFt(heightClass, distanceFt, elevationDeg) {
 // ─── Row label ───────────────────────────────────────────────────────────────
 function RowLabel({ children }) {
   return (
-    <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>
+    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>
       {children}
     </p>
   );
@@ -242,7 +242,7 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
         WebkitUserSelect: 'none', userSelect: 'none',
       }}
     >
-      <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>{label}</p>
       <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{value}</p>
       {showSecondary && (
         <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
@@ -288,7 +288,7 @@ function LightRoleCard({ roleKey, role }) {
         borderRadius: 1.5, backgroundColor: color,
       }} />
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color, letterSpacing: '1px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: '1px', ...FONT_SMOOTH }}>
           {label}
         </span>
         <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
@@ -297,7 +297,7 @@ function LightRoleCard({ roleKey, role }) {
       </div>
       {primaryEvidence && (
         <p style={{
-          margin: '4px 0 0', fontSize: 10, fontWeight: 500, lineHeight: 1.35,
+          margin: '4px 0 0', fontSize: 12, fontWeight: 500, lineHeight: 1.35,
           color: C.textSubBold, ...FONT_SMOOTH,
         }}>
           {primaryEvidence}
@@ -370,14 +370,14 @@ function DesktopSpec({ label, value, hint, hintColor }) {
       boxShadow: 'inset 1px 1px 3px 0px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px 0px rgba(255,255,255,0.035)',
       minWidth: 0,
     }}>
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1.1px', ...FONT_SMOOTH }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '1.1px', ...FONT_SMOOTH }}>
         {label}
       </p>
       <p style={{ margin: '5px 0 0', fontSize: 15, fontWeight: 700, color: SM_C.textPrimary, lineHeight: 1.2, textShadow: '0 1px 0 rgba(0,0,0,0.5)', ...FONT_SMOOTH }}>
         {value}
       </p>
       {hint && (
-        <p style={{ margin: '3px 0 0', fontSize: 10, fontWeight: 500, color: hintColor || steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+        <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 500, color: hintColor || steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
           {hint}
         </p>
       )}
@@ -435,7 +435,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           IRIS COVERAGE
         </p>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
@@ -491,7 +491,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
           {pct.toFixed(1)}<span style={{ fontSize: 11, fontWeight: 700, color: steel(0.62), marginLeft: 3 }}>% iris</span>
         </span>
         {angularArea && (
-          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
             {angularArea}
           </span>
         )}
@@ -797,7 +797,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           }}>
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
-          <p style={{ margin: 0, fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
             LIGHTING SETUP
           </p>
         </div>
@@ -930,7 +930,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
                 <div style={{ padding: '12px 18px 0' }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                     KEY LIGHT
                   </p>
                 </div>
@@ -1021,7 +1021,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
                 <div style={{ padding: '10px 20px 0', alignSelf: 'stretch' }}>
-                  <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                     SETUP DIAGRAM
                   </p>
                 </div>
@@ -1086,7 +1086,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                   KEY LIGHT
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: 18, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>
@@ -1192,7 +1192,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             padding: '10px 16px', position: 'relative',
           }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: 10, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-            <p style={{ margin: '0 0 5px', fontSize: 10, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
+            <p style={{ margin: '0 0 5px', fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
               CAMERA
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
@@ -1298,7 +1298,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <PullTabDrawer label="SETUP GUIDE" open={!!drawers.setupGuide} onToggle={() => toggleDrawer('setupGuide')} maxH={400}>
             {rsBg && (
               <div style={{ marginBottom: rsNotes.length > 0 ? 10 : 0 }}>
-                <p style={{ margin: '0 0 4px', fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
                   BACKGROUND
                 </p>
                 <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>
@@ -1467,7 +1467,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
         <div style={{ position: 'relative', zIndex: 1, padding: '20px 20px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-            <p style={{ margin: 0, fontSize: 10, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
               KEY LIGHT — VIEWFINDER
             </p>
             <button onClick={closeViewfinder} style={{
@@ -1481,19 +1481,19 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
             {modName && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>MODIFIER</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>MODIFIER</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{modName}</p>
               </div>
             )}
             {positionDisplay && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>POSITION</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>POSITION</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{positionDisplay}</p>
               </div>
             )}
             {mod?.distRange && (
               <div>
-                <p style={{ margin: 0, fontSize: 9, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>DISTANCE</p>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.62), letterSpacing: '0.6px', ...FONT_SMOOTH }}>DISTANCE</p>
                 <p style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{mod.distRange}</p>
               </div>
             )}
@@ -1509,8 +1509,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
           {(directionDisplay || elevDisplay) && (
             <div style={{ display: 'flex', gap: 20, justifyContent: 'center', paddingTop: 4 }}>
-              {directionDisplay && <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), ...FONT_SMOOTH }}>{directionDisplay}</span>}
-              {elevDisplay && <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), ...FONT_SMOOTH }}>{elevDisplay} height</span>}
+              {directionDisplay && <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.55), ...FONT_SMOOTH }}>{directionDisplay}</span>}
+              {elevDisplay && <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.55), ...FONT_SMOOTH }}>{elevDisplay} height</span>}
             </div>
           )}
         </div>
@@ -1677,7 +1677,7 @@ function ModePickerSheet({ open, selectedMode, onSelectMode, onConfirm, onClose 
         }} />
 
         <p style={{
-          margin: 0, fontSize: 10, fontWeight: 700,
+          margin: 0, fontSize: 12, fontWeight: 700,
           color: '#c89b45', letterSpacing: '1.4px',
           textAlign: 'center', ...FONT_SMOOTH,
         }}>

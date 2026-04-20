@@ -52,7 +52,7 @@ function SubLabel({ children }) {
   return (
     <p style={{
       margin: '14px 0 6px',
-      fontSize: 11, fontWeight: 700,
+      fontSize: 12, fontWeight: 700,
       color: 'rgba(132, 158, 184,0.62)',
       letterSpacing: '1.2px',
       textTransform: 'uppercase',
@@ -260,7 +260,7 @@ function BlownHighlightsCanvas({ src, objectFit, objectPosition }) {
           padding: '6px 10px', borderRadius: 8,
           backgroundColor: 'rgba(8,9,12,0.78)',
           boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(255,255,255,0.06)',
-          fontSize: 10, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
           color: 'rgba(245,180,90,0.95)',
           letterSpacing: '0.6px',
           mixBlendMode: 'normal',
@@ -338,7 +338,7 @@ function ShadowSignature({ angleDeg, density }) {
             cursor: 'zoom-in',
           }}
         >
-          <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
             NOSE SHADOW
           </p>
           <svg viewBox="0 0 100 72" width="120" height="86" style={{ display: 'block', margin: '2px auto 0' }}>
@@ -391,7 +391,7 @@ function ShadowSignature({ angleDeg, density }) {
           display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: READOUT_LABEL, letterSpacing: '0.9px', ...FONT_SMOOTH }}>
               SHADOW DENSITY
             </p>
             <p style={{
@@ -513,7 +513,7 @@ function SceneField({ label, value }) {
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
       minWidth: 0,
     }}>
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
         {prettify(label, { upper: true })}
       </p>
       <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 500, color: C.textSubBold, lineHeight: '18px', textShadow: '0 1px 0 rgba(0,0,0,0.45)', ...FONT_SMOOTH }}>
@@ -556,7 +556,7 @@ function SignalGauge({ label, value, display, mode, accentColor }) {
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           {label}
         </p>
         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>
@@ -820,7 +820,7 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false, side 
           Suppressed in compact mode (twin instruments) — position is in the spec cell. */}
       {!compact && primaryHour != null && (
         <span style={{
-          fontSize: 9, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
           color: 'rgba(245,210,140,0.92)',
           letterSpacing: '1px',
           ...FONT_SMOOTH,
@@ -880,7 +880,7 @@ function LightComponentChips({ components }) {
           boxShadow: `0 0 5px ${color}`,
           flexShrink: 0,
         }} />
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           {label}
         </p>
       </div>
@@ -968,7 +968,7 @@ function DirectionalCompass({ direction }) {
         {cells}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           LIGHT DIRECTION
         </p>
         {keyQuadrant && (
@@ -1020,7 +1020,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           COLOR TEMPERATURE
         </p>
         <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
@@ -1510,7 +1510,7 @@ function SpecCell({ label, value, secondary, secondaryColor }) {
       backgroundColor: SPEC_CELL_BG,
       boxShadow: SPEC_CELL_SHADOW,
     }}>
-      <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.1px', ...FONT_SMOOTH }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.50), letterSpacing: '1.1px', ...FONT_SMOOTH }}>{label}</p>
       <p style={{ margin: '4px 0 0', fontSize: 15, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, ...FONT_SMOOTH, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
       {secondary && (
         <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: secondaryColor || C.confHigh, letterSpacing: '0.1px', ...FONT_SMOOTH }}>
@@ -1567,7 +1567,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
       boxShadow: 'inset 1px 1px 3px rgba(0,0,0,0.55), inset -0.5px -0.5px 0.5px rgba(255,255,255,0.035)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-        <p style={{ margin: 0, fontSize: 9, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           IRIS COVERAGE
         </p>
         <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
@@ -2511,7 +2511,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             {geometricBase && (
               <p style={{
                 margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
-                fontSize: isDesktop ? 15 : 11, lineHeight: '1.2',
+                fontSize: isDesktop ? 15 : 13, lineHeight: '1.2',
                 color: steel(0.55), letterSpacing: '0.5px',
                 ...FONT_SMOOTH,
                 textShadow: TEXT_SHADOW_ENGRAVED,
@@ -2836,7 +2836,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     compact
                   />
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                   CATCHLIGHT
                 </span>
               </div>
@@ -2854,7 +2854,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   <div style={{ height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <ModifierEmission family={sections.modifier.family} size={100} />
                   </div>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: steel(0.50), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                     MODIFIER
                   </span>
                 </div>
@@ -2877,9 +2877,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             {sections.catchlightModifier && !sections.modifier?.family && (
               <p style={{
                 margin: '6px 0 0',
-                fontSize: 12,
+                fontSize: 14,
                 fontWeight: 400,
-                lineHeight: '18px',
+                lineHeight: '20px',
                 color: C.textSub,
                 overflowWrap: 'anywhere',
                 ...FONT_SMOOTH,
@@ -3107,7 +3107,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   <DiagnosticsDisclosure>
                     {hasRawSignals && (
                       <div style={{ marginBottom: 12 }}>
-                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                           RAW SIGNALS
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -3159,7 +3159,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     )}
                     {sections.signalQuality.passSummaries && Object.keys(sections.signalQuality.passSummaries).length > 0 && (
                       <div style={{ marginBottom: 12 }}>
-                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                           PASS RELIABILITY
                         </p>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -3260,7 +3260,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     WebkitTapHighlightColor: 'transparent',
                   }}>
                   <span style={{ fontSize: 18, color: o.color, ...FONT_SMOOTH }}>{o.icon}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>{o.label}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>{o.label}</span>
                 </button>
               ))}
             </div>
@@ -3301,12 +3301,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 5v14l7-5 7 5V5" />
             </svg>
-            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.5px', color: steel(0.50), ...FONT_SMOOTH }}>Save This Setup</span>
+            <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.5px', color: steel(0.50), ...FONT_SMOOTH }}>Save This Setup</span>
           </button>
         )}
         {isPaid && setupSaved && (
           <div style={{ margin: '8px 0', padding: '12px', textAlign: 'center', borderRadius: 10, background: 'linear-gradient(141.71deg, #142218 0%, #0e1810 100%)', boxShadow: PANEL_SHADOW }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: C.confHigh, letterSpacing: '0.3px', ...FONT_SMOOTH }}>✓ Saved to your setups</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: C.confHigh, letterSpacing: '0.3px', ...FONT_SMOOTH }}>✓ Saved to your setups</span>
           </div>
         )}
 
@@ -3360,7 +3360,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               }}
             >
               <span style={{
-                fontSize: isDesktop ? 13 : 11, fontWeight: 700,
+                fontSize: isDesktop ? 14 : 14, fontWeight: 700,
                 color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
                 letterSpacing: isDesktop ? '3px' : '2.5px',
                 textTransform: 'uppercase',

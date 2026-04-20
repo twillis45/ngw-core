@@ -136,14 +136,14 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
           }}>
             <div style={{ display: 'grid', gap: 10 }}>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                   Name
                 </label>
                 <input value={uploadName} onChange={e => setUploadName(e.target.value)} placeholder="e.g. Sarah's headshot look" style={inputStyle} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                     Category
                   </label>
                   <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} style={{ ...inputStyle, appearance: 'none' }}>
@@ -153,20 +153,20 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontSize: 10, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                     Tags
                   </label>
                   <input value={uploadTags} onChange={e => setUploadTags(e.target.value)} placeholder="beauty, soft, clamshell" style={inputStyle} />
                 </div>
               </div>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                   Notes
                 </label>
                 <textarea value={uploadNotes} onChange={e => setUploadNotes(e.target.value)} placeholder="What makes this look work..." rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
               </div>
               <div>
-                <label style={{ fontSize: 10, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
                   Reference Image
                 </label>
                 <input ref={fileRef} type="file" accept="image/*" onChange={e => setUploadFile(e.target.files?.[0] || null)} style={{ fontSize: 12, color: steel(0.5) }} />
@@ -175,7 +175,7 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
                 onClick={handleUpload}
                 disabled={!uploadFile || !uploadName.trim() || uploading}
                 style={{
-                  padding: '10px 20px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700,
+                  padding: '10px 20px', borderRadius: 8, border: 'none', fontSize: 14, fontWeight: 700,
                   background: `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`,
                   color: steel(0.8), cursor: uploading ? 'wait' : 'pointer',
                   opacity: (!uploadFile || !uploadName.trim()) ? 0.4 : 1,

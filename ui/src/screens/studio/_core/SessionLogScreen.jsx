@@ -99,7 +99,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
                 padding: '5px 12px',
                 borderRadius: 6,
                 border: 'none',
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: 600,
                 letterSpacing: '0.04em',
                 textTransform: 'capitalize',
@@ -192,7 +192,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
                     {(a.pattern || 'unknown').replace(/_/g, ' ')}
                   </span>
                   <span style={{
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 12, fontWeight: 700,
                     padding: '2px 6px', borderRadius: 4,
                     background: `${confidenceColor(a.confidence || 0)}15`,
                     color: confidenceColor(a.confidence || 0),
@@ -200,7 +200,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
                     {Math.round((a.confidence || 0) * 100)}%
                   </span>
                 </div>
-                <div style={{ fontSize: 10, color: steel(0.35) }}>
+                <div style={{ fontSize: 12, color: steel(0.35) }}>
                   {formatDate(a.created_at)} · {formatTime(a.created_at)}
                 </div>
               </div>
@@ -219,7 +219,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
               style={{
                 padding: '6px 14px', borderRadius: 6, border: 'none',
                 background: C.slotBg, color: page <= 1 ? steel(0.2) : steel(0.6),
-                fontSize: 12, fontWeight: 600, cursor: page <= 1 ? 'default' : 'pointer',
+                fontSize: 13, fontWeight: 600, cursor: page <= 1 ? 'default' : 'pointer',
               }}
             >
               Prev
@@ -233,7 +233,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
               style={{
                 padding: '6px 14px', borderRadius: 6, border: 'none',
                 background: C.slotBg, color: page >= totalPages ? steel(0.2) : steel(0.6),
-                fontSize: 12, fontWeight: 600, cursor: page >= totalPages ? 'default' : 'pointer',
+                fontSize: 13, fontWeight: 600, cursor: page >= totalPages ? 'default' : 'pointer',
               }}
             >
               Next

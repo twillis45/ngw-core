@@ -259,7 +259,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
               {prettify(result.pattern, { title: true })}
             </p>
             {result.confidence != null && (
-              <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
+              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
                 {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
               </p>
             )}
@@ -340,7 +340,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                 }}>{currentStage.label}</p>
                 {/* Percentage readout */}
                 <p style={{
-                  margin: 0, fontWeight: 700, fontSize: 11, letterSpacing: '2px',
+                  margin: 0, fontWeight: 700, fontSize: 13, letterSpacing: '2px',
                   color: 'rgba(72,186,136,0.65)', textTransform: 'uppercase',
                   ...FS,
                 }}>{Math.round(progress)}%</p>
@@ -493,7 +493,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         position: 'absolute',
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: 'translateX(-50%)',
-        margin: 0, fontWeight: 600, fontSize: 12, lineHeight: '16px',
+        margin: 0, fontWeight: 600, fontSize: 13, lineHeight: '16px',
         color: analysisComplete ? 'rgba(140,225,180,0.92)' : 'rgba(140,225,180,0.85)',
         letterSpacing: '3px',
         textTransform: 'uppercase',

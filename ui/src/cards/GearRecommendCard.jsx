@@ -77,7 +77,7 @@ export default function GearRecommendCard({ pattern, userKit, diagramLights = []
         }}
       >
         <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: steel(0.4), letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: steel(0.4), letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 2 }}>
             GEAR READINESS
           </div>
           <div style={{ fontSize: 14, color: C.textPrimary, fontWeight: 600 }}>
@@ -107,7 +107,7 @@ export default function GearRecommendCard({ pattern, userKit, diagramLights = []
           {/* Modifier substitutions */}
           {analysis.modifiers.length > 0 && (
             <div style={{ padding: '10px 16px 6px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.35), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: steel(0.35), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 MODIFIERS
               </div>
               {analysis.modifiers.map((r, i) => (
@@ -122,13 +122,13 @@ export default function GearRecommendCard({ pattern, userKit, diagramLights = []
                         {(r.recommended || '').replace(/_/g, ' ')}
                       </span>
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_COLORS[r.status] }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLORS[r.status] }}>
                       {STATUS_LABELS[r.status]}
                     </span>
                   </div>
                   {r.status === 'substituted' && (
                     <div style={{ marginLeft: 15, marginTop: 4 }}>
-                      <div style={{ fontSize: 12, color: STATUS_COLORS.substituted }}>
+                      <div style={{ fontSize: 13, color: STATUS_COLORS.substituted }}>
                         Use: <strong>{(r.substitute || '').replace(/_/g, ' ')}</strong>
                         {r.compromiseLevel && r.compromiseLevel !== 'none' && (
                           <span style={{ marginLeft: 8, fontSize: 10, color: steel(0.4) }}>
@@ -151,7 +151,7 @@ export default function GearRecommendCard({ pattern, userKit, diagramLights = []
           {/* Light substitutions */}
           {analysis.lights.length > 0 && (
             <div style={{ padding: '6px 16px 14px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.35), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: steel(0.35), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8 }}>
                 LIGHTS
               </div>
               {analysis.lights.map((r, i) => (
@@ -164,7 +164,7 @@ export default function GearRecommendCard({ pattern, userKit, diagramLights = []
                     <span style={{ fontSize: 13, fontWeight: 600, color: C.textPrimary, flex: 1, textTransform: 'capitalize' }}>
                       {(r.recommended || '').replace(/_/g, ' ')}
                     </span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_COLORS[r.status] }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: STATUS_COLORS[r.status] }}>
                       {STATUS_LABELS[r.status]}
                     </span>
                   </div>

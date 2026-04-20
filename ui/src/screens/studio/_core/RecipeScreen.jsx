@@ -151,7 +151,7 @@ function PillButton({ label, active, onClick }) {
         boxShadow: active
           ? `0 0 0 1px ${accent(0.45)}, 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`
           : `0 2px 5px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04), inset -1px -1px 0 rgba(0,0,0,0.20)`,
-        fontSize: isDesktop ? 12 : 11, fontWeight: active ? 700 : 600,
+        fontSize: isDesktop ? 13 : 13, fontWeight: active ? 700 : 600,
         color: active ? KEY_ACCENT : steel(0.65),
         letterSpacing: '0.5px',
         WebkitTapHighlightColor: 'transparent',
@@ -171,7 +171,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
   const diffLabel = DIFFICULTY_LABEL[recipe.difficulty] || '';
   const diffColor = DIFFICULTY_COLOR[recipe.difficulty] || steel(0.6);
   const lightCount = recipe.setupTime?.split('·')[0]?.trim() || '';
-  const metaFs = isDesktop ? 11 : 10;
+  const metaFs = isDesktop ? 12 : 12;
 
   return (
     <div
@@ -335,11 +335,11 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
           }}>
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
-          <p style={{ margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+          <p style={{ margin: 0, fontSize: isDesktop ? 12 : 12, fontWeight: 600, color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
             LIGHTING RECIPES
           </p>
         </div>
-        <p style={{ margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500, color: steel(0.4), ...FONT_SMOOTH }}>
+        <p style={{ margin: 0, fontSize: isDesktop ? 14 : 13, fontWeight: 500, color: steel(0.4), ...FONT_SMOOTH }}>
           {sortedRecipes.length} setups
         </p>
       </div>

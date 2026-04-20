@@ -1768,7 +1768,7 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
                         </span>
                       )}
                       {l.continuous_power_hint && (
-                        <span className="diagram-legend__field" style={{ fontSize: '0.7em', opacity: 0.65 }}>
+                        <span className="diagram-legend__field" style={{ fontSize: '0.75em', opacity: 0.65 }}>
                           <span className="diagram-legend__field-key">LED</span>{l.continuous_power_hint}
                         </span>
                       )}

@@ -911,7 +911,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 </g>
               </svg>
               <p style={{
-                margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '2.8px',
+                margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '2.8px',
                 color: steel(0.42), textTransform: 'uppercase', ...FONT_SMOOTH,
               }}>LOAD PHOTO</p>
             </div>
@@ -1163,7 +1163,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.12em', color: steel(0.60) }}>Lighting</span></p>
         <p style={{
           margin: '3px 0 0 1px',
-          fontWeight: 700, fontSize: 12, lineHeight: '15px',
+          fontWeight: 700, fontSize: 14, lineHeight: '15px',
           color: 'rgba(235,240,245,0.95)', letterSpacing: '0.1px',
           WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
         }}>See how any photo was lit — and rebuild it.</p>
@@ -1200,7 +1200,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               {user.username || user.email}
             </p>
             {user.email && user.username && (
-              <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 500, color: steel(0.55), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
+              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 500, color: steel(0.55), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
                 {user.email}
               </p>
             )}
@@ -1221,7 +1221,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
                   WebkitTapHighlightColor: 'transparent', minHeight: 36,
                 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>{item.label}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, letterSpacing: '0.2px', ...FONT_SMOOTH }}>{item.label}</span>
                 <span style={{ fontSize: 13, color: steel(0.4), lineHeight: 1, ...FONT_SMOOTH }}>›</span>
               </button>
             ))}
@@ -1233,14 +1233,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
                 WebkitTapHighlightColor: 'transparent',
               }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(184,191,199,0.75)', letterSpacing: '0.3px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>Settings</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(184,191,199,0.75)', letterSpacing: '0.3px', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>Settings</span>
               <span style={{ fontSize: 13, color: steel(0.58), lineHeight: 1 }}>›</span>
             </button>
             <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.04)', margin: '8px 0' }} />
             <button onClick={() => { onLogout?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}
               style={{
                 backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: 0,
-                fontSize: 11, fontWeight: 600, color: 'rgba(180,60,60,0.75)', letterSpacing: '0.5px',
+                fontSize: 13, fontWeight: 600, color: 'rgba(180,60,60,0.75)', letterSpacing: '0.5px',
                 WebkitTapHighlightColor: 'transparent',
                 WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision',
               }}>
@@ -1248,7 +1248,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             </button>
           </>
         ) : (
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: steel(0.62), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 500, color: steel(0.62), WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>
             Not signed in
           </p>
         )}
@@ -1367,7 +1367,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               position: 'absolute', top: '50%', left: '50%',
               transform: 'translate(-50%, -50%)',
               margin: 0, width: '75%', textAlign: 'center',
-              fontSize: 11, fontWeight: 600, letterSpacing: '0.2px', lineHeight: '15px',
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.2px', lineHeight: '15px',
               color: 'rgba(237,154,56,0.85)',
               pointerEvents: 'none', zIndex: 7,
               WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
@@ -1729,7 +1729,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         position: 'absolute',
         top: LBL_TOP, left: '50%', width: BTN_D,
         transform: lblTransform,
-        margin: 0, fontWeight: 600, fontSize: isDesktop ? 13 : 12, lineHeight: '16px',
+        margin: 0, fontWeight: 600, fontSize: isDesktop ? 14 : 14, lineHeight: '16px',
         color: analyzeText, letterSpacing: '3px', textShadow: analyzeGlow,
         textTransform: 'uppercase',
         textAlign: 'center', whiteSpace: 'nowrap', pointerEvents: 'none',
