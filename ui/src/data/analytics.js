@@ -20,6 +20,11 @@ const MAX_EVENTS = 200;
  */
 export function trackEvent(name, data = {}) {
   try {
+    // Respect allowAnalytics setting — if disabled, skip tracking entirely
+    try {
+      const _s = JSON.parse(localStorage.getItem('ngw_settings') || '{}');
+      if (_s.allowAnalytics === false) return;
+    } catch { /* proceed if settings unreadable */ }
     if (import.meta.env?.DEV) {
       console.debug('[NGW]', name, data);
     }

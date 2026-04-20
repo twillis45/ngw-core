@@ -119,7 +119,14 @@ export async function fetchImageFromUrl(url) {
 export async function analyzeImage(file, { debug = false, signal } = {}) {
   const form = new FormData();
   form.append('image', file);
-  const query = debug ? '?debug=true' : '';
+  const params = new URLSearchParams();
+  if (debug) params.set('debug', 'true');
+  // Respect imageHandling setting — delete uploaded image after analysis
+  try {
+    const s = JSON.parse(localStorage.getItem('ngw_settings') || '{}');
+    if (s.imageHandling === 'delete') params.set('delete_after', 'true');
+  } catch { /* proceed without */ }
+  const query = params.toString() ? `?${params}` : '';
   return labFetch(`/analyze${query}`, { method: 'POST', body: form, signal });
 }
 

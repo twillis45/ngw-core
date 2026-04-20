@@ -33,7 +33,7 @@ const C = {
   glassSheen:  'rgba(178,191,209,0.07)',
 };
 
-export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, onRecipes, onSavedSetups, onBuildWizard, onMyKit, onSessionLog, onLookLibrary, onVideoCapture, lastAnalysisTime }) {
+export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult, user, onLogout, onSettings, onRecipes, onSavedSetups, onBuildWizard, onMyKit, onSessionLog, onLookLibrary, onClientBrief, onVideoCapture, lastAnalysisTime }) {
   const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isPressed,    setIsPressed]    = useState(false);
@@ -1228,6 +1228,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               { label: 'My Kit',           action: onMyKit },
               { label: 'Lighting Journal', action: onSessionLog },
               { label: 'Look Library', action: onLookLibrary },
+              { label: 'Client Brief', action: onClientBrief },
               { label: 'From Video', action: onVideoCapture },
             ].map(item => (
               <button key={item.label} onClick={() => { item.action?.(); setProfileOpen(false); softClickSound(); tapHaptic(); }}

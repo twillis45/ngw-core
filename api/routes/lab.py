@@ -143,6 +143,7 @@ async def lab_analyze(
     request: Request,
     image: UploadFile = File(...),
     debug: bool = Query(False, description="Generate debug overlay image"),
+    delete_after: bool = Query(False, description="Delete uploaded image after analysis (privacy mode)"),
     user: Dict = Depends(get_dev_user),
 ):
     """Run full pipeline analysis on an uploaded image.
@@ -705,6 +706,14 @@ async def lab_analyze(
             _replay_log.getLogger(__name__).warning(
                 "Build 3A: failed to persist replay blob: %s", _replay_err
             )
+
+        # Privacy mode: delete the uploaded image after analysis + replay persistence
+        if delete_after and fpath.exists():
+            try:
+                fpath.unlink()
+                logger.info("delete_after: removed %s", fpath)
+            except Exception as _del_err:
+                logger.warning("delete_after: failed to remove %s — %s", fpath, _del_err)
 
         return response
     except Exception as e:

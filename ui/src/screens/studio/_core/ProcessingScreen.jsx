@@ -298,11 +298,21 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'rgba(245,247,250,0.92)', letterSpacing: '-0.3px', textAlign: 'center', textShadow: '0 0 18px rgba(245,190,72,0.35), 0 2px 8px rgba(0,0,0,0.7)', ...FS }}>
               {prettify(result.pattern, { title: true })}
             </p>
-            {result.confidence != null && (
-              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
-                {result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ'} · {Math.round(result.confidence)}%
-              </p>
-            )}
+            {result.confidence != null && (() => {
+              const _s = loadSettings();
+              const _confMode = _s.confidenceDisplay || 'simple';
+              const _showPct = _s.showConfidenceScore !== false;
+              const _label = result.confidence >= 70 ? 'STRONG READ' : 'PARTIAL READ';
+              const _pct = `${Math.round(result.confidence)}%`;
+              const _text = _confMode === 'numeric' ? _pct
+                : _confMode === 'detailed' ? `${_label} · ${_pct}`
+                : _showPct ? `${_label} · ${_pct}` : _label;
+              return (
+                <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
+                  {_text}
+                </p>
+              );
+            })()}
           </div>
         )}
       </div>

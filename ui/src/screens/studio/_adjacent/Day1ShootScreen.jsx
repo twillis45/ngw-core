@@ -27,6 +27,7 @@ import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
+import { loadSettings } from '../../../data/settingsStore';
 import { postSignal } from '../../../data/signalsApi';
 import useStableViewport from '../../../utils/useStableViewport';
 import { getUser } from '../../../data/authApi';
@@ -855,7 +856,14 @@ function buildSteps({ pattern, confidence, modName, position, distance,
     {
       key: 'capture',
       title: 'TAKE THE SHOT',
-      lead: `You're set for ${pattern.toLowerCase()}. Take a photo and compare it to the reference.`,
+      lead: (() => {
+        try {
+          const _cp = (loadSettings().comparisonPrompts || 'auto');
+          if (_cp === 'off') return `You're set for ${pattern.toLowerCase()}. Take the shot.`;
+          if (_cp === 'low_conf_only' && confidence >= 70) return `You're set for ${pattern.toLowerCase()}. Take the shot.`;
+        } catch {}
+        return `You're set for ${pattern.toLowerCase()}. Take a photo and compare it to the reference.`;
+      })(),
       why: _p === 'rembrandt'
         ? `Check for three things: (1) Can you see the small triangle of light on the shadow cheek? That's the Rembrandt signature. (2) Is there a bright spark in both eyes? (3) Does the shadow side still show some detail — it shouldn't be pure black. If the triangle is missing, adjust position. If eyes are dark, lower the light.`
         : _p === 'butterfly'
@@ -2229,8 +2237,9 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
         </p>
       </div>
 
-      {/* WHY callout — clean readable layout */}
-      {step.why && (
+      {/* WHY callout — gated by explanationDepth setting.
+           brief: hidden entirely. standard: show. technical: show + raw signals would go here. */}
+      {step.why && (() => { try { return (loadSettings().explanationDepth || 'standard') !== 'brief'; } catch { return true; } })() && (
         <div style={{ padding: dk ? '18px 28px 0' : '14px 20px 0', position: 'relative', zIndex: 1 }}>
           <div style={{
             backgroundColor: 'rgba(18,19,22,0.85)',

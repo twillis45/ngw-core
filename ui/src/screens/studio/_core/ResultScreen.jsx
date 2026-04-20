@@ -1708,6 +1708,10 @@ function ModifierDetail({ modifier }) {
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry, isPaid = true, plan = 'enterprise', isAdmin = false }) {
   const isDesktop = useIsDesktop();
   const tilt = useDeviceTilt();
+  // Admin settings — confidence display mode
+  const _settings = loadSettings();
+  const confDisplayMode = _settings.confidenceDisplay || 'simple'; // 'simple' | 'numeric' | 'detailed'
+  const showConfPct = _settings.showConfidenceScore !== false; // default true
   // Hero column: 430 on mobile, 540 on desktop — the wider column lets the
   // photo breathe (less aggressive face crop) and makes room for a taller
   // hero block alongside the analytical panel. FitToViewport handles the
@@ -2499,14 +2503,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 ...FONT_SMOOTH,
                 textShadow: TEXT_SHADOW_ENGRAVED,
               }}>{prettify(pattern, { title: true })}</p>
-              {/* Confidence inline with pattern — one confident statement */}
-              <p style={{
-                margin: 0,
-                fontWeight: 700, fontSize: isDesktop ? 32 : 20, lineHeight: '1.1',
-                color: confColor,
-                ...FONT_SMOOTH,
-                textShadow: `0 0 16px ${confColor}40, 0 2px 6px rgba(0,0,0,0.5)`,
-              }}>{confidence}%</p>
+              {/* Confidence inline with pattern — respects confidenceDisplay + showConfidenceScore settings */}
+              {showConfPct && confDisplayMode !== 'simple' && (
+                <p style={{
+                  margin: 0,
+                  fontWeight: 700, fontSize: isDesktop ? 32 : 20, lineHeight: '1.1',
+                  color: confColor,
+                  ...FONT_SMOOTH,
+                  textShadow: `0 0 16px ${confColor}40, 0 2px 6px rgba(0,0,0,0.5)`,
+                }}>{confidence}%</p>
+              )}
+              {confDisplayMode === 'simple' && (
+                <p style={{
+                  margin: 0,
+                  fontWeight: 700, fontSize: isDesktop ? 18 : 14, lineHeight: '1.2',
+                  color: confColor, letterSpacing: '0.5px',
+                  ...FONT_SMOOTH,
+                  textShadow: `0 0 12px ${confColor}30, 0 1px 4px rgba(0,0,0,0.5)`,
+                }}>{confidence >= 70 ? 'Strong read' : 'Partial read'}</p>
+              )}
             </div>
             {geometricBase && (
               <p style={{
