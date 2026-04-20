@@ -193,7 +193,8 @@ export const GLASS_REFLECTION = [
 
 // Lens vignette — ultra-smooth falloff with 8 stops to prevent visible edge.
 // The transition zone spans 40–100% so there's no sharp ring.
-export const LENS_VIGNETTE = 'radial-gradient(ellipse 110% 95% at center, transparent 38%, rgba(0,0,0,0.01) 48%, rgba(0,0,0,0.03) 55%, rgba(0,0,0,0.06) 62%, rgba(0,0,0,0.10) 70%, rgba(0,0,0,0.15) 78%, rgba(0,0,0,0.20) 88%, rgba(0,0,0,0.25) 100%)';
+// Lens vignette — 16 stops for zero banding on mobile OLED
+export const LENS_VIGNETTE = 'radial-gradient(ellipse 110% 95% at center, transparent 35%, rgba(0,0,0,0.003) 40%, rgba(0,0,0,0.006) 44%, rgba(0,0,0,0.01) 48%, rgba(0,0,0,0.016) 52%, rgba(0,0,0,0.024) 56%, rgba(0,0,0,0.035) 60%, rgba(0,0,0,0.05) 64%, rgba(0,0,0,0.07) 68%, rgba(0,0,0,0.09) 72%, rgba(0,0,0,0.12) 76%, rgba(0,0,0,0.15) 80%, rgba(0,0,0,0.18) 85%, rgba(0,0,0,0.21) 90%, rgba(0,0,0,0.24) 95%, rgba(0,0,0,0.25) 100%)';
 
 // ─── VF dither noise layer ──────────────────────────────────────────────────
 // Subtle high-frequency noise breaks up gradient banding in LENS_VIGNETTE and

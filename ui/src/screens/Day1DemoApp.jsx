@@ -1360,7 +1360,7 @@ export default function Day1DemoApp() {
           designWidth={430}
           designHeight={932}
           maxScale={1.9}
-          tightness={0.96}
+          tightness={0.92}
         >
           {homeEl}
         </FitToViewport>

@@ -195,27 +195,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         </div>
         <ViewfinderHUD dimmed />
 
-        {/* ── Scan line — sweeps top-to-bottom showing the engine reading the image.
-            Visible on all viewports. Green-tinted to match analyzing accent. ── */}
-        {!analysisComplete && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              position: 'absolute', left: 0, right: 0, height: isDesktop ? 3 : 2,
-              background: `linear-gradient(90deg, transparent 0%, rgba(72,186,136,0.45) 30%, rgba(72,186,136,0.65) 50%, rgba(72,186,136,0.45) 70%, transparent 100%)`,
-              boxShadow: '0 0 20px rgba(72,186,136,0.30), 0 0 60px rgba(72,186,136,0.10)',
-              animation: 'procScanLine 3.2s ease-in-out infinite',
-            }} />
-            {/* Trailing glow beneath scan line */}
-            <div style={{
-              position: 'absolute', left: 0, right: 0, height: isDesktop ? 80 : 50,
-              background: 'linear-gradient(to bottom, rgba(72,186,136,0.06) 0%, transparent 100%)',
-              animation: 'procScanGlow 3.2s ease-in-out infinite',
-            }} />
-          </div>
-        )}
+        {/* Scan line removed — clean photo analysis without visual noise */}
 
         {/* ── Pulsing edge glow — ambient energy showing the machine is alive ── */}
         {!analysisComplete && (
