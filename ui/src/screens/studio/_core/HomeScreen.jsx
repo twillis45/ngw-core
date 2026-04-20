@@ -598,18 +598,27 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   const SC = STATE_COLORS[effectiveUiState];
   const ringBase  = `rgba(${SC.r},${SC.g},${SC.b},${SC.a})`;
   const ringBright= `rgba(${SC.r},${SC.g},${SC.b},${Math.min(SC.a + 0.22, 0.98).toFixed(2)})`;
-  const ringGlow  = `rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.50).toFixed(2)})`;
-  const ringDim   = `rgba(${SC.r},${SC.g},${SC.b},0.15)`;
+  const ringGlow  = `rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.60).toFixed(2)})`;
+  const ringDim   = `rgba(${SC.r},${SC.g},${SC.b},0.20)`;
 
-  // Ring box-shadow — directional arc (lit top-left, shadow bottom-right) + state glow
+  // Ring box-shadow — directional arc (lit top-left, shadow bottom-right) + state glow.
+  // Ring is now always visible (faint glow even at idle) so the button reads as an
+  // instrument with a perimeter indicator, not a flat circle.
   const ringBoxShadow = buttonState === 'pressed'
-    ? `0 0 0 1px ${ringDim}`
+    ? `0 0 0 1.5px ${ringDim}, 0 0 4px ${ringDim}`
     : [
-        `0 0 0 1px ${ringBase}`,
+        `0 0 0 1.5px ${ringBase}`,
         `-1px -1px 0 0 ${ringBright}`,
-        `1px 1px 0 0 rgba(0,0,0,0.28)`,
-        ...(effectiveUiState !== 'idle' ? [`0 0 ${effectiveUiState === 'error' ? 10 : 7}px ${ringGlow}`] : []),
-      ].join(', ');
+        `1px 1px 0 0 rgba(0,0,0,0.32)`,
+        // Glow always present — idle gets a faint halo, active states get stronger
+        effectiveUiState === 'idle'
+          ? `0 0 6px rgba(${SC.r},${SC.g},${SC.b},0.12)`
+          : `0 0 ${effectiveUiState === 'error' ? 14 : 12}px ${ringGlow}`,
+        // Second outer glow layer for depth
+        effectiveUiState !== 'idle'
+          ? `0 0 ${effectiveUiState === 'error' ? 24 : 20}px rgba(${SC.r},${SC.g},${SC.b},0.10)`
+          : '',
+      ].filter(Boolean).join(', ');
 
   // Ring animation — pulse for loading, urgent flash for error, single flare on load accept
   const ringAnimation = loadFlash                      ? 'ringLoadAccept 0.6s ease-out forwards'
@@ -1390,18 +1399,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               pointerEvents: 'none', zIndex: 7,
             }}>
               {!isUrlFetching && (<>
-                {/* Ghost portrait silhouette — photography DNA. Faint human outline
-                    hints at "this is where your portrait goes" without words.
-                    Scaled to ~40% of VF height so it reads as a clear silhouette. */}
-                <svg width="100" height="120" viewBox="0 0 60 72" fill="none" style={{
-                  opacity: 0.05, position: 'absolute', top: '32%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                }}>
-                  {/* Head */}
-                  <ellipse cx="30" cy="22" rx="12" ry="14" fill={steel(1)} />
-                  {/* Shoulders */}
-                  <path d="M10 72 Q10 48 30 44 Q50 48 50 72" fill={steel(1)} />
-                </svg>
                 {/* Viewfinder bracket icon — pulsing glow, proportionate to VF */}
                 <svg width="68" height="68" viewBox="0 0 38 38" fill="none" style={{
                   opacity: 0.80,
@@ -1671,8 +1668,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             : isHovered
               ? 'linear-gradient(141.71deg, #010102 0%, #020304 50%, #030405 100%)'
               : buttonState === 'alive'
-                ? 'linear-gradient(141.71deg, #2e3444 0%, #171c28 50%, #07080c 100%)'
-                : 'linear-gradient(141.71deg, #1e222a 0%, #0F1116 50%, #06070a 100%)',
+                ? 'linear-gradient(141.71deg, #343d52 0%, #1c2438 50%, #080a10 100%)'
+                : 'linear-gradient(141.71deg, #242a34 0%, #131720 50%, #06080c 100%)',
           boxShadow: buttonState === 'pressed'
             ? [
                 // Outer near-zero — button is seated; floor contact only
@@ -1711,16 +1708,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   ].join(', ')
                 : [
                     // Idle — X:Y matched to 141.71° diagonal
-                    '10px 10px 28px rgba(0,0,0,0.94)',
-                    '5px 5px 12px rgba(0,0,0,0.78)',
-                    '2px 2px 5px rgba(0,0,0,0.55)',
-                    // Outer side-wall catch — subtle, ring arc already handles top-left
-                    '-1px -1px 2px rgba(255,255,255,0.05)',
-                    // Inner chamfer — present but not competing with ring
-                    'inset 0 1.5px 0 rgba(255,255,255,0.13)',
-                    'inset 1.5px 0 0 rgba(255,255,255,0.07)',
+                    '12px 12px 32px rgba(0,0,0,0.96)',
+                    '6px 6px 14px rgba(0,0,0,0.82)',
+                    '2px 2px 6px rgba(0,0,0,0.60)',
+                    // Outer side-wall catch — visible edge highlight
+                    '-1px -1px 3px rgba(255,255,255,0.08)',
+                    // Inner chamfer — polished machined edge catches key light
+                    'inset 0 2px 0 rgba(255,255,255,0.18)',
+                    'inset 2px 0 0 rgba(255,255,255,0.10)',
                     // Bottom-right chamfer — in shadow
-                    'inset -1px -1px 0 rgba(0,0,0,0.60)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.65)',
                   ].join(', '),
           animation: buttonState === 'pressed' || isHovered ? 'none' : 'btnBreath 5.2s cubic-bezier(0.42,0.00,0.20,1.00) infinite',
           transition: btnTransition,
