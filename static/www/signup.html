@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Sign Up — NGW</title>
+  <title>Sign Up — No Guesswork Lighting</title>
+  <meta name="description" content="Create your free No Guesswork Lighting account. Get 3 free lighting analyses — upload a photo, get the complete setup in seconds."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/www/css/marketing.css"/>
@@ -46,8 +47,15 @@
 <!-- ── Signup Form ─────────────────────────────────── -->
 <main class="auth">
   <div class="auth__card">
+    <div style="text-align:center;margin-bottom:20px">
+      <svg width="36" height="36" viewBox="0 0 48 48" fill="none" style="margin:0 auto 8px">
+        <rect x="4" y="4" width="40" height="40" rx="12" stroke="var(--accent, #849eb8)" stroke-width="2" fill="none"/>
+        <path d="M18 14 L24 34 L30 14" stroke="var(--accent, #849eb8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="24" cy="14" r="3" fill="var(--accent, #849eb8)"/>
+      </svg>
+    </div>
     <h1>Create your account</h1>
-    <p>Start analyzing lighting in seconds</p>
+    <p>3 free analyses included. No credit card required.</p>
 
     <form id="signupForm">
       <div class="auth__field">
@@ -60,17 +68,24 @@
       </div>
       <div class="auth__field">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Create a password" required autocomplete="new-password" minlength="6"/>
+        <input type="password" id="password" name="password" placeholder="6 characters minimum" required autocomplete="new-password" minlength="6"/>
       </div>
-      <div id="signupError" style="color:#ff6b6b;font-size:.875rem;margin-bottom:12px;display:none"></div>
+      <div id="signupError" style="color:var(--error, #f87171);font-size:.875rem;margin-bottom:12px;display:none"></div>
       <button type="submit" class="btn btn--primary" id="signupBtn">Create Account</button>
     </form>
 
-    <div class="auth__footer">
+    <div class="auth__footer" style="margin-top:16px">
       Already have an account? <a href="/login">Log in</a>
     </div>
   </div>
 </main>
+
+<!-- ── Footer ──────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__bottom" style="border-top:none;margin-top:0;padding-top:0">&copy; 2026 No Guesswork Lighting. All rights reserved.</div>
+  </div>
+</footer>
 
 <script src="/www/js/marketing.js"></script>
 <script>

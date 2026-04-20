@@ -92,13 +92,13 @@ def send_verification_email(to_email: str, token: str) -> None:
 </html>"""
 
     text = (
-        f"Verify your NGW email address\n\n"
+        f"Verify your email address\n\n"
         f"Click the link below to confirm your address:\n{verify_url}\n\n"
         f"This link expires in 24 hours.\n"
         f"If you didn't create an account, ignore this email."
     )
 
-    _send(to_email, "Verify your NGW email address", html, text)
+    _send(to_email, "Verify your email address", html, text)
 
 
 def send_magic_link_email(to_email: str, token: str) -> None:
@@ -109,16 +109,16 @@ def send_magic_link_email(to_email: str, token: str) -> None:
 <body style="font-family:sans-serif;background:#0f1117;color:#f9fafb;padding:40px 20px;margin:0">
   <div style="max-width:480px;margin:0 auto;background:#1a1d26;border-radius:12px;padding:36px 32px;border:1px solid #2a2d3a">
     <div style="text-align:center;margin-bottom:28px">
-      <p style="color:#C8A96E;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
+      <p style="color:#849eb8;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
     </div>
     <h1 style="font-size:1.375rem;font-weight:700;text-align:center;margin:0 0 8px">Your sign-in link</h1>
     <p style="color:#9ca3af;text-align:center;font-size:.9rem;margin:0 0 28px">
       Click below to sign in instantly — no password needed. This link expires in 15 minutes.
     </p>
     <a href="{magic_url}"
-       style="display:block;text-align:center;background:#C8A96E;color:#0f1117;text-decoration:none;
+       style="display:block;text-align:center;background:#849eb8;color:#0f1117;text-decoration:none;
               padding:14px 24px;border-radius:8px;font-weight:700;font-size:1rem;margin-bottom:24px">
-      Sign in to NGW
+      Sign In
     </a>
     <p style="color:#6b7280;font-size:.8rem;text-align:center;margin:0">
       If you didn't request this link, you can safely ignore this email.
@@ -128,13 +128,13 @@ def send_magic_link_email(to_email: str, token: str) -> None:
 </html>"""
 
     text = (
-        f"Your NGW sign-in link\n\n"
+        f"Your sign-in link\n\n"
         f"Click the link below to sign in — no password needed:\n{magic_url}\n\n"
         f"This link expires in 15 minutes.\n"
         f"If you didn't request this, ignore this email."
     )
 
-    _send(to_email, "Your NGW sign-in link", html, text)
+    _send(to_email, "Your sign-in link", html, text)
 
 
 def send_password_reset_email(to_email: str, token: str) -> None:
@@ -145,14 +145,14 @@ def send_password_reset_email(to_email: str, token: str) -> None:
 <body style="font-family:sans-serif;background:#0f1117;color:#f9fafb;padding:40px 20px;margin:0">
   <div style="max-width:480px;margin:0 auto;background:#1a1d26;border-radius:12px;padding:36px 32px;border:1px solid #2a2d3a">
     <div style="text-align:center;margin-bottom:28px">
-      <p style="color:#C8A96E;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
+      <p style="color:#849eb8;font-weight:700;font-size:1.1rem;margin:0">No Guesswork Lighting</p>
     </div>
     <h1 style="font-size:1.375rem;font-weight:700;text-align:center;margin:0 0 8px">Reset your password</h1>
     <p style="color:#9ca3af;text-align:center;font-size:.9rem;margin:0 0 28px">
       Click below to set a new password. This link expires in 1 hour.
     </p>
     <a href="{reset_url}"
-       style="display:block;text-align:center;background:#C8A96E;color:#0f1117;text-decoration:none;
+       style="display:block;text-align:center;background:#849eb8;color:#0f1117;text-decoration:none;
               padding:14px 24px;border-radius:8px;font-weight:700;font-size:1rem;margin-bottom:24px">
       Reset Password
     </a>
@@ -165,10 +165,10 @@ def send_password_reset_email(to_email: str, token: str) -> None:
 </html>"""
 
     text = (
-        f"Reset your NGW password\n\n"
+        f"Reset your password\n\n"
         f"Click the link below to set a new password:\n{reset_url}\n\n"
         f"This link expires in 1 hour.\n"
         f"If you didn't request this, ignore this email — your password won't change."
     )
 
-    _send(to_email, "Reset your NGW password", html, text)
+    _send(to_email, "Reset your password", html, text)

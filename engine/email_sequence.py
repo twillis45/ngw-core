@@ -50,13 +50,13 @@ SEQUENCE: List[Dict[str, Any]] = [
     {
         "id": "day2",
         "day": 2,
-        "subject": "How NGW reads lighting from a single photo",
+        "subject": "How we read lighting from a single photo",
         "preview": "The 7-stage pipeline behind your analysis results.",
     },
     {
         "id": "day5",
         "day": 5,
-        "subject": "Can you identify this lighting setup? (NGW can — in seconds)",
+        "subject": "Can you identify this lighting setup? (We can — in seconds)",
         "preview": "Rembrandt, loop, butterfly, split — and 24 more patterns.",
     },
     {
@@ -82,7 +82,7 @@ def _base_html(preview: str, body_html: str, app_url: str) -> str:
 <head>
   <meta charset="utf-8"/>
   <meta name="x-apple-disable-message-reformatting"/>
-  <title>No Guesswork</title>
+  <title>No Guesswork Lighting</title>
 </head>
 <body style="margin:0;padding:0;background:#0E0F12;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
   <!-- preview text (hidden) -->
@@ -92,7 +92,7 @@ def _base_html(preview: str, body_html: str, app_url: str) -> str:
       <table width="560" cellpadding="0" cellspacing="0" style="background:#17191F;border:1px solid #2A2E38;border-radius:12px;padding:40px;">
         <tr><td>
           <div style="margin-bottom:28px;">
-            <span style="font-size:1.25rem;font-weight:700;color:#F4F6F8;">No Guesswork</span>
+            <span style="font-size:1.25rem;font-weight:700;color:#F4F6F8;">No Guesswork Lighting</span>
           </div>
           {body_html}
           <hr style="border:none;border-top:1px solid #2A2E38;margin:28px 0;"/>
@@ -127,7 +127,7 @@ def _build_day2(greeting: str, app_url: str) -> tuple[str, str]:
       <p {_body_text()}>{greeting}</p>
       <p {_body_text()}>
         You joined the waitlist because you want to stop guessing at lighting setups.
-        Here's how NGW actually does it — no fluff.
+        Here's how it actually works — no fluff.
       </p>
       <div style="background:#1E2129;border-radius:8px;padding:20px;margin-bottom:24px;">
         <p style="color:#A9AFBB;font-size:0.875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin:0 0 12px;">
@@ -151,7 +151,7 @@ def _build_day2(greeting: str, app_url: str) -> tuple[str, str]:
     """
     text = f"""{greeting}
 
-Here's how NGW actually analyzes a photo (no fluff):
+Here's how the analysis actually works (no fluff):
 
 1. Face & Region Detection — isolates subject from background
 2. Shadow Direction Analysis — maps key light from shadow cast
@@ -183,7 +183,7 @@ def _build_day5(greeting: str, app_url: str) -> tuple[str, str]:
       </p>
       <div style="background:#1E2129;border-radius:8px;padding:20px;margin-bottom:24px;">
         <p style="color:#A9AFBB;font-size:0.875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;margin:0 0 12px;">
-          What NGW detects in every photo
+          What gets detected in every photo
         </p>
         <ul style="color:#F4F6F8;font-size:0.9375rem;line-height:1.8;margin:0;padding-left:20px;">
           <li>Lighting pattern (28 classifications)</li>
@@ -205,7 +205,7 @@ Quick question: when you look at a portrait, can you immediately name the lighti
 
 Most photographers can't — and that's not a skill gap, it's a practice gap.
 
-NGW detects in every photo:
+What gets detected in every photo:
 - Lighting pattern (28 classifications)
 - Modifier family — octabox, beauty dish, strip, parabolic, reflector
 - Key light position — front, 45°, 90°, backlit
@@ -239,7 +239,7 @@ def _build_day10(greeting: str, app_url: str) -> tuple[str, str]:
       </div>
       <p {_body_text()}>
         We're keeping early access small on purpose. A smaller first group means faster feedback,
-        better support, and a tighter product. Everyone who gets in early shapes what NGW becomes.
+        better support, and a tighter product. Everyone who gets in early shapes what we build next.
       </p>
       <p {_body_text()}>
         When your batch opens, you'll get a personal invite link.
@@ -257,7 +257,7 @@ Waitlist status:
 - Your spot is still reserved — but the batches are moving
 
 We're keeping early access small on purpose. A smaller first group means faster feedback,
-better support, and a tighter product. Everyone who gets in early shapes what NGW becomes.
+better support, and a tighter product. Everyone who gets in early shapes what we build next.
 
 When your batch opens, you'll get a personal invite link. No generic sign-up — direct access.
 
@@ -293,7 +293,7 @@ def _build_day14(greeting: str, app_url: str) -> tuple[str, str]:
       </p>
       {_cta_button(f"{app_url}/early-access", "Claim your spot now →")}
       <p {_body_text(color="#A9AFBB")}>
-        If you've already decided NGW isn't for you, no worries — you won't hear from me again.
+        If you've already decided this isn't for you, no worries — you won't hear from me again.
         If you're in, your invite link is coming soon.
       </p>
     """
@@ -313,7 +313,7 @@ Once the waitlist closes, the 3-months-free offer disappears with it.
 
 {app_url}/early-access
 
-If you've already decided NGW isn't for you, no worries — you won't hear from me again.
+If you've already decided this isn't for you, no worries — you won't hear from me again.
 If you're in, your invite link is coming soon.
 """
     return _base_html(SEQUENCE[3]["preview"], html_body, app_url), text

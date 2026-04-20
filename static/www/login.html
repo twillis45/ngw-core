@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Log In — NGW</title>
+  <title>Log In — No Guesswork Lighting</title>
+  <meta name="description" content="Log in to your No Guesswork Lighting account. Access your lighting analyses, saved setups, and reference library."/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/www/css/marketing.css"/>
@@ -46,9 +47,17 @@
 <!-- ── Login Form ──────────────────────────────────── -->
 <main class="auth">
   <div class="auth__card">
+    <div style="text-align:center;margin-bottom:20px">
+      <svg width="36" height="36" viewBox="0 0 48 48" fill="none" style="margin:0 auto 8px">
+        <rect x="4" y="4" width="40" height="40" rx="12" stroke="var(--accent, #849eb8)" stroke-width="2" fill="none"/>
+        <path d="M18 14 L24 34 L30 14" stroke="var(--accent, #849eb8)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <circle cx="24" cy="14" r="3" fill="var(--accent, #849eb8)"/>
+      </svg>
+    </div>
     <h1>Welcome back</h1>
-    <p>Log in to your NGW account</p>
+    <p>Sign in to your lighting workspace</p>
 
+    <!-- Password login form -->
     <form id="loginForm">
       <div class="auth__field">
         <label for="email">Email</label>
@@ -56,22 +65,45 @@
       </div>
       <div class="auth__field">
         <label for="password">Password</label>
-        <input type="password" id="password" name="password" placeholder="Your password" required autocomplete="current-password"/>
+        <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password"/>
       </div>
-      <div id="loginError" style="color:#ff6b6b;font-size:.875rem;margin-bottom:12px;display:none"></div>
+      <div id="loginError" style="color:var(--error, #f87171);font-size:.875rem;margin-bottom:12px;display:none"></div>
       <button type="submit" class="btn btn--primary" id="loginBtn">Log In</button>
     </form>
 
-    <div class="auth__footer" style="margin-bottom:8px">
-      Don't have an account? <a href="/signup">Sign up</a>
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0">
+      <div style="flex:1;height:1px;background:var(--border, rgba(132,158,184,0.08))"></div>
+      <span style="font-size:.75rem;color:var(--text-dim, #9ca3af);text-transform:uppercase;letter-spacing:0.06em;font-weight:600">or</span>
+      <div style="flex:1;height:1px;background:var(--border, rgba(132,158,184,0.08))"></div>
+    </div>
+
+    <!-- Magic link -->
+    <button type="button" class="btn btn--ghost" id="magicLinkBtn" style="width:100%;font-size:.875rem">Sign in with email link</button>
+    <div id="magicLinkSuccess" style="display:none;text-align:center;margin-top:12px;padding:12px 16px;background:rgba(72,186,136,0.08);border:1px solid rgba(72,186,136,0.20);border-radius:8px;font-size:.875rem;color:var(--success, rgba(72,186,136,0.90))">
+      Check your inbox — a sign-in link is on the way.
+    </div>
+
+    <div class="auth__footer" style="margin-bottom:8px;margin-top:16px">
+      Don&rsquo;t have an account? <a href="/signup">Sign up free</a>
     </div>
     <div class="auth__footer">
       <button type="button" class="auth__reset-link" id="forgotBtn">Forgot your password?</button>
     </div>
 
-    <div id="resetInfo" class="auth__reset-info" style="display:none">
-      <strong>To reset your password:</strong>
-      <p>Email <a href="mailto:hello@noguesswork.com">hello@noguesswork.com</a> from the address on your account. We&rsquo;ll send a reset link within a few hours.</p>
+    <!-- Password reset form (inline, automated) -->
+    <div id="resetPanel" style="display:none;margin-top:16px">
+      <div class="auth__reset-info">
+        <strong>Reset your password</strong>
+        <div class="auth__field" style="margin-bottom:12px">
+          <input type="email" id="resetEmail" placeholder="Enter your email address" style="width:100%;padding:10px 14px;background:#08090c;border:none;border-radius:8px;color:var(--text, #f9fafb);font-size:.875rem;font-family:inherit;box-shadow:inset 2px 2px 5px rgba(0,0,0,0.50),inset -0.5px -0.5px 1px rgba(255,255,255,0.012)"/>
+        </div>
+        <button type="button" class="btn btn--primary" id="resetBtn" style="width:100%;padding:10px 20px;font-size:.8125rem">Send Reset Link</button>
+        <div id="resetSuccess" style="display:none;margin-top:10px;font-size:.8125rem;color:var(--success, rgba(72,186,136,0.90))">
+          If that email has an account, a reset link was sent. Check your inbox.
+        </div>
+        <div id="resetError" style="display:none;margin-top:10px;font-size:.8125rem;color:var(--error, #f87171)"></div>
+      </div>
     </div>
   </div>
 </main>
@@ -79,29 +111,111 @@
 <style>
 .auth__reset-link {
   background: none; border: none; padding: 0;
-  color: var(--accent, #4DA3FF); font-size: .875rem;
+  color: var(--accent, #849eb8); font-size: .875rem;
   cursor: pointer; text-decoration: underline;
 }
 .auth__reset-link:hover { opacity: .8; }
 .auth__reset-info {
-  margin-top: 16px; padding: 14px 16px;
-  background: rgba(77,163,255,.08);
-  border: 1px solid rgba(77,163,255,.25);
-  border-radius: 8px; font-size: .875rem;
+  padding: 16px;
+  background: rgba(132,158,184,.06);
+  border: 1px solid rgba(132,158,184,.15);
+  border-radius: 10px; font-size: .875rem;
   line-height: 1.55; color: var(--text-dim, #9ca3af);
 }
-.auth__reset-info strong { color: var(--text, #f9fafb); display: block; margin-bottom: 6px; }
-.auth__reset-info a { color: var(--accent, #4DA3FF); }
+.auth__reset-info strong { color: var(--text, #f9fafb); display: block; margin-bottom: 10px; font-size: .9375rem; }
 </style>
+
+<!-- ── Footer ──────────────────────────────────────── -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer__bottom" style="border-top:none;margin-top:0;padding-top:0">&copy; 2026 No Guesswork Lighting. All rights reserved.</div>
+  </div>
+</footer>
+
 <script src="/www/js/marketing.js"></script>
 <script>
+/* Toggle reset panel */
 document.getElementById('forgotBtn').addEventListener('click', function() {
-  var el = document.getElementById('resetInfo');
+  var el = document.getElementById('resetPanel');
   var shown = el.style.display !== 'none';
   el.style.display = shown ? 'none' : 'block';
-  this.textContent = shown ? 'Forgot your password?' : 'Hide reset instructions';
+  this.textContent = shown ? 'Forgot your password?' : 'Cancel';
+  if (!shown) {
+    var loginEmail = document.getElementById('email').value;
+    if (loginEmail) document.getElementById('resetEmail').value = loginEmail;
+    document.getElementById('resetEmail').focus();
+  }
 });
 
+/* Password reset — calls automated API */
+document.getElementById('resetBtn').addEventListener('click', async function() {
+  var btn = this;
+  var email = document.getElementById('resetEmail').value.trim();
+  var successEl = document.getElementById('resetSuccess');
+  var errorEl = document.getElementById('resetError');
+  successEl.style.display = 'none';
+  errorEl.style.display = 'none';
+  if (!email || !email.includes('@')) {
+    errorEl.textContent = 'Please enter a valid email address.';
+    errorEl.style.display = 'block';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    var res = await fetch('/api/auth/password-reset/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    if (!res.ok) {
+      var data = await res.json();
+      throw new Error(data.detail || 'Something went wrong.');
+    }
+    successEl.style.display = 'block';
+    btn.textContent = 'Sent';
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Send Reset Link';
+  }
+});
+
+/* Magic link */
+document.getElementById('magicLinkBtn').addEventListener('click', async function() {
+  var email = document.getElementById('email').value.trim();
+  var successEl = document.getElementById('magicLinkSuccess');
+  var errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Enter your email address above, then click this button.';
+    errEl.style.display = 'block';
+    return;
+  }
+  this.disabled = true;
+  this.textContent = 'Sending link...';
+  try {
+    var res = await fetch('/api/auth/magic-link/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    if (!res.ok) {
+      var data = await res.json();
+      throw new Error(data.detail || 'Something went wrong.');
+    }
+    successEl.style.display = 'block';
+    this.style.display = 'none';
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+    this.disabled = false;
+    this.textContent = 'Sign in with email link';
+  }
+});
+
+/* Password login */
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   var btn = document.getElementById('loginBtn');

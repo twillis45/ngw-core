@@ -83,7 +83,7 @@ def _send_confirmation(email: str, first_name: str) -> None:
 
     greeting = f"Hi {first_name}," if first_name else "Hey,"
 
-    subject = "You're on the No Guesswork waitlist 📸"
+    subject = "You're on the No Guesswork Lighting waitlist 📸"
 
     html_body = f"""<!DOCTYPE html>
 <html>
@@ -95,7 +95,7 @@ def _send_confirmation(email: str, first_name: str) -> None:
         <tr><td>
           <!-- Logo -->
           <div style="margin-bottom:28px;">
-            <span style="font-size:1.25rem;font-weight:700;color:#F4F6F8;">No Guesswork</span>
+            <span style="font-size:1.25rem;font-weight:700;color:#F4F6F8;">No Guesswork Lighting</span>
           </div>
 
           <!-- Greeting -->
@@ -139,7 +139,7 @@ def _send_confirmation(email: str, first_name: str) -> None:
 
     text_body = f"""{greeting}
 
-You're on the No Guesswork waitlist.
+You're on the No Guesswork Lighting waitlist.
 
 We're onboarding photographers in small batches. First 500 get 3 months free + locked-in pricing.
 You'll get a personal invite link when your spot opens.
