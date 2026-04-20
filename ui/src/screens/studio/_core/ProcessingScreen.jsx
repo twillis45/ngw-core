@@ -28,18 +28,18 @@ import ExifStrip from '../_shared/ExifStrip';
 
 const C = { ...SM_C, border: 'rgba(167,173,183,0.06)' };
 
-// Pipeline stage descriptions — real engine steps in photographer-friendly language.
-// Timed to roughly track actual analysis cadence (~6–8s total).
-// Pipeline stage labels — short enough to read in <2s at glance speed.
-// Detail line removed; the label alone carries the narrative.
+// Pipeline stage labels — photographer's internal monologue.
+// Each line is what a master lighter would think while studying the print.
+// Not technical engine steps, not generic loading — the thought process
+// of someone who actually understands light reading a portrait.
 const STAGE_MESSAGES = [
-  { label: 'Reading the light…' },
-  { label: 'Mapping catchlights…' },
-  { label: 'Tracing shadows…' },
-  { label: 'Identifying pattern…' },
-  { label: 'Analyzing modifier…' },
-  { label: 'Counting sources…' },
-  { label: 'Building blueprint…' },
+  { label: 'Where is the key coming from…' },
+  { label: 'Reading the catchlights…' },
+  { label: 'Following the shadow edge…' },
+  { label: 'Checking the fill side…' },
+  { label: 'What modifier makes this wrap…' },
+  { label: 'How many sources in the setup…' },
+  { label: 'Building the recreation blueprint…' },
 ];
 
 export default function ProcessingScreen({ imagePreview, analysisComplete, exifData, result, onCancel }) {
