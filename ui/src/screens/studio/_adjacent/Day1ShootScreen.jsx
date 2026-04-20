@@ -1184,6 +1184,8 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   fullWidth
                   heightDisplay={heightDisplay}
                   modName={modName}
+                heroFitMode={heroFitMode}
+                onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
                 />
               </div>
             )}
@@ -1954,6 +1956,8 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
             mode="photographer"
             heightDisplay={heightDisplay}
             modName={modName}
+          heroFitMode={heroFitMode}
+          onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
           />
         </div>
       )}
@@ -2193,6 +2197,8 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
             mode="learning"
             heightDisplay={heightDisplay}
             modName={modName}
+          heroFitMode={heroFitMode}
+          onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
           />
         </div>
       )}
@@ -2250,7 +2256,7 @@ function LearningBody({ step, imagePreview, result, stepKey, position, angleDeg,
 // ─── Reference photo with per-step catchlight / key-light overlays ─────────
 // Role-aware: Photographer gets minimal clinical markers; Learning gets
 // labeled educational annotations. Assistant never renders a photo at all.
-function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300, fullWidth = false, heightDisplay = '—', modName = '' }) {
+function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDeg, distance, pattern, mode = 'photographer', maxHeight = 300, fullWidth = false, heightDisplay = '—', modName = '', heroFitMode = 'contain', onToggleFit }) {
   const imgDim = result?._raw?.image_dimensions
     || result?._raw?.description?.size
     || { width: 1177, height: 1592 };
@@ -2459,10 +2465,10 @@ function ReferenceWithOverlay({ imagePreview, result, stepKey, position, angleDe
     }}>
       <img src={imagePreview} alt="Reference"
         style={{ width: '100%', height: '100%', objectFit: heroFitMode, display: 'block', transition: 'object-fit 0.3s ease' }}
-        onClick={() => { setHeroFitMode(f => f === 'contain' ? 'cover' : 'contain'); tapHaptic(); }}
+        onClick={() => { onToggleFit?.(); tapHaptic(); }}
       />
       {/* Fit mode toggle — bottom-right corner */}
-      <button onClick={(e) => { e.stopPropagation(); setHeroFitMode(f => f === 'contain' ? 'cover' : 'contain'); tapHaptic(); }}
+      <button onClick={(e) => { e.stopPropagation(); onToggleFit?.(); tapHaptic(); }}
         style={{
           position: 'absolute', bottom: 8, right: 8, zIndex: 10,
           width: 28, height: 28, borderRadius: 6,
