@@ -1821,18 +1821,27 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {/* Engraved instrument label — cohesive with the dome button above.
-              Reads as a secondary action on the same panel surface, not a separate UI element. */}
-          <p style={{
-            margin: 0,
-            fontSize: 11, fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase',
-            color: sampleLoading ? steel(0.30) : steel(0.38),
-            textShadow: '0 1px 1px rgba(0,0,0,0.8), 0 -1px 0 rgba(255,255,255,0.03)',
-            WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
-            textRendering: 'geometricPrecision',
+          {/* Backlit engraved label — cohesive with dome but stands out via glow.
+              Simulates a backlit label on a camera body: etched letters with faint
+              LED illumination bleeding through from behind. */}
+          <div style={{
+            padding: '8px 20px',
+            borderRadius: 8,
+            background: 'rgba(132,158,184,0.04)',
+            border: `1px solid rgba(132,158,184,0.08)`,
+            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.02)',
           }}>
-            {sampleLoading ? 'Loading…' : 'Or try a sample →'}
-          </p>
+            <p style={{
+              margin: 0,
+              fontSize: 12, fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase',
+              color: sampleLoading ? steel(0.30) : steel(0.52),
+              textShadow: `0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.04), 0 0 6px ${steel(0.12)}`,
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale',
+              textRendering: 'geometricPrecision',
+            }}>
+              {sampleLoading ? 'Loading…' : 'Try a sample →'}
+            </p>
+          </div>
         </div>
       )}
 
