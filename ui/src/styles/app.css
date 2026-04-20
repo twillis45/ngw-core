@@ -16849,7 +16849,7 @@ body {
 
 /* ── 16. LAB ROOT — full viewport ── */
 [data-theme="studio"] .screen.lab-screen {
-  background: #0b0b0c;
+  background: #000000;
 }
 [data-theme="studio"] .lab-screen > *,
 [data-theme="studio"] .lab-screen > .lab-content,

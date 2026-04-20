@@ -40,12 +40,12 @@ export const KEY_ACCENT = '#c89b45';
 // All Studio Matte full-screen roots use this Carbon Black instead of C.bg
 // which is pure black. Provides a softer, warmer near-black.
 // Figma canonical: #0B0B0C (Carbon Black, node 1318:2).
-export const SCREEN_BG = '#0b0b0c';
+export const SCREEN_BG = '#000000';
 
 // ─── Color palette ────────────────────────────────────────────────────────────
 export const C = {
   // ── Surface ──
-  bg:          '#0b0b0c',           // --sm-bg — Carbon Black (matches SCREEN_BG)
+  bg:          '#000000',           // --sm-bg — Deep Black
   slotBg:      '#08080a',           // --sm-surface-slot
   wellBg:      '#050507',           // --sm-surface-well (ring tracks, deep insets)
   trackBg:     '#08090c',           // --sm-surface-track (scroll tracks, secondary wells)

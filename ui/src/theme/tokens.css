@@ -227,7 +227,7 @@
 
   /* ── Studio Matte — Day1DemoApp design language ────── */
   /* Pixel-exact from Figma YQgGd8KZyZoXzZwJV7p4b6 / Studio Matte Theme */
-  --sm-bg:            #0b0b0c;                      /* main background — Carbon Black */
+  --sm-bg:            #000000;                      /* main background — Carbon Black */
   --sm-surface:       #0f1013;                      /* analytical panel / card */
   --sm-surface-slot:  #08080a;                      /* viewfinder well */
   --sm-surface-pill:  #070709;                      /* meta pill */
@@ -382,7 +382,7 @@
 /* Near-black surfaces + steel-blue text tint — Figma YQgGd8KZyZoXzZwJV7p4b6 */
 /* Only overrides tokens that differ from :root (dark) defaults.               */
 [data-theme="studio"] {
-  --color-bg:              #0b0b0c;
+  --color-bg:              #000000;
   --color-surface:         #0f1013;
   --color-surface-elevated:#111316;
   --color-text:            rgba(245,247,250,0.95);
