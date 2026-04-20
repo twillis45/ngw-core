@@ -1497,7 +1497,9 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
   const [activeLight, setActiveLight] = useState(null); // role of selected/dragged light
   const [lightOverrides, setLightOverrides] = useState({}); // { [role]: { distance_m, height_m } } — live drag state
   const dragRef = useRef(null); // { role, startX, startY, scaleX, scaleY, origDistM, origHeightM }
-  const { units, powerDisplay } = useSettings();
+  const { units, powerDisplay, exportBranding } = useSettings();
+  // White-label if: Studio/Admin tier OR user turned off export branding in settings
+  const whiteLabel = !!(isStudio || isAdmin || exportBranding === false);
 
   const handleCanvasZoom = useCallback(() => {
     if (canvasRef.current) {
@@ -1667,9 +1669,9 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
         </button>
         <button
           className="diagram-print-btn"
-          onClick={() => handleExportPNG(canvasRef.current, spec, title, view, !!(isStudio || isAdmin))}
+          onClick={() => handleExportPNG(canvasRef.current, spec, title, view, whiteLabel)}
           type="button"
-          title="Download PNG"
+          title={whiteLabel ? 'Download clean PNG' : 'Download branded PNG'}
           aria-label="Download diagram as PNG"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -1681,9 +1683,9 @@ export default function DiagramCard({ spec, title, inline, cameraSettings, space
         </button>
         <button
           className="diagram-print-btn"
-          onClick={() => handleExportPDF(canvasRef.current, spec, title, view, !!(isStudio || isAdmin))}
+          onClick={() => handleExportPDF(canvasRef.current, spec, title, view, whiteLabel)}
           type="button"
-          title={isStudio || isAdmin ? 'Download white-label PDF' : 'Download branded PDF'}
+          title={whiteLabel ? 'Download clean PDF' : 'Download branded PDF'}
           aria-label="Download diagram as PDF"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

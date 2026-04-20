@@ -605,6 +605,13 @@
                  "Palatino", serif;
 }
 
+/* ── Daylight Mode ──────────────────────────────────── */
+/* Brightness boost for bright studios / outdoor use.    */
+/* Lifts all steel opacities ~15% so UI stays readable.  */
+[data-daylight] {
+  filter: brightness(1.15);
+}
+
 /* ── Font Scale (Studio Matte) ──────────────────────── */
 /* Scrollable content screens opt in by adding zoom.     */
 /* Fixed-viewport screens (Home, Processing) do NOT use  */

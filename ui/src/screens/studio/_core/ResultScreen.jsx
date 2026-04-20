@@ -1740,9 +1740,22 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   const [diagramZoomed, setDiagramZoomed] = useState(false);
   const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
   const [setupSaved, setSetupSaved] = useState(false);
-  // lightExpanded state removed — THE LIGHT now shows only the pattern
-  // answer (shadow analysis moved to DETAIL), so no clip is needed.
-  // Daylight brightness boost — persisted across screens via settings store.
+
+  // Auto-save setup if setting is enabled — runs once on mount
+  useEffect(() => {
+    if (!isPaid || setupSaved) return;
+    try {
+      const s = loadSettings();
+      if (s.autoSaveSetups && result) {
+        saveSetup({ name: result?.pattern || result?.authoritative_pattern || 'Setup', tag: 'auto', result });
+        setSetupSaved(true);
+      }
+    } catch { /* skip */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Daylight brightness boost — now global via CSS data-daylight attribute.
+  // Legacy per-screen filter kept for backward compat but the setting-driven
+  // global approach in applySettings() is the primary mechanism.
   const [daylightMode] = useState(() => {
     try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
   });

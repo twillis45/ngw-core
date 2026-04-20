@@ -67,12 +67,15 @@ const DEFAULTS = {
   fontSize: 'medium',             // 'xs' | 'small' | 'medium' | 'large' | 'xl'
   fontFamily: 'system',           // 'system' | 'inter' | 'source' | 'mono' | 'serif'
   density: 'comfortable',         // 'compact' | 'comfortable' | 'spacious'
+  daylightMode: false,            // brightness boost for bright studios / outdoor use
+  exportBranding: true,           // show "No Guesswork Lighting" on PNG/PDF exports
 
-  // ── Shooting preferences (legacy, preserved for hook consumers) ──────────
+  // ── Shooting preferences ────────────────────────────────────────────────
   units: 'imperial',              // 'imperial' | 'metric'
   powerDisplay: 'fraction',       // 'fraction' | 'stops' | 'percent'
-  showConfidenceScore: true,      // legacy: show numeric confidence in results
-  autoSaveSetups: false,          // legacy: auto-save after every recommendation
+  diagramStyle: 'standard',       // 'standard' | 'minimal'
+  autoSaveSetups: false,          // auto-save after every recommendation
+  showConfidenceScore: true,      // show numeric confidence in results
 
   // ── Experience ───────────────────────────────────────────────────────────
   viewMode: 'full',               // 'quick' | 'full'
@@ -163,6 +166,12 @@ export function applySettings(settings) {
   document.documentElement.setAttribute('data-font-size', s.fontSize || 'medium');
   document.documentElement.setAttribute('data-font-family', s.fontFamily || 'system');
   document.documentElement.setAttribute('data-density', s.density || 'comfortable');
+  // Daylight brightness boost — applies CSS filter on the root for bright environments
+  if (s.daylightMode) {
+    document.documentElement.setAttribute('data-daylight', '');
+  } else {
+    document.documentElement.removeAttribute('data-daylight');
+  }
   // Reduce motion — disables animations globally via CSS
   if (s.reduceMotion) {
     document.documentElement.setAttribute('data-reduce-motion', '');

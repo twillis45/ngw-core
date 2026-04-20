@@ -54,6 +54,8 @@ function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
         {/* ── APPEARANCE — all users ────────────────────────────────────── */}
         <SectionLabel label="APPEARANCE" />
         <Panel>
+          <ToggleRow label="Daylight mode" value={!!settings.daylightMode} onChange={v => update('daylightMode', v)} tooltip="Brightness boost for bright studios and outdoor use. Makes the UI readable in direct light." />
+          <Divider />
           <ToggleRow label="Haptic feedback" value={settings.hapticFeedback !== false} onChange={v => update('hapticFeedback', v)} tooltip="Vibration feedback on taps and interactions." />
           <Divider />
           <ToggleRow label="Reduce motion" value={!!settings.reduceMotion} onChange={v => update('reduceMotion', v)} tooltip="Disables animations for accessibility." />
@@ -71,6 +73,8 @@ function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
             onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
             tooltip="Feet/inches or meters for distances."
           />
+          <Divider />
+          <ToggleRow label="Export branding" value={settings.exportBranding !== false} onChange={v => update('exportBranding', v)} tooltip="Show 'No Guesswork Lighting' on diagram PNG/PDF exports. Turn off for clean client deliverables." />
         </Panel>
 
         {/* ── SHOOT MODE — all users ──────────────────────────────────── */}
@@ -82,6 +86,15 @@ function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
             onClick={() => cycleOption('powerDisplay', POWER_DISPLAY_OPTIONS)}
             tooltip="How strobe power is displayed. Fraction: 1/4, 1/2. Stops: f-stop relative. Percent: 0–100%."
           />
+          <Divider />
+          <NavRow
+            label="Diagram style"
+            value={settings.diagramStyle === 'minimal' ? 'Minimal' : 'Standard'}
+            onClick={() => update('diagramStyle', settings.diagramStyle === 'minimal' ? 'standard' : 'minimal')}
+            tooltip="Standard: full diagram with labels. Minimal: clean positions only."
+          />
+          <Divider />
+          <ToggleRow label="Auto-save setups" value={!!settings.autoSaveSetups} onChange={v => update('autoSaveSetups', v)} tooltip="Automatically save every lighting setup after analysis. Find them in Saved Setups." />
         </Panel>
 
         {/* ── ADMIN — engine tuning, only shown for admin accounts ──── */}
