@@ -700,9 +700,10 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false, side 
           </radialGradient>
         </defs>
 
-        {/* Almond eye shape */}
-        <path d="M10 50 C10 50 24 20 50 20 C76 20 90 50 90 50 C90 50 76 80 50 80 C24 80 10 50 10 50 Z"
-          fill="url(#scleraGrad)" stroke={stroke} strokeWidth={1.5} />
+        {/* Almond eye shape — asymmetric: tight medial (inner) canthus,
+            rounder lateral (outer) canthus. More anatomically natural. */}
+        <path d="M8 50 C14 42 28 26 50 26 C72 26 86 42 92 50 C86 58 72 74 50 74 C28 74 14 58 8 50 Z"
+          fill="url(#scleraGrad)" stroke={stroke} strokeWidth={1.4} />
 
         {/* Subtle sclera vasculature — faint lines near corners for realism */}
         <line x1={16} y1={49} x2={28} y2={47} stroke={stroke} strokeWidth={0.3} opacity={0.15} />
