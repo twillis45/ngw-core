@@ -645,12 +645,8 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false, side 
   const stroke = steel(0.65);
   const maxCount = Math.max(1, ...Array.from(counts.values()));
 
-  // Mirror the eye shape based on which eye the catchlight is in.
-  // Catchlights at 9-11 o'clock = key light camera-left = subject's right eye = our left.
-  // Catchlights at 1-3 o'clock = key light camera-right = subject's left eye = mirror.
-  const firstHour = hours?.[0] ?? (primaryHour ?? 12);
-  const isRightEye = side === 'right' || (side === 'auto' && firstHour >= 1 && firstHour <= 5);
-  const eyeTransform = isRightEye ? 'scaleX(-1)' : undefined;
+  // No mirror — catchlight dots are positioned absolutely on the clock face.
+  // Mirroring the SVG would reverse their positions which is incorrect.
 
   // Resolve a primary hour for the readout label so the user sees the
   // engine's clock position spelled out (e.g. "10 o'clock") in addition to
@@ -683,7 +679,7 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false, side 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 48, minHeight: 48 }}>
-      <svg viewBox="0 0 100 100" width="80" height="80" style={{ display: 'block', transform: eyeTransform }}>
+      <svg viewBox="0 0 100 100" width="80" height="80" style={{ display: 'block' }}>
         <defs>
           {/* Iris radial gradient — darker limbal ring fading to lighter mid-iris */}
           <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
@@ -704,9 +700,9 @@ function CatchlightEye({ clockHour, clockHours, angleDeg, compact = false, side 
           </radialGradient>
         </defs>
 
-        {/* Almond eye shape — narrow pointed canthi, wide iris zone */}
-        <path d="M6 50 C12 38 28 24 50 24 C72 24 88 38 94 50 C88 62 72 76 50 76 C28 76 12 62 6 50 Z"
-          fill="url(#scleraGrad)" stroke={stroke} strokeWidth={1.2} />
+        {/* Almond eye shape */}
+        <path d="M10 50 C10 50 24 20 50 20 C76 20 90 50 90 50 C90 50 76 80 50 80 C24 80 10 50 10 50 Z"
+          fill="url(#scleraGrad)" stroke={stroke} strokeWidth={1.5} />
 
         {/* Subtle sclera vasculature — faint lines near corners for realism */}
         <line x1={16} y1={49} x2={28} y2={47} stroke={stroke} strokeWidth={0.3} opacity={0.15} />
