@@ -146,7 +146,7 @@ function CTA({ label, disabled, onClick, isDesktop }) {
       }}
     >
       <span style={{
-        fontSize: isDesktop ? 14 : 13, fontWeight: 700,
+        fontSize: isDesktop ? 14 : 14, fontWeight: 700,
         color: disabled ? steel(0.3) : 'rgba(245,247,250,0.92)',
         letterSpacing: '1.5px', textTransform: 'uppercase',
         pointerEvents: 'none', ...FONT_SMOOTH,
@@ -180,7 +180,7 @@ function SectionLabel({ children }) {
   const isDesktop = useIsDesktop();
   return (
     <p style={{
-      margin: '0 0 10px', fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+      margin: '0 0 10px', fontSize: isDesktop ? 12 : 12, fontWeight: 600,
       color: steel(0.55), letterSpacing: '1.2px',
       textTransform: 'uppercase', ...FONT_SMOOTH,
     }}>
@@ -218,9 +218,9 @@ function OptionChip({ label, hint, selected, onClick, icon }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {icon && <span style={{ fontSize: 13, opacity: selected ? 1 : 0.5, ...FONT_SMOOTH }}>{icon}</span>}
+        {icon && <span style={{ fontSize: 14, opacity: selected ? 1 : 0.5, ...FONT_SMOOTH }}>{icon}</span>}
         <span style={{
-          fontSize: 13, fontWeight: 600,
+          fontSize: 14, fontWeight: 600,
           color: selected ? KEY_ACCENT : C.textSub,
           ...FONT_SMOOTH,
         }}>
@@ -228,7 +228,7 @@ function OptionChip({ label, hint, selected, onClick, icon }) {
         </span>
       </div>
       {hint && (
-        <span style={{ fontSize: 10, color: steel(0.4), fontWeight: 400, ...FONT_SMOOTH }}>{hint}</span>
+        <span style={{ fontSize: 12, color: steel(0.4), fontWeight: 400, ...FONT_SMOOTH }}>{hint}</span>
       )}
     </button>
   );
@@ -268,7 +268,7 @@ function IntentCard({ icon, label, desc, onClick, disabled }) {
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, marginBottom: 2, ...FONT_SMOOTH }}>{label}</div>
-        <div style={{ fontSize: 11, color: steel(0.45), fontWeight: 400, ...FONT_SMOOTH }}>{desc}</div>
+        <div style={{ fontSize: 13, color: steel(0.45), fontWeight: 400, ...FONT_SMOOTH }}>{desc}</div>
       </div>
       <span style={{ fontSize: 16, color: steel(0.3), ...FONT_SMOOTH }}>›</span>
     </button>
@@ -302,7 +302,7 @@ function SkinToneChip({ tone, selected, onClick }) {
         border: `1px solid ${steel(0.15)}`,
         flexShrink: 0,
       }} />
-      <span style={{ fontSize: 12, color: selected ? KEY_ACCENT : steel(0.55), fontWeight: 500, ...FONT_SMOOTH }}>
+      <span style={{ fontSize: 13, color: selected ? KEY_ACCENT : steel(0.55), fontWeight: 500, ...FONT_SMOOTH }}>
         {tone.label}
       </span>
     </button>
@@ -360,7 +360,7 @@ function StepTheShot({ state, onChange }) {
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
           <SectionLabel>Skin Tone</SectionLabel>
-          <span style={{ fontSize: 10, color: steel(0.3), fontWeight: 400, ...FONT_SMOOTH }}>optional</span>
+          <span style={{ fontSize: 12, color: steel(0.3), fontWeight: 400, ...FONT_SMOOTH }}>optional</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {SKIN_TONES.map(t => (
@@ -386,11 +386,11 @@ function StepTheShot({ state, onChange }) {
             ...FONT_SMOOTH,
           }}
         >
-          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '1.2px', textTransform: 'uppercase', ...FONT_SMOOTH }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '1.2px', textTransform: 'uppercase', ...FONT_SMOOTH }}>
             STYLE REFERENCE
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, color: steel(0.35) }}>
+            <span style={{ fontSize: 12, color: steel(0.35) }}>
               {styleRef ? STYLE_REFS.find(r => r.id === styleRef)?.label || 'Custom' : 'optional'}
             </span>
             <span style={{
@@ -486,7 +486,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
             ))}
           </div>
           <p style={{
-            margin: '8px 0 0', fontSize: 11, color: steel(0.35),
+            margin: '8px 0 0', fontSize: 12, color: steel(0.35),
             lineHeight: 1.5, ...FONT_SMOOTH,
           }}>
             Low ceilings limit overhead positions and restrict hair lights.
@@ -498,7 +498,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
       <div style={{ opacity: envReady ? 1 : 0.35, transition: 'opacity 0.2s ease' }}>
         <SectionLabel>Your Gear</SectionLabel>
         <p style={{
-          margin: '0 0 12px', fontSize: 11, color: steel(0.4),
+          margin: '0 0 12px', fontSize: 13, color: steel(0.4),
           lineHeight: 1.5, ...FONT_SMOOTH,
         }}>
           NGW adapts the blueprint to what you own. "Best Setup" shows the ideal rig.
@@ -580,7 +580,7 @@ function StepGearEntry({ state, onChange }) {
           background: steel(0.04), border: `1px solid ${steel(0.08)}`,
           ...FONT_SMOOTH,
         }}>
-          <span style={{ fontSize: 11, color: steel(0.45) }}>
+          <span style={{ fontSize: 13, color: steel(0.45) }}>
             {lights?.length || 0} light type{lights?.length !== 1 ? 's' : ''} · {modifiers?.length || 0} modifier{modifiers?.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -701,14 +701,14 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
             <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
           </button>
           <p style={{
-            margin: 0, fontSize: isDesktop ? 11 : 10, fontWeight: 600,
+            margin: 0, fontSize: isDesktop ? 12 : 12, fontWeight: 600,
             color: steel(0.65), letterSpacing: '1.2px', ...FONT_SMOOTH,
           }}>
             BUILD FROM SCRATCH
           </p>
         </div>
         <p style={{
-          margin: 0, fontSize: isDesktop ? 13 : 11, fontWeight: 500,
+          margin: 0, fontSize: isDesktop ? 14 : 13, fontWeight: 500,
           color: steel(0.4), ...FONT_SMOOTH,
         }}>
           Step {step + 1} of 3

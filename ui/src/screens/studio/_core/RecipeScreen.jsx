@@ -151,7 +151,7 @@ function PillButton({ label, active, onClick }) {
         boxShadow: active
           ? `0 0 0 1px ${accent(0.45)}, 0 2px 6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)`
           : `0 2px 5px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04), inset -1px -1px 0 rgba(0,0,0,0.20)`,
-        fontSize: isDesktop ? 13 : 13, fontWeight: active ? 700 : 600,
+        fontSize: isDesktop ? 14 : 14, fontWeight: active ? 700 : 600,
         color: active ? KEY_ACCENT : steel(0.65),
         letterSpacing: '0.5px',
         WebkitTapHighlightColor: 'transparent',
@@ -171,7 +171,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
   const diffLabel = DIFFICULTY_LABEL[recipe.difficulty] || '';
   const diffColor = DIFFICULTY_COLOR[recipe.difficulty] || steel(0.6);
   const lightCount = recipe.setupTime?.split('·')[0]?.trim() || '';
-  const metaFs = isDesktop ? 12 : 12;
+  const metaFs = isDesktop ? 13 : 13;
 
   return (
     <div
@@ -233,7 +233,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
 
         {/* Description */}
         <p style={{
-          margin: '3px 0 0', fontSize: isDesktop ? 13 : 12, fontWeight: 400,
+          margin: '3px 0 0', fontSize: isDesktop ? 14 : 14, fontWeight: 400,
           color: C.textDim, lineHeight: 1.35, ...FONT_SMOOTH,
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         }}>
@@ -368,7 +368,7 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: '40px 20px',
           }}>
-            <p style={{ fontSize: 13, fontWeight: 500, color: steel(0.4), textAlign: 'center', ...FONT_SMOOTH }}>
+            <p style={{ fontSize: 15, fontWeight: 500, color: steel(0.4), textAlign: 'center', ...FONT_SMOOTH }}>
               No recipes in this category yet.
             </p>
           </div>
@@ -401,7 +401,7 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
               >
                 <span style={{ fontSize: 16, color: steel(0.35), lineHeight: 1 }}>+</span>
                 <span style={{
-                  fontSize: isDesktop ? 13 : 12, fontWeight: 600, color: steel(0.45),
+                  fontSize: isDesktop ? 14 : 14, fontWeight: 600, color: steel(0.45),
                   letterSpacing: '0.5px', ...FONT_SMOOTH,
                 }}>
                   Build from Scratch

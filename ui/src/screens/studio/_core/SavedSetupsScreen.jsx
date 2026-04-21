@@ -49,7 +49,7 @@ function CTAButton({ label, onClick }) {
       }}
     >
       <span style={{
-        fontSize: 13, fontWeight: 700,
+        fontSize: 14, fontWeight: 700,
         color: 'rgba(245,247,250,0.92)',
         letterSpacing: '1.5px', textTransform: 'uppercase',
         pointerEvents: 'none', ...FONT_SMOOTH,
@@ -192,7 +192,7 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {setup.tag && setup.tag !== 'auto' && (
             <span style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', textTransform: 'uppercase',
               color: steel(0.40), padding: '1px 6px', borderRadius: 4,
               background: steel(0.06), ...FONT_SMOOTH,
             }}>
@@ -272,7 +272,7 @@ function MenuButton({ label, danger, onClick }) {
         background: hover ? steel(0.08) : 'transparent',
         border: 'none', cursor: 'pointer',
         padding: '10px 14px',
-        fontSize: 13, fontWeight: 500,
+        fontSize: 14, fontWeight: 500,
         color: danger ? C.textDanger : C.textSub,
         ...FONT_SMOOTH,
         transition: 'background 0.12s ease',
@@ -346,7 +346,7 @@ function EmptyState({ onBuild }) {
         No setups yet
       </h3>
       <p style={{
-        margin: '0 0 28px', fontSize: 13, fontWeight: 400,
+        margin: '0 0 28px', fontSize: 15, fontWeight: 400,
         color: steel(0.45), lineHeight: 1.5, maxWidth: 280, ...FONT_SMOOTH,
       }}>
         Build a setup or analyze a photo — then save it to build your collection.
@@ -366,7 +366,7 @@ function EmptyState({ onBuild }) {
             <span style={{
               width: 26, height: 26, borderRadius: '50%',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, lineHeight: 1,
+              fontSize: 12, fontWeight: 700, lineHeight: 1,
               background: step.gold
                 ? `linear-gradient(141.71deg, ${accent(0.22)} 0%, ${accent(0.12)} 100%)`
                 : 'linear-gradient(141.71deg, rgba(26,28,34,1) 0%, rgba(14,15,18,1) 100%)',
@@ -377,7 +377,7 @@ function EmptyState({ onBuild }) {
                 : 'inset 2px 2px 5px rgba(0,0,0,0.55), inset -0.5px -0.5px 1px rgba(255,255,255,0.03), 1px 2px 4px rgba(0,0,0,0.30)',
               flexShrink: 0, ...FONT_SMOOTH,
             }}>{step.num}</span>
-            <span style={{ fontSize: 13, color: steel(0.55), textAlign: 'left', ...FONT_SMOOTH }}>
+            <span style={{ fontSize: 14, color: steel(0.55), textAlign: 'left', ...FONT_SMOOTH }}>
               {step.text}
             </span>
           </div>
@@ -533,12 +533,12 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
             ...(isDesktop ? { gridColumn: '1 / -1' } : {}),
           }}>
             <span style={{
-              fontSize: 9, fontWeight: 700, color: KEY_ACCENT,
+              fontSize: 11, fontWeight: 700, color: KEY_ACCENT,
               letterSpacing: '0.8px', textTransform: 'uppercase',
               ...FONT_SMOOTH,
             }}>TIP</span>
             <span style={{
-              fontSize: 12, color: steel(0.4), ...FONT_SMOOTH,
+              fontSize: 14, color: steel(0.4), ...FONT_SMOOTH,
             }}>
               Tap any setup to open its full blueprint
             </span>
