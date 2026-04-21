@@ -317,6 +317,12 @@ app.include_router(teams_router)  # prefix set in router (/api/teams)
 app.include_router(api_keys_router)  # prefix set in router (/api/api-keys)
 app.include_router(studio_api_router)  # prefix set in router (/api/v1)
 app.include_router(brief_router)  # prefix set in router (/api/brief)
+# Sample image served at root for HomeScreen "Try a Sample" flow
+@app.get("/ghost-rembrandt.jpg")
+async def serve_sample_image():
+    from fastapi.responses import FileResponse
+    return FileResponse("static/ui/ghost-rembrandt.jpg", media_type="image/jpeg")
+
 app.mount("/www", StaticFiles(directory="static/www"), name="www")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
