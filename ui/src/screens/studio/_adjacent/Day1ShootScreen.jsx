@@ -1147,6 +1147,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           heightDisplay={heightDisplay} angleDeg={angleDeg}
           pattern={pattern} confidence={confidence} cct={cct}
           result={result} stepKey={step.key} mode={mode}
+          heroFitMode={heroFitMode} onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
           heroPressHandlers={heroPressHandlers} vfHeight={VF_HEIGHT} hidePhoto={isDesktop} />;
 
   const primaryLabel = justCaptured
@@ -1929,7 +1930,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
 
 // ─── Photographer body ──────────────────────────────────────────────────────
 function PhotographerBody({ step, imagePreview, modName, position, distance,
-  heightDisplay, angleDeg, pattern, confidence, cct, result, stepKey, mode, heroPressHandlers, vfHeight, hidePhoto }) {
+  heightDisplay, angleDeg, pattern, confidence, cct, result, stepKey, mode, heroFitMode, onToggleFit, heroPressHandlers, vfHeight, hidePhoto }) {
   const dk = hidePhoto; // desktop flag — scale up text for wider column
   return (
     <>
@@ -1978,7 +1979,7 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
             heightDisplay={heightDisplay}
             modName={modName}
           heroFitMode={heroFitMode}
-          onToggleFit={() => setHeroFitMode(f => f === "contain" ? "cover" : "contain")}
+          onToggleFit={onToggleFit}
           />
         </div>
       )}
