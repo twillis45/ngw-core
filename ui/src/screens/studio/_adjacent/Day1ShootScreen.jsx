@@ -1518,28 +1518,28 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               x: 20, y: _photoTop, w: COL_W - 40, h: _photoH, r: 12,
               title: 'Your target light',
               desc: 'The light you\'re recreating — match this on set.',
-              tipY: _photoTop + _photoH + 40,
+              tipY: _photoTop + _photoH + 56,
               arrow: 'up',
             },
             { // Step 1: Step lead + spec strip — the instructions
               x: 16, y: _headerH, w: COL_W - 32, h: _specH + 20, r: 14,
               title: 'Step-by-step rebuild',
               desc: 'Each step tells you exactly what to place and where.',
-              tipY: _headerH + _specH + 50,
+              tipY: _headerH + _specH + 66,
               arrow: 'up',
             },
             { // Step 2: Step dots — navigation
               x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 24, r: 12,
               title: 'Swipe or tap to navigate',
               desc: 'Move between setup steps at your own pace.',
-              tipY: _dotsTop - 130,
+              tipY: _dotsTop - 150,
               arrow: 'down',
             },
             { // Step 3: Capture button — the action
               x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 52, r: 26,
               title: 'Fire when it matches',
               desc: 'Tap Capture once your light matches the reference.',
-              tipY: _ctaTop - 140,
+              tipY: _ctaTop - 160,
               arrow: 'down',
             },
           ];
@@ -1688,9 +1688,9 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                 }} />
                 <div style={{
                   position: 'relative',
-                  padding: '10px 14px',
+                  padding: '14px 18px',
                   borderRadius: 14,
-                  backgroundColor: 'rgba(10,11,14,0.85)',
+                  backgroundColor: 'rgba(10,11,14,0.88)',
                   border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.08)')}`,
                   boxShadow: [
                     '0 8px 32px rgba(0,0,0,0.55)',
@@ -1726,8 +1726,8 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                         ...FONT_SMOOTH,
                       }}>{_s.title}</p>
                       <p style={{
-                        margin: '3px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '17px',
-                        color: 'rgba(184,191,199,0.50)',
+                        margin: '4px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '18px',
+                        color: 'rgba(184,191,199,0.62)',
                         ...FONT_SMOOTH,
                       }}>{_s.desc}</p>
                     </div>
