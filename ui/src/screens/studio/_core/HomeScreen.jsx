@@ -1458,17 +1458,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 {/* VF copy — instruction + specific deliverables + ghosted proof */}
                 <p style={{
                   margin: '10px 0 0', fontSize: 16, fontWeight: 700, letterSpacing: '-0.1px',
-                  color: steel(0.42),
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.03)',
+                  color: steel(0.62),
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04)',
                   textAlign: 'center', lineHeight: '20px',
                   ...FONT_SMOOTH,
                 }}>Tap to load a portrait</p>
-                {/* Specific deliverables — names what the user actually gets.
-                    This is proof the tool speaks photographer. */}
+                {/* Specific deliverables — names what the user actually gets. */}
                 <p style={{
                   margin: '6px 0 0', fontSize: 11, fontWeight: 600, letterSpacing: '1.5px',
-                  color: steel(0.22), textTransform: 'uppercase',
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.7)',
+                  color: steel(0.38), textTransform: 'uppercase',
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.6)',
                   textAlign: 'center', lineHeight: '14px',
                   ...FONT_SMOOTH,
                 }}>Pattern · Modifier · Position · Diagram</p>
@@ -1477,7 +1476,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                     Real terminology a photographer would respect. */}
                 <p style={{
                   margin: '14px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.2px',
-                  color: steel(0.15),
+                  color: steel(0.28),
                   fontStyle: 'italic',
                   textAlign: 'center', lineHeight: '15px',
                   ...FONT_SMOOTH,
