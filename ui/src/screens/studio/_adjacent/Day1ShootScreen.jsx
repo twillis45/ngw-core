@@ -1505,45 +1505,61 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           // Responsive column width — matches Home teach
           const COL_W = Math.min(430, window.innerWidth);
           const COL_CX = Math.round(COL_W / 2);
-          // Cockpit layout geometry for spotlight targeting (mobile single-column)
-          const _headerH = 40;
-          const _specH = 56;
-          const _photoTop = _headerH + _specH;
-          const _photoH = Math.min(VF_HEIGHT, 260);
-          const _dotsTop = stableVH - safeBottom - 34 - 44 - 36;
-          const _ctaTop = stableVH - safeBottom - 34 - 52;
+          // Cockpit layout geometry — adaptive to viewport height.
+          // Instead of hardcoded pixel offsets, derive from stableVH
+          // so spotlights land correctly on iPhone SE through Pro Max.
+          const _vh = stableVH;
+          const _sb = safeBottom;
+          // Header: ~44px (12px pad top + 20px content + 12px pad bottom)
+          const _headerH = 44;
+          // Body starts after header — the scrollable content region
+          const _bodyTop = _headerH;
+          // Photo/hero zone — occupies roughly 30% of viewport below header
+          const _photoTop = _bodyTop + 8;
+          const _photoH = Math.round(Math.min(_vh * 0.32, 280));
+          // Bottom action row: home indicator (34) + action row (~56) + step dots (~36)
+          const _actionRowH = 34 + 56 + 36;
+          const _dotsTop = _vh - _sb - _actionRowH + 4;
+          const _ctaTop = _vh - _sb - 34 - 56;
+          // Card height estimate for clamp
+          const _CARD_H = 110;
+          const _maxTipY = _vh - _sb - _CARD_H - 8;
+          const _minTipY = _sb + 8;
+          const clampTip = (y) => Math.max(_minTipY, Math.min(_maxTipY, y));
 
           const _spots = [
             { // Step 0: Reference photo — the target
               x: 20, y: _photoTop, w: COL_W - 40, h: _photoH, r: 12,
               title: 'Your target light',
               desc: 'The light you\'re recreating — match this on set.',
-              tipY: _photoTop + _photoH + 56,
+              tipY: clampTip(_photoTop + _photoH + 24),
               arrow: 'up',
             },
             { // Step 1: Step lead + spec strip — the instructions
-              x: 16, y: _headerH, w: COL_W - 32, h: _specH + 20, r: 14,
+              x: 16, y: _bodyTop - 4, w: COL_W - 32, h: 64, r: 14,
               title: 'Step-by-step rebuild',
               desc: 'Each step tells you exactly what to place and where.',
-              tipY: _headerH + _specH + 66,
+              tipY: clampTip(_bodyTop + 90),
               arrow: 'up',
             },
             { // Step 2: Step dots — navigation
-              x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 24, r: 12,
+              x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 28, r: 14,
               title: 'Swipe or tap to navigate',
               desc: 'Move between setup steps at your own pace.',
-              tipY: _dotsTop - 150,
+              tipY: clampTip(_dotsTop - 140),
               arrow: 'down',
             },
             { // Step 3: Capture button — the action
-              x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 52, r: 26,
+              x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 56, r: 28,
               title: 'Fire when it matches',
               desc: 'Tap Capture once your light matches the reference.',
-              tipY: _ctaTop - 160,
+              tipY: clampTip(_ctaTop - 140),
               arrow: 'down',
             },
           ];
           const _s = _spots[cockpitTeachStep] || _spots[0];
+          // Clamp spotlight Y to viewport
+          _s.y = Math.max(0, Math.min(_vh - _sb - _s.h, _s.y));
           const _cx = _s.x + _s.w / 2;
           const _cy = _s.y + _s.h / 2;
           const _rx = _s.w / 2 + 14;
