@@ -27,7 +27,7 @@ import {
 function RowLabel({ children }) {
   return (
     <p style={{
-      margin: 0, fontSize: 10, fontWeight: 600,
+      margin: 0, fontSize: 11, fontWeight: 600,
       color: steel(0.65), letterSpacing: '1px',
       textTransform: 'uppercase', ...FONT_SMOOTH,
     }}>
@@ -112,7 +112,7 @@ export function SubstitutionsCard({ items }) {
           }}>
             <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
               <span style={{
-                fontSize: 9, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 color: steel(0.55), letterSpacing: '0.8px',
                 minWidth: 48, ...FONT_SMOOTH,
               }}>
@@ -127,7 +127,7 @@ export function SubstitutionsCard({ items }) {
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
               <span style={{
-                fontSize: 9, fontWeight: 700,
+                fontSize: 11, fontWeight: 700,
                 color: steel(0.55), letterSpacing: '0.8px',
                 minWidth: 48, ...FONT_SMOOTH,
               }}>
@@ -191,7 +191,7 @@ export function QuickFixesCard({ items, fixOrder }) {
           borderTop: fixes.length > 0 ? `1px solid ${steel(0.08)}` : 'none',
         }}>
           <p style={{
-            margin: '0 0 8px', fontSize: 9, fontWeight: 700,
+            margin: '0 0 8px', fontSize: 11, fontWeight: 700,
             color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH,
           }}>
             FIX ORDER
@@ -226,7 +226,7 @@ export function WhatToLookForCard({ goodSigns, warnings }) {
       {good.length > 0 && (
         <div>
           <p style={{
-            margin: '0 0 8px', fontSize: 9, fontWeight: 700,
+            margin: '0 0 8px', fontSize: 11, fontWeight: 700,
             color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH,
           }}>
             GOOD SIGNS
@@ -258,7 +258,7 @@ export function WhatToLookForCard({ goodSigns, warnings }) {
           borderTop: good.length > 0 ? `1px solid ${steel(0.08)}` : 'none',
         }}>
           <p style={{
-            margin: '0 0 8px', fontSize: 9, fontWeight: 700,
+            margin: '0 0 8px', fontSize: 11, fontWeight: 700,
             color: steel(0.55), letterSpacing: '0.8px', ...FONT_SMOOTH,
           }}>
             WATCH FOR

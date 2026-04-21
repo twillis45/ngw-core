@@ -84,7 +84,7 @@ function DiagnosticsDisclosure({ children }) {
         }}
       >
         <span style={{
-          fontSize: 9, fontWeight: 700,
+          fontSize: 11, fontWeight: 700,
           color: steel(0.50),
           letterSpacing: '1px',
           padding: '3px 8px',
@@ -422,8 +422,8 @@ function ShadowSignature({ angleDeg, density }) {
             }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>OPEN</span>
-            <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>DEEP</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>OPEN</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.58), letterSpacing: '0.5px', ...FONT_SMOOTH }}>DEEP</span>
           </div>
         </div>
       )}
@@ -1023,7 +1023,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
         <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           COLOR TEMPERATURE
         </p>
-        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
           KELVIN
         </span>
       </div>
@@ -1047,7 +1047,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
               boxShadow: '0 0 8px rgba(245,190,72,0.65), inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 1px rgba(0,0,0,0.4)',
             }} />
             <span style={{
-              position: 'absolute', top: -13, fontSize: 9, fontWeight: 700,
+              position: 'absolute', top: -13, fontSize: 10, fontWeight: 700,
               color: 'rgba(245,190,72,0.95)', letterSpacing: '0.2px',
               textShadow: '0 0 4px rgba(0,0,0,0.8)',
               whiteSpace: 'nowrap', ...FONT_SMOOTH,
@@ -1066,7 +1066,7 @@ function CCTAxis({ keyKStr, shadowKStr }) {
               boxShadow: '0 0 4px rgba(168,200,240,0.55), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 1px rgba(0,0,0,0.4)',
             }} />
             <span style={{
-              position: 'absolute', top: 15, fontSize: 9, fontWeight: 700,
+              position: 'absolute', top: 15, fontSize: 10, fontWeight: 700,
               color: 'rgba(168,200,240,0.95)', letterSpacing: '0.2px',
               textShadow: '0 0 4px rgba(0,0,0,0.8)',
               whiteSpace: 'nowrap', ...FONT_SMOOTH,
@@ -1075,21 +1075,21 @@ function CCTAxis({ keyKStr, shadowKStr }) {
         )}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>2500K · TUNGSTEN</span>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>5500K · DAYLIGHT</span>
-        <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.58), letterSpacing: '0.4px', ...FONT_SMOOTH }}>8500K · SHADE</span>
+        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>2500K · TUNGSTEN</span>
+        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>5500K · DAYLIGHT</span>
+        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.58), letterSpacing: '0.3px', ...FONT_SMOOTH }}>8500K · SHADE</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 8 }}>
         {keyK != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 7, height: 10, borderRadius: 2, backgroundColor: 'rgba(245,190,72,0.95)', boxShadow: '0 0 4px rgba(245,190,72,0.5)' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>KEY {keyK}K</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>KEY {keyK}K</span>
           </div>
         )}
         {shadowK != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 5, height: 8, borderRadius: 2, backgroundColor: 'rgba(168,200,240,0.9)', boxShadow: '0 0 4px rgba(168,200,240,0.5)' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>SHADOW {shadowK}K</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>SHADOW {shadowK}K</span>
           </div>
         )}
       </div>
@@ -1387,7 +1387,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
                         padding: '3px 10px', borderRadius: 6,
                         border: `1px solid ${steel(0.2)}`,
                         background: 'rgba(255,255,255,0.03)',
-                        color: steel(0.7), fontSize: 10, fontWeight: 600,
+                        color: steel(0.7), fontSize: 11, fontWeight: 600,
                         letterSpacing: '0.6px', cursor: 'pointer',
                         WebkitTapHighlightColor: 'transparent',
                         ...FONT_SMOOTH,
@@ -1411,7 +1411,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
             }}
           >
             <span style={{
-              fontSize: 10, fontWeight: 700,
+              fontSize: 11, fontWeight: 700,
               color: steel(0.48),
               letterSpacing: '0.8px',
               ...FONT_SMOOTH,
@@ -1450,7 +1450,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           }}
         >
           <p style={{
-            margin: 0, fontSize: 10, fontWeight: 700,
+            margin: 0, fontSize: 11, fontWeight: 700,
             letterSpacing: '2px', color: steel(0.6), ...FONT_SMOOTH,
           }}>PATTERN · {zoomedPattern.score}% MATCH</p>
 
@@ -1482,7 +1482,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           )}
 
           <p style={{
-            margin: '6px 0 0', fontSize: 9, fontWeight: 700,
+            margin: '6px 0 0', fontSize: 10, fontWeight: 700,
             letterSpacing: '1.5px', color: steel(0.55), ...FONT_SMOOTH,
           }}>TAP TO CLOSE</p>
         </div>,
@@ -1570,7 +1570,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
         <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           IRIS COVERAGE
         </p>
-        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
           {activeBand.label}
         </span>
       </div>
@@ -1611,7 +1611,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
         {bands.map((b) => (
           <div key={b.label} style={{
             flex: (b.end - b.start),
-            fontSize: 7.5, fontWeight: 700, letterSpacing: '0.4px',
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.3px',
             color: steel(0.55), textAlign: 'center', ...FONT_SMOOTH,
           }}>{b.label}</div>
         ))}
@@ -1623,7 +1623,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
           {pct.toFixed(1)}<span style={{ fontSize: 11, fontWeight: 700, color: steel(0.62), marginLeft: 3 }}>% iris</span>
         </span>
         {angularArea && (
-          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
             {angularArea}
           </span>
         )}
@@ -2721,13 +2721,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             pointerEvents: 'none',
           }}>
             <span style={{
-              fontSize: 9, fontWeight: 700,
+              fontSize: 11, fontWeight: 700,
               color: steel(0.42),
               letterSpacing: '1px',
               ...FONT_SMOOTH,
             }}>LIGHTING DIAGRAM</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.45 }}>
-              <span style={{ fontSize: 8, fontWeight: 600, color: steel(0.65), letterSpacing: '0.5px', ...FONT_SMOOTH }}>TAP TO EXPAND</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '0.5px', ...FONT_SMOOTH }}>TAP TO EXPAND</span>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" stroke={steel(0.85)} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -2821,7 +2821,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 }}>
                   {/* Lock + PRO badge */}
                   <span style={{
-                    fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
+                    fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase',
                     padding: '3px 10px', borderRadius: 4,
                     background: 'rgba(200,155,60,0.15)', border: '1px solid rgba(200,155,60,0.30)',
                     color: 'rgba(200,155,60,0.90)', ...FONT_SMOOTH,
@@ -2956,7 +2956,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   boxShadow: diagramView === v
                     ? 'inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)'
                     : 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                  fontSize: 8, fontWeight: 700, letterSpacing: '0.6px',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.6px',
                   color: diagramView === v ? '#c89b45' : steel(0.30),
                   WebkitTapHighlightColor: 'transparent',
                 }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
@@ -3208,7 +3208,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     )}
                     {sections.signalQuality.supporting.length > 0 && (
                       <div style={{ marginBottom: sections.signalQuality.contradicting.length > 0 ? 10 : 0 }}>
-                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: C.confHigh, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                           SUPPORTING
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -3223,7 +3223,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     )}
                     {sections.signalQuality.contradicting.length > 0 && (
                       <div>
-                        <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+                        <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: C.confLow, letterSpacing: '0.5px', ...FONT_SMOOTH }}>
                           CONTRADICTING
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -3244,7 +3244,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             {/* ── Admin-only: raw engine data ── */}
             {isAdmin && (
               <div style={{ marginTop: 16, padding: '12px 0', borderTop: `1px solid ${C.divider}` }}>
-                <p style={{ margin: '0 0 8px', fontSize: 9, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.35), ...FONT_SMOOTH }}>
+                <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.35), ...FONT_SMOOTH }}>
                   ENGINE DATA
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10, fontFamily: 'var(--font-mono, monospace)', color: steel(0.45), ...FONT_SMOOTH }}>
@@ -3269,7 +3269,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             background: MACHINED_PANEL_BG,
             boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
           }}>
-            <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: steel(0.40), textAlign: 'center', ...FONT_SMOOTH }}>
+            <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: steel(0.40), textAlign: 'center', ...FONT_SMOOTH }}>
               DID YOU GET THE SHOT?
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>

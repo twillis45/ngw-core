@@ -95,8 +95,8 @@ export const TYPE = {
   T1: 32,  // hero lead, step numbers
   T2: 20,  // section titles, modifier names, pattern name
   T3: 14,  // body text, spec values, drawer item copy
-  T4: 11,  // labels, secondary text, sub-leads
-  T5: 9,   // micro labels, metadata, category tags
+  T4: 12,  // labels, secondary text, sub-leads
+  T5: 11,  // micro labels, metadata, category tags
 };
 export const TYPE_DK = {
   T1: 38,

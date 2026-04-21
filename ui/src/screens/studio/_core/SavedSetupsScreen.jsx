@@ -36,7 +36,7 @@ function CTAButton({ label, onClick }) {
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}
       style={{
-        padding: '0 32px', height: 50, borderRadius: 24,
+        padding: '0 32px', height: 52, borderRadius: 25,
         border: 'none', cursor: 'pointer',
         background: CTA_BG,
         boxShadow: pressed

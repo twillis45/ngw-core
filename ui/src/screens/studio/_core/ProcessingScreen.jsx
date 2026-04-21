@@ -279,7 +279,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                   }} />
                 </div>
                 <p style={{
-                  margin: 0, fontWeight: 700, fontSize: 11, letterSpacing: '1.5px',
+                  margin: 0, fontWeight: 700, fontSize: 13, letterSpacing: '1.5px',
                   color: 'rgba(72,186,136,0.55)', fontVariantNumeric: 'tabular-nums',
                   ...FS,
                 }}>{Math.round(progress)}%</p>
@@ -349,7 +349,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
               <p style={{ margin: 0, fontWeight: 800, fontSize: 17, lineHeight: 1, color: C.textPrimary, letterSpacing: '-0.3px', ...FS }}>No Guesswork</p>
-              <p style={{ margin: 0, fontWeight: 700, fontSize: 8.5, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: 10, lineHeight: 1, color: steel(0.32), letterSpacing: '3px', ...FS }}>LIGHTING</p>
             </div>
           </div>
 

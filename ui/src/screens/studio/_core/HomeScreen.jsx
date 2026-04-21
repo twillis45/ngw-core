@@ -1103,7 +1103,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               transition: 'background 0.15s ease',
             }} />
             <span style={{
-              fontSize: isDesktop ? 14 : 12, fontWeight: 700, letterSpacing: isDesktop ? '3.5px' : '2.5px', textTransform: 'uppercase',
+              fontSize: isDesktop ? 14 : 13, fontWeight: 700, letterSpacing: isDesktop ? '3.5px' : '2.5px', textTransform: 'uppercase',
               color: isPressed ? steel(0.30) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
               textShadow: isPressed ? 'none' : `0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.25)`,
               ...FONT_SMOOTH,

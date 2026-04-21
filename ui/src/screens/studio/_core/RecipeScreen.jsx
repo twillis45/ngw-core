@@ -171,7 +171,7 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
   const diffLabel = DIFFICULTY_LABEL[recipe.difficulty] || '';
   const diffColor = DIFFICULTY_COLOR[recipe.difficulty] || steel(0.6);
   const lightCount = recipe.setupTime?.split('·')[0]?.trim() || '';
-  const metaFs = isDesktop ? 13 : 13;
+  const metaFs = 13;
 
   return (
     <div

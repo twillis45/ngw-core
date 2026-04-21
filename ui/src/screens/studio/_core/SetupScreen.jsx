@@ -245,12 +245,12 @@ function LongPressSpec({ label, value, secondary, secondaryColor, alwaysRevealed
       <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>{label}</p>
       <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 700, color: C.textPrimary, lineHeight: 1.2, ...FONT_SMOOTH, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{value}</p>
       {showSecondary && (
-        <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
+        <p style={{ margin: '3px 0 0', fontSize: 13, fontWeight: 600, color: secondaryColor || C.confHigh, ...FONT_SMOOTH }}>
           {secondary}
         </p>
       )}
       {interactive && !revealed && (
-        <p style={{ margin: '3px 0 0', fontSize: 8, fontWeight: 500, color: steel(0.50), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+        <p style={{ margin: '3px 0 0', fontSize: 10, fontWeight: 500, color: steel(0.50), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
           HOLD
         </p>
       )}
@@ -291,7 +291,7 @@ function LightRoleCard({ roleKey, role }) {
         <span style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: '1px', ...FONT_SMOOTH }}>
           {label}
         </span>
-        <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '0.5px', ...FONT_SMOOTH }}>
           {conf}%
         </span>
       </div>
@@ -438,7 +438,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
         <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.58), letterSpacing: '0.9px', ...FONT_SMOOTH }}>
           IRIS COVERAGE
         </p>
-        <span style={{ fontSize: 9, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'rgba(245,210,140,0.85)', letterSpacing: '0.4px', ...FONT_SMOOTH }}>
           {activeBand.label}
         </span>
       </div>
@@ -1001,7 +1001,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                 }}>
                   <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
                     TAP FOR DIAGRAM
                   </span>
                 </div>
@@ -1030,7 +1030,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
                 {compactSummary && (
                   <p style={{
-                    margin: '2px 0 0', fontSize: 11, fontWeight: 500, color: C.textSub,
+                    margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: C.textSub,
                     textAlign: 'center', ...FONT_SMOOTH,
                   }}>
                     {compactSummary}
@@ -1039,7 +1039,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
                 <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                   <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
                     TAP FOR SPECS
                   </span>
                 </div>
@@ -1128,7 +1128,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                       boxShadow: diagramView === v
                         ? `inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)`
                         : 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.8px',
                       color: diagramView === v ? KEY_ACCENT : steel(0.35),
                       WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
                     }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
