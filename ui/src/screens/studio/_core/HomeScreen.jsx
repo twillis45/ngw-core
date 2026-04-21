@@ -1907,27 +1907,27 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             x: COL_CX - 60, y: VF_TOP + Math.round(VF_HEIGHT / 2) - 50, w: 120, h: 100, r: 18,
             title: 'Recreate any light you see',
             desc: 'Drop in a portrait you want to reverse-engineer.',
-            tipY: VF_TOP + VF_HEIGHT + 66,
+            tipY: VF_TOP + VF_HEIGHT + 80,
             arrow: 'up',
           },
           { // Step 1: Analyze button — the solve
             x: COL_CX - BTN_D / 2 - 10, y: BTN_TOP - 10, w: BTN_D + 20, h: BTN_D + 20, r: BTN_D,
             title: 'Get the exact setup',
             desc: 'Pattern, modifier, distance, height — decoded.',
-            tipY: BTN_TOP - 220,
+            tipY: BTN_TOP - 240,
             arrow: 'down',
           },
           { // Step 2: Sample CTA — proof
             x: COL_CX - 155, y: BTN_TOP + BTN_D + 2, w: 310, h: 48, r: 24,
             title: 'See it in action',
             desc: 'We\'ll analyze a Rembrandt portrait for you.',
-            tipY: BTN_TOP - 100,
+            tipY: BTN_TOP - 130,
             arrow: 'down',
           },
         ];
         const s = spotlights[teachStep] || spotlights[0];
         // Clamp tooltip to viewport — prevent clipping on short screens
-        const CARD_H = 80;
+        const CARD_H = 110;
         const maxTipY = stableVH - safeBottom - CARD_H - 8;
         const minTipY = safeBottom + 8;
         s.tipY = Math.max(minTipY, Math.min(maxTipY, s.tipY));
@@ -2044,9 +2044,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               }} />
               <div style={{
                 position: 'relative',
-                padding: '10px 14px',
+                padding: '14px 18px',
                 borderRadius: 14,
-                backgroundColor: 'rgba(10,11,14,0.85)',
+                backgroundColor: 'rgba(10,11,14,0.88)',
                 border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
                 boxShadow: [
                   '0 8px 32px rgba(0,0,0,0.55)',
@@ -2106,8 +2106,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                       ...FONT_SMOOTH,
                     }}>{s.title}</p>
                     <p style={{
-                      margin: '3px 0 0', fontSize: 11, fontWeight: 500, lineHeight: '15px',
-                      color: 'rgba(184,191,199,0.50)',
+                      margin: '4px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '18px',
+                      color: 'rgba(184,191,199,0.62)',
                       ...FONT_SMOOTH,
                     }}>{s.desc}</p>
                   </div>
@@ -2127,8 +2127,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                     }}
                   >
                     <p style={{
-                      margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px',
-                      color: sc.replace(/[\d.]+\)$/, teachStep < 2 ? '0.82)' : '0.90)'),
+                      margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.3px',
+                      color: sc.replace(/[\d.]+\)$/, teachStep < 2 ? '0.85)' : '0.92)'),
                       ...FONT_SMOOTH,
                       whiteSpace: 'nowrap',
                     }}>{teachStep < 2 ? 'Next' : 'Try it'}</p>
