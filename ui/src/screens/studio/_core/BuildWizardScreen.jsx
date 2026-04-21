@@ -268,7 +268,7 @@ function IntentCard({ icon, label, desc, onClick, disabled }) {
       </span>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: C.textPrimary, marginBottom: 2, ...FONT_SMOOTH }}>{label}</div>
-        <div style={{ fontSize: 13, color: steel(0.45), fontWeight: 400, ...FONT_SMOOTH }}>{desc}</div>
+        <div style={{ fontSize: 14, color: steel(0.45), fontWeight: 400, ...FONT_SMOOTH }}>{desc}</div>
       </div>
       <span style={{ fontSize: 16, color: steel(0.3), ...FONT_SMOOTH }}>›</span>
     </button>
@@ -498,7 +498,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
       <div style={{ opacity: envReady ? 1 : 0.35, transition: 'opacity 0.2s ease' }}>
         <SectionLabel>Your Gear</SectionLabel>
         <p style={{
-          margin: '0 0 12px', fontSize: 13, color: steel(0.4),
+          margin: '0 0 12px', fontSize: 14, color: steel(0.4),
           lineHeight: 1.5, ...FONT_SMOOTH,
         }}>
           NGW adapts the blueprint to what you own. "Best Setup" shows the ideal rig.

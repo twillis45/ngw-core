@@ -119,7 +119,7 @@ export function SubstitutionsCard({ items }) {
                 MISSING
               </span>
               <span style={{
-                flex: 1, fontSize: 13, fontWeight: 500,
+                flex: 1, fontSize: 14, fontWeight: 500,
                 color: C.textPrimary, ...FONT_SMOOTH,
               }}>
                 {sub.ifMissing}
@@ -134,7 +134,7 @@ export function SubstitutionsCard({ items }) {
                 USE
               </span>
               <span style={{
-                flex: 1, fontSize: 13, fontWeight: 500,
+                flex: 1, fontSize: 14, fontWeight: 500,
                 color: C.textPrimary, ...FONT_SMOOTH,
               }}>
                 {sub.use}
@@ -175,7 +175,7 @@ export function QuickFixesCard({ items, fixOrder }) {
                 marginTop: 6, opacity: 0.85,
               }} />
               <span style={{
-                flex: 1, fontSize: 13, fontWeight: 400,
+                flex: 1, fontSize: 14, fontWeight: 400,
                 color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH,
               }}>
                 {fix}
@@ -202,8 +202,8 @@ export function QuickFixesCard({ items, fixOrder }) {
           }}>
             {order.map((step, i) => (
               <li key={i} style={{
-                fontSize: 13, fontWeight: 400, color: C.textSub,
-                lineHeight: 1.45, ...FONT_SMOOTH,
+                fontSize: 14, fontWeight: 400, color: C.textSub,
+                lineHeight: 1.5, ...FONT_SMOOTH,
               }}>
                 {step}
               </li>

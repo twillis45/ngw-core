@@ -1475,7 +1475,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           {zoomedPattern.def && (
             <p style={{
               margin: 0, maxWidth: 420,
-              fontSize: 14, lineHeight: 1.5,
+              fontSize: 15, lineHeight: 1.5,
               color: steel(0.78), textAlign: 'center',
               ...FONT_SMOOTH,
             }}>{zoomedPattern.def}</p>
@@ -2616,7 +2616,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 </div>
                 <p style={{
                   margin: 0,
-                  fontSize: 13, lineHeight: '19px',
+                  fontSize: 14, lineHeight: '20px',
                   color: 'rgba(225,228,234,0.92)',
                   ...FONT_SMOOTH,
                 }}>
@@ -3030,7 +3030,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               <>
                 <SubLabel>Scene</SubLabel>
                 {sections.sceneDescription && (
-                  <p style={{ margin: 0, fontSize: 13, fontWeight: 400, lineHeight: '20px', color: C.textSub, ...FONT_SMOOTH }}>
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 400, lineHeight: '21px', color: C.textSub, ...FONT_SMOOTH }}>
                     {sections.sceneDescription}
                   </p>
                 )}

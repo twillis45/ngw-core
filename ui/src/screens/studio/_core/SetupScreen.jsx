@@ -1301,7 +1301,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                 <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: steel(0.55), letterSpacing: '1px', ...FONT_SMOOTH }}>
                   BACKGROUND
                 </p>
-                <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>
                   {rsBg}
                 </p>
               </div>
@@ -1314,7 +1314,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                       width: 4, height: 4, borderRadius: 2, flexShrink: 0, marginTop: 7,
                       backgroundColor: steel(0.4),
                     }} />
-                    <p style={{ margin: 0, fontSize: 13, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 400, color: C.textSub, lineHeight: 1.5, ...FONT_SMOOTH }}>
                       {note}
                     </p>
                   </div>
