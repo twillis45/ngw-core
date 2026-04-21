@@ -48,7 +48,7 @@ export default function StudioLabWrapper({ onBack }) {
           ...FS,
         }}
       >
-        <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.45), letterSpacing: '0.3px' }}>← Exit Lab</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.50), letterSpacing: '0.3px' }}>← Exit Lab</span>
       </button>
 
       {/* Legacy Lab — fills entire viewport, no wrapper chrome */}
@@ -97,6 +97,12 @@ export default function StudioLabWrapper({ onBack }) {
         .lab-nav { padding-inline: 28px !important; }
         .lab-subnav { padding-inline: 28px !important; }
         .lab-wb-layout { padding-inline: 0 !important; }
+        /* Lab typography floor — enforce minimum readability */
+        .lab-screen button,
+        .lab-screen select,
+        .lab-screen .lab-btn { font-size: max(12px, inherit) !important; }
+        .lab-screen input,
+        .lab-screen textarea { font-size: 14px !important; }
       `}</style>
     </div>
   );

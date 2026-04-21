@@ -1315,7 +1315,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                     </svg>
                   )}
                   <span style={{
-                    fontSize: 13, fontWeight: 600, color: 'rgba(245,247,250,0.95)',
+                    fontSize: 14, fontWeight: 600, color: 'rgba(245,247,250,0.95)',
                     letterSpacing: '0.8px', ...FONT_SMOOTH,
                   }}>{primaryLabel}</span>
                 </button>
@@ -1344,7 +1344,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                 onClick={handleExit}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: steel(0.65), fontSize: 13, padding: '4px 0',
+                  color: steel(0.65), fontSize: 14, padding: '4px 0',
                   WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
                 }}
               >
@@ -1361,7 +1361,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   onClick={handleDone}
                   style={{
                     background: 'none', border: 'none', cursor: 'pointer',
-                    color: C.confHigh, fontSize: 12, fontWeight: 700,
+                    color: C.confHigh, fontSize: 14, fontWeight: 700,
                     letterSpacing: '0.6px', padding: '4px 0',
                     WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
                   }}
@@ -2060,9 +2060,9 @@ function CoachingPanel({ coach, variant = 'photographer' }) {
   if (!coach) return null;
   const isLearning = variant === 'learning';
   const pad = isLearning ? '14px 16px' : '10px 12px';
-  const labelFs = isLearning ? 9 : 8;
-  const itemFs = isLearning ? 11 : 10;
-  const symptomFs = isLearning ? 10 : 9;
+  const labelFs = isLearning ? 10 : 9;
+  const itemFs = isLearning ? 12 : 11;
+  const symptomFs = isLearning ? 11 : 10;
   const colGap = isLearning ? 14 : 10;
 
   return (
@@ -2138,7 +2138,7 @@ function CoachingPanel({ coach, variant = 'photographer' }) {
 function SpecCell({ label, value, sub }) {
   return (
     <div>
-      <p style={{ margin: 0, fontSize: 11, fontWeight: 600,
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 600,
         color: steel(0.45), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
         {label}
       </p>
@@ -2148,7 +2148,7 @@ function SpecCell({ label, value, sub }) {
         {value}
       </p>
       {sub && (
-        <p style={{ margin: '1px 0 0', fontSize: 11, fontWeight: 500,
+        <p style={{ margin: '1px 0 0', fontSize: 12, fontWeight: 500,
           color: steel(0.45), letterSpacing: '0.1px', ...FONT_SMOOTH,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {sub}
