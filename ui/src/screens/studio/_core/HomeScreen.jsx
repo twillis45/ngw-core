@@ -1366,7 +1366,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           <img src="/ghost-rembrandt.jpg" alt="" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: '50% 30%',
-            opacity: 0.10, zIndex: 1,
+            opacity: 0.15, zIndex: 1,
             pointerEvents: 'none',
             filter: 'grayscale(1) brightness(0.7)',
           }} />
@@ -1486,17 +1486,18 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 {/* What you get — restrained payoff preview */}
                 <p style={{
                   margin: '8px 0 0', fontSize: 13, fontWeight: 600, letterSpacing: '0.8px',
-                  color: steel(0.42), textTransform: 'uppercase',
+                  color: steel(0.50), textTransform: 'uppercase',
                   textShadow: '0 -1px 1px rgba(0,0,0,0.5)',
                   textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
                 }}>Pattern · Modifier · Distance · Diagram</p>
+                {/* ── NEW: subtle amber arrow pointing to sample CTA ── */}
                 {/* Ghosted sample read — one real result line.
                     Photographer-credible terminology. Not fake, not loud —
                     just enough to show the shape of the answer. */}
                 <p style={{
                   margin: '16px 0 0', fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
-                  color: steel(0.32),
+                  color: steel(0.40),
                   fontStyle: 'italic',
                   textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
@@ -1898,8 +1899,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               the instrument surface. */}
           <p style={{
             margin: 0,
-            fontSize: 13, fontWeight: 600, letterSpacing: '0.5px',
-            color: sampleLoading ? steel(0.30) : steel(0.45),
+            fontSize: 14, fontWeight: 600, letterSpacing: '0.5px',
+            color: sampleLoading ? steel(0.35) : steel(0.55),
             ...FONT_SMOOTH,
           }}>
             {sampleLoading ? 'Loading…' : 'Try a sample photo →'}

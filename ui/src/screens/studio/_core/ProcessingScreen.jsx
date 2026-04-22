@@ -282,8 +282,8 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                   }} />
                 </div>
                 <p style={{
-                  margin: 0, fontWeight: 700, fontSize: 13, letterSpacing: '1.5px',
-                  color: 'rgba(72,186,136,0.55)', fontVariantNumeric: 'tabular-nums',
+                  margin: 0, fontWeight: 700, fontSize: 14, letterSpacing: '1.5px',
+                  color: 'rgba(72,186,136,0.70)', fontVariantNumeric: 'tabular-nums',
                   ...FS,
                 }}>{Math.round(progress)}%</p>
               </div>
@@ -312,7 +312,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
                 : _confMode === 'detailed' ? `${_label} · ${_pct}`
                 : _showPct ? `${_label} · ${_pct}` : _label;
               return (
-                <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
+                <p style={{ margin: '6px 0 0', fontSize: 15, fontWeight: 600, color: result.confidence >= 70 ? 'rgba(140,225,180,0.90)' : 'rgba(250,210,130,0.90)', letterSpacing: '0.8px', textAlign: 'center', textTransform: 'uppercase', ...FS }}>
                   {_text}
                 </p>
               );

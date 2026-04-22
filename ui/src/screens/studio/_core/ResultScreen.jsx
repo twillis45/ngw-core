@@ -1735,7 +1735,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   const VF_HEIGHT = Math.max(280, M_WELL_TOP - VF_GAP - VF_TOP);
   // Single detail drawer — THE LIGHT and THE SETUP are always visible.
   // Only the DETAIL section (scene + colors + confidence) collapses.
-  const [detailOpen, setDetailOpen] = useState(false);
+  // Auto-expand DETAIL on high confidence — photographer wants to see the full read
+  const [detailOpen, setDetailOpen] = useState(() => confidence >= 80);
   const [diagramView, setDiagramView] = useState('top');
   const [diagramZoomed, setDiagramZoomed] = useState(false);
   const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
@@ -2543,7 +2544,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             {geometricBase && (
               <p style={{
                 margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
-                fontSize: isDesktop ? 15 : 13, lineHeight: '1.2',
+                fontSize: isDesktop ? 15 : 14, lineHeight: '1.2',
                 color: steel(0.55), letterSpacing: '0.5px',
                 ...FONT_SMOOTH,
                 textShadow: TEXT_SHADOW_ENGRAVED,

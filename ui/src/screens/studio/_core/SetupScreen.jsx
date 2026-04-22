@@ -787,7 +787,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       {!isDesktop && imagePreview && (
         <div style={{
           position: 'relative', width: '100%',
-          height: Math.round((typeof window !== 'undefined' ? window.innerHeight : 844) * 0.40),
+          height: Math.round((typeof window !== 'undefined' ? window.innerHeight : 844) * 0.45),
           overflow: 'hidden', flexShrink: 0,
         }}>
           <img src={imagePreview} alt="" style={{
