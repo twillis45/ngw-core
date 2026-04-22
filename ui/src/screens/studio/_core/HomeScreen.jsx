@@ -1178,8 +1178,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.10em', color: steel(0.50) }}>Lighting</span></p>
         <p style={{
           margin: '2px 0 0',
-          fontWeight: 600, fontSize: 12, lineHeight: '15px',
-          color: steel(0.42), letterSpacing: '0.3px',
+          fontWeight: 600, fontSize: 13, lineHeight: '16px',
+          color: steel(0.48), letterSpacing: '0.3px',
           ...FONT_SMOOTH,
         }}>Reverse-engineer any portrait lighting</p>
       </div>
