@@ -783,7 +783,54 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
 
       <MatteBackground variant="subdued" />
 
-      {/* ─── Nav bar ─── */}
+      {/* ─── Full-bleed photo hero — matches Home/Processing/Result ─── */}
+      {!isDesktop && imagePreview && (
+        <div style={{
+          position: 'relative', width: '100%',
+          height: Math.round((typeof window !== 'undefined' ? window.innerHeight : 844) * 0.40),
+          overflow: 'hidden', flexShrink: 0,
+        }}>
+          <img src={imagePreview} alt="" style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: faceCrop || '50% 25%',
+            opacity: 0.85,
+          }} />
+          {/* Bottom gradient */}
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: 120,
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(0,0,0,0.60) 40%, rgba(0,0,0,0.95) 100%)',
+          }} />
+          {/* Back chevron on hero */}
+          <button aria-label="Back" onClick={handleCancel} style={{
+            position: 'absolute', top: 48, left: 8, width: 44, height: 44, zIndex: 10,
+            background: 'none', border: 'none', cursor: 'pointer',
+            WebkitTapHighlightColor: 'transparent',
+          }}>
+            <span style={{ fontSize: 22, color: C.textMeta, lineHeight: 1, ...FONT_SMOOTH }}>‹</span>
+          </button>
+          {/* Pattern name + confidence overlaid on hero */}
+          {result && (
+            <div style={{ position: 'absolute', bottom: 16, left: 24, right: 24, zIndex: 5 }}>
+              <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: steel(0.55), letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+                LIGHTING PATTERN
+              </p>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+                <p style={{ margin: '2px 0 0', fontSize: 26, fontWeight: 800, color: C.textPrimary, letterSpacing: '-0.3px', ...FONT_SMOOTH }}>
+                  {result.pattern}
+                </p>
+                {result.confidence != null && (
+                  <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: result.confidence >= 70 ? C.confHigh : C.confLow, ...FONT_SMOOTH }}>
+                    {Math.round(result.confidence)}%
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Nav bar — desktop or no image fallback ─── */}
+      {(isDesktop || !imagePreview) && (
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: isDesktop ? '56px 40px 0' : '56px 20px 0', position: 'relative', zIndex: 1,
@@ -815,6 +862,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </button>
         )}
       </div>
+      )}
 
       {/* ─── Content ─── */}
       <div style={{
@@ -825,8 +873,8 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         position: 'relative', zIndex: 1,
       }}>
 
-        {/* ── Result header — always expanded ── */}
-        {result && (
+        {/* ── Result header — hidden on mobile when full-bleed hero is showing ── */}
+        {result && (isDesktop || !imagePreview) && (
           <div style={{
             borderRadius: 14, backgroundColor: C.panelBg,
             boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
