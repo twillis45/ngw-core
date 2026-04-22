@@ -169,11 +169,14 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
 
       {/* ── Viewfinder — fills entire viewport on desktop ── */}
       <div style={{
+        // Full-bleed photo — fills entire viewport on all devices.
+        // Stage readout + dome overlay on top via gradient scrims.
         position: isDesktop ? 'relative' : 'absolute',
-        top: isDesktop ? undefined : VF_TOP,
-        left: isDesktop ? undefined : 0,
-        right: isDesktop ? undefined : 0,
-        height: isDesktop ? '100%' : VF_HEIGHT,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: isDesktop ? '100%' : undefined,
         gridColumn: isDesktop ? '1 / -1' : undefined,
         gridRow: isDesktop ? '1 / -1' : undefined,
         borderRadius: 0, overflow: 'hidden',
@@ -234,7 +237,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         {!isDesktop && !analysisComplete && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '40px 20px 20px',
+            padding: `40px 20px ${stableVH - BTN_TOP + 30}px`,
             background: 'linear-gradient(to bottom, transparent 0%, rgba(4,5,8,0.50) 30%, rgba(4,5,8,0.85) 100%)',
             zIndex: 7, pointerEvents: 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
@@ -291,7 +294,8 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         {!isDesktop && analysisComplete && result?.pattern && (
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '36px 20px 18px',
+            // Pad bottom to clear dome CTA zone
+            padding: `36px 20px ${stableVH - BTN_TOP + 30}px`,
             background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.70) 40%, rgba(11,11,12,0.92) 100%)',
             zIndex: 7, animation: 'patternTeaseIn 0.5s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
           }}>

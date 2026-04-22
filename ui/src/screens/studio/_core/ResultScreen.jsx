@@ -2177,7 +2177,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   const D_DIAGRAM_TOP  = D_CTA_TOP + 60;         // CTA (48) + 12 gap → diagram well
   // Desktop: hero fills available viewport height (minus CTA area at bottom).
   // The photo + pattern overlay stretch to fill the column naturally.
-  const panelTop    = isDesktop ? (stableVH - 80) : M_TOP_END;
+  // Hero photo fills ~55% of viewport. Pattern name + chips + CTA + drawers
+  // all visible below without scrolling — matches Figma single-scroll layout.
+  const panelTop    = isDesktop ? (stableVH - 80) : Math.round(stableVH * 0.55);
 
   // Detail drawer toggle — silent.  THE LIGHT and THE SETUP are always
   // visible; only the DETAIL section collapses.
@@ -2236,7 +2238,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
     <div
       style={{
       width: '100%',
-      maxWidth: isDesktop ? '100%' : 430,
+      maxWidth: isDesktop ? '100%' : undefined,
       height: '100%',
       backgroundColor: C.bg,
       boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
@@ -2350,11 +2352,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             // fullscreen overlay (rendered below, escapes FitToViewport)
             // own the visual.  Keeping the inline node mounted preserves
             // the position/size CSS so exit transitions still feel right.
+            // Photo fills the hero section (top ~55% of viewport).
+            // Pattern name + answer content visible below.
             position: 'absolute',
-            top: (isDesktop ? D_PHOTO_TOP : VF_TOP),
+            top: 0,
             left: 0,
             right: 0,
-            height: (isDesktop ? D_PHOTO_HEIGHT : VF_HEIGHT),
+            height: '100%',
             borderRadius: 0,
             visibility: isZoomed ? 'hidden' : 'visible',
             overflow: 'hidden',
@@ -2369,8 +2373,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           {imagePreview && (
             <img key={imagePreview} src={imagePreview} alt="Result" style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'contain',
-              objectPosition: '50% 50%',
+              objectFit: isDesktop ? 'contain' : 'cover',
+              objectPosition: isDesktop ? '50% 50%' : '50% 25%',
               opacity: 1,
               // Inline pinch-zoom + pan — transform applied directly so the
               // image scales inside the VF with overflow: hidden clipping.

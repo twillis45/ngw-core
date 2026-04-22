@@ -1295,11 +1295,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         role="button"
         aria-label={hasImage ? 'Photo loaded — tap to swap, long-press to clear' : 'Tap to load a photo'}
         style={{
+          // Full-bleed on ALL viewports — photo fills the entire screen.
+          // Brand and dome overlay on top, not alongside.
           position: isDesktop ? 'relative' : 'absolute',
-          top: isDesktop ? undefined : VF_TOP,
-          left: isDesktop ? undefined : 0,
-          right: isDesktop ? undefined : 0,
-          height: isDesktop ? '100%' : VF_HEIGHT,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: isDesktop ? '100%' : undefined,
           gridColumn: isDesktop ? '1 / -1' : undefined,
           gridRow: isDesktop ? '1 / -1' : undefined,
           borderRadius: 0,
@@ -1353,6 +1356,21 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           ].join(', '),
           pointerEvents: 'none', zIndex: 0,
         }} />
+
+        {/* 0a — Ghosted sample portrait — faint hint of a face in the empty VF.
+             Shows "a portrait goes here" and hints at the analysis subject.
+             Sits behind brackets/text (z1) but above LCD backlight (z0).
+             Fades out when a real photo loads. The image is already prefetched
+             at mount (line ~89) so this renders instantly from cache. */}
+        {!hasImage && (
+          <img src="/ghost-rembrandt.jpg" alt="" style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'cover', objectPosition: '50% 30%',
+            opacity: 0.10, zIndex: 1,
+            pointerEvents: 'none',
+            filter: 'grayscale(1) brightness(0.7)',
+          }} />
+        )}
 
         {/* 0b — LCD sub-pixel texture — faint horizontal scan lines that make the
              surface read as a real display panel, not a flat div. Subtle enough to
