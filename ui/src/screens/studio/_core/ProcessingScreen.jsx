@@ -242,6 +242,12 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
             zIndex: 7, pointerEvents: 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
           }}>
+            {/* Context label — reinforces what the system is doing */}
+            <p style={{
+              margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '1.8px',
+              color: 'rgba(72,186,136,0.45)', textTransform: 'uppercase',
+              ...FS,
+            }}>READING LIGHTING</p>
             {/* Frosted glass readout card */}
             <div style={{
               padding: '14px 24px 12px',

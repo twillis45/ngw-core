@@ -1908,9 +1908,30 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         </div>
       )}
 
-      {/* Tagline removed — value prop appears above VF; output hint fills the gap below */}
-
-      {/* Home Indicator removed — interfered with mobile viewport / safe-area on Samsung and compact phones */}
+      {/* ── Last result indicator — subtle chip when a prior result exists ── */}
+      {!isDesktop && hasLastResult && !hasImage && (
+        <div
+          onClick={() => { if (onViewLastResult) { softClickSound(); tapHaptic(); onViewLastResult(); } }}
+          style={{
+            position: 'absolute',
+            top: BTN_TOP - 36,
+            left: '50%', transform: 'translateX(-50%)',
+            padding: '5px 14px', borderRadius: 20,
+            background: 'rgba(72,186,136,0.12)',
+            border: '1px solid rgba(72,186,136,0.25)',
+            cursor: 'pointer',
+            zIndex: 8,
+            display: 'flex', alignItems: 'center', gap: 6,
+            WebkitTapHighlightColor: 'transparent',
+            animation: 'ghostFadeIn 0.6s ease 0.5s both',
+          }}
+        >
+          <span style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(72,186,136,0.75)' }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(72,186,136,0.80)', letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+            Last read
+          </span>
+        </div>
+      )}
 
       {/* ── Spotlight coach-marks — first-time user walkthrough ──────────────
            Semi-transparent scrim with spotlight cutout over the active UI element.
