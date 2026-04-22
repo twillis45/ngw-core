@@ -1922,26 +1922,29 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         // Column may be narrower than 430px on small viewports
         const COL_W = Math.min(430, window.innerWidth);
         const COL_CX = Math.round(COL_W / 2);
+        // Full-bleed viewport: VF fills 0→stableVH. Spotlight targets
+        // are absolute pixel positions. Cards sit near VF center (~35%).
+        const vhCenter = Math.round(stableVH * 0.35);
         const spotlights = [
-          { // Step 0: IMPORT icon — the problem
-            x: COL_CX - 60, y: VF_TOP + Math.round(VF_HEIGHT / 2) - 50, w: 120, h: 100, r: 18,
+          { // Step 0: IMPORT icon — center of viewport
+            x: COL_CX - 60, y: Math.round(stableVH * 0.28), w: 120, h: 100, r: 18,
             title: 'Recreate any light you see',
             desc: 'Drop in a portrait you want to reverse-engineer.',
-            tipY: Math.round(stableVH * 0.42),
+            tipY: Math.round(stableVH * 0.28) + 120,
             arrow: 'up',
           },
-          { // Step 1: Analyze button — the solve
+          { // Step 1: Analyze button — dome at bottom
             x: COL_CX - BTN_D / 2 - 10, y: BTN_TOP - 10, w: BTN_D + 20, h: BTN_D + 20, r: BTN_D,
             title: 'Get the exact setup',
             desc: 'Pattern, modifier, distance, height — decoded.',
-            tipY: Math.round(stableVH * 0.30),
+            tipY: vhCenter,
             arrow: 'down',
           },
-          { // Step 2: Sample CTA — proof (card pushed toward VF center)
+          { // Step 2: Sample CTA — below dome
             x: COL_CX - 155, y: BTN_TOP + BTN_D + 2, w: 310, h: 48, r: 24,
             title: 'See it in action',
             desc: 'We\'ll analyze a Rembrandt portrait for you.',
-            tipY: Math.round(stableVH * 0.35),
+            tipY: vhCenter,
             arrow: 'down',
           },
         ];
