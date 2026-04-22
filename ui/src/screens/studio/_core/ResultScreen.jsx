@@ -1736,7 +1736,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
   // Single detail drawer — THE LIGHT and THE SETUP are always visible.
   // Only the DETAIL section (scene + colors + confidence) collapses.
   // Auto-expand DETAIL on high confidence — photographer wants to see the full read
-  const [detailOpen, setDetailOpen] = useState(() => confidence >= 80);
+  const [detailOpen, setDetailOpen] = useState(() => (result?.confidence ?? 0) >= 80);
   const [diagramView, setDiagramView] = useState('top');
   const [diagramZoomed, setDiagramZoomed] = useState(false);
   const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
