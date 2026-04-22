@@ -1455,32 +1455,34 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
                   <circle cx="19" cy="19" r="1.5" fill={steel(0.40)} />
                 </svg>
-                {/* VF copy — instruction + specific deliverables + ghosted proof */}
+                {/* VF copy — instruction + deliverables + ghosted proof.
+                    Two-state design: this IS the payoff preview for the empty state.
+                    It communicates what the user gets, not just what to do. */}
                 <p style={{
                   margin: '10px 0 0', fontSize: 16, fontWeight: 700, letterSpacing: '-0.1px',
-                  color: steel(0.62),
+                  color: steel(0.65),
                   textShadow: '0 -1px 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04)',
                   textAlign: 'center', lineHeight: '20px',
                   ...FONT_SMOOTH,
-                }}>Tap to load a portrait</p>
-                {/* Specific deliverables — names what the user actually gets. */}
+                }}>Load a portrait</p>
+                {/* What you get — restrained payoff preview */}
                 <p style={{
-                  margin: '6px 0 0', fontSize: 11, fontWeight: 600, letterSpacing: '1.5px',
-                  color: steel(0.38), textTransform: 'uppercase',
-                  textShadow: '0 -1px 1px rgba(0,0,0,0.6)',
-                  textAlign: 'center', lineHeight: '14px',
+                  margin: '8px 0 0', fontSize: 13, fontWeight: 600, letterSpacing: '0.8px',
+                  color: steel(0.42), textTransform: 'uppercase',
+                  textShadow: '0 -1px 1px rgba(0,0,0,0.5)',
+                  textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
-                }}>Pattern · Modifier · Position · Diagram</p>
-                {/* Ghosted output preview — one believable result line.
-                    Shows WHAT you get, not just that you get something.
-                    Real terminology a photographer would respect. */}
+                }}>Pattern · Modifier · Distance · Diagram</p>
+                {/* Ghosted sample read — one real result line.
+                    Photographer-credible terminology. Not fake, not loud —
+                    just enough to show the shape of the answer. */}
                 <p style={{
-                  margin: '14px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.2px',
-                  color: steel(0.28),
+                  margin: '16px 0 0', fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
+                  color: steel(0.32),
                   fontStyle: 'italic',
-                  textAlign: 'center', lineHeight: '15px',
+                  textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
-                }}>Rembrandt · 3:1 · 5′ octa · 45° camera-left</p>
+                }}>Rembrandt · Softbox · 45° left · 4 ft</p>
               </>)}
               {isUrlFetching && (
                 <p style={{
@@ -1878,8 +1880,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               the instrument surface. */}
           <p style={{
             margin: 0,
-            fontSize: 12, fontWeight: 600, letterSpacing: '0.5px',
-            color: sampleLoading ? steel(0.22) : steel(0.35),
+            fontSize: 13, fontWeight: 600, letterSpacing: '0.5px',
+            color: sampleLoading ? steel(0.30) : steel(0.45),
             ...FONT_SMOOTH,
           }}>
             {sampleLoading ? 'Loading…' : 'Try a sample photo →'}
