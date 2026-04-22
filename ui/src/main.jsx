@@ -35,6 +35,14 @@ Sentry.init({
   },
 });
 
+/* Lock phones to portrait via Screen Orientation API (PWA/fullscreen only).
+   Falls back silently — the CSS overlay in index.html handles non-PWA. */
+try {
+  if (screen.orientation?.lock && window.innerWidth < 768) {
+    screen.orientation.lock('portrait').catch(() => {});
+  }
+} catch { /* ignore — API not supported */ }
+
 /* Apply saved theme and settings before first paint.
    Studio Matte flow forces 'studio' theme for the deeper carbon-black palette. */
 const _savedTheme = loadTheme();

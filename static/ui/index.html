@@ -6,10 +6,36 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#0f172a" />
   <title>No Guesswork Lighting</title>
-  <script type="module" crossorigin src="/static/ui/assets/index-6dc107e8.js"></script>
+  <style>
+    /* Phone landscape blocker — show "rotate to portrait" overlay.
+       Tablets (≥768px short side) are excluded and get desktop layout. */
+    #ngw-rotate-overlay {
+      display: none; position: fixed; inset: 0; z-index: 99999;
+      background: #000; color: rgba(132,158,184,0.7);
+      flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; font-family: Inter, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    #ngw-rotate-overlay svg { opacity: 0.5; animation: ngwRotatePulse 2s ease-in-out infinite; }
+    #ngw-rotate-overlay p { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.3px; }
+    #ngw-rotate-overlay span { font-size: 13px; font-weight: 400; opacity: 0.5; }
+    @keyframes ngwRotatePulse { 0%,100%{transform:rotate(0)} 50%{transform:rotate(90deg)} }
+    @media screen and (max-width: 767px) and (orientation: landscape) {
+      #ngw-rotate-overlay { display: flex; }
+      #root { display: none; }
+    }
+  </style>
+  <script type="module" crossorigin src="/static/ui/assets/index-37e41dac.js"></script>
   <link rel="stylesheet" href="/static/ui/assets/index-a62d1f47.css">
 </head>
 <body>
+  <div id="ngw-rotate-overlay">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="2" width="16" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18.01"/>
+    </svg>
+    <p>Rotate to portrait</p>
+    <span>NGW is designed for portrait mode</span>
+  </div>
   <div id="root"></div>
   
 </body>
