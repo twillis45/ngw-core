@@ -3465,8 +3465,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
         const sc = stepColors[resultTeachStep] || stepColors[0];
 
         // Arrow geometry — card shifted left for down-arrows, arrow targets spotlight edge
-        const cardLeft = s.arrow === 'down' ? 20 : 32;
-        const cardRight = s.arrow === 'down' ? 140 : 32;
+        const cardLeft = 24;
+        const cardRight = 24;
         const cardW = COL_W - cardLeft - cardRight;
         const cardCX = cardLeft + cardW / 2;
         const cardEdgeY = s.arrow === 'up' ? s.tipY : s.tipY + 72;
@@ -3562,9 +3562,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
               }} />
               <div style={{
                 position: 'relative',
-                padding: '10px 14px',
-                borderRadius: 14,
-                backgroundColor: 'rgba(10,11,14,0.85)',
+                padding: '24px 28px 20px',
+                borderRadius: 18,
+                backgroundColor: 'rgba(10,11,14,0.92)',
                 border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
                 boxShadow: [
                   '0 8px 32px rgba(0,0,0,0.55)',
@@ -3576,11 +3576,25 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 backdropFilter: 'blur(20px) saturate(1.3)',
                 WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Top: large text */}
+                  <div>
+                    <p style={{
+                      margin: 0, fontSize: 22, fontWeight: 800, lineHeight: '26px',
+                      color: 'rgba(245,247,250,0.96)', letterSpacing: '-0.4px',
+                      ...FONT_SMOOTH,
+                    }}>{s.title}</p>
+                    <p style={{
+                      margin: '6px 0 0', fontSize: 16, fontWeight: 500, lineHeight: '22px',
+                      color: 'rgba(184,191,199,0.72)', ...FONT_SMOOTH,
+                    }}>{s.desc}</p>
+                  </div>
+                  {/* Bottom row: icon + action */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {/* Step icon */}
                   <div style={{
-                    width: 36, height: 36, flexShrink: 0,
-                    borderRadius: 10,
+                    width: 52, height: 52, flexShrink: 0,
+                    borderRadius: 14,
                     background: `linear-gradient(145deg, ${sc.replace(/[\d.]+\)$/, '0.14)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.03)')} 100%)`,
                     border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.16)')}`,
                     boxShadow: `inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
@@ -3588,26 +3602,26 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     animation: 'rTeachFloat 3s ease-in-out infinite',
                   }}>
                     {resultTeachStep === 0 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'rTeachGlow 2s ease-in-out infinite' }}>
                         <circle cx="16" cy="16" r="10" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
                         <path d="M12 16l3 3 5-6" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                       </svg>
                     )}
                     {resultTeachStep === 1 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'rTeachGlow 2s ease-in-out infinite' }}>
                         <circle cx="16" cy="16" r="6" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
                         <path d="M16 6v4M16 22v4M6 16h4M22 16h4M9 9l3 3M20 20l3 3M9 23l3-3M20 12l3-3" stroke={sc.replace(/[\d.]+\)$/, '0.50)')} strokeWidth="1.4" strokeLinecap="round" />
                       </svg>
                     )}
                     {resultTeachStep === 2 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'rTeachGlow 2s ease-in-out infinite' }}>
                         <rect x="6" y="8" width="20" height="16" rx="2" stroke={sc.replace(/[\d.]+\)$/, '0.55)')} strokeWidth="1.8" fill="none" />
                         <path d="M10 14h4M10 18h8" stroke={sc.replace(/[\d.]+\)$/, '0.50)')} strokeWidth="1.4" strokeLinecap="round" />
                         <circle cx="22" cy="14" r="2" fill={sc.replace(/[\d.]+\)$/, '0.35)')} />
                       </svg>
                     )}
                     {resultTeachStep === 3 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'rTeachGlow 2s ease-in-out infinite' }}>
                         <path d="M16 6l-3 6h6l-3 6" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
                         <path d="M8 22h16" stroke={sc.replace(/[\d.]+\)$/, '0.45)')} strokeWidth="1.6" strokeLinecap="round" />
                         <path d="M10 26h12" stroke={sc.replace(/[\d.]+\)$/, '0.30)')} strokeWidth="1.4" strokeLinecap="round" />
@@ -3615,24 +3629,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     )}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                      margin: 0, fontSize: 14, fontWeight: 700, lineHeight: '18px',
-                      color: 'rgba(245,247,250,0.94)',
-                      letterSpacing: '-0.2px',
-                      ...FONT_SMOOTH,
-                    }}>{s.title}</p>
-                    <p style={{
-                      margin: '3px 0 0', fontSize: 11, fontWeight: 500, lineHeight: '15px',
-                      color: 'rgba(184,191,199,0.50)',
-                      ...FONT_SMOOTH,
-                    }}>{s.desc}</p>
-                  </div>
-
+                  <div style={{ flex: 1 }} />
                   <div
                     onClick={(e) => { e.stopPropagation(); advanceResultTeach(); }}
                     style={{
-                      flexShrink: 0, padding: '6px 14px', borderRadius: 9,
+                      flexShrink: 0, padding: '8px 18px', borderRadius: 10,
                       background: `linear-gradient(135deg, ${sc.replace(/[\d.]+\)$/, '0.16)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.06)')} 100%)`,
                       border: `1px solid ${sc.replace(/[\d.]+\)$/, resultTeachStep < 3 ? '0.18)' : '0.26)')}`,
                       boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.06)')}`,
@@ -3640,12 +3641,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                     }}
                   >
                     <p style={{
-                      margin: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px',
-                      color: sc.replace(/[\d.]+\)$/, resultTeachStep < 3 ? '0.82)' : '0.90)'),
+                      margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '0.4px',
+                      color: sc.replace(/[\d.]+\)$/, resultTeachStep < 3 ? '0.90)' : '0.95)'),
                       ...FONT_SMOOTH, whiteSpace: 'nowrap',
-                    }}>{resultTeachStep < 3 ? 'Next' : 'Got it'}</p>
+                    }}>{resultTeachStep < 3 ? 'Next →' : 'Got it →'}</p>
                   </div>
-                </div>
+                </div>{/* close bottom row */}
+                </div>{/* close two-row layout */}
 
                 {/* Progress bar + skip */}
                 <div style={{
@@ -3764,9 +3766,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
         /* rTeachArrowSlideN keyframes are generated inline per step */
         @keyframes rTeachBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
         @keyframes rTeachFloat {
-          0%   { transform: translateY(0); }
-          50%  { transform: translateY(-3px); }
-          100% { transform: translateY(0); }
+          0%   { transform: translateY(0) scale(1); filter: brightness(1); }
+          50%  { transform: translateY(-5px) scale(1.12); filter: brightness(1.4); }
+          100% { transform: translateY(0) scale(1); filter: brightness(1); }
+        }
+        @keyframes rTeachGlow {
+          0%   { filter: drop-shadow(0 0 2px currentColor) brightness(1); }
+          50%  { filter: drop-shadow(0 0 8px currentColor) brightness(1.3); }
+          100% { filter: drop-shadow(0 0 2px currentColor) brightness(1); }
         }
         @property --teach-border-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
         @keyframes rTeachBorder { to { --teach-border-angle: 360deg; } }

@@ -1522,9 +1522,10 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           const _dotsTop = _vh - _sb - _actionRowH + 4;
           const _ctaTop = _vh - _sb - 34 - 56;
           // Card height estimate for clamp
-          const _CARD_H = 110;
+          const _CARD_H = 170;
           const _maxTipY = _vh - _sb - _CARD_H - 8;
           const _minTipY = _sb + 8;
+          const _vhMid = Math.round(_vh * 0.38); // push cards toward VF center
           const clampTip = (y) => Math.max(_minTipY, Math.min(_maxTipY, y));
 
           const _spots = [
@@ -1532,28 +1533,28 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               x: 20, y: _photoTop, w: COL_W - 40, h: _photoH, r: 12,
               title: 'Your target light',
               desc: 'The light you\'re recreating — match this on set.',
-              tipY: clampTip(_photoTop + _photoH + 24),
+              tipY: clampTip(Math.max(_vhMid, _photoTop + _photoH + 24)),
               arrow: 'up',
             },
             { // Step 1: Step lead + spec strip — the instructions
               x: 16, y: _bodyTop - 4, w: COL_W - 32, h: 64, r: 14,
               title: 'Step-by-step rebuild',
               desc: 'Each step tells you exactly what to place and where.',
-              tipY: clampTip(_bodyTop + 90),
+              tipY: clampTip(Math.max(_vhMid, _bodyTop + 90)),
               arrow: 'up',
             },
             { // Step 2: Step dots — navigation
               x: COL_CX - 115, y: _dotsTop - 6, w: 230, h: 28, r: 14,
               title: 'Swipe or tap to navigate',
               desc: 'Move between setup steps at your own pace.',
-              tipY: clampTip(_dotsTop - 140),
+              tipY: clampTip(Math.min(_vhMid, _dotsTop - 180)),
               arrow: 'down',
             },
             { // Step 3: Capture button — the action
               x: COL_CX - 155, y: _ctaTop - 4, w: 310, h: 56, r: 28,
               title: 'Fire when it matches',
               desc: 'Tap Capture once your light matches the reference.',
-              tipY: clampTip(_ctaTop - 140),
+              tipY: clampTip(Math.min(_vhMid, _ctaTop - 180)),
               arrow: 'down',
             },
           ];
@@ -1574,8 +1575,8 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
           const _sc = _colors[cockpitTeachStep] || _colors[0];
 
           // Arrow geometry — card shifted left for down-arrows, arrow targets spotlight edge
-          const _cardLeft = _s.arrow === 'down' ? 20 : 32;
-          const _cardRight = _s.arrow === 'down' ? 140 : 32;
+          const _cardLeft = 24;
+          const _cardRight = 24;
           const _cardW = COL_W - _cardLeft - _cardRight;
           const _cardCX = _cardLeft + _cardW / 2;
           const _cardEdgeY = _s.arrow === 'up' ? _s.tipY : _s.tipY + 72;
@@ -1704,9 +1705,9 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                 }} />
                 <div style={{
                   position: 'relative',
-                  padding: '14px 18px',
-                  borderRadius: 14,
-                  backgroundColor: 'rgba(10,11,14,0.88)',
+                  padding: '24px 28px 20px',
+                  borderRadius: 18,
+                  backgroundColor: 'rgba(10,11,14,0.92)',
                   border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.08)')}`,
                   boxShadow: [
                     '0 8px 32px rgba(0,0,0,0.55)',
@@ -1718,12 +1719,24 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                   backdropFilter: 'blur(20px) saturate(1.3)',
                   WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
                 }}>
-                  {/* Single row: icon + text + action */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {/* Two-row: big text on top, icon + action on bottom */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                      <p style={{
+                        margin: 0, fontSize: 22, fontWeight: 800, lineHeight: '26px',
+                        color: 'rgba(245,247,250,0.96)', letterSpacing: '-0.4px',
+                        ...FONT_SMOOTH,
+                      }}>{_s.title}</p>
+                      <p style={{
+                        margin: '6px 0 0', fontSize: 16, fontWeight: 500, lineHeight: '22px',
+                        color: 'rgba(184,191,199,0.72)', ...FONT_SMOOTH,
+                      }}>{_s.desc}</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     {/* Icon badge */}
                     <div style={{
-                      width: 36, height: 36, flexShrink: 0,
-                      borderRadius: 10,
+                      width: 52, height: 52, flexShrink: 0,
+                      borderRadius: 14,
                       background: `linear-gradient(145deg, ${_sc.replace(/[\d.]+\)$/, '0.14)')} 0%, ${_sc.replace(/[\d.]+\)$/, '0.03)')} 100%)`,
                       border: `1px solid ${_sc.replace(/[\d.]+\)$/, '0.16)')}`,
                       boxShadow: `inset 0 1px 0 ${_sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
@@ -1733,28 +1746,14 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       {_icons[cockpitTeachStep]}
                     </div>
 
-                    {/* Text block */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        margin: 0, fontSize: 14, fontWeight: 700, lineHeight: '18px',
-                        color: 'rgba(245,247,250,0.94)',
-                        letterSpacing: '-0.2px',
-                        ...FONT_SMOOTH,
-                      }}>{_s.title}</p>
-                      <p style={{
-                        margin: '4px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '18px',
-                        color: 'rgba(184,191,199,0.62)',
-                        ...FONT_SMOOTH,
-                      }}>{_s.desc}</p>
-                    </div>
-
+                    <div style={{ flex: 1 }} />
                     {/* Action pill */}
                     <div
                       onClick={(e) => { e.stopPropagation(); advanceCockpitTeach(); }}
                       style={{
                         flexShrink: 0,
-                        padding: '6px 14px',
-                        borderRadius: 9,
+                        padding: '8px 18px',
+                        borderRadius: 10,
                         background: `linear-gradient(135deg, ${_sc.replace(/[\d.]+\)$/, '0.16)')} 0%, ${_sc.replace(/[\d.]+\)$/, '0.06)')} 100%)`,
                         border: `1px solid ${_sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.18)' : '0.26)')}`,
                         boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${_sc.replace(/[\d.]+\)$/, '0.06)')}`,
@@ -1763,13 +1762,14 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       }}
                     >
                       <p style={{
-                        margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.3px',
-                        color: _sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.82)' : '0.90)'),
+                        margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '0.4px',
+                        color: _sc.replace(/[\d.]+\)$/, cockpitTeachStep < 3 ? '0.90)' : '0.95)'),
                         ...FONT_SMOOTH,
                         whiteSpace: 'nowrap',
-                      }}>{cockpitTeachStep < 3 ? 'Next' : 'Got it'}</p>
+                      }}>{cockpitTeachStep < 3 ? 'Next →' : 'Got it →'}</p>
                     </div>
-                  </div>
+                    </div>{/* close bottom row */}
+                  </div>{/* close two-row layout */}
 
                   {/* Progress track + skip */}
                   <div style={{

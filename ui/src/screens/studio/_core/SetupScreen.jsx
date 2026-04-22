@@ -775,7 +775,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       onTouchMove={handleSwipeBackMove}
       onTouchEnd={handleSwipeBackEnd}
       style={{
-      width: '100%', maxWidth: isDesktop ? 'min(96vw, 1400px)' : 430, height: '100%', margin: '0 auto',
+      width: '100%', maxWidth: isDesktop ? 'min(96vw, 1400px)' : undefined, height: '100%', margin: '0 auto',
       backgroundColor: C.bg,
       display: 'flex', flexDirection: 'column', overflowY: 'auto',
       position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',

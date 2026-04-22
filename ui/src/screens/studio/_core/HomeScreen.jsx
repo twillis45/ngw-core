@@ -1927,27 +1927,27 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             x: COL_CX - 60, y: VF_TOP + Math.round(VF_HEIGHT / 2) - 50, w: 120, h: 100, r: 18,
             title: 'Recreate any light you see',
             desc: 'Drop in a portrait you want to reverse-engineer.',
-            tipY: VF_TOP + VF_HEIGHT + 80,
+            tipY: Math.round(stableVH * 0.42),
             arrow: 'up',
           },
           { // Step 1: Analyze button — the solve
             x: COL_CX - BTN_D / 2 - 10, y: BTN_TOP - 10, w: BTN_D + 20, h: BTN_D + 20, r: BTN_D,
             title: 'Get the exact setup',
             desc: 'Pattern, modifier, distance, height — decoded.',
-            tipY: BTN_TOP - 240,
+            tipY: Math.round(stableVH * 0.30),
             arrow: 'down',
           },
-          { // Step 2: Sample CTA — proof
+          { // Step 2: Sample CTA — proof (card pushed toward VF center)
             x: COL_CX - 155, y: BTN_TOP + BTN_D + 2, w: 310, h: 48, r: 24,
             title: 'See it in action',
             desc: 'We\'ll analyze a Rembrandt portrait for you.',
-            tipY: BTN_TOP - 130,
+            tipY: Math.round(stableVH * 0.35),
             arrow: 'down',
           },
         ];
         const s = spotlights[teachStep] || spotlights[0];
         // Clamp tooltip to viewport — prevent clipping on short screens
-        const CARD_H = 110;
+        const CARD_H = 170;
         const maxTipY = stableVH - safeBottom - CARD_H - 8;
         const minTipY = safeBottom + 8;
         s.tipY = Math.max(minTipY, Math.min(maxTipY, s.tipY));
@@ -1964,8 +1964,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
         // Arrow geometry — computed once, used by SVG
         // Steps 1 & 2: card shifted left so arrow arcs naturally to centered spotlight
-        const cardLeft = s.arrow === 'down' ? 20 : 32;
-        const cardRight = s.arrow === 'down' ? 140 : 32;
+        const cardLeft = s.arrow === 'down' ? 16 : 24;
+        const cardRight = s.arrow === 'down' ? 16 : 24;
         const cardW = COL_W - cardLeft - cardRight;
         const cardCX = cardLeft + cardW / 2;
         const cardEdgeY = s.arrow === 'up' ? s.tipY : s.tipY + 72;
@@ -2029,11 +2029,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.12)')}`,
               boxShadow: `0 0 44px ${sc.replace(/[\d.]+\)$/, '0.12)')}, 0 0 18px ${sc.replace(/[\d.]+\)$/, '0.06)')}, inset 0 0 20px ${sc.replace(/[\d.]+\)$/, '0.05)')}`,
               pointerEvents: 'none',
-              animation: 'teachIconPulse 2.4s ease-in-out infinite',
+              // Starts still, then pulses after arrow draw-on (0.9s delay)
+              animation: 'teachSpotlightPulse 2s ease-in-out 0.9s infinite',
               transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
             }} />
 
-            {/* Inner spotlight ring — crisp border, step-colored */}
+            {/* Inner spotlight ring — crisp border, pulses after arrow arrives */}
             <div style={{
               position: 'absolute',
               left: s.x - 3, top: s.y - 3,
@@ -2042,7 +2043,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               border: `1.5px solid ${sc.replace(/[\d.]+\)$/, '0.50)')}`,
               boxShadow: `0 0 20px ${sc.replace(/[\d.]+\)$/, '0.22)')}, 0 0 6px ${sc.replace(/[\d.]+\)$/, '0.12)')}, inset 0 0 10px ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
               pointerEvents: 'none',
-              animation: 'teachIconPulse 2.4s ease-in-out 0.2s infinite',
+              animation: 'teachSpotlightPulse 2s ease-in-out 1.1s infinite',
               transition: 'all 0.55s cubic-bezier(0.4, 0, 0.2, 1)',
             }} />
 
@@ -2064,9 +2065,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               }} />
               <div style={{
                 position: 'relative',
-                padding: '14px 18px',
-                borderRadius: 14,
-                backgroundColor: 'rgba(10,11,14,0.88)',
+                padding: '24px 28px 20px',
+                borderRadius: 18,
+                backgroundColor: 'rgba(10,11,14,0.92)',
                 border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.08)')}`,
                 boxShadow: [
                   '0 8px 32px rgba(0,0,0,0.55)',
@@ -2078,12 +2079,28 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 backdropFilter: 'blur(20px) saturate(1.3)',
                 WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
               }}>
-                {/* Single row: icon + text + action */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {/* Icon badge — 36px, refined gradient */}
+                {/* Two-row layout: large text block on top, icon + action on bottom */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {/* Top: large headline + description */}
+                  <div>
+                    <p style={{
+                      margin: 0, fontSize: 22, fontWeight: 800, lineHeight: '26px',
+                      color: 'rgba(245,247,250,0.96)',
+                      letterSpacing: '-0.4px',
+                      ...FONT_SMOOTH,
+                    }}>{s.title}</p>
+                    <p style={{
+                      margin: '6px 0 0', fontSize: 16, fontWeight: 500, lineHeight: '22px',
+                      color: 'rgba(184,191,199,0.72)',
+                      ...FONT_SMOOTH,
+                    }}>{s.desc}</p>
+                  </div>
+                  {/* Bottom row: animated icon + action pill */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {/* Icon badge — 52px, animated with glow */}
                   <div style={{
-                    width: 36, height: 36, flexShrink: 0,
-                    borderRadius: 10,
+                    width: 52, height: 52, flexShrink: 0,
+                    borderRadius: 14,
                     background: `linear-gradient(145deg, ${sc.replace(/[\d.]+\)$/, '0.14)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.03)')} 100%)`,
                     border: `1px solid ${sc.replace(/[\d.]+\)$/, '0.16)')}`,
                     boxShadow: `inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.08)')}, 0 2px 6px rgba(0,0,0,0.25)`,
@@ -2091,7 +2108,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                     animation: 'teachIconFloat 3s ease-in-out infinite',
                   }}>
                     {teachStep === 0 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'teachIconGlow 2s ease-in-out infinite' }}>
                         <path d="M5 11V7a2 2 0 012-2h4" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="2" strokeLinecap="round" />
                         <path d="M21 5h4a2 2 0 012 2v4" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="2" strokeLinecap="round" />
                         <path d="M27 21v4a2 2 0 01-2 2h-4" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="2" strokeLinecap="round" />
@@ -2103,42 +2120,28 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                       </svg>
                     )}
                     {teachStep === 1 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'teachIconGlow 2s ease-in-out infinite' }}>
                         <path d="M16 8C10 8 5.2 11.5 3 16c2.2 4.5 7 8 13 8s10.8-3.5 13-8c-2.2-4.5-7-8-13-8z" stroke={sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" fill="none" />
                         <circle cx="16" cy="16" r="4" stroke={sc.replace(/[\d.]+\)$/, '0.65)')} strokeWidth="1.8" fill="none" />
                         <circle cx="16" cy="16" r="1.5" fill={sc.replace(/[\d.]+\)$/, '0.50)')} />
                       </svg>
                     )}
                     {teachStep === 2 && (
-                      <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                      <svg width="28" height="28" viewBox="0 0 32 32" fill="none" style={{ animation: 'teachIconGlow 2s ease-in-out infinite' }}>
                         <circle cx="16" cy="16" r="12" stroke={sc.replace(/[\d.]+\)$/, '0.30)')} strokeWidth="1.6" fill="none" />
                         <path d="M17 6L9 18h6l-1 8 8-12h-6l1-8z" stroke={sc.replace(/[\d.]+\)$/, '0.70)')} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" fill={sc.replace(/[\d.]+\)$/, '0.08)')} />
                       </svg>
                     )}
                   </div>
 
-                  {/* Text block */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{
-                      margin: 0, fontSize: 14, fontWeight: 700, lineHeight: '18px',
-                      color: 'rgba(245,247,250,0.94)',
-                      letterSpacing: '-0.2px',
-                      ...FONT_SMOOTH,
-                    }}>{s.title}</p>
-                    <p style={{
-                      margin: '4px 0 0', fontSize: 13, fontWeight: 500, lineHeight: '18px',
-                      color: 'rgba(184,191,199,0.62)',
-                      ...FONT_SMOOTH,
-                    }}>{s.desc}</p>
-                  </div>
-
+                  <div style={{ flex: 1 }} />
                   {/* Action pill — elevated */}
                   <div
                     onClick={(e) => { e.stopPropagation(); advanceTeach(); }}
                     style={{
                       flexShrink: 0,
-                      padding: '6px 14px',
-                      borderRadius: 9,
+                      padding: '8px 18px',
+                      borderRadius: 10,
                       background: `linear-gradient(135deg, ${sc.replace(/[\d.]+\)$/, '0.16)')} 0%, ${sc.replace(/[\d.]+\)$/, '0.06)')} 100%)`,
                       border: `1px solid ${sc.replace(/[\d.]+\)$/, teachStep < 2 ? '0.18)' : '0.26)')}`,
                       boxShadow: `0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 ${sc.replace(/[\d.]+\)$/, '0.06)')}`,
@@ -2147,15 +2150,16 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                     }}
                   >
                     <p style={{
-                      margin: 0, fontSize: 13, fontWeight: 700, letterSpacing: '0.3px',
-                      color: sc.replace(/[\d.]+\)$/, teachStep < 2 ? '0.85)' : '0.92)'),
+                      margin: 0, fontSize: 16, fontWeight: 700, letterSpacing: '0.4px',
+                      color: sc.replace(/[\d.]+\)$/, teachStep < 2 ? '0.90)' : '0.95)'),
                       ...FONT_SMOOTH,
                       whiteSpace: 'nowrap',
-                    }}>{teachStep < 2 ? 'Next' : 'Try it'}</p>
+                    }}>{teachStep < 2 ? 'Next →' : 'Try it →'}</p>
                   </div>
-                </div>
+                  </div>{/* close bottom row */}
+                </div>{/* close two-row layout */}
 
-                {/* Progress track + skip — replaces dots with animated bar */}
+                {/* Progress track + skip */}
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                   marginTop: 8,
@@ -2382,9 +2386,19 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
         /* ── Coach icon float — gentle up/down hover ── */
         @keyframes teachIconFloat {
-          0%   { transform: translateY(0); }
-          50%  { transform: translateY(-3px); }
-          100% { transform: translateY(0); }
+          0%   { transform: translateY(0) scale(1); filter: brightness(1); }
+          50%  { transform: translateY(-5px) scale(1.12); filter: brightness(1.4); }
+          100% { transform: translateY(0) scale(1); filter: brightness(1); }
+        }
+        @keyframes teachIconGlow {
+          0%   { filter: drop-shadow(0 0 2px currentColor) brightness(1); }
+          50%  { filter: drop-shadow(0 0 8px currentColor) brightness(1.3); }
+          100% { filter: drop-shadow(0 0 2px currentColor) brightness(1); }
+        }
+        @keyframes teachSpotlightPulse {
+          0%   { transform: scale(1); opacity: 0.5; }
+          50%  { transform: scale(1.06); opacity: 0.9; }
+          100% { transform: scale(1); opacity: 0.5; }
         }
 
         /* ── Coach arrow bounce — arrowhead pulses toward target ── */
@@ -2553,13 +2567,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           15%  { opacity: 1; }
           100% { opacity: 0; }
         }
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
+        /* prefers-reduced-motion: teach overlays exempt — they're essential
+           for first-time onboarding. The reduce-motion setting in app preferences
+           handles this via data-reduce-motion attribute instead. */
       `}</style>
     </div>
     </div>
