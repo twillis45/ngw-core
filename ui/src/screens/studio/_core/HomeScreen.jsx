@@ -1663,58 +1663,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         }} />
       </div>
 
-      {/* ── Button Trough — recessed panel strip below the VF that hosts the well ──
-           Connects the VF bottom to the button visually: a machined-in strip carved
-           into the body panel, lit from 141.71°. Upper rim catches a thin key-light
-           highlight (VF bottom rolls over it); interior is darker than the surrounding
-           body; lower rim has a faint bounce from below. The well+button sit inside. */}
-      {/* Button trough — softer transition from VF to controls.
-           Less aggressive than before: gentle gradient, lighter shadows.
-           The VF and trough should feel like one continuous instrument. */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0,
-        top: VF_BOTTOM + 4,
-        height: Math.max(stableVH - (VF_BOTTOM + 4), BTN_D + 80),
-        pointerEvents: 'none',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.12) 15%, rgba(0,0,0,0.06) 50%, rgba(0,0,0,0.14) 100%)',
-        boxShadow: [
-          'inset 0 1px 3px rgba(0,0,0,0.55)',
-          'inset 0 2px 0 rgba(255,255,255,0.018)',
-          'inset 0 -1px 3px rgba(132,158,184,0.03)',
-        ].join(', '),
-      }} />
-
-      {/* ── Well (recessed cavity the analyze button sits in) ──
-          Larger than the button so there's a visible rim; lit from 141.71° like
-          the rest of the app. Inset shadows carve the upper-left interior dark
-          (key light falls past the rim into shadow) and the lower-right interior
-          catches a faint warm fill from the bounce. Outer rim has a thin light
-          lip on top-left where the chamfer catches the key, and a soft drop on
-          bottom-right so the well floor sits below the surface plane. */}
-      <div style={{
-        position: 'absolute', left: '50%', top: WELL_TOP, width: WELL_D, height: WELL_D,
-        transform: 'translateX(-50%)', pointerEvents: 'none',
-        borderRadius: '50%',
-        // Near-black pit floor; inner edge picks up a faint cool tint from the LED ring below
-        background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, #09090d00 68%, transparent 100%), linear-gradient(141.71deg, #04050610 0%, #0a0b0f08 100%)',
-        boxShadow: [
-          // Deep carved interior — key light blocked by rim walls
-          'inset 12px 12px 24px rgba(0,0,0,0.97)',
-          'inset 7px 7px 14px rgba(0,0,0,0.90)',
-          'inset 3px 3px 6px rgba(0,0,0,0.78)',
-          'inset 1px 1px 2px rgba(0,0,0,0.60)',
-          // LED ring light trapped inside — tracks state colour
-          `inset 0 0 12px rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.14).toFixed(2)})`,
-          `inset 0 0 5px rgba(${SC.r},${SC.g},${SC.b},${(SC.a * 0.09).toFixed(2)})`,
-          // Lower-right cavity — tiny bounce off the deep well floor
-          'inset -2px -2px 5px rgba(255,255,255,0.018)',
-          // Upper-left rim chamfer — thin lip catches the key
-          '-1px -1px 1px rgba(255,255,255,0.055)',
-          // Well drops below the panel surface
-          '5px 7px 18px rgba(0,0,0,0.72)',
-          '2px 3px 6px rgba(0,0,0,0.50)',
-        ].join(', '),
-      }} />
+      {/* Trough + Well removed — full-bleed layout means the dome floats
+           directly on the photo/VF with just the gradient scrim for grounding.
+           The machined cavity was designed for the old contained-slot layout. */}
 
       {/* ── Analyze Button — Figma spec (rgba(31,34,42) face; drop+inner shadow; sunk on press) ── */}
       <div

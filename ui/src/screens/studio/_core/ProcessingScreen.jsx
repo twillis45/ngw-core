@@ -460,24 +460,9 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
         </div>
       </>)}
 
-      {/* ── Mobile-only: button trough, well, dome, ring, label ── */}
+      {/* ── Mobile-only: dome, ring, label ── */}
       {!isDesktop && <>
-      {/* Button Trough */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0,
-        top: VF_BOTTOM + 10,
-        height: Math.max(stableVH - (VF_BOTTOM + 10), BTN_D + 80),
-        pointerEvents: 'none',
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.42) 0%, rgba(0,0,0,0.18) 18%, rgba(0,0,0,0.10) 55%, rgba(0,0,0,0.22) 100%)',
-        boxShadow: [
-          'inset 0 2px 4px rgba(0,0,0,0.78)',
-          'inset 0 1px 1px rgba(0,0,0,0.55)',
-          'inset 0 3px 0 rgba(255,255,255,0.025)',
-          'inset 6px 0 12px rgba(0,0,0,0.30)',
-          'inset -6px 0 12px rgba(0,0,0,0.20)',
-          'inset 0 -2px 4px rgba(132,158,184,0.04)',
-        ].join(', '),
-      }} />
+      {/* Trough + Well removed — dome floats on full-bleed photo */}
 
       {/* Track ring */}
       <div style={{
@@ -493,26 +478,6 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           background: 'linear-gradient(141.71deg, rgba(255,255,255,0.10) 0%, transparent 35%, transparent 65%, rgba(0,0,0,0.15) 100%)',
         }} />
       </div>
-
-      {/* Well */}
-      <div style={{
-        position: 'absolute', left: '50%', top: WELL_TOP, width: WELL_D, height: WELL_D,
-        transform: 'translateX(-50%)', pointerEvents: 'none',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle at 50% 44%, #010102 0%, #040508 32%, #09090d00 68%, transparent 100%), linear-gradient(141.71deg, #04050610 0%, #0a0b0f08 100%)',
-        boxShadow: [
-          'inset 12px 12px 24px rgba(0,0,0,0.97)',
-          'inset 7px 7px 14px rgba(0,0,0,0.90)',
-          'inset 3px 3px 6px rgba(0,0,0,0.78)',
-          'inset 1px 1px 2px rgba(0,0,0,0.60)',
-          'inset 0 0 12px rgba(72,186,136,0.10)',
-          'inset 0 0 5px rgba(72,186,136,0.06)',
-          'inset -2px -2px 5px rgba(255,255,255,0.018)',
-          '-1px -1px 1px rgba(255,255,255,0.055)',
-          '5px 7px 18px rgba(0,0,0,0.72)',
-          '2px 3px 6px rgba(0,0,0,0.50)',
-        ].join(', '),
-      }} />
 
       {/* Button dome */}
       <div style={{
