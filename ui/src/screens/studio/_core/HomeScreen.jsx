@@ -1163,8 +1163,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         style={{
           position: 'absolute', top: 24, left: 22, padding: 6,
           cursor: 'pointer', WebkitTapHighlightColor: 'transparent', userSelect: 'none', zIndex: 15,
-          opacity: hasImage ? 0.25 : undefined,
-          animation: hasImage ? 'none' : showTeach ? 'none' : 'wordmarkFade 1s ease 3s forwards',
+          opacity: hasImage ? 0.20 : undefined,
           transition: 'opacity 0.6s ease',
         }}
       >
@@ -1177,9 +1176,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           ...FONT_SMOOTH,
         }}>No Guesswork <span style={{ fontWeight: 600, fontSize: '0.88em', letterSpacing: '0.10em', color: steel(0.50) }}>Lighting</span></p>
         <p style={{
-          margin: '2px 0 0',
+          margin: '3px 0 0',
           fontWeight: 600, fontSize: 13, lineHeight: '16px',
-          color: steel(0.48), letterSpacing: '0.3px',
+          color: steel(0.42), letterSpacing: '0.3px',
           ...FONT_SMOOTH,
         }}>Reverse-engineer any portrait lighting</p>
       </div>
@@ -1454,7 +1453,10 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               // "load your photo here" without competing with the analyze CTA.
               position: 'absolute', inset: 0,
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: 10,
+              gap: 6,
+              // Nudge cluster slightly above geometric center — closer to
+              // the golden mean and away from the dome zone below.
+              paddingBottom: Math.round(stableVH * 0.12),
               opacity: (showPrompt || isUrlFetching) ? 1 : 0,
               transition: 'opacity 1.2s ease',
               pointerEvents: 'none', zIndex: 7,
@@ -1463,41 +1465,40 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 {/* Tight content cluster: brackets + instruction + hint arrow.
                     Grouped close together so the VF center has one cohesive element
                     instead of scattered parts floating in empty space. */}
-                <svg width="72" height="72" viewBox="0 0 38 38" fill="none" style={{
+                <svg width="88" height="88" viewBox="0 0 38 38" fill="none" style={{
                   animation: 'vfPulseGlow 2.4s ease-in-out infinite',
-                  filter: `drop-shadow(0 0 10px ${steel(0.30)})`,
+                  filter: `drop-shadow(0 0 12px ${steel(0.25)})`,
                 }}>
-                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.50)} strokeWidth="1.0" strokeLinecap="round" fill="none" />
-                  <circle cx="19" cy="19" r="1.5" fill={steel(0.40)} />
+                  <path d="M5 12 V7 Q5 5 7 5 H12" stroke={steel(0.45)} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+                  <path d="M26 5 H31 Q33 5 33 7 V12" stroke={steel(0.45)} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+                  <path d="M33 26 V31 Q33 33 31 33 H26" stroke={steel(0.45)} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+                  <path d="M12 33 H7 Q5 33 5 31 V26" stroke={steel(0.45)} strokeWidth="0.9" strokeLinecap="round" fill="none" />
+                  <circle cx="19" cy="19" r="1.5" fill={steel(0.35)} />
                 </svg>
                 {/* VF copy — instruction + deliverables + ghosted proof.
                     Two-state design: this IS the payoff preview for the empty state.
                     It communicates what the user gets, not just what to do. */}
                 <p style={{
-                  margin: '10px 0 0', fontSize: 16, fontWeight: 700, letterSpacing: '-0.1px',
-                  color: steel(0.65),
+                  margin: '6px 0 0', fontSize: 17, fontWeight: 700, letterSpacing: '-0.2px',
+                  color: steel(0.62),
                   textShadow: '0 -1px 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04)',
-                  textAlign: 'center', lineHeight: '20px',
+                  textAlign: 'center', lineHeight: '22px',
                   ...FONT_SMOOTH,
                 }}>Load a portrait</p>
                 {/* What you get — restrained payoff preview */}
                 <p style={{
-                  margin: '8px 0 0', fontSize: 13, fontWeight: 600, letterSpacing: '0.8px',
-                  color: steel(0.50), textTransform: 'uppercase',
+                  margin: '6px 0 0', fontSize: 12, fontWeight: 600, letterSpacing: '1px',
+                  color: steel(0.38), textTransform: 'uppercase',
                   textShadow: '0 -1px 1px rgba(0,0,0,0.5)',
                   textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
                 }}>Pattern · Modifier · Distance · Diagram</p>
-                {/* ── NEW: subtle amber arrow pointing to sample CTA ── */}
                 {/* Ghosted sample read — one real result line.
                     Photographer-credible terminology. Not fake, not loud —
                     just enough to show the shape of the answer. */}
                 <p style={{
-                  margin: '16px 0 0', fontSize: 13, fontWeight: 500, letterSpacing: '0.3px',
-                  color: steel(0.40),
+                  margin: '14px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.3px',
+                  color: steel(0.30),
                   fontStyle: 'italic',
                   textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
@@ -1621,6 +1622,22 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         transition: 'opacity 1.4s ease',
       }} />
 
+      {/* ── Vertical rhythm line — connects VF center to dome.
+           Faint descending gradient that ties the composition together.
+           Only visible on empty state — photo replaces it. */}
+      {!hasImage && (
+        <div style={{
+          position: 'absolute',
+          left: '50%', width: 1,
+          top: Math.round(stableVH * 0.52),
+          bottom: stableVH - BTN_TOP + 20,
+          transform: 'translateX(-0.5px)',
+          background: `linear-gradient(180deg, ${steel(0.08)} 0%, ${steel(0.14)} 50%, transparent 100%)`,
+          pointerEvents: 'none', zIndex: 2,
+          animation: 'ghostFadeIn 1.5s ease 0.8s both',
+        }} />
+      )}
+
       {/* ── Analyze Track ── */}
       <div
         role="button"
@@ -1666,6 +1683,19 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
       {/* Trough + Well removed — full-bleed layout means the dome floats
            directly on the photo/VF with just the gradient scrim for grounding.
            The machined cavity was designed for the old contained-slot layout. */}
+
+      {/* ── Bottom scrim — grounds the dome on full-bleed photo.
+           Faint gradient fade so the button never floats on raw highlights. */}
+      <div style={{
+        position: 'absolute',
+        left: 0, right: 0,
+        bottom: 0,
+        height: Math.round(stableVH * 0.32),
+        background: 'linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.35) 60%, rgba(0,0,0,0.55) 100%)',
+        pointerEvents: 'none', zIndex: 3,
+        opacity: hasImage ? 1 : 0,
+        transition: 'opacity 0.6s ease',
+      }} />
 
       {/* ── Analyze Button — Figma spec (rgba(31,34,42) face; drop+inner shadow; sunk on press) ── */}
       <div
@@ -1850,8 +1880,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               the instrument surface. */}
           <p style={{
             margin: 0,
-            fontSize: 14, fontWeight: 600, letterSpacing: '0.5px',
-            color: sampleLoading ? steel(0.35) : steel(0.55),
+            fontSize: 13, fontWeight: 600, letterSpacing: '0.4px',
+            color: sampleLoading ? steel(0.30) : steel(0.45),
             ...FONT_SMOOTH,
           }}>
             {sampleLoading ? 'Loading…' : 'Try a sample photo →'}
@@ -2309,10 +2339,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           from { opacity: 0; }
           to   { opacity: 1; }
         }
-        @keyframes wordmarkFade {
-          from { opacity: 1; }
-          to   { opacity: 0.25; }
-        }
+        /* wordmarkFade removed — wordmark stays visible in empty state */
         @keyframes hudFadeDown {
           from { opacity: 1; }
           to   { opacity: 0.15; }

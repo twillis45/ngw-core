@@ -718,7 +718,7 @@ export default function ResultsScreen() {
         <PaywallGate
           isPaid={effectiveIsPaid}
           onUnlock={unlock}
-          headline="Get gear that locks this result in every time."
+          headline="Get the gear to recreate this look."
           preview={false}
         >
           <RecommendedKitsCard modifierFamily={modifierFamily} setupLights={result.setup?.lights} />

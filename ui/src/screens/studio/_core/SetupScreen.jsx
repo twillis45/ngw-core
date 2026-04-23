@@ -92,7 +92,7 @@ const EDGE_CASE_LABELS = {
   blown_highlights:                { label: 'BLOWN HIGHLIGHTS',   sev: 'warn' },
   earring_catchlight_contamination:{ label: 'EARRING IN CATCHLIGHT', sev: 'danger' },
   mixed_color_temperature:         { label: 'MIXED CCT',          sev: 'warn' },
-  no_face:                         { label: 'NO FACE DETECTED',   sev: 'danger' },
+  no_face:                         { label: 'NO FACE FOUND — use a clear headshot', sev: 'danger' },
   outdoor_foliage_shadows:         { label: 'FOLIAGE SHADOWS',    sev: 'warn' },
   window_light_gradient:           { label: 'WINDOW GRADIENT',    sev: 'info' },
   bw_processing:                   { label: 'B&W PROCESSING',     sev: 'info' },
@@ -1199,7 +1199,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 {mod?.distRange && (
-                  <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `sweet spot ${mod.optDist}` : null} hintColor={C.confHigh} />
+                  <DesktopSpec label="DISTANCE" value={mod.distRange} hint={mod.optDist ? `typical: ${mod.optDist}` : null} hintColor={C.confHigh} />
                 )}
                 {(directionDisplay || positionDisplay) && (
                   <DesktopSpec label="DIRECTION" value={directionDisplay || positionDisplay} hint={keyAngleDisplay} hintColor={KEY_ACCENT} />
@@ -1273,7 +1273,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           const chips = [...(result?.meta || [])].map(m => prettify(m));
           if (cctDisplay) chips.push(cctMixed ? `${cctDisplay} · MIXED` : cctDisplay);
           if (fillMethod)  chips.push(prettify(fillMethod, { upper: true }));
-          if (bgDetected)  chips.push(bgDistance ? `BG LIGHT ${bgDistance}FT` : 'BG LIGHT');
+          if (bgDetected)  chips.push(bgDistance ? `BG LIGHT ~${bgDistance}FT` : 'BG LIGHT (likely)');
           if (chips.length === 0) return null;
           return (
             <div style={{

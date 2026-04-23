@@ -1427,7 +1427,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
           margin: '14px 0 0', fontSize: 11,
           color: C.textWarn, lineHeight: 1.4,
           ...FONT_SMOOTH,
-        }}>Close match — try a sharper photo for higher confidence</p>
+        }}>Possible match — a brighter or sharper photo may improve results</p>
       )}
 
       {/* Fullscreen zoom portal — large silhouette + name + score + definition.
@@ -2538,7 +2538,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                   color: confColor, letterSpacing: '0.5px',
                   ...FONT_SMOOTH,
                   textShadow: `0 0 12px ${confColor}30, 0 1px 4px rgba(0,0,0,0.5)`,
-                }}>{confidence >= 70 ? 'Strong read' : 'Partial read'}</p>
+                }}>{confidence >= 80 ? 'High confidence' : confidence >= 60 ? 'Moderate confidence' : 'Low confidence'}</p>
               )}
             </div>
             {geometricBase && (
@@ -3307,7 +3307,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             boxShadow: PANEL_SHADOW + ', ' + PANEL_BEVEL,
           }}>
             <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: outcomeRecorded === 'nailed_it' ? C.confHigh : outcomeRecorded === 'close' ? C.confLow : C.textDanger, ...FONT_SMOOTH }}>
-              {outcomeRecorded === 'nailed_it' ? 'Nailed it. Pattern confirmed.' : outcomeRecorded === 'close' ? 'Almost — we\'ll tune it.' : 'Logged. We\'ll fix it.'}
+              {outcomeRecorded === 'nailed_it' ? 'Nailed it — your feedback helps us improve.' : outcomeRecorded === 'close' ? 'Almost — we\'ll use this to tune.' : 'Noted — we\'ll use this to improve.'}
             </p>
             <p style={{ margin: '4px 0 0', fontSize: 10, color: steel(0.35), ...FONT_SMOOTH }}>
               This feeds the learning engine
