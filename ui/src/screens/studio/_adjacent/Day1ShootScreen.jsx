@@ -1162,7 +1162,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
         onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         style={{
-        width: '100%', maxWidth: isDesktop ? 1440 : 430, height: '100%', margin: '0 auto',
+        width: '100%', maxWidth: isDesktop ? 1440 : undefined, height: '100%', margin: '0 auto',
         backgroundColor: C.bg,
         display: 'flex', flexDirection: 'column',
         position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',

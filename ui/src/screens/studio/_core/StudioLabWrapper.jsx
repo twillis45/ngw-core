@@ -97,12 +97,34 @@ export default function StudioLabWrapper({ onBack }) {
         .lab-nav { padding-inline: 28px !important; }
         .lab-subnav { padding-inline: 28px !important; }
         .lab-wb-layout { padding-inline: 0 !important; }
-        /* Lab typography floor — enforce minimum readability */
+        /* Lab typography floor — enforce minimum readability across all elements */
+        /* Body text — nothing below 12px */
+        .lab-screen { font-size: 13px !important; line-height: 1.5 !important; }
+        .lab-screen p, .lab-screen span, .lab-screen div,
+        .lab-screen li, .lab-screen td, .lab-screen th,
+        .lab-screen label, .lab-screen dt, .lab-screen dd { font-size: max(12px, inherit) !important; }
+        /* Buttons + selects — 13px min for interactives */
         .lab-screen button,
         .lab-screen select,
-        .lab-screen .lab-btn { font-size: max(12px, inherit) !important; }
+        .lab-screen .lab-btn { font-size: max(13px, inherit) !important; }
+        /* Inputs — 14px to prevent iOS zoom */
         .lab-screen input,
         .lab-screen textarea { font-size: 14px !important; }
+        /* Headings */
+        .lab-screen h1 { font-size: max(22px, inherit) !important; }
+        .lab-screen h2 { font-size: max(18px, inherit) !important; }
+        .lab-screen h3 { font-size: max(15px, inherit) !important; }
+        .lab-screen h4 { font-size: max(13px, inherit) !important; }
+        /* Section labels */
+        .lab-screen .lab-section-label,
+        .lab-screen .lab-label { font-size: max(11px, inherit) !important; letter-spacing: 0.8px !important; }
+        /* Monospace/code — keep readable */
+        .lab-screen code, .lab-screen pre,
+        .lab-screen .lab-mono { font-size: max(12px, inherit) !important; }
+        /* Tab navigation */
+        .lab-screen .lab-tab,
+        .lab-screen .lab-nav a,
+        .lab-screen .lab-subnav a { font-size: max(13px, inherit) !important; }
       `}</style>
     </div>
   );
