@@ -1560,8 +1560,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           </div>
         )}
 
-        {/* 8b — LCD backlight wash — warm LEDs under the glass, upper-left key light orientation */}
-        {lcdOn && (
+        {/* 8b — LCD backlight wash — mobile only. Desktop photo sits on clean matte. */}
+        {lcdOn && !isDesktop && (
           <div style={{
             position: 'absolute', inset: 0, zIndex: 8,
             background: [
@@ -1580,12 +1580,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         </div>
         )}
 
-        {/* 10 — Inner shadow — always visible. Glass edge catch even on empty VF. */}
+        {/* 10 — Inner shadow — mobile only. Desktop doesn't need VF bezel on full-bleed photo. */}
+        {!isDesktop && (
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
           opacity: hasImage ? 1 : 0.65,
         }} />
+        )}
 
         {/* 11 — Teach glow — first-session pulsing edge glow to draw the eye to the VF.
              Gentle steel-blue inner border that breathes, says "this is where your photo goes"
