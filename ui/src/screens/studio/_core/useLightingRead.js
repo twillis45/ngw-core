@@ -77,7 +77,22 @@ function playCompletionClick() {
 export default function useLightingRead(imagePreview, analysisComplete) {
   // imagePreview can be a File, Blob, or object URL string
   const canvasRef = useRef(null);
-  const [faceData, setFaceData] = useState(null);
+  // Start immediately with estimated face proportions so the animation
+  // doesn't wait for the preflight API call. Real landmarks refine later.
+  const DEFAULT_FACE = {
+    lm: {
+      left_eye: { x: 0.42, y: 0.38 }, right_eye: { x: 0.58, y: 0.38 },
+      nose_tip: { x: 0.50, y: 0.48 }, nose_bridge: { x: 0.50, y: 0.40 },
+      forehead: { x: 0.50, y: 0.30 }, chin: { x: 0.50, y: 0.60 },
+      left_cheek: { x: 0.38, y: 0.48 }, right_cheek: { x: 0.62, y: 0.48 },
+      mouth_top: { x: 0.50, y: 0.54 }, mouth_bot: { x: 0.50, y: 0.57 },
+      left_jaw: { x: 0.35, y: 0.55 }, right_jaw: { x: 0.65, y: 0.55 },
+      left_brow: { x: 0.40, y: 0.33 }, right_brow: { x: 0.60, y: 0.33 },
+      nose_bottom: { x: 0.50, y: 0.50 },
+    },
+    cls: [], keyDir: 'left', keyAngle: -Math.PI / 4,
+  };
+  const [faceData, setFaceData] = useState(DEFAULT_FACE);
   const rafRef = useRef(null);
   const t0Ref = useRef(Date.now());
   const flashTimesRef = useRef(new Set());
@@ -127,11 +142,17 @@ export default function useLightingRead(imagePreview, analysisComplete) {
           }
         }
 
+        // Real landmarks arrived — restart the animation cycle so the
+        // pools re-emerge at accurate face positions with fresh timing.
+        t0Ref.current = Date.now();
+        flashTimesRef.current = new Set();
+        activeLabelsRef.current = [];
+        spRef.current = [0, 0, 0, 0, 0];
         setFaceData({
           lm: data.landmarks || {},
           cls,
           keyDir: (le && re) ? (le.intensity > re.intensity ? 'left' : 'right') : 'left',
-          keyAngle: keyAngleRad, // radians, 0 = right, -π/2 = top
+          keyAngle: keyAngleRad,
         });
       } catch (e) { console.warn('[useLightingRead] preflight failed:', e.message); }
     })();
