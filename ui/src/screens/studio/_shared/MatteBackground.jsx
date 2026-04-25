@@ -55,24 +55,24 @@ export default function MatteBackground({ variant = 'default' }) {
       {/* Edge vignette — anchors the frame */}
       <div style={{ position: 'absolute', inset: 0, background: vignette }} />
       {/* Anti-banding: 3 dither layers at different frequencies.
-          Uses soft-light blend to add variation without brightening.
-          Different tile sizes prevent moire patterns. */}
+          Boosted opacities to eliminate visible color steps on 8-bit desktop monitors.
+          Different tile sizes + blend modes prevent moire patterns. */}
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: grainUrl, backgroundSize: '200px 200px',
-        opacity: 0.06, mixBlendMode: 'soft-light',
+        opacity: 0.18, mixBlendMode: 'soft-light',
         pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: grainUrl, backgroundSize: '64px 64px',
-        opacity: 0.04, mixBlendMode: 'soft-light',
+        opacity: 0.12, mixBlendMode: 'soft-light',
         pointerEvents: 'none',
       }} />
       <div style={{
         position: 'absolute', inset: 0,
         backgroundImage: grainUrl, backgroundSize: '128px 128px',
-        opacity: 0.03, mixBlendMode: 'multiply',
+        opacity: 0.08, mixBlendMode: 'overlay',
         pointerEvents: 'none',
       }} />
       {/* Top specular edge — ceiling light hit at 141.71° */}
@@ -90,7 +90,7 @@ export default function MatteBackground({ variant = 'default' }) {
       {isWide && (
         <div style={{
           position: 'absolute', inset: 0,
-          opacity: 0.02, mixBlendMode: 'soft-light',
+          opacity: 0.10, mixBlendMode: 'soft-light',
           backgroundImage: grainUrl, backgroundSize: '256px 256px',
         }} />
       )}
