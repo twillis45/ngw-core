@@ -12,7 +12,9 @@
  *   fluid     — boolean, render the SVG at 100% of its container so the
  *               diagram zooms with the viewport (default false)
  */
-import { steel } from '../../../../theme/studioMatte';
+import { forwardRef, useRef, useImperativeHandle } from 'react';
+import { steel, FONT_SMOOTH } from '../../../../theme/studioMatte';
+import { exportSvgAsPng, exportSvgAsPdf } from '../../../../utils/exportSvg';
 
 // ─── Role colors (from DiagramCard palette — dark theme) ─────────────────────
 const KEY_COLOR      = '#c89b45';
@@ -37,7 +39,9 @@ function sideToAngle(side, elevation) {
   return base + elevAdj;
 }
 
-export default function LightingDiagram({ result, compact = false, fluid = false }) {
+const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = false, fluid = false, showExport = false, whiteLabel = false }, ref) {
+  const svgRef = useRef(null);
+  useImperativeHandle(ref, () => ({ getSvgElement: () => svgRef.current }));
   if (!result) return null;
 
   const raw = result._raw || {};
@@ -424,8 +428,13 @@ export default function LightingDiagram({ result, compact = false, fluid = false
                        : _camHeight === 'at_eye_level' ? 'EYE LEVEL'
                        : null;
 
+  const pattern = result?.pattern || li.pattern || 'setup';
+
   return (
+    <>
     <svg
+      ref={svgRef}
+      xmlns="http://www.w3.org/2000/svg"
       {...(fluid
         ? { width: '100%', height: '100%', preserveAspectRatio: 'xMidYMid meet' }
         : { width: W, height: H })}
@@ -972,5 +981,33 @@ export default function LightingDiagram({ result, compact = false, fluid = false
         </>
       )}
     </svg>
+    {showExport && (
+      <div style={{
+        display: 'flex', justifyContent: 'center', gap: 12, padding: '8px 0 4px',
+      }}>
+        <button onClick={() => {
+          const title = (pattern || 'diagram').replace(/\s+/g, '_');
+          exportSvgAsPng(svgRef.current, `${title}_top`, whiteLabel);
+        }} style={{
+          background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
+          padding: '5px 14px', cursor: 'pointer',
+          fontSize: 11, fontWeight: 600, color: steel(0.45),
+          letterSpacing: '0.5px', ...FONT_SMOOTH,
+          WebkitTapHighlightColor: 'transparent',
+        }}>PNG</button>
+        <button onClick={() => {
+          exportSvgAsPdf(svgRef.current, result, pattern, whiteLabel);
+        }} style={{
+          background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
+          padding: '5px 14px', cursor: 'pointer',
+          fontSize: 11, fontWeight: 600, color: steel(0.45),
+          letterSpacing: '0.5px', ...FONT_SMOOTH,
+          WebkitTapHighlightColor: 'transparent',
+        }}>PDF</button>
+      </div>
+    )}
+    </>
   );
-}
+});
+
+export default LightingDiagram;
