@@ -1250,13 +1250,9 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       tapHaptic(); softClickSound();
                       setShareStatus('sharing');
                       const result = await onShare();
-                      if (result && result.clipboardFailed) {
+                      if (result && result.url) {
                         setShareUrl(result.url);
-                        setShareStatus('clipboard_fail');
-                        setTimeout(() => { setShareStatus(null); setShareUrl(null); }, 12000);
-                      } else if (result) {
-                        setShareStatus('shared');
-                        setTimeout(() => setShareStatus(null), 3000);
+                        setShareStatus('clipboard_fail'); // always show modal with URL
                       } else {
                         setShareStatus('error');
                         setTimeout(() => setShareStatus(null), 3000);
