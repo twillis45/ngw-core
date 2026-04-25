@@ -748,11 +748,16 @@ def describe_reference_image(image_path: str) -> Optional[VLMDescription]:
         signals = _parse_signals(raw.get("signals", {}))
 
         # Map raw JSON into VLMDescription model
+        _subject_count = raw.get("subject_count", 1) or 1
+        # Guard: "mixed skin tones" only applies to multi-subject images.
+        # A single person cannot have mixed skin tones — the VLM sometimes
+        # hallucates this from lighting variation across one face.
+        _skin_mixed = raw.get("skin_tone_mixed", False) and _subject_count > 1
         return VLMDescription(
             subject_type=raw.get("subject_type", ""),
-            subject_count=raw.get("subject_count", 1),
+            subject_count=_subject_count,
             apparent_skin_tones=raw.get("apparent_skin_tones", []),
-            skin_tone_mixed=raw.get("skin_tone_mixed", False),
+            skin_tone_mixed=_skin_mixed,
             framing=raw.get("framing", ""),
             pose=raw.get("pose", ""),
             expression=raw.get("expression", ""),

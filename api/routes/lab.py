@@ -68,6 +68,95 @@ _ALLOWED_CONTENT_TYPES = {
 }
 
 
+def _extract_exif(image_bytes: bytes) -> Dict[str, Any]:
+    """Extract photographer-relevant EXIF metadata from image bytes.
+
+    Returns a dict with shutter, aperture, iso, focal_length, camera_body,
+    lens_model — all strings formatted for display. Missing fields are None.
+    """
+    try:
+        from PIL import Image as PILImage
+        from PIL.ExifTags import TAGS, GPSTAGS
+        import io
+
+        img = PILImage.open(io.BytesIO(image_bytes))
+        exif_raw = img._getexif()
+        if not exif_raw:
+            return {}
+
+        # Build tag-name lookup
+        decoded = {}
+        for tag_id, value in exif_raw.items():
+            tag_name = TAGS.get(tag_id, tag_id)
+            decoded[tag_name] = value
+
+        result: Dict[str, Any] = {}
+
+        # Aperture (FNumber)
+        fn = decoded.get("FNumber")
+        if fn:
+            val = float(fn) if not hasattr(fn, "numerator") else fn.numerator / fn.denominator
+            result["aperture"] = f"f/{val:.1f}" if val != int(val) else f"f/{int(val)}"
+
+        # Shutter speed (ExposureTime)
+        et = decoded.get("ExposureTime")
+        if et:
+            if hasattr(et, "numerator"):
+                num, den = et.numerator, et.denominator
+                if num and den and num < den:
+                    result["shutter"] = f"1/{den // num}s"
+                elif num and den:
+                    result["shutter"] = f"{num / den:.1f}s"
+            else:
+                val = float(et)
+                if val < 1:
+                    result["shutter"] = f"1/{int(round(1 / val))}s"
+                else:
+                    result["shutter"] = f"{val:.1f}s"
+
+        # ISO
+        iso = decoded.get("ISOSpeedRatings")
+        if iso:
+            result["iso"] = str(iso) if not isinstance(iso, (list, tuple)) else str(iso[0])
+
+        # Focal length
+        fl = decoded.get("FocalLength")
+        if fl:
+            val = float(fl) if not hasattr(fl, "numerator") else fl.numerator / fl.denominator
+            result["focal_length"] = f"{int(val)}mm" if val == int(val) else f"{val:.1f}mm"
+
+        # Camera body (Make + Model)
+        make = decoded.get("Make", "").strip()
+        model = decoded.get("Model", "").strip()
+        if model:
+            # Many cameras prepend make into model (e.g. "Canon" + "Canon EOS R5")
+            if make and model.lower().startswith(make.lower()):
+                result["camera_body"] = model
+            elif make:
+                result["camera_body"] = f"{make} {model}"
+            else:
+                result["camera_body"] = model
+
+        # Lens model
+        lens = decoded.get("LensModel", "").strip()
+        if lens:
+            result["lens"] = lens
+
+        # White balance
+        wb = decoded.get("WhiteBalance")
+        if wb is not None:
+            result["white_balance"] = "Auto" if wb == 0 else "Manual"
+
+        # Flash
+        flash = decoded.get("Flash")
+        if flash is not None:
+            result["flash_fired"] = bool(flash & 0x01) if isinstance(flash, int) else False
+
+        return result
+    except Exception:
+        return {}
+
+
 async def _validate_upload(upload: UploadFile) -> bytes:
     """Read file contents and validate size + MIME type. Returns raw bytes."""
     content = await upload.read()
@@ -136,6 +225,169 @@ async def lab_status(user: Dict = Depends(get_dev_user)):
     }
 
 
+# ── Fast face preflight — returns face_box + catchlights in <2s ─────────
+
+@router.post("/face-preflight")
+async def lab_face_preflight(
+    request: Request,
+    image: UploadFile = File(...),
+    user: Dict = Depends(get_dev_user),
+):
+    """Fast CV-only pass: face bounding box + catchlight positions.
+
+    Runs analyze_image_regions (no VLM, no full pipeline) and returns
+    face geometry data for the processing animation overlay. Designed
+    to complete in <2s so the animation can start with real data while
+    the full analysis continues in parallel.
+    """
+    check_rate_limit("lab_face_preflight", request, limit=20, window=60)
+    content = await _validate_upload(image)
+
+    import tempfile, os, math
+    from PIL import Image as PILImage
+    from engine.image_analysis import analyze_image_regions
+    from engine.vision_pipeline import _MODEL_DIR, _make_mp_image
+    import mediapipe as mp
+
+    # Write temp file
+    ext = Path(image.filename or "image.jpg").suffix.lower() or ".jpg"
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False, dir=str(UPLOAD_DIR)) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        vision = analyze_image_regions(tmp_path, return_masks=False)
+
+        if not vision.get("ok"):
+            return {"ok": False, "error": "Face detection failed"}
+
+        ra = vision.get("region_attribution", {})
+        face_box = ra.get("face_box")  # [x0, y0, x1, y1] in pixels
+
+        # Get actual image dimensions
+        pil_img = PILImage.open(tmp_path)
+        img_w, img_h = pil_img.size
+
+        # Catchlight positions
+        cl_data = vision.get("catchlight", {}) or vision.get("catchlights", {})
+        catchlights = []
+        if isinstance(cl_data, dict):
+            for cl in cl_data.get("catchlights", []):
+                catchlights.append({
+                    "eye": cl.get("eye"),
+                    "position": cl.get("position"),
+                    "abs_cx": cl.get("abs_cx"),
+                    "abs_cy": cl.get("abs_cy"),
+                    "intensity": cl.get("intensity"),
+                    "shape": cl.get("shape"),
+                })
+
+        # face_box is in the engine's internal resolution (often upscaled).
+        # Detect the scale factor and normalize everything to 0→1.
+        face_box_norm = None
+        if face_box:
+            # The engine upscales small images. face_box coords may exceed
+            # original img dimensions. Infer the internal resolution from
+            # the face_box extents vs image size.
+            internal_w = max(img_w, face_box[2] + 1)
+            internal_h = max(img_h, face_box[3] + 1)
+            # Better: check region_attribution for the actual processed dims
+            ra_w = ra.get("_image_w", 0)
+            ra_h = ra.get("_image_h", 0)
+            if ra_w > 0: internal_w = ra_w
+            if ra_h > 0: internal_h = ra_h
+
+            face_box_norm = {
+                "x": face_box[0] / internal_w,
+                "y": face_box[1] / internal_h,
+                "w": (face_box[2] - face_box[0]) / internal_w,
+                "h": (face_box[3] - face_box[1]) / internal_h,
+            }
+
+        # Normalize catchlight positions — abs_cx/abs_cy appear to be in
+        # ORIGINAL image resolution, not the upscaled internal resolution.
+        # Try original first; if values are > 1.0, switch to internal.
+        for cl in catchlights:
+            if cl.get("abs_cx") is not None and img_w and img_h:
+                nx = cl["abs_cx"] / img_w
+                ny = cl["abs_cy"] / img_h
+                # Sanity: if > 1 these must be in upscaled space
+                if nx > 1.0 or ny > 1.0:
+                    int_w = internal_w if face_box else img_w
+                    int_h = internal_h if face_box else img_h
+                    nx = cl["abs_cx"] / int_w
+                    ny = cl["abs_cy"] / int_h
+                cl["nx"] = nx
+                cl["ny"] = ny
+
+        # ── Extract face mesh landmarks for precise positioning ──
+        landmarks = {}
+        try:
+            import cv2
+            import numpy as np
+            face_lm_model = _MODEL_DIR / "face_landmarker.task"
+            if face_lm_model.exists():
+                img_cv = cv2.imread(tmp_path)
+                if img_cv is not None:
+                    fh, fw = img_cv.shape[:2]
+                    img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
+                    mp_img = _make_mp_image(img_rgb)
+
+                    lm_opts = mp.tasks.vision.FaceLandmarkerOptions(
+                        base_options=mp.tasks.BaseOptions(model_asset_path=str(face_lm_model)),
+                        running_mode=mp.tasks.vision.RunningMode.IMAGE,
+                        num_faces=1,
+                    )
+                    landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(lm_opts)
+                    try:
+                        lm_res = landmarker.detect(mp_img)
+                    finally:
+                        landmarker.close()
+
+                    if lm_res.face_landmarks:
+                        lm = lm_res.face_landmarks[0]
+                        # Key landmark indices (MediaPipe 478-point face mesh):
+                        LM_MAP = {
+                            'nose_tip':    4,    # tip of nose (more accurate than 1)
+                            'nose_bridge': 6,    # between eyes
+                            'nose_bottom': 2,    # bottom of nose (septum area)
+                            'forehead':    10,
+                            'chin':        152,
+                            'mouth_top':   13,
+                            'mouth_bot':   14,
+                            'left_eye':    468,  # iris center
+                            'right_eye':   473,  # iris center
+                            'left_jaw':    234,
+                            'right_jaw':   454,
+                            'left_cheek':  123,
+                            'right_cheek': 352,
+                            'left_brow':   70,   # left eyebrow center
+                            'right_brow':  300,  # right eyebrow center
+                        }
+                        for name, idx in LM_MAP.items():
+                            if idx < len(lm):
+                                landmarks[name] = {
+                                    'x': lm[idx].x,  # 0→1 normalized
+                                    'y': lm[idx].y,
+                                }
+        except Exception as e:
+            landmarks = {"error": str(e)}
+
+        return {
+            "ok": True,
+            "image_size": {"w": img_w, "h": img_h},
+            "face_box": face_box,
+            "face_box_norm": face_box_norm,
+            "catchlights": catchlights,
+            "landmarks": landmarks,
+        }
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
 # ── Workbench: Full-fidelity Analysis ─────────────────────
 
 @router.post("/analyze")
@@ -162,6 +414,9 @@ async def lab_analyze(
 
     with open(fpath, "wb") as f:
         f.write(content)
+
+    # ── EXIF extraction — pull photographer-relevant camera data ──
+    exif_data = _extract_exif(content)
 
     # Run full analysis pipeline via orchestrator (in thread — CPU-bound)
     try:
@@ -670,6 +925,8 @@ async def lab_analyze(
             "analyzed_at": time.time(),
             "stage_timings": getattr(ar, "stage_timings", {}),
             "image_dimensions": ar.description.get("size") if ar.description else None,
+            # EXIF camera data — aperture, shutter, ISO, focal length, body, lens
+            "camera_settings": exif_data if exif_data else None,
             # Phase L1 — structured observability surface
             "observability": _l1_record,
         }
@@ -2816,6 +3073,24 @@ async def get_server_logs(
         until=until,
     )
     return {"records": records, "count": len(records)}
+
+
+@router.delete("/l1-stream")
+async def clear_l1_stream(user: Dict = Depends(get_dev_user)):
+    """Delete all analysis results from the L1 stream."""
+    with get_db() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM analysis_results").fetchone()[0]
+        conn.execute("DELETE FROM analysis_results")
+        conn.commit()
+    return {"ok": True, "deleted": count}
+
+
+@router.delete("/server-logs")
+async def clear_server_logs(user: Dict = Depends(get_dev_user)):
+    """Clear the in-memory server log buffer."""
+    from engine.log_buffer import clear_records
+    clear_records()
+    return {"ok": True}
 
 
 @router.get("/server-logs/export")

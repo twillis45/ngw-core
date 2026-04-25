@@ -868,6 +868,16 @@ export async function exportServerLogs() {
   return labFetch('/server-logs/export');
 }
 
+/** Clear all L1 stream analysis records. */
+export async function clearL1Stream() {
+  return labFetch('/l1-stream', { method: 'DELETE' });
+}
+
+/** Clear the in-memory server log buffer. */
+export async function clearServerLogs() {
+  return labFetch('/server-logs', { method: 'DELETE' });
+}
+
 /** Fetch all diagnostic failure entries, optionally filtered by pattern. */
 export async function getDiagnostics(pattern = null) {
   const qs = pattern ? `?pattern=${encodeURIComponent(pattern)}` : '';

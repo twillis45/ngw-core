@@ -72,6 +72,12 @@ def install() -> None:
     _installed = True
 
 
+def clear_records():
+    """Clear all records from the in-memory log buffer."""
+    with _lock:
+        _buffer.clear()
+
+
 def get_records(
     limit: int = 200,
     level: Optional[str] = None,

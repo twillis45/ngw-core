@@ -90,11 +90,16 @@ async def api_analyze(
         # Return the full replay dict (same format used for stored results)
         result = analysis_result_to_replay_dict(ar)
 
+        # EXIF camera data — best-effort extraction
+        from api.routes.lab import _extract_exif
+        exif = _extract_exif(data)
+
         return {
             "status": "ok",
             "analysis_id": getattr(ar, "analysis_id", None),
             "pattern": getattr(ar, "authoritative_pattern", None) or "unknown",
             "confidence": round(getattr(ar, "pattern_confidence", 0.0), 3),
+            "camera_settings": exif if exif else None,
             "result": result,
         }
     except HTTPException:

@@ -87,23 +87,40 @@ export const FONT_SMOOTH = {
   textRendering:       'geometricPrecision',
 };
 
-// ─── 5-tier type scale ───────────────────────────────────────────────────────
-// Canonical sizes across all Studio Matte screens. Desktop variants scale up
-// each tier for wide-viewport reading distance (typically +2–6px).
-// T1 = hero leads / big numbers, T5 = micro metadata / drawer labels.
+// ─── Relational type scale ───────────────────────────────────────────────────
+// Floor-anchored scale: change FLOOR and everything adjusts proportionally.
+// Ratio ~1.2 (minor third) between tiers — comfortable for instrument UI.
+//
+//   FLOOR (T6) = smallest readable text on high-DPI mobile (Galaxy S25, iPhone 15)
+//   T5 = labels, section headings, chips
+//   T4 = body text, spec values, drawer items
+//   T3 = card titles, secondary headings
+//   T2 = section titles, modifier names
+//   T1 = hero leads, pattern names, big numbers
+//   T0 = display / splash (used sparingly)
+//
+// To bump the whole scale: change FLOOR. Everything else follows.
+const FLOOR = 14;
+const R = 1.2; // minor third ratio
 export const TYPE = {
-  T1: 32,  // hero lead, step numbers
-  T2: 20,  // section titles, modifier names, pattern name
-  T3: 14,  // body text, spec values, drawer item copy
-  T4: 12,  // labels, secondary text, sub-leads
-  T5: 11,  // micro labels, metadata, category tags
+  T0: Math.round(FLOOR * R * R * R * R * R),  // 35 — display
+  T1: Math.round(FLOOR * R * R * R * R),       // 29 — hero
+  T2: Math.round(FLOOR * R * R * R),            // 24 — section title
+  T3: Math.round(FLOOR * R * R),                // 20 — card title
+  T4: Math.round(FLOOR * R),                    // 17 — body
+  T5: FLOOR + 1,                                // 15 — labels
+  T6: FLOOR,                                    // 14 — floor (smallest)
+  FLOOR,
 };
 export const TYPE_DK = {
-  T1: 38,
-  T2: 24,
-  T3: 16,
-  T4: 13,
-  T5: 11,
+  T0: Math.round(FLOOR * R * R * R * R * R) + 6, // 41
+  T1: Math.round(FLOOR * R * R * R * R) + 4,     // 33
+  T2: Math.round(FLOOR * R * R * R) + 2,          // 26
+  T3: Math.round(FLOOR * R * R) + 2,              // 22
+  T4: Math.round(FLOOR * R) + 1,                  // 18
+  T5: FLOOR + 1,                                  // 15
+  T6: FLOOR,                                      // 14
+  FLOOR,
 };
 
 // ─── Focus-visible ring ──────────────────────────────────────────────────────

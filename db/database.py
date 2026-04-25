@@ -379,6 +379,25 @@ def init_db():
                 invited_at    REAL NOT NULL,
                 PRIMARY KEY (team_id, user_id)
             );
+
+            -- ── Team sessions (shoot session sharing) ────────────────────
+            -- One row per shared cockpit session. Creator shares a short
+            -- token URL; assistant opens it to see the setup context.
+            -- Sessions auto-expire after 24h. No real-time sync — this is
+            -- a persistent "here's what we're shooting" handoff.
+            CREATE TABLE IF NOT EXISTS team_sessions (
+                id            TEXT PRIMARY KEY,
+                share_token   TEXT UNIQUE NOT NULL,
+                creator_email TEXT NOT NULL,
+                setup_name    TEXT NOT NULL,
+                setup_data    TEXT NOT NULL,
+                created_at    REAL NOT NULL,
+                expires_at    REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_team_sessions_token
+                ON team_sessions(share_token);
+            CREATE INDEX IF NOT EXISTS idx_team_sessions_expires
+                ON team_sessions(expires_at);
         """)
     # Migrate existing users table — add email_verified if missing
     with get_db() as conn:
@@ -1930,3 +1949,89 @@ def remove_team_member(team_id: str, user_id: str) -> bool:
             (team_id, user_id),
         )
     return cur.rowcount > 0
+
+
+# ── Team Sessions (shoot session sharing) ────────────────────────────────────
+
+def create_team_session(
+    creator_email: str,
+    setup_name: str,
+    setup_data: str,
+    expires_in: int = 86400,
+) -> Dict[str, Any]:
+    """Create a shared shoot session. Returns the session dict with share_token."""
+    import secrets
+    session_id = uuid.uuid4().hex
+    now = time.time()
+    expires_at = now + expires_in
+
+    # Generate a short URL-safe token with collision retry
+    for _ in range(5):
+        token = secrets.token_urlsafe(8)  # ~11 chars, 64 bits entropy
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    """INSERT INTO team_sessions
+                       (id, share_token, creator_email, setup_name, setup_data, created_at, expires_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (session_id, token, creator_email, setup_name, setup_data, now, expires_at),
+                )
+            return {
+                "id": session_id,
+                "share_token": token,
+                "creator_email": creator_email,
+                "setup_name": setup_name,
+                "created_at": now,
+                "expires_at": expires_at,
+            }
+        except Exception:
+            session_id = uuid.uuid4().hex
+            continue
+    raise RuntimeError("Failed to generate unique session token after 5 attempts")
+
+
+def get_team_session_by_token(share_token: str) -> Optional[Dict[str, Any]]:
+    """Fetch a session by its share token. Returns None if not found.
+    Does NOT check expiry — caller decides 404 vs 410."""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT * FROM team_sessions WHERE share_token = ?",
+            (share_token,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def update_team_session(
+    share_token: str,
+    setup_name: Optional[str] = None,
+    setup_data: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Update a session's name or data. Returns updated row or None."""
+    updates = []
+    params = []
+    if setup_name is not None:
+        updates.append("setup_name = ?")
+        params.append(setup_name)
+    if setup_data is not None:
+        updates.append("setup_data = ?")
+        params.append(setup_data)
+    if not updates:
+        return get_team_session_by_token(share_token)
+    params.append(share_token)
+    with get_db() as conn:
+        conn.execute(
+            f"UPDATE team_sessions SET {', '.join(updates)} WHERE share_token = ?",
+            params,
+        )
+    return get_team_session_by_token(share_token)
+
+
+def cleanup_expired_team_sessions() -> int:
+    """Delete sessions that expired more than 1 hour ago. Returns count deleted."""
+    cutoff = time.time() - 3600
+    with get_db() as conn:
+        cur = conn.execute(
+            "DELETE FROM team_sessions WHERE expires_at < ?",
+            (cutoff,),
+        )
+    return cur.rowcount

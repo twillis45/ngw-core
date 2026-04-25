@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import HomeScreen from './studio/_core/HomeScreen';
 import ProcessingScreen from './studio/_core/ProcessingScreen';
 import ResultScreen from './studio/_core/ResultScreen';
@@ -18,6 +18,7 @@ import MyKitScreen from './studio/_core/MyKitScreen';
 import StudioLabWrapper from './studio/_core/StudioLabWrapper';
 import RoomPlannerWrapper from './studio/_core/RoomPlannerWrapper';
 import OnboardingScreen from './studio/_adjacent/OnboardingScreen';
+import ShotMatchAdapter from './studio/_adjacent/ShotMatchAdapter';
 import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth, loadPreferences } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
@@ -603,12 +604,21 @@ function mapApiResult(data) {
     }
   }
 
+  // ── EXIF camera data — real camera settings from uploaded photo ──────────
+  const exifCamera = data.camera_settings || null;
+
+  // ── Setup notes / quick fixes from recreation_setup ────────────────────
+  const recreationSetup = data.reference_analysis?.recreation_setup || {};
+  const setupNotes = recreationSetup.setup_notes || [];
+
   return {
     pattern,
     geometricBase,
     confidence,
     meta,
     mood,
+    cameraSettings: exifCamera,
+    setupNotes,
     sections: {
       patternCandidates: candidates,
       patternSource,
@@ -651,6 +661,44 @@ export default function Day1DemoApp() {
 
   // Force studio theme so [data-theme="studio"] CSS overrides apply everywhere
   useEffect(() => { applyTheme('studio'); }, []);
+
+  // ── Session join flow — detect ?session=TOKEN on mount ──────────────────
+  const [sharedSession, setSharedSession] = useState(null);
+  const [joinLoading, setJoinLoading] = useState(() => {
+    // Pre-read the param synchronously so we can show loading immediately
+    try { return !!new URLSearchParams(window.location.search).get('session'); } catch { return false; }
+  });
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('session');
+    if (!token) return;
+    import('../data/teamStore').then(({ getSession }) => {
+      getSession(token)
+        .then(session => {
+          setSharedSession(session);
+          // Hydrate the result from the shared setup data
+          if (session.setup_data) {
+            const mapped = typeof session.setup_data === 'string'
+              ? JSON.parse(session.setup_data)
+              : session.setup_data;
+            setResult(mapped);
+            setScreen('setup');
+          }
+        })
+        .catch(err => {
+          console.warn('[TeamSession] Join failed:', err.message);
+          if (err.status === 410) {
+            setSharedSession({ expired: true, detail: err.detail });
+          } else {
+            setSharedSession({ error: true, detail: err.detail || 'Session not found' });
+          }
+        })
+        .finally(() => setJoinLoading(false));
+    });
+    // Clean the URL param so refresh doesn't re-fetch
+    const url = new URL(window.location.href);
+    url.searchParams.delete('session');
+    window.history.replaceState({}, '', url);
+  }, []);
 
   // Check if onboarding is needed (first login, no photographer_profile)
   useEffect(() => {
@@ -1171,9 +1219,45 @@ export default function Day1DemoApp() {
   const handleBuildWizard = () => setScreen('build');
   const handleMyKit = () => setScreen('mykit');
   const handleRoomPlanner = () => setScreen('roomplanner');
+  const handleShotMatch = () => setScreen('shotmatch');
   const handleSessionLog = () => setScreen('journal');
   const [showVideoCapture, setShowVideoCapture] = useState(false);
   const handleVideoCapture = () => setShowVideoCapture(true);
+
+  // Team session — backend-backed shoot session sharing
+  const [activeSessionToken, setActiveSessionToken] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const handleShareSession = useCallback(async () => {
+    if (shareLoading) return null;
+    setShareLoading(true);
+    try {
+      // Re-share existing session if one was created this cockpit visit
+      if (activeSessionToken) {
+        const { getShareUrl } = await import('../data/teamStore');
+        const url = getShareUrl(activeSessionToken);
+        let clipboardFailed = false;
+        try { await navigator.clipboard.writeText(url); } catch { clipboardFailed = true; }
+        setShareLoading(false);
+        return { url, clipboardFailed };
+      }
+      // Create new backend session
+      const { createSession } = await import('../data/teamStore');
+      const session = await createSession(
+        result?.pattern || 'Shoot Session',
+        result || {},
+      );
+      setActiveSessionToken(session.share_token);
+      const url = session.share_url;
+      let clipboardFailed = false;
+      try { await navigator.clipboard.writeText(url); } catch { clipboardFailed = true; }
+      setShareLoading(false);
+      return { url, clipboardFailed };
+    } catch (err) {
+      setShareLoading(false);
+      console.error('[TeamSession] Create failed:', err.message);
+      return null;
+    }
+  }, [result, activeSessionToken, shareLoading]);
   const handleLookLibrary = () => setScreen('looklibrary');
   const handleClientBrief = () => setScreen('clientbrief');
   const handleBuildComplete = (payload) => {
@@ -1340,6 +1424,84 @@ export default function Day1DemoApp() {
     }} />;
   }
 
+  // ── Session join: loading + error gates ─────────────────────────────────
+  if (joinLoading) {
+    return (
+      <div style={{
+        minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--color-bg, #0a0a0c)',
+      }}>
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            border: '2px solid rgba(90,120,160,0.18)',
+            borderTopColor: 'rgba(90,120,160,0.65)',
+            animation: 'sessionSpinner 0.8s linear infinite',
+          }} />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(160,180,210,0.55)', letterSpacing: '0.6px', WebkitFontSmoothing: 'antialiased' }}>
+            Loading shared session…
+          </span>
+        </div>
+        <style>{`@keyframes sessionSpinner { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (sharedSession?.expired || sharedSession?.error) {
+    const isExpired = !!sharedSession.expired;
+    return (
+      <div style={{
+        minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--color-bg, #0a0a0c)',
+        padding: '0 24px',
+      }}>
+        <div style={{
+          maxWidth: 340, width: '100%', textAlign: 'center',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20,
+        }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: isExpired ? 'rgba(200,155,60,0.10)' : 'rgba(200,70,70,0.10)',
+            border: `1.5px solid ${isExpired ? 'rgba(200,155,60,0.25)' : 'rgba(200,70,70,0.22)'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {isExpired ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(200,155,60,0.70)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(200,70,70,0.70)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'rgba(200,215,235,0.85)', letterSpacing: '0.3px', WebkitFontSmoothing: 'antialiased' }}>
+              {isExpired ? 'Session Expired' : 'Session Not Found'}
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: 'rgba(140,165,195,0.55)', lineHeight: 1.5, fontWeight: 400 }}>
+              {isExpired
+                ? 'This shared session has expired. Sessions are valid for 24 hours. Ask the photographer to share a new link.'
+                : 'This session link is invalid or has been removed. Ask the photographer to share a new link.'}
+            </p>
+          </div>
+          <button
+            onClick={() => { setSharedSession(null); setScreen('home'); }}
+            style={{
+              background: 'rgba(90,120,160,0.10)', border: '1px solid rgba(90,120,160,0.22)',
+              borderRadius: 8, padding: '9px 22px', cursor: 'pointer',
+              fontSize: 13, fontWeight: 600, color: 'rgba(160,185,215,0.75)',
+              letterSpacing: '0.5px', WebkitFontSmoothing: 'antialiased',
+              transition: 'background 0.15s ease',
+            }}
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Screen crossfade — each screen fades in on mount (200ms) ──
   const screenContent = (() => {
     switch (screen) {
@@ -1381,7 +1543,7 @@ export default function Day1DemoApp() {
     }
     case 'processing': {
       const procMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
-      const procEl = <ProcessingScreen imagePreview={imagePreview} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />;
+      const procEl = <ProcessingScreen imagePreview={imagePreview} imageFile={imageFile} analysisComplete={analysisReady} exifData={exifData} result={result} onCancel={handleRetry} />;
       if (!procMobile) return procEl;
       return (
         <FitToViewport designWidth={430} designHeight={932} maxScale={1.9} tightness={0.96}>
@@ -1399,6 +1561,7 @@ export default function Day1DemoApp() {
           imagePreview={imagePreview}
           onSetup={handleSetup}
           onRetry={handleRetry}
+          onShotMatch={handleShotMatch}
           isPaid={appIsPaid}
           plan={appPlan}
           isAdmin={appIsAdmin}
@@ -1429,7 +1592,7 @@ export default function Day1DemoApp() {
       );
       if (!setupMobile) return setupEl;
       return (
-        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+        <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>
           {setupEl}
         </FitToViewport>
       );
@@ -1453,6 +1616,8 @@ export default function Day1DemoApp() {
             imagePreview={imagePreview}
             mode={shootMode}
             onExit={handleExitShoot}
+            onLiveView={handleVideoCapture}
+            onShare={handleShareSession}
           />
         </FitToViewport>
       );
@@ -1461,7 +1626,7 @@ export default function Day1DemoApp() {
       const buildMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const buildEl = <BuildWizardScreen onComplete={handleBuildComplete} onBack={() => setScreen('home')} />;
       if (!buildMobile) return buildEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{buildEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{buildEl}</FitToViewport>;
     }
     case 'saved': {
       const savedMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
@@ -1474,13 +1639,13 @@ export default function Day1DemoApp() {
         />
       );
       if (!savedMobile) return savedEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{savedEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{savedEl}</FitToViewport>;
     }
     case 'recipes': {
       const recipesMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const recipesEl = <RecipeScreen onSelect={handleRecipeSelect} onBack={() => setScreen('home')} onBuild={handleBuildWizard} />;
       if (!recipesMobile) return recipesEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{recipesEl}</FitToViewport>;
     }
     case 'journal': {
       const journalMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
@@ -1503,28 +1668,39 @@ export default function Day1DemoApp() {
         />
       );
       if (!journalMobile) return journalEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{journalEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{journalEl}</FitToViewport>;
     }
     case 'clientbrief': {
       const cbMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const cbEl = <ClientBriefScreen onBack={() => setScreen('home')} />;
       if (!cbMobile) return cbEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{cbEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{cbEl}</FitToViewport>;
     }
     case 'looklibrary': {
       const llMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const llEl = <LookLibraryScreen onBack={() => setScreen('home')} />;
       if (!llMobile) return llEl;
-      return <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>{llEl}</FitToViewport>;
+      return <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>{llEl}</FitToViewport>;
     }
     case 'roomplanner':
       return <RoomPlannerWrapper result={result} onBack={() => setScreen(result ? 'setup' : 'home')} />;
+    case 'shotmatch':
+      return (
+        <ShotMatchAdapter
+          result={result}
+          imagePreview={imagePreview}
+          user={user}
+          isPaid={appIsPaid}
+          isAdmin={appIsAdmin}
+          onBack={() => setScreen(result ? 'result' : 'home')}
+        />
+      );
     case 'mykit': {
       const mkMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
       const mkEl = <MyKitScreen onBack={() => setScreen('home')} onRecipes={handleRecipes} />;
       if (!mkMobile) return mkEl;
       return (
-        <FitToViewport designWidth={430} designHeight={932} minScale={0.8} maxScale={1.9} tightness={0.96}>
+        <FitToViewport designWidth={430} designHeight={932} minScale={1} maxScale={1.9} tightness={0.96}>
           {mkEl}
         </FitToViewport>
       );
@@ -1547,7 +1723,7 @@ export default function Day1DemoApp() {
       );
     }
     case 'lab':
-      return <StudioLabWrapper onBack={() => setScreen('settings')} />;
+      return <StudioLabWrapper onBack={() => setScreen('settings')} onSessionLog={() => setScreen('sessionLog')} onLookLibrary={() => setScreen('lookLibrary')} />;
     case 'error':
       return (
         <FallbackReveal
@@ -1602,6 +1778,39 @@ export default function Day1DemoApp() {
             color: appPlan === 'free' ? 'rgba(200,155,60,0.75)' : 'rgba(140,225,180,0.70)',
             WebkitFontSmoothing: 'antialiased',
           }}>Testing as {PLAN_LABELS[appPlan]}</span>
+        </div>
+      )}
+      {/* Shared session banner — shown when viewing a session joined via URL */}
+      {sharedSession && !sharedSession.expired && !sharedSession.error && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9000,
+          padding: '6px 16px',
+          background: 'rgba(14,20,30,0.92)',
+          borderBottom: '1px solid rgba(90,120,160,0.18)',
+          backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          pointerEvents: 'auto',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(90,140,200,0.65)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(140,170,210,0.60)', letterSpacing: '0.4px', WebkitFontSmoothing: 'antialiased' }}>
+              Shared session
+              {sharedSession.creator_email ? ` · ${sharedSession.creator_email}` : ''}
+              {sharedSession.setup_name ? ` — ${sharedSession.setup_name}` : ''}
+            </span>
+          </div>
+          <button
+            onClick={() => setSharedSession(null)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+              color: 'rgba(140,165,195,0.40)', fontSize: 14, lineHeight: 1,
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            title="Dismiss"
+          >×</button>
         </div>
       )}
       <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>

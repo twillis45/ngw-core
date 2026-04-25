@@ -1908,7 +1908,7 @@ def build_image_read(
         subject_type = getattr(vlm, "subject_type", "") or ""
         subject_count = getattr(vlm, "subject_count", 1) or 1
         subject_skin_tones = getattr(vlm, "apparent_skin_tones", []) or []
-        skin_tone_mixed = getattr(vlm, "skin_tone_mixed", False) or False
+        skin_tone_mixed = (getattr(vlm, "skin_tone_mixed", False) or False) and subject_count > 1
 
         # Lighting style & photographer — VLM high-level read
         vlm_lighting_style = getattr(vlm, "lighting_style", "") or ""

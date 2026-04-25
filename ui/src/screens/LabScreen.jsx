@@ -55,6 +55,8 @@ import {
   getDiagnostics,
   getServerLogs,
   exportServerLogs,
+  clearL1Stream,
+  clearServerLogs,
   getAutonomyLog,
   getAutonomyQueue,
   probeApiKey,
@@ -563,7 +565,7 @@ function LabHelpPanel({ tabId, onClose }) {
  * Protected by enable_lab feature flag + logged-in user.
  * Tabs: Workbench, Gold Set, Candidates, Reference Dataset, Learning Ops.
  */
-export default function LabScreen() {
+export default function LabScreen({ onSessionLog, onLookLibrary } = {}) {
   const { user, labPendingImage } = useAppState();
   const dispatch = useDispatch();
   const [activeTab, setActiveTab] = useState('workbench');
@@ -1261,6 +1263,23 @@ export default function LabScreen() {
         )}
         {activeSection === 'support' && (
           <div>
+            {/* Admin user data access */}
+            {(onSessionLog || onLookLibrary) && (
+              <div style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-md)', flexWrap: 'wrap' }}>
+                {onSessionLog && (
+                  <button onClick={onSessionLog} className="lab-btn lab-btn--outline" type="button"
+                    style={{ fontSize: 14, padding: '10px 20px' }}>
+                    📓 Lighting Journal
+                  </button>
+                )}
+                {onLookLibrary && (
+                  <button onClick={onLookLibrary} className="lab-btn lab-btn--outline" type="button"
+                    style={{ fontSize: 14, padding: '10px 20px' }}>
+                    📷 Look Library
+                  </button>
+                )}
+              </div>
+            )}
             <ControlCenterTab user={user} onNavigateTo={handleNavigateTo} initialSection="support" key="support-cc" />
           </div>
         )}
@@ -1387,6 +1406,7 @@ function L1StreamPanel({ onNavigateTo }) {
         </LogSectionLabel>
         <div className="lab-log__header-actions">
           <ActionBtn label="↻ Refresh" onClick={() => fetch_()} variant="blue" />
+          <ActionBtn label="Clear Logs" onClick={() => { if (window.confirm('Delete all analysis records?')) clearL1Stream().then(() => fetch_()); }} variant="red" />
           <ActionBtn label="+ Analyze" onClick={() => onNavigateTo?.({ tab: 'workbench' })} variant="green" />
         </div>
       </div>
@@ -1656,6 +1676,7 @@ function ServerLogsPanel() {
           <ActionBtn label={showFilters ? '▲ Filters' : '▼ Filters'} onClick={() => setShowFilters(!showFilters)} variant={hasFilters ? 'amber' : 'muted'} />
           <ActionBtn label={sortAsc ? '↑ Oldest' : '↓ Newest'} onClick={() => setSortAsc(!sortAsc)} variant="muted" />
           <ActionBtn label={exporting ? 'Exporting…' : '⬇ Export'} onClick={handleExport} variant="muted" disabled={exporting} />
+          <ActionBtn label="Clear Logs" onClick={() => { clearServerLogs().then(() => fetch_()); }} variant="red" />
           <ActionBtn label="↻ Refresh" onClick={() => fetch_()} variant="blue" />
         </div>
       </div>

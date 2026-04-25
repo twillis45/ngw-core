@@ -769,3 +769,9 @@ export function useAppState() {
 export function useDispatch() {
   return useContext(DispatchCtx);
 }
+
+// ── Compatibility bridge ────────────────────────────────────────────────────
+// Exported for Studio Matte wrappers (e.g. RoomPlannerWrapper) that need to
+// provide minimal mock state to legacy screens without spinning up the full
+// AppProvider + reducer. Not a new pattern — use only for legacy bridging.
+export { StateCtx as _StateCtx, DispatchCtx as _DispatchCtx };
