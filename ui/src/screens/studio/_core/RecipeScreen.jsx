@@ -402,9 +402,9 @@ function RecipeDetail({ recipe, onUse, onClose, isDesktop, isTablet }) {
             </p>
             {recipe.variations.map((v, i) => (
               <p key={i} style={{
-                margin: '0 0 2px', fontSize: 14, color: steel(0.50), lineHeight: 1.4, ...FONT_SMOOTH,
+                margin: '0 0 4px', fontSize: 14, color: steel(0.50), lineHeight: 1.4, ...FONT_SMOOTH,
               }}>
-                · {v}
+                <span style={{ fontWeight: 700, color: steel(0.60) }}>{v.label}:</span> {v.mod}
               </p>
             ))}
           </div>
