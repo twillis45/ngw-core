@@ -1,6 +1,21 @@
 /**
  * MatteBackground — 5-layer matte metal surface treatment
  *
+ * ┌─────────────────────────────────────────────────────────────────┐
+ * │ LOCKED — DO NOT CHANGE GRAIN OPACITIES OR BLEND MODES          │
+ * │                                                                 │
+ * │ The current values (multiply @ 0.09/0.06/0.04/0.05) are the    │
+ * │ result of multiple calibration rounds against desktop monitors  │
+ * │ and mobile OLED screens. Higher opacities wash out the dark     │
+ * │ surface. soft-light/overlay blend modes brighten it.            │
+ * │                                                                 │
+ * │ If banding appears, the fix is NEVER to boost grain opacity —   │
+ * │ it's to add more gradient color stops in the ambient/vignette   │
+ * │ layers so the transitions are smoother.                         │
+ * │                                                                 │
+ * │ Calibrated: 2026-04-25                                          │
+ * └─────────────────────────────────────────────────────────────────┘
+ *
  * Shared across HomeScreen, ProcessingScreen, ResultScreen (and any future
  * studio screens that need the carbon-black studio backdrop).
  *
