@@ -816,12 +816,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             margin: '0 0 6px', fontWeight: 700, fontSize: 30, lineHeight: '36px',
             color: 'rgba(245,247,250,0.90)', letterSpacing: '-0.5px',
             textAlign: 'center', ...FONT_SMOOTH,
-          }}>See how any portrait was lit.</p>
+          }}>See how it was lit.</p>
           <p style={{
             margin: '0 0 30px', fontWeight: 500, fontSize: 14, lineHeight: '20px',
             color: steel(0.50), letterSpacing: '0.1px',
             textAlign: 'center', ...FONT_SMOOTH,
-          }}>Reverse-engineer the lighting. Rebuild it in your studio.</p>
+          }}>Rembrandt · Softbox · 45° left · 4 ft</p>
 
           {/* Viewfinder — identical material treatment to mobile VF slot */}
           <div
@@ -881,6 +881,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             <div style={{
               position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
               background: 'radial-gradient(ellipse 70% 50% at 45% 42%, rgba(255,255,255,0.008) 0%, transparent 60%)',
+            }} />
+            {/* Ghosted portrait — contained inside desktop VF slot */}
+            <img src="/ghost-rembrandt.jpg" alt="" style={{
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover', objectPosition: '50% 30%',
+              opacity: 0.12, zIndex: 1,
+              pointerEvents: 'none',
+              filter: 'grayscale(1) brightness(0.6)',
             }} />
             {/* Ellipse depth oval — Leica-style distance indicator */}
             <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
@@ -974,11 +982,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               }}
               className="sm-btn-lift"
               >
-                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1px', color: steel(0.78), display: 'flex', alignItems: 'center', gap: 8, ...FONT_SMOOTH }}>
-                  {sampleLoading ? 'Loading...' : (<>
-                    Try a Sample Photo
-                    <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(200,155,69,0.65)', letterSpacing: '0.5px' }}>→</span>
-                  </>)}
+                <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.75), textTransform: 'uppercase', ...FONT_SMOOTH }}>
+                  {sampleLoading ? 'Loading...' : 'Try a Sample'}
                 </span>
               </button>
             </div>
@@ -1017,7 +1022,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 }}
                 className="sm-btn-lift"
                 >
-                  <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.4px', color: steel(0.75), ...FONT_SMOOTH }}>Last Result</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.75), textTransform: 'uppercase', ...FONT_SMOOTH }}>Last Result</span>
                 </button>
               </div>
             )}
@@ -1139,6 +1144,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           display: 'grid',
           gridTemplateColumns: '1fr',
           gridTemplateRows: '1fr',
+          maxWidth: 1400,
         } : {}),
       }}
     >
@@ -1361,7 +1367,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
              Sits behind brackets/text (z1) but above LCD backlight (z0).
              Fades out when a real photo loads. The image is already prefetched
              at mount (line ~89) so this renders instantly from cache. */}
-        {!hasImage && (
+        {!hasImage && !isDesktop && (
           <img src="/ghost-rembrandt.jpg" alt="" style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
             objectFit: 'cover', objectPosition: '50% 30%',
@@ -1394,7 +1400,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         )}
 
         {/* 1 — Ellipse depth oval — desktop hides when no photo */}
-        {(!isDesktop || hasImage) && (
+        {!isDesktop && (
         <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1 }}>
           <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
         </div>
@@ -1484,23 +1490,14 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   textShadow: '0 -1px 1px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04)',
                   textAlign: 'center', lineHeight: '22px',
                   ...FONT_SMOOTH,
-                }}>Load a portrait</p>
-                {/* What you get — restrained payoff preview */}
+                }}>See how it was lit</p>
+                {/* Proof line — matches desktop hero */}
                 <p style={{
-                  margin: '6px 0 0', fontSize: 12, fontWeight: 600, letterSpacing: '1px',
-                  color: steel(0.38), textTransform: 'uppercase',
+                  margin: '6px 0 0', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px',
+                  color: steel(0.42),
                   textShadow: '0 -1px 1px rgba(0,0,0,0.5)',
                   textAlign: 'center', lineHeight: '16px',
-                  ...FONT_SMOOTH,
-                }}>Pattern · Modifier · Distance · Diagram</p>
-                {/* Ghosted sample read — one real result line.
-                    Photographer-credible terminology. Not fake, not loud —
-                    just enough to show the shape of the answer. */}
-                <p style={{
-                  margin: '14px 0 0', fontSize: 12, fontWeight: 500, letterSpacing: '0.3px',
-                  color: steel(0.30),
                   fontStyle: 'italic',
-                  textAlign: 'center', lineHeight: '16px',
                   ...FONT_SMOOTH,
                 }}>Rembrandt · Softbox · 45° left · 4 ft</p>
               </>)}
@@ -1578,11 +1575,13 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           }} />
         )}
 
-        {/* 9 — Glass panel overlay — always visible. Empty VF reads as powered-off glass instrument. */}
+        {/* 9 — Glass panel overlay — mobile only. Desktop VF slot provides its own glass treatment. */}
+        {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, opacity: hasImage ? 1 : 0.6 }} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: hasImage ? 0.62 : 0.30, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
+        )}
 
         {/* 10 — Inner shadow — always visible. Glass edge catch even on empty VF. */}
         <div style={{

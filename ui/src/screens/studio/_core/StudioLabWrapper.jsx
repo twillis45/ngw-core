@@ -22,7 +22,7 @@ const FS = FONT_SMOOTH;
 // Lazy-load the legacy LabScreen so internal components load on demand
 const LegacyLab = lazy(() => import('../../LabScreen'));
 
-export default function StudioLabWrapper({ onBack }) {
+export default function StudioLabWrapper({ onBack, onSessionLog, onLookLibrary }) {
   return (
     <div style={{
       position: 'fixed', inset: 0,
@@ -65,7 +65,7 @@ export default function StudioLabWrapper({ onBack }) {
             Loading Lab...
           </div>
         }>
-          <LegacyLab />
+          <LegacyLab onSessionLog={onSessionLog} onLookLibrary={onLookLibrary} />
         </Suspense>
       </div>
 

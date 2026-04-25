@@ -648,7 +648,6 @@ function CatalogChip({ label, selected, qty = 0, onAdd, onMinus, onRemove, onCli
               'inset 0 1px 0 rgba(255,255,255,0.04)',
               'inset -1px -1px 0 rgba(0,0,0,0.18)',
             ].join(', '),
-        cursor: 'pointer',
         fontSize: 11, fontWeight: selected ? 700 : 500,
         color: selected ? KEY_ACCENT : steel(0.55),
         letterSpacing: '0.1px',
