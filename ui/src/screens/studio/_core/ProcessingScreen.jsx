@@ -35,18 +35,17 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
+      <MatteBackground />
     <div style={{
       position: 'relative',
       width: '100%',
       height: '100%',
       margin: '0 auto',
-      backgroundColor: SCREEN_BG,
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
       filter: daylightMode ? 'brightness(1.15)' : undefined,
       ...(isDesktop ? { display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr', maxWidth: 1400 } : {}),
     }}>
-      <MatteBackground />
 
       {/* Cancel button */}
       {onCancel && !analysisComplete && (

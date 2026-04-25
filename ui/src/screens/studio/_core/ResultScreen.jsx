@@ -2227,6 +2227,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       onTouchEnd={!isDesktop ? handleSwipeEnd : undefined}
       style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}
     >
+    <MatteBackground variant="subdued" />
     {/* Swipe-back edge hint — left edge glow that follows finger */}
     {swipeProgress > 0 && (
       <div style={{
@@ -2243,8 +2244,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       width: '100%',
       maxWidth: isDesktop ? '100%' : undefined,
       height: '100%',
-      backgroundColor: C.bg,
-      boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
       margin: '0 auto',
       fontFamily: 'Inter, system-ui, sans-serif',
       overflowX: 'hidden',
@@ -2270,7 +2269,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         justifyContent: 'center',
       } : null),
     }}>
-      <MatteBackground variant="subdued" />
 
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
       <div style={{
