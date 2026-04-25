@@ -2227,7 +2227,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       onTouchEnd={!isDesktop ? handleSwipeEnd : undefined}
       style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}
     >
-    <MatteBackground variant="subdued" />
     {/* Swipe-back edge hint — left edge glow that follows finger */}
     {swipeProgress > 0 && (
       <div style={{
@@ -2269,6 +2268,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         justifyContent: 'center',
       } : null),
     }}>
+      <MatteBackground variant="subdued" />
 
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
       <div style={{
