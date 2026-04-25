@@ -2263,6 +2263,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         gridTemplateAreas: '"hero panel" "cta cta"',
         columnGap: 16,
         rowGap: 0,
+        maxWidth: 1400,
+        margin: '0 auto',
         paddingLeft: 20, paddingRight: 20,
         alignItems: 'start',
         justifyContent: 'center',
