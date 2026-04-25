@@ -34,6 +34,15 @@ import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
 import SocialExportPanel from '../../../cards/SocialExportPanel';
 import ExifStrip from '../_shared/ExifStrip';
+import { Component } from 'react';
+
+// Error boundary — prevents SocialExportPanel crashes from killing the result page
+class SafeRender extends Component {
+  constructor(props) { super(props); this.state = { error: false }; }
+  static getDerivedStateFromError() { return { error: true }; }
+  componentDidCatch(err) { console.warn('[SafeRender]', err.message); }
+  render() { return this.state.error ? null : this.props.children; }
+}
 import SideViewDiagram from './components/SideViewDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import PullTabDrawer from '../_shared/PullTabDrawer';
@@ -3352,13 +3361,15 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         )}
 
         {isPaid && (
-          <SocialExportPanel
-            result={result}
-            imagePreview={imagePreview}
-            diagramCanvas={null}
-            isStudio={plan === 'studio' || plan === 'enterprise'}
-            isAdmin={isAdmin}
-          />
+          <SafeRender>
+            <SocialExportPanel
+              result={result}
+              imagePreview={imagePreview}
+              diagramCanvas={null}
+              isStudio={plan === 'studio' || plan === 'enterprise'}
+              isAdmin={isAdmin}
+            />
+          </SafeRender>
         )}
 
         {isPaid && onShotMatch && (

@@ -25,7 +25,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { navHaptic, tapHaptic, successHaptic, grainHaptic, longPressHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL } from '../../../theme/studioMatte';
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
 import { loadSettings } from '../../../data/settingsStore';
 import { postSignal } from '../../../data/signalsApi';
@@ -2295,7 +2295,7 @@ function CoachingPanel({ coach, variant = 'photographer' }) {
         {coach.fixes && coach.fixes.length > 0 && (
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: labelFs, fontWeight: 800,
-              color: '#d67b4e', letterSpacing: '1.2px', ...FONT_SMOOTH }}>
+              color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
               FIXES
             </p>
             <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none' }}>
@@ -2305,7 +2305,7 @@ function CoachingPanel({ coach, variant = 'photographer' }) {
                   lineHeight: 1.35,
                 }}>
                   <p style={{ margin: 0, fontSize: symptomFs, fontWeight: 700,
-                    color: 'rgba(214,123,78,0.85)', ...FONT_SMOOTH }}>
+                    color: KEY_ACCENT, ...FONT_SMOOTH }}>
                     {symptom}
                   </p>
                   <p style={{ margin: '1px 0 0', fontSize: itemFs, fontWeight: 500,
