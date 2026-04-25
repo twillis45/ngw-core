@@ -983,7 +983,7 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
     </svg>
     {showExport && (
       <div style={{
-        display: 'flex', justifyContent: 'center', gap: 12, padding: '8px 0 4px',
+        display: 'flex', justifyContent: 'flex-end', padding: '4px 8px 0',
       }}>
         <button onClick={() => {
           const d = new Date();
@@ -991,24 +991,21 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
           const name = `NGW_${(pattern || 'diagram').replace(/\s+/g, '_')}_top-down_${date}`;
           exportSvgAsPng(svgRef.current, name, whiteLabel);
         }} style={{
-          background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
-          padding: '5px 14px', cursor: 'pointer',
-          fontSize: 11, fontWeight: 600, color: steel(0.45),
-          letterSpacing: '0.5px', ...FONT_SMOOTH,
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: 6, opacity: 0.35,
           WebkitTapHighlightColor: 'transparent',
-        }}>PNG</button>
-        <button onClick={() => {
-          const d = new Date();
-          const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-          const title = `NGW ${(pattern || 'Diagram').replace(/_/g, ' ')} — Top-Down — ${date}`;
-          exportSvgAsPdf(svgRef.current, result, title, whiteLabel);
-        }} style={{
-          background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
-          padding: '5px 14px', cursor: 'pointer',
-          fontSize: 11, fontWeight: 600, color: steel(0.45),
-          letterSpacing: '0.5px', ...FONT_SMOOTH,
-          WebkitTapHighlightColor: 'transparent',
-        }}>PDF</button>
+          transition: 'opacity 0.15s ease',
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0.35'}
+        title="Download diagram PNG"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={steel(0.65)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+        </button>
       </div>
     )}
     </>
