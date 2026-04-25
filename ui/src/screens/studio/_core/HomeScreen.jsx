@@ -1324,7 +1324,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           // Top/left edges are dark (in shadow), bottom/right catch a faint highlight.
           boxShadow: isDragOver
             ? 'inset 0 0 40px rgba(132, 158, 184,0.15)'
-            : hasImage ? 'none' : [
+            : (hasImage || isDesktop) ? 'none' : [
                 // Deep bezel channel — panel is recessed into the body
                 'inset 0 3px 8px rgba(0,0,0,0.85)',
                 'inset 2px 0 6px rgba(0,0,0,0.55)',
@@ -1342,9 +1342,10 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           animation: viewfinderShake ? 'vfShake 0.4s ease' : 'none',
         }}
       >
-        {/* 0 — LCD panel backlight — always visible. Even empty VF should read as a powered-off screen. */}
+        {/* 0 — LCD panel backlight — suppressed on desktop so MatteBackground shows through letterbox areas. */}
         <div style={{
           position: 'absolute', inset: 0,
+          opacity: (isDesktop && hasImage) ? 0 : 1,
           background: hasImage ? [
             'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
             'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
