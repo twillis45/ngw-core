@@ -1245,6 +1245,36 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.45), letterSpacing: '0.5px', ...FONT_SMOOTH }}>LIVE</span>
                     </button>
                   )}
+                  {onShare && (
+                    <button onClick={async () => {
+                      tapHaptic(); softClickSound();
+                      setShareStatus('sharing');
+                      const result = await onShare();
+                      if (result && result.clipboardFailed) {
+                        setShareUrl(result.url);
+                        setShareStatus('clipboard_fail');
+                        setTimeout(() => { setShareStatus(null); setShareUrl(null); }, 12000);
+                      } else if (result) {
+                        setShareStatus('shared');
+                        setTimeout(() => setShareStatus(null), 3000);
+                      } else {
+                        setShareStatus('error');
+                        setTimeout(() => setShareStatus(null), 3000);
+                      }
+                    }} disabled={shareStatus === 'sharing'} style={{
+                      background: shareStatus === 'shared' ? 'rgba(72,186,136,0.12)' : shareStatus === 'error' ? 'rgba(200,70,70,0.12)' : 'none',
+                      border: `1px solid ${shareStatus === 'shared' ? 'rgba(72,186,136,0.30)' : shareStatus === 'error' ? 'rgba(200,70,70,0.25)' : steel(0.15)}`,
+                      borderRadius: 6, padding: '3px 8px', cursor: shareStatus === 'sharing' ? 'wait' : 'pointer',
+                      WebkitTapHighlightColor: 'transparent', transition: 'all 0.2s ease',
+                    }}>
+                      {shareStatus === 'sharing' ? <span style={{ fontSize: 11, color: steel(0.45), ...FONT_SMOOTH }}>...</span>
+                       : shareStatus === 'shared' ? <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(72,186,136,0.85)', ...FONT_SMOOTH }}>SHARED</span>
+                       : shareStatus === 'error' ? <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(200,70,70,0.75)', ...FONT_SMOOTH }}>FAILED</span>
+                       : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.45)} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                           <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" />
+                         </svg>}
+                    </button>
+                  )}
                 </div>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                   letterSpacing: '1.4px', ...FONT_SMOOTH }}>
@@ -1376,6 +1406,36 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                     WebkitTapHighlightColor: 'transparent',
                   }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.45), letterSpacing: '0.5px', ...FONT_SMOOTH }}>LIVE</span>
+                  </button>
+                )}
+                {onShare && (
+                  <button onClick={async () => {
+                    tapHaptic(); softClickSound();
+                    setShareStatus('sharing');
+                    const result = await onShare();
+                    if (result && result.clipboardFailed) {
+                      setShareUrl(result.url);
+                      setShareStatus('clipboard_fail');
+                      setTimeout(() => { setShareStatus(null); setShareUrl(null); }, 12000);
+                    } else if (result) {
+                      setShareStatus('shared');
+                      setTimeout(() => setShareStatus(null), 3000);
+                    } else {
+                      setShareStatus('error');
+                      setTimeout(() => setShareStatus(null), 3000);
+                    }
+                  }} disabled={shareStatus === 'sharing'} style={{
+                    background: shareStatus === 'shared' ? 'rgba(72,186,136,0.12)' : shareStatus === 'error' ? 'rgba(200,70,70,0.12)' : 'none',
+                    border: `1px solid ${shareStatus === 'shared' ? 'rgba(72,186,136,0.30)' : shareStatus === 'error' ? 'rgba(200,70,70,0.25)' : steel(0.15)}`,
+                    borderRadius: 6, padding: '3px 8px', cursor: shareStatus === 'sharing' ? 'wait' : 'pointer',
+                    WebkitTapHighlightColor: 'transparent', transition: 'all 0.2s ease',
+                  }}>
+                    {shareStatus === 'sharing' ? <span style={{ fontSize: 11, color: steel(0.45), ...FONT_SMOOTH }}>...</span>
+                     : shareStatus === 'shared' ? <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(72,186,136,0.85)', ...FONT_SMOOTH }}>SHARED</span>
+                     : shareStatus === 'error' ? <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(200,70,70,0.75)', ...FONT_SMOOTH }}>FAILED</span>
+                     : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.45)} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                         <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" />
+                       </svg>}
                   </button>
                 )}
               </div>
