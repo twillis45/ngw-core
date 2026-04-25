@@ -501,7 +501,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
 }
 
 export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit, onRoomPlanner, isPaid = false, plan = 'free' }) {
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);

@@ -1708,7 +1708,7 @@ function ModifierDetail({ modifier }) {
 }
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry, onShotMatch, isPaid = false, plan = 'free', isAdmin = false }) {
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
   const tilt = useDeviceTilt();
   // Admin settings — confidence display mode
   const _settings = loadSettings();

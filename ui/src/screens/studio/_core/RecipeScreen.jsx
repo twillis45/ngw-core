@@ -134,7 +134,7 @@ function CategoryPills({ categories, active, onChange }) {
 
 function PillButton({ label, active, onClick }) {
   const [hover, setHover] = useState(false);
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
   return (
     <button
       onClick={onClick}
@@ -432,7 +432,8 @@ function RecipeDetail({ recipe, onUse, onClose, isDesktop, isTablet }) {
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function RecipeScreen({ onSelect, onBack, onBuild }) {
-  const { isDesktop, isTablet } = useIsDesktop();
+  const isDesktop = useIsDesktop();
+  const isTablet = false; // tablet layout deferred — useIsDesktop returns boolean
   const [activeCategory, setActiveCategory] = useState(null);
   const [detailRecipe, setDetailRecipe] = useState(null);
 

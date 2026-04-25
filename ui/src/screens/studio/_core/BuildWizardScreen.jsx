@@ -209,7 +209,7 @@ function WizardProgress({ step, total }) {
 }
 
 function SectionLabel({ children }) {
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
   return (
     <p style={{
       margin: '0 0 10px', fontSize: isDesktop ? 12 : 12, fontWeight: 600,
@@ -345,7 +345,7 @@ function SkinToneChip({ tone, selected, onClick }) {
 function StepTheShot({ state, onChange }) {
   const { mood, subject, skinTone, styleRef } = state;
   const [styleOpen, setStyleOpen] = useState(!!styleRef);
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -461,7 +461,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
   const { environment, ceiling } = state;
   const isOutdoor = NO_CEILING.includes(environment);
   const envReady = environment && (isOutdoor || ceiling);
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
 
   // Auto-set ceiling for outdoor
   useEffect(() => {
@@ -563,7 +563,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
 // ─── Step 3: Gear Entry ─────────────────────────────────────────────────────
 function StepGearEntry({ state, onChange }) {
   const { lights, modifiers } = state;
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
 
   function toggleItem(list, value, field) {
     const current = list || [];
@@ -631,7 +631,7 @@ function StepGearEntry({ state, onChange }) {
 
 // ─── Main Screen ────────────────────────────────────────────────────────────
 export default function BuildWizardScreen({ onComplete, onBack }) {
-  const { isDesktop } = useIsDesktop();
+  const isDesktop = useIsDesktop();
   const [step, setStep] = useState(0);
 
   // Wizard state
