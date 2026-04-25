@@ -1122,6 +1122,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
   return (
     <div ref={rootRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: SCREEN_BG, overflow: 'hidden', overscrollBehavior: 'none' }}>
+      {/* MatteBackground spans full viewport — visible around the maxWidth-constrained content */}
+      <MatteBackground />
     <div
       onClick={handleBodyTap}
       onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
@@ -1131,15 +1133,10 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         width: '100%',
         height: '100%',
         margin: '0 auto',
-        backgroundColor: SCREEN_BG,
-        boxShadow: '2px 4px 40px rgba(0,0,0,0.6), -1px -1px 1px rgba(255,255,255,0.02)',
         overflow: 'hidden',
         fontFamily: 'Inter, system-ui, sans-serif',
-        // Daylight brightness boost — lifts all steel opacities ~15% so
-        // the UI stays readable in bright outdoor / on-location shoots.
         filter: daylightMode ? 'brightness(1.15)' : undefined,
         transition: 'filter 0.4s ease',
-        // Desktop: single-column grid — VF fills entire viewport, controls overlay
         ...(isDesktop ? {
           display: 'grid',
           gridTemplateColumns: '1fr',
@@ -1148,7 +1145,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         } : {}),
       }}
     >
-      <MatteBackground />
       <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileChange} style={{ display: 'none' }} />
 
