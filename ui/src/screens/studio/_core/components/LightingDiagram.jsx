@@ -986,8 +986,10 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
         display: 'flex', justifyContent: 'center', gap: 12, padding: '8px 0 4px',
       }}>
         <button onClick={() => {
-          const title = (pattern || 'diagram').replace(/\s+/g, '_');
-          exportSvgAsPng(svgRef.current, `${title}_top`, whiteLabel);
+          const d = new Date();
+          const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const name = `NGW_${(pattern || 'diagram').replace(/\s+/g, '_')}_top-down_${date}`;
+          exportSvgAsPng(svgRef.current, name, whiteLabel);
         }} style={{
           background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
           padding: '5px 14px', cursor: 'pointer',
@@ -996,7 +998,10 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
           WebkitTapHighlightColor: 'transparent',
         }}>PNG</button>
         <button onClick={() => {
-          exportSvgAsPdf(svgRef.current, result, pattern, whiteLabel);
+          const d = new Date();
+          const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const title = `NGW ${(pattern || 'Diagram').replace(/_/g, ' ')} — Top-Down — ${date}`;
+          exportSvgAsPdf(svgRef.current, result, title, whiteLabel);
         }} style={{
           background: 'none', border: `1px solid ${steel(0.12)}`, borderRadius: 6,
           padding: '5px 14px', cursor: 'pointer',
