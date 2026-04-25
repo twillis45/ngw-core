@@ -34,6 +34,8 @@ import { getUser } from '../../../data/authApi';
 import ZoomableHeroOverlay from './components/ZoomableHeroOverlay';
 import NailedItOverlay from './components/NailedItOverlay';
 import LightingDiagram from '../_core/components/LightingDiagram';
+import useWakeLock from '../../../hooks/useWakeLock';
+import { createPortal } from 'react-dom';
 
 const MODE_LABELS = {
   photographer: { label: 'Photographer', tag: 'FULL DETAILS' },
@@ -878,7 +880,7 @@ function buildSteps({ pattern, confidence, modName, position, distance,
   return { photographer, assistant, learning };
 }
 
-export default function Day1ShootScreen({ result, imagePreview, mode = 'photographer', onExit }) {
+export default function Day1ShootScreen({ result, imagePreview, mode = 'photographer', onExit, onLiveView, onShare }) {
   const [capturePressed, setCapturePressed] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [framesCaptured, setFramesCaptured] = useState(0);
@@ -887,6 +889,9 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
   const [heroFitMode, setHeroFitMode] = useState('contain'); // 'contain' | 'cover'
   const [outcomeOpen, setOutcomeOpen] = useState(false);
   const outcomeSentRef = useRef(false);
+  const [shareStatus, setShareStatus] = useState(null);
+  const [shareUrl, setShareUrl] = useState(null);
+  const [modalCopied, setModalCopied] = useState(false);
 
   // ── Cockpit teach overlay (first-time user onboarding) ────────────────────
   const [cockpitTeachStep, setCockpitTeachStep] = useState(0);
@@ -959,6 +964,8 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
     onPointerCancel: endHeroLongPress,
     onDoubleClick: () => { longPressHaptic(); setHeroZoomed(true); },
   };
+
+  useWakeLock(true);
 
   // ── VF geometry — match Home / Results viewfinder height ───────────────────
   // L-1 / user request: "same vf size for cockpit as other windows".
@@ -1223,11 +1230,22 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '20px 28px 12px', flexShrink: 0,
               }}>
-                <button onClick={handleExit} style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: steel(0.65), fontSize: 15, padding: '4px 0',
-                  WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
-                }}>‹ Exit</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={handleExit} style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: steel(0.65), fontSize: 15, padding: '4px 0',
+                    WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                  }}>‹ Exit</button>
+                  {onLiveView && (
+                    <button onClick={() => { tapHaptic(); softClickSound(); onLiveView(); }} style={{
+                      background: 'none', border: `1px solid ${steel(0.15)}`, borderRadius: 6,
+                      padding: '3px 8px', cursor: 'pointer',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.45), letterSpacing: '0.5px', ...FONT_SMOOTH }}>LIVE</span>
+                    </button>
+                  )}
+                </div>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                   letterSpacing: '1.4px', ...FONT_SMOOTH }}>
                   COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
@@ -1340,16 +1358,27 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               padding: '12px 20px 6px', position: 'relative', zIndex: 1,
               flexShrink: 0,
             }}>
-              <button
-                onClick={handleExit}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: steel(0.65), fontSize: 14, padding: '4px 0',
-                  WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
-                }}
-              >
-                ‹ Exit
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={handleExit}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: steel(0.65), fontSize: 14, padding: '4px 0',
+                    WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
+                  }}
+                >
+                  ‹ Exit
+                </button>
+                {onLiveView && (
+                  <button onClick={() => { tapHaptic(); softClickSound(); onLiveView(); }} style={{
+                    background: 'none', border: `1px solid ${steel(0.15)}`, borderRadius: 6,
+                    padding: '3px 8px', cursor: 'pointer',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.45), letterSpacing: '0.5px', ...FONT_SMOOTH }}>LIVE</span>
+                  </button>
+                )}
+              </div>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                 letterSpacing: '1.2px', ...FONT_SMOOTH }}>
                 COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
@@ -1940,6 +1969,92 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
         onSelect={handleOutcomePick}
         onDismiss={handleOutcomeDismiss}
       />
+
+      {shareStatus === 'clipboard_fail' && shareUrl && createPortal(
+        <>
+          <div onClick={() => { setShareStatus(null); setShareUrl(null); setModalCopied(false); }} style={{
+            position: 'fixed', inset: 0, zIndex: 99998,
+            background: 'rgba(0,0,0,0.65)',
+          }} />
+          <div style={{
+            position: 'fixed', left: 20, right: 20, top: '50%', transform: 'translateY(-50%)',
+            zIndex: 99999,
+            background: 'rgba(18,22,30,0.98)', border: '1px solid rgba(200,155,60,0.30)',
+            borderRadius: 14, padding: '20px 20px 16px',
+            boxShadow: '0 12px 40px rgba(0,0,0,0.70)',
+          }}>
+            <p style={{ margin: '0 0 10px', fontSize: 14, color: 'rgba(200,155,60,0.80)', fontWeight: 700, letterSpacing: '1px',
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' }}>
+              SHARE THIS SESSION
+            </p>
+            {navigator.share && (
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.share({ title: 'Shoot Session', text: 'Join my lighting setup', url: shareUrl });
+                    setModalCopied(true);
+                    setTimeout(() => { setModalCopied(false); setShareStatus('shared'); setShareUrl(null); setTimeout(() => setShareStatus(null), 2000); }, 1000);
+                  } catch {}
+                }}
+                style={{
+                  width: '100%', padding: '14px', marginBottom: 12,
+                  borderRadius: 10, border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(141.71deg, #1a2218 0%, #122016 100%)',
+                  boxShadow: '4px 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.07)',
+                  fontSize: 15, fontWeight: 700, letterSpacing: '1px',
+                  color: 'rgba(72,186,136,0.90)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(72,186,136,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" />
+                </svg>
+                SHARE LINK
+              </button>
+            )}
+            <div
+              onClick={() => {
+                try {
+                  const ta = document.createElement('textarea');
+                  ta.value = shareUrl;
+                  ta.style.cssText = 'position:fixed;left:0;top:0;opacity:0;';
+                  document.body.appendChild(ta);
+                  ta.focus(); ta.select();
+                  const ok = document.execCommand('copy');
+                  document.body.removeChild(ta);
+                  if (ok) {
+                    setModalCopied(true);
+                    setTimeout(() => { setModalCopied(false); setShareStatus('shared'); setShareUrl(null); setTimeout(() => setShareStatus(null), 2000); }, 1000);
+                  }
+                } catch {}
+              }}
+              style={{
+                fontSize: 16,
+                color: modalCopied ? 'rgba(72,186,136,0.95)' : 'rgba(160,185,215,0.85)',
+                wordBreak: 'break-all',
+                lineHeight: 1.6, cursor: 'pointer', padding: '12px 14px',
+                background: modalCopied ? 'rgba(72,186,136,0.10)' : 'rgba(90,120,160,0.08)',
+                borderRadius: 10,
+                border: modalCopied ? '1px solid rgba(72,186,136,0.35)' : '1px solid rgba(90,120,160,0.18)',
+                fontFamily: 'monospace',
+                userSelect: 'all', WebkitUserSelect: 'all',
+                transition: 'all 0.25s ease',
+                textAlign: 'center',
+              }}
+            >
+              {modalCopied ? '\u2713 Copied!' : shareUrl}
+            </div>
+            <p style={{ margin: '10px 0 0', fontSize: 14,
+              color: modalCopied ? 'rgba(72,186,136,0.55)' : 'rgba(140,160,185,0.50)',
+              transition: 'color 0.25s ease',
+              WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' }}>
+              {modalCopied ? 'Closing...' : 'Tap to copy \u00b7 long-press to select \u00b7 tap outside to close'}
+            </p>
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   );
 }

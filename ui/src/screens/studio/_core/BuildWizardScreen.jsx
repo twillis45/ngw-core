@@ -19,6 +19,9 @@ import { useIsDesktop } from '../../../utils/useIsDesktop';
 import { steel, accent, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, SCREEN_BG, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
+import { loadKit } from '../../../data/kitStore';
+import { getLightDetails } from '../../../data/lightCatalog';
+import { getModifierDetails } from '../../../data/modifierCatalog';
 const STEP_NAMES = ['The Shot', 'The Space', 'Your Gear'];
 
 // ─── Data ────────────────────────────────────────────────────────────────────
@@ -79,6 +82,17 @@ const ENV_LOCATION = [
 // (ballrooms, hotel rooms, offices) absolutely have ceiling constraints.
 const NO_CEILING = ['on_location_outdoor', 'event'];
 
+const DEFAULT_CEILING = {
+  studio_small:        'under_8',
+  home_studio:         '8_9',
+  studio_medium:       '10_12',
+  studio_large:        '12_plus',
+  on_location_indoor:  '8_9',
+};
+
+const SINGLE_PERSON_SUBJECTS = ['headshot', 'half_body', 'full_body'];
+const NON_PERSON_SUBJECTS = ['product', 'food', 'interior'];
+
 const CEILING_OPTIONS = [
   { value: 'under_8',  label: 'Under 8 ft' },
   { value: '8_9',      label: '8–9 ft' },
@@ -86,8 +100,26 @@ const CEILING_OPTIONS = [
   { value: '12_plus',  label: '12+ ft' },
 ];
 
+function kitSummary() {
+  const kit = loadKit();
+  if (!kit) return '';
+  const parts = [];
+  for (const l of (kit.lights || []).slice(0, 3)) {
+    const details = getLightDetails(l.type);
+    const name = details ? `${details.vendor} ${details.model}` : l.type;
+    parts.push(l.qty > 1 ? `${l.qty}\u00D7 ${name}` : name);
+  }
+  if ((kit.lights || []).length > 3) parts.push(`+${kit.lights.length - 3} more`);
+  for (const m of (kit.modifiers || []).slice(0, 2)) {
+    const mType = typeof m === 'string' ? m : m.type;
+    const mod = getModifierDetails(mType);
+    parts.push(mod ? mod.label : mType);
+  }
+  return parts.join(', ');
+}
+
 const GEAR_QUESTION = [
-  { value: 'my_gear',    label: 'Use My Gear',         desc: 'Adapted to what you own', icon: '⚙' },
+  { value: 'my_gear',    label: 'Use My Gear',         desc: kitSummary() || 'Adapted to what you own', icon: '⚙' },
   { value: 'best_setup', label: 'Best Possible Setup',  desc: 'Show me the ideal rig',   icon: '★' },
 ];
 
@@ -177,7 +209,7 @@ function WizardProgress({ step, total }) {
 }
 
 function SectionLabel({ children }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   return (
     <p style={{
       margin: '0 0 10px', fontSize: isDesktop ? 12 : 12, fontWeight: 600,
@@ -313,7 +345,7 @@ function SkinToneChip({ tone, selected, onClick }) {
 function StepTheShot({ state, onChange }) {
   const { mood, subject, skinTone, styleRef } = state;
   const [styleOpen, setStyleOpen] = useState(!!styleRef);
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -357,13 +389,14 @@ function StepTheShot({ state, onChange }) {
       </div>
 
       {/* Skin Tone */}
+      {!NON_PERSON_SUBJECTS.includes(subject) && (
       <div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
           <SectionLabel>Skin Tone</SectionLabel>
           <span style={{ fontSize: 12, color: steel(0.3), fontWeight: 400, ...FONT_SMOOTH }}>optional</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {SKIN_TONES.map(t => (
+          {SKIN_TONES.filter(t => t.value !== 'mixed' || !SINGLE_PERSON_SUBJECTS.includes(subject)).map(t => (
             <SkinToneChip
               key={t.value}
               tone={t}
@@ -373,6 +406,7 @@ function StepTheShot({ state, onChange }) {
           ))}
         </div>
       </div>
+      )}
 
       {/* Style Reference (collapsed) */}
       <div>
@@ -427,7 +461,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
   const { environment, ceiling } = state;
   const isOutdoor = NO_CEILING.includes(environment);
   const envReady = environment && (isOutdoor || ceiling);
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
 
   // Auto-set ceiling for outdoor
   useEffect(() => {
@@ -435,6 +469,12 @@ function StepTheSpace({ state, onChange, onGearPick }) {
       onChange({ ceiling: '12_plus' });
     }
   }, [isOutdoor]);
+
+  useEffect(() => {
+    if (environment && !isOutdoor && !ceiling && DEFAULT_CEILING[environment]) {
+      onChange({ ceiling: DEFAULT_CEILING[environment] });
+    }
+  }, [environment]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -523,7 +563,7 @@ function StepTheSpace({ state, onChange, onGearPick }) {
 // ─── Step 3: Gear Entry ─────────────────────────────────────────────────────
 function StepGearEntry({ state, onChange }) {
   const { lights, modifiers } = state;
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
 
   function toggleItem(list, value, field) {
     const current = list || [];
@@ -591,7 +631,7 @@ function StepGearEntry({ state, onChange }) {
 
 // ─── Main Screen ────────────────────────────────────────────────────────────
 export default function BuildWizardScreen({ onComplete, onBack }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   const [step, setStep] = useState(0);
 
   // Wizard state

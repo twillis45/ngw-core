@@ -6,7 +6,7 @@
  * chrome (header, back button) while the legacy internals handle the floor
  * plan, camera measurement, and light placement.
  */
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { steel, C, FONT_SMOOTH, SCREEN_BG, MACHINED_BG, MACHINED_SHADOW } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import { tapHaptic, navHaptic } from '../../../utils/haptics';
@@ -14,7 +14,15 @@ import { softClickSound } from '../../../utils/sounds';
 
 const LegacyRoomPlanner = lazy(() => import('../../RoomPlannerScreen'));
 
+import { _StateCtx, _DispatchCtx } from '../../../context/AppContext';
+const _noopDispatch = () => {};
+
 export default function RoomPlannerWrapper({ result, onBack }) {
+  const mockState = useMemo(() => ({
+    result: result || null,
+    roomDimensions: null,
+  }), [result]);
+
   return (
     <div style={{
       position: 'fixed', inset: 0,
@@ -50,7 +58,11 @@ export default function RoomPlannerWrapper({ result, onBack }) {
             Loading Room Planner...
           </div>
         }>
-          <LegacyRoomPlanner />
+          <_StateCtx.Provider value={mockState}>
+            <_DispatchCtx.Provider value={_noopDispatch}>
+              <LegacyRoomPlanner />
+            </_DispatchCtx.Provider>
+          </_StateCtx.Provider>
         </Suspense>
       </div>
 

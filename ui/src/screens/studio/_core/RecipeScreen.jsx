@@ -134,7 +134,7 @@ function CategoryPills({ categories, active, onChange }) {
 
 function PillButton({ label, active, onClick }) {
   const [hover, setHover] = useState(false);
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   return (
     <button
       onClick={onClick}
@@ -286,10 +286,155 @@ function RecipeCard({ recipe, onSelect, isDesktop }) {
   );
 }
 
+// ─── Recipe detail bottom sheet ─────────────────────────────────────────────
+function RecipeDetail({ recipe, onUse, onClose, isDesktop, isTablet }) {
+  const modLabel = humanModifier(recipe.modifierFamily, recipe.modifiers);
+  const diffLabel = DIFFICULTY_LABEL[recipe.difficulty] || '';
+  const diffColor = DIFFICULTY_COLOR[recipe.difficulty] || steel(0.6);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 100,
+      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+    }}>
+      {/* Scrim */}
+      <div onClick={onClose} style={{
+        position: 'absolute', inset: 0,
+        background: 'rgba(0,0,0,0.65)',
+      }} />
+
+      {/* Sheet */}
+      <div style={{
+        position: 'relative', zIndex: 1,
+        maxHeight: '80vh', overflowY: 'auto',
+        background: SCREEN_BG,
+        borderRadius: '20px 20px 0 0',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.60)',
+        padding: isDesktop ? '28px 40px 32px' : '22px 22px 28px',
+      }}>
+        {/* Handle */}
+        <div style={{
+          width: 36, height: 4, borderRadius: 2,
+          background: steel(0.20), margin: '0 auto 18px',
+        }} />
+
+        {/* Pattern diagram + title */}
+        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16 }}>
+          <div style={{
+            flexShrink: 0, width: 72, height: 72, borderRadius: 12,
+            backgroundColor: C.pillBg,
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5), inset 0 0 6px rgba(0,0,0,0.3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <PatternDiagram pattern={recipe.pattern} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{
+              margin: 0, fontSize: isDesktop ? 20 : 18, fontWeight: 700,
+              color: C.textPrimary, lineHeight: 1.25, ...FONT_SMOOTH,
+            }}>
+              {recipe.name}
+            </p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              {modLabel && (
+                <span style={{ fontSize: 13, fontWeight: 600, color: steel(0.6), letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                  {modLabel}
+                </span>
+              )}
+              {diffLabel && (
+                <>
+                  <span style={{ fontSize: 13, color: steel(0.25) }}>·</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: diffColor, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
+                    {diffLabel}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Description */}
+        <p style={{
+          margin: '0 0 14px', fontSize: 15, fontWeight: 400,
+          color: C.textDim, lineHeight: 1.5, ...FONT_SMOOTH,
+        }}>
+          {recipe.description}
+        </p>
+
+        {/* Why it works */}
+        {recipe.whyItWorks && (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10,
+            background: steel(0.04), marginBottom: 14,
+          }}>
+            <p style={{
+              margin: '0 0 4px', fontSize: 11, fontWeight: 700,
+              color: KEY_ACCENT, letterSpacing: '1px', ...FONT_SMOOTH,
+            }}>
+              WHY IT WORKS
+            </p>
+            <p style={{
+              margin: 0, fontSize: 14, color: steel(0.55), lineHeight: 1.45, ...FONT_SMOOTH,
+            }}>
+              {recipe.whyItWorks}
+            </p>
+          </div>
+        )}
+
+        {/* Gear summary */}
+        {recipe.setupTime && (
+          <p style={{
+            margin: '0 0 8px', fontSize: 13, fontWeight: 600,
+            color: steel(0.5), letterSpacing: '0.3px', ...FONT_SMOOTH,
+          }}>
+            {recipe.setupTime}
+          </p>
+        )}
+
+        {/* Variations */}
+        {recipe.variations && recipe.variations.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{
+              margin: '0 0 6px', fontSize: 11, fontWeight: 700,
+              color: steel(0.45), letterSpacing: '1px', ...FONT_SMOOTH,
+            }}>
+              VARIATIONS
+            </p>
+            {recipe.variations.map((v, i) => (
+              <p key={i} style={{
+                margin: '0 0 2px', fontSize: 14, color: steel(0.50), lineHeight: 1.4, ...FONT_SMOOTH,
+              }}>
+                · {v}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* CTA */}
+        <button
+          onClick={() => { tapHaptic(); softClickSound(); onUse(recipe); }}
+          style={{
+            width: '100%', height: 50, borderRadius: 24,
+            border: 'none', cursor: 'pointer',
+            background: CTA_BG, boxShadow: CTA_SHADOW,
+            fontSize: 16, fontWeight: 700, letterSpacing: '1px',
+            color: 'rgba(245,247,250,0.95)',
+            WebkitTapHighlightColor: 'transparent',
+            ...FONT_SMOOTH,
+          }}
+        >
+          Use This Setup
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 export default function RecipeScreen({ onSelect, onBack, onBuild }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop, isTablet } = useIsDesktop();
   const [activeCategory, setActiveCategory] = useState(null);
+  const [detailRecipe, setDetailRecipe] = useState(null);
 
   // Filter recipes by workflow category
   const filteredRecipes = activeCategory
@@ -378,7 +523,7 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
               <RecipeCard
                 key={recipe.id}
                 recipe={recipe}
-                onSelect={onSelect}
+                onSelect={setDetailRecipe}
                 isDesktop={isDesktop}
               />
             ))}
@@ -416,6 +561,16 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
       <div style={{ height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
         <div style={{ width: 134, height: 5, borderRadius: 3, backgroundColor: C.homeBar }} />
       </div>
+
+      {detailRecipe && (
+        <RecipeDetail
+          recipe={detailRecipe}
+          onUse={(r) => { setDetailRecipe(null); onSelect(r); }}
+          onClose={() => setDetailRecipe(null)}
+          isDesktop={isDesktop}
+          isTablet={isTablet}
+        />
+      )}
     </div>
   );
 }

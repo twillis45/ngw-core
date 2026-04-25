@@ -32,6 +32,8 @@ import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
+import SocialExportPanel from '../../../cards/SocialExportPanel';
+import ExifStrip from '../_shared/ExifStrip';
 import SideViewDiagram from './components/SideViewDiagram';
 import Chip, { sevToVariant } from '../_shared/Chip';
 import PullTabDrawer from '../_shared/PullTabDrawer';
@@ -1706,7 +1708,7 @@ function ModifierDetail({ modifier }) {
 }
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry, isPaid = true, plan = 'enterprise', isAdmin = false }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   const tilt = useDeviceTilt();
   // Admin settings — confidence display mode
   const _settings = loadSettings();
@@ -2555,6 +2557,12 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
                 the hero — everything else lives below the drag handle. */}
           </div>
 
+          {result?.cameraSettings && (
+            <ExifStrip exifData={result.cameraSettings} style={{
+              bottom: 4, zIndex: 8, opacity: 0.75,
+            }} />
+          )}
+
           {/* Chip detail overlay — slides up over the hero when a warning chip
               is tapped. Sits above the inner-shadow bevel so the rim still
               reads behind it. */}
@@ -2709,7 +2717,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
             display: 'flex', justifyContent: 'center', alignItems: 'stretch',
             zIndex: 1,
           }}>
-            <LightingDiagram result={result} fluid compact />
+            <LightingDiagram result={result} fluid compact showExport={isPaid} />
           </div>
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
@@ -2944,7 +2952,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           >
             <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
               {diagramView === 'top' ? (
-                <LightingDiagram result={result} fluid />
+                <LightingDiagram result={result} fluid showExport={isPaid} />
               ) : (
                 <SideViewDiagram result={result} fluid />
               )}
@@ -3341,6 +3349,36 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, i
           <div style={{ margin: '8px 0', padding: '12px', textAlign: 'center', borderRadius: 10, background: 'linear-gradient(141.71deg, #142218 0%, #0e1810 100%)', boxShadow: PANEL_SHADOW }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: C.confHigh, letterSpacing: '0.3px', ...FONT_SMOOTH }}>✓ Saved to your setups</span>
           </div>
+        )}
+
+        {isPaid && (
+          <SocialExportPanel
+            result={result}
+            imagePreview={imagePreview}
+            diagramCanvas={null}
+            isStudio={plan === 'studio' || plan === 'enterprise'}
+            isAdmin={isAdmin}
+          />
+        )}
+
+        {isPaid && onShotMatch && (
+          <button onClick={() => { tapHaptic(); softClickSound(); onShotMatch(); }}
+            className="sm-btn-lift"
+            style={{
+              width: '100%', padding: '13px 0', margin: '8px 0',
+              borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: MACHINED_BG,
+              boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              WebkitTapHighlightColor: 'transparent',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="2" width="9" height="9" rx="1" />
+              <rect x="13" y="13" width="9" height="9" rx="1" />
+              <path d="M13 6h3M16 3v6M6 13v3M3 16h6" />
+            </svg>
+            <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: '0.5px', color: steel(0.50), ...FONT_SMOOTH }}>Compare Your Shot</span>
+          </button>
         )}
 
         {/* Mobile CTA spacer — reserves room at bottom of scroll content

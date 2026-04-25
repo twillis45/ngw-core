@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Processing v24 — Final Polish</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #030405; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+  .demo {
+    position: relative; width: 100vw; height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .demo::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 70% at 50% 48%, rgba(8,10,14,1) 0%, rgba(3,4,5,1) 100%);
+  }
+  .version { position: absolute; top: 10px; right: 14px; z-index: 50;
+    font-size: 8px; font-weight: 600; letter-spacing: 1.5px; color: rgba(132,158,184,0.12); text-transform: uppercase; }
+  .vf {
+    position: relative;
+    width: min(52vh, 520px); height: calc(min(52vh, 520px) * 1.30);
+    max-height: 82vh; overflow: hidden; z-index: 1;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.75), 0 8px 25px rgba(0,0,0,0.5),
+      inset 0 0 0 0.5px rgba(255,240,210,0.03);
+  }
+  @media (max-width: 600px) { .vf { width: 100%; height: 100%; max-height: none; box-shadow: none; } }
+  .vf .photo {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: 50% 25%;
+    filter: brightness(0.58) saturate(0.12) contrast(0.90);
+    z-index: 1;
+    /* Slow subtle zoom during processing — the photo is alive */
+    animation: procZoom 24s cubic-bezier(0.25,0.46,0.45,0.94) infinite;
+  }
+  @keyframes procZoom {
+    0%   { transform: scale(1.00); }
+    50%  { transform: scale(1.03); }
+    100% { transform: scale(1.00); }
+  }
+  .vf canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; }
+  .vf .vig {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse 55% 48% at 50% 36%, transparent 20%, rgba(0,0,0,0.60) 100%);
+  }
+  .progress { position: absolute; bottom: 0; left: 0; height: 1px; z-index: 20;
+    background: linear-gradient(90deg, rgba(220,190,140,0.0) 0%, rgba(220,190,140,0.30) 20%, rgba(220,190,140,0.65) 100%);
+    box-shadow: 0 0 6px rgba(220,190,140,0.10), 0 -1px 4px rgba(220,190,140,0.05);
+    transition: width 0.3s linear; }
+</style>
+</head>
+<body>
+<div class="demo">
+<div class="version">v24</div>
+<div class="vf" id="vf">
+  <img class="photo" id="photo" src="/static/ui/ghost-rembrandt.jpg" alt="" />
+  <canvas id="cvs"></canvas>
+  <div class="vig"></div>
+  <div class="progress" id="prog"></div>
+</div>
+</div>
+
+<script>
+const vf = document.getElementById('vf');
+const cvs = document.getElementById('cvs');
+const ctx = cvs.getContext('2d');
+const prog = document.getElementById('prog');
+const photoEl = document.getElementById('photo');
+
+let fd = null; // face data from engine
+
+// ── Audio: soft strobe pop synced to each flash cluster ──
+let audioCtx = null;
+let audioReady = false;
+const flashTimes = new Set();
+
+// Audio: context created on first user gesture, pops play after that.
+let _gestureReceived = false;
+function _onGesture() {
+  if (_gestureReceived) return;
+  _gestureReceived = true;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume().then(() => { audioReady = true; });
+  } catch(e) {}
+}
+document.addEventListener('click', _onGesture);
+document.addEventListener('touchstart', _onGesture);
+
+function playStrobePop(intensity) {
+  if (!audioReady || !audioCtx) return;
+
+  const now = audioCtx.currentTime;
+  const rate = audioCtx.sampleRate;
+
+  // Two-layer sound: a warm thump (low frequency body) + a bright click (high transient).
+  // Together they sound like a real studio strobe: the capacitor discharge thump
+  // followed by the flash tube ignition click. Warm, physical, not digital.
+
+  // Layer 1: Low thump — the body of the strobe pop
+  const thumpDur = 0.08 + intensity * 0.04;
+  const thumpLen = Math.ceil(rate * thumpDur);
+  const thumpBuf = audioCtx.createBuffer(1, thumpLen, rate);
+  const thumpData = thumpBuf.getChannelData(0);
+  for (let i = 0; i < thumpLen; i++) {
+    const t = i / rate;
+    // Sine wave at 60-80Hz with fast exponential decay — the capacitor thump
+    const freq = 55 + intensity * 12;
+    const env = Math.exp(-t * 28) * (1 - Math.exp(-t * 500));
+    thumpData[i] = Math.sin(t * freq * Math.PI * 2) * env * 0.40 * intensity;
+  }
+
+  // Layer 2: Bright click — the transient
+  const clickDur = 0.03 + intensity * 0.02;
+  const clickLen = Math.ceil(rate * clickDur);
+  const clickBuf = audioCtx.createBuffer(1, clickLen, rate);
+  const clickData = clickBuf.getChannelData(0);
+  for (let i = 0; i < clickLen; i++) {
+    const t = i / rate;
+    // Filtered noise burst — very short, bright
+    const env = Math.exp(-t * 80) * (1 - Math.exp(-t * 2000));
+    clickData[i] = (Math.random() * 2 - 1) * env * 0.20 * intensity;
+  }
+
+  // Thump chain — dominant, warm, chest-feel
+  const thumpSrc = audioCtx.createBufferSource();
+  thumpSrc.buffer = thumpBuf;
+  const thumpFilter = audioCtx.createBiquadFilter();
+  thumpFilter.type = 'lowpass';
+  thumpFilter.frequency.value = 150 + intensity * 40;
+  thumpFilter.Q.value = 1.0;
+  const thumpGain = audioCtx.createGain();
+  thumpGain.gain.value = 0.70 + intensity * 0.30;
+  thumpSrc.connect(thumpFilter);
+  thumpFilter.connect(thumpGain);
+  thumpGain.connect(audioCtx.destination);
+
+  // Click chain — subtle, just enough presence to define the transient
+  const clickSrc = audioCtx.createBufferSource();
+  clickSrc.buffer = clickBuf;
+  const clickFilter = audioCtx.createBiquadFilter();
+  clickFilter.type = 'bandpass';
+  clickFilter.frequency.value = 2500 + intensity * 1000;
+  clickFilter.Q.value = 0.4;
+  const clickGain = audioCtx.createGain();
+  clickGain.gain.value = 0.10 + intensity * 0.08;
+  clickSrc.connect(clickFilter);
+  clickFilter.connect(clickGain);
+  clickGain.connect(audioCtx.destination);
+
+  // Fire both simultaneously
+  thumpSrc.start(now);
+  clickSrc.start(now);
+}
+
+function playCompletionTone() {
+  if (!audioReady || !audioCtx) return;
+
+  const now = audioCtx.currentTime;
+  const rate = audioCtx.sampleRate;
+
+  // Short, crisp, done. Like a camera shutter closing — click.
+  // Higher frequency than the strobe pops. No sustained tone. No hum.
+  // Just a single sharp transient that says "locked."
+
+  const dur = 0.05; // 50ms — extremely short
+  const len = Math.ceil(rate * dur);
+  const buf = audioCtx.createBuffer(1, len, rate);
+  const data = buf.getChannelData(0);
+
+  for (let i = 0; i < len; i++) {
+    const t = i / rate;
+    // Sharp attack, immediate decay — a click, not a tone
+    const env = Math.exp(-t * 120);
+    // Noise + a brief mid-frequency knock
+    const click = (Math.random() * 2 - 1) * 0.5;
+    const knock = Math.sin(t * 800 * Math.PI * 2) * 0.3;
+    data[i] = (click + knock) * env;
+  }
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+
+  // Band-pass: keep the click crisp, cut the lows entirely
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'bandpass';
+  filter.frequency.value = 1200;
+  filter.Q.value = 0.5;
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.55;
+
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  src.start(now);
+}
+
+// ── Fetch real face data from engine ──
+async function init() {
+  try {
+    const resp = await fetch('/static/ui/ghost-rembrandt.jpg');
+    const blob = await resp.blob();
+    const form = new FormData();
+    form.append('image', blob, 'ghost-rembrandt.jpg');
+    const result = await fetch('/api/lab/face-preflight', { method: 'POST', body: form });
+    const data = await result.json();
+    console.log('Preflight response:', data);
+    if (!data.ok) { console.error('Preflight failed:', data); return; }
+
+  fd = {
+    lm: data.landmarks || {},
+    cls: data.catchlights || [],
+    keyDir: 'left', // default
+  };
+
+  // Key direction from catchlight intensity
+  const le = fd.cls.find(c => c.eye === 'left');
+  const re = fd.cls.find(c => c.eye === 'right');
+  if (le && re) fd.keyDir = le.intensity > re.intensity ? 'left' : 'right';
+
+  console.log('Engine data loaded:', fd);
+  console.log('Landmarks available:', fd ? Object.keys(fd.lm) : 'none');
+  } catch(e) { console.error('Preflight error:', e); }
+}
+init();
+
+// ── Cover-fit: source 0→1 coords → canvas pixels ──
+function srcToCanvas(fx, fy) {
+  const iw = photoEl.naturalWidth, ih = photoEl.naturalHeight;
+  const W = cvs.width, H = cvs.height;
+  const canvasAR = W / H, imgAR = iw / ih;
+  let drawW, drawH, drawX, drawY;
+  if (imgAR > canvasAR) {
+    drawH = H; drawW = H * imgAR;
+    drawX = -(drawW - W) * 0.50; drawY = -(drawH - H) * 0.25;
+  } else {
+    drawW = W; drawH = W / imgAR;
+    drawX = -(drawW - W) * 0.50; drawY = -(drawH - H) * 0.25;
+  }
+  return { x: drawX + fx * drawW, y: drawY + fy * drawH };
+}
+
+function lmPt(name) {
+  const p = fd.lm[name];
+  return p ? srcToCanvas(p.x, p.y) : null;
+}
+
+const CYCLE = 12000; // matches real analysis time (~12s)
+const activeLabels = []; // { label, x, y, born, intensity }
+const t0 = Date.now();
+let sp = [0,0,0,0,0];
+
+function tick() {
+  try {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = cvs.width = vf.clientWidth * dpr;
+  const H = cvs.height = vf.clientHeight * dpr;
+  const ir = Math.min(W, H);
+  const time = Date.now() / 1000;
+  const elapsed = Date.now() - t0;
+  const cycleTime = elapsed % (CYCLE + 3000);
+  const t = Math.min(1, cycleTime / CYCLE);
+  const as = Math.min(4, Math.floor(t * 5));
+
+  for (let i = 0; i <= 4; i++) {
+    if (i <= as && t < 1) sp[i] = Math.min(1, i < as ? 1 : (t * 5) - i);
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  if (!fd || !photoEl.naturalWidth) {
+    requestAnimationFrame(tick); return;
+  }
+
+  // ═══ STAGE 0: HIGHLIGHT BURSTS — at catchlights + all key-lit face features ═══
+  // Not just the eye catchlights — every bright landmark gets a burst.
+  // Catchlights first (brightest), then forehead, cheekbone, nose bridge.
+  const p0 = sp[0];
+  if (p0 > 0.01) {
+    const ba = as === 0 ? 1.0 : 0.45;
+    const isLeft = fd.keyDir === 'left';
+
+    // Build targets with cluster timing — groups appear together, not sequentially.
+    // key = key side, fill = shadow side. Color shifts warm→cool across the face.
+    const T = []; // { x, y, intensity, delay (0→1), warmth (1=warm, 0=cool) }
+    const addT = (key, int, delay, warmth) => {
+      const p = fd.lm[key]; if (p) T.push({ x: p.x, y: p.y, intensity: int, delay, warmth });
+    };
+
+    // Clusters timed to fill a 12s analysis — each has room to breathe.
+    // ~2.5s between each cluster pop.
+
+    // Cluster 1 (0.0 = 0s): Eyes — catchlights first
+    fd.cls.forEach(cl => { if (cl.nx) T.push({ x: cl.nx, y: cl.ny, intensity: 0.55, delay: 0.0, warmth: 0.7 }); });
+
+    // Cluster 2 (0.20 = ~2.4s): Forehead area
+    addT('forehead', 0.55, 0.20, 0.8);
+    addT(isLeft ? 'left_cheek' : 'right_cheek', 0.65, 0.24, 0.9);
+    addT(isLeft ? 'left_brow' : 'right_brow', 0.35, 0.26, 0.75);
+
+    // Cluster 3 (0.42 = ~5s): Nose
+    addT('nose_tip', 0.50, 0.42, 0.7);
+    addT('nose_bridge', 0.45, 0.46, 0.65);
+
+    // Cluster 4 (0.62 = ~7.5s): Cheek / shadow side
+    addT(isLeft ? 'right_cheek' : 'left_cheek', 0.30, 0.62, 0.3);
+    addT(isLeft ? 'right_brow' : 'left_brow', 0.25, 0.65, 0.35);
+
+    // Cluster 5 (0.80 = ~9.5s): Chin
+    addT('chin', 0.30, 0.80, 0.4);
+    addT('mouth_top', 0.25, 0.84, 0.35);
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    T.forEach((t, i) => {
+      // Fade in based on cluster delay
+      const fadeIn = Math.max(0, Math.min(1, (p0 - t.delay) * 1.8));
+      if (fadeIn < 0.01) return;
+
+      const a = fadeIn * ba * t.intensity;
+      const p = srcToCanvas(t.x, t.y);
+
+      // Flash pop — bright strobe burst on arrival, independent of fade-in.
+      // Fires at FULL intensity the instant this pool's delay is reached,
+      // then decays. The hold glow ramps up behind it.
+      const rawT = Math.max(0, p0 - t.delay);
+      // Flash: bright pop that eases out (not linear cut)
+      const flashRaw = Math.max(0, 1 - rawT * 4.5);
+      const flashPop = flashRaw * flashRaw; // ease-out: fast initial decay, slow tail
+      // Hold: modeling light eases in (not linear ramp)
+      const holdRaw = Math.min(1, rawT * 2.8);
+      const holdGlow = holdRaw * holdRaw * (3 - 2 * holdRaw); // smoothstep
+
+      const breath = 0.84 + Math.sin(time * 0.8 + i * 0.7) * 0.16;
+      const holdA = a * holdGlow * breath;
+      // Flash is NOT multiplied by fadeIn — fires at full intensity on arrival
+      const flashA = (rawT > 0 ? 1 : 0) * t.intensity * flashPop;
+
+      // Audio pop + label tracking synced to each cluster
+      const clusterKey = Math.round(t.delay * 100);
+      if (rawT > 0 && rawT < 0.02 && !flashTimes.has(clusterKey)) {
+        flashTimes.add(clusterKey);
+        playStrobePop(t.intensity);
+        // Store label + position for canvas rendering
+        const copyMap = {
+          0:  'Catchlights',
+          20: 'Forehead',
+          42: 'Nose',
+          62: 'Cheek',
+          80: 'Chin',
+        };
+        const label = copyMap[clusterKey];
+        if (label) {
+          activeLabels.push({ label, x: p.x, y: p.y, born: time, intensity: t.intensity });
+        }
+      }
+
+      // Growth — radius animates from 0 to full
+      const growIn = Math.min(1, fadeIn * 1.5);
+      const grow = 0.3 + growIn * 0.7;
+
+      // Color: warm on key side, cooler on shadow side
+      const w = t.warmth;
+      const rC = 255;
+      const gC = Math.round(210 + w * 25);
+      const bC = Math.round(140 + (1-w) * 40);
+
+      // ── FLASH: bright strobe pop ──
+      if (flashA > 0.02) {
+        // Wide spill — the strobe illuminates a large area of the face
+        const rf = ir * 0.18;
+        const gf = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rf);
+        gf.addColorStop(0, `rgba(255,252,245,${(flashA * 0.90).toFixed(2)})`);
+        gf.addColorStop(0.15, `rgba(255,248,235,${(flashA * 0.50).toFixed(2)})`);
+        gf.addColorStop(0.4, `rgba(255,240,220,${(flashA * 0.15).toFixed(2)})`);
+        gf.addColorStop(0.7, `rgba(255,235,210,${(flashA * 0.04).toFixed(2)})`);
+        gf.addColorStop(1, 'rgba(255,235,210,0)');
+        ctx.fillStyle = gf;
+        ctx.fillRect(p.x - rf, p.y - rf, rf * 2, rf * 2);
+
+        // Hot white core
+        const rc = ir * 0.04;
+        const gc = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rc);
+        gc.addColorStop(0, `rgba(255,255,250,${(flashA * 0.95).toFixed(2)})`);
+        gc.addColorStop(0.4, `rgba(255,250,240,${(flashA * 0.45).toFixed(2)})`);
+        gc.addColorStop(1, 'rgba(255,248,235,0)');
+        ctx.fillStyle = gc;
+        ctx.fillRect(p.x - rc, p.y - rc, rc * 2, rc * 2);
+      }
+
+      // ── HOLD: warm pool that persists after the flash ──
+      if (holdA > 0.02) {
+        // Layer 1: Atmosphere
+        const r0 = ir * 0.10 * grow * (0.7 + t.intensity * 0.3);
+        const g0 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r0);
+        g0.addColorStop(0, `rgba(${rC},${gC},${bC},${(holdA * 0.16).toFixed(3)})`);
+        g0.addColorStop(0.45, `rgba(${rC},${gC},${bC},${(holdA * 0.05).toFixed(3)})`);
+        g0.addColorStop(1, `rgba(${rC},${gC},${bC},0)`);
+        ctx.fillStyle = g0;
+        ctx.fillRect(p.x - r0, p.y - r0, r0 * 2, r0 * 2);
+
+        // Layer 2: Body — the warm modeling light that stays
+        const r1 = ir * 0.048 * grow * (0.7 + t.intensity * 0.3);
+        const g1 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r1);
+        g1.addColorStop(0, `rgba(${rC},${gC+5},${bC-10},${(holdA * 0.45).toFixed(2)})`);
+        g1.addColorStop(0.35, `rgba(${rC},${gC},${bC},${(holdA * 0.20).toFixed(2)})`);
+        g1.addColorStop(0.75, `rgba(${rC},${gC-5},${bC+5},${(holdA * 0.05).toFixed(2)})`);
+        g1.addColorStop(1, `rgba(${rC},${gC},${bC},0)`);
+        ctx.fillStyle = g1;
+        ctx.fillRect(p.x - r1, p.y - r1, r1 * 2, r1 * 2);
+
+        // Layer 3: Core — warm center with subtle pulse
+        const corePulse = 0.85 + Math.sin(time * 1.5 + i * 1.3) * 0.15;
+        const r2 = ir * 0.016 * grow;
+        const coreA = holdA * corePulse;
+        const g2 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r2);
+        g2.addColorStop(0, `rgba(255,${235+Math.round(w*10)},${200+Math.round(w*15)},${(coreA * 0.65).toFixed(2)})`);
+        g2.addColorStop(0.45, `rgba(255,${230+Math.round(w*8)},${195+Math.round(w*10)},${(coreA * 0.25).toFixed(2)})`);
+        g2.addColorStop(1, `rgba(255,225,190,0)`);
+        ctx.fillStyle = g2;
+        ctx.fillRect(p.x - r2, p.y - r2, r2 * 2, r2 * 2);
+      }
+    });
+    ctx.restore();
+  }
+
+  // ═══ FLASH LABELS — a breath ═══
+  if (activeLabels.length > 0) {
+    ctx.save();
+    activeLabels.forEach(lb => {
+      const age = time - lb.born;
+      if (age > 3.0) return;
+
+      // Bloom in (0.25s) → hold (0.5s) → dissolve (2.25s)
+      let alpha, drift;
+      if (age < 0.25) {
+        const t = age / 0.25;
+        alpha = t * t * (3 - 2 * t);
+        drift = (1 - alpha) * ir * 0.004;
+      } else if (age < 0.75) {
+        alpha = 1.0;
+        drift = 0;
+      } else {
+        const t = (age - 0.75) / 2.25;
+        alpha = Math.max(0, 1 - t * t);
+        drift = -t * ir * 0.008;
+      }
+      if (alpha < 0.01) return;
+
+      const isMobile = W < 1000;
+      const onRight = lb.x > W * 0.52;
+      const gap = ir * (isMobile ? 0.04 : 0.035);
+      const word = lb.label.toLowerCase();
+      const fontSize = Math.round(ir * (isMobile ? 0.030 : 0.026));
+
+      ctx.font = `300 ${fontSize}px Inter, system-ui, sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = onRight ? 'right' : 'left';
+
+      const tx = onRight ? lb.x - gap : lb.x + gap;
+      const ty = lb.y + drift;
+
+      ctx.globalCompositeOperation = 'source-over';
+
+      // Text — warm white with dark shadow for readability
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 6;
+      ctx.fillStyle = `rgba(242,232,210,${(alpha * 0.72).toFixed(2)})`;
+      ctx.fillText(word, tx, ty);
+      ctx.shadowBlur = 0;
+    });
+    ctx.restore();
+    while (activeLabels.length > 0 && time - activeLabels[0].born > 3.0) activeLabels.shift();
+  }
+
+
+  // ═══ STAGE 2: KEY DIRECTION — warm wash blooms from key cheek ═══
+  const p2 = sp[2];
+  if (p2 > 0.01) {
+    const ba = as === 2 ? 1.0 : 0.30;
+    const isLeft = fd.keyDir === 'left';
+    // Center the wash between the key-side cheek and where the light source
+    // would be — upper and further to the key side. This makes the wash
+    // feel directional, like light falling across the face from above.
+    const cheekPt = lmPt(isLeft ? 'left_cheek' : 'right_cheek');
+    const browPt = lmPt(isLeft ? 'left_brow' : 'right_brow');
+    const keyPt = (cheekPt && browPt) ? {
+      x: cheekPt.x + (cheekPt.x - (cheekPt.x + browPt.x) / 2) * 0.6, // push further toward key side
+      y: (cheekPt.y + browPt.y) / 2 - (cheekPt.y - browPt.y) * 0.3,   // push upward
+    } : cheekPt;
+
+    if (keyPt) {
+      // Fire "Key Light" label when wash first appears
+      if (p2 > 0.05 && !flashTimes.has('key')) {
+        flashTimes.add('key');
+        playStrobePop(0.7);
+        activeLabels.push({ label: 'Key Light', x: keyPt.x, y: keyPt.y, born: time, intensity: 0.7 });
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const ease = p2 * p2 * (3 - 2 * p2);
+      const kr = ir * 0.65 * ease;
+      const ka = ba * ease;
+
+      // Warm key wash
+      const g = ctx.createRadialGradient(keyPt.x, keyPt.y, 0, keyPt.x, keyPt.y, kr);
+      g.addColorStop(0, `rgba(255,235,190,${(ka * 0.65).toFixed(3)})`);
+      g.addColorStop(0.18, `rgba(255,228,175,${(ka * 0.32).toFixed(3)})`);
+      g.addColorStop(0.40, `rgba(255,220,165,${(ka * 0.12).toFixed(3)})`);
+      g.addColorStop(0.70, `rgba(255,215,155,${(ka * 0.03).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(255,215,155,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+      // Subtle warm breath on the key wash
+      const keyBreath = 0.90 + Math.sin(time * 0.8) * 0.10;
+      ctx.globalAlpha = keyBreath;
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  }
+
+  // ═══ STAGE 3: FILL SIDE — cool wash blooms from shadow cheek ═══
+  const p3 = sp[3];
+  if (p3 > 0.01) {
+    const ba = as === 3 ? 1.0 : 0.25;
+    const isLeft = fd.keyDir === 'left';
+    const fillPt = lmPt(isLeft ? 'right_cheek' : 'left_cheek');
+
+    if (fillPt) {
+      // Fire "Shadow" label
+      if (p3 > 0.05 && !flashTimes.has('fill')) {
+        flashTimes.add('fill');
+        playStrobePop(0.5);
+        activeLabels.push({ label: 'Shadow', x: fillPt.x, y: fillPt.y, born: time, intensity: 0.5 });
+      }
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const ease = p3 * p3 * (3 - 2 * p3);
+      const fr = ir * 0.55 * ease;
+      const fa = ba * ease;
+
+      const g = ctx.createRadialGradient(fillPt.x, fillPt.y, 0, fillPt.x, fillPt.y, fr);
+      g.addColorStop(0, `rgba(140,172,218,${(fa * 0.38).toFixed(3)})`);
+      g.addColorStop(0.22, `rgba(132,165,212,${(fa * 0.18).toFixed(3)})`);
+      g.addColorStop(0.50, `rgba(125,158,205,${(fa * 0.06).toFixed(3)})`);
+      g.addColorStop(1, 'rgba(125,158,205,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+  }
+
+  // ═══ STAGE 4: CONVERGENCE — the reading completes ═══
+  const p4 = sp[4];
+  // Fire completion sound once
+  if (p4 > 0.05 && !flashTimes.has('done')) {
+    flashTimes.add('done');
+    playCompletionTone();
+  }
+  if (p4 > 0.01) {
+    const ease = p4 * p4 * (3 - 2 * p4);
+
+    // Lift the photo — CSS filter transition driven by canvas overlay
+    // (The actual ProcessingScreen will animate the <img> filter directly)
+    photoEl.style.filter = `brightness(${(0.58 + ease * 0.22).toFixed(2)}) saturate(${(0.12 + ease * 0.35).toFixed(2)}) contrast(${(0.90 + ease * 0.06).toFixed(2)})`;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Full-frame warm settle
+    ctx.fillStyle = `rgba(245,232,205,${(ease * 0.10).toFixed(3)})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Face-centered warm bloom
+    const faceCtr = lmPt('nose_tip') || lmPt('nose_bridge');
+    if (faceCtr) {
+      const cr = ir * 0.35;
+      const cg = ctx.createRadialGradient(faceCtr.x, faceCtr.y, 0, faceCtr.x, faceCtr.y, cr);
+      cg.addColorStop(0, `rgba(255,238,200,${(ease * 0.15).toFixed(3)})`);
+      cg.addColorStop(0.35, `rgba(255,230,190,${(ease * 0.07).toFixed(3)})`);
+      cg.addColorStop(1, 'rgba(255,225,180,0)');
+      ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
+    }
+
+    ctx.restore();
+  } else {
+    // Reset photo filter when not in convergence
+    photoEl.style.filter = 'brightness(0.58) saturate(0.12) contrast(0.90)';
+  }
+
+  prog.style.width = Math.min(100, t * 100).toFixed(1) + '%';
+
+  if (cycleTime > CYCLE + 2000 && cycleTime < CYCLE + 2050) {
+    sp = [0,0,0,0,0]; flashTimes.clear(); activeLabels.length = 0;
+  }
+
+  } catch(e) { console.error('tick error:', e); }
+  requestAnimationFrame(tick);
+}
+
+requestAnimationFrame(tick);
+</script>
+</body>
+</html>

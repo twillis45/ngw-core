@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Studio Matte — Hasselblad Amber · Selective Accent</title>
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+<style>
+  :root {
+    --carbon-black:  #0B0B0C;
+    --soft-black:    #121316;
+    --graphite:      #1A1C20;
+    --slate-metal:   #23262C;
+    --fog-gray:      #A7ADB7;
+    --soft-silver:   #D7DCE3;
+    --studio-white:  #F5F7FA;
+
+    /* Tier 3 — Steel Blue chrome (everything non-attention) */
+    --steel-primary: #5F7C96;
+    --steel-text:    #7A9AB5;
+    --steel-18:      rgba(132,158,184,0.18);
+    --steel-30:      rgba(132,158,184,0.30);
+    --steel-50:      rgba(132,158,184,0.50);
+    --steel-75:      rgba(132,158,184,0.75);
+
+    /* Tier 1 — Hasselblad amber, SELECTIVE (one accent pixel per screen) */
+    --amber:         #ED9A38;
+    --amber-hover:   #C27516;
+    --amber-text:    #F6BB62;
+    --amber-glow:    rgba(237,154,56,0.38);
+    --amber-subtle:  rgba(237,154,56,0.14);
+
+    --text-hi:       rgba(245,247,250,0.92);
+    --text-lo:       rgba(167,173,183,0.62);
+    --hairline:      rgba(167,173,183,0.06);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--carbon-black);
+    color: var(--text-hi);
+    font-family: Inter, -apple-system, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    padding: 32px 28px 60px;
+  }
+  h1 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    text-transform: uppercase;
+    color: var(--steel-text);
+    margin-bottom: 6px;
+  }
+  .lede {
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-hi);
+    max-width: 920px;
+    margin-bottom: 28px;
+  }
+  .lede b { color: var(--amber-text); font-weight: 700; }
+  .row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    max-width: 1680px;
+  }
+  .col {
+    background: linear-gradient(180deg, var(--graphite) 0%, var(--soft-black) 100%);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    padding: 22px 22px 26px;
+    box-shadow:
+      1px 2px 4px rgba(0,0,0,0.25),
+      2px 4px 12px rgba(0,0,0,0.45),
+      inset 1px 1px 0 rgba(255,255,255,0.045),
+      inset -1px -1px 2px rgba(0,0,0,0.12);
+  }
+  .col h2 {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--steel-text);
+    margin-bottom: 4px;
+  }
+  .col .sub {
+    font-size: 9px;
+    letter-spacing: 0.8px;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  /* === CTA === */
+  .cta {
+    height: 46px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 3.4px;
+    color: var(--text-hi);
+    background: linear-gradient(141.71deg, #3d404d 0%, #292b36 50%, #1c1d24 100%);
+    box-shadow:
+      0 0 6px 1px rgba(132,158,184,0.08),
+      1px 2px 4px rgba(0,0,0,0.45),
+      2px 5px 12px rgba(0,0,0,0.7),
+      inset -1px -1px 2px rgba(0,0,0,0.3),
+      inset 1px 1px 0 rgba(255,255,255,0.2);
+    position: relative;
+    margin: 8px 0 20px;
+  }
+  /* Variant A — CTA rim is the amber accent */
+  .col--cta .cta {
+    box-shadow:
+      0 0 6px 1px var(--amber-glow),
+      0 0 0 1px rgba(206,165,100,0.42),
+      1px 2px 4px rgba(0,0,0,0.45),
+      2px 5px 12px rgba(0,0,0,0.7),
+      inset -1px -1px 2px rgba(0,0,0,0.3),
+      inset 1px 1px 0 rgba(255,255,255,0.2);
+  }
+  .col--cta .cta::before {
+    content: '';
+    position: absolute;
+    left: 18px; right: 18px; top: 1px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--amber), transparent);
+    opacity: 0.7;
+  }
+
+  /* === Section label === */
+  .label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin: 18px 0 10px;
+    text-shadow: 0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  /* === Lighting diagram === */
+  .diagram {
+    background: var(--soft-black);
+    border-radius: 12px;
+    height: 160px;
+    position: relative;
+    box-shadow:
+      inset 3px 4px 9px rgba(0,0,0,0.7),
+      inset 1px 1px 2px rgba(0,0,0,0.5),
+      inset -1px -1px 1px rgba(255,255,255,0.03);
+    overflow: hidden;
+  }
+  .subject {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #2a2d33, #0b0b0c);
+    box-shadow: inset 0 1px 2px rgba(255,255,255,0.06), 0 0 8px rgba(0,0,0,0.6);
+    z-index: 2;
+  }
+  /* Generic arrow — Steel Blue by default */
+  .arrow {
+    position: absolute;
+    height: 1.5px;
+    background: var(--steel-75);
+    transform-origin: left center;
+    z-index: 3;
+  }
+  .arrow::after {
+    content: '';
+    position: absolute;
+    right: -4px; top: -3px;
+    border-left: 8px solid var(--steel-75);
+    border-top: 4px solid transparent;
+    border-bottom: 4px solid transparent;
+  }
+  .arrow .lbl {
+    position: absolute;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.9px;
+    color: var(--steel-text);
+    top: -14px;
+    left: 4px;
+  }
+  /* Key arrow (top-left → subject) */
+  .arrow--key {
+    left: 30px; top: 40px;
+    width: 52px;
+    transform: rotate(30deg);
+  }
+  /* Fill arrow (right → subject) */
+  .arrow--fill {
+    left: calc(50% + 18px); top: calc(50% - 2px);
+    width: 44px;
+    transform: rotate(-10deg);
+  }
+  .arrow--fill .lbl { top: 6px; left: 10px; }
+
+  /* Variant B — KEY label pill is the amber accent (arrow itself stays steel) */
+  .col--key .arrow--key .lbl {
+    background: var(--amber);
+    color: #0b0b0c;
+    padding: 2px 7px 2px;
+    border-radius: 999px;
+    top: -16px;
+    letter-spacing: 1px;
+    box-shadow: 0 0 8px var(--amber-glow), inset 0 1px 0 rgba(255,255,255,0.3);
+  }
+
+  /* === Status chip row === */
+  .chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .chip {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(132,158,184,0.08);
+    border: 1px solid var(--steel-30);
+    color: var(--steel-text);
+    text-transform: uppercase;
+  }
+  /* Variant C — single ACTIVE chip is the amber accent */
+  .col--chip .chip--active {
+    background: var(--amber-subtle);
+    border-color: var(--amber);
+    color: var(--amber-text);
+    box-shadow: 0 0 10px var(--amber-glow), inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  /* Steel-only baseline for the OTHER variants' chip rows */
+  .col--cta .chip--active,
+  .col--key .chip--active,
+  .col--mods .chip--active {
+    background: rgba(132,158,184,0.10);
+    border-color: var(--steel-50);
+    color: var(--soft-silver);
+  }
+
+  /* === Readout === */
+  .readout {
+    background: #070709;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-top: 10px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.55), inset 0 1px 2px rgba(0,0,0,0.35);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .readout .v {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-hi);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.7), 0 0 6px rgba(132,158,184,0.22);
+    letter-spacing: 1px;
+  }
+  .readout .u {
+    font-size: 9px;
+    letter-spacing: 1.6px;
+    color: var(--text-lo);
+    text-transform: uppercase;
+  }
+
+  /* === Diff swatch legend === */
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: 10px;
+    color: var(--text-lo);
+    letter-spacing: 0.4px;
+  }
+  .legend .sw {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber-glow), inset 0 1px 0 rgba(255,255,255,0.25), 0 0 0 1px rgba(0,0,0,0.4);
+  }
+  .legend b { color: var(--amber-text); font-weight: 700; }
+
+  /* === Emission-face modifier row (variant D) === */
+  .mods {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 14px 6px 8px;
+    background: var(--soft-black);
+    border-radius: 12px;
+    box-shadow:
+      inset 3px 4px 9px rgba(0,0,0,0.7),
+      inset 1px 1px 2px rgba(0,0,0,0.5),
+      inset -1px -1px 1px rgba(255,255,255,0.03);
+  }
+  .mod { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .mod .face {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      /* amber inner rim — accent lives on the edge */
+      inset 0 0 0 1px rgba(206,165,100,0.55),
+      inset 0 0 4px rgba(206,165,100,0.35),
+      /* steel bezel outside the amber rim */
+      0 0 0 1px rgba(132,158,184,0.42),
+      0 0 0 3px rgba(11,11,12,0.85),
+      0 0 0 4px rgba(132,158,184,0.22),
+      /* outer ambient glow */
+      0 0 24px rgba(206,165,100,0.22),
+      0 0 10px rgba(255,250,235,0.10);
+  }
+  .mod .face::after {
+    /* inner specular bloom — hot near-white kissed top-left, very gentle */
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(ellipse 48% 40% at 40% 32%, rgba(255,253,244,0.32), rgba(255,250,230,0.10) 46%, transparent 76%);
+    pointer-events: none;
+    mix-blend-mode: screen;
+  }
+  /* Natural softbox emission — nearly-white hot core that falls off through
+     warm cream to an amber-shadow rim. Color swung into our Hasselblad amber
+     family but the VALUE stays mostly bright so it reads as a real light
+     source, not a saturated orange disc. */
+  /* Translucent diffuser: core is opaque hot-white, mid fades through warm
+     cream with rising alpha, rim fades to semi-transparent amber so the dark
+     panel bleeds through the fabric like a real softbox diffuser. */
+  .mod .face--rect {
+    width: 64px; height: 46px;
+    border-radius: 4px;
+    background:
+      radial-gradient(ellipse 92% 96% at 44% 40%,
+        rgba(255,254,248,0.98) 0%,
+        rgba(253,248,234,0.92) 28%,
+        rgba(245,232,202,0.80) 50%,
+        rgba(224,192,130,0.72) 72%,
+        rgba(206,165,100,0.78) 88%,
+        rgba(168,130,66,0.62) 98%,
+        rgba(110,82,37,0.32) 100%);
+  }
+  .mod .face--oct {
+    width: 56px; height: 56px;
+    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    background:
+      radial-gradient(circle at 42% 36%,
+        rgba(255,254,248,0.98) 0%,
+        rgba(253,248,234,0.92) 28%,
+        rgba(245,232,202,0.80) 50%,
+        rgba(224,192,130,0.72) 72%,
+        rgba(206,165,100,0.78) 88%,
+        rgba(168,130,66,0.62) 98%,
+        rgba(110,82,37,0.32) 100%);
+    box-shadow:
+      0 0 0 3px rgba(11,11,12,0.9),
+      0 0 22px rgba(206,165,100,0.18),
+      0 0 8px rgba(255,250,235,0.10),
+      inset 0 0 6px rgba(0,0,0,0.15);
+  }
+  .mod .face--beauty {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 50%, #0a0b0d 0 9px, transparent 10px),
+      radial-gradient(circle at 42% 36%,
+        rgba(255,254,248,0.98) 0%,
+        rgba(253,248,234,0.92) 28%,
+        rgba(245,232,202,0.80) 52%,
+        rgba(224,192,130,0.72) 72%,
+        rgba(206,165,100,0.78) 88%,
+        rgba(168,130,66,0.62) 98%,
+        rgba(110,82,37,0.32) 100%);
+  }
+  .mod .face--strip {
+    width: 24px; height: 66px;
+    border-radius: 3px;
+    background:
+      radial-gradient(ellipse 170% 65% at 50% 44%,
+        rgba(255,254,248,0.98) 0%,
+        rgba(253,248,234,0.92) 28%,
+        rgba(245,232,202,0.80) 50%,
+        rgba(224,192,130,0.72) 70%,
+        rgba(206,165,100,0.78) 88%,
+        rgba(168,130,66,0.62) 98%,
+        rgba(110,82,37,0.32) 100%);
+  }
+  .mod .dim {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--steel-text);
+    padding: 2px 7px;
+    background: #070709;
+    border-radius: 999px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.6), inset 0 0 4px rgba(0,0,0,0.35);
+  }
+
+  /* === Pullout drawer row === */
+  .drawers {
+    max-width: 1680px;
+    margin-top: 28px;
+    padding: 22px 24px 26px;
+    background: linear-gradient(180deg, var(--graphite) 0%, var(--soft-black) 100%);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    box-shadow:
+      1px 2px 4px rgba(0,0,0,0.25),
+      2px 4px 12px rgba(0,0,0,0.45),
+      inset 1px 1px 0 rgba(255,255,255,0.045),
+      inset -1px -1px 2px rgba(0,0,0,0.12);
+  }
+  .drawers h2 {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--steel-text);
+    margin-bottom: 4px;
+  }
+  .drawers .sub {
+    font-size: 9px;
+    letter-spacing: 0.8px;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+  .drawer-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+  .drawer {
+    background: var(--soft-black);
+    border-radius: 14px;
+    padding: 18px 18px 22px;
+    box-shadow:
+      inset 3px 4px 9px rgba(0,0,0,0.7),
+      inset 1px 1px 2px rgba(0,0,0,0.5),
+      inset -1px -1px 1px rgba(255,255,255,0.03);
+  }
+  .drawer .title {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--text-lo);
+    margin-bottom: 14px;
+  }
+  /* Tactile handle pill — inset well machined into the panel surface */
+  .handle {
+    height: 32px;
+    border-radius: 14px;
+    background: #0a0b0d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow:
+      inset 0 1px 3px rgba(0,0,0,0.6),
+      inset 0 0 6px rgba(0,0,0,0.3);
+    position: relative;
+  }
+  .handle .lbl {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+  }
+  .handle .chev {
+    font-size: 9px;
+    letter-spacing: 2px;
+  }
+  /* CLOSED state — cool steel label */
+  .handle--closed .lbl,
+  .handle--closed .chev {
+    color: var(--steel-75);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+  }
+  /* OPEN state — Hasselblad amber label glow */
+  .handle--open {
+    box-shadow:
+      inset 0 1px 3px rgba(0,0,0,0.6),
+      inset 0 0 6px rgba(0,0,0,0.3),
+      inset 0 0 12px var(--amber-glow),
+      0 0 1px rgba(206,165,100,0.4);
+  }
+  .handle--open .lbl,
+  .handle--open .chev {
+    color: var(--amber-text);
+    text-shadow: 0 1px 0 rgba(0,0,0,0.7), 0 0 8px var(--amber-glow);
+  }
+  /* Drawer body — visible only on OPEN */
+  .drawer-body {
+    margin-top: 12px;
+    padding: 14px 14px 16px;
+    background: linear-gradient(180deg, #141519 0%, #0d0e11 100%);
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.04);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-hi);
+  }
+  .drawer-body .h {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--amber-text);
+    margin-bottom: 6px;
+  }
+  .drawer-body .b {
+    color: var(--fog-gray);
+    font-size: 10px;
+    line-height: 1.55;
+  }
+  .drawer-placeholder {
+    margin-top: 12px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-lo);
+    text-transform: uppercase;
+    text-align: center;
+    padding: 14px;
+    border: 1px dashed var(--hairline);
+    border-radius: 10px;
+  }
+
+  .footnote {
+    max-width: 1680px;
+    margin-top: 24px;
+    padding: 14px 18px;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1.65;
+    color: var(--text-lo);
+  }
+  .footnote b { color: var(--amber-text); }
+  .footnote code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--soft-silver);
+    background: var(--soft-black);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Studio Matte · Hasselblad Amber · Selective Accent</h1>
+<p class="lede">
+  Warm token energized to <b>#ED9A38 Hasselblad amber</b> — but applied <b>selectively</b>, one attention pixel per screen. Steel Blue still carries 95% of the chrome; amber draws the eye to the single most important element. Below are three candidate "accent locations" — pick the one that best draws attention without flooding.
+</p>
+
+<div class="row">
+
+  <!-- Variant A — amber on the CTA rim only -->
+  <div class="col col--cta">
+    <h2>A · CTA Rim</h2>
+    <div class="sub">Hasselblad amber on the primary action only</div>
+
+    <div class="cta">ANALYZE</div>
+
+    <div class="label">Lighting Diagram</div>
+    <div class="diagram">
+      <div class="subject"></div>
+      <div class="arrow arrow--key"><span class="lbl">KEY</span></div>
+      <div class="arrow arrow--fill"><span class="lbl">FILL</span></div>
+    </div>
+
+    <div class="label">Status</div>
+    <div class="chips">
+      <div class="chip chip--active">KEY LOCKED</div>
+      <div class="chip">HIGH CONF</div>
+      <div class="chip">5500K</div>
+    </div>
+
+    <div class="readout"><span class="v">ƒ/5.6</span><span class="u">KEY · 1/200s</span></div>
+
+    <div class="legend"><span class="sw"></span> Accent pixel: <b>CTA rim + top highlight</b></div>
+  </div>
+
+  <!-- Variant B — amber on the KEY label pill only -->
+  <div class="col col--key">
+    <h2>B · KEY Label</h2>
+    <div class="sub">Amber pill floats on top of steel arrow</div>
+
+    <div class="cta">ANALYZE</div>
+
+    <div class="label">Lighting Diagram</div>
+    <div class="diagram">
+      <div class="subject"></div>
+      <div class="arrow arrow--key"><span class="lbl">KEY</span></div>
+      <div class="arrow arrow--fill"><span class="lbl">FILL</span></div>
+    </div>
+
+    <div class="label">Status</div>
+    <div class="chips">
+      <div class="chip chip--active">KEY LOCKED</div>
+      <div class="chip">HIGH CONF</div>
+      <div class="chip">5500K</div>
+    </div>
+
+    <div class="readout"><span class="v">ƒ/5.6</span><span class="u">KEY · 1/200s</span></div>
+
+    <div class="legend"><span class="sw"></span> Accent pixel: <b>KEY label pill only</b></div>
+  </div>
+
+  <!-- Variant D — amber on modifier emission faces -->
+  <div class="col col--mods">
+    <h2>D · Emission Face</h2>
+    <div class="sub">Modifiers as glowing front faces — amber is the light</div>
+
+    <div class="cta">ANALYZE</div>
+
+    <div class="label">Modifiers · Emission Face</div>
+    <div class="mods">
+      <div class="mod"><div class="face face--rect"></div><div class="dim">36×48</div></div>
+      <div class="mod"><div class="face face--oct"></div><div class="dim">60 ∅</div></div>
+      <div class="mod"><div class="face face--beauty"></div><div class="dim">22 ∅</div></div>
+      <div class="mod"><div class="face face--strip"></div><div class="dim">12×55</div></div>
+    </div>
+
+    <div class="label">Status</div>
+    <div class="chips">
+      <div class="chip chip--active">KEY LOCKED</div>
+      <div class="chip">HIGH CONF</div>
+      <div class="chip">5500K</div>
+    </div>
+
+    <div class="readout"><span class="v">ƒ/5.6</span><span class="u">KEY · 1/200s</span></div>
+
+    <div class="legend"><span class="sw"></span> Accent pixel: <b>Modifier emission faces</b></div>
+  </div>
+
+  <!-- Variant C — amber on the ACTIVE status chip only -->
+  <div class="col col--chip">
+    <h2>C · Active Chip</h2>
+    <div class="sub">Amber reserved for the ACTIVE / locked state</div>
+
+    <div class="cta">ANALYZE</div>
+
+    <div class="label">Lighting Diagram</div>
+    <div class="diagram">
+      <div class="subject"></div>
+      <div class="arrow arrow--key"><span class="lbl">KEY</span></div>
+      <div class="arrow arrow--fill"><span class="lbl">FILL</span></div>
+    </div>
+
+    <div class="label">Status</div>
+    <div class="chips">
+      <div class="chip chip--active">KEY LOCKED</div>
+      <div class="chip">HIGH CONF</div>
+      <div class="chip">5500K</div>
+    </div>
+
+    <div class="readout"><span class="v">ƒ/5.6</span><span class="u">KEY · 1/200s</span></div>
+
+    <div class="legend"><span class="sw"></span> Accent pixel: <b>Locked chip only</b></div>
+  </div>
+
+</div>
+
+<div class="drawers">
+  <h2>Pullout Drawer · Closed ↔ Open</h2>
+  <div class="sub">Hasselblad amber lights the label when a drawer is open — Tier 1 attention pixel, tactile well stays cool otherwise</div>
+  <div class="drawer-row">
+
+    <div class="drawer">
+      <div class="title">Closed — Dormant</div>
+      <div class="handle handle--closed">
+        <span class="lbl">Catchlight &amp; Modifier</span>
+        <span class="chev">▲</span>
+      </div>
+      <div class="drawer-placeholder">Body hidden · pull to reveal</div>
+    </div>
+
+    <div class="drawer">
+      <div class="title">Open — Active</div>
+      <div class="handle handle--open">
+        <span class="lbl">Catchlight &amp; Modifier</span>
+        <span class="chev">▼</span>
+      </div>
+      <div class="drawer-body">
+        <div class="h">Rectangular Softbox · 36×48 in</div>
+        <div class="b">Feathered from upper-left, ~4 ft from subject. Catchlight fills ~38% of iris; edge wrap is soft and diffusion is even across the key.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footnote">
+  <b>Rule of use.</b> The warm token <code>--sm-warm</code> / <code>WARM_PRIMARY</code> = <code>#ED9A38</code> is pulled from Hasselblad's creamy H-system amber and lives in the Studio Matte SOP. It is a <b>selective Tier 1 accent</b> — expect exactly <b>one</b> amber element per screen. Everything else stays in the Steel Blue chrome family so the amber actually reads as "the thing to look at". Pick A, B, or C (or a combination — e.g. KEY label on the setup screen and CTA rim on the home screen) and I'll roll it into the Studio Matte components.
+</div>
+
+</body>
+</html>

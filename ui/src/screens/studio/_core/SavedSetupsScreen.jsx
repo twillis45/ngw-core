@@ -395,7 +395,7 @@ function EmptyState({ onBuild }) {
 
 // ─── Main Screen ────────────────────────────────────────────────────────────
 export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   const [setups, setSetups] = useState(() => loadSetups());
   const [menuId, setMenuId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);

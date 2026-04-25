@@ -1,0 +1,34 @@
+{
+  "benchmark_id": "rembrandt_t1_rembrandt_bw_lowkey_turned_woman",
+  "description": "Rembrandt lighting \u2014 B&W \u2014 low-key",
+  "image_path": "benchmarks/images/Tier 1/Rembrandt/rembrandt_bw_lowkey_turned_woman.jpg",
+  "ground_truth": {
+    "expected_pattern": "rembrandt",
+    "expected_light_count": 1,
+    "expected_key_direction": "right",
+    "acceptable_patterns": [
+      "rembrandt",
+      "loop",
+      "split",
+      "short",
+      "low_key",
+      "short_fashion_key"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      3
+    ]
+  },
+  "metadata": {
+    "category": "rembrandt",
+    "difficulty": "hard",
+    "known_challenges": [
+      "B&W removes color cues",
+      "dark skin reduces shadow contrast",
+      "extreme low-key \u2014 most face in shadow",
+      "face turned \u2014 short vs rembrandt ambiguity"
+    ],
+    "added_date": "2026-04-18",
+    "tier": 1
+  }
+}

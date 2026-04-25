@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Modifier Graphics — Studio Matte</title>
+<script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+<style>
+  /* ─── Studio Matte canonical tokens — Figma 1317:2 "Token Palette — Studio Matte" ─── */
+  :root {
+    /* Neutrals */
+    --carbon-black:  #0B0B0C;   /* app background */
+    --soft-black:    #121316;   /* panel / cell inner */
+    --graphite:      #1A1C20;   /* raised surface */
+    --slate-metal:   #23262C;   /* border / divider metal */
+    --fog-gray:      #A7ADB7;   /* secondary text / dim icon */
+    --soft-silver:   #D7DCE3;   /* hover text */
+    --studio-white:  #F5F7FA;   /* primary text / hot light */
+
+    /* Accent — Steel Blue */
+    --steel-primary: #5F7C96;   /* primary accent (LCD active) */
+    --steel-hover:   #4E697F;
+    --steel-text:    #7A9AB5;   /* accent text */
+
+    /* Aliases */
+    --bg-outer:      var(--carbon-black);
+    --bg-inner:      var(--soft-black);
+    --hairline:      rgba(167,173,183,0.06);
+    --text-hi:       rgba(245,247,250,0.88);
+    --text-lo:       rgba(167,173,183,0.60);
+    /* Steel blue — the ONLY accent color in Studio Matte */
+    --steel-04:      rgba(95,124,150,0.04);
+    --steel-06:      rgba(95,124,150,0.06);
+    --steel-08:      rgba(95,124,150,0.08);
+    --steel-15:      rgba(95,124,150,0.15);
+    --steel-18:      rgba(95,124,150,0.18);
+    --steel-30:      rgba(95,124,150,0.30);
+    --steel-40:      rgba(95,124,150,0.40);
+    --steel-50:      rgba(95,124,150,0.50);
+    --steel-75:      rgba(95,124,150,0.75);
+    /* Highlight/shadow — light defines form */
+    --hi-18:         rgba(255,255,255,0.18);
+    --hi-07:         rgba(255,255,255,0.07);
+    --hi-03:         rgba(255,255,255,0.03);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background: var(--bg-outer);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: var(--text-hi);
+    padding: 36px 30px 60px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-lo); font-weight: 500; margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px; color: var(--text-lo); margin-bottom: 30px;
+    max-width: 720px; line-height: 1.55; font-weight: 400;
+  }
+  .subtitle b { color: var(--text-hi); font-weight: 600; }
+  .subtitle code {
+    color: rgba(95,124,150,0.75);
+    font-family: 'Inter', monospace; font-size: 12px;
+    background: var(--steel-06); padding: 1px 6px;
+    border: 0.5px solid var(--steel-15); border-radius: 3px;
+  }
+
+  table { border-collapse: separate; border-spacing: 12px 14px; }
+  th {
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(95,124,150,0.75); font-weight: 600;
+    text-align: center; padding: 0 2px 10px;
+  }
+  th.row-label {
+    text-align: right; padding-right: 16px; white-space: nowrap;
+    font-size: 10px; line-height: 1.5;
+    color: var(--text-hi); font-weight: 600;
+    letter-spacing: 0.02em; text-transform: none;
+  }
+  th.row-label .hint {
+    display: block; font-size: 9px;
+    color: rgba(95,124,150,0.75);
+    letter-spacing: 0.10em; margin-top: 4px;
+    text-transform: uppercase; font-weight: 500;
+  }
+
+  /* Studio Matte cell — matches viewfinder recipe from home 1336:2 */
+  td.cell {
+    position: relative;
+    background: var(--bg-inner);
+    border: 0.5px solid var(--hairline);
+    border-radius: 10px;
+    padding: 12px 10px 10px;
+    vertical-align: top;
+    text-align: center;
+    /* inset shadow recipe straight from Figma (LCD rim + edge bevel) */
+    box-shadow:
+      inset 0 -2px 4px rgba(0,0,0,0.12),
+      inset 0 -1px 1px rgba(0,0,0,0.25),
+      inset 0 1px 3px var(--hi-03),
+      inset 0 1px 0 var(--hi-07),
+      inset 0 0 30px rgba(95,124,150,0.03),
+      inset 0 0 14px rgba(95,124,150,0.06);
+  }
+  td.cell svg { display: block; margin: 0 auto; }
+
+  td.cell .dim {
+    display: inline-block; margin-top: 6px;
+    font-family: 'Inter', monospace;
+    font-size: 8.5px; font-weight: 500;
+    letter-spacing: 0.12em;
+    color: rgba(95,124,150,0.75);
+    padding: 2px 8px;
+    background: var(--steel-06);
+    border: 0.5px solid var(--steel-15);
+    border-radius: 999px;
+  }
+
+  .section-rule {
+    height: 1px; margin: 30px 0 18px;
+    background: linear-gradient(90deg, transparent, var(--hairline) 20%, var(--hairline) 80%, transparent);
+  }
+</style>
+</head>
+<body>
+
+<h1>Modifier Graphics — Studio Matte</h1>
+<p class="subtitle">
+  Three variations per modifier in <b>Studio Matte</b> — canonical tokens from Figma node <code>1317:2</code> "Token Palette — Studio Matte". Carbon Black <code>#0B0B0C</code>, Soft Black <code>#121316</code> cells, Steel Blue <code>#5F7C96</code> as the single accent, Studio White <code>#F5F7FA</code> highlights.
+  <br/>Columns: <b>A. Emission Face</b> — cool-white subject POV &nbsp;·&nbsp; <b>B. ¾ Perspective</b> — physical object at angle &nbsp;·&nbsp; <b>C. Split Front + Profile</b> — two views in one tile.
+</p>
+
+<table>
+<thead>
+<tr>
+  <th class="row-label"></th>
+  <th>A — Emission Face</th>
+  <th>B — ¾ Perspective</th>
+  <th>C — Split Front + Profile</th>
+</tr>
+</thead>
+<tbody>
+
+<!-- ══════════════════════════════════════════════════════════════ BEAUTY DISH -->
+<tr>
+<th class="row-label">Beauty Dish<br/><span class="hint">22" silver</span></th>
+
+<!-- A: Emission face — cool white ring glow, dark deflector center -->
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="bd-a-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.35"/>
+        <stop offset="85%" stop-color="rgba(95,124,150,1)" stop-opacity="0.10"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <circle cx="54" cy="44" r="38" fill="url(#bd-a-glow)"/>
+    <circle cx="54" cy="44" r="34" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <!-- central deflector disc (dark) -->
+    <circle cx="54" cy="44" r="9" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.9"/>
+    <circle cx="54" cy="44" r="6" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+
+<!-- B: 3/4 perspective wireframe -->
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="bd-b-face" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%"  stop-color="rgba(178,191,209,1)" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.04"/>
+      </linearGradient>
+    </defs>
+    <path d="M28 58 Q54 26 82 58" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.8"/>
+    <ellipse cx="54" cy="50" rx="32" ry="10" fill="url(#bd-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <ellipse cx="54" cy="50" rx="24" ry="7" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5"/>
+    <ellipse cx="54" cy="50" rx="7" ry="2.2" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.7"/>
+    <line x1="54" y1="60" x2="54" y2="74" stroke="rgba(95,124,150,0.40)" stroke-width="0.8"/>
+    <rect x="49" y="72" width="10" height="4" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+
+<!-- C: split front + profile -->
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <circle cx="30" cy="44" r="20" fill="none" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="30" cy="44" r="15" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.6"/>
+    <circle cx="30" cy="44" r="5" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <path d="M62 30 L84 44 L62 58 Z" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="62" y1="44" x2="70" y2="44" stroke="rgba(95,124,150,0.50)" stroke-width="0.7"/>
+    <circle cx="70" cy="44" r="2" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.6"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="75" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ SOFTBOX -->
+<tr>
+<th class="row-label">Softbox<br/><span class="hint">rectangular</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="sb-a-glow" cx="50%" cy="50%" r="60%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <rect x="18" y="18" width="72" height="52" rx="3" fill="url(#sb-a-glow)"
+          stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <rect x="22" y="22" width="64" height="44" rx="2" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="sb-b-face" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.06"/>
+      </linearGradient>
+    </defs>
+    <path d="M20 22 L84 30 L84 58 L20 66 Z" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <line x1="20" y1="22" x2="20" y2="66" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <path d="M84 30 L96 26 L96 62 L84 58 Z"
+          fill="url(#sb-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <line x1="52" y1="26" x2="52" y2="62" stroke="rgba(95,124,150,0.18)" stroke-width="0.5" stroke-dasharray="1 2"/>
+    <rect x="15" y="42" width="6" height="6" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <rect x="12" y="26" width="36" height="32" rx="2"
+          fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="15" y="29" width="30" height="26" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <path d="M62 32 L86 26 L86 58 L62 52 Z"
+          fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="62" y1="42" x2="86" y2="42" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 2"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="74" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ STRIP -->
+<tr>
+<th class="row-label">Strip<br/><span class="hint">long narrow</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="st-a-glow" cx="50%" cy="50%" r="65%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <rect x="42" y="10" width="24" height="68" rx="2" fill="url(#st-a-glow)"
+          stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <rect x="45" y="14" width="18" height="60" rx="1" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="st-b-face" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.06"/>
+      </linearGradient>
+    </defs>
+    <path d="M24 18 L82 22 L82 66 L24 70 Z" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <line x1="24" y1="18" x2="24" y2="70" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <path d="M82 22 L92 20 L92 68 L82 66 Z"
+          fill="url(#st-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <line x1="53" y1="20" x2="53" y2="68" stroke="rgba(95,124,150,0.18)" stroke-width="0.5" stroke-dasharray="1 2"/>
+    <rect x="19" y="41" width="6" height="6" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <rect x="22" y="16" width="16" height="50" rx="2"
+          fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="24.5" y="18.5" width="11" height="45" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.4"/>
+    <path d="M66 22 L88 18 L88 66 L66 62 Z"
+          fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="66" y1="42" x2="88" y2="42" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 2"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="77" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ OCTABOX -->
+<tr>
+<th class="row-label">Octabox<br/><span class="hint">8-sided soft</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="oct-a-glow" cx="50%" cy="50%" r="55%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="45%" stop-color="rgba(178,191,209,1)" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.04"/>
+      </radialGradient>
+    </defs>
+    <polygon points="54,8 78,18 88,42 88,50 78,70 54,80 30,70 20,50 20,42 30,18"
+             fill="url(#oct-a-glow)" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <polygon points="54,16 72,24 80,44 80,48 72,62 54,70 36,62 28,48 28,44 36,24"
+             fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="oct-b-face" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.06"/>
+      </linearGradient>
+    </defs>
+    <path d="M22 44 L80 24 L92 44 L80 64 Z" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <polygon points="82,24 94,30 98,44 94,58 82,64 74,58 72,44 74,30"
+             fill="url(#oct-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <polygon points="84,28 93,33 96,44 93,55 84,60 78,55 76,44 78,33"
+             fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <rect x="17" y="41" width="6" height="6" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <polygon points="30,20 42,26 48,40 48,48 42,62 30,68 18,62 12,48 12,40 18,26"
+             fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <polygon points="30,26 39,31 44,41 44,47 39,57 30,62 21,57 16,47 16,41 21,31"
+             fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.4"/>
+    <path d="M62 32 L86 26 L90 44 L86 62 L62 56 Z"
+          fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="62" y1="44" x2="90" y2="44" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 2"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="76" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ UMBRELLA -->
+<tr>
+<th class="row-label">Umbrella<br/><span class="hint">shoot-through</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="um-a-glow" cx="50%" cy="45%" r="55%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="45%" stop-color="rgba(178,191,209,1)" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <circle cx="54" cy="44" r="34" fill="url(#um-a-glow)" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.5">
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="20" y1="44" x2="88" y2="44"/>
+      <line x1="29" y1="19" x2="79" y2="69"/>
+      <line x1="79" y1="19" x2="29" y2="69"/>
+    </g>
+    <circle cx="54" cy="44" r="4" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.7"/>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="um-b-dome" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.20"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.05"/>
+      </linearGradient>
+    </defs>
+    <path d="M18 44 Q54 14 90 44 Q54 52 18 44 Z"
+          fill="url(#um-b-dome)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.5" fill="none">
+      <path d="M18 44 Q54 14 90 44"/>
+      <path d="M32 39 Q54 18 76 39"/>
+      <path d="M54 14 L54 48"/>
+      <path d="M38 20 L46 48"/>
+      <path d="M70 20 L62 48"/>
+    </g>
+    <line x1="54" y1="44" x2="54" y2="78" stroke="rgba(95,124,150,0.40)" stroke-width="0.9"/>
+    <circle cx="54" cy="44" r="2" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.6"/>
+    <rect x="49" y="76" width="10" height="3" rx="0.5" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <circle cx="30" cy="42" r="20" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.5">
+      <line x1="30" y1="22" x2="30" y2="62"/>
+      <line x1="10" y1="42" x2="50" y2="42"/>
+      <line x1="16" y1="28" x2="44" y2="56"/>
+      <line x1="44" y1="28" x2="16" y2="56"/>
+    </g>
+    <circle cx="30" cy="42" r="2.5" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.6"/>
+    <path d="M62 42 Q78 14 92 42" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="77" y1="28" x2="77" y2="64" stroke="rgba(95,124,150,0.40)" stroke-width="0.8"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="77" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ PARABOLIC -->
+<tr>
+<th class="row-label">Parabolic<br/><span class="hint">deep reflector</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="pb-a-glow" cx="50%" cy="50%" r="45%">
+        <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="1"/>
+        <stop offset="18%" stop-color="#F5F7FA" stop-opacity="0.85"/>
+        <stop offset="50%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.02"/>
+      </radialGradient>
+    </defs>
+    <circle cx="54" cy="44" r="38" fill="url(#pb-a-glow)"/>
+    <circle cx="54" cy="44" r="34" fill="none" stroke="rgba(95,124,150,0.75)" stroke-width="0.8"/>
+    <circle cx="54" cy="44" r="26" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <circle cx="54" cy="44" r="17" fill="none" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <circle cx="54" cy="44" r="9"  fill="none" stroke="rgba(95,124,150,0.12)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="pb-b-face" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.06"/>
+      </linearGradient>
+    </defs>
+    <path d="M28 26 Q8 44 28 62" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <path d="M28 26 Q50 20 78 22" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <path d="M28 62 Q50 68 78 66" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <path d="M18 44 Q40 42 78 44" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.4" stroke-dasharray="1 2"/>
+    <ellipse cx="78" cy="44" rx="14" ry="22" fill="url(#pb-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <ellipse cx="78" cy="44" rx="10" ry="16" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <ellipse cx="78" cy="44" rx="5" ry="8" fill="none" stroke="rgba(95,124,150,0.15)" stroke-width="0.4"/>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <circle cx="30" cy="42" r="20" fill="rgba(95,124,150,0.08)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="30" cy="42" r="14" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <circle cx="30" cy="42" r="7"  fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+    <circle cx="30" cy="42" r="2.5" fill="#F5F7FA" stroke="rgba(95,124,150,0.50)" stroke-width="0.5"/>
+    <path d="M62 22 Q72 22 72 42 Q72 62 62 62" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="62" y1="22" x2="62" y2="62" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="88" cy="42" r="1.5" fill="#F5F7FA"/>
+    <line x1="72" y1="42" x2="86" y2="42" stroke="rgba(95,124,150,0.30)" stroke-width="0.4" stroke-dasharray="1 1.5"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="77" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ RING FLASH -->
+<tr>
+<th class="row-label">Ring Flash<br/><span class="hint">on-axis</span></th>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <radialGradient id="rf-a-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stop-color="#121316" stop-opacity="1"/>
+        <stop offset="38%" stop-color="#121316" stop-opacity="1"/>
+        <stop offset="48%" stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="65%" stop-color="rgba(178,191,209,1)" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <circle cx="54" cy="44" r="36" fill="url(#rf-a-glow)"/>
+    <circle cx="54" cy="44" r="32" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="54" cy="44" r="18" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="54" cy="44" r="11" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.9"/>
+    <circle cx="54" cy="44" r="7"  fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5"/>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <linearGradient id="rf-b-face" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.08"/>
+      </linearGradient>
+    </defs>
+    <ellipse cx="54" cy="48" rx="32" ry="10" fill="url(#rf-b-face)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <ellipse cx="54" cy="48" rx="12" ry="3.6" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <path d="M22 48 Q54 36 86 48" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.7"/>
+    <ellipse cx="54" cy="48" rx="6" ry="1.8" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.6"/>
+    <line x1="54" y1="58" x2="54" y2="72" stroke="rgba(95,124,150,0.30)" stroke-width="0.8"/>
+    <rect x="49" y="70" width="10" height="4" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+
+<td class="cell">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <line x1="54" y1="8" x2="54" y2="76" stroke="rgba(95,124,150,0.15)" stroke-width="0.5"/>
+    <circle cx="30" cy="42" r="20" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="30" cy="42" r="8" fill="#121316" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="30" cy="42" r="4" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5"/>
+    <rect x="64" y="38" width="24" height="8" rx="1" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.50)" stroke-width="1"/>
+    <line x1="72" y1="46" x2="72" y2="60" stroke="rgba(95,124,150,0.40)" stroke-width="0.8"/>
+    <rect x="68" y="58" width="8" height="4" rx="1" fill="none" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+    <text x="30" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">FRONT</text>
+    <text x="76" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.8">SIDE</text>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<div class="section-rule"></div>
+<h1 style="margin-top:22px">Set B — Studio-Matte-Native Variations</h1>
+<p class="subtitle">
+  Three <b>new</b> variations designed around tokens that Set&nbsp;A didn't exercise: <b>Graphite</b> / <b>Slate Metal</b> engraved surfaces, <b>Fog Gray</b> technical lines, <b>LCD Instrument</b> active/inactive/glow recipe.
+  <br/>Columns: <b>D. LCD Instrument</b> — modifier rendered as a viewfinder readout &nbsp;·&nbsp; <b>E. Engraved Metal</b> — carved into brushed hardware, no emission &nbsp;·&nbsp; <b>F. Blueprint Spec</b> — technical drawing with dimension callouts.
+</p>
+
+<style>
+  /* Set B — specialised cell treatments */
+  td.cell-lcd {
+    /* LCD instrument: slight blue backlight glow, dashed grid behind */
+    background:
+      radial-gradient(80% 60% at 50% 50%, rgba(95,124,150,0.04), transparent 70%),
+      var(--soft-black);
+  }
+  td.cell-metal {
+    /* Graphite → Slate Metal gradient, brushed-metal feel */
+    background: linear-gradient(160deg, #23262C 0%, #1A1C20 50%, #121316 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(215,220,227,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.55),
+      inset 0 0 0 0.5px rgba(167,173,183,0.04),
+      0 1px 2px rgba(0,0,0,0.4);
+  }
+  td.cell-blueprint {
+    /* Blueprint: flat dark field + dashed frame */
+    background: var(--carbon-black);
+    border: 0.5px dashed rgba(95,124,150,0.22);
+    box-shadow:
+      inset 0 0 0 3px var(--carbon-black),
+      inset 0 0 0 3.5px rgba(95,124,150,0.06);
+  }
+  td.cell-blueprint .dim {
+    background: transparent;
+    border-color: rgba(122,154,181,0.30);
+    color: var(--steel-text);
+  }
+</style>
+
+<table>
+<thead>
+<tr>
+  <th class="row-label"></th>
+  <th>D — LCD Instrument</th>
+  <th>E — Engraved Metal</th>
+  <th>F — Blueprint Spec</th>
+</tr>
+</thead>
+<tbody>
+
+<!-- ══════════════════════════════════════════════════════════════ BEAUTY DISH -->
+<tr>
+<th class="row-label">Beauty Dish<br/><span class="hint">22" silver</span></th>
+
+<!-- D: LCD instrument readout -->
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <!-- LCD grid backdrop -->
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <!-- corner reticles -->
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <!-- modifier: ring -->
+    <circle cx="54" cy="44" r="28" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="54" cy="44" r="22" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="7" fill="var(--carbon-black)" stroke="rgba(95,124,150,0.75)" stroke-width="0.7"/>
+    <!-- center hot dot -->
+    <circle cx="54" cy="44" r="1" fill="#F5F7FA"/>
+    <!-- LCD label -->
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">BD 22</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+
+<!-- E: Engraved metal -->
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <defs>
+      <filter id="bd-e-engrave" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur in="SourceAlpha" stdDeviation="0.3" result="blur"/>
+        <feOffset in="blur" dx="0" dy="0.6" result="offset"/>
+        <feMerge><feMergeNode in="offset"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <!-- dark shadow (carved-in bottom edge) -->
+    <g transform="translate(0 0.6)" opacity="0.9">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+      <circle cx="54" cy="44" r="22" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="0.6"/>
+      <circle cx="54" cy="44" r="8" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="0.8"/>
+    </g>
+    <!-- light highlight (top edge of engrave) -->
+    <g transform="translate(0 -0.3)">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+      <circle cx="54" cy="44" r="22" fill="none" stroke="rgba(215,220,227,0.15)" stroke-width="0.5"/>
+      <circle cx="54" cy="44" r="8" fill="none" stroke="rgba(215,220,227,0.25)" stroke-width="0.6"/>
+    </g>
+    <!-- deepest shadow in groove -->
+    <circle cx="54" cy="44" r="28" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="54" cy="44" r="8" fill="rgba(0,0,0,0.45)"/>
+    <!-- small screw / rivet marks -->
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+
+<!-- F: Blueprint spec sheet -->
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <!-- construction circles -->
+    <circle cx="54" cy="42" r="26" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <circle cx="54" cy="42" r="7" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <!-- center cross -->
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="10" x2="54" y2="74"/>
+      <line x1="22" y1="42" x2="86" y2="42"/>
+    </g>
+    <!-- dimension arrows: diameter -->
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4" fill="none">
+      <line x1="28" y1="82" x2="80" y2="82"/>
+      <path d="M28 80 L24 82 L28 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M80 80 L84 82 L80 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">Ø 22"</text>
+    <!-- deflector callout -->
+    <line x1="54" y1="42" x2="90" y2="20" stroke="rgba(122,154,181,0.45)" stroke-width="0.4"/>
+    <circle cx="90" cy="20" r="1" fill="rgba(245,247,250,0.88)"/>
+    <text x="92" y="17" font-family="Inter, monospace" font-size="4.5" font-weight="600" fill="rgba(167,173,183,0.60)" letter-spacing="0.3">DEFL</text>
+  </svg>
+  <div class="dim">Ø 22"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ SOFTBOX -->
+<tr>
+<th class="row-label">Softbox<br/><span class="hint">rectangular</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <rect x="22" y="22" width="64" height="44" rx="2" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="26" y="26" width="56" height="36" rx="1" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="1" fill="#F5F7FA"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">SB 36×48</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <rect x="22" y="22" width="64" height="44" rx="3" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+      <rect x="26" y="26" width="56" height="36" rx="2" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="0.6"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <rect x="22" y="22" width="64" height="44" rx="3" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+      <rect x="26" y="26" width="56" height="36" rx="2" fill="none" stroke="rgba(215,220,227,0.15)" stroke-width="0.5"/>
+    </g>
+    <rect x="22" y="22" width="64" height="44" rx="3" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <rect x="22" y="18" width="64" height="48" rx="1" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="10" x2="54" y2="74"/>
+      <line x1="14" y1="42" x2="94" y2="42"/>
+    </g>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="22" y1="82" x2="86" y2="82"/>
+      <path d="M22 80 L18 82 L22 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M86 80 L90 82 L86 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">48"</text>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="96" y1="18" x2="96" y2="66"/>
+      <path d="M94 18 L96 14 L98 18 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M94 66 L96 70 L98 66 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="102" y="44" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">36"</text>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ STRIP -->
+<tr>
+<th class="row-label">Strip<br/><span class="hint">long narrow</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <rect x="44" y="14" width="20" height="60" rx="1.5" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="47" y="17" width="14" height="54" rx="0.8" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="1" fill="#F5F7FA"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">ST 12×48</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <rect x="44" y="14" width="20" height="60" rx="2" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <rect x="44" y="14" width="20" height="60" rx="2" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+    </g>
+    <rect x="44" y="14" width="20" height="60" rx="2" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <rect x="44" y="12" width="20" height="56" rx="1" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="8" x2="54" y2="72"/>
+    </g>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="44" y1="82" x2="64" y2="82"/>
+      <path d="M44 80 L40 82 L44 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M64 80 L68 82 L64 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <line x1="76" y1="12" x2="76" y2="68"/>
+      <path d="M74 12 L76 8 L78 12 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M74 68 L76 72 L78 68 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">12"</text>
+    <text x="82" y="42" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">48"</text>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ OCTABOX -->
+<tr>
+<th class="row-label">Octabox<br/><span class="hint">8-sided soft</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <polygon points="54,16 72,24 80,42 80,48 72,64 54,72 36,64 28,48 28,42 36,24"
+             fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <polygon points="54,22 68,28 74,42 74,46 68,58 54,64 40,58 34,46 34,42 40,28"
+             fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="1" fill="#F5F7FA"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">OCT 36</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <polygon points="54,14 74,22 82,42 82,48 74,66 54,74 34,66 26,48 26,42 34,22"
+               fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <polygon points="54,14 74,22 82,42 82,48 74,66 54,74 34,66 26,48 26,42 34,22"
+               fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+    </g>
+    <polygon points="54,14 74,22 82,42 82,48 74,66 54,74 34,66 26,48 26,42 34,22"
+             fill="rgba(0,0,0,0.18)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <polygon points="54,12 76,22 86,44 86,50 76,66 54,72 32,66 22,50 22,44 32,22"
+             fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <circle cx="54" cy="42" r="30" fill="none" stroke="rgba(95,124,150,0.25)" stroke-width="0.4" stroke-dasharray="1 1.5"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="8" x2="54" y2="72"/>
+      <line x1="18" y1="42" x2="90" y2="42"/>
+    </g>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="24" y1="82" x2="84" y2="82"/>
+      <path d="M24 80 L20 82 L24 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M84 80 L88 82 L84 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">Ø 36"</text>
+  </svg>
+  <div class="dim">Ø 36"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ UMBRELLA -->
+<tr>
+<th class="row-label">Umbrella<br/><span class="hint">shoot-through</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <path d="M20 44 Q54 16 88 44 Q54 50 20 44 Z" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.5" fill="none" stroke-dasharray="1 1.5">
+      <path d="M32 40 Q54 20 76 40"/>
+      <path d="M54 16 L54 48"/>
+    </g>
+    <line x1="54" y1="44" x2="54" y2="74" stroke="rgba(95,124,150,0.40)" stroke-width="0.6"/>
+    <circle cx="54" cy="44" r="1" fill="#F5F7FA"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">UM 45</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <path d="M20 44 Q54 16 88 44 Q54 50 20 44 Z" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+      <line x1="54" y1="44" x2="54" y2="74" stroke="rgba(0,0,0,0.85)" stroke-width="0.9"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <path d="M20 44 Q54 16 88 44 Q54 50 20 44 Z" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+      <line x1="54" y1="44" x2="54" y2="74" stroke="rgba(215,220,227,0.25)" stroke-width="0.7"/>
+    </g>
+    <path d="M20 44 Q54 16 88 44 Q54 50 20 44 Z" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <path d="M20 44 Q54 14 88 44" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <line x1="20" y1="44" x2="88" y2="44" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <line x1="54" y1="14" x2="54" y2="72" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="20" y1="44" x2="54" y2="14"/>
+      <line x1="88" y1="44" x2="54" y2="14"/>
+    </g>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="20" y1="82" x2="88" y2="82"/>
+      <path d="M20 80 L16 82 L20 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M88 80 L92 82 L88 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">Ø 45"</text>
+  </svg>
+  <div class="dim">Ø 45"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ PARABOLIC -->
+<tr>
+<th class="row-label">Parabolic<br/><span class="hint">deep reflector</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <circle cx="54" cy="44" r="28" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="54" cy="44" r="20" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="12" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="54" cy="44" r="2.5" fill="#F5F7FA"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">PB 51</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+      <circle cx="54" cy="44" r="20" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="0.5"/>
+      <circle cx="54" cy="44" r="12" fill="none" stroke="rgba(0,0,0,0.55)" stroke-width="0.5"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+      <circle cx="54" cy="44" r="20" fill="none" stroke="rgba(215,220,227,0.15)" stroke-width="0.5"/>
+      <circle cx="54" cy="44" r="12" fill="none" stroke="rgba(215,220,227,0.15)" stroke-width="0.5"/>
+    </g>
+    <circle cx="54" cy="44" r="28" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="54" cy="44" r="2" fill="rgba(215,220,227,0.40)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <circle cx="54" cy="42" r="28" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <path d="M32 42 Q54 22 76 42" fill="none" stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="10" x2="54" y2="74"/>
+      <line x1="22" y1="42" x2="86" y2="42"/>
+    </g>
+    <circle cx="54" cy="42" r="1.2" fill="rgba(245,247,250,0.88)"/>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="26" y1="82" x2="82" y2="82"/>
+      <path d="M26 80 L22 82 L26 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M82 80 L86 82 L82 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">Ø 51"</text>
+    <text x="58" y="40" font-family="Inter, monospace" font-size="4.5" font-weight="600" fill="rgba(167,173,183,0.60)" letter-spacing="0.3">f</text>
+  </svg>
+  <div class="dim">Ø 51"</div>
+</td>
+</tr>
+
+<!-- ══════════════════════════════════════════════════════════════ RING FLASH -->
+<tr>
+<th class="row-label">Ring Flash<br/><span class="hint">on-axis</span></th>
+
+<td class="cell cell-lcd">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="12" y1="22" x2="96" y2="22"/>
+      <line x1="12" y1="44" x2="96" y2="44"/>
+      <line x1="12" y1="66" x2="96" y2="66"/>
+      <line x1="36" y1="10" x2="36" y2="78"/>
+      <line x1="54" y1="10" x2="54" y2="78"/>
+      <line x1="72" y1="10" x2="72" y2="78"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6">
+      <path d="M12 14 L12 10 L16 10 M96 10 L100 10 L100 14 M12 74 L12 78 L16 78 M96 78 L100 78 L100 74"/>
+    </g>
+    <circle cx="54" cy="44" r="28" fill="rgba(95,124,150,0.06)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="54" cy="44" r="22" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="54" cy="44" r="11" fill="var(--carbon-black)" stroke="rgba(95,124,150,0.75)" stroke-width="0.7"/>
+    <circle cx="54" cy="44" r="6" fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.4" stroke-dasharray="1 1.5"/>
+    <text x="12" y="14" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(122,154,181,0.75)" letter-spacing="0.6">RF 14</text>
+    <text x="96" y="14" text-anchor="end" font-family="Inter, monospace" font-size="5" font-weight="600" fill="rgba(95,124,150,0.50)" letter-spacing="0.6">● REC</text>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+
+<td class="cell cell-metal">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <g transform="translate(0 0.6)">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="1"/>
+      <circle cx="54" cy="44" r="11" fill="none" stroke="rgba(0,0,0,0.85)" stroke-width="0.9"/>
+    </g>
+    <g transform="translate(0 -0.3)">
+      <circle cx="54" cy="44" r="28" fill="none" stroke="rgba(215,220,227,0.30)" stroke-width="0.8"/>
+      <circle cx="54" cy="44" r="11" fill="none" stroke="rgba(215,220,227,0.25)" stroke-width="0.7"/>
+    </g>
+    <path d="M54 16 A28 28 0 0 1 82 44 L71 44 A17 17 0 0 0 54 27 Z" fill="rgba(0,0,0,0.18)"/>
+    <path d="M54 72 A28 28 0 0 1 26 44 L37 44 A17 17 0 0 0 54 61 Z" fill="rgba(0,0,0,0.18)"/>
+    <circle cx="16" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="14" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="16" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+    <circle cx="92" cy="74" r="1.2" fill="rgba(0,0,0,0.5)" stroke="rgba(215,220,227,0.15)" stroke-width="0.3"/>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+
+<td class="cell cell-blueprint">
+  <svg width="108" height="88" viewBox="0 0 108 88">
+    <circle cx="54" cy="42" r="26" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <circle cx="54" cy="42" r="10" fill="none" stroke="rgba(122,154,181,0.85)" stroke-width="0.8"/>
+    <g stroke="rgba(95,124,150,0.55)" stroke-width="0.4" stroke-dasharray="1 1.5">
+      <line x1="54" y1="12" x2="54" y2="72"/>
+      <line x1="22" y1="42" x2="86" y2="42"/>
+    </g>
+    <g stroke="rgba(167,173,183,0.45)" stroke-width="0.4">
+      <line x1="28" y1="82" x2="80" y2="82"/>
+      <path d="M28 80 L24 82 L28 84 Z" fill="rgba(167,173,183,0.45)"/>
+      <path d="M80 80 L84 82 L80 84 Z" fill="rgba(167,173,183,0.45)"/>
+    </g>
+    <text x="54" y="78" text-anchor="middle" font-family="Inter, monospace" font-size="5.5" font-weight="600" fill="rgba(167,173,183,0.70)" letter-spacing="0.3">Ø 14"</text>
+    <line x1="54" y1="42" x2="88" y2="18" stroke="rgba(122,154,181,0.45)" stroke-width="0.4"/>
+    <text x="90" y="17" font-family="Inter, monospace" font-size="4.5" font-weight="600" fill="rgba(167,173,183,0.60)" letter-spacing="0.3">LENS</text>
+  </svg>
+  <div class="dim">Ø 14"</div>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<div class="section-rule"></div>
+<h1 style="margin-top:22px">Set C — Hybrid: Emission Face × LCD Instrument</h1>
+<p class="subtitle">
+  Combining Set&nbsp;A's <b>Emission Face</b> radial glow with Set&nbsp;B's <b>LCD Instrument</b> frame — the modifier's actual emitting face reads as a live viewfinder target. Technical overlay + real light signature in one tile. This is what the shoot feels like in the app: you see <em>what the subject sees</em>, framed by the instrument.
+</p>
+
+<table>
+<thead>
+<tr>
+  <th class="row-label"></th>
+  <th style="padding-right:32px;padding-left:32px">G — Emission &times; LCD</th>
+</tr>
+</thead>
+<tbody>
+
+<!-- BEAUTY DISH — glow ring + dark deflector inside LCD frame -->
+<tr>
+<th class="row-label">Beauty Dish<br/><span class="hint">22" silver</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-bd-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.35"/>
+        <stop offset="85%" stop-color="rgba(95,124,150,1)" stop-opacity="0.10"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <!-- LCD grid -->
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <!-- corner reticles -->
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <!-- Emission glow -->
+    <circle cx="72" cy="60" r="46" fill="url(#g-bd-glow)"/>
+    <circle cx="72" cy="60" r="42" fill="none" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="72" cy="60" r="34" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="72" cy="60" r="11" fill="var(--carbon-black)" stroke="rgba(95,124,150,0.75)" stroke-width="0.9"/>
+    <circle cx="72" cy="60" r="7" fill="none" stroke="rgba(95,124,150,0.35)" stroke-width="0.5"/>
+    <!-- LCD labels -->
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">BD 22</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">22"</div>
+</td>
+</tr>
+
+<!-- SOFTBOX -->
+<tr>
+<th class="row-label">Softbox<br/><span class="hint">rectangular</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-sb-glow" cx="50%" cy="50%" r="60%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <rect x="24" y="30" width="96" height="60" rx="3" fill="url(#g-sb-glow)"
+          stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="30" y="36" width="84" height="48" rx="2" fill="none" stroke="rgba(95,124,150,0.25)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">SB 36×48</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">36×48"</div>
+</td>
+</tr>
+
+<!-- STRIP -->
+<tr>
+<th class="row-label">Strip<br/><span class="hint">long narrow</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-st-glow" cx="50%" cy="50%" r="65%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="40%" stop-color="rgba(178,191,209,1)" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <rect x="58" y="18" width="28" height="84" rx="2" fill="url(#g-st-glow)"
+          stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <rect x="62" y="22" width="20" height="76" rx="1" fill="none" stroke="rgba(95,124,150,0.25)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">ST 12×48</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">12×48"</div>
+</td>
+</tr>
+
+<!-- OCTABOX -->
+<tr>
+<th class="row-label">Octabox<br/><span class="hint">8-sided soft</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-oct-glow" cx="50%" cy="50%" r="55%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="45%" stop-color="rgba(178,191,209,1)" stop-opacity="0.32"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.04"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <polygon points="72,16 102,28 116,56 116,64 102,92 72,104 42,92 28,64 28,56 42,28"
+             fill="url(#g-oct-glow)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <polygon points="72,24 96,34 108,58 108,62 96,82 72,92 48,82 36,62 36,58 48,34"
+             fill="none" stroke="rgba(95,124,150,0.25)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">OCT 36</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">36"</div>
+</td>
+</tr>
+
+<!-- UMBRELLA -->
+<tr>
+<th class="row-label">Umbrella<br/><span class="hint">shoot-through</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-um-glow" cx="50%" cy="48%" r="55%">
+        <stop offset="0%"  stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="45%" stop-color="rgba(178,191,209,1)" stop-opacity="0.28"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <circle cx="72" cy="60" r="44" fill="url(#g-um-glow)" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.5">
+      <line x1="72" y1="16" x2="72" y2="104"/>
+      <line x1="28" y1="60" x2="116" y2="60"/>
+      <line x1="40" y1="28" x2="104" y2="92"/>
+      <line x1="104" y1="28" x2="40" y2="92"/>
+    </g>
+    <circle cx="72" cy="60" r="4" fill="var(--carbon-black)" stroke="rgba(95,124,150,0.55)" stroke-width="0.7"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">UM 45</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">45"</div>
+</td>
+</tr>
+
+<!-- PARABOLIC -->
+<tr>
+<th class="row-label">Parabolic<br/><span class="hint">deep reflector</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-pb-glow" cx="50%" cy="50%" r="45%">
+        <stop offset="0%"  stop-color="#FFFFFF" stop-opacity="1"/>
+        <stop offset="18%" stop-color="#F5F7FA" stop-opacity="0.85"/>
+        <stop offset="50%" stop-color="rgba(178,191,209,1)" stop-opacity="0.22"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.02"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <circle cx="72" cy="60" r="50" fill="url(#g-pb-glow)"/>
+    <circle cx="72" cy="60" r="44" fill="none" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="72" cy="60" r="34" fill="none" stroke="rgba(95,124,150,0.18)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="72" cy="60" r="22" fill="none" stroke="rgba(95,124,150,0.15)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <circle cx="72" cy="60" r="11" fill="none" stroke="rgba(95,124,150,0.12)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">PB 51</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">51"</div>
+</td>
+</tr>
+
+<!-- RING FLASH -->
+<tr>
+<th class="row-label">Ring Flash<br/><span class="hint">on-axis</span></th>
+<td class="cell cell-lcd" style="padding:14px 16px 12px">
+  <svg width="144" height="118" viewBox="0 0 144 118">
+    <defs>
+      <radialGradient id="g-rf-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%"  stop-color="#08080a" stop-opacity="1"/>
+        <stop offset="38%" stop-color="#08080a" stop-opacity="1"/>
+        <stop offset="48%" stop-color="#F5F7FA" stop-opacity="0.88"/>
+        <stop offset="65%" stop-color="rgba(178,191,209,1)" stop-opacity="0.30"/>
+        <stop offset="100%" stop-color="rgba(95,124,150,1)" stop-opacity="0.03"/>
+      </radialGradient>
+    </defs>
+    <g stroke="rgba(95,124,150,0.08)" stroke-width="0.4" stroke-dasharray="0.8 1.6">
+      <line x1="16" y1="30" x2="128" y2="30"/><line x1="16" y1="60" x2="128" y2="60"/><line x1="16" y1="90" x2="128" y2="90"/>
+      <line x1="48" y1="14" x2="48" y2="106"/><line x1="72" y1="14" x2="72" y2="106"/><line x1="96" y1="14" x2="96" y2="106"/>
+    </g>
+    <g stroke="rgba(95,124,150,0.30)" stroke-width="0.6" fill="none">
+      <path d="M16 19 L16 14 L21 14 M128 14 L133 14 L133 19 M16 101 L16 106 L21 106 M128 106 L133 106 L133 101"/>
+    </g>
+    <circle cx="72" cy="60" r="46" fill="url(#g-rf-glow)"/>
+    <circle cx="72" cy="60" r="42" fill="none" stroke="rgba(95,124,150,0.75)" stroke-width="1"/>
+    <circle cx="72" cy="60" r="24" fill="none" stroke="rgba(95,124,150,0.50)" stroke-width="0.8"/>
+    <circle cx="72" cy="60" r="14" fill="var(--carbon-black)" stroke="rgba(95,124,150,0.75)" stroke-width="0.8"/>
+    <circle cx="72" cy="60" r="9"  fill="none" stroke="rgba(95,124,150,0.30)" stroke-width="0.5" stroke-dasharray="1 1.5"/>
+    <text x="16" y="18" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(122,154,181,0.85)" letter-spacing="0.7">RF 14</text>
+    <text x="133" y="18" text-anchor="end" font-family="Inter, monospace" font-size="6" font-weight="600" fill="rgba(95,124,150,0.55)" letter-spacing="0.7">● LIVE</text>
+    <text x="16" y="112" font-family="Inter, monospace" font-size="5" font-weight="500" fill="rgba(95,124,150,0.45)" letter-spacing="0.5">f/5.6  1/200  ISO 100</text>
+  </svg>
+  <div class="dim">14"</div>
+</td>
+</tr>
+
+</tbody>
+</table>
+
+<div class="section-rule"></div>
+<p class="subtitle" style="margin-bottom:0;">
+  Tokens: <code>#0B0B0C</code> Carbon Black · <code>#121316</code> Soft Black · <code>#1A1C20</code> Graphite · <code>#23262C</code> Slate Metal · <code>#A7ADB7</code> Fog Gray · <code>#5F7C96</code> Steel Blue · <code>#F5F7FA</code> Studio White
+</p>
+
+</body>
+</html>

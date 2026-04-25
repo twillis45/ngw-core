@@ -25,6 +25,7 @@ import { steel, C as SM_C, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHA
 import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import ExifStrip from '../_shared/ExifStrip';
+import useLightingRead from './useLightingRead';
 
 const C = { ...SM_C, border: 'rgba(167,173,183,0.06)' };
 
@@ -42,9 +43,10 @@ const STAGE_MESSAGES = [
   { label: 'Building the recreation blueprint…' },
 ];
 
-export default function ProcessingScreen({ imagePreview, analysisComplete, exifData, result, onCancel }) {
+export default function ProcessingScreen({ imagePreview, imageFile, analysisComplete, exifData, result, onCancel }) {
   const tilt = useDeviceTilt();
   const [progress, setProgress] = useState(0);
+  const { canvasRef } = useLightingRead(imageFile || imagePreview, analysisComplete);
   const pulseStopRef = useRef(null);
   const [stageIdx, setStageIdx] = useState(0);
   const [stageFade, setStageFade] = useState(1);
@@ -197,6 +199,12 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
           <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
         </div>
         <ViewfinderHUD dimmed />
+
+        {/* Lighting read canvas — engine-driven warm pools at real face landmarks */}
+        <canvas ref={canvasRef} style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 2,
+          pointerEvents: 'none',
+        }} />
 
         {/* Scan line removed — clean photo analysis without visual noise */}
 
@@ -461,7 +469,7 @@ export default function ProcessingScreen({ imagePreview, analysisComplete, exifD
       </>)}
 
       {/* ── Mobile-only: dome, ring, label ── */}
-      {!isDesktop && <>
+      {!isDesktop && analysisComplete && <>
       {/* Trough + Well removed — dome floats on full-bleed photo */}
 
       {/* Track ring */}

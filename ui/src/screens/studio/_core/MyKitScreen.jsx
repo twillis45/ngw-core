@@ -836,7 +836,7 @@ function EmptyState({ onAdd, isDesktop }) {
 // ─── Main Screen ────────────────────────────────────────────────────────────
 
 export default function MyKitScreen({ onBack, onRecipes }) {
-  const isDesktop = useIsDesktop();
+  const { isDesktop } = useIsDesktop();
   const [kit, setKit] = useState(() => loadKit());
   const [editing, setEditing] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
