@@ -391,6 +391,67 @@ function RecipeDetail({ recipe, onUse, onClose, isDesktop, isTablet }) {
           </p>
         )}
 
+        {/* Gear flexibility */}
+        {recipe.gearFlexibility && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: steel(0.45), letterSpacing: '1px', ...FONT_SMOOTH }}>
+              GEAR
+            </p>
+            <p style={{ margin: 0, fontSize: 14, color: steel(0.55), lineHeight: 1.45, ...FONT_SMOOTH }}>
+              {recipe.gearFlexibility}
+            </p>
+          </div>
+        )}
+
+        {/* Continuous power specs (video recipes) */}
+        {recipe.continuousPower && (
+          <div style={{
+            marginBottom: 14, padding: '12px 14px', borderRadius: 10,
+            background: 'rgba(200,155,69,0.05)', border: '1px solid rgba(200,155,69,0.12)',
+          }}>
+            <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1px', ...FONT_SMOOTH }}>
+              LED / CONTINUOUS POWER
+            </p>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              {recipe.continuousPower.watts && (
+                <div>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{recipe.continuousPower.watts}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.40), marginLeft: 3, ...FONT_SMOOTH }}>W</span>
+                </div>
+              )}
+              {recipe.continuousPower.lumens && (
+                <div>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{(recipe.continuousPower.lumens / 1000).toFixed(recipe.continuousPower.lumens >= 10000 ? 0 : 1)}k</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.40), marginLeft: 3, ...FONT_SMOOTH }}>lm</span>
+                </div>
+              )}
+              {recipe.continuousPower.kelvin && (
+                <div>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: C.textPrimary, ...FONT_SMOOTH }}>{recipe.continuousPower.kelvin}</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: steel(0.40), marginLeft: 3, ...FONT_SMOOTH }}>K</span>
+                </div>
+              )}
+            </div>
+            {recipe.continuousPower.notes && (
+              <p style={{ margin: '8px 0 0', fontSize: 13, color: steel(0.45), lineHeight: 1.4, ...FONT_SMOOTH }}>
+                {recipe.continuousPower.notes}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Warning */}
+        {recipe.warning && (
+          <div style={{ marginBottom: 14 }}>
+            <p style={{ margin: '0 0 4px', fontSize: 11, fontWeight: 700, color: 'rgba(230,130,100,0.85)', letterSpacing: '1px', ...FONT_SMOOTH }}>
+              WATCH OUT
+            </p>
+            <p style={{ margin: 0, fontSize: 14, color: steel(0.55), lineHeight: 1.45, ...FONT_SMOOTH }}>
+              {recipe.warning}
+            </p>
+          </div>
+        )}
+
         {/* Variations */}
         {recipe.variations && recipe.variations.length > 0 && (
           <div style={{ marginBottom: 14 }}>

@@ -119,7 +119,10 @@ export default function StepTheShot() {
           <span className="skin-tone-inline__label">Skin tone</span>
           <span className="skin-tone-inline__optional">optional</span>
           <div className="tone-row tone-row--compact">
-            {SKIN_TONES.map(t => (
+            {SKIN_TONES
+              // Mixed skin tone only makes sense with multiple subjects
+              .filter(t => t.value !== 'mixed' || !subjectType || !SINGLE_PERSON_SUBJECTS.includes(subjectType))
+              .map(t => (
               <button
                 key={t.value}
                 className={`tone-chip tone-chip--small${skinTone === t.value ? ' tone-chip--selected' : ''}`}
