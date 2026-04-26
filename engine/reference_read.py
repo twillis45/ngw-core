@@ -3938,7 +3938,15 @@ def build_recreation_setup(
                     "reason": "Hard key can produce Rembrandt or split lighting.",
                 })
         elif _sq == "soft":
-            if family != "beauty_clamshell":
+            # Only suggest beauty_clamshell when the shadow pattern is
+            # architecturally compatible: clamshell requires an overhead/
+            # near-frontal key + dedicated fill below, which is inconsistent
+            # with lateral directional patterns (loop, broad, rembrandt, split).
+            _clam_compatible_pats = {
+                "clamshell", "butterfly", "flat", "high_key", "unknown", "",
+            }
+            _clam_ok = lighting_read.shadow_pattern in _clam_compatible_pats
+            if family != "beauty_clamshell" and _clam_ok:
                 alternates.append({
                     "hypothesis": "beauty_clamshell",
                     "confidence": max(0.1, confidence - 0.05),
