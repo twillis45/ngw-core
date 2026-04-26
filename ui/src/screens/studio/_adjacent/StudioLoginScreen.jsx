@@ -107,7 +107,7 @@ function InsetField({
   const errorRing = showError ? `, 0px 0px 0px 1px rgba(230,85,85,0.55)` : '';
   return (
     <div style={{ marginBottom: 16 }}>
-      <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>
+      <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 600, color: steel(0.65), letterSpacing: '1px', ...FONT_SMOOTH }}>
         {label}
       </p>
       <div style={{ position: 'relative' }}>
@@ -166,7 +166,7 @@ function InsetField({
       </div>
       {(showError || hint) && (
         <p style={{
-          margin: '6px 2px 0', fontSize: 10.5, fontWeight: 500,
+          margin: '6px 2px 0', fontSize: 13, fontWeight: 500,
           color: showError ? C.errorRed : steel(0.55),
           letterSpacing: '0.1px', lineHeight: 1.35,
           ...FONT_SMOOTH,
@@ -318,7 +318,7 @@ export default function StudioLoginScreen({ onLogin }) {
             ...FONT_SMOOTH,
           }}>LIGHTING</p>
           <p style={{
-            margin: '10px 0 0', fontSize: 12, fontWeight: 400,
+            margin: '10px 0 0', fontSize: 14, fontWeight: 400,
             color: steel(0.7), letterSpacing: '0.2px', lineHeight: 1.5,
             ...FONT_SMOOTH,
           }}>Reverse-engineer any portrait. Nail the shot, every time.</p>
@@ -404,7 +404,7 @@ export default function StudioLoginScreen({ onLogin }) {
               <div style={{
                 margin: '-6px 2px 14px',
                 display: 'flex', alignItems: 'center', gap: 6,
-                fontSize: 10.5, fontWeight: 600,
+                fontSize: 13, fontWeight: 600,
                 color: 'rgba(245,200,120,0.92)',
                 letterSpacing: '0.3px',
                 ...FONT_SMOOTH,
@@ -425,7 +425,7 @@ export default function StudioLoginScreen({ onLogin }) {
                 onClick={handleForgotPassword}
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 11, fontWeight: 500, color: steel(0.7),
+                  fontSize: 14, fontWeight: 500, color: steel(0.7),
                   padding: '4px 2px', letterSpacing: '0.2px',
                   WebkitTapHighlightColor: 'transparent',
                   ...FONT_SMOOTH,
@@ -439,7 +439,7 @@ export default function StudioLoginScreen({ onLogin }) {
           {/* Error */}
           {error && (
             <p style={{
-              margin: '0 0 16px', fontSize: 12, fontWeight: 500,
+              margin: '0 0 16px', fontSize: 14, fontWeight: 500,
               color: C.errorRed, lineHeight: 1.4,
               ...FONT_SMOOTH,
             }}>{error}</p>
@@ -467,7 +467,7 @@ export default function StudioLoginScreen({ onLogin }) {
           >
             {loading && <Spinner />}
             <span style={{
-              fontSize: 13, fontWeight: 600,
+              fontSize: 15, fontWeight: 600,
               color: 'rgba(245,247,250,0.9)',
               letterSpacing: '0.5px',
               pointerEvents: 'none',
@@ -509,7 +509,7 @@ export default function StudioLoginScreen({ onLogin }) {
               <path d="M11.6 8.5c0-2 1.6-3 1.7-3-0.9-1.4-2.4-1.5-2.9-1.6-1.2-0.1-2.4 0.7-3 0.7-0.6 0-1.6-0.7-2.6-0.7-1.3 0-2.6 0.8-3.3 2-1.4 2.4-0.4 6 1 8 0.7 1 1.5 2 2.6 2 1 0 1.4-0.7 2.7-0.7 1.2 0 1.6 0.7 2.7 0.7 1.1 0 1.8-1 2.5-2 0.8-1.1 1.1-2.2 1.1-2.3-0.1 0-2.5-0.9-2.5-3.1zM9.7 2.6c0.6-0.7 1-1.6 0.9-2.6-0.8 0-1.8 0.5-2.4 1.2-0.5 0.6-1 1.6-0.9 2.5 0.9 0.1 1.8-0.4 2.4-1.1z" />
             </svg>
             <span style={{
-              fontSize: 13, fontWeight: 600,
+              fontSize: 15, fontWeight: 600,
               color: 'rgba(245,247,250,0.9)',
               letterSpacing: '0.2px',
             }}>Continue with Apple</span>
@@ -537,7 +537,7 @@ export default function StudioLoginScreen({ onLogin }) {
               <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
             </svg>
             <span style={{
-              fontSize: 13, fontWeight: 600,
+              fontSize: 15, fontWeight: 600,
               color: 'rgba(245,247,250,0.9)',
               letterSpacing: '0.2px',
             }}>Continue with Google</span>
@@ -548,7 +548,7 @@ export default function StudioLoginScreen({ onLogin }) {
             onClick={switchMode}
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 12, fontWeight: 500, color: C.textMeta,
+              fontSize: 14, fontWeight: 500, color: C.textMeta,
               padding: '4px 0', display: 'block', width: '100%', textAlign: 'center',
               WebkitTapHighlightColor: 'transparent',
               ...FONT_SMOOTH,
@@ -560,7 +560,7 @@ export default function StudioLoginScreen({ onLogin }) {
           {/* Legal — register mode only */}
           {mode === 'register' && (
             <p style={{
-              margin: '14px 16px 0', fontSize: 10, fontWeight: 400,
+              margin: '14px 16px 0', fontSize: 12, fontWeight: 400,
               color: steel(0.5), lineHeight: 1.5, textAlign: 'center',
               ...FONT_SMOOTH,
             }}>

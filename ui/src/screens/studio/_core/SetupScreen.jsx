@@ -994,7 +994,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   <div style={{ padding: '4px 18px 0', textAlign: mod?.family ? 'center' : 'left' }}>
                     <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>{modName}</p>
                     {mod?.sizeRange && (
-                      <p style={{ margin: '3px 0 0', fontSize: 11, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
+                      <p style={{ margin: '3px 0 0', fontSize: 13, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                     )}
                   </div>
                 ) : result.sections?.catchlightModifier ? (
@@ -1261,7 +1261,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               )}
             </div>
             {rsCamGuide && (rsFocal || rsAperture) && (
-              <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 400, color: C.textDim, lineHeight: 1.4, ...FONT_SMOOTH }}>
+              <p style={{ margin: '4px 0 0', fontSize: 13, fontWeight: 400, color: C.textDim, lineHeight: 1.4, ...FONT_SMOOTH }}>
                 {rsCamGuide}
               </p>
             )}

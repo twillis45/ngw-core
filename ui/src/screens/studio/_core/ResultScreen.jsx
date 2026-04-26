@@ -1288,7 +1288,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
               </div>
               {def && (
                 <p style={{
-                  margin: '2px 0 6px', fontSize: 11, lineHeight: 1.35,
+                  margin: '2px 0 6px', fontSize: 13, lineHeight: 1.35,
                   color: steel(0.68),
                   fontWeight: 400,
                   ...FONT_SMOOTH,
@@ -1368,7 +1368,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
                   </div>
                   {def && (
                     <p style={{
-                      margin: '2px 0 6px', fontSize: 11, lineHeight: 1.4,
+                      margin: '2px 0 6px', fontSize: 13, lineHeight: 1.4,
                       color: steel(0.60), fontWeight: 400,
                       ...FONT_SMOOTH,
                     }}>{def}</p>
@@ -1435,7 +1435,7 @@ function PatternBars({ candidates, isHighConf, shadowSide, onSelectSetup }) {
 
       {!isHighConf && (
         <p style={{
-          margin: '14px 0 0', fontSize: 11,
+          margin: '14px 0 0', fontSize: 13,
           color: C.textWarn, lineHeight: 1.4,
           ...FONT_SMOOTH,
         }}>Possible match — a brighter or sharper photo may improve results</p>

@@ -116,7 +116,7 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
             <button
               onClick={() => setShowUpload(!showUpload)}
               style={{
-                padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 700,
+                padding: '6px 14px', borderRadius: 7, border: 'none', fontSize: 14, fontWeight: 700,
                 background: `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 100%)`,
                 color: steel(0.8), cursor: 'pointer',
                 boxShadow: `2px 2px 6px rgba(0,0,0,0.4), 0 0 0 0.5px ${steel(0.2)}`,
@@ -195,7 +195,7 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
               key={c.value}
               onClick={() => setCategory(c.value)}
               style={{
-                padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 11, fontWeight: 600,
+                padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 13, fontWeight: 600,
                 cursor: 'pointer', whiteSpace: 'nowrap',
                 background: category === c.value
                   ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 100%)`
@@ -256,9 +256,9 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
                   }}>
                     {r.category || 'uncategorized'}
                   </span>
-                  <span style={{ fontSize: 10, color: steel(0.3) }}>{formatDate(r.created_at)}</span>
+                  <span style={{ fontSize: 12, color: steel(0.3) }}>{formatDate(r.created_at)}</span>
                 </div>
-                {r.notes && <div style={{ fontSize: 11, color: steel(0.4), lineHeight: 1.4, marginBottom: 6 }}>{r.notes}</div>}
+                {r.notes && <div style={{ fontSize: 13, color: steel(0.4), lineHeight: 1.4, marginBottom: 6 }}>{r.notes}</div>}
                 {r.tags && (
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 6 }}>
                     {r.tags.split(',').map((t, i) => (
@@ -272,14 +272,14 @@ export default function LookLibraryScreen({ onBack, onAnalyze }) {
                   {r.analysis_id && onAnalyze && (
                     <button
                       onClick={() => onAnalyze(r.analysis_id)}
-                      style={{ fontSize: 10, fontWeight: 600, color: steel(0.5), background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                      style={{ fontSize: 13, fontWeight: 600, color: steel(0.5), background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                     >
                       View Analysis
                     </button>
                   )}
                   <button
                     onClick={() => handleDelete(r.id)}
-                    style={{ fontSize: 10, fontWeight: 600, color: 'rgba(248,113,113,0.6)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
+                    style={{ fontSize: 13, fontWeight: 600, color: 'rgba(248,113,113,0.6)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}
                   >
                     Delete
                   </button>
