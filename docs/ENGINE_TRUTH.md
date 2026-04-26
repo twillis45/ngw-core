@@ -317,15 +317,6 @@ The following were removed because they test setup_family / mood / technique —
 - `golden_hour` — mood (outdoor warm tonal condition)
 - `reflector_fill` — technique (reflector as fill modifier)
 
-### Removed Benchmarks (not geometric patterns)
-
-The following were removed because they test setup_family / mood / technique — not geometric lighting patterns:
-
-- `corporate_soft_key` — setup_family (corporate portraiture technique)
-- `weak_catchlight` — signal condition (low catchlight intensity)
-- `golden_hour` — mood (outdoor warm tonal condition)
-- `reflector_fill` — technique (reflector as fill modifier)
-
 ---
 
 ## 10. Dark Skin / Low-Contrast Adaptations (added 2026-04-17)
@@ -390,3 +381,36 @@ These three concepts are **strictly orthogonal** — never mix them as peer patt
 | `source_context` | `source_context` | natural_window, studio_strobe, continuous_led, outdoor_sun |
 
 `setup_family` and `source_context` are resolved **after** `authoritative_pattern` is settled. They must not appear as candidate patterns in `resolve_pattern_candidates()`.
+
+---
+
+## 13. LightingRead Fill Fields (NGW-50)
+
+`LightingRead` (the output object emitted by `reference_read.build_lighting_read()`) includes two fill-related fields:
+
+| Field | Type | Values | Notes |
+|-------|------|--------|-------|
+| `fill_presence` | str | `none` \| `subtle` \| `moderate` \| `strong` \| `unknown` | Estimated fill intensity from shadow ratios |
+| `fill_direction` | str | `below` \| `camera-left` \| `camera-right` \| `camera-axis` \| `none` \| `unknown` | Geometric position of fill light |
+
+### fill_direction Derivation Logic
+
+Computed by `_derive_fill_direction(shadow_pattern, key_direction, fill_presence)` in `reference_read.py`:
+
+| Condition | fill_direction |
+|-----------|---------------|
+| `fill_presence == "none"` | `"none"` |
+| `fill_presence in ("unknown", "")` | `"unknown"` |
+| `shadow_pattern` contains "clamshell" | `"below"` (under-chin reflector/softbox) |
+| `shadow_pattern` contains "butterfly" | `"below"` (Paramount fill is always below key) |
+| `key_direction == "upper_left"` | `"camera-right"` |
+| `key_direction == "upper_right"` | `"camera-left"` |
+| `key_direction == "left"` | `"camera-right"` |
+| `key_direction == "right"` | `"camera-left"` |
+| `key_direction == "lower_left"` | `"camera-right"` |
+| `key_direction == "lower_right"` | `"camera-left"` |
+| `key_direction == "top_center"` | `"camera-axis"` |
+| `shadow_pattern` in (`flat`, `ring_light`, `high_key`) | `"camera-axis"` |
+| fallback | `"camera-axis"` |
+
+Physical rationale: fill always comes from the opposite side of the key for directional patterns (reduces key shadows). For clamshell/butterfly, the fill is a below-chin reflector regardless of key direction. For non-directional patterns (flat, ring, high_key), fill is frontal/on-axis.
