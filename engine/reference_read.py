@@ -2979,6 +2979,14 @@ def build_lighting_read(
     # Guard B — BW + unknown direction: B&W images lose shadow-direction signal,
     # so "unknown" key direction is ambiguous (could be lateral, not on-axis).
     # Treating unknown as on-axis to fire clamshell is a false assumption.
+    # Guard C — Topology-only with lateral key: when shadow_pattern came from
+    # lighting_intel's vertical-topology detection (geometry.shadow_pattern is
+    # "unknown" — no shadow-direction corroboration) and key_light_direction is
+    # clearly lateral (≥90° off-axis), the 2-light catchlight signature is from
+    # a lateral key + lower fill, not a true clamshell.  A real clamshell has
+    # the key overhead (top_center) or near-overhead (upper_left/upper_right);
+    # strictly horizontal or below-horizontal keys cannot produce clamshell
+    # shadow geometry regardless of catchlight count.
     if shadow_pattern == "clamshell":
         _fo_lr = cue_report.face_orientation
         _face_turned_lr = (
@@ -2990,7 +2998,11 @@ def build_lighting_read(
         _is_bw_lr = getattr(_tp_lr, "is_bw", False)
         _geo_dir_lr = getattr(geometry, "key_light_direction", "unknown") if geometry else "unknown"
         _bw_unknown_lr = _is_bw_lr and _geo_dir_lr in ("unknown", "")
-        if _face_turned_lr or _bw_unknown_lr:
+        _geo_sp_c = (getattr(geometry, "shadow_pattern", "unknown") if geometry else "unknown") or "unknown"
+        _topology_only_clam = _geo_sp_c in ("unknown", "")
+        _key_clearly_lateral = _geo_dir_lr in {"left", "right", "lower_left", "lower_right"}
+        _topology_lateral_clam = _topology_only_clam and _key_clearly_lateral
+        if _face_turned_lr or _bw_unknown_lr or _topology_lateral_clam:
             shadow_pattern = "unknown"
 
     # ── Normalize shadow_pattern to canonical enum values ──────────────
