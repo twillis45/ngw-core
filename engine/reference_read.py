@@ -1171,6 +1171,61 @@ def _derive_fill_strategy(
     return ""
 
 
+def _derive_fill_direction(
+    shadow_pattern: str,
+    key_direction: str,
+    fill_presence: str,
+) -> str:
+    """Derive the geometric position of the fill light relative to the key.
+
+    Returns a canonical direction token:
+      below         — dedicated fill below the key (clamshell, butterfly reflector)
+      camera-left   — fill on camera-left side (key on camera-right)
+      camera-right  — fill on camera-right side (key on camera-left)
+      camera-axis   — on-axis fill (ring, beauty dish, or unknown lateral key)
+      none          — no fill light
+      unknown       — cannot determine from available signals
+
+    Physical grounding:
+      Clamshell / butterfly require an overhead key + dedicated fill below or
+      on-axis.  Directional patterns (loop, rembrandt, split) place the fill
+      on the opposite side from the key.
+    """
+    if fill_presence == "none":
+        return "none"
+    if fill_presence in ("unknown", ""):
+        return "unknown"
+
+    pat = (shadow_pattern or "").lower()
+
+    # Clamshell: fill is always a dedicated below-key source
+    if "clamshell" in pat:
+        return "below"
+
+    # Butterfly: fill typically from below (reflector plate) or camera-axis
+    if "butterfly" in pat:
+        return "below"
+
+    # Directional patterns: fill sits opposite the key
+    _KEY_TO_FILL = {
+        "upper_left": "camera-right",
+        "upper_right": "camera-left",
+        "left": "camera-right",
+        "right": "camera-left",
+        "lower_left": "camera-right",
+        "lower_right": "camera-left",
+        "top_center": "camera-axis",
+    }
+    if key_direction in _KEY_TO_FILL:
+        return _KEY_TO_FILL[key_direction]
+
+    # Flat / ring_light / unknown key — fill is on or near camera axis
+    if pat in ("flat", "ring_light", "high_key"):
+        return "camera-axis"
+
+    return "camera-axis"  # safe default when key direction is unknown
+
+
 def _infer_focal_aperture_from_geometry(
     face_ratio: float,
     person_ratio: float,
@@ -3062,6 +3117,9 @@ def build_lighting_read(
         _face_mesh_avail = getattr(scene_ctx, "has_face_mesh", True) if scene_ctx else True
         fill_presence = _derive_fill_presence(geometry, cue_report, face_mesh_available=_face_mesh_avail) if geometry else "unknown"
 
+    _fill_key_dir = getattr(geometry, "key_light_direction", "unknown") if geometry else "unknown"
+    fill_direction = _derive_fill_direction(shadow_pattern, _fill_key_dir, fill_presence)
+
     # Lighting family — for gobo/slit or inferred dramatic hard light,
     # override light count from catchlights (catchlights may show multiple
     # reflections from a single masked source, or zero when obscured).
@@ -3341,6 +3399,7 @@ def build_lighting_read(
         shadow_pattern=shadow_pattern,
         shadow_pattern_detail=shadow_pattern_detail,
         fill_presence=fill_presence,
+        fill_direction=fill_direction,
         rim_presence=rim_presence,
         light_count=light_count,
         lighting_family=lighting_family,

@@ -759,6 +759,7 @@ class LightingRead(BaseModel):
     shadow_pattern: str = "unknown"  # rembrandt | loop | split | butterfly | flat | gobo | unknown
     shadow_pattern_detail: str = ""  # descriptive detail (e.g. "grid/window gobo") when available
     fill_presence: str = "unknown"  # none | subtle | moderate | strong | unknown
+    fill_direction: str = "unknown"  # below | camera-left | camera-right | camera-axis | none | unknown
     rim_presence: str = "unknown"  # none | subtle | strong | unknown
     light_count: int = 0
     lighting_family: str = "unknown"
