@@ -40,12 +40,13 @@ const APP_VERSION    = 'v1.4.0';
 
 // ─── Row sub-components ──────────────────────────────────────────────────────
 
-function NavRow({ label, value, onClick, danger, billing }) {
+function NavRow({ label, value, onClick, danger, billing, testId }) {
   return (
     <button
       className={`stgx-row stgx-row--nav${danger ? ' stgx-row--danger' : ''}${billing ? ' stgx-row--billing' : ''}`}
       onClick={onClick}
       type="button"
+      data-testid={testId}
     >
       <span className="stgx-row__label">{label}</span>
       <span className="stgx-row__right">
@@ -56,9 +57,9 @@ function NavRow({ label, value, onClick, danger, billing }) {
   );
 }
 
-function ToggleRow({ label, value, onChange }) {
+function ToggleRow({ label, value, onChange, testId }) {
   return (
-    <div className="stgx-row stgx-row--toggle">
+    <div className="stgx-row stgx-row--toggle" data-testid={testId}>
       <span className="stgx-row__label">{label}</span>
       <button
         className={`stgx-toggle${value ? ' stgx-toggle--on' : ''}`}
@@ -93,7 +94,7 @@ function ListCard({ children, className = '' }) {
 function ScreenHeader({ title, backLabel, onBack }) {
   return (
     <div className="stgx-hdr">
-      <button className="stgx-hdr__back" onClick={onBack} type="button">
+      <button className="stgx-hdr__back" onClick={onBack} type="button" data-testid="settings-back">
         ‹ {backLabel}
       </button>
       <h2 className="stgx-hdr__title">{title}</h2>
@@ -728,6 +729,7 @@ export default function SettingsScreen() {
         className="stgx-user-card"
         onClick={() => setSubScreen('account')}
         type="button"
+        data-testid="settings-account-card"
       >
         <div className="stgx-user-card__avatar">
           {(displayName || 'G').charAt(0).toUpperCase()}
@@ -767,11 +769,13 @@ export default function SettingsScreen() {
           label="Units"
           value={unitsLabel}
           onClick={() => update('units', settings.units === 'metric' ? 'imperial' : 'metric')}
+          testId="settings-units"
         />
         <ToggleRow
           label="Analysis auto-save"
           value={settings.sessionStorage === 'auto'}
           onChange={v => update('sessionStorage', v ? 'auto' : 'manual')}
+          testId="settings-auto-save"
         />
         {mode !== 'assistant' && (
           <NavRow
@@ -783,6 +787,7 @@ export default function SettingsScreen() {
         <NavRow
           label={mode === 'assistant' ? 'Shoot Preferences' : mode === 'learning' ? 'My Preferences' : 'Preferences'}
           onClick={() => setSubScreen('preferences')}
+          testId="settings-preferences"
         />
       </ListCard>
 

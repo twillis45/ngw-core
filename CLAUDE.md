@@ -230,3 +230,53 @@ NGW must become:
 - Stable enough to lock as a baseline and build on
 
 The product must feel credible not only to engineers and designers, but to a **world-class working photographer** with real commercial and editorial experience. Every recommendation must be realistic enough that an experienced pro would not dismiss it as artificial, over-academic, or impractical.
+
+---
+
+## XI. EXECUTION DISCIPLINE
+
+- Do not code, test, and commit in one pass.
+- Separate work into distinct passes:
+  1. audit/discovery
+  2. implementation
+  3. validation/testing
+  4. commit readiness
+- If scope drift, hidden dependency, uncertain selector strategy, or conflicting behavior appears, **stop and report** instead of improvising.
+- A clean build alone is not sufficient proof.
+
+---
+
+## XII. PROOF-BEFORE-EDIT RULES
+
+- Before changing code, always return:
+  1. **ACTIVE_FILE_SCOPE** — exact files in scope
+  2. **ROOT_CAUSE** — what is wrong and why
+  3. **FILES_TO_CHANGE** — exact files to edit
+  4. **FILES_NOT_TO_CHANGE** — files that must NOT be touched
+  5. **TEST_PLAN** — how the change will be verified
+- Never broaden file scope silently.
+- If any additional file must be touched, justify it explicitly before editing.
+- No opportunistic refactors.
+- No formatting-only edits.
+- No "while I'm here" cleanup.
+
+---
+
+## XIII. TESTING DISCIPLINE
+
+- Use Playwright for visual/device testing. Test only the scoped flow.
+- Prefer:
+  - `data-testid`
+  - role-based selectors
+  - stable accessible names
+- Avoid:
+  - `nth-child`
+  - deep CSS chains
+  - arbitrary waits
+  - force clicks unless justified
+- If stable selectors do not exist, **stop and list which test IDs should be added first**.
+- For each failing Playwright test, classify:
+  - **real bug** — code is wrong
+  - **flaky selector** — test is wrong
+  - **timing issue** — needs explicit wait
+  - **missing test ID** — needs markup change before test can be written

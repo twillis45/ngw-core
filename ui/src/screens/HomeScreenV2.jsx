@@ -191,6 +191,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
           type="button"
           className="ngw-primary-btn home-v2__primary-cta ngw-btn--raised"
           onClick={triggerUpload}
+          data-testid="home-analyze"
         >
           Analyze a Photo
         </button>
@@ -202,6 +203,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
           type="button"
           className="home-v2__secondary-btn"
           onClick={() => dispatch({ type: 'NAVIGATE', screen: 'recipes' })}
+          data-testid="home-browse-recipes"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
@@ -219,6 +221,7 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
           type="button"
           className="home-v2__continue"
           onClick={() => dispatch({ type: 'NAVIGATE', screen: 'saved_setups' })}
+          data-testid="home-continue"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
@@ -255,6 +258,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
             type="button"
             className="home-v2__continue-card-btn"
             onClick={() => dispatch({ type: 'NAVIGATE', screen: continueTarget })}
+            data-testid="home-continue"
           >
             <div className="home-v2__continue-card-icon">
               {hasResult ? (
@@ -287,6 +291,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
           type="button"
           className="ngw-primary-btn home-v2__primary-cta ngw-btn--raised"
           onClick={triggerUpload}
+          data-testid="home-analyze"
         >
           Analyze a Photo
         </button>
@@ -298,6 +303,7 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
           type="button"
           className="home-v2__secondary-btn"
           onClick={() => dispatch({ type: 'NAVIGATE', screen: 'recipes' })}
+          data-testid="home-browse-recipes"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 016.5 17H20"/>
@@ -438,6 +444,7 @@ export default function HomeScreenV2() {
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      data-testid="home-root"
     >
       <input
         ref={fileRef}
@@ -446,6 +453,7 @@ export default function HomeScreenV2() {
         multiple
         style={{ display: 'none' }}
         onChange={handleFileChange}
+        data-testid="home-file-input"
       />
 
       {/* Drop overlay */}

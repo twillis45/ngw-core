@@ -181,7 +181,10 @@ async def lifespan(app):
     # ── Startup service probes — VLM, DB, SMTP, Stripe (all parallel) ──────────
     # Each probe is informational only — a failure is logged and stored for the
     # health endpoint but never blocks startup or disables the service.
-    try:
+    # SKIP_PROBES=1 skips all probes for fast local dev startup.
+    _skip_probes = os.getenv("SKIP_PROBES", "").strip().lower() in ("1", "true", "yes")
+    if not _skip_probes:
+      try:
         import asyncio as _aio
         import engine.vlm          as _vlm_mod
         import engine.service_health as _svc_health
@@ -234,8 +237,10 @@ async def lifespan(app):
                 "  → VLM calls will still attempt but may fail.",
                 _VLM_PROVIDER.upper(),
             )
-    except Exception as exc:
+      except Exception as exc:
         _startup_logger.warning("Service probes failed at startup: %s", exc)
+    else:
+        _startup_logger.info("SKIP_PROBES=1 — skipping startup service probes")
 
     # Start background scheduler (no-op if ENABLE_SCHEDULER is not set)
     from engine.scheduler import boot_scheduler, stop_scheduler

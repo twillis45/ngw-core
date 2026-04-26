@@ -38,7 +38,10 @@ export default function MatteBackground({ variant = 'default' }) {
   // they vanish into pure black. Desktop multiplier lifts all layers ~2× while
   // keeping the same relative hierarchy.
   const isWide = typeof window !== 'undefined' && window.innerWidth >= 1024;
-  const m = 0.35; // perceptible surface treatment — warm ambient + specular give the machined metal feel
+  // Desktop monitors need stronger surface treatment — pixel density is lower
+  // and the viewing distance is greater, so the subtle OLED-tuned values
+  // disappear into pure black on 27"+ panels, causing visible gradient banding.
+  const m = isWide ? 0.65 : 0.35;
 
   // Layer 1 — cool ambient key wash (10 stops for smooth fade)
   const a = subdued ? 0.022 * m : 0.028 * m;

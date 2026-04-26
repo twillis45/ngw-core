@@ -65,17 +65,37 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
 
       {/* Hero photo — desaturated during analysis, lifts on completion */}
       <div style={{
-        position: 'absolute', inset: 0, overflow: 'hidden',
+        ...(isDesktop ? {
+          // Desktop: panel hugs the hero image width.
+          // Image is in flow so the container shrink-wraps to its rendered size.
+          position: 'relative',
+          height: '100%',
+          width: 'fit-content',
+          margin: '0 auto',
+          overflow: 'hidden',
+          // LCD panel — matches Home empty VF slot exactly
+          background: 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)',
+          boxShadow: VIEWFINDER_INNER_SHADOW,
+        } : {
+          position: 'absolute', inset: 0, overflow: 'hidden',
+        }),
       }}>
         {imagePreview && (
           <img key={imagePreview} src={imagePreview} alt="Analyzing" style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: isDesktop ? 'contain' : 'cover',
+            // Desktop: in-flow so container hugs width. Mobile: absolute cover.
+            ...(isDesktop ? {
+              display: 'block', height: '100%', width: 'auto',
+            } : {
+              position: 'absolute', inset: 0, width: '100%', height: '100%',
+              objectFit: 'cover',
+            }),
             objectPosition: isDesktop ? '50% 50%' : '50% 25%',
-            opacity: analysisComplete ? 0.90 : 0.78,
+            opacity: analysisComplete ? 0.92 : (isDesktop ? 0.88 : 0.78),
             filter: analysisComplete
               ? 'brightness(0.90) saturate(0.85) contrast(0.95)'
-              : 'brightness(0.62) saturate(0.15) contrast(0.88)',
+              : isDesktop
+                ? 'brightness(0.72) saturate(0.30) contrast(0.92)'
+                : 'brightness(0.62) saturate(0.15) contrast(0.88)',
             animation: 'heroZoomIn 12s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
             transition: 'opacity 0.8s ease, filter 1.2s ease',
@@ -89,7 +109,20 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           pointerEvents: 'none',
         }} />
 
-        {/* Glass overlay — lens vignette + directional key reflection */}
+        {/* Desktop: glass overlay inside the recessed panel */}
+        {isDesktop && (
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+            background: GLASS_REFLECTION, opacity: 0.4,
+            transform: glassReflectionTransform(tilt), willChange: 'transform',
+          }} />
+        </div>
+        )}
+
+        {/* Mobile: glass overlay — full VF treatment */}
+        {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
           <div style={{
@@ -98,11 +131,14 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
             transform: glassReflectionTransform(tilt), willChange: 'transform',
           }} />
         </div>
-        {/* Inner shadow — machined bezel */}
+        )}
+        {/* Inner shadow — machined bezel (mobile only — desktop gets it from panel boxShadow) */}
+        {!isDesktop && (
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
           boxShadow: VIEWFINDER_INNER_SHADOW,
         }} />
+        )}
       </div>
 
       {/* Pattern tease on completion */}

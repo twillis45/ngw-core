@@ -2374,7 +2374,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             borderRadius: 0,
             visibility: isZoomed ? 'hidden' : 'visible',
             overflow: 'hidden',
-            backgroundColor: '#000',
+            // Desktop: deep recessed LCD panel — matching ProcessingScreen trough.
+            // Mobile: plain black.
+            backgroundColor: isDesktop ? undefined : '#000',
+            // LCD panel — matches Home empty VF slot exactly
+            background: isDesktop
+              ? 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)'
+              : '#000',
+            boxShadow: isDesktop ? VIEWFINDER_INNER_SHADOW : undefined,
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
             transition: 'none',
@@ -2396,7 +2403,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
               transition: heroScale <= 1.01 ? 'transform 0.15s ease-out' : 'none',
               willChange: heroScale > 1.01 ? 'transform' : undefined,
               animation: heroScale <= 1.01
-                ? 'heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards'
+                ? 'heroRevealLift 1.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards, heroZoomInSlow 1.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards'
                 : 'none',
               transformOrigin: 'center center',
             }} />
@@ -2495,17 +2502,11 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             background: 'linear-gradient(to bottom, transparent 45%, rgba(9,9,11,0.35) 75%, rgba(9,9,11,0.65) 100%)',
             pointerEvents: 'none',
           }} />
-          {/* Glass panel — lens vignette + upper-left key light reflection (identical to HomeScreen) */}
+          {/* Glass panel — lens vignette + key light reflection inside recessed panel */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 2, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: isDesktop ? 0.4 : 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
           </div>
-          {/* Inner shadow — identical to HomeScreen */}
-          <div style={{
-            position: 'absolute', inset: 0, borderRadius: 0,
-            pointerEvents: 'none', zIndex: 3,
-            boxShadow: VIEWFINDER_INNER_SHADOW,
-          }} />
           {/* ── Result identification overlay — Apple-style metadata on the photo ──
               Pattern name + confidence sit on the lower third of the VF so the
               answer is ON the photo, not below it. The vignette gradient at
@@ -3790,6 +3791,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           </div>
         );
       })()}
+
+      {/* Hero reveal — bridges the desaturated ProcessingScreen look to full color */}
+      <style>{`
+        @keyframes heroRevealLift {
+          0%   { filter: brightness(0.90) saturate(0.85) contrast(0.95); opacity: 0.90; }
+          100% { filter: brightness(1) saturate(1) contrast(1); opacity: 1; }
+        }
+      `}</style>
 
       {/* Result teach keyframes */}
       <style>{`

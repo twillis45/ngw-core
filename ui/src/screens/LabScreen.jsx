@@ -952,6 +952,7 @@ export default function LabScreen({ onSessionLog, onLookLibrary } = {}) {
                 className={`lab-nav__tab${activeSection === section.id ? ' lab-nav__tab--active' : ''}`}
                 onClick={() => handleSectionSwitch(section.id)}
                 type="button"
+                data-testid={`lab-nav-${section.id}`}
               >
                 {hasError && activeSection !== section.id && (
                   <span className="lab-nav__alert-dot" />

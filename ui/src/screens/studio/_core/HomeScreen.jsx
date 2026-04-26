@@ -1296,30 +1296,33 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         role="button"
         aria-label={hasImage ? 'Photo loaded — tap to swap, long-press to clear' : 'Tap to load a photo'}
         style={{
-          // Full-bleed on ALL viewports — photo fills the entire screen.
-          // Brand and dome overlay on top, not alongside.
+          // Desktop loaded: 720px bounded panel matching Processing.
+          // Desktop empty: full-bleed. Mobile: absolute fill.
           position: isDesktop ? 'relative' : 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: isDesktop ? '100%' : undefined,
-          gridColumn: isDesktop ? '1 / -1' : undefined,
-          gridRow: isDesktop ? '1 / -1' : undefined,
+          ...(isDesktop ? {
+            height: '100%',
+            gridColumn: '1 / -1', gridRow: '1 / -1',
+            ...(hasImage ? { width: 720, justifySelf: 'center' } : {}),
+          } : {
+            top: 0, left: 0, right: 0, bottom: 0,
+          }),
           borderRadius: 0,
           // Edge-to-edge viewfinder — no rounded corners, flush with screen edges.
           // Drag-over: faint steel tint to signal accept state.
           border: isDragOver ? `1.5px solid rgba(132, 158, 184,0.40)` : 'none',
           overflow: 'hidden',
           cursor: 'pointer',
-          // VF surface — transparent so it inherits the Carbon Black body
-          // through the MatteBackground. LCD realism comes from overlay layers,
-          // not a separate fill color.
-          backgroundColor: 'transparent',
-          // Recessed LCD bezel — deep machined channel around the panel.
-          // Top/left edges are dark (in shadow), bottom/right catch a faint highlight.
+          // VF surface — dark LCD panel when housing a photo on desktop,
+          // transparent on mobile so it inherits the Carbon Black body
+          // through the MatteBackground.
+          // LCD panel — matches Home empty VF slot exactly
+          backgroundColor: (isDesktop && hasImage) ? undefined : 'transparent',
+          background: (isDesktop && hasImage)
+            ? 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)'
+            : 'transparent',
           boxShadow: isDragOver
             ? 'inset 0 0 40px rgba(132, 158, 184,0.15)'
+            : (isDesktop && hasImage) ? VIEWFINDER_INNER_SHADOW
             : (hasImage || isDesktop) ? 'none' : [
                 // Deep bezel channel — panel is recessed into the body
                 'inset 0 3px 8px rgba(0,0,0,0.85)',
@@ -1529,7 +1532,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               position: 'absolute', inset: 0, width: '100%', height: '100%',
               objectFit: isDesktop ? 'contain' : 'cover',
               objectPosition: isDesktop ? '50% 50%' : '50% 25%',
-              opacity: isDesktop ? 0.92 : 0.85, zIndex: 8,
+              opacity: isDesktop ? 0.95 : 0.85, zIndex: 8,
               animation: 'heroZoomIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
               transformOrigin: 'center 25%',
             }} />
@@ -1572,7 +1575,8 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           }} />
         )}
 
-        {/* 9 — Glass panel overlay — mobile only. Desktop VF slot provides its own glass treatment. */}
+        {/* 9 — Glass panel overlay — shows inside recessed panel on both mobile and desktop loaded.
+               Mobile empty: reduced opacity. Desktop empty: handled by VF slot above. */}
         {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, opacity: hasImage ? 1 : 0.6 }} />
@@ -1580,7 +1584,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         </div>
         )}
 
-        {/* 10 — Inner shadow — mobile only. Desktop doesn't need VF bezel on full-bleed photo. */}
+        {/* 10 — Inner shadow — mobile only (desktop loaded gets it from panel boxShadow). */}
         {!isDesktop && (
         <div style={{
           position: 'absolute', inset: 0, borderRadius: 0,

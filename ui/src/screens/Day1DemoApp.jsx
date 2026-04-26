@@ -645,7 +645,14 @@ function mapApiResult(data) {
 if (typeof window !== 'undefined') window.__ngwMapResult = mapApiResult;
 
 export default function Day1DemoApp() {
-  const [screen, setScreen] = useState('home');
+  const [screen, _setScreen] = useState('home');
+  const prevScreenRef = useRef('home');
+  const setScreen = useCallback((next) => {
+    _setScreen(prev => {
+      prevScreenRef.current = prev;
+      return next;
+    });
+  }, []);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -1751,7 +1758,10 @@ export default function Day1DemoApp() {
   const showTestingBadge = appIsAdmin && appPlan !== 'enterprise';
 
   return (
-    <div key={screen} style={{ animation: 'screenFadeIn 0.2s ease both', position: 'relative' }}>
+    <div key={screen} style={{
+      animation: `${prevScreenRef.current === 'processing' && screen === 'result' ? 'screenRevealIn' : 'screenFadeIn'} ${prevScreenRef.current === 'processing' && screen === 'result' ? '0.45s' : '0.2s'} ease both`,
+      position: 'relative',
+    }}>
       {screenContent}
       {/* Admin tier testing indicator — fixed bottom-right corner */}
       {showTestingBadge && (
@@ -1813,7 +1823,10 @@ export default function Day1DemoApp() {
           >×</button>
         </div>
       )}
-      <style>{`@keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }`}</style>
+      <style>{`
+        @keyframes screenFadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes screenRevealIn { from { opacity: 0; } 40% { opacity: 0.6; } to { opacity: 1; } }
+      `}</style>
       {showVideoCapture && (
         <VideoFrameCapture
           onCapture={(frameFile) => {

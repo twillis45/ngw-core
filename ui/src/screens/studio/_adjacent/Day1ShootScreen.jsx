@@ -1257,7 +1257,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                         setShareStatus('error');
                         setTimeout(() => setShareStatus(null), 3000);
                       }
-                    }} disabled={shareStatus === 'sharing'} style={{
+                    }} disabled={shareStatus === 'sharing'} data-testid="cockpit-share" style={{
                       background: shareStatus === 'shared' ? 'rgba(72,186,136,0.12)' : shareStatus === 'error' ? 'rgba(200,70,70,0.12)' : 'none',
                       border: `1px solid ${shareStatus === 'shared' ? 'rgba(72,186,136,0.30)' : shareStatus === 'error' ? 'rgba(200,70,70,0.25)' : steel(0.15)}`,
                       borderRadius: 6, padding: '3px 8px', cursor: shareStatus === 'sharing' ? 'wait' : 'pointer',
@@ -1420,7 +1420,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                       setShareStatus('error');
                       setTimeout(() => setShareStatus(null), 3000);
                     }
-                  }} disabled={shareStatus === 'sharing'} style={{
+                  }} disabled={shareStatus === 'sharing'} data-testid="cockpit-share" style={{
                     background: shareStatus === 'shared' ? 'rgba(72,186,136,0.12)' : shareStatus === 'error' ? 'rgba(200,70,70,0.12)' : 'none',
                     border: `1px solid ${shareStatus === 'shared' ? 'rgba(72,186,136,0.30)' : shareStatus === 'error' ? 'rgba(200,70,70,0.25)' : steel(0.15)}`,
                     borderRadius: 6, padding: '3px 8px', cursor: shareStatus === 'sharing' ? 'wait' : 'pointer',
