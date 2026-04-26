@@ -214,6 +214,20 @@ function FreeHomeContent({ triggerUpload, handleWizard, lastSetup, dispatch, use
             <span className="home-v2__secondary-hint">Pick a look — run it today</span>
           </div>
         </button>
+        <button
+          type="button"
+          className="home-v2__secondary-btn"
+          onClick={handleWizard}
+          data-testid="home-build-setup"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+          <div className="home-v2__secondary-text">
+            <span className="home-v2__secondary-label">Build a Setup</span>
+            <span className="home-v2__secondary-hint">Describe your vision — get a blueprint</span>
+          </div>
+        </button>
       </div>
 
       {lastSetup && (
@@ -314,7 +328,20 @@ function PaidHomeContent({ result, lastSetup, recentSetups, triggerUpload, handl
             <span className="home-v2__secondary-hint">Pick a look — run it today</span>
           </div>
         </button>
-
+        <button
+          type="button"
+          className="home-v2__secondary-btn"
+          onClick={handleWizard}
+          data-testid="home-build-setup"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+          <div className="home-v2__secondary-text">
+            <span className="home-v2__secondary-label">Build a Setup</span>
+            <span className="home-v2__secondary-hint">Describe your vision — get a blueprint</span>
+          </div>
+        </button>
       </div>
 
       {/* ── Recent setups ── */}

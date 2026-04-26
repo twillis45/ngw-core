@@ -60,16 +60,17 @@ export default function BottomNav({ onShare }) {
       </button>
 
       <button
-        className="bottom-nav__item"
-        onClick={() => dispatch({ type: 'RESET' })}
-        disabled={isWelcome}
+        className={`bottom-nav__item${screen === 'wizard' ? ' bottom-nav__item--active' : ''}`}
+        onClick={() => {
+          dispatch({ type: 'SET_APP_MODE', mode: 'build' });
+          dispatch({ type: 'SET_INTENT', intent: 'mood' });
+        }}
         type="button"
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="9"/>
-          <path d="M12 8v8M8 12h8"/>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
         </svg>
-        <span className="bottom-nav__label">New</span>
+        <span className="bottom-nav__label">Build</span>
       </button>
 
       {isResults && (
