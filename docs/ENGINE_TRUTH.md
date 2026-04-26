@@ -166,6 +166,20 @@ These rules fire independently of `shadow_continuity` — they use different det
 
 **Dark skin fix**: `extract_light_structure()` previously rejected valid pipeline data because `light_structure_pass` does not set `"ok": True` in its output dict. Fixed to check `"ok" is not False` instead of `get("ok", False)`. Without this fix, `cue_report.light_structure` was never populated, and all triangle_isolation contradiction rules silently failed.
 
+### Clamshell Reality-Check Guards (P6)
+
+Applied inside `reference_read.build_lighting_read()` before the pattern is emitted. `reference_read` operates at priority 0, so these guards must mirror the equivalent checks in `cue_inference` — they cannot be overridden downstream.
+
+| Guard | Condition | Action |
+|-------|-----------|--------|
+| Guard A — Pose | `face_orientation.confidence ≥ 0.65` AND `broad_side` known (face turned) | `shadow_pattern = "unknown"` |
+| Guard B — BW + unknown direction | `is_bw == True` AND `key_light_direction in ("unknown", "")` | `shadow_pattern = "unknown"` |
+| Guard C — Topology-only lateral key | `geometry.shadow_pattern in ("unknown", "")` (no shadow-direction corroboration) AND `key_light_direction in {"left", "right", "lower_left", "lower_right"}` | `shadow_pattern = "unknown"` |
+
+Guard C closes a specific gap: when `lighting_inference`'s vertical-topology detection assigns "clamshell" (2-light upper+lower catchlight signature) and `geometry.shadow_pattern` is "unknown" (cue_inference shadow-direction analysis produced no pattern), a clearly lateral key direction makes clamshell physically impossible — the key cannot produce under-chin fill shadow geometry from ≥90° off-axis. Setting the pattern to "unknown" causes the orchestrator's resolver filter (line 1729/1731: `sp != "unknown"`) to skip this candidate and let cue_inference's geometric answer win.
+
+**Not blocked by Guard C**: keys at `top_center`, `upper_left`, `upper_right` — these are legitimate clamshell positions (overhead and near-overhead). Guard C only fires for strictly horizontal or below-horizontal keys.
+
 ### Cascade Demotion
 
 When `reference_read` is demoted for pattern X, any other source that independently agrees on X AND passes the same contradiction test is also demoted. All demoted sources are pushed to priority 4 (below `light_structure` at 3).
@@ -281,16 +295,27 @@ When overfill is detected, paths 1 and 4 are blocked. Overfill (flat multi-sourc
 
 ## 9. Benchmark Suite Status
 
-| Date | PASS | SOFT | FAIL | Total | Notes |
-|------|------|------|------|-------|-------|
+| Date | PASS | SOFT | FAIL | Unique Fixtures | Notes |
+|------|------|------|------|-----------------|-------|
 | 2026-03-16 | — | — | — | — | Baseline (no benchmarks) |
 | 2026-04-12 | 27 | 1 | 0 | 28 | After full tightening sprint |
+| 2026-04-19 | 45 | 11 | 0 | 56* | *56 entries included 14 duplicate rembrandt_t1 IDs — actual unique = 42 |
+| 2026-04-26 | 33 | 9 | 0 | 42 | After NGW-45 Guard C + beauty_clamshell fix; deduplication corrected |
 
-### Remaining SOFT (1)
+### Remaining SOFT (9)
 
-| Benchmark | Det | Exp | Root Cause |
-|-----------|-----|-----|------------|
-| `short_fashion_key` | `low_key` | `short` | No face detected in extreme dark portrait — pose resolver cannot fire; requires either face detection improvement or a dedicated tonal+directional dark-key detector |
+Current SOFT_PASS fixtures are within acceptable_patterns but did not hit the primary expected value. All are pre-existing instabilities — none introduced by the 2026-04-26 engine changes.
+
+Key chronic soft cases: `short_fashion_key` (no face in dark portrait), `high_key` (blown-highlights light-count instability), `window_negative_fill`, `white_seamless_catalog`, `rembrandt_color_editorial_blonde_ocean`, `rembrandt_bw_man_short_light_turned`.
+
+### Removed Benchmarks (not geometric patterns)
+
+The following were removed because they test setup_family / mood / technique — not geometric lighting patterns:
+
+- `corporate_soft_key` — setup_family (corporate portraiture technique)
+- `weak_catchlight` — signal condition (low catchlight intensity)
+- `golden_hour` — mood (outdoor warm tonal condition)
+- `reflector_fill` — technique (reflector as fill modifier)
 
 ### Removed Benchmarks (not geometric patterns)
 
