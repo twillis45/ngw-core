@@ -1094,13 +1094,13 @@ function CCTAxis({ keyKStr, shadowKStr }) {
         {keyK != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 7, height: 10, borderRadius: 2, backgroundColor: 'rgba(245,190,72,0.95)', boxShadow: '0 0 4px rgba(245,190,72,0.5)' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>KEY {keyK}K</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>KEY {keyK}K</span>
           </div>
         )}
         {shadowK != null && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <div style={{ width: 5, height: 8, borderRadius: 2, backgroundColor: 'rgba(168,200,240,0.9)', boxShadow: '0 0 4px rgba(168,200,240,0.5)' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>SHADOW {shadowK}K</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.textSub, ...FONT_SMOOTH }}>SHADOW {shadowK}K</span>
           </div>
         )}
       </div>
@@ -1119,7 +1119,7 @@ function Pill({ label }) {
       boxShadow: PILL_SHADOW,
       flexShrink: 0,
     }}>
-      <span style={{ fontSize: 11, fontWeight: 600, color: C.textMeta, whiteSpace: 'nowrap', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>{label}</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: C.textMeta, whiteSpace: 'nowrap', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'geometricPrecision' }}>{label}</span>
     </div>
   );
 }

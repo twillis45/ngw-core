@@ -397,7 +397,7 @@ body {
   height: 26px;
   min-width: 70px;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: var(--weight-medium);
   padding: 0 14px;
   border: none;
@@ -999,7 +999,7 @@ body {
   display: flex; align-items: center; gap: var(--space-xs); flex-wrap: wrap;
 }
 .my-setups-card__pattern-pill {
-  font-size: 10px; padding: 1px 6px; border-radius: 3px;
+  font-size: 12px; padding: 1px 6px; border-radius: 3px;
   background: rgba(99, 179, 237, 0.12); color: #63b3ed;
   text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap;
 }
@@ -1546,7 +1546,7 @@ body {
   gap: var(--space-xs);
 }
 .rs-pattern-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: var(--weight-semibold);
   letter-spacing: 0.08em;
   color: var(--color-text-secondary);
@@ -3033,7 +3033,7 @@ body {
   color: var(--color-accent);
 }
 .app-header__signin-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: var(--weight-medium);
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -5051,7 +5051,7 @@ body {
   display: flex; align-items: center; gap: 4px;
 }
 .shoot-mode__mode-tagline {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--color-text-secondary);
   padding-left: 2px;
   min-height: 14px;
@@ -5635,7 +5635,7 @@ body {
 }
 /* Learning mode — per-spec hint caption */
 .shoot-light-lg__spec-hint {
-  display: block; font-size: 11px; color: var(--color-text-dim);
+  display: block; font-size: 13px; color: var(--color-text-dim);
   margin-top: 4px; line-height: 1.4; font-weight: var(--weight-normal);
 }
 /* Learning mode — "Why this light?" expandable */
