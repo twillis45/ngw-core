@@ -1,4 +1,4 @@
-// NGW Home — 5-workflow browser smoke test
+// NGW Home — 7-workflow browser smoke test
 //
 // Drives the actual Home UI in Chromium and exercises each entry point:
 //   W1  Analyze a Photo (file picker)             → ref_eval
@@ -6,6 +6,8 @@
 //   W3  Paste image from clipboard                → ref_eval
 //   W4  Browse Proven Setups                      → recipes
 //   W5  Continue last setup / Resume last         → saved_setups
+//   W6  Build a Setup (home secondary button)     → wizard
+//   W7  Build (BottomNav tab)                     → wizard
 //
 // Usage:
 //   node ui/test-home-workflows.mjs                          # default http://localhost:5173/static/ui/
@@ -73,7 +75,7 @@ async function expectScreen(page, selector, label) {
 }
 
 console.log('============================================================');
-console.log('  NGW Home — 5-Workflow Browser Smoke Test');
+console.log('  NGW Home — 7-Workflow Browser Smoke Test');
 console.log(`  ${BASE_URL}`);
 console.log('============================================================');
 
@@ -176,6 +178,53 @@ console.log('============================================================');
     await continueBtn.click();
     const ok = await expectScreen(page, '.ss-screen, .results-screen, [class*="results"]', 'saved_setups or results');
     record('W5', ok, ok ? 'Continue → saved_setups/results' : 'did not navigate');
+  }
+  await page.close();
+}
+
+// ── W6: Build a Setup (home secondary button) ────────────────────────
+{
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errors.push(`W6 ${e.message}`));
+  await loadHome(page);
+  const btn = page.getByTestId('home-build-setup').first();
+  const visible = await btn.isVisible().catch(() => false);
+  if (!visible) {
+    record('W6', false, '"Build a Setup" secondary button did not render on home');
+  } else {
+    await btn.click();
+    const ok = await expectScreen(page, '.screen-heading', 'wizard screen-heading');
+    if (ok) {
+      const heading = await page.$eval('.screen-heading', el => el.textContent.trim()).catch(() => '');
+      const isWizard = heading.toLowerCase().includes('build') || heading.toLowerCase().includes('scratch');
+      record('W6', isWizard, isWizard ? `Build a Setup → wizard ("${heading}")` : `screen-heading found but unexpected: "${heading}"`);
+    } else {
+      record('W6', false, 'did not navigate to wizard');
+    }
+  }
+  await page.close();
+}
+
+// ── W7: Build tab in BottomNav ───────────────────────────────────────
+{
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errors.push(`W7 ${e.message}`));
+  await loadHome(page);
+  // BottomNav "Build" tab — matches by label text since no testid on nav items
+  const buildTab = page.locator('.bottom-nav__item').filter({ hasText: 'Build' }).first();
+  const visible = await buildTab.isVisible().catch(() => false);
+  if (!visible) {
+    record('W7', false, '"Build" BottomNav tab did not render on home');
+  } else {
+    await buildTab.click();
+    const ok = await expectScreen(page, '.screen-heading', 'wizard screen-heading');
+    if (ok) {
+      const heading = await page.$eval('.screen-heading', el => el.textContent.trim()).catch(() => '');
+      const isWizard = heading.toLowerCase().includes('build') || heading.toLowerCase().includes('scratch');
+      record('W7', isWizard, isWizard ? `BottomNav Build → wizard ("${heading}")` : `unexpected heading: "${heading}"`);
+    } else {
+      record('W7', false, 'did not navigate to wizard');
+    }
   }
   await page.close();
 }
