@@ -2558,9 +2558,22 @@ def build_lighting_read(
     # Suppress unless geometry *explicitly* corroborates gobo/slit/projected.
     # Standard patterns (loop, rembrandt, etc.) and "unknown" both indicate the
     # parallel lines are texture noise — reset early so fill/count/family are clean.
+    #
+    # Exception — no-face + dark background: the primary false positive source
+    # for marginal SIP is face-shadow boundary lines misread as parallel gobo
+    # shadows.  When no face mesh is available AND the background is effectively
+    # dark, that source is absent.  Relax the threshold to 0.50 so genuine
+    # projected images with partially-obscured faces (partial visibility causing
+    # face mesh failure) are not suppressed.
     if has_shadow_interruption and sip is not None:
         _sip_par_lr = getattr(sip, "line_parallelism", 1.0) or 1.0
-        if _sip_par_lr < 0.70:
+        _no_face_dark_lr = (
+            scene_ctx is not None
+            and not scene_ctx.has_face_mesh
+            and scene_ctx.bg_is_effectively_dark
+        )
+        _sip_threshold_lr = 0.50 if _no_face_dark_lr else 0.70
+        if _sip_par_lr < _sip_threshold_lr:
             _geo_sp_lr = (getattr(geometry, "shadow_pattern", "unknown") if geometry else "unknown") or "unknown"
             _geo_says_gobo_lr = any(tok in _geo_sp_lr for tok in ("gobo", "slit", "project"))
             if not _geo_says_gobo_lr:
