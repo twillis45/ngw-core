@@ -755,6 +755,99 @@ class TestBackLightStructuralDetector:
         assert r.complexity_profile.rim_load_bearing is False
 
 
+class TestCatchlightUnreliabilityDetector:
+    """Phase 3B Workstream C — catchlight-unreliability detector.
+
+    NOT a glasses-specific detector.  Detects "the catchlight signal
+    is unresolvable" via the resolver's outcome quality.  Hits when:
+      - face is detected, face_quality is good
+      - signal_reliability >= 0.50
+      - resolver source is _demoted
+      - resolver pattern_confidence < 0.25
+      - catchlight_count >= 4
+    Sets catchlight_reliability='blocked', which routes INSUFFICIENT.
+
+    Future cases (mirror selfie, sunglasses, jewelry contamination)
+    expected to also hit this signature.
+    """
+
+    def _make_ct(self, count=5):
+        class _CT:
+            pass
+        ct = _CT()
+        ct.catchlight_count = count
+        ct.cluster_geometry = "linear"
+        ct.bilateral_symmetry_score = 0.00
+        return ct
+
+    def test_unreliability_fires_when_resolver_failed_with_face_intact(self):
+        # Face fine, signals fine, but resolver picked a demoted candidate
+        # at conf=0.15 with many catchlights → contamination signature.
+        r = _make_result(
+            face_detected=True, face_quality="good", signal_strength=0.65,
+            primary_pattern="loop", primary_confidence=0.15,
+            primary_source="lighting_inference_demoted",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.20, "source": "cue_inference_demoted"}],
+            pattern_status=FieldStatus.CONTESTED,
+        )
+        r.cue_report.catchlight_topology = self._make_ct(count=6)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.catchlight_reliability == "blocked"
+        # And the INSUFFICIENT gate must fire
+        r.candidate_credibility = compute_candidate_credibility(r)
+        mode, _, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.INSUFFICIENT
+
+    def test_unreliability_does_not_fire_on_clean_classical(self):
+        # High confidence + clean source → unreliability detector silent.
+        r = _make_result(
+            face_detected=True, face_quality="good", signal_strength=0.65,
+            primary_pattern="rembrandt", primary_confidence=0.95,
+            primary_source="reference_read",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(count=6)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.catchlight_reliability == "reliable"
+
+    def test_unreliability_blocked_when_face_quality_poor(self):
+        # If face quality is poor, the existing INSUFFICIENT gate (face
+        # quality) handles it — unreliability detector should not double-fire.
+        r = _make_result(
+            face_detected=True, face_quality="poor", signal_strength=0.65,
+            primary_pattern="loop", primary_confidence=0.15,
+            primary_source="lighting_inference_demoted",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(count=6)
+        r.complexity_profile = compute_scene_complexity(r)
+        # face_quality=poor short-circuits — reliability stays unflagged
+        # because the unreliability check requires face_quality != "poor".
+        # The existing face_quality INSUFFICIENT gate will route correctly.
+        assert r.complexity_profile.catchlight_reliability == "reliable"
+
+    def test_unreliability_blocked_when_few_catchlights(self):
+        # catchlight_count < 4 → not the contamination signature.
+        r = _make_result(
+            face_detected=True, face_quality="good", signal_strength=0.65,
+            primary_pattern="loop", primary_confidence=0.15,
+            primary_source="lighting_inference_demoted",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(count=2)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.catchlight_reliability == "reliable"
+
+    def test_unreliability_blocked_when_high_confidence_resolver(self):
+        # Resolver picked at high conf — even with many catchlights and a
+        # demoted source, the resolver's confidence is the trump.
+        r = _make_result(
+            face_detected=True, face_quality="good", signal_strength=0.65,
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="lighting_inference_demoted",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(count=6)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.catchlight_reliability == "reliable"
+
+
 class TestPhase1Preserved:
 
     def test_no_face_routes_insufficient(self):

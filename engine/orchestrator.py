@@ -2567,15 +2567,63 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
         cp.ambient_contamination = 0.6
         notes.append("window_light_gradient flag set")
 
-    # ── catchlight_reliability — from no_face / earring contamination ───
+    # ── catchlight_reliability — Phase 3A (no_face/earring) + Phase 3B ──
+    # Phase 3B addition: detect "catchlight signal is unreliable" via the
+    # resolver's outcome quality — when face is detected and signal_strength
+    # is fine but the resolver produced a low-confidence demoted winner,
+    # catchlights are likely contaminated (eyeglass lens reflections,
+    # mirrored sunglasses, jewelry, glossy surfaces, etc.).  This is NOT
+    # a glasses-specific detector — it is a "catchlights produced an
+    # unresolvable signal" detector.  The test case
+    # (insufficient_glasses_corporate_t1) hits this signature; other
+    # future cases (mirror selfie, heavy reflective contamination) will
+    # also hit it.  Phase 3C may add per-source detectors that distinguish.
     no_face = False
     fv = result.face_validation
+    sr = result.signal_reliability  # also used in capture_quality_score below
     if fv is not None and not getattr(fv, "face_detected", False):
         no_face = True
     earring = bool(getattr(ecf, "earring_catchlight_contamination", False)) if ecf else False
+
+    # Phase 3B catchlight-unreliability signature:
+    #   - face is good (not blocked, not poor quality)
+    #   - signal_reliability.overall_signal_strength is otherwise fine (≥ 0.50)
+    #   - resolver source is demoted
+    #   - resolver pattern_confidence is very weak (< 0.25)
+    #   - cue_report.catchlight_topology has many catchlights (>= 4)
+    # Together these mean: face is fine, signals are fine, BUT the
+    # catchlight detector returned many candidates and the resolver
+    # could not produce a confident pattern from them — the catchlight
+    # signal itself is contaminated.
+    catchlight_unreliable = False
+    if (
+        not no_face
+        and fv is not None
+        and getattr(fv, "face_quality", "") != "poor"
+        and sr is not None
+        and getattr(sr, "overall_signal_strength", 1.0) >= 0.50
+    ):
+        src = (getattr(result, "authoritative_pattern_source", "") or "")
+        pc = getattr(result, "pattern_candidates", None)
+        primary_conf = float(pc.primary.confidence or 0.0) if (pc and pc.primary) else 0.0
+        ct_count = int(getattr(ct, "catchlight_count", 0) or 0) if ct else 0
+        if (
+            "_demoted" in src
+            and primary_conf < 0.25
+            and ct_count >= 4
+        ):
+            catchlight_unreliable = True
+
     if no_face:
         cp.catchlight_reliability = "blocked"
         cp.catchlight_reliability_reason = "no_face"
+    elif catchlight_unreliable:
+        cp.catchlight_reliability = "blocked"
+        cp.catchlight_reliability_reason = "low_confidence_demoted_winner_with_many_catchlights"
+        notes.append(
+            "catchlight reliability blocked: many catchlights but no confident "
+            "pattern resolution (likely glasses/mirror/jewelry contamination)"
+        )
     elif earring:
         cp.catchlight_reliability = "degraded"
         cp.catchlight_reliability_reason = "earring_contamination"
@@ -2584,7 +2632,8 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
         cp.catchlight_reliability_reason = ""
 
     # ── capture_quality_score — from signal_reliability ─────────────────
-    sr = result.signal_reliability
+    # (sr was set near the top of the function for the catchlight-
+    # reliability detector; reuse here.)
     if sr is not None:
         cp.capture_quality_score = float(getattr(sr, "overall_signal_strength", 1.0) or 1.0)
 
