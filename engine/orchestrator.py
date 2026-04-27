@@ -2950,6 +2950,18 @@ def compute_candidate_credibility(
     SOURCE_TRUST_CLEAN      = w.source_trust_clean
     NEUTRAL_BASELINE        = w.neutral_baseline
 
+    # Pre-compute paradox state once per result (Phase 3D/A) — shared
+    # across all candidates within the same compute call.
+    _paradox_flags = _detect_signal_paradoxes(result)
+    _any_paradox_active = any(_paradox_flags.values())
+    _ra_for_paradox = getattr(result, "reference_analysis", None)
+    _lr_for_paradox = getattr(_ra_for_paradox, "lighting_read", None) if _ra_for_paradox else None
+    _catchlight_paradox = any(
+        "catchlight_shadow_paradox" in (cn or "")
+        for cn in (getattr(_lr_for_paradox, "contradictions", []) or [])
+    )
+    _paradox_blocks_forgiveness = _any_paradox_active or _catchlight_paradox
+
     out: List[CandidateCredibility] = []
     for c in cands:
         cred = NEUTRAL_BASELINE
@@ -2970,21 +2982,79 @@ def compute_candidate_credibility(
             cred += EV_PATTERN_MATCH_WEIGHT
             evidence_for.append("reference_read_pattern_match")
 
-        # Contradiction-burden evidence
+        # ── Phase 3D/A — demotion-forgiveness eligibility check ───────
+        # Compute BEFORE applying contradictions and source-trust.  When
+        # forgiveness fires, demotion-event contradictions ("demoted X",
+        # "cascade ... X") for this candidate's pattern are skipped —
+        # they describe the same demotion event the trust multiplier
+        # was capturing, so applying both is double-counting.
+        # Genuine classifier-disagreement contradictions ("X says A but
+        # Y says B") are still applied — those are independent of the
+        # demotion event.
+        src = c.source or ""
+        forgiveness_fires = False
+        independent_supports = 0
+        if "_demoted" in src and not _paradox_blocks_forgiveness:
+            # Identify the candidate's own source classifier.
+            src_classifier = src.replace("_demoted", "")
+            if src_classifier.startswith("specialty:"):
+                src_classifier = src_classifier[len("specialty:"):]
+
+            # Count INDEPENDENT raw-signal supports (other classifiers
+            # whose raw pattern field equals c.pattern).
+            for cn, cp_val in (
+                ("cue_inference",      cue_pattern),
+                ("light_structure",    ls_pattern),
+                ("lighting_inference", intel_pattern),
+                ("reference_read",     rr_pattern),
+            ):
+                if cn == src_classifier:
+                    continue
+                if cp_val and cp_val == c.pattern:
+                    independent_supports += 1
+
+            if independent_supports >= 1:
+                forgiveness_fires = True
+
+        # Contradiction-burden evidence (forgiveness-aware).
+        # Pre-Phase-3D/A: matched contradictions where pattern name
+        # appeared AND ("demoted" or "cascade") was in the text.  This
+        # captured the resolver's contradiction-engine demotion events.
+        # Phase 3D/A skips those same demotion events when forgiveness
+        # fires — they represent the same event the trust multiplier
+        # was capturing, and double-counting drags credibility below
+        # the long-term BOUNDED floor for cases forgiveness was meant
+        # to recover.  All other contradiction-handling behavior is
+        # preserved exactly as Phase 3B/C.
         for contra in contradictions:
-            # Match contradictions that explicitly demoted this pattern
-            if c.pattern in contra and ("demoted" in contra or "cascade" in contra):
-                cred -= EV_CONTRADICTION_WEIGHT
-                evidence_against.append(f"contradiction:{contra[:80]}")
+            if c.pattern not in contra:
+                continue
+            if not ("demoted" in contra or "cascade" in contra):
+                continue
+            if forgiveness_fires:
+                # Skip the same demotion event the multiplier captured.
+                continue
+            cred -= EV_CONTRADICTION_WEIGHT
+            evidence_against.append(f"contradiction:{contra[:80]}")
 
         # Source-trust multiplier (does NOT mix with raw confidence)
-        src = c.source or ""
         if "ambiguity_fallback" in src:
             trust = SOURCE_TRUST_FALLBACK
             evidence_against.append("source_ambiguity_fallback")
         elif "_demoted" in src:
-            trust = SOURCE_TRUST_DEMOTED
-            evidence_against.append("source_demoted")
+            if forgiveness_fires:
+                trust = SOURCE_TRUST_CLEAN
+                evidence_for.append(
+                    f"demotion_forgiven_by_independent_corroboration_x{independent_supports}"
+                )
+            elif _paradox_blocks_forgiveness:
+                trust = SOURCE_TRUST_DEMOTED
+                evidence_against.append("source_demoted")
+                evidence_against.append("forgiveness_blocked_by_active_paradox")
+            else:
+                # Demoted but no independent corroboration.
+                trust = SOURCE_TRUST_DEMOTED
+                evidence_against.append("source_demoted")
         else:
             trust = SOURCE_TRUST_CLEAN
         cred *= trust
@@ -3178,6 +3248,28 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         # decision.
         resolver_primary_pattern = pc.primary.pattern if pc.primary else ""
         credibility_overrules_resolver = c0.pattern != resolver_primary_pattern
+        # Phase 3D/A — forgiveness-aware overrule.
+        # When demotion-forgiveness fires for the alternate AND the
+        # alternate's pattern disagrees with the resolver primary, the
+        # forgiven alt represents a credible counter-narrative even if
+        # tied with the resolver primary in credibility ranking.  Stable
+        # sort can place the resolver primary ahead of a tied alt by
+        # insertion order, mechanically blocking the gate; this branch
+        # restores it for the specific case where forgiveness recovered
+        # an alt that disagrees with the resolver pick.  Does NOT loosen
+        # the gate for non-forgiveness cases — `overcast_natural`-style
+        # tied-credibility-on-clean-sources cases are unchanged.
+        if not credibility_overrules_resolver:
+            for cand in (c0, c1):
+                if (
+                    cand.pattern != resolver_primary_pattern
+                    and any(
+                        "demotion_forgiven" in str(e)
+                        for e in (cand.evidence_for or [])
+                    )
+                ):
+                    credibility_overrules_resolver = True
+                    break
         if (
             patterns_disagree
             and c0.credibility >= 0.55 and c1.credibility >= 0.45

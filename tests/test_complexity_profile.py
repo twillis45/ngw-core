@@ -848,6 +848,144 @@ class TestCatchlightUnreliabilityDetector:
         assert r.complexity_profile.catchlight_reliability == "reliable"
 
 
+class TestDemotionForgiveness:
+    """Phase 3D/A — demotion-forgiveness lift in compute_candidate_credibility.
+
+    When a demoted candidate has independent structural support from a
+    raw-signal classifier OTHER than its own source, AND no paradox
+    is active, the demotion is forgiven (trust multiplier lifted from
+    SOURCE_TRUST_DEMOTED to SOURCE_TRUST_CLEAN).  Demotion-event
+    contradictions for the same candidate are also skipped to avoid
+    double-counting.  Other contradictions (classifier-disagreement
+    "X says A but Y says B") still apply unchanged from Phase 3B.
+    """
+
+    def _make_with_forgiveness_setup(self, *, primary_pat="loop", alt_pat="rembrandt"):
+        """Helper: build a result where the alt is demoted AND has
+        independent corroboration from cue_inference geometry.
+        """
+        r = _make_result(
+            primary_pattern=primary_pat, primary_confidence=0.70,
+            primary_source="light_structure",
+            alternates=[
+                {"pattern": alt_pat, "confidence": 0.20, "source": "lighting_inference_demoted"},
+            ],
+            pattern_status=FieldStatus.CONTESTED,
+            cue_geo_pattern=alt_pat,  # independent corroboration: cue_inference votes alt
+            intel_pattern=alt_pat,    # lighting_inference also votes alt (same as alt's source)
+        )
+        return r
+
+    def test_forgiveness_fires_with_independent_corroboration(self):
+        # alt has source=lighting_inference_demoted; cue_inference votes
+        # the same pattern (independent of alt's source).  No paradox.
+        # → forgiveness fires; alt credibility lifted to clean trust.
+        r = self._make_with_forgiveness_setup()
+        cc = compute_candidate_credibility(r)
+        rembrandt_cc = next((c for c in cc if c.pattern == "rembrandt"), None)
+        assert rembrandt_cc is not None
+        assert rembrandt_cc.source_trust_multiplier == 1.00  # forgiven, not 0.70
+        # Must have an explicit forgiveness note in evidence_for
+        assert any("demotion_forgiven_by_independent_corroboration"
+                   in str(e) for e in rembrandt_cc.evidence_for)
+        # The "source_demoted" tag is NOT added when forgiveness fires
+        assert "source_demoted" not in (rembrandt_cc.evidence_against or [])
+
+    def test_forgiveness_blocked_by_active_paradox(self):
+        # Same forgiveness setup, but a catchlight-shadow paradox is
+        # active in lighting_read.contradictions.  Forgiveness must NOT
+        # fire — paradox indicates the structural reality may itself
+        # be a measurement artifact.
+        r = self._make_with_forgiveness_setup()
+        r.reference_analysis.lighting_read.contradictions = [
+            "catchlight_shadow_paradox: shadow→key=upper_right vs catchlight@7→key=lower_left",
+        ]
+        cc = compute_candidate_credibility(r)
+        rembrandt_cc = next((c for c in cc if c.pattern == "rembrandt"), None)
+        assert rembrandt_cc is not None
+        # Forgiveness blocked → trust multiplier stays demoted
+        assert rembrandt_cc.source_trust_multiplier == 0.70
+        # Explicit telemetry that forgiveness was blocked by paradox
+        assert "forgiveness_blocked_by_active_paradox" in (rembrandt_cc.evidence_against or [])
+        # No forgiveness note in evidence_for
+        assert not any("demotion_forgiven" in str(e)
+                       for e in rembrandt_cc.evidence_for)
+
+    def test_forgiveness_does_not_fire_for_single_source_demoted(self):
+        # alt is demoted but ONLY its own classifier (lighting_inference)
+        # voted for it.  No independent corroboration → forgiveness
+        # does NOT fire; trust stays demoted.
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.70,
+            primary_source="reference_read",
+            alternates=[
+                {"pattern": "rembrandt", "confidence": 0.20, "source": "lighting_inference_demoted"},
+            ],
+            pattern_status=FieldStatus.CONTESTED,
+            intel_pattern="rembrandt",   # alt's OWN source classifier votes alt
+            # NO cue_geo_pattern set → cue_inference does not vote rembrandt
+            # NO ls_pattern set explicitly → light_structure does not vote rembrandt
+        )
+        cc = compute_candidate_credibility(r)
+        rembrandt_cc = next((c for c in cc if c.pattern == "rembrandt"), None)
+        assert rembrandt_cc is not None
+        assert rembrandt_cc.source_trust_multiplier == 0.70
+        assert not any("demotion_forgiven" in str(e)
+                       for e in rembrandt_cc.evidence_for)
+
+    def test_forgiveness_does_not_invent_evidence(self):
+        # alt is demoted; cue_inference votes a DIFFERENT pattern.
+        # Forgiveness must not pretend independent corroboration exists.
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.70,
+            primary_source="light_structure",
+            alternates=[
+                {"pattern": "rembrandt", "confidence": 0.20, "source": "lighting_inference_demoted"},
+            ],
+            pattern_status=FieldStatus.CONTESTED,
+            cue_geo_pattern="butterfly",  # cue does NOT vote rembrandt
+        )
+        cc = compute_candidate_credibility(r)
+        rembrandt_cc = next((c for c in cc if c.pattern == "rembrandt"), None)
+        assert rembrandt_cc is not None
+        assert rembrandt_cc.source_trust_multiplier == 0.70
+        # No invented forgiveness evidence
+        assert not any("demotion_forgiven" in str(e)
+                       for e in rembrandt_cc.evidence_for)
+
+    def test_forgiveness_skips_demotion_event_contradictions_for_self(self):
+        # When forgiveness fires, the contradiction-burden penalties for
+        # demotion-event contradictions naming the candidate's own
+        # pattern are skipped (avoid double-counting the demotion event
+        # already captured by the trust multiplier change).
+        r = self._make_with_forgiveness_setup()
+        # Plant a demotion-event contradiction for rembrandt
+        r.pattern_candidates.contradictions = [
+            "signal contradiction (1.00) demoted lighting_inference 'rembrandt'",
+        ]
+        cc = compute_candidate_credibility(r)
+        rembrandt_cc = next((c for c in cc if c.pattern == "rembrandt"), None)
+        assert rembrandt_cc is not None
+        # Forgiveness fires; the demotion contradiction for rembrandt was
+        # NOT counted against credibility (no "contradiction:" entry in
+        # evidence_against for the demoted-rembrandt contradiction).
+        demotion_entries = [e for e in (rembrandt_cc.evidence_against or [])
+                            if "demoted lighting_inference 'rembrandt'" in str(e)]
+        assert demotion_entries == []
+
+    def test_forgiveness_recovers_bounded_long_term_predicate(self):
+        # End-to-end: with forgiveness firing, the long-term BOUNDED
+        # predicate fires (rembrandt cred lifts to match loop, both at
+        # 0.70 with patterns_disagree, all other gates pass, and the
+        # forgiveness-aware credibility_overrules_resolver branch fires
+        # because the forgiven alt disagrees with the resolver primary).
+        r = self._make_with_forgiveness_setup()
+        _populate_phase3_layers(r)
+        mode, rationale, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.BOUNDED
+        assert "credibility" in rationale.lower()
+
+
 class TestOutcomeTrustRisk:
     """Phase 3C Workstream B — outcome_trust_risk detector for INS routing.
 
