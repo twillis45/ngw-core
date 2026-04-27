@@ -2714,8 +2714,39 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
     return cp
 
 
-def compute_candidate_credibility(result: "AnalysisResult") -> List[CandidateCredibility]:
-    """Phase 3B — compute photographic-evidence credibility for top candidates.
+# ── Credibility weight constants (Phase 3B defaults) ───────────────────────
+# Default values were arrived at empirically during Phase 3B against the
+# 48-benchmark corpus.  Phase 3C calibration sweep
+# (engine.benchmark_v2.credibility_sweep) tests alternative settings and
+# reports per-config metrics; final values frozen via this module.
+DEFAULT_CRED_EV_MATCH_WEIGHT       = 0.10  # per upstream-classifier pattern match
+DEFAULT_CRED_CONTRADICTION_WEIGHT  = 0.15  # per contradiction naming this pattern
+DEFAULT_CRED_SOURCE_TRUST_DEMOTED  = 0.70
+DEFAULT_CRED_SOURCE_TRUST_FALLBACK = 0.50
+DEFAULT_CRED_SOURCE_TRUST_CLEAN    = 1.00
+CRED_NEUTRAL_BASELINE              = 0.50
+
+
+@dataclass
+class CredibilityWeights:
+    """Tunable weights for compute_candidate_credibility.
+
+    Phase 3C — exposed so the calibration sweep can test alternative
+    settings without monkey-patching.  Defaults match Phase 3B values.
+    """
+    ev_match_weight:       float = DEFAULT_CRED_EV_MATCH_WEIGHT
+    contradiction_weight:  float = DEFAULT_CRED_CONTRADICTION_WEIGHT
+    source_trust_demoted:  float = DEFAULT_CRED_SOURCE_TRUST_DEMOTED
+    source_trust_fallback: float = DEFAULT_CRED_SOURCE_TRUST_FALLBACK
+    source_trust_clean:    float = DEFAULT_CRED_SOURCE_TRUST_CLEAN
+    neutral_baseline:      float = CRED_NEUTRAL_BASELINE
+
+
+def compute_candidate_credibility(
+    result: "AnalysisResult",
+    weights: Optional[CredibilityWeights] = None,
+) -> List[CandidateCredibility]:
+    """Phase 3B/C — compute photographic-evidence credibility for top candidates.
 
     Runs AFTER resolve_pattern_candidates() and before mode routing.
     Does NOT modify the resolver; consumes its output and produces a
@@ -2726,19 +2757,21 @@ def compute_candidate_credibility(result: "AnalysisResult") -> List[CandidateCre
     photographic evidence available from upstream classifiers + signals.
 
     Algorithm (deterministic, evidence-template-based):
-      1. Start at neutral 0.50.
+      1. Start at neutral baseline (default 0.50).
       2. For each upstream classifier whose pattern matches the candidate,
-         add evidence_for and a small credibility bonus.
+         add evidence_for and a per-match bonus.
       3. For each contradiction in pattern_candidates.contradictions that
          names the candidate's pattern as demoted, subtract.
-      4. Multiply by source_trust_multiplier (1.0 clean, 0.7 demoted,
-         0.5 ambiguity_fallback) — preserves the resolver's penalty for
-         demoted sources without conflating them with photographic fit.
+      4. Multiply by source_trust_multiplier (clean/demoted/fallback)
+         — preserves the resolver's penalty for demoted sources without
+         conflating them with photographic fit.
       5. Clamp to [0.0, 1.0].
 
-    No prose generation.  No magic numbers buried in conditionals — all
-    weights named below.
+    No prose generation.  All weights named in CredibilityWeights and
+    tunable via the `weights` parameter (Phase 3C calibration).
     """
+    w = weights if weights is not None else CredibilityWeights()
+
     pc = result.pattern_candidates
     if pc is None or pc.primary is None:
         return []
@@ -2770,13 +2803,13 @@ def compute_candidate_credibility(result: "AnalysisResult") -> List[CandidateCre
     lr = getattr(ra, "lighting_read", None) if ra else None
     rr_pattern = (getattr(lr, "shadow_pattern", "") or "") if lr else ""
 
-    # Weight constants (named, not buried)
-    EV_PATTERN_MATCH_WEIGHT = 0.10        # per upstream classifier matching
-    EV_CONTRADICTION_WEIGHT = 0.15        # per contradiction naming this pattern
-    SOURCE_TRUST_DEMOTED = 0.70
-    SOURCE_TRUST_FALLBACK = 0.50
-    SOURCE_TRUST_CLEAN = 1.00
-    NEUTRAL_BASELINE = 0.50
+    # Weight constants — read from CredibilityWeights for tunability
+    EV_PATTERN_MATCH_WEIGHT = w.ev_match_weight
+    EV_CONTRADICTION_WEIGHT = w.contradiction_weight
+    SOURCE_TRUST_DEMOTED    = w.source_trust_demoted
+    SOURCE_TRUST_FALLBACK   = w.source_trust_fallback
+    SOURCE_TRUST_CLEAN      = w.source_trust_clean
+    NEUTRAL_BASELINE        = w.neutral_baseline
 
     out: List[CandidateCredibility] = []
     for c in cands:
