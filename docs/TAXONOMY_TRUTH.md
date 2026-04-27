@@ -105,6 +105,23 @@ Keyed on `(gear_profile, modifier_family, environment)`.
 
 ## 3. Taxonomy Enforcement Rules
 
+### Rule 0: Orthogonal Concept Separation
+
+NGW recognizes **four orthogonal concepts** about a photograph. They compose without overlap; mixing abstraction levels between them is a TX violation:
+
+| Concept | What it describes | Enum / Field |
+|---------|-------------------|--------------|
+| `pattern` | Geometric face-shadow pattern (loop, rembrandt, butterfly, clamshell, etc.) | `LightingPattern` / `authoritative_pattern` |
+| `setup_family` | Practical setup family for recreation (single_key_loop, dramatic_chiaroscuro, etc.) | `RecreationSetup.setup_family` |
+| `source_context` | Environmental / source-type descriptor (window, golden_hour, overcast) | `AnalysisResult.source_context` |
+| `analysis_mode` | The engine's *answer shape* for this image (classical / bounded / hybrid / insufficient) | `AnalysisMode` / `analysis_mode` |
+
+**Rules:**
+- These four are computed in order: `pattern` first, then `setup_family`, then `source_context`, then `analysis_mode`. Earlier concepts must not consume later ones.
+- A value belonging to one concept must never appear as a peer value of another. Source-context strings (`golden_hour`, `overcast_natural`) must not become pattern values; mode names must not become pattern values; etc.
+- `analysis_mode` is the **headline** output of the analyzer. The other three are mode-conditional content per `docs/ENGINE_TRUTH.md` §14.
+- See `engine/orchestrator.py:resolve_pattern_candidates()` for the source-context leak prevention guard (`_SOURCE_CONTEXT_LEAK`) that enforces this rule at runtime.
+
 ### Rule 1: No New Categories Outside Enums
 
 Any new categorical value (pattern, modifier, environment, etc.) MUST be added to

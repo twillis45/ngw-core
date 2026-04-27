@@ -144,6 +144,19 @@ def _build_record(result: "AnalysisResult") -> Dict[str, Any]:
     # ── Stage 1 definitive pattern (if short-circuit fired) ──────────────────
     definitive_pattern: Optional[str] = getattr(result, "definitive_pattern", None)
 
+    # ── Complex-Lighting Strategy Phase 1 — analysis mode (router output) ───
+    # Surfaces the headline answer-shape (classical/bounded/hybrid/insufficient)
+    # to the L1 telemetry stream.  Required for Phase 2 gate D — shadow-mode
+    # production observation of false-positive HYBRID and false-positive
+    # INSUFFICIENT rates over a two-week window before Phase 4 UI ships.
+    # mode_confidence is router certainty in the chosen mode shape; per
+    # strategy revision §4 it is a separate concept from pattern confidence
+    # and must not be conflated with it.
+    am = getattr(result, "analysis_mode", None)
+    analysis_mode_value = (am.value if hasattr(am, "value") else str(am)) if am else "classical"
+    mode_confidence = round(float(getattr(result, "mode_confidence", 0.0) or 0.0), 4)
+    mode_rationale = getattr(result, "mode_rationale", "") or ""
+
     # ── Assemble ─────────────────────────────────────────────────────────────
     return {
         "analysis_id":        analysis_id,
@@ -163,4 +176,8 @@ def _build_record(result: "AnalysisResult") -> Dict[str, Any]:
         # Expert Deconstruction Order layer outputs
         "mode_flags":         mode_flags,
         "definitive_pattern": definitive_pattern,
+        # Complex-Lighting Strategy Phase 1 router output
+        "analysis_mode":      analysis_mode_value,
+        "mode_confidence":    mode_confidence,
+        "mode_rationale":     mode_rationale,
     }

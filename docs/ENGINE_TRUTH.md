@@ -414,3 +414,78 @@ Computed by `_derive_fill_direction(shadow_pattern, key_direction, fill_presence
 | fallback | `"camera-axis"` |
 
 Physical rationale: fill always comes from the opposite side of the key for directional patterns (reduces key shadows). For clamshell/butterfly, the fill is a below-chin reflector regardless of key direction. For non-directional patterns (flat, ring, high_key), fill is frontal/on-axis.
+
+## 14. Mode Routing — Complex-Lighting Strategy Phase 1+
+
+After the perception layer runs, `route_analysis_mode()` decides the analysis's *answer shape*. **Mode is the headline output**; pattern resolution becomes mode-conditional content. Pattern fields (`authoritative_pattern`, `pattern_candidates`, `pattern_status`) are **unchanged by routing** — mode is additive metadata.
+
+### 14.1 Doctrine
+
+- **Mode before pattern.** Reporting, workflow, and recreation strategies are mode-conditional. Pattern naming serves mode-conditional content, not the headline.
+- **Mode is mutually exclusive; evidence factors are not.** A scene's evidence factors (multi-source, ambiguity, low signal, etc.) routinely co-exist. The router picks the highest-precedence mode whose gate fires; lower-mode evidence is preserved in `pattern_candidates.alternates` and `pattern_candidates.contradictions` for downstream consumers. Modes describe *the engine's response shape*, not *categories of the scene itself*.
+- **Mode-confidence is not pattern-confidence.** Three confidence concepts exist and must not be conflated: `mode_confidence` (router certainty in mode), `candidate_credibility` (per-pattern credibility for BOUNDED, Phase 3), `contribution_confidence` (per-LightContribution belief for HYBRID, Phase 3). Phase 1 introduces only `mode_confidence`.
+- **No `pattern_confidence` in mode routing.** The mode router must not consume pattern_confidence. Mode routing inputs are `face_validation`, `signal_reliability`, `pattern_status`, `authoritative_pattern_source`, and (in Phase 3) `ComplexityProfile`.
+
+### 14.2 Router precedence
+
+```
+INSUFFICIENT > HYBRID > BOUNDED > CLASSICAL
+```
+
+Higher-precedence modes have hard gates evaluated against the available signals; lower modes are fallthrough.
+
+### 14.3 Phase 1 gates (current)
+
+| Gate | Condition | Source |
+|------|-----------|--------|
+| INSUFFICIENT | `not face_validation.face_detected` | `_compute_face_validation` |
+| INSUFFICIENT | `face_validation.face_quality == "poor"` | `_compute_face_validation` |
+| INSUFFICIENT | `signal_reliability.overall_signal_strength < 0.40` | `_compute_signal_reliability` |
+| HYBRID | _(deferred — Phase 3 with complexity scorer)_ | — |
+| BOUNDED (bootstrap) | `pattern_status == CONTESTED` AND `"_demoted" in source` AND `len(alternates) >= 1` | resolver mechanics |
+| CLASSICAL | fallthrough | — |
+
+The 0.40 `signal_strength` floor was confirmed via threshold sweep (`engine.benchmark_v2.threshold_sweep`) to sit in the middle of a stable [0.30, 0.50] plateau on the current 42-benchmark corpus.
+
+### 14.4 Phase 1 BOUNDED bootstrap — TEMPORARY
+
+The BOUNDED gate currently uses a heuristic anchored to current resolver mechanics (`_demoted` in source, `pattern_status == CONTESTED`). **This is not the long-term definition.** Phase 3 retires it.
+
+Long-term BOUNDED detection (Phase 3+):
+- ≥ 2 classical pattern candidates with `candidate_credibility ≥ 0.35`
+- top-2 credibility spread ≤ 0.20
+- top-2 candidates agree on key direction (within one clock position)
+- INSUFFICIENT gates do not fire
+- HYBRID gates do not fire
+
+The Phase 1 bootstrap is documented in `route_analysis_mode()`'s docstring with an explicit reference to its temporary nature.
+
+### 14.5 Truthfulness rules in effect
+
+- **Confidence ceiling for INSUFFICIENT.** When `analysis_mode == INSUFFICIENT`, `pattern_confidence` is capped at 0.70 regardless of resolver-internal arithmetic. Enforced post-routing in `analyze_image()`.
+- **Pattern-status interaction.** When `analysis_mode == BOUNDED`, `pattern_status` is `CONTESTED` (driven by Pass 1's `_demoted`/`ambiguity_fallback` predicate). FUSED_FINAL on a BOUNDED result is forbidden by construction.
+- **Catchlight-shadow paradox surfaces but does not yet override.** As of the Lane (b) fix, `LightingRead.contradictions` records the paradox when shadow direction and catchlight position disagree on horizontal key direction, and the resolver promotes it into `pattern_candidates.contradictions`. Acting on the signal — demoting shadow-direction-derived candidates per the catchlight-first doctrine — is queued for Phase 3.
+
+### 14.6 Mode-conditional output (preserved + planned)
+
+| Field | CLASSICAL | BOUNDED | HYBRID (Phase 3) | INSUFFICIENT |
+|-------|-----------|---------|------------------|--------------|
+| `authoritative_pattern` | the answer | leading candidate | dominant driver | best guess (capped 0.70) |
+| `pattern_status` | FUSED_FINAL | CONTESTED | (Phase 3) | CONTESTED or UNKNOWN |
+| `pattern_confidence` | meaningful | meaningful + alternates surfaced | dominant-driver only | capped 0.70 |
+| `analysis_mode` | classical | bounded | hybrid | insufficient |
+| `mode_confidence` | high (~0.85) | bootstrap modest (~0.70) | (Phase 3) | high (≥ 0.70) |
+| `pattern_reasoning` | single-pattern statement | multi-candidate framing (Pass 1) | decomposition summary (Phase 3) | what's known + what's missing (Phase 3 UI) |
+
+### 14.7 Phasing reference
+
+| Phase | Status | Scope |
+|-------|--------|-------|
+| Phase 1 | **Live** | AnalysisMode router; INSUFFICIENT + bootstrap BOUNDED gates; CONTESTED status reorder; multi-candidate pattern_reasoning |
+| Phase 2 | **Live** | Benchmark mode-tagging, mode confusion matrix, threshold sensitivity sweep, shadow-mode L1 telemetry emission |
+| Phase 3 | Queued | ComplexityProfile (Stage 6.5); HYBRID gate; load-bearing source detection (six-criterion test); BOUNDED long-term predicate; catchlight-overrides-shadow doctrine action |
+| Phase 4 | Blocked on Phase 2 gate D (two-week shadow-mode observation) | Mode-aware UI: BOUNDED candidate cards, INSUFFICIENT result screen |
+| Phase 5 | Queued | Feedback architecture (per-mode signal mapping, decomposition corrections) |
+| Phase 6 | Queued | Edge-case polish (window+strobe, gels, group, mirror, etc.) |
+
+See `docs/TAXONOMY_TRUTH.md` for `AnalysisMode`'s relationship to `pattern`, `setup_family`, and `source_context`.
