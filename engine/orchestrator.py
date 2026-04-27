@@ -2588,25 +2588,69 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
     if sr is not None:
         cp.capture_quality_score = float(getattr(sr, "overall_signal_strength", 1.0) or 1.0)
 
-    # ── rim_present / rim_load_bearing — STRUCTURAL EVIDENCE ONLY ───────
-    # Per Phase 3A correction #3: do not infer rim_load_bearing from
-    # taxonomy-polluted pattern labels alone.  Use lighting_intel
-    # structural signals (fill_method_text containing rim/kicker keywords).
-    # If evidence is weak, rim_load_bearing stays False.
+    # ── rim_present / rim_load_bearing — STRUCTURAL EVIDENCE ─────────────
+    # Phase 3A: text-only matches in fill_method_text.  Phase 3B adds a
+    # bounded structural detector for back-light/hair-light contributions
+    # using catchlight_topology evidence.
+    #
+    # Phase 3A signals (preserved):
     rim_keywords = ("rim", "kicker", "edge light", "back light", "backlight")
     rim_text_hit = any(kw in fill_text for kw in rim_keywords)
-    cp.rim_present = bool(rim_text_hit)
-    # rim_load_bearing requires *load-bearing* evidence: explicit indication
-    # the rim is structurally part of the look.  Phase 3A heuristic is strict:
-    # require both rim text AND a phrasing that implies it carries the look.
     rim_load_text_hit = any(kw in fill_text for kw in (
         "dominant rim", "rim-dominant", "primary rim",
         "key rim", "rim is key", "rim drives",
     ))
-    cp.rim_load_bearing = rim_load_text_hit
-    # Note: in Phase 3A this almost never fires.  That is intentional.
-    # Phase 3B adds intensity-relative measurement and proper rim-dominance
-    # detection from catchlight_intelligence and back-light topology.
+
+    # Phase 3B back-light / hair-light structural detector.
+    # Signature for an undetected separate back-light:
+    #   - catchlight_count significantly higher than typical key/fill
+    #     (suggests the catchlight detector is picking up specular
+    #     reflections beyond the eye region — typically hair-edge
+    #     specular from a back-light)
+    #   - cluster is "linear" or "triangular" (multi-source character)
+    #   - bilateral_symmetry_score in 0.3–0.7 range (asymmetric enough
+    #     to NOT be a clean clamshell key+fill, symmetric enough to NOT
+    #     be a single misdetection)
+    #   - lighting_intel.light_count is == 1 (engine doesn't already
+    #     see the back light)
+    #   - resolver source is not definitive_signature or specialty:*
+    #     (those patterns have their own structural classifications:
+    #     rim_only, athletic_rim_sculpt are tagged classical via
+    #     definitive_signature; high_key/window_portrait are specialty
+    #     tonal/source upgrades)
+    back_light_structural = False
+    if (
+        ct is not None
+        and getattr(ct, "catchlight_count", 0) >= 5
+        and getattr(ct, "cluster_geometry", "") in ("linear", "triangular")
+        and 0.30 <= getattr(ct, "bilateral_symmetry_score", 0.0) <= 0.70
+        and intel_lc == 1
+    ):
+        # Source-exclusion check — avoid stepping on definitive/specialty
+        # patterns that are already classified differently.
+        src = (getattr(result, "authoritative_pattern_source", "") or "")
+        if "definitive_signature" not in src and not src.startswith("specialty:"):
+            back_light_structural = True
+            notes.append(
+                f"back_light_structural_indicator (count={ct.catchlight_count}, "
+                f"cluster={ct.cluster_geometry}, bilat_sym={ct.bilateral_symmetry_score:.2f})"
+            )
+
+    cp.rim_present = bool(rim_text_hit or back_light_structural)
+    # rim_load_bearing fires on EITHER explicit text dominance OR the
+    # structural back-light detector (Phase 3B).  The structural signal
+    # is bounded: only fires when count >= 5 AND non-specialty source.
+    cp.rim_load_bearing = bool(rim_load_text_hit or back_light_structural)
+
+    # When the back-light detector fires, the engine's reported light_count
+    # is structurally undercounting (it sees only 1 but the catchlight
+    # signature implies 2+).  Upgrade load_bearing_source_count to reflect
+    # the structural evidence.  This is the only place where ComplexityProfile
+    # axis values are derived from inference rather than direct upstream
+    # signal — clearly named and bounded.
+    if back_light_structural and cp.load_bearing_source_count < 2:
+        cp.load_bearing_source_count = 2
+        notes.append("load_bearing_source_count upgraded to 2 from back_light_structural")
 
     # ── overall_complexity — observability blend ─────────────────────────
     # Weighted combination of the *real* axes only.  Placeholders excluded.

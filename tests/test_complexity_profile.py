@@ -670,6 +670,91 @@ class TestKeyZoneCompatibility:
         assert _key_zones_compatible("low_key", "butterfly")
 
 
+class TestBackLightStructuralDetector:
+    """Phase 3B Workstream B — back-light/hair-light structural detector.
+
+    Fires when:
+      - catchlight_count >= 5
+      - cluster is 'linear' or 'triangular'
+      - bilateral_symmetry_score in [0.30, 0.70]
+      - lighting_intel.light_count == 1 (engine doesn't already see it)
+      - resolver source is not definitive_signature or specialty:*
+    """
+
+    def _make_ct(self, count, cluster, bilat_sym):
+        class _CT:
+            pass
+        ct = _CT()
+        ct.catchlight_count = count
+        ct.cluster_geometry = cluster
+        ct.bilateral_symmetry_score = bilat_sym
+        return ct
+
+    def test_back_light_signature_upgrades_load_bearing_to_2(self):
+        # All conditions met → back_light_structural=True → load_bearing
+        # upgrades to 2, rim_load_bearing=True, HYBRID gate fires.
+        r = _make_result(
+            light_count=1,
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(6, "linear", 0.50)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.load_bearing_source_count == 2
+        assert r.complexity_profile.rim_load_bearing is True
+        assert r.complexity_profile.rim_present is True
+
+    def test_back_light_blocked_when_definitive_signature_source(self):
+        # rim_only / athletic_rim hit definitive_signature path.  Their
+        # high catchlight_count is from rim-light specular but the pattern
+        # is already classified.  Filter must exclude them.
+        r = _make_result(
+            light_count=1,
+            primary_pattern="rim", primary_confidence=0.95,
+            primary_source="definitive_signature",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(8, "linear", 0.00)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.rim_load_bearing is False
+        assert r.complexity_profile.load_bearing_source_count == 1
+
+    def test_back_light_blocked_when_specialty_source(self):
+        # high_key_beauty: count=8, linear, but source is
+        # specialty:reference_read.  Specialty patterns have their own
+        # tonal/source classification — back-light detector must skip them.
+        r = _make_result(
+            light_count=1,
+            primary_pattern="high_key", primary_confidence=0.95,
+            primary_source="specialty:reference_read",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(8, "linear", 0.00)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.rim_load_bearing is False
+
+    def test_back_light_blocked_when_count_below_5(self):
+        # Standard butterfly with 3 catchlights (key + 2 fill specular)
+        # is a clean classical, not a back-light scene.
+        r = _make_result(
+            light_count=1,
+            primary_pattern="butterfly", primary_confidence=0.85,
+            primary_source="reference_read",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(3, "triangular", 0.15)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.rim_load_bearing is False
+
+    def test_back_light_blocked_when_cluster_is_dual(self):
+        # cluster='dual' = key+fill, NOT multi-source character.
+        r = _make_result(
+            light_count=1,
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+        )
+        r.cue_report.catchlight_topology = self._make_ct(6, "dual", 0.50)
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.rim_load_bearing is False
+
+
 class TestPhase1Preserved:
 
     def test_no_face_routes_insufficient(self):
