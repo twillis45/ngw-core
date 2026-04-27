@@ -1171,6 +1171,40 @@ class FieldStatus(str, Enum):
     UNKNOWN         = "unknown"
 
 # ═══════════════════════════════════════════════════════════════════════════
+# 44. Analysis Mode — Complex-Lighting Strategy Phase 1
+# ═══════════════════════════════════════════════════════════════════════════
+
+class AnalysisMode(str, Enum):
+    """The shape of the answer the image's evidence supports.
+
+    Headline output of the analyzer. Reporting, workflow, and recreation
+    strategies are mode-conditional. Pattern resolution is mode-conditional
+    content, not the headline.
+
+    Mode is mutually exclusive — exactly one is emitted per analysis. The
+    mode describes the engine's response shape, NOT a category of the scene
+    itself. A scene's evidence factors (multi-source, ambiguity, low signal,
+    etc.) routinely co-exist; the router picks the highest-precedence mode
+    whose gate fires.
+
+    Router precedence (highest first):
+      1. INSUFFICIENT  — measurement failure; nothing else matters
+      2. HYBRID        — multiple load-bearing sources; decompose
+      3. BOUNDED       — single-source scene but two patterns equally credible
+      4. CLASSICAL     — default; coherent single-driver scene
+
+    Display labels (UI/API mapping layer, not engine):
+      CLASSICAL    -> "Classical Read"
+      BOUNDED      -> "Bounded Read"
+      HYBRID       -> "Hybrid Decomposition"
+      INSUFFICIENT -> "Insufficient Evidence"
+    """
+    CLASSICAL    = "classical"
+    BOUNDED      = "bounded"
+    HYBRID       = "hybrid"
+    INSUFFICIENT = "insufficient"
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Lookup helpers
 # ═══════════════════════════════════════════════════════════════════════════
 

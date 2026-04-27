@@ -85,7 +85,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from engine.enums import FieldStatus
+from engine.enums import AnalysisMode, FieldStatus
 from engine.analysis_version import AnalysisVersionMetadata
 from engine.taxonomy import TAXONOMY_VERSION
 from engine.provenance_models import FieldProvenance, FieldCandidate as _FieldCandidate
@@ -2301,6 +2301,118 @@ def _resolve_authoritative_pattern(result: "AnalysisResult") -> Tuple[str, str]:
     return (pc.authoritative_pattern, pc.authoritative_source)
 
 
+def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, float]:
+    """Decide the answer-shape mode for this analysis.
+
+    Phase 1 (Complex-Lighting Strategy) implementation.
+
+    Router precedence (highest first):
+      1. INSUFFICIENT  — measurement failure; nothing else matters
+      2. HYBRID        — multiple load-bearing sources; decompose
+      3. BOUNDED       — single-source scene but two patterns equally credible
+      4. CLASSICAL     — default; coherent single-driver scene
+
+    Phase 1 scope:
+      - INSUFFICIENT gate: built from face_validation + signal_reliability.
+        ComplexityProfile axes (catchlight reliability, crop completeness,
+        post-processing risk, compositing) are deferred to Phase 3.
+      - HYBRID gate: deferred to Phase 3. Returns CLASSICAL fallthrough.
+      - BOUNDED gate: bootstrap heuristic anchored to Pass 1's CONTESTED
+        status and resolver demotion paths.  This is NOT the long-term
+        definition.  Phase 3 retires this in favor of credibility-based
+        scoring (multiple credible classical interpretations agreeing on
+        key direction, adequate evidence quality, not Hybrid, not
+        Insufficient).
+      - CLASSICAL: fallthrough.
+
+    Returns (mode, rationale, mode_confidence).
+      mode_confidence is the router's certainty in the chosen mode shape.
+      It is a separate concept from pattern_confidence (resolver belief in
+      the pattern slot) and from candidate_credibility / contribution_
+      confidence (introduced in later phases).  Mode routing must not
+      consume pattern_confidence.
+
+    Doctrine notes:
+      - Mode is mutually exclusive (engine emits one); evidence factors
+        co-exist on the scene.  The router picks the highest-precedence
+        mode whose gate fires; lower-mode evidence is preserved in the
+        result struct for downstream consumers.
+      - Per CLAUDE.md §III TR (no auto-promotion): mode is a status
+        decision, not a value mutation.  authoritative_pattern is
+        unchanged by mode routing.
+    """
+    fv = result.face_validation
+    sr = result.signal_reliability
+    pc = result.pattern_candidates
+
+    # ── Gate 1: INSUFFICIENT ─────────────────────────────────────────────
+    # Phase 1: face quality + signal reliability only.  Phase 3 adds
+    # catchlight reliability, crop completeness, post-processing risk,
+    # and compositing detection from ComplexityProfile.
+    insufficient_reasons: List[str] = []
+    if fv is None or not getattr(fv, "face_detected", False):
+        insufficient_reasons.append("no face detected")
+    elif getattr(fv, "face_quality", "") == "poor":
+        insufficient_reasons.append("face quality poor")
+    if sr is not None and getattr(sr, "overall_signal_strength", 1.0) < 0.40:
+        insufficient_reasons.append(
+            f"signal strength {sr.overall_signal_strength:.2f} below 0.40 floor"
+        )
+    if insufficient_reasons:
+        # Higher mode_confidence when multiple gates fire simultaneously.
+        n = len(insufficient_reasons)
+        conf = 0.70 + min(0.20, 0.10 * (n - 1))
+        return (
+            AnalysisMode.INSUFFICIENT,
+            "Insufficient evidence: " + "; ".join(insufficient_reasons),
+            round(conf, 3),
+        )
+
+    # ── Gate 2: HYBRID ───────────────────────────────────────────────────
+    # Deferred to Phase 3.  ComplexityProfile is not yet computed; HYBRID
+    # cannot fire honestly until load-bearing source detection (per the
+    # six-criterion operational test) is wired.  Falls through.
+
+    # ── Gate 3: BOUNDED (Phase 1 bootstrap) ──────────────────────────────
+    # Anchored to Pass 1's CONTESTED status and resolver demotion paths.
+    # This is a TEMPORARY heuristic.  Phase 3 retires it.  Long-term
+    # definition: multiple classical patterns at credibility ≥ 0.35,
+    # credibility spread ≤ 0.20, agreement on key direction, INSUFFICIENT
+    # gates pass, HYBRID gates pass.
+    src = result.authoritative_pattern_source or ""
+    if (
+        result.pattern_status == FieldStatus.CONTESTED
+        and "_demoted" in src
+        and pc is not None
+        and len(pc.alternates) >= 1
+    ):
+        alt = pc.alternates[0]
+        return (
+            AnalysisMode.BOUNDED,
+            f"Bounded read: winner '{result.authoritative_pattern}' "
+            f"came via {src}; leading alternate is '{alt.pattern}'",
+            0.70,  # bootstrap predicate is approximate — modest confidence
+        )
+
+    # ── Gate 4: CLASSICAL (fallthrough) ──────────────────────────────────
+    pat = result.authoritative_pattern or ""
+    if result.pattern_status == FieldStatus.CONTESTED:
+        # CONTESTED but no BOUNDED bootstrap match — unusual edge.
+        # Phase 3 will retire this branch entirely.
+        return (
+            AnalysisMode.CLASSICAL,
+            "Classical fallthrough (contested status without BOUNDED match)",
+            0.60,
+        )
+    if pat in ("unknown", ""):
+        return (
+            AnalysisMode.CLASSICAL,
+            "Classical fallthrough (no resolved pattern)",
+            0.55,
+        )
+    return (AnalysisMode.CLASSICAL, "", 0.85)
+
+
 # Canonical setup family for each pattern used in blueprint/shoot steps.
 # Maps authoritative_pattern → RecreationSetup.setup_family value.
 # Patterns not listed here fall back to:
@@ -2452,6 +2564,10 @@ class AnalysisResult:
         # Expert Deconstruction Order fields
         "mode_flags",        # Layer 0: {no_face, is_bw, is_hcg, scene_type}
         "definitive_pattern",  # Stage 1: pattern short-circuit (ring_light, silhouette_key)
+        # Complex-Lighting Strategy Phase 1 — answer-shape routing
+        "analysis_mode",        # AnalysisMode: headline output shape (classical/bounded/hybrid/insufficient)
+        "mode_rationale",       # one-sentence reason the mode was chosen
+        "mode_confidence",      # router certainty in chosen mode; NOT pattern_confidence
     )
 
     def __init__(self) -> None:
@@ -2491,6 +2607,10 @@ class AnalysisResult:
         # Expert Deconstruction Order
         self.mode_flags: Dict[str, Any] = {}      # Layer 0: mode pre-read flags
         self.definitive_pattern: Optional[str] = None  # Stage 1: short-circuit pattern
+        # Complex-Lighting Strategy Phase 1 — mode router output (post-resolver)
+        self.analysis_mode: AnalysisMode = AnalysisMode.CLASSICAL
+        self.mode_rationale: str = ""
+        self.mode_confidence: float = 0.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3475,10 +3595,38 @@ def _compute_perception_explanation(
     if pe.supporting_signals:
         top = pe.supporting_signals[0]
         detail = f"{top['signal'].replace('_', ' ')} indicates {top['value']}."
-    pe.pattern_reasoning = (
-        f"Pattern '{pattern}' selected by {source} "
-        f"(confidence {conf:.0%}). {detail}"
-    ).strip()
+
+    # When the resolver flagged the result as CONTESTED (winner came through
+    # a demotion path or ambiguity fallback), produce a multi-candidate
+    # photographer-facing framing instead of a single-pattern statement.
+    # Surfaces the top alternate and the strongest contradicting signal so
+    # a working photographer can see what the engine is uncertain about.
+    _status = getattr(result, "pattern_status", None)
+    if (
+        _status == FieldStatus.CONTESTED
+        and pc is not None
+        and pc.alternates
+    ):
+        alt = pc.alternates[0]
+        primary_label = (pattern or "unknown").replace("_", " ")
+        alt_label = (alt.pattern or "unknown").replace("_", " ")
+        contra_phrase = ""
+        if pe.contradicting_signals:
+            cs = pe.contradicting_signals[0]
+            contra_phrase = (
+                f" Conflict: {cs['signal'].replace('_', ' ')} — {cs['value']}."
+            )
+        pe.pattern_reasoning = (
+            f"Most likely {primary_label} or {alt_label} — classifiers disagree. "
+            f"Top read: {primary_label} ({conf:.0%}) from {source}. "
+            f"Alternate: {alt_label} ({alt.confidence:.0%}) from {alt.source}."
+            f"{contra_phrase} Review recommended."
+        ).strip()
+    else:
+        pe.pattern_reasoning = (
+            f"Pattern '{pattern}' selected by {source} "
+            f"(confidence {conf:.0%}). {detail}"
+        ).strip()
 
     return pe
 
@@ -4625,16 +4773,26 @@ def analyze_image(
     # ── Phase 1: conservative pattern_status assignment ──────────────
     # Assigned here — after all upgrades — when the final authoritative
     # pattern is settled.  Rules (in priority order):
+    #   CONTESTED    — winner came through a demotion path or ambiguity
+    #                  fallback: a most-likely candidate was picked but the
+    #                  resolver could not cleanly resolve it.  Per FieldStatus
+    #                  doctrine: "multiple sources disagree materially; not
+    #                  resolved."  Checked FIRST so a picked candidate does not
+    #                  mask material disagreement.
     #   FUSED_FINAL  — a real pattern was resolved from ranked candidates
-    #   CONTESTED    — resolver found material contradictions between classifiers
+    #                  with no demotion path involvement.
     #   ASSUMED      — no signal; fell back to "unknown" explicitly
     #   UNKNOWN      — none of the above; pre-resolution default
     _src = result.authoritative_pattern_source or ""
     _pat = result.authoritative_pattern or ""
-    if _pat and _pat not in ("unknown", ""):
-        result.pattern_status = FieldStatus.FUSED_FINAL
-    elif "contradiction" in _src or "contested" in _src:
+    _is_contested = (
+        "_demoted" in _src
+        or "ambiguity_fallback" in _src
+    )
+    if _is_contested:
         result.pattern_status = FieldStatus.CONTESTED
+    elif _pat and _pat not in ("unknown", ""):
+        result.pattern_status = FieldStatus.FUSED_FINAL
     elif _pat in ("unknown", "") and _src in ("none", "fallback", ""):
         result.pattern_status = FieldStatus.ASSUMED
     else:
@@ -4961,6 +5119,30 @@ def analyze_image(
     # ── Perception layer (read-only diagnostics) ─────────────────────
     _compute_perception_layer(result)
 
+    # ── Complex-Lighting Strategy Phase 1: mode routing ──────────────
+    # Decide the answer-shape mode (CLASSICAL/BOUNDED/HYBRID/INSUFFICIENT).
+    # Runs AFTER _compute_perception_layer so face_validation and
+    # signal_reliability are populated.  Mode is the headline output;
+    # pattern resolution becomes mode-conditional content.  Pattern fields
+    # (authoritative_pattern, pattern_candidates, pattern_status) are
+    # unchanged by routing — mode is additive metadata.
+    _mode, _mode_rationale, _mode_conf = route_analysis_mode(result)
+    result.analysis_mode = _mode
+    result.mode_rationale = _mode_rationale
+    result.mode_confidence = _mode_conf
+
+    # Truthfulness rule: confidence ceiling for INSUFFICIENT mode.
+    # When the engine cannot reliably read the scene, pattern_confidence
+    # must not exceed 0.70 regardless of resolver-internal arithmetic.
+    # Per Complex-Lighting Strategy §13: "Don't fake certainty."
+    if result.analysis_mode == AnalysisMode.INSUFFICIENT:
+        if result.pattern_confidence > 0.70:
+            result.pattern_confidence = 0.70
+            if result.pattern_candidates and result.pattern_candidates.primary:
+                if result.pattern_candidates.primary.confidence > 0.70:
+                    result.pattern_candidates.primary.confidence = 0.70
+                result.pattern_confidence_label = result.pattern_candidates.confidence_label
+
     _total = round(_time.perf_counter() - _t0, 2)
     result.stage_timings["total"] = _total
     logger.info("[analyze_image] TOTAL: %.1fs", _total)
@@ -5036,6 +5218,20 @@ def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
     _ps = getattr(result, "pattern_status", None)
     if _ps is not None:
         out["pattern_status"] = str(_ps.value) if hasattr(_ps, "value") else str(_ps)
+
+    # analysis_mode (Enum) — Complex-Lighting Strategy Phase 1
+    # Headline answer-shape: classical / bounded / hybrid / insufficient.
+    # mode_confidence is router certainty in the chosen mode shape and is
+    # distinct from pattern_confidence — they must not be conflated.
+    _am = getattr(result, "analysis_mode", None)
+    if _am is not None:
+        out["analysis_mode"] = str(_am.value) if hasattr(_am, "value") else str(_am)
+    _mr = getattr(result, "mode_rationale", None)
+    if _mr:
+        out["mode_rationale"] = _mr
+    _mc = getattr(result, "mode_confidence", None)
+    if _mc is not None:
+        out["mode_confidence"] = _safe(_mc)
 
     # ── PatternCandidates ────────────────────────────────────────────────────
     _pc = getattr(result, "pattern_candidates", None)
