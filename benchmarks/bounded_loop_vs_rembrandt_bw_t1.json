@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "bounded_loop_vs_rembrandt_bw_t1",
+  "description": "B&W editorial close-up, subject's hand near face with pearl necklace. Soft single key from camera-left creates a small loop or a rembrandt-style cheek triangle depending on whether the cheek shadow is read as connected. Two credible classical reads, same key direction.",
+  "image_path": "benchmarks/images/Tier 1/Butterfly/download (4).jpeg",
+  "ground_truth": {
+    "expected_pattern": "loop",
+    "expected_light_count": 1,
+    "expected_key_direction": "left",
+    "acceptable_patterns": ["loop", "rembrandt"],
+    "acceptable_light_count_range": [1, 2],
+    "expected_mode": "bounded"
+  },
+  "metadata": {
+    "category": "editorial_bw",
+    "difficulty": "bounded_loop_rembrandt_boundary",
+    "review_notes": "Photographer-verified: B&W reduces some chroma cues but shadow geometry is reliable. Loop/rembrandt boundary is one of the most common real-world ambiguities (cheek shadow extent / nose shadow continuation). NOT hybrid — single soft key.",
+    "added_date": "2026-04-27"
+  }
+}

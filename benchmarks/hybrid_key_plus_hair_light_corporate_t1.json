@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "hybrid_key_plus_hair_light_corporate_t1",
+  "description": "Corporate editorial headshot with structurally load-bearing hair-light/rim. Frontal key shapes the face; a separate back-light creates strong specular highlights along the hair, providing subject separation from the dark background. Removing the hair-light meaningfully changes the look (hair loses sheen, separation collapses against background). Genuinely multi-source per the load-bearing operational test.",
+  "image_path": "benchmarks/images/Tier 1/0eef459a20ad8757dba35988bc82d52a.jpg",
+  "ground_truth": {
+    "expected_pattern": "loop",
+    "expected_light_count": 2,
+    "expected_key_direction": "center",
+    "acceptable_patterns": ["loop", "butterfly", "clamshell"],
+    "acceptable_light_count_range": [2, 3],
+    "expected_mode": "hybrid"
+  },
+  "metadata": {
+    "category": "editorial_headshot_with_separation",
+    "difficulty": "hybrid_key_plus_hair_light",
+    "review_notes": "Photographer-verified per Phase 3A correction #5: the hair-light is structurally load-bearing — without it, the look's polished editorial separation against the dark background collapses. Frontal key + back hair-light = two load-bearing sources. Per strategy §5 load-bearing operational test: this contribution materially changes subject separation (criterion 3) AND build order (criterion 6).",
+    "added_date": "2026-04-27"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "bounded_butterfly_vs_clamshell_beauty",
+  "description": "Beauty close-up with hands framing the face — high-axial soft key creates a butterfly read; the hands acting as below-chin fill make a clamshell read equally credible. Two classical patterns, same key geometry, dispute is shape/fill interpretation.",
+  "image_path": "benchmarks/images/Tier 1/Clamshel:Beauty/48e9c9296a2a6204d41d1fd83c43c029.jpg",
+  "ground_truth": {
+    "expected_pattern": "butterfly",
+    "expected_light_count": 1,
+    "expected_key_direction": "top_center",
+    "acceptable_patterns": ["butterfly", "clamshell"],
+    "acceptable_light_count_range": [1, 2],
+    "expected_mode": "bounded"
+  },
+  "metadata": {
+    "category": "beauty",
+    "difficulty": "bounded_two_credible_classical",
+    "review_notes": "Photographer-verified Phase 3A curation: single high-axial soft key, hands provide passive below-chin reflection. Whether this is butterfly (single source, ignore hand-fill) or clamshell (key + hand-reflector fill structure) is genuinely a two-sided interpretation. Same key direction; dispute is pattern shape only.",
+    "added_date": "2026-04-27"
+  }
+}

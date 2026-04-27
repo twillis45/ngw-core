@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "insufficient_glasses_corporate_t1",
+  "description": "Corporate headshot with eyeglasses. Face is clearly detected and the lighting is reasonably soft and frontal — but the eyeglass lens reflections occlude/distort the actual eye catchlights, making catchlight-position-based key direction unreliable. Per the catchlights-first doctrine, when catchlight reliability is degraded the engine should route INSUFFICIENT and surface the limitation rather than emit a confident pattern.",
+  "image_path": "benchmarks/images/Tier 1/8cf18699f1faa350fa290605e06b6222.jpg",
+  "ground_truth": {
+    "expected_pattern": "unknown",
+    "expected_light_count": 1,
+    "expected_key_direction": "unknown",
+    "acceptable_patterns": ["butterfly", "clamshell", "flat", "loop", "unknown"],
+    "acceptable_light_count_range": [1, 2],
+    "expected_mode": "insufficient"
+  },
+  "metadata": {
+    "category": "insufficient_with_face_present",
+    "difficulty": "insufficient_eyeglass_catchlight_blocked",
+    "review_notes": "Photographer-verified Phase 3A: face is detected and signal_strength is fine, so Phase 1 INSUFFICIENT gate does NOT fire. Phase 3A's catchlight_reliability axis covers no_face and earring_contamination but not eyeglasses. Phase 3B target — adding glasses-detection to catchlight_reliability will make this benchmark pass. The current engine routes this BOUNDED (via bootstrap path) at confidence 0.15 — extremely weak, an honest signal of measurement failure that the engine should escalate to INSUFFICIENT mode, not BOUNDED.",
+    "added_date": "2026-04-27"
+  }
+}

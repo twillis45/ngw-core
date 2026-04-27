@@ -85,6 +85,17 @@ PHASE_2_DECISIONS: Dict[str, str] = {
     "bottle_backlight.json": "insufficient",
     "tabletop_soft_product.json": "insufficient",
     "projected.json": "insufficient",
+
+    # Phase 3A curation pass (2026-04-27) — photographer-verified additions.
+    # See review_notes in each benchmark JSON for per-image rationale.
+    # No engine grading itself: every tag below was assigned from visual
+    # photographer review, not because the engine happens to predict it.
+    "bounded_butterfly_vs_clamshell_beauty.json": "bounded",
+    "bounded_loop_vs_short_rihanna_t1.json": "bounded",
+    "bounded_loop_vs_short_jewelry_t1.json": "bounded",
+    "bounded_loop_vs_rembrandt_bw_t1.json": "bounded",
+    "hybrid_key_plus_hair_light_corporate_t1.json": "hybrid",
+    "insufficient_glasses_corporate_t1.json": "insufficient",
 }
 
 

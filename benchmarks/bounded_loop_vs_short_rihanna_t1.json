@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "bounded_loop_vs_short_rihanna_t1",
+  "description": "Editorial headshot, subject turned slightly toward the light (camera-right key). Loop nose shadow visible; pose interpretation determines whether this reads as loop (face mostly frontal) or short (face turned away from key, broad side away from camera). Two credible classical reads, same key direction.",
+  "image_path": "benchmarks/images/Tier 1/Headshots(studio)/a76a17449d7d85f80bd0494663ff9d11.jpg",
+  "ground_truth": {
+    "expected_pattern": "loop",
+    "expected_light_count": 1,
+    "expected_key_direction": "right",
+    "acceptable_patterns": ["loop", "short", "rembrandt"],
+    "acceptable_light_count_range": [1, 2],
+    "expected_mode": "bounded"
+  },
+  "metadata": {
+    "category": "editorial_headshot",
+    "difficulty": "bounded_pose_relative_disagreement",
+    "review_notes": "Photographer-verified: single key from camera-right. Slight head turn places it in pose-relative ambiguity. Loop and short are both credible reads with the same key geometry. Rembrandt is also a possibility if the cheek shadow connects to the nose shadow.",
+    "added_date": "2026-04-27"
+  }
+}

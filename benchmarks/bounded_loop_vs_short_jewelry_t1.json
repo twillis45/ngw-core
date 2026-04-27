@@ -1,0 +1,19 @@
+{
+  "benchmark_id": "bounded_loop_vs_short_jewelry_t1",
+  "description": "Beauty close-up with hands and rings framing the face. Subject's head is subtly turned. Light from camera-right creates a loop nose shadow on the cheek closer to the key. Loop and short are both defensible reads given the subtle pose turn. Single source.",
+  "image_path": "benchmarks/images/Tier 1/Loop/43ad981c7c99da7dfa3acfdf3b7c40f8.jpg",
+  "ground_truth": {
+    "expected_pattern": "loop",
+    "expected_light_count": 1,
+    "expected_key_direction": "right",
+    "acceptable_patterns": ["loop", "short"],
+    "acceptable_light_count_range": [1, 2],
+    "expected_mode": "bounded"
+  },
+  "metadata": {
+    "category": "beauty",
+    "difficulty": "bounded_pose_relative_disagreement",
+    "review_notes": "Photographer-verified: single key from camera-right, subtle face turn making loop vs short genuinely ambiguous. Rings/hands are passive reflective elements, not light sources. NOT hybrid.",
+    "added_date": "2026-04-27"
+  }
+}
