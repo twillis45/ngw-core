@@ -354,6 +354,15 @@ class ComplexityProfile:
     rim_present:                bool  = False
     rim_load_bearing:           bool  = False    # only set True with structural evidence
 
+    # — Outcome-trust risk (Phase 3C/B) —
+    # Fires when a high-confidence winner from a clean (non-demoted) source
+    # has weak cross-system support AND geometry-coherent counter-narrative
+    # exists.  See compute_scene_complexity for the strict predicate.
+    # When True, the INSUFFICIENT gate escalates ("confident wrong winner"
+    # signature, e.g., mixed-light scenes the resolver mis-resolves).
+    outcome_trust_risk:         bool  = False
+    outcome_trust_risk_reason:  str   = ""
+
     # — Aggregate (observability only; mode router uses individual axes) —
     overall_complexity:         float = 0.0
     notes:                      List[str] = dc_field(default_factory=list)
@@ -2701,6 +2710,116 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
         cp.load_bearing_source_count = 2
         notes.append("load_bearing_source_count upgraded to 2 from back_light_structural")
 
+    # ── outcome_trust_risk — Phase 3C Workstream B ──────────────────────
+    # "Confident wrong winner" signature.  Fires when ALL of:
+    #   1. winner pattern_confidence >= 0.75 (looks authoritative)
+    #   2. winner.source has no "_demoted" (resolver didn't flag it)
+    #   3. credibility evidence for winner == 1 (only ONE upstream
+    #      classifier directly votes for it via raw signal fields)
+    #   4. cue_inference geometry shadow_pattern is non-empty AND
+    #      != winner.pattern (geometry actively disagrees with winner)
+    #   5. at least ONE other classifier (light_structure or
+    #      lighting_inference) ALSO votes for the same alternative as
+    #      cue_inference geometry — geometry-coherent counter-narrative
+    #
+    # All five conditions together = "the resolver picked confidently
+    # via source priority, but the geometric evidence says otherwise
+    # and a second classifier agrees with the geometry".  This is
+    # specifically the mixed_light_failure shape (engine emits loop
+    # @ 0.83 from reference_read, but cue+light_structure both vote
+    # rembrandt — a coherent geometric counter-narrative).
+    #
+    # Why this is truthful and not a heuristic mess:
+    #   - The signal directly compares classifier outputs that already
+    #     exist; no new CV.
+    #   - It does NOT fire on classical-twin disagreements (window_soft_
+    #     side: cue agrees with winner, predicate skips).
+    #   - It does NOT fire on uncoordinated disagreement (rembrandt_t1_
+    #     download: cue says short, ls+intel say loop — geometry stands
+    #     alone, no coherent counter-narrative, predicate skips).
+    #   - It DOES fire on the documented mixed-light shape and is bounded.
+    pc = result.pattern_candidates
+    if pc and pc.primary:
+        winner = pc.primary
+        winner_pat = winner.pattern
+        winner_conf = float(winner.confidence or 0.0)
+        winner_src = winner.source or ""
+        # Source must be clean (not demoted, not fallback, NOT
+        # definitive_signature — those patterns have hard physics-based
+        # confidence and should not be downgraded by this heuristic).
+        winner_clean_for_otr = (
+            "_demoted" not in winner_src
+            and "ambiguity_fallback" not in winner_src
+            and "definitive_signature" not in winner_src
+        )
+
+        # Pull each classifier's raw pattern claim
+        cue_pat_local = ""
+        ci = getattr(result, "cue_inference_result", None)
+        geo_local = ci.get("geometry") if isinstance(ci, dict) else None
+        if geo_local:
+            cue_pat_local = getattr(geo_local, "shadow_pattern", "") or ""
+        ls_local = getattr(cr, "light_structure", None) if cr else None
+        ls_pat_local = (getattr(ls_local, "pattern_name", "") or "") if ls_local else ""
+        intel_pat_local = (getattr(intel, "pattern", "") or "") if intel else ""
+        ra = getattr(result, "reference_analysis", None)
+        lr_local = getattr(ra, "lighting_read", None) if ra else None
+        rr_pat_local = (getattr(lr_local, "shadow_pattern", "") or "") if lr_local else ""
+
+        # ev_for count for winner: how many classifiers' raw pattern
+        # fields directly equal the winner's pattern
+        ev_for_winner = sum(
+            1 for p in (cue_pat_local, ls_pat_local, intel_pat_local, rr_pat_local)
+            if p and p == winner_pat
+        )
+
+        # Geometry actively disagrees with winner
+        geometry_disagrees = (
+            cue_pat_local
+            and cue_pat_local != "unknown"
+            and cue_pat_local != winner_pat
+        )
+
+        # Coherent counter-narrative: at least one of {light_structure,
+        # lighting_inference} votes the SAME pattern as cue_inference
+        # geometry (i.e., geometry has a corroborator in another classifier)
+        if geometry_disagrees:
+            geometry_pat = cue_pat_local
+            counter_corroborated = (
+                (ls_pat_local == geometry_pat and ls_pat_local != "unknown")
+                or (intel_pat_local == geometry_pat and intel_pat_local != "unknown")
+            )
+        else:
+            counter_corroborated = False
+
+        # Catchlight-shadow paradox NOT already firing.  When the paradox
+        # detector (Block B persistence) flags catchlight-vs-shadow
+        # disagreement on horizontal key direction, the engine is already
+        # signalling legitimate "two readings of the same scene" — that's
+        # BOUNDED territory, not INSUFFICIENT.  We escalate to INSUFFICIENT
+        # only when there is NO catchlight paradox to anchor BOUNDED on.
+        no_catchlight_paradox = (cp.catchlight_conflict_score < 0.5)
+
+        if (
+            winner_conf >= 0.75
+            and winner_clean_for_otr
+            and ev_for_winner == 1
+            and geometry_disagrees
+            and counter_corroborated
+            and no_catchlight_paradox
+        ):
+            cp.outcome_trust_risk = True
+            cp.outcome_trust_risk_reason = (
+                f"winner='{winner_pat}'@{winner_conf:.0%} from {winner_src} "
+                f"with single-classifier support; geometry says '{cue_pat_local}' "
+                f"corroborated by another classifier; no catchlight paradox to "
+                f"anchor BOUNDED"
+            )
+            notes.append(
+                f"outcome_trust_risk: confident winner with weak cross-system "
+                f"support and geometry-coherent counter-narrative"
+            )
+
     # ── overall_complexity — observability blend ─────────────────────────
     # Weighted combination of the *real* axes only.  Placeholders excluded.
     cp.overall_complexity = round(min(1.0, max(0.0,
@@ -2923,6 +3042,11 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
             and "no face detected" not in insufficient_reasons:
         insufficient_reasons.append(
             f"catchlight reliability blocked ({cp.catchlight_reliability_reason})"
+        )
+    # Phase 3C Workstream B — outcome_trust_risk routes INSUFFICIENT
+    if cp is not None and getattr(cp, "outcome_trust_risk", False):
+        insufficient_reasons.append(
+            f"outcome trust risk: {cp.outcome_trust_risk_reason}"
         )
     if insufficient_reasons:
         n = len(insufficient_reasons)
@@ -5977,6 +6101,8 @@ def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
                 "capture_quality_score":       _cp.capture_quality_score,
                 "rim_present":                 _cp.rim_present,
                 "rim_load_bearing":            _cp.rim_load_bearing,
+                "outcome_trust_risk":          _cp.outcome_trust_risk,
+                "outcome_trust_risk_reason":   _cp.outcome_trust_risk_reason,
                 "overall_complexity":          _cp.overall_complexity,
                 "notes":                       list(_cp.notes or []),
                 "not_yet_computed":            list(_cp.not_yet_computed or []),

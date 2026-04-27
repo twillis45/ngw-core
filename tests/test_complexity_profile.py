@@ -848,6 +848,107 @@ class TestCatchlightUnreliabilityDetector:
         assert r.complexity_profile.catchlight_reliability == "reliable"
 
 
+class TestOutcomeTrustRisk:
+    """Phase 3C Workstream B — outcome_trust_risk detector for INS routing.
+
+    Fires when ALL of:
+      1. winner.confidence >= 0.75
+      2. winner.source has no _demoted/ambiguity_fallback/definitive_signature
+      3. winner credibility ev_for == 1 (single-classifier support)
+      4. cue_inference geometry pattern actively disagrees with winner
+      5. at least 1 of {light_structure, lighting_inference} agrees with
+         cue's geometry pattern (geometry-coherent counter-narrative)
+      6. no catchlight_shadow paradox already firing (catchlight_conflict
+         < 0.5) — paradox indicates BOUNDED legitimacy, not INSUFFICIENT.
+
+    The catchlight_conflict gate (#6) is the key Phase 3C discriminator
+    between confident-wrong-winner (mixed_light_failure: no paradox) and
+    legitimate two-credible-reads (blonde_ocean: paradox detected).
+    """
+
+    def test_fires_on_mixed_light_signature(self):
+        # Synthesize the exact mixed_light_failure shape
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "cue_inference"}],
+            cue_geo_pattern="rembrandt",
+        )
+        # Force light_structure to corroborate cue's geometry-counter
+        class _LS:
+            pattern_name = "rembrandt"
+            shadow_density = 0.5
+            nose_shadow_centroid_distance = 0.0
+            left_right_asymmetry = 0.0
+        r.cue_report.light_structure = _LS()
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.outcome_trust_risk is True
+        r.candidate_credibility = compute_candidate_credibility(r)
+        mode, _, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.INSUFFICIENT
+
+    def test_does_not_fire_when_catchlight_paradox_present(self):
+        # Same shape, but catchlight_shadow_paradox is in lighting_read
+        # contradictions → catchlight_conflict_score = 1.0 → predicate
+        # blocked, BOUNDED gate gets to fire.
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "cue_inference"}],
+            cue_geo_pattern="rembrandt",
+            lr_contradictions=["catchlight_shadow_paradox: shadow→key=upper_right vs catchlight@7→key=lower_left"],
+        )
+        class _LS:
+            pattern_name = "rembrandt"
+            shadow_density = 0.5
+            nose_shadow_centroid_distance = 0.0
+            left_right_asymmetry = 0.0
+        r.cue_report.light_structure = _LS()
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.catchlight_conflict_score >= 0.5
+        assert r.complexity_profile.outcome_trust_risk is False
+
+    def test_does_not_fire_on_definitive_signature_winner(self):
+        # rim_only / athletic_rim hit definitive_signature.  Even with the
+        # other conditions met, definitive_signature winners are exempt.
+        r = _make_result(
+            primary_pattern="rim", primary_confidence=0.95,
+            primary_source="definitive_signature",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "cue_inference"}],
+            cue_geo_pattern="rembrandt",
+        )
+        class _LS:
+            pattern_name = "rembrandt"
+            shadow_density = 0.5
+            nose_shadow_centroid_distance = 0.0
+            left_right_asymmetry = 0.0
+        r.cue_report.light_structure = _LS()
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.outcome_trust_risk is False
+
+    def test_does_not_fire_when_geometry_supports_winner(self):
+        # cue_inference geometry agrees with winner — predicate skips.
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+            cue_geo_pattern="loop",   # geometry agrees with winner
+        )
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.outcome_trust_risk is False
+
+    def test_does_not_fire_when_geometry_alone_disagrees(self):
+        # cue_inference disagrees but no other classifier corroborates —
+        # geometry is the ODD ONE OUT, not a coherent counter-narrative.
+        r = _make_result(
+            primary_pattern="loop", primary_confidence=0.85,
+            primary_source="reference_read",
+            cue_geo_pattern="rembrandt",
+            # NO light_structure stub set → ls_pat = "" → no corroboration
+        )
+        r.complexity_profile = compute_scene_complexity(r)
+        assert r.complexity_profile.outcome_trust_risk is False
+
+
 class TestPhase1Preserved:
 
     def test_no_face_routes_insufficient(self):
