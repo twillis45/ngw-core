@@ -239,6 +239,66 @@ class EdgeCaseFlags:
 
 
 @dataclass
+class CandidateCredibility:
+    """Phase 3B — photographic-evidence credibility for a single pattern candidate.
+
+    Computed AFTER resolve_pattern_candidates() and before mode routing.
+    The resolver does not change.  This struct sits alongside
+    PatternCandidate and provides a credibility score that is independent
+    of resolver source-priority arithmetic and based on whether the
+    candidate's pattern fits the actual photographic evidence.
+
+    Used by route_analysis_mode()'s long-term BOUNDED predicate.
+    Phase 3A used raw resolver confidence + spread thresholds, which
+    proved too crude (5/5 BOUNDED benchmarks miss-routed CLASSICAL).
+    """
+    pattern: str
+    credibility: float                          # 0..1, photographic-evidence fit
+    raw_confidence: float                       # resolver's belief, for traceability
+    source: str                                 # resolver source name (passthrough)
+    evidence_for: List[str] = dc_field(default_factory=list)
+    evidence_against: List[str] = dc_field(default_factory=list)
+    source_trust_multiplier: float = 1.0        # 1.0 clean, 0.7 demoted, 0.5 fallback
+    is_classical: bool = True
+    notes: List[str] = dc_field(default_factory=list)
+
+
+# ── Pattern key-direction zones (Phase 3B) ─────────────────────────────────
+# Used by the long-term BOUNDED predicate's same-key-direction check.
+# Two BOUNDED candidates must place their key in the same general zone.
+# E.g., loop ↔ rembrandt are both side-key (compatible); butterfly ↔ loop
+# disagree on horizontal placement (incompatible — that's HYBRID/INS terr.).
+_PATTERN_KEY_ZONE = {
+    "butterfly":  "center",
+    "clamshell":  "center",
+    "flat":       "center",
+    "high_key":   "center",
+    "ring_light": "center",
+    "loop":       "side",
+    "rembrandt":  "side",
+    "split":      "side",
+    "broad":      "side",
+    "short":      "side",
+    "triangle":   "side",
+    "low_key":    "any",
+}
+
+
+def _key_zones_compatible(p1: str, p2: str) -> bool:
+    """Two pattern candidates have compatible key-direction zones?
+
+    Returns True when both patterns place their key in the same general
+    horizontal zone (center vs side).  'any' is permissive — `low_key`
+    is a tonal regime that can apply over any key direction.
+    """
+    z1 = _PATTERN_KEY_ZONE.get(p1, "any")
+    z2 = _PATTERN_KEY_ZONE.get(p2, "any")
+    if z1 == "any" or z2 == "any":
+        return True
+    return z1 == z2
+
+
+@dataclass
 class ComplexityProfile:
     """Quantified scene complexity — Complex-Lighting Strategy Phase 3A skeleton.
 
@@ -2561,6 +2621,124 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
     return cp
 
 
+def compute_candidate_credibility(result: "AnalysisResult") -> List[CandidateCredibility]:
+    """Phase 3B — compute photographic-evidence credibility for top candidates.
+
+    Runs AFTER resolve_pattern_candidates() and before mode routing.
+    Does NOT modify the resolver; consumes its output and produces a
+    parallel `candidate_credibility` list.
+
+    Credibility is independent of resolver source-priority arithmetic
+    and based on whether each candidate's pattern fits the actual
+    photographic evidence available from upstream classifiers + signals.
+
+    Algorithm (deterministic, evidence-template-based):
+      1. Start at neutral 0.50.
+      2. For each upstream classifier whose pattern matches the candidate,
+         add evidence_for and a small credibility bonus.
+      3. For each contradiction in pattern_candidates.contradictions that
+         names the candidate's pattern as demoted, subtract.
+      4. Multiply by source_trust_multiplier (1.0 clean, 0.7 demoted,
+         0.5 ambiguity_fallback) — preserves the resolver's penalty for
+         demoted sources without conflating them with photographic fit.
+      5. Clamp to [0.0, 1.0].
+
+    No prose generation.  No magic numbers buried in conditionals — all
+    weights named below.
+    """
+    pc = result.pattern_candidates
+    if pc is None or pc.primary is None:
+        return []
+
+    # Collect candidates: primary + first 2 alternates, dedup by pattern
+    raw_candidates: List[PatternCandidate] = [pc.primary] + list(pc.alternates[:2])
+    seen: set = set()
+    cands: List[PatternCandidate] = []
+    for c in raw_candidates:
+        if c.pattern not in seen:
+            seen.add(c.pattern)
+            cands.append(c)
+
+    contradictions = list(pc.contradictions or [])
+
+    # Pull upstream pattern claims from each independent classifier
+    cue_inf = getattr(result, "cue_inference_result", None)
+    geo = cue_inf.get("geometry") if isinstance(cue_inf, dict) else None
+    cue_pattern = (getattr(geo, "shadow_pattern", "") or "") if geo else ""
+
+    cr = getattr(result, "cue_report", None)
+    ls = getattr(cr, "light_structure", None) if cr else None
+    ls_pattern = (getattr(ls, "pattern_name", "") or "") if ls else ""
+
+    intel = getattr(result, "lighting_intel", None)
+    intel_pattern = (getattr(intel, "pattern", "") or "") if intel else ""
+
+    ra = getattr(result, "reference_analysis", None)
+    lr = getattr(ra, "lighting_read", None) if ra else None
+    rr_pattern = (getattr(lr, "shadow_pattern", "") or "") if lr else ""
+
+    # Weight constants (named, not buried)
+    EV_PATTERN_MATCH_WEIGHT = 0.10        # per upstream classifier matching
+    EV_CONTRADICTION_WEIGHT = 0.15        # per contradiction naming this pattern
+    SOURCE_TRUST_DEMOTED = 0.70
+    SOURCE_TRUST_FALLBACK = 0.50
+    SOURCE_TRUST_CLEAN = 1.00
+    NEUTRAL_BASELINE = 0.50
+
+    out: List[CandidateCredibility] = []
+    for c in cands:
+        cred = NEUTRAL_BASELINE
+        evidence_for: List[str] = []
+        evidence_against: List[str] = []
+
+        # Upstream-classifier pattern-match evidence
+        if cue_pattern and cue_pattern == c.pattern:
+            cred += EV_PATTERN_MATCH_WEIGHT
+            evidence_for.append("cue_inference_geometry_pattern_match")
+        if ls_pattern and ls_pattern == c.pattern:
+            cred += EV_PATTERN_MATCH_WEIGHT
+            evidence_for.append("light_structure_pattern_match")
+        if intel_pattern and intel_pattern == c.pattern:
+            cred += EV_PATTERN_MATCH_WEIGHT
+            evidence_for.append("lighting_inference_pattern_match")
+        if rr_pattern and rr_pattern == c.pattern:
+            cred += EV_PATTERN_MATCH_WEIGHT
+            evidence_for.append("reference_read_pattern_match")
+
+        # Contradiction-burden evidence
+        for contra in contradictions:
+            # Match contradictions that explicitly demoted this pattern
+            if c.pattern in contra and ("demoted" in contra or "cascade" in contra):
+                cred -= EV_CONTRADICTION_WEIGHT
+                evidence_against.append(f"contradiction:{contra[:80]}")
+
+        # Source-trust multiplier (does NOT mix with raw confidence)
+        src = c.source or ""
+        if "ambiguity_fallback" in src:
+            trust = SOURCE_TRUST_FALLBACK
+            evidence_against.append("source_ambiguity_fallback")
+        elif "_demoted" in src:
+            trust = SOURCE_TRUST_DEMOTED
+            evidence_against.append("source_demoted")
+        else:
+            trust = SOURCE_TRUST_CLEAN
+        cred *= trust
+
+        cred = round(max(0.0, min(1.0, cred)), 3)
+        out.append(CandidateCredibility(
+            pattern=c.pattern,
+            credibility=cred,
+            raw_confidence=float(c.confidence or 0.0),
+            source=src,
+            evidence_for=evidence_for,
+            evidence_against=evidence_against,
+            source_trust_multiplier=trust,
+            is_classical=(c.pattern in _CLASSICAL_BOUNDED_SET),
+        ))
+
+    return out
+
+
 def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, float]:
     """Decide the answer-shape mode for this analysis.
 
@@ -2670,33 +2848,64 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
             round(conf, 3),
         )
 
-    # ── Gate 3: BOUNDED long-term predicate (Phase 3A, partial) ────────
-    # Per Phase 3A correction #2: spread <= 0.15 AND top_alt >= 0.50.
-    # Uses raw confidence as a credibility *proxy*.  Real credibility
-    # scoring is Phase 3B.  Both candidates must be classical AND must
-    # NAME DIFFERENT PATTERNS — same-pattern twice is confirmation, not
-    # ambiguity, and is the strongest possible CLASSICAL signal.
-    if pc is not None and pc.primary and pc.alternates:
-        primary = pc.primary
-        top_alt = pc.alternates[0]
-        primary_classical = primary.pattern in _CLASSICAL_BOUNDED_SET
-        alt_classical = top_alt.pattern in _CLASSICAL_BOUNDED_SET
-        primary_conf = float(primary.confidence or 0.0)
-        alt_conf = float(top_alt.confidence or 0.0)
-        spread = abs(primary_conf - alt_conf)
-        patterns_disagree = primary.pattern != top_alt.pattern
+    # ── Gate 3: BOUNDED long-term predicate (Phase 3B credibility-based) ─
+    # Phase 3B replaces the Phase 3A raw-confidence proxy with photographic-
+    # evidence credibility (compute_candidate_credibility).  Credibility
+    # is computed from upstream-classifier pattern-match agreement,
+    # contradiction burden, and source trust — independent of resolver
+    # source-priority arithmetic.
+    #
+    # Predicate (all required):
+    #   1. ≥ 2 classical credibility entries.
+    #   2. Top-2 must NAME DIFFERENT PATTERNS (same-pattern twice is
+    #      confirmation, not ambiguity).
+    #   3. Top credibility ≥ 0.55 AND second ≥ 0.45.
+    #   4. Credibility spread ≤ 0.20.
+    #   5. Key-direction zones compatible (both side-key, both center-key,
+    #      or one is "any") — disagreement on horizontal placement means
+    #      this is HYBRID/INSUFFICIENT territory, not BOUNDED.
+    #   6. At least one of the top-2 candidates has ≥ 2 supporting
+    #      upstream classifiers (strong photographic evidence).  This
+    #      blocks "alternate is just a leftover with one weak match"
+    #      false positives — empirically the strongest filter against
+    #      classical→bounded over-trigger on the existing corpus.
+    cc = list(getattr(result, "candidate_credibility", []) or [])
+    classical_cc = [c for c in cc if c.is_classical]
+    if len(classical_cc) >= 2:
+        # Sort by credibility desc (stable; preserves resolver order on ties)
+        classical_cc.sort(key=lambda x: x.credibility, reverse=True)
+        c0, c1 = classical_cc[0], classical_cc[1]
+        spread = abs(c0.credibility - c1.credibility)
+        zones_ok = _key_zones_compatible(c0.pattern, c1.pattern)
+        patterns_disagree = c0.pattern != c1.pattern
+        c0_ev = len(c0.evidence_for or [])
+        c1_ev = len(c1.evidence_for or [])
+        max_evidence_count = max(c0_ev, c1_ev)
+        min_evidence_count = min(c0_ev, c1_ev)
+        # Phase 3B doctrinal anchor: credibility is meant as a CHECK on
+        # resolver source-priority arithmetic.  If the credibility-top
+        # candidate is the same as the resolver's primary, the resolver
+        # was probably right — credibility-scoring agreement with the
+        # resolver is CLASSICAL, not BOUNDED.  Real BOUNDED is when
+        # photographic-evidence credibility OVERRULES the resolver pick.
+        resolver_primary_pattern = pc.primary.pattern if pc.primary else ""
+        credibility_overrules_resolver = c0.pattern != resolver_primary_pattern
         if (
             patterns_disagree
-            and primary_classical and alt_classical
-            and primary_conf >= 0.35 and alt_conf >= 0.50
-            and spread <= 0.15
+            and c0.credibility >= 0.55 and c1.credibility >= 0.45
+            and spread <= 0.20
+            and zones_ok
+            and max_evidence_count >= 2
+            and min_evidence_count >= 1
+            and credibility_overrules_resolver
         ):
             return (
                 AnalysisMode.BOUNDED,
-                f"Bounded long-term: '{primary.pattern}' ({primary_conf:.0%}) "
-                f"vs '{top_alt.pattern}' ({alt_conf:.0%}) — both classical, "
-                f"spread {spread:.2f} ≤ 0.15",
-                0.78,
+                f"Bounded long-term (credibility): '{c0.pattern}' "
+                f"({c0.credibility:.0%}) vs '{c1.pattern}' "
+                f"({c1.credibility:.0%}) — both classical, same key zone, "
+                f"max upstream support {max_evidence_count}",
+                0.80,
             )
 
     # ── Gate 4: BOUNDED bootstrap (TEMPORARY — Phase 3 will retire) ─────
@@ -2892,6 +3101,8 @@ class AnalysisResult:
         "mode_confidence",      # router certainty in chosen mode; NOT pattern_confidence
         # Complex-Lighting Strategy Phase 3A — scene complexity scoring
         "complexity_profile",   # ComplexityProfile populated at Stage 6.5
+        # Complex-Lighting Strategy Phase 3B — candidate credibility scoring
+        "candidate_credibility",  # List[CandidateCredibility] for top classical candidates
     )
 
     def __init__(self) -> None:
@@ -2937,6 +3148,8 @@ class AnalysisResult:
         self.mode_confidence: float = 0.0
         # Complex-Lighting Strategy Phase 3A — scene complexity profile
         self.complexity_profile: Optional[ComplexityProfile] = None
+        # Complex-Lighting Strategy Phase 3B — candidate credibility (post-resolver)
+        self.candidate_credibility: List[CandidateCredibility] = []
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5458,7 +5671,17 @@ def analyze_image(
         logger.debug("compute_scene_complexity failed", exc_info=True)
         result.complexity_profile = None
 
-    # ── Complex-Lighting Strategy Phase 1+3A: mode routing ───────────
+    # ── Complex-Lighting Strategy Phase 3B: candidate credibility ────
+    # Compute photographic-evidence credibility for top candidates.
+    # Used by route_analysis_mode()'s long-term BOUNDED predicate as a
+    # replacement for raw-confidence-as-credibility-proxy.
+    try:
+        result.candidate_credibility = compute_candidate_credibility(result)
+    except Exception:
+        logger.debug("compute_candidate_credibility failed", exc_info=True)
+        result.candidate_credibility = []
+
+    # ── Complex-Lighting Strategy Phase 1+3A+3B: mode routing ────────
     # Decide the answer-shape mode (CLASSICAL/BOUNDED/HYBRID/INSUFFICIENT).
     # Runs AFTER _compute_perception_layer + complexity scoring so all
     # routing inputs are populated.  Mode is the headline output; pattern
@@ -5571,6 +5794,31 @@ def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
     _mc = getattr(result, "mode_confidence", None)
     if _mc is not None:
         out["mode_confidence"] = _safe(_mc)
+
+    # candidate_credibility — Complex-Lighting Strategy Phase 3B
+    # Photographic-evidence credibility for top classical candidates.
+    # Used by the long-term BOUNDED predicate as a replacement for
+    # raw-confidence-as-credibility-proxy.  Surfaced for downstream
+    # consumers who want to inspect the per-candidate evidence trace.
+    _cc = getattr(result, "candidate_credibility", None) or []
+    if _cc:
+        try:
+            out["candidate_credibility"] = [
+                {
+                    "pattern":           c.pattern,
+                    "credibility":       c.credibility,
+                    "raw_confidence":    c.raw_confidence,
+                    "source":            c.source,
+                    "evidence_for":      list(c.evidence_for or []),
+                    "evidence_against":  list(c.evidence_against or []),
+                    "source_trust_multiplier": c.source_trust_multiplier,
+                    "is_classical":      c.is_classical,
+                    "notes":             list(c.notes or []),
+                }
+                for c in _cc
+            ]
+        except Exception:
+            pass
 
     # complexity_profile — Complex-Lighting Strategy Phase 3A
     # Quantified evidence-factor population.  Serializes the full profile

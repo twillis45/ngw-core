@@ -200,4 +200,13 @@ def _build_record(result: "AnalysisResult") -> Dict[str, Any]:
         "mode_rationale":     mode_rationale,
         # Complex-Lighting Strategy Phase 3A — compact complexity summary
         "complexity_summary": complexity_summary,
+        # Complex-Lighting Strategy Phase 3B — top-candidate credibility
+        # Surface only the (pattern, credibility) tuples for top candidates
+        # so the L1 record stays small.  Full evidence traces are available
+        # in analysis_result_to_replay_dict.
+        "candidate_credibility_summary": [
+            {"pattern": c.pattern, "credibility": round(float(c.credibility), 4),
+             "is_classical": bool(c.is_classical)}
+            for c in (getattr(result, "candidate_credibility", []) or [])
+        ],
     }
