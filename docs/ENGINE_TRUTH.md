@@ -434,31 +434,39 @@ INSUFFICIENT > HYBRID > BOUNDED > CLASSICAL
 
 Higher-precedence modes have hard gates evaluated against the available signals; lower modes are fallthrough.
 
-### 14.3 Phase 1 gates (current)
+### 14.3 Phase 1 + 3A gates (current)
 
 | Gate | Condition | Source |
 |------|-----------|--------|
 | INSUFFICIENT | `not face_validation.face_detected` | `_compute_face_validation` |
 | INSUFFICIENT | `face_validation.face_quality == "poor"` | `_compute_face_validation` |
 | INSUFFICIENT | `signal_reliability.overall_signal_strength < 0.40` | `_compute_signal_reliability` |
-| HYBRID | _(deferred — Phase 3 with complexity scorer)_ | — |
-| BOUNDED (bootstrap) | `pattern_status == CONTESTED` AND `"_demoted" in source` AND `len(alternates) >= 1` | resolver mechanics |
+| INSUFFICIENT | `complexity_profile.catchlight_reliability == "blocked"` | `compute_scene_complexity` (Phase 3A; mostly redundant with no_face today) |
+| HYBRID | `complexity_profile.load_bearing_source_count >= 2` AND ≥ 1 corroborator from {`rim_load_bearing`, `ambient_contamination >= 0.5`, `shadow_conflict_score >= 0.50` with reliable catchlight} | Phase 3A — strict |
+| BOUNDED (long-term) | top-2 candidates: both classical, *different patterns*, primary ≥ 0.35, top-alt ≥ 0.50, spread ≤ 0.15 | Phase 3A — partial (raw confidence as credibility proxy) |
+| BOUNDED (bootstrap) | `pattern_status == CONTESTED` AND `"_demoted" in source` AND `len(alternates) >= 1` | TEMPORARY — resolver mechanics |
 | CLASSICAL | fallthrough | — |
 
 The 0.40 `signal_strength` floor was confirmed via threshold sweep (`engine.benchmark_v2.threshold_sweep`) to sit in the middle of a stable [0.30, 0.50] plateau on the current 42-benchmark corpus.
 
-### 14.4 Phase 1 BOUNDED bootstrap — TEMPORARY
+**Phase 3A HYBRID gate corroborators (strict — empirical refinement):**
+`multi_catchlight_topology` (cluster_geometry: triangular/linear/strip) was originally proposed as a corroborator but found empirically too noisy on existing CV — clean Rembrandt with a small fill reads `linear`/`triangular`, ring lights read `strip`. Topology stays on `ComplexityProfile` for observability but is **not** consumed by the HYBRID gate in Phase 3A. Phase 3B will rebuild a topology trigger using intensity-relative signals from `catchlight_intelligence`.
 
-The BOUNDED gate currently uses a heuristic anchored to current resolver mechanics (`_demoted` in source, `pattern_status == CONTESTED`). **This is not the long-term definition.** Phase 3 retires it.
+**Phase 3A long-term BOUNDED predicate (strict):**
+- Top-2 candidates must NAME DIFFERENT PATTERNS (same-pattern-twice is confirmation, not ambiguity — strongest CLASSICAL signal).
+- Both candidates must be in `_CLASSICAL_BOUNDED_SET = {loop, butterfly, clamshell, rembrandt, split, broad, short, flat, high_key, low_key, triangle}`.
+- Primary confidence ≥ 0.35; top-alternate ≥ 0.50; spread ≤ 0.15.
+- INSUFFICIENT and HYBRID gates must not have fired.
 
-Long-term BOUNDED detection (Phase 3+):
-- ≥ 2 classical pattern candidates with `candidate_credibility ≥ 0.35`
-- top-2 credibility spread ≤ 0.20
-- top-2 candidates agree on key direction (within one clock position)
-- INSUFFICIENT gates do not fire
-- HYBRID gates do not fire
+This uses raw confidence as a *credibility proxy*. Phase 3B replaces it with real photographic-evidence credibility scoring (which is independent of resolver-internal source-priority arithmetic). The proxy is documented in `route_analysis_mode()`'s docstring.
 
-The Phase 1 bootstrap is documented in `route_analysis_mode()`'s docstring with an explicit reference to its temporary nature.
+### 14.4 BOUNDED bootstrap — STILL TEMPORARY (Phase 3A retains as fallback)
+
+Phase 3A added a long-term BOUNDED predicate (§14.3) that fires before the bootstrap. The bootstrap is preserved as a fallback for cases the long-term doesn't reach yet:
+
+- The bootstrap fires when `pattern_status == CONTESTED` AND `_demoted in source` AND `len(alternates) ≥ 1` AND the long-term predicate did NOT fire.
+- It exists so Phase 1's catchable cases (4/42 benchmarks) don't silently drop out when the long-term predicate is too strict.
+- Phase 3B retires the bootstrap entirely once real `candidate_credibility` scoring + key-direction agreement detection land.
 
 ### 14.5 Truthfulness rules in effect
 
@@ -483,8 +491,9 @@ The Phase 1 bootstrap is documented in `route_analysis_mode()`'s docstring with 
 |-------|--------|-------|
 | Phase 1 | **Live** | AnalysisMode router; INSUFFICIENT + bootstrap BOUNDED gates; CONTESTED status reorder; multi-candidate pattern_reasoning |
 | Phase 2 | **Live** | Benchmark mode-tagging, mode confusion matrix, threshold sensitivity sweep, shadow-mode L1 telemetry emission |
-| Phase 3 | Queued | ComplexityProfile (Stage 6.5); HYBRID gate; load-bearing source detection (six-criterion test); BOUNDED long-term predicate; catchlight-overrides-shadow doctrine action |
-| Phase 4 | Blocked on Phase 2 gate D (two-week shadow-mode observation) | Mode-aware UI: BOUNDED candidate cards, INSUFFICIENT result screen |
+| Phase 3A | **Live** | ComplexityProfile skeleton (existing signals only); compute_scene_complexity(); HYBRID gate strict + corroboration-required; long-term BOUNDED predicate (raw-confidence proxy); rim_load_bearing structural-evidence-only; placeholder axes carry not_yet_computed |
+| Phase 3B | Queued | Real `candidate_credibility` scoring; per-contribution `contribution_confidence`; new CV detectors (multi-face, gels, post-processing risk, compositing, occlusion, crop completeness); `HybridDecomposition` data shape (LightContribution, BuildStep); catchlight-overrides-shadow doctrinal action; bootstrap BOUNDED retired |
+| Phase 4 | Blocked on Phase 2 gate D (two-week shadow-mode observation) | Mode-aware UI: BOUNDED candidate cards, INSUFFICIENT result screen, HYBRID decomposition table |
 | Phase 5 | Queued | Feedback architecture (per-mode signal mapping, decomposition corrections) |
 | Phase 6 | Queued | Edge-case polish (window+strobe, gels, group, mirror, etc.) |
 

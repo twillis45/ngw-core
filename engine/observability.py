@@ -157,6 +157,24 @@ def _build_record(result: "AnalysisResult") -> Dict[str, Any]:
     mode_confidence = round(float(getattr(result, "mode_confidence", 0.0) or 0.0), 4)
     mode_rationale = getattr(result, "mode_rationale", "") or ""
 
+    # ── Complex-Lighting Strategy Phase 3A — compact complexity summary ───
+    # Surface only the high-signal axes and the not-yet-computed list.  Full
+    # ComplexityProfile is in analysis_result_to_replay_dict; L1 keeps small.
+    cp = getattr(result, "complexity_profile", None)
+    complexity_summary: Dict[str, Any] = {}
+    if cp is not None:
+        complexity_summary = {
+            "load_bearing_source_count": int(getattr(cp, "load_bearing_source_count", 0) or 0),
+            "shadow_conflict_score":     round(float(getattr(cp, "shadow_conflict_score", 0.0) or 0.0), 4),
+            "catchlight_conflict_score": round(float(getattr(cp, "catchlight_conflict_score", 0.0) or 0.0), 4),
+            "ambient_contamination":     round(float(getattr(cp, "ambient_contamination", 0.0) or 0.0), 4),
+            "multi_catchlight_topology": str(getattr(cp, "multi_catchlight_topology", "unknown") or "unknown"),
+            "catchlight_reliability":    str(getattr(cp, "catchlight_reliability", "unknown") or "unknown"),
+            "rim_load_bearing":          bool(getattr(cp, "rim_load_bearing", False)),
+            "overall_complexity":        round(float(getattr(cp, "overall_complexity", 0.0) or 0.0), 4),
+            "not_yet_computed":          list(getattr(cp, "not_yet_computed", []) or []),
+        }
+
     # ── Assemble ─────────────────────────────────────────────────────────────
     return {
         "analysis_id":        analysis_id,
@@ -180,4 +198,6 @@ def _build_record(result: "AnalysisResult") -> Dict[str, Any]:
         "analysis_mode":      analysis_mode_value,
         "mode_confidence":    mode_confidence,
         "mode_rationale":     mode_rationale,
+        # Complex-Lighting Strategy Phase 3A — compact complexity summary
+        "complexity_summary": complexity_summary,
     }

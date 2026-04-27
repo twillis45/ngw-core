@@ -238,6 +238,79 @@ class EdgeCaseFlags:
     earring_catchlight_contamination: bool = False
 
 
+@dataclass
+class ComplexityProfile:
+    """Quantified scene complexity — Complex-Lighting Strategy Phase 3A skeleton.
+
+    Computed at Stage 6.5 (post-perception, pre-mode-routing).  Describes the
+    *evidence-factor population* on the scene; multiple factors routinely
+    co-exist.  The mode router consumes this profile but does NOT classify
+    the scene by it — mode is a separate, mutually-exclusive concept.
+
+    Phase 3A scope:
+      - Axes implementable from existing engine signals get real values.
+      - Axes requiring new CV (gels, multi-face, post-processing risk,
+        compositing, occlusion, crop completeness) carry placeholder
+        defaults and are listed in `not_yet_computed`.
+      - Routing logic must NOT consume placeholder axes.
+
+    Phase 3B will fill the placeholders.
+    """
+    # — Source multiplicity —
+    multiple_plausible_keys:    float = 0.0      # 0..1 from pattern_candidates spread
+    load_bearing_source_count:  int   = 0        # int from light_count + multi_shadow_detection
+    secondary_source_load:      float = 0.0      # 0..1 rough estimate when topology available
+
+    # — Geometric conflict —
+    shadow_conflict_score:      float = 0.0      # 0..1 from _detect_signal_paradoxes
+    catchlight_conflict_score:  float = 0.0      # 0..1 from lighting_read.contradictions (Block B)
+    multi_catchlight_topology:  str   = "unknown"  # single|dual|triangular|linear|ring|strip|unknown
+
+    # — Environmental —
+    ambient_contamination:      float = 0.0      # 0..1 from edge_case_flags.window_light_gradient
+    practical_contamination:    float = 0.0      # PLACEHOLDER — Phase 3B
+    practical_load_bearing:     bool  = False    # PLACEHOLDER — Phase 3B
+
+    # — Color story —
+    color_contamination_score:  float = 0.0      # PLACEHOLDER — Phase 3B
+    detected_gels:              List[str] = dc_field(default_factory=list)  # PLACEHOLDER — Phase 3B
+
+    # — Face & framing —
+    occlusion_ratio:            float = 0.0      # PLACEHOLDER — Phase 3B
+    catchlight_reliability:     str   = "unknown"  # reliable|degraded|blocked|unknown
+    catchlight_reliability_reason: str = ""
+    crop_completeness:          float = 1.0      # PLACEHOLDER — Phase 3B (defaults to "complete")
+
+    # — Group / multi-face —
+    face_count:                 int   = 1        # PLACEHOLDER — Phase 3B (single-face assumption)
+    multi_face_lighting_consistency: float = 1.0 # PLACEHOLDER — Phase 3B
+
+    # — Capture quality —
+    post_processing_risk:       float = 0.0      # PLACEHOLDER — Phase 3B
+    is_composited:              bool  = False    # PLACEHOLDER — Phase 3B
+    capture_quality_score:      float = 1.0      # 0..1 from signal_reliability (real)
+
+    # — Rim / accent —
+    rim_present:                bool  = False
+    rim_load_bearing:           bool  = False    # only set True with structural evidence
+
+    # — Aggregate (observability only; mode router uses individual axes) —
+    overall_complexity:         float = 0.0
+    notes:                      List[str] = dc_field(default_factory=list)
+
+    # — Implementation transparency —
+    # Names every axis that is a Phase 3A placeholder.  Consumers MUST check
+    # this list before treating an axis value as authoritative.  Phase 3B
+    # will shrink this list as detectors land.
+    not_yet_computed:           List[str] = dc_field(default_factory=lambda: [
+        "practical_contamination", "practical_load_bearing",
+        "color_contamination_score", "detected_gels",
+        "occlusion_ratio", "crop_completeness",
+        "face_count", "multi_face_lighting_consistency",
+        "post_processing_risk", "is_composited",
+    ])
+
+
 def _apply_signal_confidence(
     candidates: List[PatternCandidate],
     result: "AnalysisResult",
@@ -2319,54 +2392,220 @@ def _resolve_authoritative_pattern(result: "AnalysisResult") -> Tuple[str, str]:
     return (pc.authoritative_pattern, pc.authoritative_source)
 
 
+_CLASSICAL_BOUNDED_SET = frozenset({
+    "loop", "butterfly", "clamshell", "rembrandt", "split",
+    "broad", "short", "flat", "high_key", "low_key", "triangle",
+})
+
+_MULTI_SOURCE_TOPOLOGIES: frozenset = frozenset()
+# Phase 3A intentionally treats `multi_catchlight_topology` as observational
+# only (no HYBRID trigger).  The cluster_geometry values from existing CV
+# (triangular, linear, strip) fire too liberally on single-key scenes — e.g.,
+# a strict ring light reads as 'strip' and a clean Rembrandt with a small
+# fill reads as 'linear' or 'triangular'.  Without intensity-relative
+# corroboration (Phase 3B catchlight_intelligence), topology cannot be
+# trusted as a HYBRID signal.  The axis stays on ComplexityProfile for
+# observability and Phase 3B will rebuild the trigger.
+
+
+def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
+    """Quantify scene complexity from existing engine signals (Phase 3A).
+
+    Stage 6.5 — runs after _compute_perception_layer so face_validation,
+    signal_reliability, edge_case_flags, and pattern_candidates are all
+    populated.
+
+    This function only consumes signals already produced by the pipeline.
+    No new CV is invoked.  Phase 3B replaces placeholder axes with real
+    detectors (gels, multi-face, post-processing risk, compositing,
+    occlusion ratio, crop completeness).
+
+    Per Complex-Lighting Strategy revision §4 doctrine:
+      - The profile describes the evidence-factor population on the scene.
+      - It does not classify the scene by mode (that is route_analysis_mode's
+        job, downstream).
+      - Placeholder axes are listed in `not_yet_computed` and must not be
+        treated as authoritative measurements.
+    """
+    cp = ComplexityProfile()
+    notes: List[str] = []
+
+    # ── multiple_plausible_keys — from pattern_candidates spread ────────
+    pc = result.pattern_candidates
+    if pc is not None and pc.alternates:
+        primary_conf = pc.primary.confidence if pc.primary else 0.0
+        within_20pp = 0
+        for a in pc.alternates:
+            if abs((a.confidence or 0.0) - primary_conf) <= 0.20 and (a.confidence or 0.0) >= 0.30:
+                within_20pp += 1
+        cp.multiple_plausible_keys = min(1.0, within_20pp / 2.0)
+    else:
+        cp.multiple_plausible_keys = 0.0
+
+    # ── load_bearing_source_count — light_count + multi_shadow ──────────
+    intel_lc = 0
+    msd_lc = 0
+    intel = result.lighting_intel
+    if intel is not None:
+        intel_lc = int(getattr(intel, "light_count", 0) or 0)
+    cr = getattr(result, "cue_report", None)
+    msd = getattr(cr, "multi_shadow_detection", None) if cr else None
+    if msd is not None:
+        msd_lc = int(getattr(msd, "shadow_count", 0) or 0)
+    # Cap at a sane upper bound to avoid noise from over-counted catchlights.
+    raw = max(intel_lc, msd_lc)
+    cp.load_bearing_source_count = max(0, min(6, raw))
+
+    # ── secondary_source_load — rough heuristic from fill_method_text ───
+    # Conservative: 0.0 unless there's textual evidence of a structured
+    # second source.  Real intensity-relative scoring is Phase 3B.
+    fill_text = (getattr(intel, "fill_method_text", "") or "").lower() if intel else ""
+    if fill_text:
+        if "reflector" in fill_text:
+            cp.secondary_source_load = 0.30  # reflector — passive fill, low contribution
+        elif "two-source" in fill_text or "three-source" in fill_text or "wrap" in fill_text:
+            cp.secondary_source_load = 0.70
+        elif "ring" in fill_text or "axis" in fill_text:
+            cp.secondary_source_load = 0.0   # ring/axial — single-source character
+        elif "fill" in fill_text:
+            cp.secondary_source_load = 0.40
+
+    # ── shadow_conflict_score — from active paradox flags ───────────────
+    paradox_flags = _detect_signal_paradoxes(result)
+    active_paradoxes = [k for k, v in paradox_flags.items() if v]
+    if active_paradoxes:
+        cp.shadow_conflict_score = min(1.0, len(active_paradoxes) / 4.0)
+        notes.append(f"signal_paradoxes: {', '.join(active_paradoxes)}")
+
+    # ── catchlight_conflict_score — from Block B persistence ────────────
+    ra = getattr(result, "reference_analysis", None)
+    lr = getattr(ra, "lighting_read", None) if ra else None
+    lr_contras = list(getattr(lr, "contradictions", []) or [])
+    has_catchlight_paradox = any(
+        c.startswith("catchlight_shadow_paradox:") for c in lr_contras
+    )
+    if has_catchlight_paradox:
+        cp.catchlight_conflict_score = 1.0
+        notes.append("catchlight_shadow_paradox observed")
+
+    # ── multi_catchlight_topology — from CatchlightTopology ──────────────
+    ct = None
+    if intel is not None:
+        ct_intel = getattr(intel, "catchlight_topology", None)
+        if ct_intel is not None:
+            ct = ct_intel
+    if ct is None and cr is not None:
+        ct = getattr(cr, "catchlight_topology", None)
+    if ct is not None:
+        cluster = getattr(ct, "cluster_geometry", "") or ""
+        if cluster:
+            cp.multi_catchlight_topology = cluster
+
+    # ── ambient_contamination — from edge_case_flags.window_light_gradient
+    ecf = result.edge_case_flags
+    if ecf is not None and getattr(ecf, "window_light_gradient", False):
+        cp.ambient_contamination = 0.6
+        notes.append("window_light_gradient flag set")
+
+    # ── catchlight_reliability — from no_face / earring contamination ───
+    no_face = False
+    fv = result.face_validation
+    if fv is not None and not getattr(fv, "face_detected", False):
+        no_face = True
+    earring = bool(getattr(ecf, "earring_catchlight_contamination", False)) if ecf else False
+    if no_face:
+        cp.catchlight_reliability = "blocked"
+        cp.catchlight_reliability_reason = "no_face"
+    elif earring:
+        cp.catchlight_reliability = "degraded"
+        cp.catchlight_reliability_reason = "earring_contamination"
+    else:
+        cp.catchlight_reliability = "reliable"
+        cp.catchlight_reliability_reason = ""
+
+    # ── capture_quality_score — from signal_reliability ─────────────────
+    sr = result.signal_reliability
+    if sr is not None:
+        cp.capture_quality_score = float(getattr(sr, "overall_signal_strength", 1.0) or 1.0)
+
+    # ── rim_present / rim_load_bearing — STRUCTURAL EVIDENCE ONLY ───────
+    # Per Phase 3A correction #3: do not infer rim_load_bearing from
+    # taxonomy-polluted pattern labels alone.  Use lighting_intel
+    # structural signals (fill_method_text containing rim/kicker keywords).
+    # If evidence is weak, rim_load_bearing stays False.
+    rim_keywords = ("rim", "kicker", "edge light", "back light", "backlight")
+    rim_text_hit = any(kw in fill_text for kw in rim_keywords)
+    cp.rim_present = bool(rim_text_hit)
+    # rim_load_bearing requires *load-bearing* evidence: explicit indication
+    # the rim is structurally part of the look.  Phase 3A heuristic is strict:
+    # require both rim text AND a phrasing that implies it carries the look.
+    rim_load_text_hit = any(kw in fill_text for kw in (
+        "dominant rim", "rim-dominant", "primary rim",
+        "key rim", "rim is key", "rim drives",
+    ))
+    cp.rim_load_bearing = rim_load_text_hit
+    # Note: in Phase 3A this almost never fires.  That is intentional.
+    # Phase 3B adds intensity-relative measurement and proper rim-dominance
+    # detection from catchlight_intelligence and back-light topology.
+
+    # ── overall_complexity — observability blend ─────────────────────────
+    # Weighted combination of the *real* axes only.  Placeholders excluded.
+    cp.overall_complexity = round(min(1.0, max(0.0,
+        0.30 * min(1.0, cp.load_bearing_source_count / 3.0)
+        + 0.30 * cp.shadow_conflict_score
+        + 0.20 * cp.catchlight_conflict_score
+        + 0.20 * cp.ambient_contamination
+    )), 3)
+
+    cp.notes = notes
+    return cp
+
+
 def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, float]:
     """Decide the answer-shape mode for this analysis.
 
-    Phase 1 (Complex-Lighting Strategy) implementation.
+    Phase 3A (Complex-Lighting Strategy) implementation.
 
     Router precedence (highest first):
-      1. INSUFFICIENT  — measurement failure; nothing else matters
-      2. HYBRID        — multiple load-bearing sources; decompose
-      3. BOUNDED       — single-source scene but two patterns equally credible
-      4. CLASSICAL     — default; coherent single-driver scene
+      1. INSUFFICIENT  — measurement failure
+      2. HYBRID        — multiple load-bearing sources with corroboration
+      3. BOUNDED       — long-term predicate (≥2 credible classical reads)
+      4. BOUNDED       — bootstrap fallback (resolver demotion path)
+      5. CLASSICAL     — default; coherent single-driver scene
 
-    Phase 1 scope:
-      - INSUFFICIENT gate: built from face_validation + signal_reliability.
-        ComplexityProfile axes (catchlight reliability, crop completeness,
-        post-processing risk, compositing) are deferred to Phase 3.
-      - HYBRID gate: deferred to Phase 3. Returns CLASSICAL fallthrough.
-      - BOUNDED gate: bootstrap heuristic anchored to Pass 1's CONTESTED
-        status and resolver demotion paths.  This is NOT the long-term
-        definition.  Phase 3 retires this in favor of credibility-based
-        scoring (multiple credible classical interpretations agreeing on
-        key direction, adequate evidence quality, not Hybrid, not
-        Insufficient).
-      - CLASSICAL: fallthrough.
+    Phase 3A changes vs Phase 1:
+      - HYBRID gate is now wired but STRICT: requires
+        load_bearing_source_count >= 2 AND at least one corroborator
+        (rim_load_bearing OR ambient_contamination >= 0.5 OR
+        shadow_conflict_score >= 0.50 with reliable catchlight OR
+        multi-source topology — explicitly NOT 'dual', which is key+fill).
+      - BOUNDED long-term predicate runs first: spread <= 0.15 AND
+        top_alternate.confidence >= 0.50 AND both candidates classical.
+      - BOUNDED bootstrap remains as fallback for cases the long-term
+        predicate doesn't reach yet.  Explicitly TEMPORARY.
 
     Returns (mode, rationale, mode_confidence).
-      mode_confidence is the router's certainty in the chosen mode shape.
-      It is a separate concept from pattern_confidence (resolver belief in
-      the pattern slot) and from candidate_credibility / contribution_
-      confidence (introduced in later phases).  Mode routing must not
-      consume pattern_confidence.
+      mode_confidence is router certainty in the chosen mode shape.
+      Distinct from pattern_confidence and from candidate_credibility
+      (Phase 3B) and contribution_confidence (Phase 3B).  Mode routing
+      must not consume pattern_confidence.
 
     Doctrine notes:
-      - Mode is mutually exclusive (engine emits one); evidence factors
-        co-exist on the scene.  The router picks the highest-precedence
-        mode whose gate fires; lower-mode evidence is preserved in the
-        result struct for downstream consumers.
-      - Per CLAUDE.md §III TR (no auto-promotion): mode is a status
-        decision, not a value mutation.  authoritative_pattern is
-        unchanged by mode routing.
+      - Mode is mutually exclusive; evidence factors co-exist on the scene.
+      - Per §III TR (no auto-promotion): mode is a status decision; pattern
+        fields are unchanged by routing.
+      - Placeholder axes on ComplexityProfile (per `not_yet_computed`) are
+        NOT consumed by this router.  Routing depends only on real signals.
     """
     fv = result.face_validation
     sr = result.signal_reliability
     pc = result.pattern_candidates
+    cp = getattr(result, "complexity_profile", None)
 
     # ── Gate 1: INSUFFICIENT ─────────────────────────────────────────────
-    # Phase 1: face quality + signal reliability only.  Phase 3 adds
-    # catchlight reliability, crop completeness, post-processing risk,
-    # and compositing detection from ComplexityProfile.
+    # Phase 1 conditions preserved; Phase 3A adds explicit catchlight
+    # reliability blocked check (mostly redundant with no_face today; the
+    # structure is here for Phase 3B detectors).
     insufficient_reasons: List[str] = []
     if fv is None or not getattr(fv, "face_detected", False):
         insufficient_reasons.append("no face detected")
@@ -2376,8 +2615,12 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         insufficient_reasons.append(
             f"signal strength {sr.overall_signal_strength:.2f} below 0.40 floor"
         )
+    if cp is not None and cp.catchlight_reliability == "blocked" \
+            and "no face detected" not in insufficient_reasons:
+        insufficient_reasons.append(
+            f"catchlight reliability blocked ({cp.catchlight_reliability_reason})"
+        )
     if insufficient_reasons:
-        # Higher mode_confidence when multiple gates fire simultaneously.
         n = len(insufficient_reasons)
         conf = 0.70 + min(0.20, 0.10 * (n - 1))
         return (
@@ -2386,17 +2629,80 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
             round(conf, 3),
         )
 
-    # ── Gate 2: HYBRID ───────────────────────────────────────────────────
-    # Deferred to Phase 3.  ComplexityProfile is not yet computed; HYBRID
-    # cannot fire honestly until load-bearing source detection (per the
-    # six-criterion operational test) is wired.  Falls through.
+    # ── Gate 2: HYBRID — Phase 3A wired, STRICT ─────────────────────────
+    # Per Phase 3A correction #1: load_bearing_source_count >= 2 alone is
+    # NOT enough.  Require at least one corroborator from real signals.
+    # This avoids over-triggering on noisy multi-shadow detections or
+    # ambiguous dual-catchlight topologies (key+fill is not multi-source).
+    hybrid_triggers: List[str] = []
+    if cp is not None:
+        lb_count = cp.load_bearing_source_count
+        rim_lb = cp.rim_load_bearing
+        ambient = cp.ambient_contamination
+        shadow_conflict = cp.shadow_conflict_score
+        catchlight_reliable = cp.catchlight_reliability == "reliable"
 
-    # ── Gate 3: BOUNDED (Phase 1 bootstrap) ──────────────────────────────
+        # Corroborator set (Phase 3A — strict; topology excluded per
+        # empirical noise observation; Phase 3B rebuilds from intensity-
+        # relative catchlight_intelligence).
+        corroborators: List[str] = []
+        if rim_lb:
+            corroborators.append("rim_load_bearing")
+        if ambient >= 0.5:
+            corroborators.append(f"ambient_contamination={ambient:.2f}")
+        if shadow_conflict >= 0.50 and catchlight_reliable:
+            corroborators.append(
+                f"shadow_conflict={shadow_conflict:.2f}_with_reliable_catchlight"
+            )
+
+        # HYBRID requires lb_count >= 2 AND at least one corroborator.
+        if lb_count >= 2 and corroborators:
+            hybrid_triggers.append(f"load_bearing={lb_count}")
+            hybrid_triggers.extend(corroborators)
+
+    if hybrid_triggers:
+        # mode_confidence: 0.65 single trigger, 0.85 multiple triggers
+        n = len(hybrid_triggers)
+        conf = 0.65 + min(0.20, 0.10 * (n - 1))
+        return (
+            AnalysisMode.HYBRID,
+            "Hybrid decomposition: " + "; ".join(hybrid_triggers),
+            round(conf, 3),
+        )
+
+    # ── Gate 3: BOUNDED long-term predicate (Phase 3A, partial) ────────
+    # Per Phase 3A correction #2: spread <= 0.15 AND top_alt >= 0.50.
+    # Uses raw confidence as a credibility *proxy*.  Real credibility
+    # scoring is Phase 3B.  Both candidates must be classical AND must
+    # NAME DIFFERENT PATTERNS — same-pattern twice is confirmation, not
+    # ambiguity, and is the strongest possible CLASSICAL signal.
+    if pc is not None and pc.primary and pc.alternates:
+        primary = pc.primary
+        top_alt = pc.alternates[0]
+        primary_classical = primary.pattern in _CLASSICAL_BOUNDED_SET
+        alt_classical = top_alt.pattern in _CLASSICAL_BOUNDED_SET
+        primary_conf = float(primary.confidence or 0.0)
+        alt_conf = float(top_alt.confidence or 0.0)
+        spread = abs(primary_conf - alt_conf)
+        patterns_disagree = primary.pattern != top_alt.pattern
+        if (
+            patterns_disagree
+            and primary_classical and alt_classical
+            and primary_conf >= 0.35 and alt_conf >= 0.50
+            and spread <= 0.15
+        ):
+            return (
+                AnalysisMode.BOUNDED,
+                f"Bounded long-term: '{primary.pattern}' ({primary_conf:.0%}) "
+                f"vs '{top_alt.pattern}' ({alt_conf:.0%}) — both classical, "
+                f"spread {spread:.2f} ≤ 0.15",
+                0.78,
+            )
+
+    # ── Gate 4: BOUNDED bootstrap (TEMPORARY — Phase 3 will retire) ─────
     # Anchored to Pass 1's CONTESTED status and resolver demotion paths.
-    # This is a TEMPORARY heuristic.  Phase 3 retires it.  Long-term
-    # definition: multiple classical patterns at credibility ≥ 0.35,
-    # credibility spread ≤ 0.20, agreement on key direction, INSUFFICIENT
-    # gates pass, HYBRID gates pass.
+    # Fires only when long-term predicate did not.  Kept as a safety net
+    # so Phase 1's catchable cases don't silently drop out.
     src = result.authoritative_pattern_source or ""
     if (
         result.pattern_status == FieldStatus.CONTESTED
@@ -2407,16 +2713,14 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         alt = pc.alternates[0]
         return (
             AnalysisMode.BOUNDED,
-            f"Bounded read: winner '{result.authoritative_pattern}' "
+            f"Bounded bootstrap (temporary): winner '{result.authoritative_pattern}' "
             f"came via {src}; leading alternate is '{alt.pattern}'",
-            0.70,  # bootstrap predicate is approximate — modest confidence
+            0.70,
         )
 
-    # ── Gate 4: CLASSICAL (fallthrough) ──────────────────────────────────
+    # ── Gate 5: CLASSICAL (fallthrough) ──────────────────────────────────
     pat = result.authoritative_pattern or ""
     if result.pattern_status == FieldStatus.CONTESTED:
-        # CONTESTED but no BOUNDED bootstrap match — unusual edge.
-        # Phase 3 will retire this branch entirely.
         return (
             AnalysisMode.CLASSICAL,
             "Classical fallthrough (contested status without BOUNDED match)",
@@ -2586,6 +2890,8 @@ class AnalysisResult:
         "analysis_mode",        # AnalysisMode: headline output shape (classical/bounded/hybrid/insufficient)
         "mode_rationale",       # one-sentence reason the mode was chosen
         "mode_confidence",      # router certainty in chosen mode; NOT pattern_confidence
+        # Complex-Lighting Strategy Phase 3A — scene complexity scoring
+        "complexity_profile",   # ComplexityProfile populated at Stage 6.5
     )
 
     def __init__(self) -> None:
@@ -2629,6 +2935,8 @@ class AnalysisResult:
         self.analysis_mode: AnalysisMode = AnalysisMode.CLASSICAL
         self.mode_rationale: str = ""
         self.mode_confidence: float = 0.0
+        # Complex-Lighting Strategy Phase 3A — scene complexity profile
+        self.complexity_profile: Optional[ComplexityProfile] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -5137,11 +5445,24 @@ def analyze_image(
     # ── Perception layer (read-only diagnostics) ─────────────────────
     _compute_perception_layer(result)
 
-    # ── Complex-Lighting Strategy Phase 1: mode routing ──────────────
+    # ── Complex-Lighting Strategy Phase 3A: scene complexity scoring ──
+    # Stage 6.5.  Quantifies the evidence-factor population on the scene
+    # using existing engine signals (face_validation, signal_reliability,
+    # edge_case_flags, pattern_candidates, lighting_intel, multi-shadow
+    # detection, lighting_read.contradictions).  No new CV.  Phase 3B
+    # adds detectors for placeholder axes.  Routing logic does NOT
+    # consume placeholder axes (per `not_yet_computed` contract).
+    try:
+        result.complexity_profile = compute_scene_complexity(result)
+    except Exception:
+        logger.debug("compute_scene_complexity failed", exc_info=True)
+        result.complexity_profile = None
+
+    # ── Complex-Lighting Strategy Phase 1+3A: mode routing ───────────
     # Decide the answer-shape mode (CLASSICAL/BOUNDED/HYBRID/INSUFFICIENT).
-    # Runs AFTER _compute_perception_layer so face_validation and
-    # signal_reliability are populated.  Mode is the headline output;
-    # pattern resolution becomes mode-conditional content.  Pattern fields
+    # Runs AFTER _compute_perception_layer + complexity scoring so all
+    # routing inputs are populated.  Mode is the headline output; pattern
+    # resolution becomes mode-conditional content.  Pattern fields
     # (authoritative_pattern, pattern_candidates, pattern_status) are
     # unchanged by routing — mode is additive metadata.
     _mode, _mode_rationale, _mode_conf = route_analysis_mode(result)
@@ -5250,6 +5571,44 @@ def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
     _mc = getattr(result, "mode_confidence", None)
     if _mc is not None:
         out["mode_confidence"] = _safe(_mc)
+
+    # complexity_profile — Complex-Lighting Strategy Phase 3A
+    # Quantified evidence-factor population.  Serializes the full profile
+    # including the `not_yet_computed` list so consumers can distinguish
+    # measured axes from placeholder defaults.  Per strategy revision §4
+    # and §5: placeholder axes must not be treated as authoritative.
+    _cp = getattr(result, "complexity_profile", None)
+    if _cp is not None:
+        try:
+            out["complexity_profile"] = {
+                "multiple_plausible_keys":     _cp.multiple_plausible_keys,
+                "load_bearing_source_count":   _cp.load_bearing_source_count,
+                "secondary_source_load":       _cp.secondary_source_load,
+                "shadow_conflict_score":       _cp.shadow_conflict_score,
+                "catchlight_conflict_score":   _cp.catchlight_conflict_score,
+                "multi_catchlight_topology":   _cp.multi_catchlight_topology,
+                "ambient_contamination":       _cp.ambient_contamination,
+                "practical_contamination":     _cp.practical_contamination,
+                "practical_load_bearing":      _cp.practical_load_bearing,
+                "color_contamination_score":   _cp.color_contamination_score,
+                "detected_gels":               list(_cp.detected_gels or []),
+                "occlusion_ratio":             _cp.occlusion_ratio,
+                "catchlight_reliability":      _cp.catchlight_reliability,
+                "catchlight_reliability_reason": _cp.catchlight_reliability_reason,
+                "crop_completeness":           _cp.crop_completeness,
+                "face_count":                  _cp.face_count,
+                "multi_face_lighting_consistency": _cp.multi_face_lighting_consistency,
+                "post_processing_risk":        _cp.post_processing_risk,
+                "is_composited":               _cp.is_composited,
+                "capture_quality_score":       _cp.capture_quality_score,
+                "rim_present":                 _cp.rim_present,
+                "rim_load_bearing":            _cp.rim_load_bearing,
+                "overall_complexity":          _cp.overall_complexity,
+                "notes":                       list(_cp.notes or []),
+                "not_yet_computed":            list(_cp.not_yet_computed or []),
+            }
+        except Exception:
+            pass
 
     # ── PatternCandidates ────────────────────────────────────────────────────
     _pc = getattr(result, "pattern_candidates", None)
