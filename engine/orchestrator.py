@@ -2267,6 +2267,24 @@ def resolve_pattern_candidates(result: "AnalysisResult") -> PatternCandidates:
         )
         needs_review = True
 
+    # ── Surface upstream lighting_read.contradictions ─────────────────
+    # build_lighting_read() persists structured paradoxes (e.g.,
+    # catchlight-vs-shadow horizontal-direction mismatch) onto the
+    # LightingRead.contradictions list.  Promote them into the resolver's
+    # contradictions list so they reach API consumers via the existing
+    # PatternCandidates.to_dict() serialization path.
+    #
+    # Persistence only — these contradictions do not change resolution
+    # behavior in this commit.  Doctrinal action ("catchlights override
+    # shadow direction when in conflict") is deferred to Phase 3 (the
+    # Complex-Lighting Strategy complexity scorer).
+    _ra = getattr(result, "reference_analysis", None)
+    _lr = getattr(_ra, "lighting_read", None) if _ra is not None else None
+    _lr_contras = list(getattr(_lr, "contradictions", []) or [])
+    for _lc in _lr_contras:
+        if _lc and _lc not in contradictions:
+            contradictions.append(_lc)
+
     # VL-002: Log when cascade fired — all top classifiers demoted — and
     # the winning source is still a demoted or unknown source.
     if contradictions and any("cascade" in c for c in contradictions):

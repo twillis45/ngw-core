@@ -2601,6 +2601,13 @@ def build_lighting_read(
     environment = cue_inference.get("environment")
     setup_family = cue_inference.get("setup_family")
 
+    # Structured contradictions accumulator — populated by paradox checks
+    # below.  Persisted onto the returned LightingRead.contradictions field
+    # so downstream consumers (orchestrator resolver, API responses) can
+    # surface the signal.  Replaces a previously-broken persistence gate
+    # (`"contradictions" in dir()` always False — dead code).
+    _contradictions: List[str] = []
+
     # Detect shadow interruption (gobo/slit) — overrides catchlight-based values
     sip = cue_report.shadow_interruption_pattern
     has_shadow_interruption = sip is not None and sip.detected
@@ -2808,12 +2815,15 @@ def build_lighting_read(
                         _psd_dir, _key_from_shadow,
                         _cl_clock, _key_from_cl,
                     )
-                    # Record on contradictions list for downstream triage
-                    if "contradictions" in dir() and isinstance(contradictions, list):
-                        contradictions.append(
-                            f"catchlight_shadow_paradox: shadow→key={_key_from_shadow} "
-                            f"vs catchlight@{_cl_clock}→key={_key_from_cl}"
-                        )
+                    # Record on contradictions list for downstream triage.
+                    # Persists onto LightingRead.contradictions; the prior
+                    # `"contradictions" in dir()` gate was always False
+                    # (dir() returns local-name strings; no `contradictions`
+                    # local existed) — fixed by threading via _contradictions.
+                    _contradictions.append(
+                        f"catchlight_shadow_paradox: shadow→key={_key_from_shadow} "
+                        f"vs catchlight@{_cl_clock}→key={_key_from_cl}"
+                    )
                     break  # Flag once per build
 
     # Shadow pattern — for gobo/slit, include shape when detectable
@@ -3408,6 +3418,7 @@ def build_lighting_read(
         ambiguity_notes=ambiguity,
         confidence=confidence,
         archetype_classification=archetype_data,
+        contradictions=list(_contradictions),
     )
     result.resolution_quality = _compute_resolution_quality(result, _LIGHTING_READ_SCORABLE)
     return result

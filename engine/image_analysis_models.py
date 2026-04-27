@@ -771,6 +771,15 @@ class LightingRead(BaseModel):
     data_quality: str = "full"  # full | face_limited | environmental_limited
     archetype_classification: Optional[Dict[str, Any]] = None  # from archetype_classifier
     notes: List[str] = Field(default_factory=list)
+    # Structured contradictions detected while building this lighting read.
+    # Populated by build_lighting_read() when paradoxes are observed (e.g.,
+    # catchlight-vs-shadow-direction horizontal mismatch). Surfaced through
+    # PatternCandidates.contradictions so API consumers and downstream
+    # triage can act on the signal. Doctrinal note: persistence only —
+    # acting on these contradictions (e.g., demoting shadow-direction-
+    # derived candidates per "catchlights before pattern") is downstream
+    # work in the Complex-Lighting Strategy Phase 3 complexity scorer.
+    contradictions: List[str] = Field(default_factory=list)
 
 
 class RecreationSetup(BaseModel):

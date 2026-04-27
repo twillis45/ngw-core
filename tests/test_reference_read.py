@@ -385,6 +385,113 @@ class TestBuildLightingRead:
         assert "B&W" in lr.tonal_processing_notes
 
 
+class TestCatchlightShadowParadoxPersistence:
+    """Regression tests for the catchlight-vs-shadow paradox persistence path.
+
+    Background: build_lighting_read() detects horizontal-direction conflicts
+    between the face shadow direction and the catchlight clock position
+    (e.g., shadow says key from camera-right but catchlight at 9 o'clock
+    says key from camera-left). Prior to the fix, the persistence path was
+    dead code (`if "contradictions" in dir() and isinstance(...)`) — `dir()`
+    returned local-name strings with no `contradictions` local present, so
+    the gate was always False. The PARADOX warning was logged but lost.
+
+    Now persists onto LightingRead.contradictions and is surfaced through
+    PatternCandidates.contradictions in the resolver for API consumers.
+
+    Doctrinal note: persistence only — these contradictions do not change
+    pattern resolution behavior. Acting on the signal ("catchlights override
+    shadow direction when in conflict") is deferred to Phase 3.
+    """
+
+    def _make_psd(self, direction: str, confidence: float = 0.7):
+        from engine.image_analysis_models import PrimaryShadowDirection
+        return PrimaryShadowDirection(direction=direction, confidence=confidence)
+
+    def test_paradox_absent_when_no_primary_shadow_direction(self):
+        cue_report = _make_cue_report()
+        cue_inference = _make_cue_inference()
+        intel = _FakeLightingIntel()
+        lr = build_lighting_read(cue_report, cue_inference, intel)
+        assert lr.contradictions == []
+
+    def test_paradox_absent_when_directions_agree(self):
+        # Shadow upper_left → key from upper_right (right-side key).
+        # Catchlight at 3 o'clock → key from right.  Agreement, no paradox.
+        cue_report = _make_cue_report(
+            primary_shadow_direction=self._make_psd("upper_left"),
+        )
+        cue_inference = _make_cue_inference()
+        intel = _FakeLightingIntel()
+        vision_data = {
+            "catchlights": {
+                "ok": True,
+                "catchlights": [{"position": "3 o'clock"}],
+            },
+        }
+        lr = build_lighting_read(
+            cue_report, cue_inference, intel, vision_data=vision_data,
+        )
+        assert lr.contradictions == []
+
+    def test_paradox_present_when_horizontal_directions_conflict(self):
+        # Shadow upper_left → key from upper_right (right-side key).
+        # Catchlight at 9 o'clock → key from left.  Conflict → paradox.
+        cue_report = _make_cue_report(
+            primary_shadow_direction=self._make_psd("upper_left"),
+        )
+        cue_inference = _make_cue_inference()
+        intel = _FakeLightingIntel()
+        vision_data = {
+            "catchlights": {
+                "ok": True,
+                "catchlights": [{"position": "9 o'clock"}],
+            },
+        }
+        lr = build_lighting_read(
+            cue_report, cue_inference, intel, vision_data=vision_data,
+        )
+        assert len(lr.contradictions) == 1
+        entry = lr.contradictions[0]
+        assert entry.startswith("catchlight_shadow_paradox:")
+        assert "upper_right" in entry  # shadow → key direction
+        assert "left" in entry          # catchlight → key direction
+
+    def test_paradox_dedup_in_resolver(self):
+        """resolve_pattern_candidates() must not double-add a paradox when
+        lighting_read.contradictions already contains it (or contains
+        duplicates of it).
+        """
+        from engine.orchestrator import (
+            AnalysisResult, resolve_pattern_candidates,
+        )
+        from engine.image_analysis_models import ReferencePhotoAnalysis
+
+        paradox_text = (
+            "catchlight_shadow_paradox: shadow→key=upper_right "
+            "vs catchlight@9→key=left"
+        )
+
+        result = AnalysisResult()
+        # Build a minimal LightingRead with the same paradox repeated.
+        # The resolver should surface it exactly once.
+        lr = LightingRead(
+            shadow_pattern="loop",
+            confidence=0.5,
+            contradictions=[paradox_text, paradox_text],
+        )
+        result.reference_analysis = ReferencePhotoAnalysis(
+            lighting_read=lr,
+        )
+
+        pc = resolve_pattern_candidates(result)
+        paradox_hits = [c for c in pc.contradictions if c == paradox_text]
+        assert len(paradox_hits) == 1, (
+            f"Expected paradox surfaced exactly once; got "
+            f"{len(paradox_hits)} hits. contradictions={pc.contradictions}"
+        )
+
+
 class TestBuildRecreationSetup:
 
     def test_basic_recreation(self):
