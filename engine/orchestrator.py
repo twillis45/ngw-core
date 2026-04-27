@@ -3158,6 +3158,24 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         # was probably right — credibility-scoring agreement with the
         # resolver is CLASSICAL, not BOUNDED.  Real BOUNDED is when
         # photographic-evidence credibility OVERRULES the resolver pick.
+        #
+        # Phase 3C Workstream D — known borderline trade-off:
+        # When the resolver applies a specialty upgrade (high_key,
+        # window_portrait, low_key, etc.) via `specialty:*` source,
+        # the credibility list still operates on the *underlying
+        # geometric* candidates (loop, short, etc.) — it cannot see
+        # the specialty pattern.  This means `credibility_overrules_
+        # resolver` mechanically fires even when the resolver's
+        # specialty pattern is photographically correct.  We do NOT
+        # add a `specialty:*` guardrail because the engine signals
+        # for confirmed-BOUNDED `rihanna_t1` and the two CLA→BND
+        # borderlines (white_seamless_catalog, window_soft_side) are
+        # BYTE-IDENTICAL — same signals, same credibility list, same
+        # gate states.  The photographer-tag difference is judgment
+        # variability, not engine error.  Adding a specialty exclusion
+        # would lose the rihanna BND hit AND remove the FPs together.
+        # See ENGINE_TRUTH §14.5 for the documented accepted-ambiguity
+        # decision.
         resolver_primary_pattern = pc.primary.pattern if pc.primary else ""
         credibility_overrules_resolver = c0.pattern != resolver_primary_pattern
         if (
