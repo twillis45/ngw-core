@@ -2581,12 +2581,32 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
     # resolver's outcome quality — when face is detected and signal_strength
     # is fine but the resolver produced a low-confidence demoted winner,
     # catchlights are likely contaminated (eyeglass lens reflections,
-    # mirrored sunglasses, jewelry, glossy surfaces, etc.).  This is NOT
-    # a glasses-specific detector — it is a "catchlights produced an
-    # unresolvable signal" detector.  The test case
-    # (insufficient_glasses_corporate_t1) hits this signature; other
-    # future cases (mirror selfie, heavy reflective contamination) will
-    # also hit it.  Phase 3C may add per-source detectors that distinguish.
+    # mirrored sunglasses, jewelry, glossy surfaces, etc.).
+    #
+    # ──────────────────────────────────────────────────────────────────
+    # PHASE 3C DECISION — option 2 ("honest renaming") chosen over
+    # option 1 ("real bounded eye-region image-bytes detector").
+    #
+    # Rationale: a true glasses detector would require:
+    #   (a) loading image bytes at the routing stage (img_bgr is not
+    #       retained on result.debug_data when debug=False), OR
+    #   (b) adding eye-region pixel measurements to an upstream pass.
+    # Path (a) means re-IO at routing time = architectural sprawl in
+    # the orchestrator.  Path (b) means modifying engine/cue_extraction.py
+    # or engine/cue_inference.py — explicitly forbidden by Phase 3C
+    # scope rules.
+    #
+    # Therefore: this detector is NOT, and is not claimed to be, a
+    # glasses detector.  It is an "unresolvable-catchlight-signal"
+    # detector that catches the glasses test case as one of several
+    # contamination shapes.  All naming in code/tests reflects this:
+    #   - variable: catchlight_unreliable
+    #   - reason: "low_confidence_demoted_winner_with_many_catchlights"
+    #   - test class: TestCatchlightUnreliabilityDetector
+    #   - benchmark description: catchlight reliability blocked, NOT
+    #     "glasses detected"
+    # A real glasses CV detector remains future work (Phase 3D+).
+    # ──────────────────────────────────────────────────────────────────
     no_face = False
     fv = result.face_validation
     sr = result.signal_reliability  # also used in capture_quality_score below
