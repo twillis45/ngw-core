@@ -19,7 +19,8 @@
     "acceptable_light_count_range": [
       1,
       2
-    ]
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "natural",
@@ -28,7 +29,7 @@
       "overcast is an environment not a geometric pattern",
       "very soft diffused light produces near-zero shadow signal",
       "outdoor scene with complex background may confuse analysis",
-      "image shows slight directionality (sd=0.134, asym=0.218) — not pure flat; pose-resolved patterns plausible"
+      "image shows slight directionality (sd=0.134, asym=0.218) \u2014 not pure flat; pose-resolved patterns plausible"
     ],
     "added_date": "2026-03-17"
   }

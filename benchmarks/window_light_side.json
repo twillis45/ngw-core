@@ -1,18 +1,30 @@
 {
   "benchmark_id": "window_light_side",
-  "description": "Natural window light from the side — soft falloff, single large source",
+  "description": "Natural window light from the side \u2014 soft falloff, single large source",
   "image_path": "benchmarks/images/window_light_side.jpg",
   "ground_truth": {
     "expected_pattern": "window_portrait",
     "expected_light_count": 1,
     "expected_key_direction": "left",
-    "acceptable_patterns": ["window_portrait", "loop", "rembrandt", "short", "broad"],
-    "acceptable_light_count_range": [1, 4]
+    "acceptable_patterns": [
+      "window_portrait",
+      "loop",
+      "rembrandt",
+      "short",
+      "broad"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      4
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "natural",
     "difficulty": "standard",
-    "known_challenges": ["window light may be classified as studio if catchlights are absent"],
+    "known_challenges": [
+      "window light may be classified as studio if catchlights are absent"
+    ],
     "added_date": "2026-03-16"
   }
 }

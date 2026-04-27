@@ -21,7 +21,8 @@
     "acceptable_light_count_range": [
       1,
       4
-    ]
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "catalog",

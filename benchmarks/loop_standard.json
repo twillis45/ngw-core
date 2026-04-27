@@ -1,18 +1,29 @@
 {
   "benchmark_id": "loop_standard",
-  "description": "Standard loop lighting — key slightly above and 30 degrees off-axis, nose shadow loops down",
+  "description": "Standard loop lighting \u2014 key slightly above and 30 degrees off-axis, nose shadow loops down",
   "image_path": "benchmarks/images/loop_standard.jpg",
   "ground_truth": {
     "expected_pattern": "loop",
     "expected_light_count": 1,
     "expected_key_direction": "upper_right",
-    "acceptable_patterns": ["loop", "rembrandt", "butterfly", "window_negative_fill"],
-    "acceptable_light_count_range": [1, 3]
+    "acceptable_patterns": [
+      "loop",
+      "rembrandt",
+      "butterfly",
+      "window_negative_fill"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      3
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "classic",
     "difficulty": "standard",
-    "known_challenges": ["loop vs rembrandt boundary depends on nose shadow extent"],
+    "known_challenges": [
+      "loop vs rembrandt boundary depends on nose shadow extent"
+    ],
     "added_date": "2026-03-16"
   }
 }

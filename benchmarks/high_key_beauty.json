@@ -18,7 +18,8 @@
     "acceptable_light_count_range": [
       1,
       6
-    ]
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "beauty",

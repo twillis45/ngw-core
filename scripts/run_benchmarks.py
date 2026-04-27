@@ -249,8 +249,30 @@ def run_single_benchmark(
             if pc.contradictions:
                 print(f"      contradictions: {pc.contradictions}")
 
+    # Mode-routing extraction (Complex-Lighting Strategy Phase 2)
+    detected_mode = ""
+    detected_mode_confidence = 0.0
+    detected_mode_rationale = ""
+    am = getattr(ar, "analysis_mode", None)
+    if am is not None:
+        detected_mode = am.value if hasattr(am, "value") else str(am)
+        detected_mode_confidence = float(getattr(ar, "mode_confidence", 0.0) or 0.0)
+        detected_mode_rationale = getattr(ar, "mode_rationale", "") or ""
+
     # Compare against ground truth
     checks: Dict[str, Any] = {}
+
+    # Mode-routing check — Phase 2 calibration.
+    # Only fires for benchmarks that have an `expected_mode` field
+    # (added by engine.benchmark_v2.apply_modes).  Benchmarks without
+    # expected_mode are not penalised — Phase 2 tagging is in progress
+    # and old benchmark JSON files may exist without the field.
+    expected_mode = gt.get("expected_mode")
+    if expected_mode and detected_mode:
+        if detected_mode == expected_mode:
+            checks["mode"] = {"status": PASS, "detected": detected_mode, "expected": expected_mode}
+        else:
+            checks["mode"] = {"status": FAIL, "detected": detected_mode, "expected": expected_mode}
 
     # Pattern check
     if detected_pattern == gt["expected_pattern"]:
@@ -321,6 +343,12 @@ def run_single_benchmark(
             "pattern_confidence": round(pattern_confidence, 3),
             "light_count": detected_light_count,
             "key_direction": detected_direction,
+            "mode": detected_mode,
+            "mode_confidence": round(detected_mode_confidence, 3),
+            "mode_rationale": detected_mode_rationale,
+        },
+        "expected": {
+            "mode": expected_mode,
         },
         "diagnostics": diagnostics,
         "timing_s": round(elapsed, 2),
@@ -384,6 +412,64 @@ def print_summary(results: List[Dict[str, Any]]) -> None:
     print(f"  Total: {total}  |  Pass: {counts[PASS]}  Soft: {counts[SOFT_PASS]}  "
           f"Fail: {counts[FAIL]}  Skip: {counts[SKIP]}  Error: {counts[ERROR]}  "
           f"|  Rate: {pct:.0f}%")
+    print("=" * 72)
+
+    # ── Mode confusion matrix (Complex-Lighting Strategy Phase 2) ──────
+    # Tabulates predicted vs expected analysis_mode for every benchmark
+    # that has an expected_mode tag.  Off-diagonal cells are mode-routing
+    # failures; named cells (CLA→HYB, HYB→CLA, INS→any) per strategy §11.
+    print()
+    print("MODE CONFUSION MATRIX")
+    print("=" * 72)
+    modes = ["classical", "bounded", "hybrid", "insufficient"]
+    matrix: Dict[str, Dict[str, int]] = {e: {p: 0 for p in modes} for e in modes}
+    n_tagged = 0
+    for r in results:
+        if r["verdict"] in (SKIP, ERROR):
+            continue
+        exp = (r.get("expected") or {}).get("mode")
+        det = (r.get("detected") or {}).get("mode")
+        if exp in modes and det in modes:
+            matrix[exp][det] += 1
+            n_tagged += 1
+    if n_tagged == 0:
+        print("  (no benchmarks have expected_mode tags — run apply_modes first)")
+    else:
+        # Header row
+        print(f"  {'expected ↓ / predicted →':<26}" + "".join(f"{m[:4]:>10}" for m in modes) + f"{'total':>10}")
+        for exp in modes:
+            row_total = sum(matrix[exp].values())
+            cells = "".join(
+                f"{matrix[exp][p]:>10}" + ("*" if p == exp and matrix[exp][p] else " ")
+                for p in modes
+            )
+            # Strip the trailing space when not on diagonal so cells align.
+            cells = "".join(f"{matrix[exp][p]:>10}" for p in modes)
+            print(f"  {exp:<26}" + cells + f"{row_total:>10}")
+        col_totals = "".join(f"{sum(matrix[e][p] for e in modes):>10}" for p in modes)
+        print(f"  {'(total predicted)':<26}" + col_totals + f"{n_tagged:>10}")
+        print()
+        # Named off-diagonal cells (strategy §11 acceptance targets).
+        cla_to_hyb = matrix["classical"]["hybrid"]
+        hyb_to_cla = matrix["hybrid"]["classical"]
+        ins_to_any = sum(matrix["insufficient"][p] for p in modes if p != "insufficient")
+        n_cla = sum(matrix["classical"].values())
+        n_hyb = sum(matrix["hybrid"].values())
+        n_ins = sum(matrix["insufficient"].values())
+        on_diag = sum(matrix[m][m] for m in modes)
+        accuracy = on_diag / n_tagged if n_tagged else 0.0
+        print(f"  mode-correctness rate     : {accuracy:.1%}  ({on_diag}/{n_tagged})")
+        if n_cla:
+            print(f"  CLA→HYB false-positive    : {cla_to_hyb}/{n_cla} = {cla_to_hyb/n_cla:.1%}  (target ≤ 5%)")
+        if n_hyb:
+            print(f"  HYB→CLA under-decompose   : {hyb_to_cla}/{n_hyb} = {hyb_to_cla/n_hyb:.1%}")
+        if n_ins:
+            print(f"  INS→any false-negative    : {ins_to_any}/{n_ins} = {ins_to_any/n_ins:.1%}  (target ≤ 3%)")
+        print()
+        print("  Phase 2 ceiling targets (strategy §11 — frozen after gate D):")
+        print("    * mode-correctness rate  ≥ 85%")
+        print("    * CLA→HYB false-positive ≤  5%")
+        print("    * INS→any false-negative ≤  3%")
     print("=" * 72)
 
     # ── Signal coverage summary ──────────────────────────────────

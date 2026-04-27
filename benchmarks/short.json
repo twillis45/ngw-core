@@ -1,18 +1,33 @@
 {
   "benchmark_id": "short",
-  "description": "Short lighting — key on narrow side of face (side turned away from camera), dark moody portrait with rim",
+  "description": "Short lighting \u2014 key on narrow side of face (side turned away from camera), dark moody portrait with rim",
   "image_path": "benchmarks/images/short.jpg",
   "ground_truth": {
     "expected_pattern": "short_fashion_key",
     "expected_light_count": 1,
     "expected_key_direction": "upper_left",
-    "acceptable_patterns": ["short", "short_fashion_key", "rembrandt", "loop", "split", "broad"],
-    "acceptable_light_count_range": [1, 2]
+    "acceptable_patterns": [
+      "short",
+      "short_fashion_key",
+      "rembrandt",
+      "loop",
+      "split",
+      "broad"
+    ],
+    "acceptable_light_count_range": [
+      1,
+      2
+    ],
+    "expected_mode": "classical"
   },
   "metadata": {
     "category": "dramatic",
     "difficulty": "hard",
-    "known_challenges": ["short vs broad depends on face turn direction relative to key — requires pose solver", "very dark image may limit shadow analysis", "rim light on far shoulder could register as second source"],
+    "known_challenges": [
+      "short vs broad depends on face turn direction relative to key \u2014 requires pose solver",
+      "very dark image may limit shadow analysis",
+      "rim light on far shoulder could register as second source"
+    ],
     "added_date": "2026-03-17"
   }
 }
