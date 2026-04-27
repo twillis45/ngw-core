@@ -87,16 +87,81 @@ def inspect(token: str) -> None:
     if cp:
         print(f"  outcome_trust_risk: {cp.outcome_trust_risk}  reason: {cp.outcome_trust_risk_reason[:80]}")
         print(f"  catchlight_reliability: {cp.catchlight_reliability}  ({cp.catchlight_reliability_reason})")
+        # Phase 3D/D — also surface source-context / scene-class axes
+        # if/when they exist on ComplexityProfile (Workstream B may add
+        # background_class).  getattr-based to remain forward-compatible.
+        bg_class = getattr(cp, "background_class", None)
+        if bg_class is not None:
+            print(f"  background_class: {bg_class}")
     print()
-    print("  classical credibility entries (sorted by cred desc):")
-    classical_cc = [c for c in cc if c.is_classical]
-    classical_cc.sort(key=lambda x: x.credibility, reverse=True)
-    for c in classical_cc:
+
+    # Phase 3D/D — full credibility trace, all candidates (not just classical)
+    print("  candidate_credibility (full trace, sorted by cred desc):")
+    cc_sorted = sorted(cc, key=lambda x: x.credibility, reverse=True)
+    if not cc_sorted:
+        print("    (none)")
+    for c in cc_sorted:
         print(f"    pat={c.pattern:<14} cred={c.credibility:.2f} "
-              f"raw={c.raw_confidence:.2f} ev_for={len(c.evidence_for)}")
+              f"raw={c.raw_confidence:.2f} src={c.source:<32} "
+              f"trust_x={c.source_trust_multiplier:.2f}  classical={c.is_classical}")
+        if c.evidence_for:
+            print(f"        evidence_for:     {list(c.evidence_for)}")
+        if c.evidence_against:
+            print(f"        evidence_against: {list(c.evidence_against)}")
+        if c.notes:
+            print(f"        notes:            {list(c.notes)}")
+
+    # Phase 3D/D — explicit demotion-forgiveness trace per candidate.
+    # Reports whether each candidate was a forgiveness candidate (source
+    # contains "_demoted") and whether independent corroboration exists.
+    # When Workstream A lands, candidates that were forgiven will already
+    # carry an evidence_for entry naming the forgiveness; this loop
+    # mirrors that decision so callers can see it explicitly.
+    print()
+    print("  demotion-forgiveness trace (Phase 3D/A doctrine):")
+    cue_inf = getattr(r, "cue_inference_result", None)
+    geo = cue_inf.get("geometry") if isinstance(cue_inf, dict) else None
+    raw_cue = (getattr(geo, "shadow_pattern", "") or "") if geo else ""
+    cr_local = getattr(r, "cue_report", None)
+    ls_local = getattr(cr_local, "light_structure", None) if cr_local else None
+    raw_ls = (getattr(ls_local, "pattern_name", "") or "") if ls_local else ""
+    intel_local = getattr(r, "lighting_intel", None)
+    raw_intel = (getattr(intel_local, "pattern", "") or "") if intel_local else ""
+    ra_local = getattr(r, "reference_analysis", None)
+    lr_local = getattr(ra_local, "lighting_read", None) if ra_local else None
+    raw_rr = (getattr(lr_local, "shadow_pattern", "") or "") if lr_local else ""
+    paradox_notes = [n for n in (cp.notes if cp else []) if "paradox" in n.lower()]
+    for c in cc_sorted:
+        is_demoted = "_demoted" in (c.source or "")
+        if not is_demoted:
+            continue  # only forgiveness-candidates
+        # Count independent classifier raw-signal supports
+        independent_supports = sum(
+            1 for raw in (raw_cue, raw_ls, raw_intel, raw_rr)
+            if raw and raw == c.pattern
+        )
+        already_forgiven = any(
+            "demotion_forgiven" in str(e) for e in (c.evidence_for or [])
+        )
+        forgiveness_eligible = (independent_supports >= 1)
+        paradox_blocks = bool(paradox_notes)
+        print(f"    pat={c.pattern:<14} demoted_source=True  "
+              f"independent_supports={independent_supports}  "
+              f"paradox_active={paradox_blocks}  "
+              f"already_forgiven={already_forgiven}")
+        if forgiveness_eligible and not paradox_blocks and not already_forgiven:
+            print(f"        -> Phase 3D/A would forgive demotion if implemented")
+        elif paradox_blocks:
+            print(f"        -> forgiveness blocked by active paradox: {paradox_notes}")
+        elif independent_supports == 0:
+            print(f"        -> single-source demoted; forgiveness not eligible")
+    if not any("_demoted" in (c.source or "") for c in cc_sorted):
+        print("    (no demoted candidates in credibility list)")
 
     print()
     print("  BOUNDED long-term predicate gate analysis:")
+    classical_cc = [c for c in cc if c.is_classical]
+    classical_cc.sort(key=lambda x: x.credibility, reverse=True)
     if len(classical_cc) >= 2:
         c0, c1 = classical_cc[0], classical_cc[1]
         spread = abs(c0.credibility - c1.credibility)
