@@ -363,6 +363,18 @@ class ComplexityProfile:
     outcome_trust_risk:         bool  = False
     outcome_trust_risk_reason:  str   = ""
 
+    # — Background class (Phase 3D/B) —
+    # Derived from existing cue_report.background_illumination signals.
+    # Used by the long-term BOUNDED predicate to suppress firing on
+    # catalog/product seamless signatures (uniform_seamless), which are
+    # intrinsically classical lighting setups even when classifiers
+    # disagree on pose-relative pattern.  See compute_scene_complexity
+    # for the derivation map.  Values:
+    #   uniform_seamless | uniform_neutral | gradient | textured |
+    #   environmental | dark | bright | unknown
+    # No new CV — pure mapping from existing observed signals.
+    background_class:           str   = "unknown"
+
     # — Aggregate (observability only; mode router uses individual axes) —
     overall_complexity:         float = 0.0
     notes:                      List[str] = dc_field(default_factory=list)
@@ -2576,6 +2588,39 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
         cp.ambient_contamination = 0.6
         notes.append("window_light_gradient flag set")
 
+    # ── background_class — Phase 3D/B from cue_report.background_illumination ──
+    # Pure mapping from existing observed signals.  No new CV.  Values:
+    #   uniform_seamless    — pattern=even, brightness_relative=darker
+    #                         (catalog/product signature: subject brightly
+    #                         lit against an even backdrop that reads
+    #                         darker than the subject)
+    #   uniform_neutral     — pattern=even, brightness_relative != darker
+    #                         (beauty close-up with neutral background)
+    #   gradient            — pattern=gradient (controlled studio gradient)
+    #   environmental       — pattern=environmental (real-world scene)
+    #   textured            — pattern=textured
+    #   dark                — pattern=dark (low-key)
+    #   bright              — pattern=bright (high-key)
+    #   unknown             — no background_illumination signal
+    bi = getattr(cr, "background_illumination", None) if cr else None
+    if bi is not None:
+        bg_pat = (getattr(bi, "pattern", "") or "").lower()
+        bg_bright = (getattr(bi, "brightness_relative", "") or "").lower()
+        if bg_pat == "even" and bg_bright == "darker":
+            cp.background_class = "uniform_seamless"
+        elif bg_pat == "even":
+            cp.background_class = "uniform_neutral"
+        elif bg_pat == "gradient":
+            cp.background_class = "gradient"
+        elif bg_pat == "environmental":
+            cp.background_class = "environmental"
+        elif bg_pat == "textured":
+            cp.background_class = "textured"
+        elif bg_pat == "dark":
+            cp.background_class = "dark"
+        elif bg_pat == "bright":
+            cp.background_class = "bright"
+
     # ── catchlight_reliability — Phase 3A (no_face/earring) + Phase 3B ──
     # Phase 3B addition: detect "catchlight signal is unreliable" via the
     # resolver's outcome quality — when face is detected and signal_strength
@@ -3279,6 +3324,36 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
             and min_evidence_count >= 1
             and credibility_overrules_resolver
         ):
+            # Phase 3D/B — uniform_seamless suppression.
+            # When the long-term BOUNDED predicate would otherwise fire
+            # AND background_class is "uniform_seamless" (catalog/product
+            # signature: even backdrop with subject brightly lit against
+            # a darker ground), suppress to CLASSICAL.  Catalog photography
+            # is intrinsically classical lighting (predictable single-key
+            # patterns); the 2-vs-1 classifier disagreement on pose-relative
+            # pattern in such scenes is engine noise rather than real
+            # ambiguity.
+            #
+            # Verified against the 48-corpus before shipping:
+            #   - Only `white_seamless_catalog` matches the suppression
+            #     signature among CLA→BND-tagged cases (was a true FP).
+            #   - `bounded_loop_vs_short_jewelry_t1` (BND-tagged hit) has
+            #     pattern=even but brightness_relative="similar" — does
+            #     NOT trigger the suppression.
+            #   - rihanna BND hit has background pattern=gradient — does
+            #     NOT trigger the suppression.
+            #   - `beauty_dish_clean` and `insufficient_glasses_corporate_t1`
+            #     also match the signature but they don't currently route
+            #     BOUNDED, so suppression is a no-op for them.
+            cp_local = getattr(result, "complexity_profile", None)
+            if cp_local is not None and cp_local.background_class == "uniform_seamless":
+                return (
+                    AnalysisMode.CLASSICAL,
+                    f"Bounded long-term suppressed (uniform_seamless): "
+                    f"catalog/product signature overrides pose-relative "
+                    f"classifier disagreement on '{c0.pattern}' vs '{c1.pattern}'",
+                    0.75,
+                )
             return (
                 AnalysisMode.BOUNDED,
                 f"Bounded long-term (credibility): '{c0.pattern}' "
@@ -6233,6 +6308,7 @@ def analysis_result_to_replay_dict(result: "AnalysisResult") -> dict:
                 "rim_load_bearing":            _cp.rim_load_bearing,
                 "outcome_trust_risk":          _cp.outcome_trust_risk,
                 "outcome_trust_risk_reason":   _cp.outcome_trust_risk_reason,
+                "background_class":            _cp.background_class,
                 "overall_complexity":          _cp.overall_complexity,
                 "notes":                       list(_cp.notes or []),
                 "not_yet_computed":            list(_cp.not_yet_computed or []),

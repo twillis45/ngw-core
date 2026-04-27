@@ -647,6 +647,134 @@ class TestBoundedRequiresCredibilityOverrulesResolver:
         assert mode == AnalysisMode.CLASSICAL
 
 
+class TestBackgroundClassDerivation:
+    """Phase 3D/B — background_class axis derived from cue_report.background_illumination."""
+
+    def _make_with_bg(self, pattern="even", brightness="darker"):
+        r = _make_result()
+
+        class _BI:
+            pass
+        bi = _BI()
+        bi.pattern = pattern
+        bi.brightness_relative = brightness
+        bi.confidence = 0.7
+        r.cue_report.background_illumination = bi
+        return r
+
+    def test_uniform_seamless_signature(self):
+        r = self._make_with_bg(pattern="even", brightness="darker")
+        cp = compute_scene_complexity(r)
+        assert cp.background_class == "uniform_seamless"
+
+    def test_uniform_neutral_when_brightness_similar(self):
+        # pat=even but brightness similar = beauty close-up, not catalog
+        r = self._make_with_bg(pattern="even", brightness="similar")
+        cp = compute_scene_complexity(r)
+        assert cp.background_class == "uniform_neutral"
+
+    def test_gradient_background(self):
+        r = self._make_with_bg(pattern="gradient", brightness="similar")
+        cp = compute_scene_complexity(r)
+        assert cp.background_class == "gradient"
+
+    def test_environmental_background(self):
+        r = self._make_with_bg(pattern="environmental", brightness="darker")
+        cp = compute_scene_complexity(r)
+        assert cp.background_class == "environmental"
+
+    def test_unknown_when_no_bg_signal(self):
+        r = _make_result()
+        # Default cue_report has background_illumination=None
+        cp = compute_scene_complexity(r)
+        assert cp.background_class == "unknown"
+
+
+class TestUniformSeamlessSuppression:
+    """Phase 3D/B — uniform_seamless suppression of long-term BOUNDED predicate.
+
+    When the BOUNDED long-term predicate would otherwise fire AND
+    background_class is "uniform_seamless" (catalog/product signature),
+    suppress to CLASSICAL.  Catalog photography is intrinsically
+    classical; pose-relative classifier disagreement is engine noise.
+    """
+
+    def _make_with_bg(self, *, pattern="gradient", brightness="similar", **kwargs):
+        r = _make_result(**kwargs)
+
+        class _BI:
+            pass
+        bi = _BI()
+        bi.pattern = pattern
+        bi.brightness_relative = brightness
+        bi.confidence = 0.7
+        r.cue_report.background_illumination = bi
+        return r
+
+    def test_suppression_fires_on_uniform_seamless(self):
+        # Setup that would otherwise fire long-term BOUNDED:
+        # primary loop, alt rembrandt, both classical, multi-classifier
+        # support, credibility overrules resolver.  Background class is
+        # uniform_seamless → suppression fires; mode is CLASSICAL.
+        r = self._make_with_bg(
+            pattern="even", brightness="darker",  # uniform_seamless
+            primary_pattern="loop", primary_confidence=0.62,
+            primary_source="reference_read",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "lighting_inference"}],
+            intel_pattern="rembrandt",
+            cue_geo_pattern="rembrandt",
+        )
+        _populate_phase3_layers(r)
+        mode, rationale, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.CLASSICAL
+        assert "uniform_seamless" in rationale.lower()
+
+    def test_suppression_does_not_fire_on_uniform_neutral(self):
+        # pat=even but brightness=similar → uniform_neutral, NOT
+        # uniform_seamless.  BOUNDED predicate fires normally.
+        r = self._make_with_bg(
+            pattern="even", brightness="similar",  # uniform_neutral
+            primary_pattern="loop", primary_confidence=0.62,
+            primary_source="reference_read",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "lighting_inference"}],
+            intel_pattern="rembrandt",
+            cue_geo_pattern="rembrandt",
+        )
+        _populate_phase3_layers(r)
+        mode, _, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.BOUNDED
+
+    def test_suppression_does_not_fire_on_gradient_bg(self):
+        # rihanna-like: gradient bg, BOUNDED-eligible signals → BOUNDED
+        r = self._make_with_bg(
+            pattern="gradient", brightness="similar",
+            primary_pattern="loop", primary_confidence=0.62,
+            primary_source="reference_read",
+            alternates=[{"pattern": "rembrandt", "confidence": 0.55, "source": "lighting_inference"}],
+            intel_pattern="rembrandt",
+            cue_geo_pattern="rembrandt",
+        )
+        _populate_phase3_layers(r)
+        mode, _, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.BOUNDED
+
+    def test_suppression_does_not_fire_when_predicate_does_not(self):
+        # Same uniform_seamless background but BOUNDED predicate would NOT
+        # have fired (no upstream classifier disagreement).  Suppression
+        # is an additional gate on the BOUNDED predicate, not a global
+        # CLASSICAL forcer — when BOUNDED wouldn't fire anyway, there's
+        # nothing to suppress.
+        r = self._make_with_bg(
+            pattern="even", brightness="darker",  # uniform_seamless
+            primary_pattern="loop", primary_confidence=0.95,
+            primary_source="reference_read",
+            # No alternates → no BOUNDED candidacy
+        )
+        _populate_phase3_layers(r)
+        mode, _, _ = route_analysis_mode(r)
+        assert mode == AnalysisMode.CLASSICAL
+
+
 class TestKeyZoneCompatibility:
     """Phase 3B — key-direction zone matching for BOUNDED predicate."""
 
