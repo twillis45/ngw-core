@@ -2650,7 +2650,11 @@ def compute_scene_complexity(result: "AnalysisResult") -> ComplexityProfile:
     #   - test class: TestCatchlightUnreliabilityDetector
     #   - benchmark description: catchlight reliability blocked, NOT
     #     "glasses detected"
-    # A real glasses CV detector remains future work (Phase 3D+).
+    # A real glasses CV detector remains future work; Phase 3E was
+    # explicitly placed in HOLD because the prerequisites (per-eye iris
+    # landmark plumbing AND ≥ 6 positive + ≥ 6 negative glasses corpus
+    # cases) are not yet met.  See ENGINE_TRUTH §14.8 for the HOLD
+    # decision and prerequisites.
     # ──────────────────────────────────────────────────────────────────
     no_face = False
     fv = result.face_validation

@@ -499,9 +499,58 @@ Phase 3A added a long-term BOUNDED predicate (§14.3) that fires before the boot
 | Phase 1 | **Live** | AnalysisMode router; INSUFFICIENT + bootstrap BOUNDED gates; CONTESTED status reorder; multi-candidate pattern_reasoning |
 | Phase 2 | **Live** | Benchmark mode-tagging, mode confusion matrix, threshold sensitivity sweep, shadow-mode L1 telemetry emission |
 | Phase 3A | **Live** | ComplexityProfile skeleton (existing signals only); compute_scene_complexity(); HYBRID gate strict + corroboration-required; long-term BOUNDED predicate (raw-confidence proxy); rim_load_bearing structural-evidence-only; placeholder axes carry not_yet_computed |
-| Phase 3B | Queued | Real `candidate_credibility` scoring; per-contribution `contribution_confidence`; new CV detectors (multi-face, gels, post-processing risk, compositing, occlusion, crop completeness); `HybridDecomposition` data shape (LightContribution, BuildStep); catchlight-overrides-shadow doctrinal action; bootstrap BOUNDED retired |
+| Phase 3B | **Live** | Candidate credibility scoring (replaces raw-confidence proxy); back-light/hair-light structural detector funneling into HYBRID gate; catchlight-unreliability detector for INSUFFICIENT routing (NOT a glasses detector — see §14.5) |
+| Phase 3C | **Live** | Credibility weight calibration sweep (production weights confirmed on optimum plateau); `outcome_trust_risk` for confident-wrong-winner INSUFFICIENT routing (catches `mixed_light_failure`); explicit Workstream-D documented accepted-ambiguity decision for CLA→BND borderlines |
+| Phase 3D | **Live** | Demotion-forgiveness lift in `compute_candidate_credibility` (recovers `bounded_loop_vs_rembrandt_bw_t1`); `background_class` axis + uniform_seamless suppression (resolves `white_seamless_catalog`); `inspect_borderlines` extended with full credibility trace + forgiveness eligibility; Workstream C (real glasses detector) honestly deferred |
+| Phase 3E | **HOLD** | No bounded engine work currently honest. See §14.8 for the explicit blocker per gap. Hold-exit triggers documented; do not initiate engine work without meeting them. |
 | Phase 4 | Blocked on Phase 2 gate D (two-week shadow-mode observation) | Mode-aware UI: BOUNDED candidate cards, INSUFFICIENT result screen, HYBRID decomposition table |
 | Phase 5 | Queued | Feedback architecture (per-mode signal mapping, decomposition corrections) |
 | Phase 6 | Queued | Edge-case polish (window+strobe, gels, group, mirror, etc.) |
 
 See `docs/TAXONOMY_TRUTH.md` for `AnalysisMode`'s relationship to `pattern`, `setup_family`, and `source_context`.
+
+### 14.8 Phase 3E HOLD decision
+
+Phase 3E does not proceed as engine work at this time. The three remaining gaps after Phase 3D are each blocked by a different honest constraint, and no bounded engine workstream can move them without violating at least one standing rule.
+
+**Phase 3D shipped state (locked):**
+- mode-correctness rate: 93.8% (45/48)
+- BOUNDED recall: 80.0% (4/5)
+- HYBRID recall: 100.0% (1/1)
+- INSUFFICIENT recall: 100.0% (5/5)
+- CLA→BND FP: 2.7% (1/37)
+- CLA→HYB FP: 2.7% (1/37)
+
+**Why each remaining gap is blocked:**
+
+1. **`bounded_butterfly_vs_clamshell_beauty` — architecture-blocked.** The resolver (`resolve_pattern_candidates`) does not surface `butterfly` or `clamshell` as candidates for this image. The credibility list contains `broad` (winner) and `short` (demoted alternate). The photographer's tag is BOUNDED on a butterfly/clamshell pair the engine never produces. Active paradoxes (`flat_bilateral`, `catchlight_shadow_paradox`) correctly block Phase 3D/A demotion-forgiveness — flat-bilateral illumination IS the signature of butterfly/clamshell, and the paradox flag is firing for the right reason. Even if forgiveness fired, the candidates are broad/short, not butterfly/clamshell. **Recovering this case requires resolver-level work to surface butterfly/clamshell as candidates when `flat_bilateral` paradox fires AND existing classifiers vote pose-relative variants. Forbidden by standing rule (no resolver rewrite).** Until that rule changes, this case is permanently CLASSICAL by design.
+
+2. **`window_soft_side` — corpus-validation-blocked.** Engine signals are byte-identical to the confirmed-BOUNDED `bounded_loop_vs_short_rihanna_t1` (same credibility list, same gate states, same specialty-source resolver upgrade). Phase 3D/B's `background_class` axis distinguishes `uniform_seamless` from `gradient` (catalog vs editorial-corporate) but classifies `window_soft_side` as `environmental`, which neither suppresses nor differentiates from rihanna's `gradient`. **Distinguishing window-driven scenes from corporate-strobe scenes when both produce gradient/environmental backgrounds requires a NEW signal (e.g., catchlight shape rectangularity, light-direction softness/falloff, background color-temperature consistency).** The corpus has 1 confirmed window-portrait BND (window_soft_side itself) and 1 confirmed corporate BND hit (rihanna). One sample of each cannot calibrate a discriminator without overfitting. Designing one against the FP itself is exactly the heuristic-stack-on-corpus-of-one trap the standing rules forbid.
+
+3. **Real glasses CV detector — corpus + architecture blocked.** The Phase 3B/C `catchlight_unreliable` detector is a documented contamination proxy (NOT a glasses detector — see §14.5). It catches the one test case via a non-glasses-specific signature. Replacing it with a real measurement-grounded detector requires BOTH (a) iris-landmark plumbing into `cue_extraction.py` (architectural — Phase 3D investigated and explicitly deferred) AND (b) corpus expansion with ≥ 6 photographer-verified positive glasses cases and ≥ 6 negative readable-eye-glasses cases for honest threshold validation. **The corpus has exactly 1 positive case.** Calibrating a new CV detector against a single positive image is not measurement-grounded — it would either trivially pass that one case (no improvement over the existing proxy) or risk silent FPs we cannot detect with this corpus. Standing rules explicitly forbid corpus-of-one CV.
+
+**No bounded engine-only work moves any of these without violating a standing rule.** The honest Phase 3E decision is HOLD.
+
+**Hold-exit triggers (any one ends HOLD and opens future work):**
+
+- Standing-rule change permitting bounded resolver candidate-generation work → opens future Phase 3F-C for `bounded_butterfly_vs_clamshell_beauty`.
+- Corpus expansion to ≥ 4 confirmed window-portrait cases AND ≥ 4 confirmed corporate-editorial cases → enables a window-vs-strobe discriminator workstream.
+- Glasses corpus expansion to ≥ 6 photographer-verified positives AND ≥ 6 negatives → enables a real glasses CV detector workstream (the architectural plumbing is the second prerequisite, addressed during the same workstream).
+- `insufficient_glasses_corporate_t1` regresses out of INSUFFICIENT in production → emergency exit to fix the contamination-proxy brittleness, NOT a forward Phase 3F.
+- Any Phase 3D shipped metric regresses without explainable cause → emergency exit, NOT a forward Phase 3F.
+
+**Periodic hold-state checks (during HOLD):**
+
+- Once per benchmark run: confirm `insufficient_glasses_corporate_t1` continues to route INSUFFICIENT.
+- Once per benchmark run: confirm Phase 3D shipped metrics still hold (mode-correctness ≥ 93.8%, BOUNDED recall ≥ 80%, INSUFFICIENT recall = 100%, CLA→BND FP ≤ 2.7%, CLA→HYB FP ≤ 2.7%).
+
+**What HOLD explicitly forbids:**
+
+- Threshold tuning (Phase 3C/A's sweep already proved threshold tuning is exhausted).
+- Specialty-source-exclusion guardrails (Phase 3C/D proved this loses the rihanna BND hit).
+- Heuristic stacks calibrated against single FP cases.
+- Face-box-approximated eye-region detectors (Phase 3D investigated; coarse approximation is not iris-relative enough for a truthful detector).
+- Synthesis of pattern_candidates the resolver did not produce.
+- VLM hint as routing-decision input.
+
+**Phase 3F (future, NOT proposed now):** when prerequisites listed in §14.8 hold-exit triggers are met, named candidate workstreams may be drafted. Implementation detail is explicitly deferred to that future planning pass.
