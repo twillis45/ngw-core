@@ -25,7 +25,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { navHaptic, tapHaptic, successHaptic, grainHaptic, longPressHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { steel, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
+         CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT, SCREEN_BG } from '../../../theme/studioMatte';
 import { trackEvent, getSessionId } from '../../../data/analytics';
 import { loadSettings } from '../../../data/settingsStore';
 import { postSignal } from '../../../data/signalsApi';
@@ -36,6 +36,7 @@ import NailedItOverlay from './components/NailedItOverlay';
 import LightingDiagram from '../_core/components/LightingDiagram';
 import useWakeLock from '../../../hooks/useWakeLock';
 import { createPortal } from 'react-dom';
+import MatteBackground from '../_shared/MatteBackground';
 
 const MODE_LABELS = {
   photographer: { label: 'Photographer', tag: 'FULL DETAILS' },
@@ -748,6 +749,7 @@ function buildSteps({ pattern, confidence, modName, position, distance,
         const parts = [];
         if (position) parts.push(position.toUpperCase());
         if (targetRange) parts.push(`${pattern} ${targetRange}`);
+        if (modName) parts.push(modName.toUpperCase());
         return parts.length ? parts.join(' · ') : null;
       })(),
       coach: coach('position'),
@@ -756,12 +758,14 @@ function buildSteps({ pattern, confidence, modName, position, distance,
       key: 'distance',
       verb: 'DISTANCE',
       command: (distance || '').toUpperCase(),
+      subCommand: modName ? modName.toUpperCase() : null,
       coach: coach('distance'),
     },
     {
       key: 'height',
       verb: 'HEIGHT',
       command: (heightDisplay || '').toUpperCase(),
+      subCommand: modName ? modName.toUpperCase() : null,
       coach: coach('height'),
     },
     {
@@ -1164,7 +1168,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
       : (isAssistant ? 'READY' : 'NEXT STEP');
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
       <div
         onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
         onTouchMove={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
@@ -1175,16 +1179,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
         position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
       }}>
 
-        {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
-        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
-          <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply',
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-            backgroundSize: '128px 128px' }} />
-        </div>
+        <MatteBackground variant="carbon" />
 
         {/* ── Desktop: two-column (photo left, controls right) ──
              Mobile: single-column stack (header → body → dots → controls) ── */}
@@ -2171,16 +2166,20 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
         </div>
       )}
 
-      {/* C-7: Simplified step lead — hero number + single context line.
-          Title label removed; step position is implied by the dots. */}
       <div style={{ padding: dk ? '14px 28px 0' : '10px 24px 0', position: 'relative', zIndex: 1, textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: dk ? 42 : 36, fontWeight: 800,
+        {step.title && (
+          <p style={{ margin: 0, fontSize: 10, fontWeight: 700,
+            color: steel(0.45), letterSpacing: '1.5px', textTransform: 'uppercase', ...FONT_SMOOTH }}>
+            {step.title}
+          </p>
+        )}
+        <p style={{ margin: step.title ? '4px 0 0' : 0, fontSize: dk ? 42 : 36, fontWeight: 800,
           color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {step.lead}
         </p>
         {step.subLead && (
-          <p style={{ margin: dk ? '6px 0 0' : '4px 0 0', fontSize: dk ? 14 : 14, fontWeight: 500,
+          <p style={{ margin: dk ? '6px 0 0' : '4px 0 0', fontSize: 14, fontWeight: 500,
             color: C.textSub, letterSpacing: '0.3px', ...FONT_SMOOTH }}>
             {step.subLead}
           </p>

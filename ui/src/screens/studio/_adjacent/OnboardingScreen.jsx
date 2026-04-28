@@ -128,7 +128,7 @@ export default function OnboardingScreen({ onComplete }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
-      <MatteBackground variant="subdued" />
+      <MatteBackground variant="carbon" />
       <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: isWide ? 600 : 440, padding: isWide ? '0 40px' : '0 24px' }}>
         {/* Step indicator */}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 28 }}>

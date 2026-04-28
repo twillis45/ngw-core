@@ -30,7 +30,7 @@ export default function RoomPlannerWrapper({ result, onBack }) {
       fontFamily: 'Inter, system-ui, sans-serif',
       overflow: 'hidden',
     }}>
-      <MatteBackground variant="subdued" />
+      <MatteBackground variant="carbon" />
 
       {/* Back button */}
       <button

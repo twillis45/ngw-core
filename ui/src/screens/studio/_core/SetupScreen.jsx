@@ -15,11 +15,12 @@ import { createPortal } from 'react-dom';
 import { tapHaptic, successHaptic, navHaptic, longPressHaptic, grainHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop } from '../../../utils/useIsDesktop';
+import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import { softClickSound, navSlideSound, segmentPressSound, panelToggleSound } from '../../../utils/sounds';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
          CTA_BG, CTA_SHADOW, CTA_BEVEL,
          VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
-         KEY_ACCENT } from '../../../theme/studioMatte';
+         KEY_ACCENT, SCREEN_BG } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import LightingDiagram from './components/LightingDiagram';
 import SideViewDiagram from './components/SideViewDiagram';
@@ -520,6 +521,7 @@ function IrisCoverageScale({ catchlightSize, angularArea }) {
 
 export default function SetupScreen({ result, imagePreview, onSave, onCancel, onStartCockpit, onRoomPlanner, isPaid = false, plan = 'free' }) {
   const isDesktop = useIsDesktop();
+  const tilt = useDeviceTilt();
   const [setupName, setSetupName] = useState('');
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);
@@ -770,7 +772,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   }, [swipeBackProgress, onCancel]);
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
     {/* Swipe-back edge hint — left edge glow (matches ResultScreen) */}
     {swipeBackProgress > 0 && (
       <div style={{
@@ -793,7 +795,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       position: 'relative', fontFamily: 'Inter, system-ui, sans-serif',
     }}>
 
-      <MatteBackground variant="subdued" />
+      <MatteBackground variant="carbon" />
 
       {/* ─── Full-bleed photo hero — matches Home/Processing/Result ─── */}
       {!isDesktop && imagePreview && (
@@ -1157,10 +1159,21 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
                   ))}
                 </div>
                 <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 14, pointerEvents: 'none', zIndex: 9 }}>
-                  <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.35 }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 14, opacity: 0.72, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
                 </div>
                 <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10 }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '14px 14px 0 0',
+                  background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+                }} />
+                <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+                }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '0 0 14px 14px',
+                  background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+                }} />
+                <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+                  background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+                }} />
               </div>
             )}
 
@@ -1505,8 +1518,19 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         boxShadow: `${VIEWFINDER_INNER_SHADOW}, 0px 8px 32px rgba(0,0,0,0.8), 0px 2px 8px rgba(0,0,0,0.5)`,
         overflow: 'hidden',
       }}>
-        <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: GLASS_REFLECTION, pointerEvents: 'none', zIndex: 2 }} />
-        <div style={{ position: 'absolute', inset: 0, borderRadius: 20, backgroundImage: LENS_VIGNETTE, pointerEvents: 'none', zIndex: 3 }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, borderRadius: 20, background: GLASS_REFLECTION, opacity: 0.72, transform: glassReflectionTransform(tilt), willChange: 'transform', pointerEvents: 'none', zIndex: 2 }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 4, pointerEvents: 'none', borderRadius: '20px 20px 0 0',
+          background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+        }} />
+        <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 4, pointerEvents: 'none',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+        }} />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 4, pointerEvents: 'none', borderRadius: '0 0 20px 20px',
+          background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+        }} />
+        <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 4, pointerEvents: 'none',
+          background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+        }} />
 
         <div style={{ position: 'relative', zIndex: 1, padding: '20px 20px 16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>

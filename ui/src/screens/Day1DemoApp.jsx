@@ -23,12 +23,13 @@ import { analyzeImage, shootMatch } from '../data/labApi';
 import { getUser, clearAuth, loadPreferences } from '../data/authApi';
 import usePlan from '../hooks/usePlan';
 import { PLAN_LABELS } from '../data/planStore';
-import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE } from '../theme/studioMatte';
+import { steel, C, FONT_SMOOTH as FS, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, SCREEN_BG } from '../theme/studioMatte';
 import { Panel, CtaButton, HomeIndicator } from './studio/_core/components';
 import { tapHaptic, warnHaptic } from '../utils/haptics';
 import { softClickSound, navSlideSound } from '../utils/sounds';
-import { LAYOUT_DESKTOP_MIN } from '../utils/useIsDesktop';
+import { LAYOUT_DESKTOP_MIN, TABLET_MIN_WIDTH } from '../utils/useIsDesktop';
 import { applyTheme } from '../data/themeStore';
+import MatteBackground from './studio/_shared/MatteBackground';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -1559,9 +1560,11 @@ export default function Day1DemoApp() {
       );
     }
     case 'result': {
-      // Desktop: bypass FitToViewport — ResultScreen manages its own layout.
+      // Desktop/tablet: bypass FitToViewport — ResultScreen manages its own layout.
+      // Tablet portrait (768–1023px) also bypasses scaling; ResultScreen activates
+      // its two-column grid internally via the TABLET_MIN_WIDTH check.
       // Mobile: 430-wide with width-only scaling.
-      const resultMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const resultMobile = typeof window !== 'undefined' && window.innerWidth < TABLET_MIN_WIDTH;
       const resultEl = (
         <ResultScreen
           result={result}
@@ -1582,9 +1585,9 @@ export default function Day1DemoApp() {
       );
     }
     case 'setup': {
-      // Desktop: bypass FitToViewport — SetupScreen manages its own layout.
+      // Desktop/tablet: bypass FitToViewport — SetupScreen manages its own layout.
       // Mobile: 430×932 with standard scaling.
-      const setupMobile = typeof window !== 'undefined' && window.innerWidth < LAYOUT_DESKTOP_MIN;
+      const setupMobile = typeof window !== 'undefined' && window.innerWidth < TABLET_MIN_WIDTH;
       const setupEl = (
         <SetupScreen
           result={result}
@@ -1948,7 +1951,7 @@ function FallbackReveal({ message, onRetry }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
       <div style={{
         position: 'relative',
         width: '100%', maxWidth: 430, height: '100%', minHeight: 600,
@@ -1957,14 +1960,7 @@ function FallbackReveal({ message, onRetry }) {
         overflow: 'hidden',
         fontFamily: 'Inter, system-ui, sans-serif',
       }}>
-        {/* Matte metal surface — same ambient/vignette/grain stack as HomeScreen */}
-        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.028) 0%, rgba(132, 158, 184,0.010) 40%, transparent 72%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.010) 0%, transparent 65%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.03) 40%, transparent 80%)' }} />
-          <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
-        </div>
+        <MatteBackground variant="carbon" />
 
         {/* ── Wordmark (top-left) — static, not interactive on this screen ── */}
         <div style={{ position: 'absolute', top: 24, left: 22, padding: 6, zIndex: 15, userSelect: 'none' }}>

@@ -462,7 +462,7 @@ function GearPicker({ kit, onSave, onCancel, isDesktop }) {
       display: 'flex', flexDirection: 'column',
       backgroundColor: SCREEN_BG,
     }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
 
       {/* Header */}
       <div style={{
@@ -875,7 +875,7 @@ export default function MyKitScreen({ onBack, onRecipes }) {
       overflow: 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
     }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
 
       {/* ── Header ── */}
       <div style={{

@@ -16,6 +16,7 @@ import { steel, accent, C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, SCREEN_BG,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, KEY_ACCENT } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import { loadSetups, deleteSetup, onSetupsChanged } from '../../../data/setupStore';
+import { formatSetupText } from '../../../utils/formatSetupText';
 
 const LAST_USED_KEY = 'ngw_last_used_setup';
 
@@ -106,6 +107,7 @@ function MiniDiagram({ lights = [], starred }) {
 function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, deleteConfirm, onLoad, onShoot, isDesktop }) {
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const [briefCopied, setBriefCopied] = useState(false);
 
   const pattern = setup.result?.bestMatch?.name
     || setup.result?.bestMatch?.lightingPattern
@@ -248,6 +250,20 @@ function SetupCard({ setup, isStarred, isMenuOpen, onTap, onMenu, onDelete, dele
           }}
         >
           <MenuButton label="Shoot This Setup" onClick={() => { onShoot(); }} />
+          <MenuButton
+            label={briefCopied ? '✓ Brief Copied' : 'Copy Brief'}
+            onClick={() => {
+              const text = formatSetupText(setup.result);
+              if (navigator.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+                navigator.share({ text }).catch(() => {});
+              } else {
+                navigator.clipboard?.writeText(text).then(() => {
+                  setBriefCopied(true);
+                  setTimeout(() => setBriefCopied(false), 2200);
+                }).catch(() => {});
+              }
+            }}
+          />
           <div style={{ height: 1, background: steel(0.10), margin: '2px 10px' }} />
           <MenuButton
             label={deleteConfirm ? 'Confirm Delete' : 'Delete'}
@@ -400,6 +416,8 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
   const [menuId, setMenuId] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
   const [lastUsedId, setLastUsedIdState] = useState(() => getLastUsedId());
+  const [query, setQuery] = useState('');
+  const [patternFilter, setPatternFilter] = useState(null);
 
   // Cross-tab sync
   useEffect(() => onSetupsChanged(() => setSetups(loadSetups())), []);
@@ -419,6 +437,19 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
       if (b.id === lastUsedId) return 1;
     }
     return (b.timestamp || 0) - (a.timestamp || 0);
+  });
+
+  const getPattern = (s) =>
+    s.result?.bestMatch?.name || s.result?.bestMatch?.lightingPattern || s.result?.pattern || null;
+
+  const uniquePatterns = [...new Set(sorted.map(getPattern).filter(Boolean))];
+
+  const visible = sorted.filter(s => {
+    const name = (s.name || '').toLowerCase();
+    const pat = (getPattern(s) || '').toLowerCase();
+    const matchesQuery = !query || name.includes(query.toLowerCase()) || pat.includes(query.toLowerCase());
+    const matchesPattern = !patternFilter || getPattern(s) === patternFilter;
+    return matchesQuery && matchesPattern;
   });
 
   function markLastUsed(id) {
@@ -457,7 +488,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
       backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
 
       {/* ── Header ── */}
       <div style={{
@@ -495,16 +526,107 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
       {setups.length === 0 ? (
         <EmptyState onBuild={onBuild} />
       ) : (
-        <div style={{
-          flex: 1, overflowY: 'auto',
-          padding: isDesktop ? '0 40px 40px' : '0 22px 40px',
-          position: 'relative', zIndex: 1,
-          display: isDesktop ? 'grid' : 'flex',
-          ...(isDesktop
-            ? { gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12, alignContent: 'start' }
-            : { flexDirection: 'column', gap: 10 }),
-        }}>
-          {sorted.map((setup, i) => (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Search + filter bar — shown when 3+ setups */}
+          {setups.length >= 3 && (
+            <div style={{
+              padding: isDesktop ? '0 40px 14px' : '0 22px 14px',
+              display: 'flex', flexDirection: 'column', gap: 10,
+              position: 'relative', zIndex: 2, flexShrink: 0,
+            }}>
+              {/* Search input */}
+              <div style={{ position: 'relative' }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"
+                  style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                  <circle cx="6.5" cy="6.5" r="5" stroke={steel(0.35)} strokeWidth="1.5" />
+                  <line x1="10.5" y1="10.5" x2="14" y2="14" stroke={steel(0.35)} strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+                <input
+                  type="search"
+                  placeholder="Search setups…"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  style={{
+                    width: '100%', boxSizing: 'border-box',
+                    height: 40, borderRadius: 10,
+                    background: 'linear-gradient(135deg, rgba(0,0,0,0.35), rgba(0,0,0,0.22))',
+                    boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.40), inset 0 1px 2px rgba(0,0,0,0.25)',
+                    border: `1px solid ${steel(0.09)}`,
+                    paddingLeft: 34, paddingRight: query ? 32 : 12,
+                    fontSize: 14, color: steel(0.85),
+                    outline: 'none', appearance: 'none', WebkitAppearance: 'none',
+                    ...FONT_SMOOTH,
+                  }}
+                />
+                {query && (
+                  <button
+                    onClick={() => setQuery('')}
+                    style={{
+                      position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 4,
+                      color: steel(0.4), fontSize: 15, lineHeight: 1,
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                  >✕</button>
+                )}
+              </div>
+
+              {/* Pattern filter chips — shown when 2+ distinct patterns */}
+              {uniquePatterns.length >= 2 && (
+                <div style={{
+                  display: 'flex', gap: 7, overflowX: 'auto', paddingBottom: 2,
+                  scrollbarWidth: 'none', msOverflowStyle: 'none',
+                }}>
+                  {[null, ...uniquePatterns].map(p => {
+                    const active = p === patternFilter;
+                    return (
+                      <button
+                        key={p || '__all'}
+                        onClick={() => setPatternFilter(active ? null : p)}
+                        style={{
+                          flexShrink: 0, height: 28,
+                          padding: '0 12px', borderRadius: 14,
+                          border: active ? `1px solid ${accent(0.35)}` : `1px solid ${steel(0.12)}`,
+                          background: active
+                            ? `linear-gradient(135deg, ${accent(0.18)}, ${accent(0.10)})`
+                            : steel(0.07),
+                          color: active ? KEY_ACCENT : steel(0.55),
+                          fontSize: 12, fontWeight: active ? 700 : 500,
+                          letterSpacing: '0.3px',
+                          cursor: 'pointer',
+                          transition: 'background 0.12s, color 0.12s, border-color 0.12s',
+                          WebkitTapHighlightColor: 'transparent',
+                          ...FONT_SMOOTH,
+                        }}
+                      >
+                        {p ? toTitleCase(p) : 'All'}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Card grid */}
+          <div style={{
+            flex: 1, overflowY: 'auto',
+            padding: isDesktop ? '0 40px 40px' : '0 22px 40px',
+            position: 'relative', zIndex: 1,
+            display: isDesktop ? 'grid' : 'flex',
+            ...(isDesktop
+              ? { gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12, alignContent: 'start' }
+              : { flexDirection: 'column', gap: 10 }),
+          }}>
+          {visible.length === 0 ? (
+            <div style={{
+              gridColumn: '1 / -1',
+              padding: '48px 0', textAlign: 'center',
+              color: steel(0.35), fontSize: 14, ...FONT_SMOOTH,
+            }}>
+              No setups match
+            </div>
+          ) : visible.map((setup, i) => (
             <SetupCard
               key={setup.id}
               setup={setup}
@@ -542,6 +664,7 @@ export default function SavedSetupsScreen({ onSelect, onBack, onBuild, onShoot }
             }}>
               Tap any setup to open its full blueprint
             </span>
+          </div>
           </div>
         </div>
       )}

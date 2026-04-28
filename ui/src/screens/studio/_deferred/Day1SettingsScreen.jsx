@@ -11,7 +11,7 @@ import { saveSetting, loadSettings, resetSettings, applySettings,
 import { loadMode, saveMode } from '../../../data/modeStore';
 import { isEnabled, setFlag } from '../../../modes/featureFlags';
 import useMode from '../../../hooks/useMode';
-import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN, KEY_ACCENT } from '../../../theme/studioMatte';
+import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL, GREEN, KEY_ACCENT, SCREEN_BG } from '../../../theme/studioMatte';
 import { Panel, Divider, SectionLabel, NavRow, ToggleRow, InfoRow, ScreenHeader, HomeIndicator }
   from '../_core/components';
 import MatteBackground from '../_shared/MatteBackground';
@@ -45,8 +45,8 @@ function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
-      <MatteBackground variant="subdued" />
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="carbon" />
     <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
       <ScreenHeader title="Preferences" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
@@ -209,8 +209,8 @@ function AccountScreen({ user, onBack, onLogout }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
-      <MatteBackground variant="subdued" />
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="carbon" />
     <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
       <ScreenHeader title="Account" onBack={onBack} />
       <div style={{ padding: '8px 20px 48px', position: 'relative', zIndex: 1 }}>
@@ -477,8 +477,8 @@ export default function Day1SettingsScreen({ user, onBack, onLogout, onLab }) {
   // ── MAIN ──────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: C.bg, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
-      <MatteBackground variant="subdued" />
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, fontFamily: 'Inter, system-ui, -apple-system, sans-serif', overflow: 'hidden' }}>
+      <MatteBackground variant="carbon" />
     <div style={{ position: 'relative', zIndex: 1, height: '100%', overflowY: 'auto', maxWidth: 720, margin: '0 auto' }}>
 
       {/* Ambient gear silhouette — desktop only, photography DNA */}

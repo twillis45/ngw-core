@@ -525,7 +525,7 @@ export default function RecipeScreen({ onSelect, onBack, onBuild }) {
       backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
 
       {/* ── Header ── */}
       <div style={{

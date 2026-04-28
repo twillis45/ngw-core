@@ -59,7 +59,7 @@ export default function SessionLogScreen({ onSelectAnalysis, onBack }) {
 
   return (
     <div style={{ background: SCREEN_BG, minHeight: '100vh', position: 'relative' }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
       <div style={{ position: 'relative', zIndex: 1, padding: '20px 16px', maxWidth: 960, margin: '0 auto' }}>
 
         {/* Header */}

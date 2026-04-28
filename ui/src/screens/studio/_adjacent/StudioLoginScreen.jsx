@@ -7,12 +7,13 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { tapHaptic, successHaptic, warnHaptic, grainHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
 import { login, register } from '../../../data/authApi';
+import MatteBackground from '../_shared/MatteBackground';
 
 // ─── Studio Matte Token Palette ──────────────────────────────────────────────
 const steel = (a) => `rgba(132, 158, 184,${a})`;
 
 const C = {
-  bg:          '#000001',
+  bg:          '#0B0B0C',
   panelBg:     '#0f1013',
   fieldBg:     '#0a0b0d',
   ctaFrom:     '#3d404d',
@@ -261,7 +262,7 @@ export default function StudioLoginScreen({ onLogin }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, backgroundColor: '#000',
+      position: 'fixed', inset: 0, backgroundColor: C.bg,
       overflow: 'auto',
       fontFamily: 'Inter, system-ui, sans-serif',
     }}>
@@ -276,14 +277,7 @@ export default function StudioLoginScreen({ onLogin }) {
         position: 'relative',
         display: 'flex', flexDirection: 'column',
       }}>
-        {/* ── Matte metal surface — layered ambient wash, vignette, specular edge, grain ── */}
-        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 75% 55% at 50% 22%, rgba(120,148,175,0.022) 0%, rgba(132, 158, 184,0.008) 40%, transparent 72%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 55% 38% at 50% 58%, rgba(180,150,110,0.008) 0%, transparent 65%)' }} />
-          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 118% 88% at 50% 50%, transparent 52%, rgba(0,0,0,0.45) 100%)' }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, background: 'linear-gradient(141.71deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.018) 40%, transparent 80%)' }} />
-          <div style={{ position: 'absolute', inset: 0, opacity: 0.16, mixBlendMode: 'multiply', backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.32' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`, backgroundSize: '128px 128px' }} />
-        </div>
+        <MatteBackground variant="carbon" />
 
         {/* ── Photography DNA — faint modifier silhouette in the background.
              A softbox outline at 3% opacity says "this was made for photographers"

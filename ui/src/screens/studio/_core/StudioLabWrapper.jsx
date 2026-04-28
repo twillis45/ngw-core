@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { steel, C as SM_C, FONT_SMOOTH, PANEL_SHADOW, PANEL_BEVEL,
-         KEY_ACCENT } from '../../../theme/studioMatte';
+         KEY_ACCENT, SCREEN_BG } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
 import { tapHaptic, navHaptic } from '../../../utils/haptics';
 import { softClickSound, navSlideSound } from '../../../utils/sounds';
@@ -26,11 +26,11 @@ export default function StudioLabWrapper({ onBack, onSessionLog, onLookLibrary }
   return (
     <div style={{
       position: 'fixed', inset: 0,
-      backgroundColor: C.bg,
+      backgroundColor: SCREEN_BG,
       fontFamily: 'Inter, system-ui, sans-serif',
       overflow: 'hidden',
     }}>
-      <MatteBackground variant="subdued" />
+      <MatteBackground variant="carbon" />
 
       {/* Back button — fixed position overlay, doesn't interfere with Lab layout */}
       <button

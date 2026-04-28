@@ -773,7 +773,7 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
       backgroundColor: SCREEN_BG,
       overflow: 'hidden',
     }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
 
       {/* ── Header ── */}
       <div style={{
