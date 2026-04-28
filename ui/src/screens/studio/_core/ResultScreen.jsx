@@ -1,8 +1,8 @@
 /**
  * ResultScreen — Studio Matte design
  * Pixel-exact match to Figma:
- *   High confidence: YQgGd8KZyZoXzZwJV7p4b6 / 1493:2
- *   Low confidence:  YQgGd8KZyZoXzZwJV7p4b6 / 1498:2
+ *   Confident:  YQgGd8KZyZoXzZwJV7p4b6 / 1493:2
+ *   Uncertain:  YQgGd8KZyZoXzZwJV7p4b6 / 1498:2
  *
  * Layout: absolute-positioned top section (hero, pattern, pills, CTA)
  *         + flow analytical panel that expands in-place

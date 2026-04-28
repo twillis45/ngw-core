@@ -109,7 +109,7 @@ function PreferencesScreen({ settings, update, onBack, mode, isAdmin }) {
                 const idx = opts.indexOf(settings.confidenceDisplay || 'simple');
                 update('confidenceDisplay', opts[(idx + 1) % opts.length]);
               }}
-              tooltip="Simple: strong/partial. Numeric: percentage. Detailed: both + signal breakdown."
+              tooltip="Simple: Confident / Tentative / Uncertain. Numeric: percentage. Detailed: percentage + label together."
             />
             <Divider />
             <NavRow

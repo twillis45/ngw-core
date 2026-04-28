@@ -1041,7 +1041,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                   ].join(', '),
                   pointerEvents: 'none',
                 }} />
-                <button onClick={() => { tapHaptic(); softClickSound(); onBuildWizard(); }} style={{
+                <button onClick={() => { tapHaptic(); softClickSound(); trackEvent('HOME_BUILD_ENTRY', { source: 'desktop_idle_panel' }); onBuildWizard(); }} style={{
                   position: 'relative',
                   background: CTA_BG, border: 'none',
                   cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
@@ -2390,7 +2390,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           {[
             { label: 'Recipes', action: onRecipes },
             { label: 'Saved Setups', action: onSavedSetups },
-            { label: 'Build a Setup', action: onBuildWizard },
+            { label: 'Build a Setup', action: () => { trackEvent('HOME_BUILD_ENTRY', { source: 'desktop_action_row' }); onBuildWizard(); } },
             { label: 'My Kit', action: onMyKit },
             { label: 'Journal', action: onSessionLog },
             { label: 'Look Library', action: onLookLibrary },
