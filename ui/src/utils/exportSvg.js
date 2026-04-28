@@ -44,6 +44,14 @@ function svgToCanvas(svgEl, scale = 2) {
 }
 
 /**
+ * Render an SVG element to an offscreen HTMLCanvasElement (no download).
+ * Used by SocialExportPanel to composite the real lighting diagram into social cards.
+ */
+export function svgToCanvasElement(svgEl, scale = 2) {
+  return svgToCanvas(svgEl, scale);
+}
+
+/**
  * Export an SVG element as a PNG file download.
  * @param {SVGElement} svgEl
  * @param {string} filename — without extension
