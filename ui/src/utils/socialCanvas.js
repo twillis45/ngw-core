@@ -1138,165 +1138,137 @@ export function drawBlueprintCard(ctx, data, S) {
 }
 
 
-// ── SIGNAL CARD (4:5) ─────────────────────────────────────────────────────────
-// Magazine-grade. Pattern name overlaid on full-bleed smart-cropped photo.
-// Uses all four new primitives: smartCrop, drawPatternHero, drawConfidenceBar, drawGrain.
+// ── SIGNAL CARD (4:5) — The Instrument Read ──────────────────────────────────
+// Hard horizontal division: specimen (top 55%) + analysis readout (bottom 45%).
+// Authority > lifestyle. Classified, stamped, measured.
 // data shape mirrors exportData in SocialExportPanel.jsx.
 // progress: 0–1 animation control (default 1 = final frame).
 export function drawSignalCard(ctx, data, S) {
   const {
-    pattern, confidence = 0, lights = [], imageEl: photo,
-    branded = true, patternReasoning, environment = null,
+    pattern, confidence = 0, imageEl: photo,
+    branded = true,
     progress = 1, confEvidence = '',
   } = data;
 
-  const w   = ctx.canvas.width;
-  const h   = ctx.canvas.height;
-  const pad = px(48, S);
-  const cw  = w - pad * 2;
-  const cc  = confColor(confidence);
+  const w          = ctx.canvas.width;
+  const h          = ctx.canvas.height;
+  const pad        = px(20, S);
+  const specimenH  = Math.round(h * 0.55);
+  const analysisY  = specimenH;
 
-  // Base fill
-  ctx.fillStyle = BG; ctx.fillRect(0, 0, w, h);
+  // ── BASE — analysis zone color covers full canvas ──
+  ctx.fillStyle = '#0B0B0C';
+  ctx.fillRect(0, 0, w, h);
 
-  // ── PHOTO — full-bleed smart crop ──
+  // ── SPECIMEN ZONE — image fills top 55%, clipped, no decorative overlay ──
+  const photoA = sect(progress, 0, 0.30);
+  ctx.save();
+  ctx.globalAlpha = photoA;
   if (photo && photo.complete && photo.naturalWidth > 0) {
-    const crop = smartCrop(photo, null, w, h);
-    const photoA = sect(progress, 0, 0.28);
-    ctx.save(); ctx.globalAlpha = photoA;
-    ctx.drawImage(photo, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, h);
-    ctx.restore();
-
-    // Cinematic overlay — dark top safe zone + heavy bottom content zone
-    const ov = ctx.createLinearGradient(0, 0, 0, h);
-    ov.addColorStop(0,    'rgba(9,9,11,0.55)');
-    ov.addColorStop(0.12, 'rgba(9,9,11,0.10)');
-    ov.addColorStop(0.32, 'rgba(9,9,11,0.38)');
-    ov.addColorStop(0.46, 'rgba(9,9,11,0.64)');
-    ov.addColorStop(0.58, 'rgba(9,9,11,0.86)');
-    ov.addColorStop(0.70, 'rgba(9,9,11,0.94)');
-    ov.addColorStop(1,    'rgba(9,9,11,0.97)');
-    ctx.fillStyle = ov; ctx.fillRect(0, 0, w, h);
+    const crop = smartCrop(photo, null, w, specimenH);
+    ctx.beginPath(); ctx.rect(0, 0, w, specimenH); ctx.clip();
+    ctx.drawImage(photo, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, w, specimenH);
   } else {
-    drawNoPhotoZone(ctx, 0, 0, w, h, pattern, confidence, S);
+    drawNoPhotoZone(ctx, 0, 0, w, specimenH, pattern, confidence, S);
   }
-
-  if (environment) drawEnvBadge(ctx, pad, px(44, S), environment, S);
-
-  // ── MICRO HEADER ──
-  ctx.save(); ctx.globalAlpha = sect(progress, 0, 0.22);
-  micro(ctx, w / 2, Math.round(h * 0.132), 'Lighting Breakdown', S,
-    { color: 'rgba(132,158,184,0.45)', size: 16, align: 'center', tracking: 4 });
   ctx.restore();
 
-  // ── PATTERN HERO — overlaid at 44% of height ──
-  const patY = Math.round(h * 0.44);
-  ctx.save(); ctx.globalAlpha = sect(progress, 0.20, 0.22);
-  drawPatternHero(ctx, pattern, w / 2, patY, cw, S,
-    { shadowColor: cc, shadowBlur: px(48, S) });
+  // ── ANALYSIS ZONE — explicit flat refill, no gradient ──
+  ctx.fillStyle = '#0B0B0C';
+  ctx.fillRect(0, analysisY, w, h - analysisY);
+
+  // ── DIVISION RULE — hard 1px boundary + left calibration notch ──
+  const ruleA = sect(progress, 0.26, 0.44);
+  ctx.save();
+  ctx.globalAlpha = ruleA;
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth   = 1;
+  ctx.beginPath(); ctx.moveTo(0, specimenH); ctx.lineTo(w, specimenH); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.beginPath(); ctx.moveTo(0, specimenH - px(2, S)); ctx.lineTo(0, specimenH + px(2, S)); ctx.stroke();
   ctx.restore();
 
-  // Accent rule — confidence-colored, fades in from center
-  const ruleFullW = px(220, S);
-  const ruleAnimW = Math.round(ruleFullW * sect(progress, 0.36, 0.18));
-  if (ruleAnimW > 2) {
-    const ruleY = patY + px(14, S);
-    const ruleX = (w - ruleAnimW) / 2;
-    const ruleG = ctx.createLinearGradient(ruleX, 0, ruleX + ruleAnimW, 0);
-    ruleG.addColorStop(0,   'rgba(0,0,0,0)');
-    ruleG.addColorStop(0.5, cc + 'cc');
-    ruleG.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.fillStyle = ruleG;
-    ctx.fillRect(ruleX, ruleY, ruleAnimW, px(3, S));
+  // ── CORNER BRACKETS — L-shaped, 10px arms, structural ──
+  const arm      = px(10, S);
+  const bracketA = sect(progress, 0.22, 0.42);
+  ctx.save();
+  ctx.globalAlpha = bracketA;
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  ctx.lineWidth   = 1;
+  ctx.lineCap     = 'square';
+  ctx.beginPath(); ctx.moveTo(0, arm); ctx.lineTo(0, 0); ctx.lineTo(arm, 0); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w - arm, 0); ctx.lineTo(w, 0); ctx.lineTo(w, arm); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, specimenH - arm); ctx.lineTo(0, specimenH); ctx.lineTo(arm, specimenH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w - arm, specimenH); ctx.lineTo(w, specimenH); ctx.lineTo(w, specimenH - arm); ctx.stroke();
+  ctx.restore();
+
+  // ── CLASSIFICATION — uppercase, left-aligned, decisive ──
+  const patternUpper = (pattern || 'UNKNOWN').toUpperCase().replace(/_/g, ' ');
+  const nameLen      = patternUpper.replace(/\s/g, '').length;
+  let   classFontSz  = nameLen <= 7 ? 36 : nameLen <= 11 ? 30 : nameLen <= 15 ? 26 : 22;
+  const maxClassW    = w - pad * 2 - px(56, S);
+
+  ctx.save();
+  ctx.font          = `700 ${f(classFontSz, S)} ${FONT}`;
+  ctx.letterSpacing = `${px(5, S)}px`;
+  while (classFontSz > 16 && ctx.measureText(patternUpper).width > maxClassW) {
+    classFontSz -= 2;
+    ctx.font = `700 ${f(classFontSz, S)} ${FONT}`;
   }
-
-  // ── SECTION DIVIDER at 54% ──
-  const divY = Math.round(h * 0.54);
-  ctx.save(); ctx.globalAlpha = sect(progress, 0.42, 0.16);
-  drawDivider(ctx, divY, pad, w - pad, 0.18);
   ctx.restore();
 
-  let y = divY + px(26, S);
+  const classY = analysisY + px(22, S);
+  const classA = sect(progress, 0.34, 0.56);
+  ctx.save();
+  ctx.globalAlpha   = classA;
+  ctx.font          = `700 ${f(classFontSz, S)} ${FONT}`;
+  ctx.letterSpacing = `${px(5, S)}px`;
+  ctx.fillStyle     = 'rgba(245,247,250,0.95)';
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'top';
+  ctx.fillText(patternUpper, pad, classY);
+  ctx.restore();
 
-  // ── CONFIDENCE — pct inline + bar ──
-  const confA = sect(progress, 0.48, 0.18);
+  // ── CONFIDENCE — right-aligned, same row, secondary, bare percentage ──
   const pct   = Math.round((confidence || 0) * 100);
-
-  ctx.save(); ctx.globalAlpha = confA;
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `800 ${f(48, S)} ${FONT}`;
-  ctx.fillStyle = cc; ctx.textAlign = 'left';
-  ctx.shadowColor = cc; ctx.shadowBlur = px(10, S);
-  ctx.fillText(`${pct}%`, pad, y);
-  const pctW = ctx.measureText(`${pct}%`).width;
-  ctx.shadowBlur = 0;
-  micro(ctx, pad + pctW + px(14, S), y, 'Confidence', S,
-    { color: TEXT_DIM, size: 12, tracking: 2 });
+  const confA = sect(progress, 0.42, 0.60);
+  ctx.save();
+  ctx.globalAlpha   = confA;
+  ctx.font          = `500 ${f(11, S)} ${FONT}`;
+  ctx.letterSpacing = `${px(0.5, S)}px`;
+  ctx.fillStyle     = `rgba(200,215,225,${pct >= 60 ? 0.45 : 0.30})`;
+  ctx.textAlign     = 'right';
+  ctx.textBaseline  = 'top';
+  ctx.fillText(`${pct}%`, w - pad, classY + px(4, S));
   ctx.restore();
 
-  ctx.save(); ctx.globalAlpha = sect(progress, 0.52, 0.16);
-  drawConfidenceBar(ctx, confidence, pad, y + px(8, S), cw, S);
+  // ── EVIDENCE READOUT — instrument log, very quiet, no chips ──
   if (confEvidence) {
-    ctx.font      = `500 ${f(18, S)} ${FONT}`;
-    ctx.fillStyle = 'rgba(132,158,184,0.65)';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(confEvidence, pad, y + px(26, S));
-  }
-  ctx.restore();
-
-  y += confEvidence ? px(44, S) : px(28, S);
-
-  // ── LIGHTS — up to 3 rows ──
-  const lc = lights.length;
-  if (lc > 0) {
-    ctx.save(); ctx.globalAlpha = sect(progress, 0.58, 0.16);
-    drawDivider(ctx, y, pad, w - pad, 0.10);
-    ctx.restore();
-    y += px(22, S);
-
-    ctx.save(); ctx.globalAlpha = sect(progress, 0.58, 0.16);
-    micro(ctx, pad, y, `Lights · ${lc}`, S, { size: 14 });
-    ctx.restore();
-    y += px(24, S);
-
-    lights.slice(0, 3).forEach((l, i) => {
-      ctx.save(); ctx.globalAlpha = sect(progress, 0.62 + i * 0.08, 0.14);
-      const rowH = drawLightRow(ctx, pad + px(2, S), y, l, S);
-      ctx.restore();
-      y += rowH + px(14, S);
-    });
-    y += px(6, S);
-  }
-
-  // ── REASONING FRAGMENT — italic, max 2 lines ──
-  if (patternReasoning && y < h - px(100, S)) {
-    const snippet = patternReasoning.slice(0, 180);
-    ctx.save(); ctx.globalAlpha = sect(progress, 0.80, 0.14);
-    ctx.font = `400 italic ${f(19, S)} ${FONT}`;
-    ctx.fillStyle = 'rgba(132,158,184,0.38)';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    y += px(10, S);
-    const lineH = px(28, S);
-    const words  = snippet.split(' ');
-    let line = '', lineCount = 0;
-    for (const word of words) {
-      const test = line ? `${line} ${word}` : word;
-      if (ctx.measureText(test).width > cw && line) {
-        if (lineCount < 2) { ctx.fillText(line, pad, y); y += lineH; lineCount++; }
-        line = word;
-      } else {
-        line = test;
-      }
-    }
-    if (line && lineCount < 2) ctx.fillText(line, pad, y);
+    const evidA = sect(progress, 0.50, 0.66);
+    ctx.save();
+    ctx.globalAlpha   = evidA;
+    ctx.font          = `400 ${f(10, S)} ${FONT}`;
+    ctx.letterSpacing = `${px(1.2, S)}px`;
+    ctx.fillStyle     = 'rgba(160,175,190,0.45)';
+    ctx.textAlign     = 'left';
+    ctx.textBaseline  = 'top';
+    ctx.fillText(`DERIVED — ${confEvidence.toUpperCase()}`, pad, classY + px(classFontSz + 14, S));
     ctx.restore();
   }
 
-  // ── BRAND ──
-  ctx.save(); ctx.globalAlpha = sect(progress, 0.92, 0.08);
-  drawBrand(ctx, w, h - px(26, S), branded, S);
-  ctx.restore();
+  // ── NGW CALIBRATION STAMP — bottom-right, barely present ──
+  if (branded) {
+    const stampA = sect(progress, 0.86, 1.0);
+    ctx.save();
+    ctx.globalAlpha   = stampA;
+    ctx.font          = `500 ${f(10, S)} ${FONT}`;
+    ctx.letterSpacing = `${px(1.5, S)}px`;
+    ctx.fillStyle     = 'rgba(255,255,255,0.22)';
+    ctx.textAlign     = 'right';
+    ctx.textBaseline  = 'alphabetic';
+    ctx.fillText('NGW', w - pad, h - px(16, S));
+    ctx.restore();
+  }
 
   // ── GRAIN — always last ──
   drawGrain(ctx, w, h);
