@@ -9,8 +9,9 @@ import { loadSettings } from '../../../data/settingsStore';
 import prettify from '../../../utils/prettify';
 import useStableViewport from '../../../utils/useStableViewport';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
-import { steel, C as SM_C, SCREEN_BG, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW } from '../../../theme/studioMatte';
+import { steel, C as SM_C, SCREEN_BG, GLASS_REFLECTION, LENS_VIGNETTE, VIEWFINDER_INNER_SHADOW, DITHER_STYLE } from '../../../theme/studioMatte';
 import MatteBackground from '../_shared/MatteBackground';
+import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import useLightingRead from './useLightingRead';
 
 const C = { ...SM_C };
@@ -35,16 +36,16 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
     <div style={{
       position: 'relative',
       width: '100%',
       height: '100%',
       margin: '0 auto',
-      overflow: 'hidden',
+      overflow: isDesktop ? 'visible' : 'hidden',
       fontFamily: 'Inter, system-ui, sans-serif',
       filter: daylightMode ? 'brightness(1.15)' : undefined,
-      ...(isDesktop ? { display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr', maxWidth: 1400 } : {}),
+      ...(isDesktop ? { display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr', maxWidth: 1400, padding: '20px 0' } : {}),
     }}>
 
       {/* Cancel button */}
@@ -73,8 +74,9 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           width: 'fit-content',
           margin: '0 auto',
           overflow: 'hidden',
-          // LCD panel — matches Home empty VF slot exactly
-          background: 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)',
+          borderRadius: 0,
+          // LCD panel — neutral dark, matches Home empty VF slot
+          background: 'linear-gradient(180deg, #0d0d0d 0%, #080808 40%, #060606 100%)',
           boxShadow: VIEWFINDER_INNER_SHADOW,
         } : {
           position: 'absolute', inset: 0, overflow: 'hidden',
@@ -109,13 +111,19 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           pointerEvents: 'none',
         }} />
 
+        {/* Viewfinder HUD — grid + AF brackets, dimmed for processing state */}
+        <div style={{ position: 'absolute', inset: 0, zIndex: 3, pointerEvents: 'none' }}>
+          <ViewfinderHUD dimmed={true} />
+        </div>
+
         {/* Desktop: glass overlay inside the recessed panel */}
         {isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={DITHER_STYLE} />
           <div style={{
             position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-            background: GLASS_REFLECTION, opacity: 0.4,
+            background: GLASS_REFLECTION, opacity: 0.72,
             transform: glassReflectionTransform(tilt), willChange: 'transform',
           }} />
         </div>
@@ -125,9 +133,10 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
         {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={DITHER_STYLE} />
           <div style={{
             position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-            background: GLASS_REFLECTION, opacity: 0.5,
+            background: GLASS_REFLECTION, opacity: 0.62,
             transform: glassReflectionTransform(tilt), willChange: 'transform',
           }} />
         </div>
@@ -139,6 +148,34 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           boxShadow: VIEWFINDER_INNER_SHADOW,
         }} />
         )}
+        {/* Bezel depth shadow — body overhangs recessed LCD from all sides (desktop) */}
+        {isDesktop && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
+          background: [
+            'linear-gradient(to bottom, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.45) 7%, rgba(0,0,0,0.14) 18%, transparent 30%)',
+            'linear-gradient(to top,   rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.28) 7%, rgba(0,0,0,0.08) 16%, transparent 28%)',
+            'linear-gradient(to right, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.30) 7%, rgba(0,0,0,0.08) 16%, transparent 26%)',
+            'linear-gradient(to left,  rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 7%, transparent 20%)',
+          ].join(', '),
+        }} />
+        )}
+
+        {/* Chamfer edge highlights + counter-chamfer — matches Home VF depth */}
+        {isDesktop && (<>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 7, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 7, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+          }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 7, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 7, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+          }} />
+        </>)}
       </div>
 
       {/* Pattern tease on completion */}

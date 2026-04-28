@@ -22,7 +22,7 @@ import { formatSetupText } from '../../../utils/formatSetupText';
 import useStableViewport from '../../../utils/useStableViewport';
 import { resultRevealSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
 import { loadSettings } from '../../../data/settingsStore';
-import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
+import { steel, C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE, DITHER_STYLE,
          CTA_BG, CTA_SHADOW, CTA_BEVEL, PANEL_SHADOW, PANEL_BEVEL,
          TEXT_SHADOW_ENGRAVED,
          READOUT_FG, READOUT_GLOW, READOUT_LABEL,
@@ -2153,8 +2153,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   }, [infoVisible, result?.confidence]);
 
   if (!result) return (
-    <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
-      <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, sans-serif' }}>
+    <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
+      <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: SCREEN_BG, fontFamily: 'Inter, system-ui, sans-serif' }}>
         <MatteBackground variant="carbon" />
         <button
           aria-label="Back"
@@ -2280,7 +2280,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       onTouchStart={!isDesktop ? handleSwipeStart : undefined}
       onTouchMove={!isDesktop ? handleSwipeMove : undefined}
       onTouchEnd={!isDesktop ? handleSwipeEnd : undefined}
-      style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}
+      style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}
     >
     {/* Swipe-back edge hint — left edge glow that follows finger */}
     {swipeProgress > 0 && (
@@ -2561,16 +2561,24 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           {/* Glass panel — lens vignette + key light reflection inside recessed panel */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 2, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: isDesktop ? 0.28 : 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+            <div style={DITHER_STYLE} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: isDesktop ? 0.72 : 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
           </div>
-          {/* Chamfer top-left edge catch — matches diagram well and Home ghost VF */}
-          {isDesktop && (
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              zIndex: 3, pointerEvents: 'none',
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 40%, transparent 100%)',
+          {/* Chamfer + counter-chamfer — matches Home VF depth */}
+          {isDesktop && (<>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 3, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
             }} />
-          )}
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 3, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+            }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 3, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 3, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+            }} />
+          </>)}
           {/* Bezel recession overlay — child div over the photo.
               box-shadow inset bleeds through bright photo backgrounds, so we use
               a 4-sided gradient vignette: hard opaque black at each edge fading
@@ -2698,10 +2706,10 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           {/* Chamfer edge highlights — top-left bezel catch, matches Home ghost VF depth */}
           {isDesktop && (<>
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none',
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.04) 100%)',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.025) 35%, rgba(255,255,255,0.008) 100%)',
             }} />
             <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 35%, transparent 65%)',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 35%, transparent 65%)',
             }} />
           </>)}
         </div>
@@ -2998,12 +3006,23 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             <LightingDiagram ref={socialDiagramRef} result={result} fluid compact showExport={isPaid} />
           </div>
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
-            <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.42 }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 12, opacity: 0.72, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
           </div>
           <div style={{
             position: 'absolute', inset: 0, borderRadius: 12,
             pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '12px 12px 0 0',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+          }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '0 0 12px 12px',
+            background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
           }} />
           {/* Label + expand icon — anchored bottom, reads as purposeful */}
           <div style={{
@@ -3172,20 +3191,26 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
                 </svg>
               </div>
             </div>
-            {/* Glass treatment */}
+            {/* Glass treatment — home empty standard */}
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, zIndex: 6, pointerEvents: 'none' }}>
-              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
               <div style={{
                 position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-                background: GLASS_REFLECTION, opacity: 0.28,
+                background: GLASS_REFLECTION, opacity: 0.72,
                 transform: glassReflectionTransform(tilt), willChange: 'transform',
               }} />
             </div>
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 7, borderRadius: 12, boxShadow: VIEWFINDER_INNER_SHADOW }} />
-            <div style={{
-              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-              zIndex: 8, pointerEvents: 'none', borderRadius: '12px 12px 0 0',
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 40%, transparent 100%)',
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 8, pointerEvents: 'none', borderRadius: '12px 12px 0 0',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 8, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+            }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 8, pointerEvents: 'none', borderRadius: '0 0 12px 12px',
+              background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 8, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
             }} />
           </div>
         )}
@@ -3366,6 +3391,18 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         )}
 
         {/* SETUP DIAGRAM moved to top of panel column — see above */}
+
+        {isPaid && (
+          <SafeRender>
+            <SocialExportPanel
+              result={result}
+              imagePreview={imagePreview}
+              diagramCanvas={socialDiagramCanvas}
+              isStudio={plan === 'studio' || plan === 'enterprise'}
+              isAdmin={isAdmin}
+            />
+          </SafeRender>
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             DETAIL — single collapsible drawer.  Scene context, color
@@ -3738,18 +3775,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           <div style={{ margin: '8px 0', padding: '12px', textAlign: 'center', borderRadius: 10, background: 'linear-gradient(141.71deg, #142218 0%, #0e1810 100%)', boxShadow: PANEL_SHADOW }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: C.confHigh, letterSpacing: '0.3px', ...FONT_SMOOTH }}>✓ Saved to your setups</span>
           </div>
-        )}
-
-        {isPaid && (
-          <SafeRender>
-            <SocialExportPanel
-              result={result}
-              imagePreview={imagePreview}
-              diagramCanvas={socialDiagramCanvas}
-              isStudio={plan === 'studio' || plan === 'enterprise'}
-              isAdmin={isAdmin}
-            />
-          </SafeRender>
         )}
 
         {/* ── Copy Setup Brief — text-message-ready spec for assistant handoff ── */}
@@ -4429,15 +4454,26 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
                 }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
               ))}
             </div>
-            {/* Glass reflection + lens vignette overlay */}
+            {/* Glass overlay — home empty standard (no LENS_VIGNETTE on diagram panel) */}
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 20, pointerEvents: 'none', zIndex: 9 }}>
-              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-              <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.42 }} />
+              <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 20, opacity: 0.72, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
             </div>
             {/* Inner-shadow bevel ring */}
             <div style={{
               position: 'absolute', inset: 0, borderRadius: 20,
               pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
+            }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '20px 20px 0 0',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+            }} />
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none', borderRadius: '0 0 20px 20px',
+              background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
             }} />
           </div>
         </div>,

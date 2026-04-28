@@ -734,7 +734,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   // Level 3: Icons + warm amber accents for photography touchpoints
   // Level 4: Glass viewfinder with full overlay stack on loaded photo
   // Level 5: Tactile CTA with dome physics + state-colored LED ring
-  const _D_VF = `min(56vh, 480px)`;
+  const _D_VF = `min(72vh, 720px)`;
   const _D_AMBER = 'rgba(200,155,60,';  // warm amber base for accents
 
   const desktopRightPanel = isDesktop ? (
@@ -837,7 +837,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               // LCD glass panel — opaque dark surface with faint blue-black cast.
               // Real camera LCDs aren't pure black — they have a subtle cool shift
               // from the backlight diffuser layer even when "off".
-              background: 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)',
+              background: 'linear-gradient(180deg, #080808 0%, #060606 40%, #050505 100%)',
               // Mobile-identical shadow: inset trough + outer drop + chamfer catch
               boxShadow: isDragOver
                 ? `inset 0 0 40px ${_D_AMBER}0.12), ${VIEWFINDER_INNER_SHADOW}`
@@ -846,42 +846,21 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {/* LCD backlight — edge-lit panel with corner bleed + center pool */}
+            {/* Surface depth — directional gradient matches 141.71° key light, darkens toward bottom-right */}
             <div style={{
               position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-              background: [
-                // Central backlight pool — panel center is brightest
-                'radial-gradient(ellipse 80% 65% at 50% 48%, rgba(110,145,195,0.065) 0%, rgba(90,125,178,0.03) 40%, transparent 68%)',
-                // Corner backlight bleed — edge-lit LEDs leak at corners
-                'radial-gradient(circle at 0% 0%, rgba(100,140,190,0.025) 0%, transparent 30%)',
-                'radial-gradient(circle at 100% 0%, rgba(100,140,190,0.018) 0%, transparent 30%)',
-                'radial-gradient(circle at 0% 100%, rgba(90,130,180,0.015) 0%, transparent 25%)',
-                'radial-gradient(circle at 100% 100%, rgba(90,130,180,0.012) 0%, transparent 25%)',
-              ].join(', '),
+              background: 'linear-gradient(141.71deg, transparent 0%, rgba(0,0,0,0.05) 55%, rgba(0,0,0,0.10) 100%)',
             }} />
-            {/* Off-axis color shift — edges tint slightly warmer/cooler than center
-                (IPS panel characteristic — viewing angle affects color temp) */}
-            <div style={{
-              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-              background: 'linear-gradient(141.71deg, rgba(140,160,195,0.012) 0%, transparent 40%, transparent 60%, rgba(100,120,150,0.008) 100%)',
-            }} />
-            {/* Glass surface — top/left edge catch + full-surface subtle reflection */}
+            {/* Chamfer edge catch — top/left bezel highlight at key-light angle */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 7,
-              background: 'linear-gradient(90deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.07) 35%, rgba(255,255,255,0.02) 100%)',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
               pointerEvents: 'none',
             }} />
             <div style={{
               position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 7,
-              background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 35%, transparent 65%)',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
               pointerEvents: 'none',
-            }} />
-            {/* Screen-off reflection — when the panel is dark, you see a faint
-                reflection of the surrounding bezel. This is the ghost you see on
-                a powered-down camera LCD in a lit room. */}
-            <div style={{
-              position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-              background: 'radial-gradient(ellipse 70% 50% at 45% 42%, rgba(255,255,255,0.008) 0%, transparent 60%)',
             }} />
             {/* Ghosted portrait — contained inside desktop VF slot */}
             <img src="/ghost-rembrandt.jpg" alt="" style={{
@@ -895,16 +874,25 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             <div style={{ position: 'absolute', left: '2.8%', top: -30, right: '2.8%', bottom: 10, zIndex: 1, opacity: 0.5 }}>
               <img src={ellipseBg} alt="" style={{ width: '100%', height: '100%' }} />
             </div>
-            {/* Glass panel overlay — lens vignette + directional key reflection */}
+            {/* Glass panel overlay — directional key reflection */}
             <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5 }}>
-              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-              <div style={DITHER_STYLE} />
               <div style={{
                 position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-                background: GLASS_REFLECTION, opacity: 0.62,
+                background: GLASS_REFLECTION, opacity: 0.72,
                 transform: glassReflectionTransform(tilt), willChange: 'transform',
               }} />
             </div>
+            {/* Counter-chamfer — bottom/right edge shadow, opposite the key light */}
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 7,
+              background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+              pointerEvents: 'none',
+            }} />
+            <div style={{
+              position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 7,
+              background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+              pointerEvents: 'none',
+            }} />
             {/* Inner shadow — Figma-exact bevel, always top of stack */}
             <div style={{
               position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
@@ -967,7 +955,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               <button onClick={loadSample} style={{
                 position: 'relative',
                 background: CTA_BG, border: 'none',
-                cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                cursor: 'pointer', padding: '10px 24px', borderRadius: 12,
                 boxShadow: [
                   '10px 10px 28px rgba(0,0,0,0.78)',
                   '5px 5px 12px rgba(0,0,0,0.58)',
@@ -1007,7 +995,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 <button onClick={onViewLastResult} style={{
                   position: 'relative',
                   background: CTA_BG, border: 'none',
-                  cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                  cursor: 'pointer', padding: '10px 24px', borderRadius: 12,
                   boxShadow: [
                     '10px 10px 28px rgba(0,0,0,0.78)',
                     '5px 5px 12px rgba(0,0,0,0.58)',
@@ -1044,7 +1032,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 <button onClick={() => { tapHaptic(); softClickSound(); trackEvent('HOME_BUILD_ENTRY', { source: 'desktop_idle_panel' }); onBuildWizard(); }} style={{
                   position: 'relative',
                   background: CTA_BG, border: 'none',
-                  cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                  cursor: 'pointer', padding: '10px 24px', borderRadius: 12,
                   boxShadow: [
                     '10px 10px 28px rgba(0,0,0,0.78)',
                     '5px 5px 12px rgba(0,0,0,0.58)',
@@ -1070,26 +1058,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
 
       {/* ── PHOTO LOADED STATE ── */}
       {hasImage && (<>
-        {/* Glass overlay on the photo — same instrument treatment as mobile */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
-        }}>
-          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-          {/* Dither noise — breaks vignette gradient banding on 8-bit displays */}
-          <div style={DITHER_STYLE} />
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
-            background: GLASS_REFLECTION, opacity: 0.4,
-            transform: glassReflectionTransform(tilt), willChange: 'transform',
-          }} />
-          <div style={{ position: 'absolute', inset: 0, boxShadow: VIEWFINDER_INNER_SHADOW }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, pointerEvents: 'none',
-            background: 'linear-gradient(90deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.07) 35%, rgba(255,255,255,0.02) 100%)',
-          }} />
-          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, pointerEvents: 'none',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 35%, transparent 65%)',
-          }} />
-        </div>
 
         {/* Bottom dock — gradient scrim + EXIF + CTA */}
         <div style={{
@@ -1099,65 +1067,72 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           background: `linear-gradient(to bottom, transparent 0%, ${SCREEN_BG}80 30%, ${SCREEN_BG}d1 70%, ${SCREEN_BG}eb 100%)`,
         }}>
           <ExifStrip exifData={exifData} style={{ marginBottom: 18, opacity: 0.85 }} />
-          {/* CTA — Studio Matte canonical button: directional gradient + chamfer + LED ring */}
-          <button
-            onClick={handleButtonClick}
-            onMouseDown={handleButtonPress}
-            onMouseUp={handleButtonRelease}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => { setIsHovered(false); handleButtonRelease(); }}
-            style={{
-              padding: '18px 84px',
-              border: 'none', borderRadius: 14, cursor: 'pointer',
-              // 141.71° directional gradient — same as mobile dome face
-              background: isPressed
-                ? 'linear-gradient(141.71deg, #020304 0%, #040506 50%, #060708 100%)'
-                : isHovered
-                  ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`
-                  : `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`,
-              boxShadow: isPressed
-                ? [
-                    'inset 0 3px 8px rgba(0,0,0,0.85)',
-                    'inset 3px 0 7px rgba(0,0,0,0.55)',
-                    'inset -1px -1px 4px rgba(0,0,0,0.4)',
-                    'inset 0 1px 2px rgba(0,0,0,0.7)',
-                    '1px 1px 3px rgba(0,0,0,0.4)',
-                  ].join(', ')
-                : [
-                    // Deep outer drop — floats above the gradient scrim
-                    '0 8px 28px rgba(0,0,0,0.75)',
-                    '0 4px 12px rgba(0,0,0,0.55)',
-                    '2px 3px 7px rgba(0,0,0,0.45)',
-                    // LED ring — state-colored perimeter glow
-                    `0 0 0 1px rgba(${SC.r},${SC.g},${SC.b},0.40)`,
-                    `0 0 20px rgba(${SC.r},${SC.g},${SC.b},0.14)`,
-                    // Top-left chamfer — 141.71° key light catch
-                    '-1px -1px 2px rgba(255,255,255,0.08)',
-                    // Inner bevel — machined face edge
-                    'inset 0 2px 0 rgba(255,255,255,0.18)',
-                    'inset 2px 0 0 rgba(255,255,255,0.08)',
-                    'inset -1px -1px 0 rgba(0,0,0,0.45)',
-                    isHovered ? '-2px -2px 3px rgba(255,255,255,0.10)' : '',
-                  ].filter(Boolean).join(', '),
-              transition: `all ${isPressed ? '0.06s' : '0.18s'} ease`,
-              transform: isPressed ? 'translateY(1px)' : isHovered ? 'translateY(-1px)' : 'none',
-              WebkitTapHighlightColor: 'transparent',
-              position: 'relative', overflow: 'hidden',
-            }}
-          >
-            {/* LED accent line — top chamfer glow */}
+          {/* CTA — well cavity wrapper: recessed socket the button sits in */}
+          <div style={{ position: 'relative' }}>
             <div style={{
-              position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-              background: `linear-gradient(90deg, transparent 0%, rgba(${SC.r},${SC.g},${SC.b},${isPressed ? 0.06 : 0.60}) 50%, transparent 100%)`,
-              transition: 'background 0.15s ease',
+              position: 'absolute', inset: -4, borderRadius: 17, pointerEvents: 'none',
+              boxShadow: [
+                'inset 8px 8px 18px rgba(0,0,0,0.90)',
+                'inset 4px 4px 9px rgba(0,0,0,0.72)',
+                'inset 2px 2px 4px rgba(0,0,0,0.52)',
+                'inset -1px -1px 3px rgba(255,255,255,0.012)',
+                '-1px -1px 1px rgba(255,255,255,0.035)',
+                '4px 5px 14px rgba(0,0,0,0.55)',
+              ].join(', '),
             }} />
-            <span style={{
-              fontSize: isDesktop ? 14 : 13, fontWeight: 700, letterSpacing: isDesktop ? '3.5px' : '2.5px', textTransform: 'uppercase',
-              color: isPressed ? steel(0.30) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
-              textShadow: isPressed ? 'none' : `0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.25)`,
-              ...FONT_SMOOTH,
-            }}>{analyzeLabel}</span>
-          </button>
+            <button
+              onClick={handleButtonClick}
+              onMouseDown={handleButtonPress}
+              onMouseUp={handleButtonRelease}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => { setIsHovered(false); handleButtonRelease(); }}
+              style={{
+                position: 'relative',
+                padding: '11px 36px',
+                border: 'none', borderRadius: 12, cursor: 'pointer',
+                overflow: 'hidden',
+                background: isPressed
+                  ? 'linear-gradient(141.71deg, #020304 0%, #040506 50%, #060708 100%)'
+                  : CTA_BG,
+                boxShadow: isPressed
+                  ? [
+                      'inset 0 4px 10px rgba(0,0,0,0.88)',
+                      'inset 3px 0 8px rgba(0,0,0,0.58)',
+                      'inset -1px -1px 4px rgba(0,0,0,0.42)',
+                      `0 0 0 1px rgba(${SC.r},${SC.g},${SC.b},0.18)`,
+                      `0 0 8px rgba(${SC.r},${SC.g},${SC.b},0.06)`,
+                      '1px 1px 3px rgba(0,0,0,0.30)',
+                    ].join(', ')
+                  : [
+                      '10px 10px 28px rgba(0,0,0,0.78)',
+                      '5px 5px 12px rgba(0,0,0,0.58)',
+                      '2px 2px 5px rgba(0,0,0,0.38)',
+                      '-1px -1px 2px rgba(255,255,255,0.06)',
+                      `0 0 0 1px rgba(${SC.r},${SC.g},${SC.b},0.45)`,
+                      `0 0 20px rgba(${SC.r},${SC.g},${SC.b},0.16)`,
+                      'inset 0 2px 0 rgba(255,255,255,0.20)',
+                      'inset 2px 0 0 rgba(255,255,255,0.09)',
+                      'inset -1px -1px 0 rgba(0,0,0,0.48)',
+                    ].join(', '),
+                transition: `all ${isPressed ? '0.06s' : '0.18s'} ease`,
+                transform: isPressed ? 'translateY(1px) scale(0.993)' : isHovered ? 'translateY(-1px)' : 'none',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {/* LED accent line — top chamfer glow */}
+              <div style={{
+                position: 'absolute', top: 0, left: '8%', right: '8%', height: 1,
+                background: `linear-gradient(90deg, transparent 0%, rgba(${SC.r},${SC.g},${SC.b},${isPressed ? 0.05 : 0.65}) 50%, transparent 100%)`,
+                transition: 'background 0.15s ease',
+              }} />
+              <span style={{
+                fontSize: 13, fontWeight: 700, letterSpacing: '2.5px', textTransform: 'uppercase',
+                color: isPressed ? steel(0.28) : `rgba(${SC.r},${SC.g},${SC.b},0.95)`,
+                textShadow: isPressed ? 'none' : `0 -1px 1px rgba(0,0,0,0.75), 0 1px 0 rgba(255,255,255,0.05), 0 0 12px rgba(${SC.r},${SC.g},${SC.b},0.28)`,
+                ...FONT_SMOOTH,
+              }}>{analyzeLabel}</span>
+            </button>
+          </div>
         </div>
       </>)}
 
@@ -1362,7 +1337,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           // LCD panel — matches Home empty VF slot exactly
           backgroundColor: (isDesktop && hasImage) ? undefined : 'transparent',
           background: (isDesktop && hasImage)
-            ? 'linear-gradient(180deg, #111d2e 0%, #0d1825 40%, #0b1420 100%)'
+            ? 'linear-gradient(180deg, #0d0d0d 0%, #080808 40%, #060606 100%)'
             : 'transparent',
           borderRadius: 0,
           boxShadow: isDragOver
@@ -1390,20 +1365,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         <div style={{
           position: 'absolute', inset: 0,
           opacity: (isDesktop && hasImage) ? 0 : 1,
-          background: hasImage ? [
-            'radial-gradient(ellipse 88% 72% at 50% 48%, rgba(110,145,195,0.052) 0%, rgba(90,125,178,0.026) 48%, transparent 76%)',
-            'linear-gradient(180deg, rgba(100,135,185,0.018) 0%, transparent 30%, transparent 70%, rgba(80,115,165,0.014) 100%)',
-          ].join(', ') : [
-            // Empty state: IPS LCD panel — visible backlight pool + edge LED bleed.
-            // Three layers create the realistic powered-off camera LCD look:
-            // 1. Center backlight pool — diffuser panel is brightest at center
-            'radial-gradient(ellipse 90% 70% at 50% 46%, rgba(80,110,160,0.09) 0%, rgba(60,85,130,0.04) 45%, transparent 75%)',
-            // 2. Vertical edge bleed — LEDs along top and bottom edges leak through
-            'linear-gradient(180deg, rgba(90,120,170,0.04) 0%, rgba(70,100,145,0.015) 6%, transparent 15%, transparent 85%, rgba(60,90,135,0.012) 94%, rgba(80,110,160,0.03) 100%)',
-            // 3. Warm corner bleed — corner LEDs are slightly warmer (manufacturing reality)
-            'radial-gradient(circle at 0% 0%, rgba(110,130,165,0.03) 0%, transparent 25%)',
-            'radial-gradient(circle at 100% 100%, rgba(95,115,150,0.02) 0%, transparent 25%)',
-          ].join(', '),
+          background: 'transparent',
           pointerEvents: 'none', zIndex: 0,
         }} />
 
@@ -1629,6 +1591,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 9, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE, opacity: hasImage ? 1 : 0.6 }} />
+          <div style={DITHER_STYLE} />
           <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: hasImage ? 0.62 : 0.30, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
         </div>
         )}
@@ -1652,11 +1615,6 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             background: GLASS_REFLECTION, opacity: 0.72,
             transform: glassReflectionTransform(tilt), willChange: 'transform',
           }} />
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: '30%', height: '45%',
-            background: 'linear-gradient(141.71deg, rgba(200,218,240,0.08) 0%, rgba(180,205,230,0.04) 30%, transparent 60%)',
-            pointerEvents: 'none',
-          }} />
         </div>
         )}
 
@@ -1672,6 +1630,22 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           ].join(', '),
         }} />
         )}
+        {/* 10c — Chamfer highlights — desktop loaded only. Key-light catch on top-left bezel edge.
+            Must sit above 10b (bezel depth shadow) so the highlights aren't swallowed by the dark edge gradient. */}
+        {isDesktop && hasImage && (<>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 12, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 12, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 35%, transparent 65%)',
+          }} />
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, zIndex: 12, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.18) 50%, transparent 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 1, zIndex: 12, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
+          }} />
+        </>)}
 
         {/* 11 — Teach glow — first-session pulsing edge glow to draw the eye to the VF.
              Gentle steel-blue inner border that breathes, says "this is where your photo goes"
