@@ -98,9 +98,12 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
   //   kY = subY + kDist × cos(angle)   → 0° → below subject (camera side) ✓
   //
   // MODIFIER ORIENTATION (emission face → subject):
-  //   kToSubDeg = atan2(kX - subX, -(subY - kY))
-  //   NOTE: (kX - subX) not (subX - kX) — this points the emission face
-  //   TOWARD the subject. Swapping the sign makes it face AWAY.
+  //   _modRotRad = atan2(kX - subX, subY - kY)        ← CURRENT CORRECT FORMULA
+  //   After SVG rotate(θ), local +Y maps to (-sin(θ), cos(θ)).
+  //   Setting θ = atan2(kX-subX, subY-kY) makes +Y land on the key-to-subject
+  //   direction, so the emission face (drawn at +Y) always faces the subject.
+  //   DO NOT CHANGE TO atan2(kX-subX, -(subY-kY)) — that is the old BROKEN
+  //   formula which points +Y away from the subject for off-axis keys.
   //
   // THREE INPUT SOURCES (priority order):
   //   1. Catchlight clock position (directly observed in iris)
@@ -718,8 +721,11 @@ const LightingDiagram = forwardRef(function LightingDiagram({ result, compact = 
           const dishD = compact ? 7 : 9;
           modShape = (
             <g transform={`rotate(${kToSubDeg}, ${kX}, ${kY})`}>
-              {/* Concave bowl — opens downward (+Y = toward subject) */}
-              <path d={`M ${kX - dishW/2} ${kY} C ${kX - dishW/4} ${kY + dishD * 1.4} ${kX + dishW/4} ${kY + dishD * 1.4} ${kX + dishW/2} ${kY}`}
+              {/* Concave bowl — control points at −Y so concave faces +Y in local.
+                  After kToSubDeg rotation, +Y = toward subject, giving the correct
+                  orientation for all key positions. (Was: control at kY+dishD*1.4
+                  which put concave at -Y → backwards after rotation.) */}
+              <path d={`M ${kX - dishW/2} ${kY} C ${kX - dishW/4} ${kY - dishD * 1.4} ${kX + dishW/4} ${kY - dishD * 1.4} ${kX + dishW/2} ${kY}`}
                 fill="rgba(200,155,60,0.12)" stroke={KEY_COLOR} strokeWidth={1.25} strokeOpacity={0.75} />
               {/* Back plate (at center) */}
               <line x1={kX - dishW/2} y1={kY}
