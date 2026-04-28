@@ -413,7 +413,7 @@ export default function SocialExportPanel({
               ref={canvasRef}
               style={{
                 width: '100%',
-                maxWidth: template === 'story' ? 252 : '100%',
+                maxWidth: template === 'story' ? 252 : 300,
                 height: 'auto',
                 borderRadius: 7,
                 display: 'block',

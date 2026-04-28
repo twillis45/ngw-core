@@ -1205,7 +1205,7 @@ export function drawSignalCard(ctx, data, S) {
   // ── CLASSIFICATION — uppercase, left-aligned, decisive ──
   const patternUpper = (pattern || 'UNKNOWN').toUpperCase().replace(/_/g, ' ');
   const nameLen      = patternUpper.replace(/\s/g, '').length;
-  let   classFontSz  = nameLen <= 7 ? 36 : nameLen <= 11 ? 30 : nameLen <= 15 ? 26 : 22;
+  let   classFontSz  = nameLen <= 7 ? 48 : nameLen <= 11 ? 42 : nameLen <= 15 ? 34 : 28;
   const maxClassW    = w - pad * 2 - px(56, S);
 
   ctx.save();
