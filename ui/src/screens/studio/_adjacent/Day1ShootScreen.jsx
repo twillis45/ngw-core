@@ -1274,7 +1274,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
                 </div>
                 <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                   letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-                  COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
+                  {pattern.toUpperCase().replace(/_/g, ' ')} <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
                     {stepIndex + 1}/{steps.length}
                   </span>
                 </p>
@@ -1437,7 +1437,7 @@ export default function Day1ShootScreen({ result, imagePreview, mode = 'photogra
               </div>
               <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: steel(0.75),
                 letterSpacing: '1.2px', ...FONT_SMOOTH }}>
-                COCKPIT <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
+                {pattern.toUpperCase().replace(/_/g, ' ')} <span style={{ color: steel(0.45), fontWeight: 600, letterSpacing: '0.8px' }}>
                   {stepIndex + 1}/{steps.length}
                 </span>
               </p>
@@ -2174,7 +2174,7 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
       {/* C-7: Simplified step lead — hero number + single context line.
           Title label removed; step position is implied by the dots. */}
       <div style={{ padding: dk ? '14px 28px 0' : '10px 24px 0', position: 'relative', zIndex: 1, textAlign: 'center' }}>
-        <p style={{ margin: 0, fontSize: dk ? 38 : 30, fontWeight: 800,
+        <p style={{ margin: 0, fontSize: dk ? 42 : 36, fontWeight: 800,
           color: C.textPrimary, letterSpacing: '-0.5px', ...FONT_SMOOTH,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {step.lead}
@@ -2186,6 +2186,23 @@ function PhotographerBody({ step, imagePreview, modName, position, distance,
           </p>
         )}
       </div>
+
+      {step.coach?.lookFor?.[0] && (
+        <div style={{ padding: dk ? '8px 28px 0' : '6px 24px 0', position: 'relative', zIndex: 1 }}>
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            padding: '8px 12px',
+            borderRadius: 8,
+            backgroundColor: 'rgba(72,186,136,0.04)',
+            border: '1px solid rgba(72,186,136,0.10)',
+          }}>
+            <span style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(72,186,136,0.6)', flexShrink: 0, marginTop: 5 }} />
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: steel(0.58), lineHeight: 1.4, ...FONT_SMOOTH }}>
+              {step.coach.lookFor[0]}
+            </p>
+          </div>
+        </div>
+      )}
 
       <CoachingDisclosure coach={step.coach} variant="photographer" />
     </>

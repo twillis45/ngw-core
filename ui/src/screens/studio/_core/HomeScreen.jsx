@@ -9,6 +9,7 @@ import { tapHaptic, selectHaptic, successHaptic, dropHaptic, warnHaptic, longPre
 import { analyzeClickSound, softClickSound, imageDropSound, powerOnSound, navSlideSound, panelToggleSound } from '../../../utils/sounds';
 import { loadSettings } from '../../../data/settingsStore';
 import { fetchImageFromUrl } from '../../../data/labApi';
+import { trackEvent } from '../../../data/analytics';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import useStableViewport from '../../../utils/useStableViewport';
 import { steel, C as SM_C, FONT_SMOOTH, VIEWFINDER_INNER_SHADOW, GLASS_REFLECTION, LENS_VIGNETTE,
@@ -1026,6 +1027,43 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
                 </button>
               </div>
             )}
+            {onBuildWizard && (
+              <div style={{ position: 'relative' }}>
+                <div style={{
+                  position: 'absolute', inset: -4, borderRadius: 16,
+                  boxShadow: [
+                    'inset 6px 6px 14px rgba(0,0,0,0.88)',
+                    'inset 3px 3px 7px rgba(0,0,0,0.70)',
+                    'inset 1px 1px 3px rgba(0,0,0,0.50)',
+                    'inset -1px -1px 3px rgba(255,255,255,0.012)',
+                    '-1px -1px 1px rgba(255,255,255,0.035)',
+                    '3px 4px 10px rgba(0,0,0,0.50)',
+                  ].join(', '),
+                  pointerEvents: 'none',
+                }} />
+                <button onClick={() => { tapHaptic(); softClickSound(); onBuildWizard(); }} style={{
+                  position: 'relative',
+                  background: CTA_BG, border: 'none',
+                  cursor: 'pointer', padding: '14px 34px', borderRadius: 12,
+                  boxShadow: [
+                    '10px 10px 28px rgba(0,0,0,0.78)',
+                    '5px 5px 12px rgba(0,0,0,0.58)',
+                    '2px 2px 5px rgba(0,0,0,0.38)',
+                    '-1px -1px 2px rgba(255,255,255,0.06)',
+                    `0 0 6px ${steel(0.06)}`,
+                    'inset 0 2px 0 rgba(255,255,255,0.14)',
+                    'inset 2px 0 0 rgba(255,255,255,0.07)',
+                    'inset -1px -1px 0 rgba(0,0,0,0.40)',
+                  ].join(', '),
+                  transition: 'transform 0.12s ease',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+                className="sm-btn-lift"
+                >
+                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '1.5px', color: steel(0.75), textTransform: 'uppercase', ...FONT_SMOOTH }}>Build from Intent</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1045,6 +1083,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
             transform: glassReflectionTransform(tilt), willChange: 'transform',
           }} />
           <div style={{ position: 'absolute', inset: 0, boxShadow: VIEWFINDER_INNER_SHADOW }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, pointerEvents: 'none',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.07) 35%, rgba(255,255,255,0.02) 100%)',
+          }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, pointerEvents: 'none',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 35%, transparent 65%)',
+          }} />
         </div>
 
         {/* Bottom dock — gradient scrim + EXIF + CTA */}
@@ -1123,7 +1167,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
   return (
     <div ref={rootRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: SCREEN_BG, overflow: 'hidden', overscrollBehavior: 'none' }}>
       {/* MatteBackground spans full viewport — visible around the maxWidth-constrained content */}
-      <MatteBackground />
+      <MatteBackground variant="carbon" />
     <div
       onClick={handleBodyTap}
       onTouchStart={(e) => { if (e.target === e.currentTarget) grainHaptic(); }}
@@ -1302,7 +1346,7 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           ...(isDesktop ? {
             height: '100%',
             gridColumn: '1 / -1', gridRow: '1 / -1',
-            ...(hasImage ? { width: 720, justifySelf: 'center' } : {}),
+            ...(hasImage ? { width: 'fit-content', justifySelf: 'center', height: 'calc(100% - 40px)', alignSelf: 'center' } : {}),
           } : {
             top: 0, left: 0, right: 0, bottom: 0,
           }),
@@ -1318,8 +1362,9 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           // LCD panel — matches Home empty VF slot exactly
           backgroundColor: (isDesktop && hasImage) ? undefined : 'transparent',
           background: (isDesktop && hasImage)
-            ? 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)'
+            ? 'linear-gradient(180deg, #111d2e 0%, #0d1825 40%, #0b1420 100%)'
             : 'transparent',
+          borderRadius: 0,
           boxShadow: isDragOver
             ? 'inset 0 0 40px rgba(132, 158, 184,0.15)'
             : (isDesktop && hasImage) ? VIEWFINDER_INNER_SHADOW
@@ -1529,8 +1574,12 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
               setIsLandscape(w > 0 && h > 0 && w / h > 1.15);
             }}
             style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: isDesktop ? 'contain' : 'cover',
+              ...(isDesktop ? {
+                display: 'block', height: '100%', width: 'auto',
+              } : {
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                objectFit: 'cover',
+              }),
               objectPosition: isDesktop ? '50% 50%' : '50% 25%',
               opacity: isDesktop ? 0.95 : 0.85, zIndex: 8,
               animation: 'heroZoomIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
@@ -1590,6 +1639,37 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
           position: 'absolute', inset: 0, borderRadius: 0,
           pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10,
           opacity: hasImage ? 1 : 0.65,
+        }} />
+        )}
+
+        {/* 9b — Glass overlay — desktop loaded. Lens vignette + key light reflection over photo. */}
+        {isDesktop && hasImage && (
+        <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 9, pointerEvents: 'none' }}>
+          <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+          <div style={DITHER_STYLE} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+            background: GLASS_REFLECTION, opacity: 0.72,
+            transform: glassReflectionTransform(tilt), willChange: 'transform',
+          }} />
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: '30%', height: '45%',
+            background: 'linear-gradient(141.71deg, rgba(200,218,240,0.08) 0%, rgba(180,205,230,0.04) 30%, transparent 60%)',
+            pointerEvents: 'none',
+          }} />
+        </div>
+        )}
+
+        {/* 10b — Bezel depth shadow — desktop loaded only. Body overhangs the recessed LCD. */}
+        {isDesktop && hasImage && (
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11,
+          background: [
+            'linear-gradient(to bottom, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.45) 7%, rgba(0,0,0,0.14) 18%, transparent 30%)',
+            'linear-gradient(to top,   rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.28) 7%, rgba(0,0,0,0.08) 16%, transparent 28%)',
+            'linear-gradient(to right, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.30) 7%, rgba(0,0,0,0.08) 16%, transparent 26%)',
+            'linear-gradient(to left,  rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 7%, transparent 20%)',
+          ].join(', '),
         }} />
         )}
 
@@ -1852,41 +1932,64 @@ export default function HomeScreen({ onAnalyze, hasLastResult, onViewLastResult,
         </div>
       )}
 
-      {/* ── Sample CTA — the real onboarding ramp ──
-           First session: promoted to primary discovery path — "or see how it works →"
-           is bigger, brighter, and the true teach moment. The sample runs the full
-           pipeline with a known-good photo; the user sees real results before committing.
-           Returning users: drops to subtle "TRY A SAMPLE PHOTO →" utility link. */}
+      {/* ── Below-dome CTA zone — two lanes: Build (bordered pill) + Sample (text link) ──
+           Build pill is a proper button with border/background — secondary to dome but
+           clearly more discoverable than a text link. Sample link remains available as
+           a soft secondary. Both hidden once a photo is loaded. */}
       {!hasImage && !profileOpen && (
         <div
-          onClick={loadSample}
           style={{
             position: 'absolute',
             top: BTN_TOP + BTN_D + 10,
             left: 0, right: 0,
             display: 'flex', justifyContent: 'center', alignItems: 'center',
-            gap: showTeach ? 5 : 6,
-            cursor: 'pointer',
-            WebkitTapHighlightColor: 'transparent',
-            opacity: sampleLoading ? 0.5 : 1,
-            transition: 'opacity 0.25s ease',
+            gap: 14,
             zIndex: 8,
             animation: showTeach ? 'ghostFadeIn 0.8s ease 1.2s both' : 'none',
           }}
         >
-          {/* Machined secondary CTA ��� raised button in the trough below the dome.
-              Same 141.71° material as the dome but rectangular + smaller = clearly secondary.
-              Reads as a physical button you can press, not a label. */}
-          {/* Engraved text link — not a competing button. The trough zone has ONE
-              control (the dome). This is a quiet secondary affordance etched into
-              the instrument surface. */}
-          <p style={{
-            margin: 0,
-            fontSize: 13, fontWeight: 600, letterSpacing: '0.4px',
-            color: sampleLoading ? steel(0.30) : steel(0.45),
-            ...FONT_SMOOTH,
-          }}>
-            {sampleLoading ? 'Loading…' : 'Try a sample photo →'}
+          {/* Build pill — bordered button, secondary weight but clear affordance */}
+          {!isDesktop && onBuildWizard && (
+            <div
+              onClick={() => {
+                tapHaptic();
+                softClickSound();
+                trackEvent('HOME_BUILD_ENTRY', { source: 'secondary_cta' });
+                onBuildWizard();
+              }}
+              style={{
+                display: 'flex', alignItems: 'center',
+                padding: '7px 18px',
+                borderRadius: 20,
+                border: `1px solid ${steel(0.22)}`,
+                background: 'rgba(167,173,183,0.04)',
+                cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+                flexShrink: 0,
+              }}
+            >
+              <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.6px', color: steel(0.54), ...FONT_SMOOTH }}>
+                Build from Intent ›
+              </span>
+            </div>
+          )}
+          {/* Vertical rule separator — only when both entries visible */}
+          {!isDesktop && onBuildWizard && (
+            <span style={{ width: 1, height: 12, background: steel(0.15), display: 'block', flexShrink: 0 }} />
+          )}
+          {/* Sample link — soft secondary, existing behavior unchanged */}
+          <p
+            onClick={loadSample}
+            style={{
+              margin: 0,
+              fontSize: 13, fontWeight: 600, letterSpacing: '0.4px',
+              color: sampleLoading ? steel(0.30) : steel(0.40),
+              cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+              opacity: sampleLoading ? 0.5 : 1,
+              transition: 'opacity 0.25s ease',
+              ...FONT_SMOOTH,
+            }}
+          >
+            {sampleLoading ? 'Loading…' : 'Try a sample →'}
           </p>
         </div>
       )}

@@ -119,8 +119,8 @@ function kitSummary() {
 }
 
 const GEAR_QUESTION = [
-  { value: 'my_gear',    label: 'Use My Gear',         desc: kitSummary() || 'Adapted to what you own', icon: '⚙' },
-  { value: 'best_setup', label: 'Best Possible Setup',  desc: 'Show me the ideal rig',   icon: '★' },
+  { value: 'my_gear',    label: 'Use My Gear',         desc: kitSummary() || "I'll tailor recommendations to your kit", icon: '⚙' },
+  { value: 'best_setup', label: 'Best Possible Setup',  desc: 'Skip gear selection — show me what works', icon: '★' },
 ];
 
 // Light categories for gear entry
@@ -189,21 +189,35 @@ function CTA({ label, disabled, onClick, isDesktop }) {
   );
 }
 
+const STEP_SEGMENT_LABELS = ['WHO', 'WHERE', 'GEAR'];
+
 function WizardProgress({ step, total }) {
   return (
-    <div style={{
-      display: 'flex', gap: 6,
-      position: 'relative', zIndex: 2,
-    }}>
-      {Array.from({ length: total }, (_, i) => (
-        <div key={i} style={{
-          flex: 1, height: 3, borderRadius: 2,
-          background: i <= step
-            ? `linear-gradient(90deg, ${KEY_ACCENT}, ${accent(0.6)})`
-            : steel(0.10),
-          transition: 'background 0.3s ease',
-        }} />
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, position: 'relative', zIndex: 2 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {Array.from({ length: total }, (_, i) => (
+          <div key={i} style={{
+            flex: 1, height: 3, borderRadius: 2,
+            background: i <= step
+              ? `linear-gradient(90deg, ${KEY_ACCENT}, ${accent(0.6)})`
+              : steel(0.10),
+            transition: 'background 0.3s ease',
+          }} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {STEP_SEGMENT_LABELS.slice(0, total).map((label, i) => (
+          <div key={i} style={{
+            flex: 1, textAlign: 'center',
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.8px',
+            color: i <= step ? steel(0.50) : steel(0.22),
+            transition: 'color 0.3s ease',
+            ...FONT_SMOOTH,
+          }}>
+            {label}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -343,15 +357,88 @@ function SkinToneChip({ tone, selected, onClick }) {
 
 // ─── Step 1: The Shot ───────────────────────────────────────────────────────
 function StepTheShot({ state, onChange }) {
-  const { mood, subject, skinTone, styleRef } = state;
+  const { mood, subject, skinTone, styleRef, gearMode } = state;
   const [styleOpen, setStyleOpen] = useState(!!styleRef);
   const isDesktop = useIsDesktop();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Mood */}
+
+      {/* Path choice — select before subject/mood so intent is clear from the start */}
       <div>
-        <SectionLabel>Look / Mood</SectionLabel>
+        <SectionLabel>Your Approach</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {GEAR_QUESTION.map(g => {
+            const selected = gearMode === g.value;
+            return (
+              <button
+                key={g.value}
+                onClick={() => { tapHaptic(); softClickSound(); onChange({ gearMode: g.value }); }}
+                style={{
+                  width: '100%', padding: '14px 18px',
+                  borderRadius: 14, border: 'none', textAlign: 'left', cursor: 'pointer',
+                  background: selected
+                    ? `linear-gradient(141.71deg, ${accent(0.15)} 0%, ${accent(0.08)} 100%)`
+                    : `linear-gradient(135deg, ${steel(0.06)}, ${steel(0.03)})`,
+                  boxShadow: selected
+                    ? `0 0 0 1px ${KEY_ACCENT}40, ${PANEL_BEVEL}`
+                    : `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+                  display: 'flex', alignItems: 'center', gap: 14,
+                  transition: 'all 0.15s ease',
+                  WebkitTapHighlightColor: 'transparent',
+                  ...FONT_SMOOTH,
+                }}
+              >
+                <span style={{
+                  fontSize: 20, width: 38, height: 38, borderRadius: 10,
+                  background: selected ? accent(0.12) : steel(0.06),
+                  border: `1px solid ${selected ? KEY_ACCENT + '30' : steel(0.10)}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  {g.icon}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: selected ? KEY_ACCENT : C.textPrimary, marginBottom: 2, ...FONT_SMOOTH }}>
+                    {g.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: steel(0.42), fontWeight: 400, ...FONT_SMOOTH }}>
+                    {g.desc}
+                  </div>
+                </div>
+                {selected && (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={KEY_ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Subject — leads; informs mood choice below */}
+      <div>
+        <SectionLabel>Subject</SectionLabel>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {SUBJECTS.map(s => (
+            <OptionChip
+              key={s.value}
+              label={s.label}
+              hint={s.hint}
+              selected={subject === s.value}
+              onClick={() => onChange({ subject: s.value })}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Mood — follows subject; optional at step level */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+          <SectionLabel>Look / Mood</SectionLabel>
+          <span style={{ fontSize: 12, color: steel(0.3), fontWeight: 400, ...FONT_SMOOTH }}>optional</span>
+        </div>
         <div style={{
           display: 'grid',
           gridTemplateColumns: isDesktop ? 'repeat(4, 1fr)' : 'repeat(2, 1fr)',
@@ -364,25 +451,7 @@ function StepTheShot({ state, onChange }) {
               hint={m.desc}
               icon={m.icon}
               selected={mood === m.value}
-              onClick={() => onChange({ mood: m.value })}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Subject */}
-      <div>
-        <SectionLabel>Subject</SectionLabel>
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 8,
-        }}>
-          {SUBJECTS.map(s => (
-            <OptionChip
-              key={s.value}
-              label={s.label}
-              hint={s.hint}
-              selected={subject === s.value}
-              onClick={() => onChange({ subject: s.value })}
+              onClick={() => onChange({ mood: mood === m.value ? null : m.value })}
             />
           ))}
         </div>
@@ -457,10 +526,9 @@ function StepTheShot({ state, onChange }) {
 }
 
 // ─── Step 2: The Space ──────────────────────────────────────────────────────
-function StepTheSpace({ state, onChange, onGearPick }) {
+function StepTheSpace({ state, onChange }) {
   const { environment, ceiling } = state;
   const isOutdoor = NO_CEILING.includes(environment);
-  const envReady = environment && (isOutdoor || ceiling);
   const isDesktop = useIsDesktop();
 
   // Auto-set ceiling for outdoor
@@ -534,28 +602,6 @@ function StepTheSpace({ state, onChange, onGearPick }) {
         </div>
       )}
 
-      {/* Gear Question */}
-      <div style={{ opacity: envReady ? 1 : 0.35, transition: 'opacity 0.2s ease' }}>
-        <SectionLabel>Your Gear</SectionLabel>
-        <p style={{
-          margin: '0 0 12px', fontSize: 14, color: steel(0.4),
-          lineHeight: 1.5, ...FONT_SMOOTH,
-        }}>
-          NGW adapts the blueprint to what you own. "Best Setup" shows the ideal rig.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {GEAR_QUESTION.map(g => (
-            <IntentCard
-              key={g.value}
-              icon={g.icon}
-              label={g.label}
-              desc={g.desc}
-              disabled={!envReady}
-              onClick={() => onGearPick(g.value)}
-            />
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -652,23 +698,34 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
   }, []);
 
   // Step validation
+  // Step 0: subject required + path (gearMode) required — both set in StepTheShot
+  // Step 1: environment required; ceiling required unless outdoor
+  // Step 2: at least one light or modifier selected
   const canNext = useMemo(() => {
     switch (step) {
-      case 0: return !!wizState.mood && !!wizState.subject;
-      case 1: return false; // Step 2 advances via gear cards
+      case 0: return !!wizState.subject && !!wizState.gearMode;
+      case 1: return !!wizState.environment && (NO_CEILING.includes(wizState.environment) || !!wizState.ceiling);
       case 2: return (wizState.lights?.length > 0) || (wizState.modifiers?.length > 0);
       default: return false;
     }
   }, [step, wizState]);
 
   function handleNext() {
-    if (step === 2) {
-      // Final step — submit
-      tapHaptic(); softClickSound();
-      onComplete?.(buildPayload());
-    } else if (step === 0) {
+    if (step === 0) {
       tapHaptic(); navSlideSound();
       setStep(1);
+    } else if (step === 1) {
+      tapHaptic();
+      if (wizState.gearMode === 'best_setup') {
+        softClickSound();
+        onComplete?.(buildPayload());
+      } else {
+        navSlideSound();
+        setStep(2);
+      }
+    } else if (step === 2) {
+      tapHaptic(); softClickSound();
+      onComplete?.(buildPayload());
     }
   }
 
@@ -679,19 +736,6 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
     } else {
       navHaptic(); navSlideSound();
       setStep(s => s - 1);
-    }
-  }
-
-  function handleGearPick(mode) {
-    update({ gearMode: mode });
-    if (mode === 'best_setup') {
-      // Skip gear entry — submit directly
-      tapHaptic(); softClickSound();
-      onComplete?.(buildPayload({ gearMode: mode }));
-    } else {
-      // Go to gear entry step
-      tapHaptic(); navSlideSound();
-      setStep(2);
     }
   }
 
@@ -711,10 +755,16 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
   }
 
   const stepHeadings = [
-    "What's the look?",
+    "Who are you shooting?",
     "Where are you shooting?",
     "What do you own?",
   ];
+
+  const stepCTALabel = (() => {
+    if (step === 0) return 'SET THE SPACE →';
+    if (step === 1) return wizState.gearMode === 'best_setup' ? 'BUILD THIS SETUP →' : 'SELECT MY GEAR →';
+    return 'BUILD THIS SETUP →';
+  })();
 
   return (
     <div style={{
@@ -781,12 +831,12 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
         position: 'relative', zIndex: 1,
       }}>
         {step === 0 && <StepTheShot state={wizState} onChange={update} />}
-        {step === 1 && <StepTheSpace state={wizState} onChange={update} onGearPick={handleGearPick} />}
+        {step === 1 && <StepTheSpace state={wizState} onChange={update} />}
         {step === 2 && <StepGearEntry state={wizState} onChange={update} />}
       </div>
 
-      {/* ── Sticky Bottom Bar ── */}
-      {(step === 0 || step === 2) && (
+      {/* ── Sticky Bottom Bar — all steps ── */}
+      {(step === 0 || step === 1 || step === 2) && (
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
           padding: isDesktop ? '16px 40px 24px' : '16px 22px 34px',
@@ -794,7 +844,7 @@ export default function BuildWizardScreen({ onComplete, onBack }) {
           zIndex: 10,
         }}>
           <CTA
-            label={step === 2 ? 'BUILD THIS SETUP →' : 'NEXT →'}
+            label={stepCTALabel}
             disabled={!canNext}
             onClick={handleNext}
             isDesktop={isDesktop}

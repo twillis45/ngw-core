@@ -102,6 +102,24 @@ const EDGE_CASE_LABELS = {
 const SPEC_UP   = '0px 1px 3px 0px rgba(0,0,0,0.35), inset 0px 0.5px 0px 0px rgba(255,255,255,0.03)';
 const SPEC_DOWN = 'inset 0px 2px 4px rgba(0,0,0,0.5), inset 0px 1px 2px rgba(0,0,0,0.3)';
 
+// ─── Confidence evidence summary ─────────────────────────────────────────────
+// Synthesizes a short evidence-source label from engine reconstruction data.
+// Only claims signal types that are actually present in the result.
+function buildConfidenceEvidence(raw) {
+  if (!raw) return null;
+  const parts = [];
+  if (typeof raw.reconstruction?.key_light_angle_deg === 'number') {
+    parts.push('catchlight position');
+  }
+  if (raw.lighting_inference?.key_side && raw.lighting_inference.key_side !== 'unknown') {
+    parts.push('shadow geometry');
+  }
+  if (parts.length === 0 && raw.lighting_inference) {
+    parts.push('lighting analysis');
+  }
+  return parts.length > 0 ? parts.join(' + ') : null;
+}
+
 // ─── Distance range → midpoint (ft) ──────────────────────────────────────────
 // Parses strings like "4-8 ft" / "4–8 ft" / "6 ft" / "< 2 ft" into a numeric
 // midpoint in feet. Returns null when no number can be extracted.
@@ -506,18 +524,17 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const [notes, setNotes] = useState('');
   const [savePressed, setSavePressed] = useState(false);
   const [drawers, setDrawers] = useState(() =>
-    isDesktop ? { setupGuide: true, save: true } : {}
+    isDesktop ? { setupGuide: true } : {}
   );
   const [viewfinderOpen, setViewfinderOpen] = useState(false);
-  const [heroFlipped, setHeroFlipped] = useState(false);
   const [thumbZoomed, setThumbZoomed] = useState(false);
   const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState('photographer');
   const [saved, setSaved] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [diagramView, setDiagramView] = useState('top'); // 'top' | 'side'
   const [diagramZoomed, setDiagramZoomed] = useState(false);
 
-  const flipHero = () => { setHeroFlipped(p => !p); softClickSound(); tapHaptic(); };
   const openThumb = () => { setThumbZoomed(true); panelToggleSound(); tapHaptic(); };
   const closeThumb = () => { setThumbZoomed(false); softClickSound(); };
   const toggleDrawer = (id) => { setDrawers(p => ({ ...p, [id]: !p[id] })); panelToggleSound(); tapHaptic(); };
@@ -527,6 +544,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const isHighConf = result && result.confidence >= 70;
   const confColor  = isHighConf ? C.confHigh : C.confLow;
   const defaultName = result?.pattern ? `${result.pattern} Setup` : 'Untitled Setup';
+  const confidenceEvidence = buildConfidenceEvidence(raw);
   const mod = result?.sections?.modifier;
   const raw = result?._raw || {};
   const li  = raw.lighting_inference || {};
@@ -685,14 +703,10 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       modifier: result?.sections?.catchlightModifier });
   }, [saved, setupName, notes, defaultName, result, onSave]);
 
-  const [cockpitLaunchedThisSetup, setCockpitLaunchedThisSetup] = useState(false);
   const handleStartCockpit = useCallback(() => {
     softClickSound(); tapHaptic();
-    // First tap on this setup: always show the role picker so the
-    // photographer can choose their cockpit mode. Subsequent taps
-    // (e.g. after returning from cockpit) skip it using the saved role.
     const savedRole = loadShootRole();
-    if (savedRole && cockpitLaunchedThisSetup) {
+    if (savedRole) {
       setSelectedMode(savedRole);
       trackEvent('SETUP_START_COCKPIT', {
         pattern: result?.pattern, mode: savedRole, skippedPicker: true,
@@ -700,16 +714,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
       onStartCockpit?.(savedRole);
       return;
     }
-    if (savedRole) setSelectedMode(savedRole);
     trackEvent('SETUP_MODE_PICKER_OPENED', {
       pattern: result?.pattern, confidence: result?.confidence,
     });
     setModeSheetOpen(true);
-  }, [result, onStartCockpit, cockpitLaunchedThisSetup]);
+  }, [result, onStartCockpit]);
 
   const handleConfirmMode = useCallback(() => {
     successHaptic(); softClickSound();
-    setCockpitLaunchedThisSetup(true);
     saveShootRole(selectedMode);
     trackEvent('SETUP_START_COCKPIT', {
       pattern: result?.pattern, mode: selectedMode,
@@ -917,10 +929,16 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
               padding: '4px 10px', borderRadius: 8, flexShrink: 0,
               backgroundColor: isHighConf ? 'rgba(72,186,136,0.10)' : 'rgba(245,190,72,0.10)',
               boxShadow: 'inset 1px 1px 2px 0px rgba(0,0,0,0.15)',
+              textAlign: 'center',
             }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: confColor, ...FONT_SMOOTH }}>
                 {result.confidence}%
               </span>
+              {confidenceEvidence && (
+                <p style={{ margin: '2px 0 0', fontSize: 9, fontWeight: 700, color: steel(0.45), letterSpacing: '0.4px', ...FONT_SMOOTH }}>
+                  {confidenceEvidence}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -954,143 +972,99 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           <WarningStrip warnings={warnings} />
         )}
 
-        {/* ── Key Light hero — flip card (specs ↔ diagram) — MOBILE ONLY ──
-            Desktop renders a static hero panel below instead, so specs and
-            diagram are visible simultaneously. The flip metaphor exists to
-            compress both faces into phone-sized real estate; on desktop
-            that compression is a handicap, not a feature. */}
-        {result && !isDesktop && (modName || positionDisplay || result._raw) && (
-          <div style={{ perspective: 1200 }} role="button" aria-label="Flip card to view diagram" tabIndex={0} onClick={flipHero} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flipHero(); } }}>
+        {/* ── Key Light hero — MOBILE: stacked diagram + specs ──
+            Diagram and specs are both always visible. No flip mechanic.
+            Diagram first (spatial model), specs below (actionable numbers). */}
+
+        {/* Diagram panel — always visible on mobile */}
+        {result && !isDesktop && result._raw && (
+          <div
+            onClick={() => { setDiagramZoomed(true); tapHaptic(); }}
+            style={{
+              borderRadius: 14, backgroundColor: C.pillBg,
+              boxShadow: 'inset 0px 2px 6px 0px rgba(0,0,0,0.55), inset 0px 1px 2px 0px rgba(0,0,0,0.4), inset 1px 0px 2px 0px rgba(0,0,0,0.3), inset -1px 0px 2px 0px rgba(0,0,0,0.3)',
+              overflow: 'hidden', cursor: 'zoom-in', position: 'relative',
+            }}
+          >
             <div style={{
-              transformStyle: 'preserve-3d',
-              transform: heroFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              transition: 'transform 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
+              padding: '14px 16px 6px',
+              display: 'flex', justifyContent: 'center', alignItems: 'stretch',
+              minHeight: 130, maxHeight: 195,
+              position: 'relative', zIndex: 1,
             }}>
-              {/* ── FRONT — specs ── */}
-              <div style={{
-                backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
-                borderRadius: 14, backgroundColor: C.panelBg,
-                boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-                overflow: 'hidden', position: 'relative',
-              }}>
-                <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-                <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
+              <LightingDiagram result={result} compact />
+            </div>
+            {compactSummary && (
+              <p style={{ margin: '0 0 2px', padding: '0 16px', fontSize: 12, fontWeight: 500, color: C.textSub, textAlign: 'center', ...FONT_SMOOTH }}>
+                {compactSummary}
+              </p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.35), letterSpacing: '1px', ...FONT_SMOOTH }}>
+                TAP TO ZOOM
+              </span>
+            </div>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: VIEWFINDER_INNER_SHADOW, zIndex: 10 }} />
+          </div>
+        )}
 
-                <div style={{ padding: '12px 18px 0' }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
-                    KEY LIGHT
-                  </p>
-                </div>
+        {/* Specs panel — key light placement specs, always revealed */}
+        {result && !isDesktop && (modName || positionDisplay) && (
+          <div style={{
+            borderRadius: 14, backgroundColor: C.panelBg,
+            boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+            overflow: 'hidden', position: 'relative',
+          }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
+            <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
 
-                {/* Hero modifier emission — sized for visual impact */}
-                {mod?.family && (
-                  <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0 4px' }}>
-                    <ModifierEmission family={mod.family} size={88} />
-                  </div>
-                )}
+            <div style={{ padding: '12px 18px 0' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.4px', ...FONT_SMOOTH }}>
+                KEY LIGHT
+              </p>
+            </div>
 
-                {modName ? (
-                  <div style={{ padding: '4px 18px 0', textAlign: mod?.family ? 'center' : 'left' }}>
-                    <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>{modName}</p>
-                    {mod?.sizeRange && (
-                      <p style={{ margin: '3px 0 0', fontSize: 13, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
-                    )}
-                  </div>
-                ) : result.sections?.catchlightModifier ? (
-                  <div style={{ padding: '6px 20px 0' }}>
-                    <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
-                      {result.sections.catchlightModifier}
-                    </p>
-                  </div>
-                ) : null}
-
-                {/* L-4: Simplified 2×2 recipe grid — Distance, Direction, Height, Fill.
-                    Only the photographer's essential "where to put it" specs.
-                    Everything else (position, placement, iris coverage, guidance)
-                    lives on the back face or SETUP GUIDE drawer. */}
-                <div onClick={(e) => e.stopPropagation()} style={{ padding: '10px 16px 12px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {mod?.distRange && (
-                      <LongPressSpec
-                        label="DISTANCE"
-                        value={mod.distRange}
-                        alwaysRevealed
-                      />
-                    )}
-                    {(directionDisplay || positionDisplay) && (
-                      <LongPressSpec
-                        label="DIRECTION"
-                        value={directionDisplay || positionDisplay}
-                        secondary={keyAngleDisplay}
-                        secondaryColor={KEY_ACCENT}
-                        alwaysRevealed
-                      />
-                    )}
-                    {keyHeightDisplay && (
-                      <LongPressSpec
-                        label="HEIGHT"
-                        value={keyHeightDisplay}
-                        alwaysRevealed
-                      />
-                    )}
-                    {rsFill && (
-                      <LongPressSpec
-                        label="FILL"
-                        value={rsFill}
-                        alwaysRevealed
-                      />
-                    )}
-                  </div>
-                </div>
-
-                {/* Flip hint */}
-                <div style={{
-                  padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                }}>
-                  <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
-                    TAP FOR DIAGRAM
-                  </span>
-                </div>
+            {mod?.family && (
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0 4px' }}>
+                <ModifierEmission family={mod.family} size={88} />
               </div>
+            )}
 
-              {/* ── BACK — diagram + compact summary ── */}
-              <div style={{
-                backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
-                transform: 'rotateY(180deg)',
-                position: 'absolute', inset: 0,
-                borderRadius: 14, backgroundColor: C.panelBg,
-                boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
-                overflow: 'hidden',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 10 }} />
-                <div style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 1.5, backgroundColor: KEY_ACCENT, zIndex: 5 }} />
-
-                <div style={{ padding: '10px 20px 0', alignSelf: 'stretch' }}>
-                  <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: KEY_ACCENT, letterSpacing: '1.2px', ...FONT_SMOOTH }}>
-                    SETUP DIAGRAM
-                  </p>
-                </div>
-
-                <LightingDiagram result={result} compact />
-
-                {compactSummary && (
-                  <p style={{
-                    margin: '2px 0 0', fontSize: 12, fontWeight: 500, color: C.textSub,
-                    textAlign: 'center', ...FONT_SMOOTH,
-                  }}>
-                    {compactSummary}
-                  </p>
+            {modName ? (
+              <div style={{ padding: '4px 18px 0', textAlign: mod?.family ? 'center' : 'left' }}>
+                <p style={{ margin: 0, fontSize: 19, fontWeight: 700, color: C.textPrimary, lineHeight: 1.15, letterSpacing: '-0.2px', ...FONT_SMOOTH }}>{modName}</p>
+                {mod?.sizeRange && (
+                  <p style={{ margin: '3px 0 0', fontSize: 13, fontWeight: 500, color: C.textDim, ...FONT_SMOOTH }}>{mod.sizeRange}</p>
                 )}
+              </div>
+            ) : result.sections?.catchlightModifier ? (
+              <div style={{ padding: '6px 20px 0' }}>
+                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: C.textPrimary, lineHeight: 1.3, ...FONT_SMOOTH }}>
+                  {result.sections.catchlightModifier}
+                </p>
+              </div>
+            ) : null}
 
-                <div style={{ padding: '4px 16px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 11, opacity: 0.4, lineHeight: 1 }}>&#x21BB;</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.5), letterSpacing: '1px', ...FONT_SMOOTH }}>
-                    TAP FOR SPECS
-                  </span>
-                </div>
+            <div style={{ padding: '10px 16px 12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                {mod?.distRange && (
+                  <LongPressSpec label="DISTANCE" value={mod.distRange} alwaysRevealed />
+                )}
+                {(directionDisplay || positionDisplay) && (
+                  <LongPressSpec
+                    label="DIRECTION"
+                    value={directionDisplay || positionDisplay}
+                    secondary={keyAngleDisplay}
+                    secondaryColor={KEY_ACCENT}
+                    alwaysRevealed
+                  />
+                )}
+                {keyHeightDisplay && (
+                  <LongPressSpec label="HEIGHT" value={keyHeightDisplay} alwaysRevealed />
+                )}
+                {rsFill && (
+                  <LongPressSpec label="FILL" value={rsFill} alwaysRevealed />
+                )}
               </div>
             </div>
           </div>
@@ -1372,11 +1346,6 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </PullTabDrawer>
         )}
 
-        {/* ── Pull-tab: Save Details ── */}
-        <PullTabDrawer label="SAVE DETAILS" open={!!drawers.save} onToggle={() => toggleDrawer('save')}>
-          <InsetField label="SETUP NAME" value={setupName} onChange={setSetupName} placeholder={defaultName} />
-          <InsetField label="NOTES" value={notes} onChange={setNotes} placeholder="Any details about this setup…" multiline />
-        </PullTabDrawer>
 
         </div>{/* end rightCol */}
         </div>{/* end middleWrap */}
@@ -1386,10 +1355,14 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
         {/* ── CTA dock — sticky at bottom on desktop so it's always in viewport ── */}
         <div style={isDesktop ? {
           position: 'sticky', bottom: 0, zIndex: 20,
-          padding: '16px 40px 20px',
+          padding: '16px 40px 24px',
           background: `linear-gradient(transparent, ${C.bg} 24%)`,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-        } : { display: 'contents' }}>
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+        } : {
+          display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 8,
+        }}>
+
+        {/* Primary: Start Shooting */}
         <button
           onClick={handleStartCockpit}
           onPointerDown={() => setSavePressed(true)}
@@ -1413,59 +1386,80 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
           </span>
         </button>
 
+        {/* Secondary: Save Setup — always visible, one-tap */}
+        <button
+          onClick={handleSave}
+          disabled={saved}
+          style={{
+            width: '100%', maxWidth: isDesktop ? 640 : undefined,
+            alignSelf: isDesktop ? 'center' : undefined,
+            height: isDesktop ? 50 : 46, borderRadius: isDesktop ? 25 : 22,
+            background: saved ? 'rgba(72,186,136,0.08)' : steel(0.05),
+            border: `1px solid ${saved ? 'rgba(72,186,136,0.30)' : steel(0.16)}`,
+            boxShadow: 'inset 0px 1px 2px rgba(0,0,0,0.30)',
+            cursor: saved ? 'default' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            WebkitTapHighlightColor: 'transparent',
+            transition: 'background 0.2s ease, border-color 0.2s ease',
+          }}
+        >
+          {saved ? (
+            <>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke={C.confHigh} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.confHigh, letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+                SAVED
+              </span>
+            </>
+          ) : (
+            <span style={{ fontSize: 13, fontWeight: 700, color: steel(0.70), letterSpacing: '0.8px', ...FONT_SMOOTH }}>
+              SAVE SETUP
+            </span>
+          )}
+        </button>
+
+        {/* Optional notes expansion */}
+        <button
+          onClick={() => { setNotesOpen(o => !o); tapHaptic(); }}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 11, fontWeight: 600, color: steel(0.38),
+            letterSpacing: '0.05em', padding: '2px 0',
+            WebkitTapHighlightColor: 'transparent', alignSelf: 'center',
+            ...FONT_SMOOTH,
+          }}
+        >
+          {notesOpen ? 'Close notes ×' : 'Rename / Add Notes ›'}
+        </button>
+
+        {notesOpen && (
+          <div style={{ width: '100%', maxWidth: isDesktop ? 640 : undefined, alignSelf: isDesktop ? 'center' : undefined }}>
+            <InsetField label="SETUP NAME" value={setupName} onChange={setSetupName} placeholder={defaultName} />
+            <InsetField label="NOTES" value={notes} onChange={setNotes} placeholder="Any details about this setup…" multiline />
+          </div>
+        )}
+
+        {/* Utility row: Cancel / Plan Room */}
         <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: isDesktop ? '0' : '10px 4px 0',
+          display: 'flex', alignItems: 'center',
+          justifyContent: onRoomPlanner ? 'space-between' : 'flex-start',
           width: '100%', maxWidth: isDesktop ? 640 : undefined,
           alignSelf: isDesktop ? 'center' : undefined,
+          padding: '2px 0',
         }}>
           <button onClick={handleCancel} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 11, fontWeight: 600, color: steel(0.40),
+            fontSize: 11, fontWeight: 600, color: steel(0.38),
             letterSpacing: '0.05em', padding: 0,
             WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
           }}>Cancel</button>
 
-          <button
-            onClick={handleSave}
-            disabled={saved}
-            style={{
-              background: 'none', border: 'none',
-              cursor: saved ? 'default' : 'pointer',
-              fontSize: 11, fontWeight: 600,
-              color: saved ? C.confHigh : steel(0.40),
-              letterSpacing: '0.05em', padding: 0,
-              display: 'flex', alignItems: 'center', gap: 5,
-              WebkitTapHighlightColor: 'transparent',
-              transition: 'color 0.2s ease',
-              ...FONT_SMOOTH,
-            }}
-          >
-            {saved ? (
-              <>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-                Saved
-              </>
-            ) : (
-              <>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                  <polyline points="17 21 17 13 7 13 7 21"/>
-                  <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                Save
-              </>
-            )}
-          </button>
-
           {onRoomPlanner && (
             <button onClick={() => { onRoomPlanner(); softClickSound(); tapHaptic(); }} style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: 11, fontWeight: 600, color: steel(0.40),
+              fontSize: 11, fontWeight: 600, color: steel(0.38),
               letterSpacing: '0.05em', padding: 0,
               display: 'flex', alignItems: 'center', gap: 5,
               WebkitTapHighlightColor: 'transparent', ...FONT_SMOOTH,
@@ -1477,6 +1471,7 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
             </button>
           )}
         </div>
+
         </div>{/* end CTA dock */}
       </div>
 

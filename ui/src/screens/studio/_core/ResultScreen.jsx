@@ -15,9 +15,10 @@ import { postSignal } from '../../../data/signalsApi';
 import { createPortal } from 'react-dom';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
-import { useIsDesktop } from '../../../utils/useIsDesktop';
+import { useIsDesktop, useViewportWidth, TABLET_MIN_WIDTH } from '../../../utils/useIsDesktop';
 import { useDeviceTilt, glassReflectionTransform } from '../../../utils/useDeviceTilt';
 import prettify from '../../../utils/prettify';
+import { formatSetupText } from '../../../utils/formatSetupText';
 import useStableViewport from '../../../utils/useStableViewport';
 import { resultRevealSound, segmentPressSound, navSlideSound, softClickSound } from '../../../utils/sounds';
 import { loadSettings } from '../../../data/settingsStore';
@@ -33,6 +34,7 @@ import MatteBackground from '../_shared/MatteBackground';
 import ViewfinderHUD from '../_shared/ViewfinderHUD';
 import LightingDiagram from './components/LightingDiagram';
 import SocialExportPanel from '../../../cards/SocialExportPanel';
+import { svgToCanvasElement } from '../../../utils/exportSvg';
 import ExifStrip from '../_shared/ExifStrip';
 import { Component } from 'react';
 
@@ -1717,7 +1719,12 @@ function ModifierDetail({ modifier }) {
 }
 
 export default function ResultScreen({ result, imagePreview, onSetup, onRetry, onShotMatch, isPaid = false, plan = 'free', isAdmin = false }) {
-  const isDesktop = useIsDesktop();
+  const _isDesktopNative = useIsDesktop();
+  const _vpW = useViewportWidth();
+  // Tablet portrait (768–1023px): treat as two-column layout territory.
+  // Day1DemoApp bypasses FitToViewport at TABLET_MIN_WIDTH, so this screen
+  // receives full viewport width on tablets and activates the desktop grid.
+  const isDesktop = _isDesktopNative || _vpW >= TABLET_MIN_WIDTH;
   const tilt = useDeviceTilt();
   // Admin settings — confidence display mode
   const _settings = loadSettings();
@@ -1750,8 +1757,20 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   const [detailOpen, setDetailOpen] = useState(() => (result?.confidence ?? 0) >= 80);
   const [diagramView, setDiagramView] = useState('top');
   const [diagramZoomed, setDiagramZoomed] = useState(false);
+  const [socialDiagramCanvas, setSocialDiagramCanvas] = useState(null);
+  const socialDiagramRef = useRef(null);
   const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
   const [setupSaved, setSetupSaved] = useState(false);
+  const [briefCopied, setBriefCopied] = useState(false);
+
+  // Rasterize the LightingDiagram SVG into a canvas for social card compositing.
+  // Runs after render so the SVG ref is populated.
+  useEffect(() => {
+    if (!socialDiagramRef.current) return;
+    const svgEl = socialDiagramRef.current.getSvgElement?.();
+    if (!svgEl) return;
+    svgToCanvasElement(svgEl, 2).then(setSocialDiagramCanvas).catch(() => {});
+  }, [result]);
 
   // Auto-save setup if setting is enabled — runs once on mount
   useEffect(() => {
@@ -1772,6 +1791,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
     try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
   });
   const [infoVisible, setInfoVisible] = useState(true);
+  const [animatedConf, setAnimatedConf] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartY = useRef(null);
@@ -2114,10 +2134,28 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, [isDragging, moveDrag, endDrag]);
 
+  // Confidence count-up — runs from 0 to the real value when the panel
+  // reveals. Resets on dismiss so the animation replays on re-reveal.
+  useEffect(() => {
+    const target = result?.confidence ?? 0;
+    if (!infoVisible) { setAnimatedConf(0); return; }
+    const DURATION = 700;
+    const start = performance.now();
+    let raf;
+    const tick = (now) => {
+      const t = Math.min((now - start) / DURATION, 1);
+      const eased = 1 - Math.pow(1 - t, 3); // ease-out cubic
+      setAnimatedConf(Math.round(eased * target));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [infoVisible, result?.confidence]);
+
   if (!result) return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: '#000', overflow: 'hidden' }}>
       <div style={{ position: 'relative', width: '100%', height: '100%', backgroundColor: C.bg, fontFamily: 'Inter, system-ui, sans-serif' }}>
-        <MatteBackground variant="subdued" />
+        <MatteBackground variant="carbon" />
         <button
           aria-label="Back"
           onClick={() => { navHaptic(); onRetry(); }}
@@ -2174,6 +2212,14 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   // Summary strip + diagram + drawers + CTA flow naturally below.
   const M_TOP_END   = VF_TOP + VF_HEIGHT + 12;
   const leadMargin  = confidence - (sections.patternCandidates?.[1]?.score ?? 0);
+  // Evidence string — shows which physical signals drove this verdict.
+  // Only includes signals that actually fired; empty string when no data.
+  const confEvidence = (() => {
+    const parts = [];
+    if (catchlightClockHour != null) parts.push('catchlights');
+    if (rawSignals.nose_shadow_angle_deg != null) parts.push('shadow geometry');
+    return parts.slice(0, 2).join(' + ');
+  })();
   // Desktop hero position constants — photo / info / CTA / diagram stacked
   // top-to-bottom inside the hero column. panelTop = D_DIAGRAM_TOP + 300
   // gives the diagram well ~300px of real estate before the analytical
@@ -2189,9 +2235,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   const D_DIAGRAM_TOP  = D_CTA_TOP + 60;         // CTA (48) + 12 gap → diagram well
   // Desktop: hero fills available viewport height (minus CTA area at bottom).
   // The photo + pattern overlay stretch to fill the column naturally.
-  // Hero photo fills ~55% of viewport. Pattern name + chips + CTA + drawers
-  // all visible below without scrolling — matches Figma single-scroll layout.
-  const panelTop    = isDesktop ? (stableVH - 80) : Math.round(stableVH * 0.55);
+  // Hero photo fills ~40% of viewport — keeps verdict hero + full diagram
+  // above fold on short phones (iPhone SE: 267px photo, 400px remaining).
+  const panelTop    = isDesktop ? (stableVH - 150) : Math.round(stableVH * 0.40);
 
   // Detail drawer toggle — silent.  THE LIGHT and THE SETUP are always
   // visible; only the DETAIL section collapses.
@@ -2255,9 +2301,9 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       margin: '0 auto',
       fontFamily: 'Inter, system-ui, sans-serif',
       overflowX: 'hidden',
-      overflowY: 'auto',
+      overflowY: isDesktop ? 'hidden' : 'auto',
       position: 'relative',
-      paddingBottom: 40,
+      paddingBottom: isDesktop ? 0 : 40,
       filter: daylightMode ? 'brightness(1.15)' : undefined,
       transition: 'filter 0.4s ease',
       // Desktop: two-column grid. Left = hero/pattern/CTA (the 430px instrument
@@ -2265,28 +2311,39 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       // alongside the hero so the screen reads native on wide viewports.
       ...(isDesktop ? {
         display: 'grid',
-        gridTemplateColumns: `${heroWidth}px minmax(0, 1fr)`,
-        gridTemplateRows: '1fr auto',
-        gridTemplateAreas: '"hero panel" "cta cta"',
-        columnGap: 16,
+        gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+        gridTemplateAreas: '"hero panel"',
+        columnGap: 0,
         rowGap: 0,
         maxWidth: 1400,
         margin: '0 auto',
-        paddingLeft: 20, paddingRight: 20,
+        paddingLeft: 0, paddingRight: 0, paddingTop: 0,
+        paddingBottom: 0,
         alignItems: 'start',
         justifyContent: 'center',
+        overflowY: 'hidden',
+        height: '100%',
       } : null),
     }}>
-      <MatteBackground variant="subdued" />
+      <MatteBackground variant="carbon" />
 
       {/* ─── Top section — absolute positioned within fixed-height container ─── */}
       <div style={{
-        position: 'relative',
-        width: isDesktop ? heroWidth : undefined,
-        height: panelTop,
-        ...(isDesktop ? { gridArea: 'hero' } : null),
+        ...(isDesktop ? {
+          gridArea: 'hero',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'sticky',
+          top: 0,
+          height: '100vh',
+          overflow: 'hidden',
+        } : {
+          position: 'relative',
+          width: '100%',
+          height: panelTop,
+        }),
       }}>
-      <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div style={{ position: 'relative', width: '100%', ...(isDesktop ? { flex: 1, overflow: 'hidden' } : { height: '100%' }) }}>
 
         {/* Back nav */}
         <button
@@ -2366,22 +2423,21 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             // the position/size CSS so exit transitions still feel right.
             // Photo fills the hero section (top ~55% of viewport).
             // Pattern name + answer content visible below.
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: '100%',
+            // Full-bleed on both desktop and mobile: photo fills the VF edge-to-edge.
+            // objectFit: cover handles orientation-agnostic cropping.
+            position: 'absolute', top: 0, left: 0, right: 0, height: '100%',
             borderRadius: 0,
             visibility: isZoomed ? 'hidden' : 'visible',
             overflow: 'hidden',
             // Desktop: deep recessed LCD panel — matching ProcessingScreen trough.
             // Mobile: plain black.
             backgroundColor: isDesktop ? undefined : '#000',
-            // LCD panel — matches Home empty VF slot exactly
             background: isDesktop
-              ? 'linear-gradient(180deg, #060810 0%, #050608 40%, #040507 100%)'
+              ? 'linear-gradient(180deg, #111113 0%, #0c0c0e 40%, #080808 100%)'
               : '#000',
-            boxShadow: isDesktop ? VIEWFINDER_INNER_SHADOW : undefined,
+            borderRadius: 0,
+            // boxShadow on the container renders BEHIND the absolutely-positioned
+            // photo child and is invisible. Bezel shadow applied as child overlay below.
             cursor: 'pointer',
             WebkitTapHighlightColor: 'transparent',
             transition: 'none',
@@ -2392,8 +2448,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           {imagePreview && (
             <img key={imagePreview} src={imagePreview} alt="Result" style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: isDesktop ? 'contain' : 'cover',
-              objectPosition: isDesktop ? '50% 50%' : '50% 25%',
+              objectFit: 'cover',
+              objectPosition: isDesktop ? '50% 20%' : '50% 25%',
               opacity: 1,
               // Inline pinch-zoom + pan — transform applied directly so the
               // image scales inside the VF with overflow: hidden clipping.
@@ -2505,66 +2561,45 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           {/* Glass panel — lens vignette + key light reflection inside recessed panel */}
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 0, zIndex: 2, pointerEvents: 'none' }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
-            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: isDesktop ? 0.4 : 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0, background: GLASS_REFLECTION, borderRadius: 0, opacity: isDesktop ? 0.28 : 0.62, transform: glassReflectionTransform(tilt), willChange: 'transform' }} />
           </div>
+          {/* Chamfer top-left edge catch — matches diagram well and Home ghost VF */}
+          {isDesktop && (
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+              zIndex: 3, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 40%, transparent 100%)',
+            }} />
+          )}
+          {/* Bezel recession overlay — child div over the photo.
+              box-shadow inset bleeds through bright photo backgrounds, so we use
+              a 4-sided gradient vignette: hard opaque black at each edge fading
+              to transparent inward. Immune to photo brightness.
+              Combined with a box-shadow ring for the hard pixel edge. */}
+          {isDesktop && (
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 4,
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.85)',
+              background: [
+                'linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.62) 4%, rgba(0,0,0,0.28) 9%, rgba(0,0,0,0.06) 14%, transparent 20%)',
+                'linear-gradient(to right,  rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.62) 3%, rgba(0,0,0,0.28) 7%, rgba(0,0,0,0.06) 11%, transparent 16%)',
+                'linear-gradient(to left,   rgba(0,0,0,0.70) 0%, rgba(0,0,0,0.45) 3%, rgba(0,0,0,0.18) 7%, rgba(0,0,0,0.04) 11%, transparent 16%)',
+                'linear-gradient(to top,    rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.38) 3%, rgba(0,0,0,0.14) 7%, transparent 14%)',
+              ].join(', '),
+            }} />
+          )}
           {/* ── Result identification overlay — Apple-style metadata on the photo ──
               Pattern name + confidence sit on the lower third of the VF so the
               answer is ON the photo, not below it. The vignette gradient at
               the bottom provides readable contrast. */}
           <div style={{
             position: 'absolute', bottom: 0, left: 0, right: 0,
-            padding: '48px 20px 16px',
-            background: 'linear-gradient(to bottom, transparent 0%, rgba(11,11,12,0.65) 50%, rgba(11,11,12,0.88) 100%)',
-            zIndex: 7, pointerEvents: 'none',
+            padding: isDesktop ? '64px 24px 28px' : '64px 20px 18px',
+            background: 'linear-gradient(to bottom, transparent 0%, rgba(6,7,9,0.40) 22%, rgba(6,7,9,0.68) 45%, rgba(6,7,9,0.88) 68%, rgba(6,7,9,0.97) 100%)',
+            zIndex: 10, pointerEvents: 'none',
           }}>
-            <div style={{
-              display: 'flex', flexDirection: isDesktop ? 'row' : 'row',
-              alignItems: 'baseline', gap: isDesktop ? 16 : 8,
-            }}>
-              <p style={{
-                margin: 0,
-                fontWeight: 800,
-                fontSize: isDesktop
-                  ? (pattern.length > 18 ? 36 : pattern.length > 12 ? 48 : 56)
-                  : (pattern.length > 18 ? 20 : pattern.length > 12 ? 26 : 32),
-                lineHeight: isDesktop ? '1.05' : (pattern.length > 18 ? '26px' : pattern.length > 12 ? '32px' : '38px'),
-                color: C.textPrimary,
-                letterSpacing: '-0.5px',
-                ...FONT_SMOOTH,
-                textShadow: TEXT_SHADOW_ENGRAVED,
-              }}>{prettify(pattern, { title: true })}</p>
-              {/* Confidence inline with pattern — respects confidenceDisplay + showConfidenceScore settings */}
-              {showConfPct && confDisplayMode !== 'simple' && (
-                <p style={{
-                  margin: 0,
-                  fontWeight: 700, fontSize: isDesktop ? 32 : 20, lineHeight: '1.1',
-                  color: confColor,
-                  ...FONT_SMOOTH,
-                  textShadow: `0 0 16px ${confColor}40, 0 2px 6px rgba(0,0,0,0.5)`,
-                }}>{confidence}%</p>
-              )}
-              {confDisplayMode === 'simple' && (
-                <p style={{
-                  margin: 0,
-                  fontWeight: 700, fontSize: isDesktop ? 18 : 14, lineHeight: '1.2',
-                  color: confColor, letterSpacing: '0.5px',
-                  ...FONT_SMOOTH,
-                  textShadow: `0 0 12px ${confColor}30, 0 1px 4px rgba(0,0,0,0.5)`,
-                }}>{confidence >= 80 ? 'High confidence' : confidence >= 60 ? 'Moderate confidence' : 'Low confidence'}</p>
-              )}
-            </div>
-            {geometricBase && (
-              <p style={{
-                margin: isDesktop ? '4px 0 0' : '2px 0 0', fontWeight: 600,
-                fontSize: isDesktop ? 15 : 14, lineHeight: '1.2',
-                color: steel(0.55), letterSpacing: '0.5px',
-                ...FONT_SMOOTH,
-                textShadow: TEXT_SHADOW_ENGRAVED,
-              }}>{prettify(geometricBase, { title: true })} geometry</p>
-            )}
-            {/* R-7: Removed VF overlay second line (modifier silhouette +
-                meta pill + source attribution). Pattern + confidence is
-                the hero — everything else lives below the drag handle. */}
+            {/* Mobile verdict lives in the VERDICT HERO ZONE panel below the photo.
+                Overlay is gradient-only so depth reads without competing text. */}
           </div>
 
           {result?.cameraSettings && (
@@ -2648,20 +2683,155 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
               </div>
             </div>
           )}
+          {/* Bezel depth shadow — body overhangs recessed LCD from all sides (desktop) */}
+          {isDesktop && (
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 9,
+            background: [
+              'linear-gradient(to bottom, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.45) 7%, rgba(0,0,0,0.14) 18%, transparent 30%)',
+              'linear-gradient(to top,   rgba(0,0,0,0.60) 0%, rgba(0,0,0,0.28) 7%, rgba(0,0,0,0.08) 16%, transparent 28%)',
+              'linear-gradient(to right, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.30) 7%, rgba(0,0,0,0.08) 16%, transparent 26%)',
+              'linear-gradient(to left,  rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 7%, transparent 20%)',
+            ].join(', '),
+          }} />
+          )}
+          {/* Chamfer edge highlights — top-left bezel catch, matches Home ghost VF depth */}
+          {isDesktop && (<>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 11, pointerEvents: 'none',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.04) 100%)',
+            }} />
+            <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 1, zIndex: 11, pointerEvents: 'none',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 35%, transparent 65%)',
+            }} />
+          </>)}
         </div>
 
-        {/* Hero-column CTA removed — single sticky CTA at bottom handles all viewports */}
-
-        {/* Desktop-only: LightingDiagram as an accompanying hero graphic —
-            pulled out of the SHADOW drawer so the hero image no longer
-            stands alone on wide viewports.  Wrapped in the canonical glass
-            viewfinder treatment (well + vignette + reflection + bevel) so
-            it reads as the same machined viewport as the home screen and
-            the hero photo above it.  The diagram itself fills the well
-            fluidly so it zooms with the hero column width instead of
-            sitting at a fixed 300px in an oversized area. */}
         {/* Desktop diagram moved to panel column — see SETUP DIAGRAM SectionPanel below */}
       </div>
+
+      {/* ─── Desktop verdict strip — pattern name on clean matte surface, evidence attached ─── */}
+      {isDesktop && (
+        <div style={{
+          flexShrink: 0,
+          padding: '12px 20px 14px',
+          borderTop: '1px solid rgba(132,158,184,0.06)',
+          opacity: infoVisible ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s',
+        }}>
+          <p style={{
+            margin: 0,
+            fontWeight: 800,
+            fontSize: pattern.length > 18 ? 28 : pattern.length > 12 ? 32 : 36,
+            lineHeight: 1.1,
+            letterSpacing: '-0.4px',
+            color: 'rgba(245,247,250,0.97)',
+            ...FONT_SMOOTH,
+          }}>
+            {prettify(pattern, { title: true })}
+          </p>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 6 }}>
+            {confDisplayMode !== 'simple' && (
+              <span style={{
+                fontSize: 20, fontWeight: 700,
+                color: confColor,
+                letterSpacing: '-0.2px',
+                fontVariantNumeric: 'tabular-nums',
+                textShadow: `0 0 10px ${confColor}40`,
+                ...FONT_SMOOTH,
+              }}>{animatedConf}%</span>
+            )}
+            {confDisplayMode !== 'numeric' && (
+              <span style={{
+                fontSize: confDisplayMode === 'simple' ? 18 : 13,
+                fontWeight: 600,
+                color: confidence >= 70 ? 'rgba(140,218,160,0.80)' : 'rgba(220,175,95,0.80)',
+                letterSpacing: '0.4px',
+                ...FONT_SMOOTH,
+              }}>
+                {confidence >= 80 ? 'Confident' : confidence >= 60 ? 'Tentative' : 'Uncertain'}
+              </span>
+            )}
+          </div>
+          {confEvidence ? (
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: 13, fontWeight: 500,
+              color: steel(0.68),
+              letterSpacing: '0.2px',
+              lineHeight: 1.35,
+              ...FONT_SMOOTH,
+            }}>{confEvidence} agree</p>
+          ) : sourceAttribution ? (
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: 12, fontWeight: 500,
+              color: steel(0.55),
+              letterSpacing: '0.3px',
+              ...FONT_SMOOTH,
+            }}>{sourceAttribution}</p>
+          ) : null}
+          {(() => {
+            const raw1 = sections.sceneDescription || sections.vlmNarrative?.fields?.[0]?.value;
+            const interp = raw1?.split('.')?.[0]?.trim();
+            return interp && interp.length > 10 ? (
+              <p style={{
+                margin: '6px 0 0',
+                fontSize: 12, fontWeight: 400,
+                color: steel(0.50),
+                lineHeight: 1.4,
+                ...FONT_SMOOTH,
+              }}>
+                {interp}.
+              </p>
+            ) : null;
+          })()}
+        </div>
+      )}
+
+      {/* ─── Desktop CTA — anchored to bottom of sticky hero column ─── */}
+      {isDesktop && (
+        <div style={{
+          flexShrink: 0,
+          padding: '16px 20px 20px',
+          pointerEvents: 'none',
+          opacity: infoVisible ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease',
+        }}>
+          <button
+            onClick={() => {
+              if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
+              else { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }) }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              width: '100%',
+              height: 54,
+              borderRadius: 24,
+              background: isPaid ? CTA_BG : 'linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%)',
+              boxShadow: isPaid
+                ? `${CTA_SHADOW}, ${CTA_BEVEL}`
+                : '4px 4px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.30), 0 0 12px rgba(200,155,69,0.08), inset 0 1px 0 rgba(200,155,69,0.12)',
+              border: 'none', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              overflow: 'hidden',
+              pointerEvents: 'auto',
+            }}
+          >
+            <span style={{
+              fontSize: 14, fontWeight: 700,
+              color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
+              letterSpacing: '3px',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+              textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.30)',
+              ...FONT_SMOOTH,
+            }}>
+              {isPaid ? 'Build This Light' : 'Upgrade · From $39/mo'}
+            </span>
+          </button>
+        </div>
+      )}
       </div>
       {/* ─── end top section ─── */}
 
@@ -2689,15 +2859,113 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         </div>
       )}
 
-      {/* Hero pattern name removed — the VF overlay (bottom gradient,
-          line ~2266) already shows pattern + confidence ON the photo.
-          Duplicating it below the handle was redundant. The VF overlay
-          is the stronger Apple-style placement — data on the content. */}
-
-      {/* R-8: Removed Lighting Summary Strip (KEY UPPER LEFT / HARD chips).
-          The diagram directly below shows key position with a labeled arrow,
-          and light quality is in THE SETUP. Chips were a redundant caption
-          for a self-explanatory diagram. */}
+      {/* ─── VERDICT HERO ZONE — mobile only ────────────────────────────────
+          Clean dark surface below the photo. The authoritative read:
+          pattern name dominant, confidence + evidence immediately attached.
+          CTA follows YOUR SETUP — action comes after comprehension.
+          Reading order: verdict → proof → setup → action → depth. */}
+      {!isDesktop && (
+        <div style={{
+          marginLeft: 25, marginRight: 25,
+          marginTop: 10, marginBottom: 4,
+          padding: '14px 16px 14px',
+          borderRadius: 14,
+          backgroundColor: C.panelBg,
+          boxShadow: `${PANEL_SHADOW}, ${PANEL_BEVEL}`,
+          position: 'relative',
+          overflow: 'hidden',
+          opacity: infoVisible ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s',
+          pointerEvents: infoVisible ? 'auto' : 'none',
+        }}>
+          {/* Bevel overlay — machined edge, matches other SectionPanels */}
+          <div style={{ position: 'absolute', inset: 0, borderRadius: 14, pointerEvents: 'none', boxShadow: PANEL_BEVEL, zIndex: 1 }} />
+          {/* Pattern name — dominant, clean surface, no photo texture competing */}
+          <p style={{
+            margin: 0,
+            fontWeight: 800,
+            fontSize: pattern.length > 18 ? 28 : pattern.length > 12 ? 32 : 36,
+            lineHeight: 1.1,
+            letterSpacing: '-0.4px',
+            color: 'rgba(245,247,250,0.97)',
+            position: 'relative', zIndex: 2,
+            ...FONT_SMOOTH,
+          }}>
+            {prettify(pattern, { title: true })}
+          </p>
+          {/* Confidence — respects confDisplayMode: simple=read, numeric=%, detailed=both */}
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 8,
+            marginTop: 6, position: 'relative', zIndex: 2,
+          }}>
+            {confDisplayMode !== 'simple' && (
+              <span style={{
+                fontSize: 20, fontWeight: 700,
+                color: confColor,
+                letterSpacing: '-0.2px',
+                fontVariantNumeric: 'tabular-nums',
+                textShadow: `0 0 10px ${confColor}40`,
+                ...FONT_SMOOTH,
+              }}>
+                {animatedConf}%
+              </span>
+            )}
+            {confDisplayMode !== 'numeric' && (
+              <span style={{
+                fontSize: confDisplayMode === 'simple' ? 18 : 13,
+                fontWeight: 600,
+                color: confidence >= 70 ? 'rgba(140,218,160,0.80)' : 'rgba(220,175,95,0.80)',
+                letterSpacing: '0.4px',
+                ...FONT_SMOOTH,
+              }}>
+                {confidence >= 80 ? 'Confident' : confidence >= 60 ? 'Tentative' : 'Uncertain'}
+              </span>
+            )}
+          </div>
+          {/* Evidence source — which physical signals drove this verdict */}
+          {confEvidence ? (
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: 13, fontWeight: 500,
+              color: steel(0.68),
+              letterSpacing: '0.2px',
+              lineHeight: 1.35,
+              position: 'relative', zIndex: 2,
+              ...FONT_SMOOTH,
+            }}>
+              {confEvidence} agree
+            </p>
+          ) : sourceAttribution ? (
+            <p style={{
+              margin: '4px 0 0',
+              fontSize: 12, fontWeight: 500,
+              color: steel(0.55),
+              letterSpacing: '0.3px',
+              position: 'relative', zIndex: 2,
+              ...FONT_SMOOTH,
+            }}>
+              {sourceAttribution}
+            </p>
+          ) : null}
+          {/* Interpretation line — first sentence from scene / VLM if available */}
+          {(() => {
+            const raw1 = sections.sceneDescription || sections.vlmNarrative?.fields?.[0]?.value;
+            const interp = raw1?.split('.')?.[0]?.trim();
+            return interp && interp.length > 10 ? (
+              <p style={{
+                margin: '6px 0 0',
+                fontSize: 12, fontWeight: 400,
+                color: steel(0.50),
+                lineHeight: 1.4,
+                position: 'relative', zIndex: 2,
+                ...FONT_SMOOTH,
+              }}>
+                {interp}.
+              </p>
+            ) : null;
+          })()}
+        </div>
+      )}
 
       {/* ─── Lighting Diagram (mobile only — always visible, not in a drawer) ───
           The single most valuable visual in the app. Shows where to put the
@@ -2727,7 +2995,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             display: 'flex', justifyContent: 'center', alignItems: 'stretch',
             zIndex: 1,
           }}>
-            <LightingDiagram result={result} fluid compact showExport={isPaid} />
+            <LightingDiagram ref={socialDiagramRef} result={result} fluid compact showExport={isPaid} />
           </div>
           <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, pointerEvents: 'none', zIndex: 9 }}>
             <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
@@ -2759,28 +3027,76 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         </div>
       )}
 
+      {/* ─── Evidence Signal Band — compact support-signal chips, mobile only ───
+          Glanceable key signals: key direction, modifier, catchlight position.
+          Positioned between diagram and analytical panels — evidence supporting
+          the verdict before deeper instrument panels. */}
+      {!isDesktop && (() => {
+        const chips = [
+          sections.modifier?.position,
+          sections.modifier?.family
+            ? `${sections.modifier.sizeLabel ? sections.modifier.sizeLabel + ' ' : ''}${sections.modifier.family}`
+            : null,
+          catchlightClockHour != null ? `${catchlightClockHour}:00 catchlight` : null,
+          geometricBase ? `${prettify(geometricBase, { title: true })} geometry` : null,
+        ].filter(Boolean);
+        return chips.length > 0 ? (
+          <div style={{
+            marginLeft: 25, marginRight: 25, marginTop: 8, marginBottom: 0,
+            display: 'flex', flexWrap: 'wrap', gap: 6,
+            opacity: infoVisible ? 1 : 0,
+            transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s',
+            pointerEvents: 'none',
+          }}>
+            {chips.map((chip, i) => (
+              <span key={i} style={{
+                fontSize: 11, fontWeight: 600,
+                color: steel(0.52),
+                letterSpacing: '0.5px',
+                padding: '4px 9px',
+                borderRadius: 6,
+                backgroundColor: C.pillBg,
+                boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.40), 0 0.5px 0 rgba(255,255,255,0.03)',
+                ...FONT_SMOOTH,
+              }}>
+                {chip}
+              </span>
+            ))}
+          </div>
+        ) : null;
+      })()}
+
       {/* ─── Analytical Panel (pull-tab drawers) ───
-          Desktop: the panel column lives in the right grid cell. We cap its
-          height to the design viewport (1040) minus top/bottom chrome so
-          opened drawers scroll inside the column instead of pushing the CTA
-          off-screen. FitToViewport handles the outer uniform scale. */}
+          Desktop: scroll container fills the right grid column at 100vh.
+          Inner wrapper is a plain flex column with no height constraint —
+          this is the fix that allows overflowY: auto to actually scroll
+          (flex children shrink to fit if the container has height + flex,
+          so we separate scroll container from flex layout). */}
+      <div style={{
+        ...(isDesktop ? {
+          gridArea: 'panel',
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          borderLeft: '1px solid rgba(132,158,184,0.05)',
+        } : null),
+      }}>
       <div style={{
         marginLeft: isDesktop ? 0 : 25,
         marginRight: isDesktop ? 0 : 25,
-        marginTop: isDesktop ? 16 : 4,
+        marginTop: isDesktop ? 0 : 4,
         display: 'flex',
         flexDirection: 'column',
-        gap: isDesktop ? 4 : 12,
+        gap: isDesktop ? 10 : 12,
         opacity: infoVisible ? 1 : 0,
         transform: infoVisible ? 'translateY(0)' : 'translateY(60px)',
         transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.05s',
         pointerEvents: infoVisible ? 'auto' : 'none',
         ...(isDesktop ? {
-          gridArea: 'panel',
-          alignSelf: 'start',
-          overflowY: 'visible',
-          paddingRight: 24,
-          paddingBottom: 12,
+          paddingLeft: 24,
+          paddingRight: 12,
+          paddingTop: 20,
+          paddingBottom: 40,
         } : {
           marginLeft: 25,
           marginRight: 25,
@@ -2803,6 +3119,77 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             This section shows the actionable blueprint: modifier + catchlight.
             PatternBars (alternate candidates) moved to DETAIL drawer.
             ═══════════════════════════════════════════════════════════════ */}
+        {/* ── SETUP DIAGRAM — first in panel column on desktop, serves as visual proof for the verdict ── */}
+        {isDesktop && result?._raw && (
+          <div
+            onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
+            style={{
+              position: 'relative', width: '100%',
+              height: 'clamp(280px, 44vh, 460px)',
+              borderRadius: 12,
+              background: 'linear-gradient(180deg, #111113 0%, #0c0c0e 40%, #080808 100%)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.45), 0 1px 6px rgba(0,0,0,0.25)',
+              overflow: 'hidden', cursor: 'zoom-in',
+            }}
+            title="Click to expand diagram"
+          >
+            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
+              {diagramView === 'top' ? (
+                <LightingDiagram result={result} fluid showExport={isPaid} />
+              ) : (
+                <SideViewDiagram result={result} fluid />
+              )}
+            </div>
+            {/* View toggle */}
+            <div style={{ position: 'absolute', top: 8, right: 10, zIndex: 11, display: 'flex' }}>
+              {['top', 'side'].map(v => (
+                <button key={v} onClick={(e) => { e.stopPropagation(); setDiagramView(v); }} style={{
+                  padding: '3px 8px', border: 'none', cursor: 'pointer',
+                  background: diagramView === v
+                    ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
+                    : 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
+                  borderRadius: v === 'top' ? '5px 0 0 5px' : '0 5px 5px 0',
+                  boxShadow: diagramView === v
+                    ? 'inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)'
+                    : 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.6px',
+                  color: diagramView === v ? '#c89b45' : steel(0.30),
+                  WebkitTapHighlightColor: 'transparent',
+                }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
+              ))}
+            </div>
+            {/* Label + expand hint */}
+            <div style={{
+              position: 'absolute', bottom: 8, left: 12, right: 12, zIndex: 9,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              pointerEvents: 'none',
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: steel(0.35), letterSpacing: '1px', ...FONT_SMOOTH }}>LIGHTING DIAGRAM</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.40 }}>
+                <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.65), letterSpacing: '0.5px', ...FONT_SMOOTH }}>CLICK TO EXPAND</span>
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M10 2h4v4M6 14H2v-4M14 2L9 7M2 14l5-5" stroke={steel(0.85)} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+            </div>
+            {/* Glass treatment */}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: 12, zIndex: 6, pointerEvents: 'none' }}>
+              <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: '5%', bottom: 0,
+                background: GLASS_REFLECTION, opacity: 0.28,
+                transform: glassReflectionTransform(tilt), willChange: 'transform',
+              }} />
+            </div>
+            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 7, borderRadius: 12, boxShadow: VIEWFINDER_INNER_SHADOW }} />
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, height: 1,
+              zIndex: 8, pointerEvents: 'none', borderRadius: '12px 12px 0 0',
+              background: 'linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.09) 40%, transparent 100%)',
+            }} />
+          </div>
+        )}
+
         {(sections.modifier?.family || rawSignals.nose_shadow_angle_deg != null || catchlightClockHour != null || sections.catchlightModifier) && (
           <SectionPanel label={isPaid ? 'YOUR SETUP' : 'YOUR SETUP — UPGRADE TO UNLOCK'}>
             {/* Free tier: blurred preview — show what they'd GET, not what they can't see.
@@ -2942,51 +3329,43 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           </SectionPanel>
         )}
 
-        {/* ── SETUP DIAGRAM — inline in the panel column on desktop ── */}
-        {isDesktop && result?._raw && (
-          <div
-            onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
-            style={{
-              position: 'relative', width: '100%',
-              height: 'clamp(220px, 38vh, 420px)',
-              borderRadius: 12, backgroundColor: '#0a0c0e',
-              border: '1px solid rgba(132,158,184,0.06)',
-              boxShadow: [
-                'inset 0px 1px 3px 0px rgba(0,0,0,0.35)',
-                'inset 0 0 20px rgba(0,0,0,0.20)',
-                '0 4px 16px rgba(0,0,0,0.30)',
-              ].join(', '),
-              overflow: 'hidden', cursor: 'zoom-in',
+        {/* ─── Primary CTA — mobile only, after SETUP ─────────────────
+            Reading order: VERDICT → PROOF → SETUP → CTA → DEPTH.
+            Follows setup so the photographer sees what they're building
+            before committing to the action. */}
+        {!isDesktop && (
+          <button
+            onClick={() => {
+              if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
+              else { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }); }
             }}
-            title="Click to expand diagram"
+            style={{
+              display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              width: '100%', height: 44, marginTop: 4,
+              borderRadius: 22,
+              background: isPaid ? CTA_BG : 'linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%)',
+              boxShadow: isPaid
+                ? `${CTA_SHADOW}, ${CTA_BEVEL}`
+                : '4px 4px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.30), inset 0 1px 0 rgba(200,155,69,0.12)',
+              border: 'none', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
           >
-            <div style={{ position: 'absolute', inset: 0, padding: '12px 14px', display: 'flex', justifyContent: 'center', alignItems: 'stretch', zIndex: 1 }}>
-              {diagramView === 'top' ? (
-                <LightingDiagram result={result} fluid showExport={isPaid} />
-              ) : (
-                <SideViewDiagram result={result} fluid />
-              )}
-            </div>
-            {/* View toggle */}
-            <div style={{ position: 'absolute', top: 8, right: 10, zIndex: 11, display: 'flex' }}>
-              {['top', 'side'].map(v => (
-                <button key={v} onClick={() => setDiagramView(v)} style={{
-                  padding: '3px 8px', border: 'none', cursor: 'pointer',
-                  background: diagramView === v
-                    ? 'linear-gradient(141.71deg, #2a2218 0%, #1c1810 100%)'
-                    : 'linear-gradient(141.71deg, #14161c 0%, #0c0d10 100%)',
-                  borderRadius: v === 'top' ? '5px 0 0 5px' : '0 5px 5px 0',
-                  boxShadow: diagramView === v
-                    ? 'inset 0 1px 0 rgba(200,155,60,0.10), 0 0 0 0.5px rgba(200,155,60,0.20)'
-                    : 'inset 0 1px 0 rgba(255,255,255,0.03)',
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.6px',
-                  color: diagramView === v ? '#c89b45' : steel(0.30),
-                  WebkitTapHighlightColor: 'transparent',
-                }}>{v === 'top' ? 'TOP' : 'SIDE'}</button>
-              ))}
-            </div>
-          </div>
+            <span style={{
+              fontSize: 13, fontWeight: 700,
+              color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
+              letterSpacing: '2.5px',
+              textTransform: 'uppercase',
+              textShadow: isPaid ? undefined : '0 0 10px rgba(200,155,60,0.28)',
+              ...FONT_SMOOTH,
+            }}>
+              {isPaid ? 'Build This Light' : 'Upgrade · From $39/mo'}
+            </span>
+          </button>
         )}
+
+        {/* SETUP DIAGRAM moved to top of panel column — see above */}
 
         {/* ═══════════════════════════════════════════════════════════════
             DETAIL — single collapsible drawer.  Scene context, color
@@ -3366,11 +3745,64 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             <SocialExportPanel
               result={result}
               imagePreview={imagePreview}
-              diagramCanvas={null}
+              diagramCanvas={socialDiagramCanvas}
               isStudio={plan === 'studio' || plan === 'enterprise'}
               isAdmin={isAdmin}
             />
           </SafeRender>
+        )}
+
+        {/* ── Copy Setup Brief — text-message-ready spec for assistant handoff ── */}
+        {isPaid && (
+          <button
+            onClick={() => {
+              tapHaptic();
+              const text = formatSetupText(result);
+              if (navigator.share && /mobile|android|iphone|ipad/i.test(navigator.userAgent)) {
+                navigator.share({ text }).catch(() => {});
+              } else {
+                navigator.clipboard?.writeText(text).then(() => {
+                  setBriefCopied(true);
+                  setTimeout(() => setBriefCopied(false), 2200);
+                }).catch(() => {
+                  // Fallback: create invisible textarea + execCommand
+                  const el = document.createElement('textarea');
+                  el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+                  document.body.appendChild(el); el.select();
+                  try { document.execCommand('copy'); setBriefCopied(true); setTimeout(() => setBriefCopied(false), 2200); } catch {}
+                  document.body.removeChild(el);
+                });
+              }
+            }}
+            className="sm-btn-lift"
+            style={{
+              width: '100%', padding: '13px 0', margin: '8px 0',
+              borderRadius: 10, border: 'none', cursor: 'pointer',
+              background: briefCopied
+                ? 'linear-gradient(141.71deg, #142218 0%, #0e1810 100%)'
+                : MACHINED_BG,
+              boxShadow: '4px 4px 12px rgba(0,0,0,0.55), -0.5px -0.5px 1px rgba(255,255,255,0.04), inset 0 1px 0 rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              WebkitTapHighlightColor: 'transparent',
+              transition: 'background 0.25s ease',
+            }}>
+            {briefCopied ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.confHigh} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.5px', color: C.confHigh, ...FONT_SMOOTH }}>Brief Copied</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={steel(0.50)} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span style={{ fontSize: 13, fontWeight: 600, letterSpacing: '0.5px', color: steel(0.50), ...FONT_SMOOTH }}>Copy Setup Brief</span>
+              </>
+            )}
+          </button>
         )}
 
         {isPaid && onShotMatch && (
@@ -3397,6 +3829,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             so the floating CTA bar doesn't occlude the last drawer items. */}
         {!isDesktop && <div style={{ height: 72 }} />}
       </div>
+      </div>
 
       {/* ─── Bottom row: single spacer ───
           The BottomActions "New Photo | Save" trough was removed because its
@@ -3406,55 +3839,50 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           the panel column alignment stays put. */}
       {!isDesktop && <div style={{ height: 16 }} />}
 
-      {/* ─── Sticky CTA bar — all viewports ─── */}
-      {(
+      {/* ─── Sticky CTA bar — mobile only (desktop CTA lives in sticky hero column) ─── */}
+      {!isDesktop && (
         <div style={{
           position: 'sticky', bottom: 0, left: 0, right: 0,
           zIndex: 40,
-          padding: isDesktop ? '12px 28px 16px' : '8px 25px 14px',
+          padding: '8px 25px 14px',
           background: `linear-gradient(to top, ${C.bg}f8 60%, ${C.bg}00 100%)`,
           pointerEvents: 'none',
           opacity: infoVisible ? 1 : 0,
           transition: isDragging ? 'none' : 'opacity 0.3s ease',
-          ...(isDesktop ? { gridArea: 'cta' } : null),
         }}>
-          {(
-            <button
-              onClick={() => {
-                if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
-                else { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }) }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center', justifyContent: 'center',
-                width: '100%',
-                maxWidth: isDesktop ? 700 : undefined,
-                margin: isDesktop ? '0 auto' : undefined,
-                height: isDesktop ? 54 : 48,
-                borderRadius: 24,
-                background: isPaid ? CTA_BG : 'linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%)',
-                boxShadow: isPaid
-                  ? `${CTA_SHADOW}, ${CTA_BEVEL}`
-                  : '4px 4px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.30), 0 0 12px rgba(200,155,69,0.08), inset 0 1px 0 rgba(200,155,69,0.12)',
-                border: 'none', cursor: 'pointer',
-                WebkitTapHighlightColor: 'transparent',
-                overflow: 'hidden',
-                pointerEvents: 'auto',
-              }}
-            >
-              <span style={{
-                fontSize: isDesktop ? 14 : 14, fontWeight: 700,
-                color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
-                letterSpacing: isDesktop ? '3px' : '2.5px',
-                textTransform: 'uppercase',
-                pointerEvents: 'none',
-                textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.30)',
-                ...FONT_SMOOTH,
-              }}>
-                {isPaid ? 'Build This Light' : 'Upgrade · From $39/mo'}
-              </span>
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (isPaid) { segmentPressSound(); tapHaptic(); onSetup(); }
+              else { tapHaptic(); startStripeCheckout().catch(e => { console.error('[checkout]', e.message); alert(e.message || 'Checkout failed. Please try again.'); }) }
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              width: '100%',
+              height: 48,
+              borderRadius: 24,
+              background: isPaid ? CTA_BG : 'linear-gradient(141.71deg, #3a3020 0%, #2a2218 50%, #1c1810 100%)',
+              boxShadow: isPaid
+                ? `${CTA_SHADOW}, ${CTA_BEVEL}`
+                : '4px 4px 14px rgba(0,0,0,0.55), 0 0 0 0.5px rgba(200,155,69,0.30), 0 0 12px rgba(200,155,69,0.08), inset 0 1px 0 rgba(200,155,69,0.12)',
+              border: 'none', cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+              overflow: 'hidden',
+              pointerEvents: 'auto',
+            }}
+          >
+            <span style={{
+              fontSize: 14, fontWeight: 700,
+              color: isPaid ? 'rgba(245,247,250,0.95)' : 'rgba(200,155,60,0.95)',
+              letterSpacing: '2.5px',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
+              textShadow: isPaid ? undefined : '0 0 12px rgba(200,155,60,0.30)',
+              ...FONT_SMOOTH,
+            }}>
+              {isPaid ? 'Build This Light' : 'Upgrade · From $39/mo'}
+            </span>
+          </button>
         </div>
       )}
 
