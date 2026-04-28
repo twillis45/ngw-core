@@ -14,6 +14,10 @@
 import { useEffect, useState } from 'react';
 
 export const LAYOUT_DESKTOP_MIN = 1024;
+// Tablet portrait threshold — screens that need a wider layout (ResultScreen,
+// SetupScreen) bypass FitToViewport and activate two-column layout at this
+// breakpoint without lowering the global desktop threshold.
+export const TABLET_MIN_WIDTH = 768;
 
 export function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(() => {
