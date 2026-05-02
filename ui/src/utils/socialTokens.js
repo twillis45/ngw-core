@@ -13,9 +13,11 @@ export const TOKENS = {
     bg:   '#d47240',  // Orange — background light / scene depth
   },
   confidence: {
-    high: '#48ba88',  // ≥75% — green glow
-    mid:  '#f0bc44',  // ≥50% — amber
-    low:  '#e08c38',  // <50% — warm orange floor (never muted gray)
+    high: '#48ba88',                 // ≥75% — green (cool; positive signal)
+    mid:  'rgba(132,158,184,0.90)', // ≥50% — steel 90% (Studio Matte; no warm amber)
+    low:  'rgba(132,158,184,0.50)', // <50% — dim steel 50% (calibrated uncertainty)
+    // Studio Matte doctrine: warm amber/gold is NOT a confidence hierarchy accent.
+    // Warm tones are reserved for semantic roles only: key-light identity and Kelvin/color-temperature.
   },
   surface: {
     base:     '#09090b',  // Card background
