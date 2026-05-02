@@ -516,7 +516,7 @@ export default function SocialExportPanel({
               }}>
                 <canvas ref={canvasRef} style={{
                   width: '100%',
-                  maxWidth: template === 'story' ? 200 : template === 'carousel' ? 300 : 360,
+                  maxWidth: template === 'story' ? 320 : template === 'carousel' ? 420 : 460,
                   height: 'auto',
                   borderRadius: 6,
                   display: 'block',
