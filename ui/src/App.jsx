@@ -205,7 +205,9 @@ export default function App() {
       <PreviewBanner />
       <div className="app-layout">
         {showBottomNav && <BottomNav />}
-        <Screen onShare={handleShare} />
+        <div className="screen-stage" key={screen}>
+          <Screen onShare={handleShare} />
+        </div>
       </div>
       <Toast message={toast} visible={!!toast} onDone={dismissToast} />
 
