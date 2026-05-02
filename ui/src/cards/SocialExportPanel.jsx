@@ -346,7 +346,7 @@ export default function SocialExportPanel({
   const activeTpl = TEMPLATES.find(t => t.id === template);
   const confPct = Math.round(confidence * 100);
   const confLabel = confPct >= 80 ? 'High' : confPct >= 60 ? 'Moderate' : 'Low';
-  const confColorStr = confPct >= 75 ? '#48ba88' : confPct >= 50 ? '#f0bc44' : '#e08c38';
+  const confColorStr = confPct >= 75 ? '#48ba88' : confPct >= 50 ? 'rgba(132,158,184,0.90)' : 'rgba(132,158,184,0.50)';
 
   // ── Aspect-ratio shape dimensions for ExportFormatStrip chips
   const CHIP_ASP = {
