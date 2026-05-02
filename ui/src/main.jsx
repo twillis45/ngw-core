@@ -151,16 +151,6 @@ try {
     params.delete('persist');
     params.delete('cockpit');
     dirty = true;
-  } else if (params.get('day1') === '1') {
-    // Temporary alias — deprecated. Remove in a later checkpoint.
-    // eslint-disable-next-line no-console
-    console.warn('[studio] ?day1=1 is deprecated — use ?studio=1');
-    try {
-      sessionStorage.setItem('ngw_studio_active', '1');
-      sessionStorage.setItem('ngw_goto_day1_demo', '1');
-    } catch { /* ignore */ }
-    params.delete('day1');
-    dirty = true;
   } else {
     // No explicit studio/day1 param — Studio Matte is now the default.
     // Use ?studio=off to revert to legacy shell.
