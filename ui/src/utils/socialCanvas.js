@@ -32,11 +32,11 @@ const TEXT_MID = 'rgba(248,249,252,0.60)';
 const TEXT_DIM = 'rgba(132,158,184,0.45)';
 const FONT     = '"Geist", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
-// Confidence: green → amber → orange (floor always warm — never muted gray)
+// Confidence: green → steel → dim steel (Studio Matte: cool/neutral tiers, no warm amber)
 function confColor(c) {
-  if (c >= 0.75) return TOKENS.confidence.high;  // '#48ba88'
-  if (c >= 0.50) return TOKENS.confidence.mid;   // '#f0bc44'
-  return TOKENS.confidence.low;                   // '#e08c38'
+  if (c >= 0.75) return TOKENS.confidence.high;  // '#48ba88' — green, cool
+  if (c >= 0.50) return 'rgba(132,158,184,0.90)'; // steel — moderate confidence
+  return 'rgba(132,158,184,0.50)';                 // dim steel — low confidence
 }
 
 // Role identity colors — semantic, not decorative
@@ -396,12 +396,12 @@ export function drawGrain(ctx, w, h, intensity = 0.025) {
   ctx.restore();
 }
 
-// Standalone confidence bar — proportional fill, hairline amber track.
+// Standalone confidence bar — proportional fill, steel track.
 export function drawConfidenceBar(ctx, confidence, barX, barY, trackW, S) {
   const barH = px(3, S);
   const r    = px(2, S);
   roundRect(ctx, barX, barY, trackW, barH, r);
-  ctx.fillStyle = 'rgba(240,188,68,0.15)'; ctx.fill();
+  ctx.fillStyle = 'rgba(132,158,184,0.10)'; ctx.fill();
   const fw = Math.max(px(6, S), Math.round(trackW * Math.min(confidence, 1)));
   roundRect(ctx, barX, barY, fw, barH, r);
   ctx.fillStyle = confColor(confidence); ctx.fill();
@@ -899,7 +899,7 @@ export function renderCarouselSlide(ctx, {
         ctx.save(); ctx.globalAlpha = sA;
         micro(ctx, ssx, y, s.label, S, { color: TEXT_DIM, size: 12, align: 'center', tracking: 2 });
         ctx.font      = `700 ${f(34, S)} ${FONT}`;
-        ctx.fillStyle = 'rgba(212,160,84,0.80)';
+        ctx.fillStyle = 'rgba(132,158,184,0.75)';
         ctx.textAlign = 'center';
         ctx.fillText(s.value, ssx, y + px(42, S));
         ctx.restore();
