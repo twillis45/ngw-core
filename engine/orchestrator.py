@@ -3215,7 +3215,7 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         corroborators: List[str] = []
         if rim_lb:
             corroborators.append("rim_load_bearing")
-        if ambient >= 0.5:
+        if ambient >= 0.65:
             corroborators.append(f"ambient_contamination={ambient:.2f}")
         if shadow_conflict >= 0.50 and catchlight_reliable:
             corroborators.append(
@@ -3278,23 +3278,20 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
         # resolver is CLASSICAL, not BOUNDED.  Real BOUNDED is when
         # photographic-evidence credibility OVERRULES the resolver pick.
         #
-        # Phase 3C Workstream D — known borderline trade-off:
+        # Phase 3C Workstream D — specialty-resolver vs credibility conflict:
         # When the resolver applies a specialty upgrade (high_key,
         # window_portrait, low_key, etc.) via `specialty:*` source,
         # the credibility list still operates on the *underlying
         # geometric* candidates (loop, short, etc.) — it cannot see
         # the specialty pattern.  This means `credibility_overrules_
         # resolver` mechanically fires even when the resolver's
-        # specialty pattern is photographically correct.  We do NOT
-        # add a `specialty:*` guardrail because the engine signals
-        # for confirmed-BOUNDED `rihanna_t1` and the two CLA→BND
-        # borderlines (white_seamless_catalog, window_soft_side) are
-        # BYTE-IDENTICAL — same signals, same credibility list, same
-        # gate states.  The photographer-tag difference is judgment
-        # variability, not engine error.  Adding a specialty exclusion
-        # would lose the rihanna BND hit AND remove the FPs together.
-        # See ENGINE_TRUTH §14.5 for the documented accepted-ambiguity
-        # decision.
+        # specialty pattern is photographically correct.  A blanket
+        # specialty exclusion is still wrong: `rihanna_t1` (confirmed
+        # BOUNDED, background_class=gradient) must remain BOUNDED.
+        # The safe discriminator is background_class: window_soft_side
+        # has background_class=environmental (verified 2026-05-03);
+        # rihanna_t1 has background_class=gradient.  See Phase 3E/A
+        # environmental suppression below for the targeted fix.
         resolver_primary_pattern = pc.primary.pattern if pc.primary else ""
         credibility_overrules_resolver = c0.pattern != resolver_primary_pattern
         # Phase 3D/A — forgiveness-aware overrule.
@@ -3356,6 +3353,46 @@ def route_analysis_mode(result: "AnalysisResult") -> Tuple[AnalysisMode, str, fl
                     f"Bounded long-term suppressed (uniform_seamless): "
                     f"catalog/product signature overrides pose-relative "
                     f"classifier disagreement on '{c0.pattern}' vs '{c1.pattern}'",
+                    0.75,
+                )
+            # Phase 3E/A — environmental background suppression.
+            # When background_class is "environmental" (real-location scene:
+            # window, doorway, natural-light setup), the specialty resolver
+            # correctly upgrades the pattern (e.g. window_portrait).
+            # Credibility disagreement on underlying geometric patterns
+            # (loop vs short) reflects pose-relative classifier noise in
+            # natural scenes, not true multi-source ambiguity.  Suppress to
+            # CLASSICAL so the specialty-resolved pattern is preserved.
+            #
+            # Verified safe against the 48-corpus (2026-05-03):
+            #   - window_soft_side (FP→fix): background_class=environmental
+            #   - rihanna BND hit:  background_class=gradient → NOT suppressed
+            #   - jewelry BND hit:  background_class=uniform_neutral → NOT suppressed
+            #   - rembrandt_bw BND hit: background_class=dark → NOT suppressed
+            if cp_local is not None and cp_local.background_class == "environmental":
+                return (
+                    AnalysisMode.CLASSICAL,
+                    f"Bounded long-term suppressed (environmental): "
+                    f"window/natural-light scene — specialty resolver pattern "
+                    f"overrides geometric credibility disagreement on "
+                    f"'{c0.pattern}' vs '{c1.pattern}'",
+                    0.75,
+                )
+            # Phase 3E/B — high-ambient suppression.
+            # When ambient_contamination >= 0.50 the scene has substantial
+            # diffuse fill that softens geometric pattern boundaries; the
+            # credibility disagreement (e.g. loop vs short) reflects soft-
+            # fill ambiguity, not genuine multi-source ambiguity.  Suppress
+            # to CLASSICAL.  Threshold verified safe against 48-corpus:
+            # all confirmed-BOUNDED hits (rihanna, jewelry, rembrandt_bw)
+            # have ambient=0.0; no confirmed-BOUNDED case has ambient>=0.50.
+            if cp_local is not None and cp_local.ambient_contamination >= 0.50:
+                return (
+                    AnalysisMode.CLASSICAL,
+                    f"Bounded long-term suppressed (high ambient): "
+                    f"ambient_contamination={cp_local.ambient_contamination:.2f} — "
+                    f"diffuse fill blurs '{c0.pattern}' vs '{c1.pattern}' "
+                    f"geometric boundary",
                     0.75,
                 )
             return (
