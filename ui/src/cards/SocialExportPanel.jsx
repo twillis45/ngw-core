@@ -173,6 +173,7 @@ export default function SocialExportPanel({
   diagramCanvas,
   isStudio = false,
   isAdmin = false,
+  layout = 'compact',
 }) {
   // Initialize to system recommendation; user can override after mount
   const [template, setTemplate] = useState(() => {
@@ -182,6 +183,7 @@ export default function SocialExportPanel({
   const [carouselIdx, setCarouselIdx] = useState(0);
   const canvasRef = useRef(null);
   const photoRef = useRef(null);
+  const miniCanvasRefs = useRef([null, null, null, null]);
   const [photoLoaded, setPhotoLoaded] = useState(false);
   const [animProgress, setAnimProgress] = useState(1);
   const animRafRef  = useRef(null);
@@ -279,6 +281,31 @@ export default function SocialExportPanel({
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
 
+  const renderMiniPreviews = useCallback(() => {
+    TEMPLATES.forEach((t, idx) => {
+      const mc = miniCanvasRefs.current[idx];
+      if (!mc) return;
+      const dims = MINI_DIMS[t.id];
+      mc.width  = dims.cw;
+      mc.height = dims.ch;
+      const ctx = mc.getContext('2d');
+      const miniFmt = { w: dims.cw, h: dims.ch };
+      const miniOpts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, format: miniFmt, branded, environment, progress: 1 };
+      if (t.id === 'bts') {
+        const patternReasoning = result?.sections?.pattern?.reasoning || result?._raw?.reconstruction?.reconstruction_narrative || '';
+        drawSignalCard(ctx, { ...miniOpts, imageEl: photoRef.current, patternReasoning, confEvidence, progress: 1 }, dims.cw / 1080);
+      } else if (t.id === 'story') {
+        renderStoryTemplate(ctx, { ...miniOpts, setupSummary: result?.mood ? `${result.mood} lighting` : '' });
+      } else if (t.id === 'summary') {
+        drawBlueprintCard(ctx, { ...miniOpts, imageEl: photoRef.current, diagramCanvas, confEvidence, progress: 1 }, dims.cw / 1080);
+      } else if (t.id === 'carousel' && lights.length > 0) {
+        renderCarouselSlide(ctx, { light: lights[0], index: 0, total: lights.length, pattern, format: miniFmt, branded, progress: 1 });
+      }
+    });
+  }, [photoLoaded, diagramCanvas, pattern, confidence, lights, camera, branded, environment, result?.mood, confEvidence, result?.sections?.pattern?.reasoning, result?._raw?.reconstruction?.reconstruction_narrative]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (layout === 'workbench') renderMiniPreviews(); }, [layout, renderMiniPreviews]);
+
   const handleDownload = useCallback(() => {
     const fmt = FORMAT_MAP[template] || FORMATS.PORTRAIT;
     const opts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, format: fmt, branded, environment };
@@ -355,6 +382,229 @@ export default function SocialExportPanel({
     summary:  { w: 22, h: 28 },  // 4:5 portrait
     carousel: { w: 26, h: 26 },  // 1:1 square
   };
+
+  // ── Workbench mini-canvas pixel dimensions (canvas attrs) + CSS display width
+  const MINI_DIMS = {
+    bts:      { cw: 108, ch: 135, dw: 44 },
+    story:    { cw:  81, ch: 144, dw: 33 },
+    summary:  { cw: 108, ch: 135, dw: 44 },
+    carousel: { cw: 108, ch: 108, dw: 44 },
+  };
+
+  if (layout === 'workbench') {
+    return (
+      <div style={{
+        marginTop: 16,
+        borderRadius: 14,
+        background: `linear-gradient(160deg, ${C.panelBg} 0%, #0d0d11 100%)`,
+        boxShadow: MACHINED_SHADOW,
+        overflow: 'hidden',
+        ...FONT_SMOOTH,
+      }}>
+
+        {/* ── WORKBENCH MASTHEAD ── */}
+        <div style={{
+          padding: '15px 20px 13px',
+          borderBottom: `1px solid ${steel(0.07)}`,
+        }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: steel(0.30), letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 7 }}>
+            Dispatch
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 21, fontWeight: 700, color: steel(0.88), letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+              {prettify(pattern, { title: true })}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+              <span style={{ color: confColorStr, fontWeight: 700, fontSize: 13 }}>{confPct}%</span>
+              <span style={{ color: steel(0.28), fontSize: 12 }}>·</span>
+              <span style={{ color: steel(0.40), fontSize: 12 }}>{confLabel}</span>
+              {lightCount > 0 && (
+                <>
+                  <span style={{ color: steel(0.28), fontSize: 12 }}>·</span>
+                  <span style={{ color: steel(0.36), fontSize: 12 }}>{lightCount} light{lightCount !== 1 ? 's' : ''}</span>
+                </>
+              )}
+              <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 700, color: steel(0.24), letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                {branded ? 'Pro' : 'Studio'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── WORKBENCH TWO-ZONE BODY ── */}
+        <div style={{ display: 'flex' }}>
+
+          {/* Left: format rail */}
+          <div style={{
+            width: 158,
+            flexShrink: 0,
+            borderRight: `1px solid ${steel(0.06)}`,
+            padding: '13px 10px 15px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 7,
+          }}>
+            {TEMPLATES.map((t, idx) => {
+              const isSel = template === t.id;
+              const isRec = recommended === t.id;
+              const dims  = MINI_DIMS[t.id];
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => { setTemplate(t.id); setCarouselIdx(0); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    width: '100%',
+                    padding: '8px 9px',
+                    borderRadius: 8,
+                    border: isSel ? `1.5px solid ${steel(0.26)}` : `1px solid ${steel(0.08)}`,
+                    cursor: 'pointer',
+                    background: isSel
+                      ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 100%)`
+                      : C.slotBg,
+                    boxShadow: isSel
+                      ? `2px 2px 6px rgba(0,0,0,0.38), 0 0 0 0.5px ${steel(0.14)}`
+                      : 'inset 1px 1px 2px rgba(0,0,0,0.32)',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  <div style={{ flexShrink: 0, borderRadius: 3, overflow: 'hidden', boxShadow: `0 0 0 1px ${steel(isSel ? 0.18 : 0.12)}` }}>
+                    <canvas
+                      ref={el => { miniCanvasRefs.current[idx] = el; }}
+                      style={{ width: dims.dw, height: 'auto', display: 'block' }}
+                    />
+                  </div>
+                  <div style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isSel ? steel(0.90) : steel(0.50), letterSpacing: '0.02em', lineHeight: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      {t.label}
+                      {isRec && (
+                        <span style={{ fontSize: 6, fontWeight: 800, color: 'rgba(240,188,68,0.85)', background: 'rgba(240,188,68,0.12)', border: '1px solid rgba(240,188,68,0.22)', borderRadius: 3, padding: '1px 3px', letterSpacing: '0.07em', lineHeight: 1.5 }}>
+                          REC
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 9, color: isSel ? steel(0.36) : steel(0.22), marginTop: 3, lineHeight: 1 }}>
+                      {t.id === 'story' ? '9:16' : t.id === 'carousel' ? '1:1' : '4:5'}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right: preview + actions */}
+          <div style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '13px 16px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 11,
+          }}>
+
+            {/* Preview stage */}
+            {!(template === 'carousel' && lights.length === 0) ? (
+              <div style={{
+                background: 'rgba(0,0,0,0.32)',
+                borderRadius: 10,
+                padding: 6,
+                boxShadow: `0 0 0 1px ${steel(0.09)}, 0 10px 28px rgba(0,0,0,0.55)`,
+                display: 'flex',
+                justifyContent: 'center',
+              }}>
+                <canvas ref={canvasRef} style={{
+                  width: '100%',
+                  maxWidth: template === 'story' ? 320 : template === 'carousel' ? 420 : 460,
+                  height: 'auto',
+                  borderRadius: 6,
+                  display: 'block',
+                }} />
+              </div>
+            ) : (
+              <div style={{ padding: '36px 16px', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: 13, color: steel(0.32) }}>
+                  Carousel requires light placement data from the engine.
+                </p>
+              </div>
+            )}
+
+            {template === 'carousel' && lights.length > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                {lights.map((l, i) => (
+                  <button key={i} onClick={() => setCarouselIdx(i)}
+                    style={{ width: 7, height: 7, borderRadius: '50%', border: 'none', cursor: 'pointer', padding: 0,
+                      background: i === carouselIdx ? steel(0.65) : steel(0.18) }} />
+                ))}
+              </div>
+            )}
+
+            {/* Format context */}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, fontSize: 10 }}>
+              <span style={{ color: steel(0.40) }}>{activeTpl?.desc}</span>
+              <span style={{ color: steel(0.20) }}>·</span>
+              <span style={{ fontWeight: 600, color: steel(0.28), letterSpacing: '0.04em' }}>{activeTpl?.formatLabel}</span>
+            </div>
+
+            {/* Download actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <button onClick={handleDownload} style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: 9,
+                border: 'none',
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                background: `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 50%, ${C.ctaTo} 100%)`,
+                color: steel(0.88),
+                boxShadow: `3px 3px 8px rgba(0,0,0,0.5), 0 0 0 0.5px ${steel(0.18)}`,
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                {template === 'carousel' && lights.length > 1
+                  ? `Save ${lights.length} Slides · PNG`
+                  : `Save ${activeTpl?.label} · PNG`}
+              </button>
+              <button onClick={handleDownloadReel} disabled={reelRecording} style={{
+                width: '100%',
+                padding: '9px 16px',
+                borderRadius: 9,
+                border: `1px solid ${reelRecording ? 'rgba(212,160,84,0.14)' : 'rgba(212,160,84,0.22)'}`,
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                cursor: reelRecording ? 'default' : 'pointer',
+                background: reelRecording ? 'rgba(212,160,84,0.06)' : 'rgba(212,160,84,0.04)',
+                color: reelRecording ? 'rgba(212,160,84,0.42)' : 'rgba(212,160,84,0.72)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'color 0.18s, border-color 0.18s',
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                {reelRecording ? (
+                  <>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(212,160,84,0.55)', flexShrink: 0 }} />
+                    Recording…
+                  </>
+                ) : (
+                  <>
+                    <span style={{ fontSize: 10, lineHeight: 1 }}>▸</span>
+                    Save Reel · WebM
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{

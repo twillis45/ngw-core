@@ -3400,6 +3400,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
               diagramCanvas={socialDiagramCanvas}
               isStudio={plan === 'studio' || plan === 'enterprise'}
               isAdmin={isAdmin}
+              layout={isDesktop ? 'workbench' : 'compact'}
             />
           </SafeRender>
         )}
