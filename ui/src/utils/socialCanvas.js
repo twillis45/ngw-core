@@ -1250,22 +1250,22 @@ export function drawSignalCard(ctx, data, S) {
   const confA = sect(progress, 0.42, 0.60);
   ctx.save();
   ctx.globalAlpha   = confA;
-  ctx.font          = `500 ${f(11, S)} ${FONT}`;
+  ctx.font          = `600 ${f(14, S)} ${FONT}`;
   ctx.letterSpacing = `${px(0.5, S)}px`;
-  ctx.fillStyle     = `rgba(200,215,225,${pct >= 60 ? 0.45 : 0.30})`;
+  ctx.fillStyle     = `rgba(200,215,225,${pct >= 60 ? 0.62 : 0.44})`;
   ctx.textAlign     = 'right';
   ctx.textBaseline  = 'top';
-  ctx.fillText(`${pct}%`, w - pad, classY + px(4, S));
+  ctx.fillText(`${pct}%`, w - pad, classY + px(2, S));
   ctx.restore();
 
-  // ── EVIDENCE READOUT — instrument log, very quiet, no chips ──
+  // ── EVIDENCE READOUT — instrument log, quiet but legible ──
   if (confEvidence) {
     const evidA = sect(progress, 0.50, 0.66);
     ctx.save();
     ctx.globalAlpha   = evidA;
-    ctx.font          = `400 ${f(10, S)} ${FONT}`;
-    ctx.letterSpacing = `${px(1.2, S)}px`;
-    ctx.fillStyle     = 'rgba(160,175,190,0.45)';
+    ctx.font          = `400 ${f(13, S)} ${FONT}`;
+    ctx.letterSpacing = `${px(1.0, S)}px`;
+    ctx.fillStyle     = 'rgba(160,175,190,0.55)';
     ctx.textAlign     = 'left';
     ctx.textBaseline  = 'top';
     ctx.fillText(`DERIVED — ${confEvidence.toUpperCase()}`, pad, classY + px(classFontSz + 14, S));

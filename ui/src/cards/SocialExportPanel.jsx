@@ -729,14 +729,10 @@ export default function SocialExportPanel({
                   borderRadius: 10,
                   border: isSel
                     ? `1.5px solid ${steel(0.28)}`
-                    : isRec
-                      ? '1.5px solid rgba(240,188,68,0.20)'
-                      : `1px solid ${steel(0.09)}`,
+                    : `1px solid ${steel(0.09)}`,
                   background: isSel
                     ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 100%)`
-                    : isRec
-                      ? 'rgba(240,188,68,0.035)'
-                      : C.slotBg,
+                    : C.slotBg,
                   cursor: 'pointer',
                   flexShrink: 0,
                   boxShadow: isSel
@@ -747,20 +743,15 @@ export default function SocialExportPanel({
               >
                 {/* Recommended badge */}
                 {isRec && (
-                  <span style={{
+                  <span title="Engine recommendation" style={{
                     position: 'absolute',
                     top: 5,
                     right: 5,
                     fontSize: 7,
-                    fontWeight: 800,
-                    letterSpacing: '0.07em',
-                    color: 'rgba(240,188,68,0.85)',
-                    background: 'rgba(240,188,68,0.12)',
-                    border: '1px solid rgba(240,188,68,0.22)',
-                    borderRadius: 3,
-                    padding: '1px 3px',
-                    lineHeight: 1.5,
-                  }}>REC</span>
+                    fontWeight: 600,
+                    color: steel(0.38),
+                    lineHeight: 1,
+                  }}>★</span>
                 )}
                 {/* Aspect ratio shape */}
                 <div style={{
@@ -775,7 +766,7 @@ export default function SocialExportPanel({
                   {t.label}
                 </span>
                 <span style={{ fontSize: 9, letterSpacing: '0.04em', color: isSel ? steel(0.40) : steel(0.22), lineHeight: 1 }}>
-                  {t.id === 'story' ? '9:16' : t.id === 'carousel' ? '1:1' : '4:5'}
+                  {t.platformHint}
                 </span>
               </button>
             );
