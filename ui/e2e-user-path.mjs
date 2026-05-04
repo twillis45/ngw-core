@@ -138,7 +138,7 @@ async function run() {
   // ── 4. SCROLL TO DISPATCH PANEL ───────────────────────────────────────────
   console.log('\n── 4. Dispatch Panel ──');
   let dispatchScrollY = 0;
-  for (const y of [800, 1400, 2000, 2800, 3500]) {
+  for (const y of [400, 800, 1400, 2000, 2800]) {
     await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
     await page.waitForTimeout(200);
     const t = await page.evaluate(() => document.body.innerText);

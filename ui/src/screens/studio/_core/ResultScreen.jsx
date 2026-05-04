@@ -2975,6 +2975,27 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
         </div>
       )}
 
+      {/* ── DISPATCH — mobile: immediately after verdict, before technical details ── */}
+      {!isDesktop && isPaid && (
+        <div style={{
+          marginLeft: 25, marginRight: 25,
+          opacity: infoVisible ? 1 : 0,
+          transition: isDragging ? 'none' : 'opacity 0.3s ease 0.05s',
+          pointerEvents: infoVisible ? 'auto' : 'none',
+        }}>
+          <SafeRender>
+            <SocialExportPanel
+              result={result}
+              imagePreview={imagePreview}
+              diagramCanvas={socialDiagramCanvas}
+              isStudio={plan === 'studio' || plan === 'enterprise'}
+              isAdmin={isAdmin}
+              layout="compact"
+            />
+          </SafeRender>
+        </div>
+      )}
+
       {/* ─── Lighting Diagram (mobile only — always visible, not in a drawer) ───
           The single most valuable visual in the app. Shows where to put the
           lights. On desktop it's inline in the hero column; on mobile it was
@@ -3138,7 +3159,21 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
             This section shows the actionable blueprint: modifier + catchlight.
             PatternBars (alternate candidates) moved to DETAIL drawer.
             ═══════════════════════════════════════════════════════════════ */}
-        {/* ── SETUP DIAGRAM — first in panel column on desktop, serves as visual proof for the verdict ── */}
+        {/* ── DISPATCH — desktop: first item in right panel, action surface immediately after verdict ── */}
+        {isDesktop && isPaid && (
+          <SafeRender>
+            <SocialExportPanel
+              result={result}
+              imagePreview={imagePreview}
+              diagramCanvas={socialDiagramCanvas}
+              isStudio={plan === 'studio' || plan === 'enterprise'}
+              isAdmin={isAdmin}
+              layout="workbench"
+            />
+          </SafeRender>
+        )}
+
+        {/* ── SETUP DIAGRAM — desktop: proof layer below Dispatch ── */}
         {isDesktop && result?._raw && (
           <div
             onClick={() => { tapHaptic(); setChipDetail(null); setDiagramFullscreen(true); }}
@@ -3390,20 +3425,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
           </button>
         )}
 
-        {/* SETUP DIAGRAM moved to top of panel column — see above */}
-
-        {isPaid && (
-          <SafeRender>
-            <SocialExportPanel
-              result={result}
-              imagePreview={imagePreview}
-              diagramCanvas={socialDiagramCanvas}
-              isStudio={plan === 'studio' || plan === 'enterprise'}
-              isAdmin={isAdmin}
-              layout={isDesktop ? 'workbench' : 'compact'}
-            />
-          </SafeRender>
-        )}
 
         {/* ═══════════════════════════════════════════════════════════════
             DETAIL — single collapsible drawer.  Scene context, color
