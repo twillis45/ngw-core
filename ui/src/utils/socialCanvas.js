@@ -294,9 +294,25 @@ function drawOverheadDiagram(ctx, x, y, w, h, lights, S) {
     if (l.role === 'fill') {
       const key = lights.find(k => k.role === 'key');
       const kp  = (key?.position_label || '').toLowerCase();
-      deg = kp.includes('right') ? 300 : kp.includes('left') ? 60 : 315;
+      if (key?.angle_deg != null && (kp.includes('right') || kp.includes('left'))) {
+        // Mirror the key's angle onto the opposite side for fill placement
+        const kMag = Math.min(key.angle_deg, 85);
+        deg = kp.includes('right') ? 360 - kMag : kMag;
+      } else {
+        deg = kp.includes('right') ? 300 : kp.includes('left') ? 60 : 315;
+      }
     } else {
-      deg = pos.includes('right') ? 55 : pos.includes('left') ? 305 : 45;
+      const isRight = pos.includes('right');
+      const isLeft  = pos.includes('left');
+      if (l.angle_deg != null && (isRight || isLeft)) {
+        // Use actual angle from engine: 0°=on-axis(top), 90°=side
+        // Right: canvas deg = angle_deg (upper-right quadrant)
+        // Left:  canvas deg = 360 - angle_deg (upper-left quadrant)
+        const mag = Math.min(l.angle_deg, 85);
+        deg = isRight ? mag : 360 - mag;
+      } else {
+        deg = isRight ? 55 : isLeft ? 305 : 45;
+      }
     }
     const rad = ((deg - 90) * Math.PI) / 180;
     const lx  = cx + Math.cos(rad) * r * 0.82;
