@@ -546,9 +546,9 @@ export default function SetupScreen({ result, imagePreview, onSave, onCancel, on
   const isHighConf = result && result.confidence >= 70;
   const confColor  = isHighConf ? C.confHigh : C.confLow;
   const defaultName = result?.pattern ? `${result.pattern} Setup` : 'Untitled Setup';
+  const raw = result?._raw || {};
   const confidenceEvidence = buildConfidenceEvidence(raw);
   const mod = result?.sections?.modifier;
-  const raw = result?._raw || {};
   const li  = raw.lighting_inference || {};
   const faceCrop = getFaceCropPosition(raw);
 
