@@ -139,24 +139,28 @@ const TEMPLATES = [
     label: 'Signal',
     desc: 'Pattern · confidence · the signal read',
     formatLabel: '1080×1350 · 4:5',
+    platformHint: 'Feed',
   },
   {
     id: 'story',
     label: 'Tall',
     desc: '9:16 tall plate',
     formatLabel: '1080×1920 · 9:16',
+    platformHint: 'Stories · Reels',
   },
   {
     id: 'summary',
     label: 'Build',
     desc: 'Lighting blueprint — setup diagram + breakdown',
     formatLabel: '1080×1350 · 4:5',
+    platformHint: 'Feed',
   },
   {
     id: 'carousel',
     label: 'Light-by-Light',
     desc: '1:1 plates — one per light source',
     formatLabel: '1080×1080 · 1:1',
+    platformHint: 'Carousel',
   },
 ];
 
@@ -485,13 +489,13 @@ export default function SocialExportPanel({
                     <div style={{ fontSize: 11, fontWeight: 700, color: isSel ? steel(0.90) : steel(0.50), letterSpacing: '0.02em', lineHeight: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                       {t.label}
                       {isRec && (
-                        <span style={{ fontSize: 6, fontWeight: 800, color: 'rgba(240,188,68,0.85)', background: 'rgba(240,188,68,0.12)', border: '1px solid rgba(240,188,68,0.22)', borderRadius: 3, padding: '1px 3px', letterSpacing: '0.07em', lineHeight: 1.5 }}>
-                          REC
+                        <span title="Engine recommendation" style={{ fontSize: 7, fontWeight: 600, color: steel(0.38), letterSpacing: '0.04em', lineHeight: 1 }}>
+                          ★ Best fit
                         </span>
                       )}
                     </div>
                     <div style={{ fontSize: 9, color: isSel ? steel(0.36) : steel(0.22), marginTop: 3, lineHeight: 1 }}>
-                      {t.id === 'story' ? '9:16' : t.id === 'carousel' ? '1:1' : '4:5'}
+                      {t.platformHint}
                     </div>
                   </div>
                 </button>
