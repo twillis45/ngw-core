@@ -179,9 +179,9 @@ async function run() {
     return false;
   }
 
-  await tryClickState(/story/i,     '05_dispatch_story.png',     'STORY');
-  await tryClickState(/blueprint/i, '06_dispatch_blueprint.png', 'BLUEPRINT');
-  await tryClickState(/carousel/i,  '07_dispatch_carousel.png',  'CAROUSEL');
+  await tryClickState(/tall/i,           '05_dispatch_story.png',     'TALL');
+  await tryClickState(/build/i,          '06_dispatch_blueprint.png', 'BUILD');
+  await tryClickState(/light.by.light/i, '07_dispatch_carousel.png',  'LIGHT-BY-LIGHT');
 
   // Full page final
   await page.evaluate(() => window.scrollTo(0, 0));
