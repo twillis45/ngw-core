@@ -136,27 +136,31 @@ function recommendExportFormat(result, hasPhoto) {
 const TEMPLATES = [
   {
     id: 'bts',
-    label: 'Signal Card',
-    desc: 'Pattern + confidence — the share card',
+    label: 'Signal',
+    desc: 'Pattern · confidence · the signal read',
     formatLabel: '1080×1350 · 4:5',
+    platformHint: 'Feed',
   },
   {
     id: 'story',
-    label: 'Story',
-    desc: '9:16 for Instagram / TikTok',
+    label: 'Tall',
+    desc: '9:16 tall plate',
     formatLabel: '1080×1920 · 9:16',
+    platformHint: 'Stories · Reels',
   },
   {
     id: 'summary',
-    label: 'Blueprint',
-    desc: '4:5 hero + diagram + light breakdown',
+    label: 'Build',
+    desc: 'Lighting blueprint — setup diagram + breakdown',
     formatLabel: '1080×1350 · 4:5',
+    platformHint: 'Feed',
   },
   {
     id: 'carousel',
-    label: 'Carousel',
-    desc: '1:1 slides — one per light',
+    label: 'Light-by-Light',
+    desc: '1:1 plates — one per light source',
     formatLabel: '1080×1080 · 1:1',
+    platformHint: 'Carousel',
   },
 ];
 
@@ -407,8 +411,13 @@ export default function SocialExportPanel({
           padding: '15px 20px 13px',
           borderBottom: `1px solid ${steel(0.07)}`,
         }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: steel(0.30), letterSpacing: '0.14em', textTransform: 'uppercase', marginBottom: 7 }}>
-            Dispatch
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 7 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: steel(0.30), letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Dispatch
+            </div>
+            <div style={{ fontSize: 9, color: steel(0.36), letterSpacing: '0.03em' }}>
+              {confPct >= 75 ? 'Plate ready to issue.' : confPct >= 50 ? 'Close read — review before issuing.' : 'Review result before issuing.'}
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 21, fontWeight: 700, color: steel(0.88), letterSpacing: '-0.4px', lineHeight: 1.1 }}>
@@ -480,13 +489,13 @@ export default function SocialExportPanel({
                     <div style={{ fontSize: 11, fontWeight: 700, color: isSel ? steel(0.90) : steel(0.50), letterSpacing: '0.02em', lineHeight: 1, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                       {t.label}
                       {isRec && (
-                        <span style={{ fontSize: 6, fontWeight: 800, color: 'rgba(240,188,68,0.85)', background: 'rgba(240,188,68,0.12)', border: '1px solid rgba(240,188,68,0.22)', borderRadius: 3, padding: '1px 3px', letterSpacing: '0.07em', lineHeight: 1.5 }}>
-                          REC
+                        <span title="Engine recommendation" style={{ fontSize: 7, fontWeight: 600, color: steel(0.38), letterSpacing: '0.04em', lineHeight: 1 }}>
+                          ★ Best fit
                         </span>
                       )}
                     </div>
                     <div style={{ fontSize: 9, color: isSel ? steel(0.36) : steel(0.22), marginTop: 3, lineHeight: 1 }}>
-                      {t.id === 'story' ? '9:16' : t.id === 'carousel' ? '1:1' : '4:5'}
+                      {t.platformHint}
                     </div>
                   </div>
                 </button>
@@ -565,8 +574,8 @@ export default function SocialExportPanel({
                 WebkitTapHighlightColor: 'transparent',
               }}>
                 {template === 'carousel' && lights.length > 1
-                  ? `Save ${lights.length} Slides · PNG`
-                  : `Save ${activeTpl?.label} · PNG`}
+                  ? `Issue ${lights.length} Plates`
+                  : 'Issue Plate'}
               </button>
               <button onClick={handleDownloadReel} disabled={reelRecording} style={{
                 width: '100%',
@@ -595,7 +604,7 @@ export default function SocialExportPanel({
                 ) : (
                   <>
                     <span style={{ fontSize: 10, lineHeight: 1 }}>▸</span>
-                    Save Reel · WebM
+                    Issue Reel →
                   </>
                 )}
               </button>
@@ -626,7 +635,7 @@ export default function SocialExportPanel({
       }}>
         <div>
           <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.32), letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 5 }}>
-            Export
+            Dispatch
           </div>
           <div style={{ fontSize: 17, fontWeight: 700, color: steel(0.88), letterSpacing: '-0.3px', lineHeight: 1.2 }}>
             {prettify(pattern, { title: true })}
@@ -813,8 +822,8 @@ export default function SocialExportPanel({
           }}
         >
           {template === 'carousel' && lights.length > 1
-            ? `Save ${lights.length} Slides · PNG`
-            : `Save ${activeTpl?.label} · PNG`}
+            ? `Issue ${lights.length} Plates`
+            : 'Issue Plate'}
         </button>
 
         {/* Secondary: animated reel */}
@@ -852,7 +861,7 @@ export default function SocialExportPanel({
           ) : (
             <>
               <span style={{ fontSize: 10, lineHeight: 1 }}>▸</span>
-              Save Reel · WebM
+              Issue Reel →
             </>
           )}
         </button>
