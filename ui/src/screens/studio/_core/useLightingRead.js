@@ -2,14 +2,19 @@
  * useLightingRead — canvas-based lighting analysis visualization.
  *
  * Calls /api/lab/face-preflight to get real face landmarks + catchlights,
- * then renders warm light pools that flash and breathe at each detected
- * face feature. Synced to a 12s analysis cycle with strobe-pop audio.
+ * then renders warm light pools that breathe at each detected face feature.
  *
- * Returns a ref to attach to a <canvas> element overlaying the photo.
+ * Design constraints:
+ * - Max 4 pools simultaneously (primary catchlight, key cheek, nose, fill cheek)
+ * - Flash peak alpha capped at 0.55 to avoid blow-out
+ * - 2 audio events max per analysis: one start tick, one completion click
+ * - No anatomy labels
+ * - 6s cycle ceiling with analysis-driven fast-forward
+ * - No pools rendered before real preflight data arrives (no DEFAULT_FACE fake signal)
+ * - prefers-reduced-motion: skip strobe/breath, show static held glow only
  *
- * Usage:
- *   const { canvasRef, faceDataLoaded } = useLightingRead(imageFile, analysisComplete);
- *   <canvas ref={canvasRef} style={{ position: 'absolute', inset: 0, zIndex: 2 }} />
+ * Returns { canvasRef, faceDataState }
+ *   faceDataState: 'loading' | 'real' | 'none'
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 
@@ -25,38 +30,24 @@ function _ensureAudio() {
   } catch (e) { /* browser blocked */ }
 }
 
-function playStrobePop(intensity) {
+// Soft start tick — fires once at cycle start
+function playStartTick() {
   if (!_audioReady || !_audioCtx) return;
   const now = _audioCtx.currentTime;
   const rate = _audioCtx.sampleRate;
-
-  // Thump
-  const thumpDur = 0.08 + intensity * 0.04;
-  const thumpBuf = _audioCtx.createBuffer(1, Math.ceil(rate * thumpDur), rate);
-  const td = thumpBuf.getChannelData(0);
-  for (let i = 0; i < td.length; i++) {
+  const buf = _audioCtx.createBuffer(1, Math.ceil(rate * 0.04), rate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
     const t = i / rate;
-    td[i] = Math.sin(t * (55 + intensity * 12) * Math.PI * 2) * Math.exp(-t * 28) * (1 - Math.exp(-t * 500)) * 0.40 * intensity;
+    d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 120) * (1 - Math.exp(-t * 1200)) * 0.12;
   }
-  const tSrc = _audioCtx.createBufferSource(); tSrc.buffer = thumpBuf;
-  const tF = _audioCtx.createBiquadFilter(); tF.type = 'lowpass'; tF.frequency.value = 150 + intensity * 40; tF.Q.value = 1.0;
-  const tG = _audioCtx.createGain(); tG.gain.value = 0.70 + intensity * 0.30;
-  tSrc.connect(tF); tF.connect(tG); tG.connect(_audioCtx.destination); tSrc.start(now);
-
-  // Click
-  const clickDur = 0.03 + intensity * 0.02;
-  const clickBuf = _audioCtx.createBuffer(1, Math.ceil(rate * clickDur), rate);
-  const cd = clickBuf.getChannelData(0);
-  for (let i = 0; i < cd.length; i++) {
-    const t = i / rate;
-    cd[i] = (Math.random() * 2 - 1) * Math.exp(-t * 80) * (1 - Math.exp(-t * 2000)) * 0.20 * intensity;
-  }
-  const cSrc = _audioCtx.createBufferSource(); cSrc.buffer = clickBuf;
-  const cF = _audioCtx.createBiquadFilter(); cF.type = 'bandpass'; cF.frequency.value = 2500 + intensity * 1000; cF.Q.value = 0.4;
-  const cG = _audioCtx.createGain(); cG.gain.value = 0.10 + intensity * 0.08;
-  cSrc.connect(cF); cF.connect(cG); cG.connect(_audioCtx.destination); cSrc.start(now);
+  const src = _audioCtx.createBufferSource(); src.buffer = buf;
+  const f = _audioCtx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;
+  const g = _audioCtx.createGain(); g.gain.value = 0.35;
+  src.connect(f); f.connect(g); g.connect(_audioCtx.destination); src.start(now);
 }
 
+// Completion click — fires once when cycle converges
 function playCompletionClick() {
   if (!_audioReady || !_audioCtx) return;
   const now = _audioCtx.currentTime;
@@ -75,32 +66,25 @@ function playCompletionClick() {
 
 // ── Hook ──
 export default function useLightingRead(imagePreview, analysisComplete) {
-  // imagePreview can be a File, Blob, or object URL string
   const canvasRef = useRef(null);
-  // Start immediately with estimated face proportions so the animation
-  // doesn't wait for the preflight API call. Real landmarks refine later.
-  const DEFAULT_FACE = {
-    lm: {
-      left_eye: { x: 0.42, y: 0.38 }, right_eye: { x: 0.58, y: 0.38 },
-      nose_tip: { x: 0.50, y: 0.48 }, nose_bridge: { x: 0.50, y: 0.40 },
-      forehead: { x: 0.50, y: 0.30 }, chin: { x: 0.50, y: 0.60 },
-      left_cheek: { x: 0.38, y: 0.48 }, right_cheek: { x: 0.62, y: 0.48 },
-      mouth_top: { x: 0.50, y: 0.54 }, mouth_bot: { x: 0.50, y: 0.57 },
-      left_jaw: { x: 0.35, y: 0.55 }, right_jaw: { x: 0.65, y: 0.55 },
-      left_brow: { x: 0.40, y: 0.33 }, right_brow: { x: 0.60, y: 0.33 },
-      nose_bottom: { x: 0.50, y: 0.50 },
-    },
-    cls: [], keyDir: 'left', keyAngle: -Math.PI / 4,
-  };
-  const [faceData, setFaceData] = useState(DEFAULT_FACE);
+
+  // faceDataState: 'loading' → 'real' or 'none' after preflight returns
+  const [faceDataState, setFaceDataState] = useState('loading');
+  const [faceData, setFaceData] = useState(null); // null until real data arrives
+
   const rafRef = useRef(null);
   const t0Ref = useRef(Date.now());
   const flashTimesRef = useRef(new Set());
-  const activeLabelsRef = useRef([]);
-  const spRef = useRef([0, 0, 0, 0, 0]);
-  const photoRef = useRef(null); // will be set externally
+  const completionStartRef = useRef(null);   // timestamp when analysisComplete first fired
+  const completionStartTRef = useRef(null);  // cycle t value at that moment
+  const startTickFiredRef = useRef(false);
+  const completionClickFiredRef = useRef(false);
+  const reducedMotionRef = useRef(
+    typeof window !== 'undefined' &&
+    Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)
+  );
 
-  // Ensure audio context on mount (user already clicked Analyze)
+  // Ensure audio context on mount (user already interacted via Analyze button)
   useEffect(() => { _ensureAudio(); }, []);
 
   // Fetch face preflight on image change
@@ -108,9 +92,13 @@ export default function useLightingRead(imagePreview, analysisComplete) {
     if (!imagePreview) return;
     let cancelled = false;
 
+    setFaceDataState('loading');
+    setFaceData(null);
+    startTickFiredRef.current = false;
+    completionClickFiredRef.current = false;
+
     (async () => {
       try {
-        // Convert imagePreview (object URL or File) to a Blob for upload
         let blob;
         if (imagePreview instanceof File || imagePreview instanceof Blob) {
           blob = imagePreview;
@@ -123,56 +111,71 @@ export default function useLightingRead(imagePreview, analysisComplete) {
         form.append('image', blob, 'photo.jpg');
         const resp = await fetch('/api/lab/face-preflight', { method: 'POST', body: form });
         const data = await resp.json();
-        if (cancelled || !data.ok) return;
+        if (cancelled) return;
+
+        if (!data.ok || !data.landmarks || Object.keys(data.landmarks).length === 0) {
+          setFaceDataState('none');
+          return;
+        }
 
         const cls = data.catchlights || [];
         const le = cls.find(c => c.eye === 'left');
         const re = cls.find(c => c.eye === 'right');
 
-        // Derive key light angle from catchlight clock position.
-        // "10 o'clock" = upper-left, "2 o'clock" = upper-right, etc.
         const primaryCL = le && re ? (le.intensity > re.intensity ? le : re) : (le || re);
-        let keyAngleRad = -Math.PI / 4; // default: upper-left (45°)
+        let keyAngleRad = -Math.PI / 4;
         if (primaryCL && primaryCL.position) {
           const clockMatch = primaryCL.position.match(/(\d+)/);
           if (clockMatch) {
             const hour = parseInt(clockMatch[1]);
-            // Clock to radians: 12=top (-π/2), 3=right (0), 6=bottom (π/2), 9=left (π)
             keyAngleRad = ((hour - 3) / 12) * Math.PI * 2;
           }
         }
 
-        // Real landmarks arrived — restart the animation cycle so the
-        // pools re-emerge at accurate face positions with fresh timing.
+        // Reset cycle timing so pools re-emerge at accurate face positions
         t0Ref.current = Date.now();
         flashTimesRef.current = new Set();
-        activeLabelsRef.current = [];
-        spRef.current = [0, 0, 0, 0, 0];
+        startTickFiredRef.current = false;
+        completionClickFiredRef.current = false;
+
+        setFaceDataState('real');
         setFaceData({
           lm: data.landmarks || {},
           cls,
           keyDir: (le && re) ? (le.intensity > re.intensity ? 'left' : 'right') : 'left',
           keyAngle: keyAngleRad,
         });
-      } catch (e) { console.warn('[useLightingRead] preflight failed:', e.message); }
+      } catch (e) {
+        if (!cancelled) {
+          console.warn('[useLightingRead] preflight failed:', e.message);
+          setFaceDataState('none');
+        }
+      }
     })();
 
     return () => { cancelled = true; };
   }, [imagePreview]);
 
-  // Reset on new analysis
+  // Reset cycle timing on new image
   useEffect(() => {
     t0Ref.current = Date.now();
     flashTimesRef.current.clear();
-    activeLabelsRef.current.length = 0;
-    spRef.current = [0, 0, 0, 0, 0];
+    completionStartRef.current = null;
+    completionStartTRef.current = null;
+    startTickFiredRef.current = false;
+    completionClickFiredRef.current = false;
   }, [imagePreview]);
 
-  // Animation loop
   const tick = useCallback(() => {
     const cvs = canvasRef.current;
     const fd = faceData;
-    if (!cvs || !fd) { rafRef.current = requestAnimationFrame(tick); return; }
+
+    // No real face data yet — clear canvas and wait
+    if (!fd || !cvs) {
+      if (cvs) { try { const ctx2 = cvs.getContext('2d'); ctx2.clearRect(0, 0, cvs.width, cvs.height); } catch {} }
+      rafRef.current = requestAnimationFrame(tick);
+      return;
+    }
 
     const ctx = cvs.getContext('2d');
     const vf = cvs.parentElement;
@@ -184,31 +187,41 @@ export default function useLightingRead(imagePreview, analysisComplete) {
       const H = cvs.height = vf.clientHeight * dpr;
       const ir = Math.min(W, H);
       const time = Date.now() / 1000;
+      const rm = reducedMotionRef.current;
 
-      const CYCLE = 12000;
-      const HOLD = 3000; // hold all elements visible for 3s after cycle completes
+      const CYCLE = 6000;
       const elapsed = Date.now() - t0Ref.current;
-      const t = Math.min(1, elapsed / CYCLE);
+
+      // Fast-forward when analysis completes mid-cycle
+      let t;
+      if (analysisComplete) {
+        if (!completionStartRef.current) {
+          completionStartRef.current = Date.now();
+          completionStartTRef.current = Math.min(1, elapsed / CYCLE);
+        }
+        const fastElapsed = Date.now() - completionStartRef.current;
+        const fastP = Math.min(1, fastElapsed / 400);
+        const base = completionStartTRef.current || 0;
+        t = base + (1 - base) * fastP;
+      } else {
+        t = Math.min(1, elapsed / CYCLE);
+      }
+
       // 5 stages across 80% of the cycle — last 20% holds everything at full
-      const stageEnd = 0.80; // stages complete at 80% of cycle
+      const stageEnd = 0.80;
       const tStage = Math.min(1, t / stageEnd);
       const as = Math.min(4, Math.floor(tStage * 5));
-      const sp = spRef.current;
-
+      const sp = [0, 0, 0, 0, 0];
       for (let i = 0; i <= 4; i++) {
         if (i <= as) sp[i] = Math.min(1, i < as ? 1 : (tStage * 5) - i);
       }
 
       ctx.clearRect(0, 0, W, H);
 
-      // Fit mapping — reads the ACTUAL computed object-fit from the <img> element.
-      // Works for any device, orientation, or layout mode.
       const imgEl = vf.querySelector('img');
       if (!imgEl || !imgEl.naturalWidth) { rafRef.current = requestAnimationFrame(tick); return; }
       const iw = imgEl.naturalWidth, ih = imgEl.naturalHeight;
-      const canvasAR = W / H, imgAR = iw / ih;
 
-      // Read the actual CSS object-fit + object-position from the rendered element
       const computedStyle = window.getComputedStyle(imgEl);
       const fitMode = computedStyle.objectFit || 'cover';
       const posStr = computedStyle.objectPosition || '50% 50%';
@@ -220,82 +233,85 @@ export default function useLightingRead(imagePreview, analysisComplete) {
       if (fitMode === 'contain') {
         const sc = Math.min(W / iw, H / ih);
         drawW = iw * sc; drawH = ih * sc;
-        drawX = (W - drawW) * posX;
-        drawY = (H - drawH) * posY;
+        drawX = (W - drawW) * posX; drawY = (H - drawH) * posY;
       } else {
-        // cover (default)
         const sc = Math.max(W / iw, H / ih);
         drawW = iw * sc; drawH = ih * sc;
-        drawX = -(drawW - W) * posX;
-        drawY = -(drawH - H) * posY;
+        drawX = -(drawW - W) * posX; drawY = -(drawH - H) * posY;
       }
 
       function srcPt(fx, fy) { return { x: drawX + fx * drawW, y: drawY + fy * drawH }; }
       function lmPt(name) { const p = fd.lm[name]; return p ? srcPt(p.x, p.y) : null; }
 
       const flashTimes = flashTimesRef.current;
-      const activeLabels = activeLabelsRef.current;
       const isLeft = fd.keyDir === 'left';
 
-      // ── STAGE 0: Light pools ──
+      // ── STAGE 0: 4 light pools only ──
       const p0 = sp[0];
       if (p0 > 0.01) {
+        // Fire start tick once when pools first appear
+        if (!startTickFiredRef.current && !rm) {
+          startTickFiredRef.current = true;
+          playStartTick();
+        }
+
         const ba = as === 0 ? 1.0 : 0.45;
         const T = [];
-        const addT = (key, int, delay, warmth) => {
-          const p = fd.lm[key]; if (p) T.push({ x: p.x, y: p.y, intensity: int, delay, warmth });
-        };
 
-        // Single primary catchlight — the brighter eye. Showing both creates
-        // visual clutter on desktop where the contained image is small.
-        const primaryCL = fd.cls.reduce((best, cl) => (!best || (cl.intensity || 0) > (best.intensity || 0)) ? cl : best, null);
-        if (primaryCL && primaryCL.nx) T.push({ x: primaryCL.nx, y: primaryCL.ny, intensity: 0.55, delay: 0.0, warmth: 0.7 });
-        addT('forehead', 0.55, 0.20, 0.8);
-        addT(isLeft ? 'left_cheek' : 'right_cheek', 0.65, 0.24, 0.9);
-        addT(isLeft ? 'left_brow' : 'right_brow', 0.35, 0.26, 0.75);
-        addT('nose_tip', 0.50, 0.42, 0.7);
-        addT('nose_bridge', 0.45, 0.46, 0.65);
-        addT(isLeft ? 'right_cheek' : 'left_cheek', 0.30, 0.62, 0.3);
-        addT(isLeft ? 'right_brow' : 'left_brow', 0.25, 0.65, 0.35);
-        addT('chin', 0.30, 0.80, 0.4);
-        addT('mouth_top', 0.25, 0.84, 0.35);
+        // Pool 1: primary catchlight
+        const primaryCL = fd.cls.reduce((best, cl) =>
+          (!best || (cl.intensity || 0) > (best.intensity || 0)) ? cl : best, null);
+        if (primaryCL && primaryCL.nx != null) {
+          T.push({ x: primaryCL.nx, y: primaryCL.ny, intensity: 0.55, delay: 0.0, warmth: 0.6 });
+        }
+
+        // Pool 2: key-side cheek
+        T.push({ key: isLeft ? 'left_cheek' : 'right_cheek', intensity: 0.58, delay: 0.22, warmth: 0.65 });
+        // Pool 3: nose bridge (the light reads across the nose)
+        T.push({ key: 'nose_tip', intensity: 0.45, delay: 0.40, warmth: 0.55 });
+        // Pool 4: fill-side cheek (cooler)
+        T.push({ key: isLeft ? 'right_cheek' : 'left_cheek', intensity: 0.28, delay: 0.58, warmth: 0.25 });
 
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         T.forEach((target, i) => {
+          // Resolve position — either direct x/y (normalized, for catchlights) or landmark key
+          let p;
+          if (target.key) {
+            const lm = fd.lm[target.key];
+            if (!lm) return;
+            p = srcPt(lm.x, lm.y);
+          } else if (target.x != null) {
+            p = srcPt(target.x, target.y);
+          } else {
+            return;
+          }
+
           const fadeIn = Math.max(0, Math.min(1, (p0 - target.delay) * 1.8));
           if (fadeIn < 0.01) return;
           const a = fadeIn * ba * target.intensity;
-          const p = srcPt(target.x, target.y);
           const rawT = Math.max(0, p0 - target.delay);
           const flashRaw = Math.max(0, 1 - rawT * 4.5);
-          const flashPop = flashRaw * flashRaw;
+          const flashPop = rm ? 0 : flashRaw * flashRaw; // no flash on reduced motion
           const holdRaw = Math.min(1, rawT * 2.8);
           const holdGlow = holdRaw * holdRaw * (3 - 2 * holdRaw);
-          const breath = 0.84 + Math.sin(time * 0.8 + i * 0.7) * 0.16;
+          const breath = rm ? 1.0 : (0.84 + Math.sin(time * 0.8 + i * 0.7) * 0.16);
           const holdA = a * holdGlow * breath;
-          const flashA = (rawT > 0 ? 1 : 0) * target.intensity * flashPop;
-
-          const clusterKey = Math.round(target.delay * 100);
-          if (rawT > 0 && rawT < 0.02 && !flashTimes.has(clusterKey)) {
-            flashTimes.add(clusterKey);
-            playStrobePop(target.intensity);
-            const copyMap = { 0: 'catchlights', 20: 'forehead', 42: 'nose', 62: 'cheek', 80: 'chin' };
-            const label = copyMap[clusterKey];
-            if (label) activeLabels.push({ label, x: p.x, y: p.y, born: time, intensity: target.intensity });
-          }
+          // Cap flash at 0.55 to prevent blow-out
+          const flashA = Math.min(0.55, target.intensity * flashPop);
 
           const grow = 0.3 + Math.min(1, fadeIn * 1.5) * 0.7;
           const w = target.warmth;
-          const rC = 255, gC = Math.round(210 + w * 25), bC = Math.round(140 + (1 - w) * 40);
+          // Toned-down warm: less amber, more neutral warm
+          const rC = 240, gC = Math.round(200 + w * 18), bC = Math.round(160 + (1 - w) * 30);
 
           if (flashA > 0.02) {
             const rf = ir * 0.18;
             const gf = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rf);
-            gf.addColorStop(0, `rgba(255,252,245,${(flashA * 0.90).toFixed(2)})`);
-            gf.addColorStop(0.15, `rgba(255,248,235,${(flashA * 0.50).toFixed(2)})`);
-            gf.addColorStop(0.4, `rgba(255,240,220,${(flashA * 0.15).toFixed(2)})`);
-            gf.addColorStop(1, 'rgba(255,235,210,0)');
+            gf.addColorStop(0, `rgba(245,242,235,${(flashA).toFixed(2)})`);
+            gf.addColorStop(0.15, `rgba(240,235,225,${(flashA * 0.45).toFixed(2)})`);
+            gf.addColorStop(0.4, `rgba(235,228,215,${(flashA * 0.12).toFixed(2)})`);
+            gf.addColorStop(1, 'rgba(230,225,210,0)');
             ctx.fillStyle = gf; ctx.fillRect(p.x - rf, p.y - rf, rf * 2, rf * 2);
           }
 
@@ -309,85 +325,52 @@ export default function useLightingRead(imagePreview, analysisComplete) {
 
             const r1 = ir * 0.048 * grow * (0.7 + target.intensity * 0.3);
             const g1 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r1);
-            g1.addColorStop(0, `rgba(${rC},${gC + 5},${bC - 10},${(holdA * 0.45).toFixed(2)})`);
-            g1.addColorStop(0.35, `rgba(${rC},${gC},${bC},${(holdA * 0.20).toFixed(2)})`);
+            g1.addColorStop(0, `rgba(${rC},${gC + 5},${bC - 8},${(holdA * 0.38).toFixed(2)})`);
+            g1.addColorStop(0.35, `rgba(${rC},${gC},${bC},${(holdA * 0.16).toFixed(2)})`);
             g1.addColorStop(1, `rgba(${rC},${gC},${bC},0)`);
             ctx.fillStyle = g1; ctx.fillRect(p.x - r1, p.y - r1, r1 * 2, r1 * 2);
 
-            const corePulse = 0.85 + Math.sin(time * 1.5 + i * 1.3) * 0.15;
+            const corePulse = rm ? 0.85 : (0.85 + Math.sin(time * 1.5 + i * 1.3) * 0.15);
             const r2 = ir * 0.016 * grow;
             const g2 = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r2);
-            g2.addColorStop(0, `rgba(255,${235 + Math.round(w * 10)},${200 + Math.round(w * 15)},${(holdA * corePulse * 0.65).toFixed(2)})`);
-            g2.addColorStop(1, 'rgba(255,225,190,0)');
+            g2.addColorStop(0, `rgba(245,${225 + Math.round(w * 8)},${195 + Math.round(w * 12)},${(holdA * corePulse * 0.55).toFixed(2)})`);
+            g2.addColorStop(1, 'rgba(235,215,185,0)');
             ctx.fillStyle = g2; ctx.fillRect(p.x - r2, p.y - r2, r2 * 2, r2 * 2);
           }
         });
         ctx.restore();
       }
 
-      // ── LABELS ──
-      if (activeLabels.length > 0) {
-        ctx.save();
-        activeLabels.forEach(lb => {
-          const age = time - lb.born;
-          if (age > 3.0) return;
-          let alpha, drift;
-          if (age < 0.25) { const tt = age / 0.25; alpha = tt * tt * (3 - 2 * tt); drift = (1 - alpha) * ir * 0.004; }
-          else if (age < 0.75) { alpha = 1.0; drift = 0; }
-          else { const tt = (age - 0.75) / 2.25; alpha = Math.max(0, 1 - tt * tt); drift = -tt * ir * 0.008; }
-          if (alpha < 0.01) return;
-          const isMobile = W < 1000;
-          const onRight = lb.x > W * 0.52;
-          const gap = ir * (isMobile ? 0.04 : 0.035);
-          const fontSize = Math.round(ir * (isMobile ? 0.030 : 0.026));
-          ctx.font = `300 ${fontSize}px Inter, system-ui, sans-serif`;
-          ctx.textBaseline = 'middle';
-          ctx.textAlign = onRight ? 'right' : 'left';
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.shadowColor = 'rgba(0,0,0,0.55)';
-          ctx.shadowBlur = 6;
-          ctx.fillStyle = `rgba(242,232,210,${(alpha * 0.72).toFixed(2)})`;
-          ctx.fillText(lb.label.toLowerCase(), onRight ? lb.x - gap : lb.x + gap, lb.y + drift);
-          ctx.shadowBlur = 0;
-        });
-        ctx.restore();
-        while (activeLabels.length > 0 && time - activeLabels[0].born > 3.0) activeLabels.shift();
-      }
-
-      // ── KEY WASH — centered on the key-lit cheek (the side the light hits) ──
+      // ── KEY WASH — centered on key-lit cheek ──
       const p2 = sp[2];
       if (p2 > 0.01) {
-        // Use the actual key-side cheek landmark — this IS where the light hits.
-        // The brighter catchlight tells us which side is key-lit.
         const keyChk = lmPt(isLeft ? 'left_cheek' : 'right_cheek');
         const keyBrw = lmPt(isLeft ? 'left_brow' : 'right_brow');
-        // Center between cheek and brow, pushed slightly outward toward the light source
         const keyPt = (keyChk && keyBrw) ? {
           x: (keyChk.x + keyBrw.x) / 2 + (keyChk.x > W / 2 ? ir * 0.05 : -ir * 0.05),
           y: (keyChk.y + keyBrw.y) / 2,
         } : keyChk;
 
         if (keyPt) {
-          if (p2 > 0.05 && !flashTimes.has('key')) { flashTimes.add('key'); playStrobePop(0.7); }
           ctx.save(); ctx.globalCompositeOperation = 'lighter';
           const ease = p2 * p2 * (3 - 2 * p2);
           const kr = ir * 0.55 * ease;
           const g = ctx.createRadialGradient(keyPt.x, keyPt.y, 0, keyPt.x, keyPt.y, kr);
-          g.addColorStop(0, `rgba(255,235,195,${(ease * 0.30).toFixed(3)})`);
-          g.addColorStop(0.20, `rgba(255,228,180,${(ease * 0.14).toFixed(3)})`);
-          g.addColorStop(0.45, `rgba(255,220,168,${(ease * 0.05).toFixed(3)})`);
-          g.addColorStop(1, 'rgba(255,218,160,0)');
+          // Neutral warm wash — not amber
+          g.addColorStop(0, `rgba(235,222,205,${(ease * 0.22).toFixed(3)})`);
+          g.addColorStop(0.20, `rgba(228,215,198,${(ease * 0.10).toFixed(3)})`);
+          g.addColorStop(0.45, `rgba(220,208,192,${(ease * 0.04).toFixed(3)})`);
+          g.addColorStop(1, 'rgba(215,205,188,0)');
           ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
           ctx.restore();
         }
       }
 
-      // ── FILL WASH — centered on the shadow-side cheek (opposite the key) ──
+      // ── FILL WASH — shadow-side cheek ──
       const p3 = sp[3];
       if (p3 > 0.01) {
         const fillPt = lmPt(isLeft ? 'right_cheek' : 'left_cheek');
         if (fillPt) {
-          if (p3 > 0.05 && !flashTimes.has('fill')) { flashTimes.add('fill'); playStrobePop(0.5); }
           ctx.save(); ctx.globalCompositeOperation = 'lighter';
           const ease = p3 * p3 * (3 - 2 * p3);
           const fr = ir * 0.50 * ease;
@@ -401,21 +384,25 @@ export default function useLightingRead(imagePreview, analysisComplete) {
         }
       }
 
-      // ── CONVERGENCE ──
+      // ── CONVERGENCE — completion beat ──
       const p4 = sp[4];
       if (p4 > 0.01) {
-        if (!flashTimes.has('done')) { flashTimes.add('done'); playCompletionClick(); }
+        if (!completionClickFiredRef.current && !rm) {
+          completionClickFiredRef.current = true;
+          playCompletionClick();
+        }
         const ease = p4 * p4 * (3 - 2 * p4);
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = `rgba(245,232,205,${(ease * 0.10).toFixed(3)})`;
+        // Neutral warm lift — not amber
+        ctx.fillStyle = `rgba(225,218,208,${(ease * 0.08).toFixed(3)})`;
         ctx.fillRect(0, 0, W, H);
         const faceCtr = lmPt('nose_tip') || lmPt('nose_bridge');
         if (faceCtr) {
           const cr = ir * 0.35;
           const cg = ctx.createRadialGradient(faceCtr.x, faceCtr.y, 0, faceCtr.x, faceCtr.y, cr);
-          cg.addColorStop(0, `rgba(255,238,200,${(ease * 0.15).toFixed(3)})`);
-          cg.addColorStop(0.35, `rgba(255,230,190,${(ease * 0.07).toFixed(3)})`);
-          cg.addColorStop(1, 'rgba(255,225,180,0)');
+          cg.addColorStop(0, `rgba(232,222,208,${(ease * 0.12).toFixed(3)})`);
+          cg.addColorStop(0.35, `rgba(225,215,200,${(ease * 0.05).toFixed(3)})`);
+          cg.addColorStop(1, 'rgba(218,210,195,0)');
           ctx.fillStyle = cg; ctx.fillRect(0, 0, W, H);
         }
         ctx.restore();
@@ -423,19 +410,26 @@ export default function useLightingRead(imagePreview, analysisComplete) {
 
     } catch (e) { /* silent — don't break rAF */ }
 
-    if (!analysisComplete) {
+    // Keep running until fully settled (fast-forward complete) or still in cycle
+    const allSettled = analysisComplete &&
+      completionStartRef.current != null &&
+      (Date.now() - completionStartRef.current) >= 400;
+
+    if (!allSettled) {
       rafRef.current = requestAnimationFrame(tick);
     }
   }, [faceData, analysisComplete]);
 
-  // Start/stop animation
+  // Start/restart animation when face data or completion state changes
   useEffect(() => {
-    if (faceData && !analysisComplete) {
-      t0Ref.current = Date.now();
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    // Run if: we have face data and analysis is still running,
+    // OR we have face data and analysis just completed (need to fast-forward to settle)
+    if (faceData) {
       rafRef.current = requestAnimationFrame(tick);
     }
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [faceData, analysisComplete, tick]);
 
-  return { canvasRef, faceDataLoaded: !!faceData };
+  return { canvasRef, faceDataState };
 }
