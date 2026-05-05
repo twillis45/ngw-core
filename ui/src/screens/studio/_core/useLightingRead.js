@@ -172,6 +172,7 @@ export default function useLightingRead(imagePreview, analysisComplete) {
 
     // No real face data yet — clear canvas and wait
     if (!fd || !cvs) {
+      if (cvs) { try { const ctx2 = cvs.getContext('2d'); ctx2.clearRect(0, 0, cvs.width, cvs.height); } catch {} }
       rafRef.current = requestAnimationFrame(tick);
       return;
     }

@@ -113,13 +113,13 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
               objectFit: 'cover',
             }),
             objectPosition: isDesktop ? '50% 50%' : '50% 25%',
-            opacity: analysisComplete ? 0.92 : (isDesktop ? 0.88 : 0.78),
+            opacity: analysisComplete ? 0.92 : (isDesktop ? 0.92 : 0.88),
             // On completion: lower saturation so ResultScreen heroRevealLift has more bloom to show
             filter: analysisComplete
               ? 'brightness(0.82) saturate(0.50) contrast(0.92)'
               : isDesktop
-                ? 'brightness(0.72) saturate(0.30) contrast(0.92)'
-                : 'brightness(0.62) saturate(0.15) contrast(0.88)',
+                ? 'brightness(0.82) saturate(0.40) contrast(0.95)'
+                : 'brightness(0.78) saturate(0.35) contrast(0.92)',
             animation: reducedMotion ? undefined : 'heroZoomIn 8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
             transition: 'opacity 0.8s ease, filter 1.2s ease',
