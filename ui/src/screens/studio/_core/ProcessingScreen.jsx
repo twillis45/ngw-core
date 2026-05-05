@@ -1,10 +1,12 @@
 /**
  * ProcessingScreen — Studio Matte design
- * Clean analysis view: desaturated hero photo + engine-driven light pools.
- * No progress bars, no stage text, no chrome — the light pools ARE the feedback.
+ * Instrument Boot + Light Read Scan hybrid.
+ * Recessed LCD + grid + AF brackets frame the analysis.
+ * Engine-driven light pools on the photo surface — 4 max, no labels.
+ * No fake progress, no anatomy diagrams, no amber.
  */
 import { useState, useEffect, useRef } from 'react';
-import { successHaptic, tapHaptic } from '../../../utils/haptics';
+import { successHaptic } from '../../../utils/haptics';
 import { loadSettings } from '../../../data/settingsStore';
 import prettify from '../../../utils/prettify';
 import useStableViewport from '../../../utils/useStableViewport';
@@ -19,11 +21,22 @@ const FS = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale
 
 export default function ProcessingScreen({ imagePreview, imageFile, analysisComplete, exifData, result, onCancel }) {
   const tilt = useDeviceTilt();
-  const { canvasRef } = useLightingRead(imageFile || imagePreview, analysisComplete);
+  const { canvasRef, faceDataState } = useLightingRead(imageFile || imagePreview, analysisComplete);
   const { stableVH, safeBottom, isDesktop } = useStableViewport();
   const [daylightMode] = useState(() => {
     try { const s = loadSettings(); return !!s.daylightMode; } catch { return false; }
   });
+  const [reducedMotion] = useState(() =>
+    typeof window !== 'undefined' &&
+    Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches)
+  );
+
+  // Subline copy: "Locating subject…" for first 0.5s, then "Reading the light on this photo."
+  const [sublinePhase, setSublinePhase] = useState('locating');
+  useEffect(() => {
+    const t = setTimeout(() => setSublinePhase('reading'), 500);
+    return () => clearTimeout(t);
+  }, [imagePreview]);
 
   // Success haptic when pattern tease appears
   const teaseHapticFired = useRef(false);
@@ -33,6 +46,18 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
       setTimeout(() => successHaptic(), 250);
     }
   }, [analysisComplete, result?.pattern]);
+
+  const sublineCopy = analysisComplete ? null
+    : faceDataState === 'none' ? 'Searching for subject — try another reference.'
+    : sublinePhase === 'locating' ? 'Locating subject…'
+    : 'Reading the light on this photo.';
+
+  // Confidence color — steel/green only, no amber
+  function confColor(conf) {
+    if (conf >= 70) return 'rgba(140,225,180,0.88)'; // green — high
+    if (conf >= 50) return steel(0.72);               // steel — moderate
+    return steel(0.50);                               // steel dim — low
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: SCREEN_BG, overflow: 'hidden' }}>
@@ -64,18 +89,15 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
         </button>
       )}
 
-      {/* Hero photo — desaturated during analysis, lifts on completion */}
+      {/* Hero photo — desaturated during analysis */}
       <div style={{
         ...(isDesktop ? {
-          // Desktop: panel hugs the hero image width.
-          // Image is in flow so the container shrink-wraps to its rendered size.
           position: 'relative',
           height: '100%',
           width: 'fit-content',
           margin: '0 auto',
           overflow: 'hidden',
           borderRadius: 0,
-          // LCD panel — neutral dark, matches Home empty VF slot
           background: 'linear-gradient(180deg, #0d0d0d 0%, #080808 40%, #060606 100%)',
           boxShadow: VIEWFINDER_INNER_SHADOW,
         } : {
@@ -84,7 +106,6 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
       }}>
         {imagePreview && (
           <img key={imagePreview} src={imagePreview} alt="Analyzing" style={{
-            // Desktop: in-flow so container hugs width. Mobile: absolute cover.
             ...(isDesktop ? {
               display: 'block', height: '100%', width: 'auto',
             } : {
@@ -93,12 +114,13 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
             }),
             objectPosition: isDesktop ? '50% 50%' : '50% 25%',
             opacity: analysisComplete ? 0.92 : (isDesktop ? 0.88 : 0.78),
+            // On completion: lower saturation so ResultScreen heroRevealLift has more bloom to show
             filter: analysisComplete
-              ? 'brightness(0.90) saturate(0.85) contrast(0.95)'
+              ? 'brightness(0.82) saturate(0.50) contrast(0.92)'
               : isDesktop
                 ? 'brightness(0.72) saturate(0.30) contrast(0.92)'
                 : 'brightness(0.62) saturate(0.15) contrast(0.88)',
-            animation: 'heroZoomIn 12s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+            animation: reducedMotion ? undefined : 'heroZoomIn 8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
             transformOrigin: 'center 30%',
             transition: 'opacity 0.8s ease, filter 1.2s ease',
             zIndex: 1,
@@ -129,7 +151,7 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
         </div>
         )}
 
-        {/* Mobile: glass overlay — full VF treatment */}
+        {/* Mobile: glass overlay */}
         {!isDesktop && (
         <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 5, pointerEvents: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: LENS_VIGNETTE }} />
@@ -141,14 +163,16 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           }} />
         </div>
         )}
-        {/* Inner shadow — machined bezel (mobile only — desktop gets it from panel boxShadow) */}
+
+        {/* Inner shadow — machined bezel (mobile) */}
         {!isDesktop && (
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
           boxShadow: VIEWFINDER_INNER_SHADOW,
         }} />
         )}
-        {/* Bezel depth shadow — body overhangs recessed LCD from all sides (desktop) */}
+
+        {/* Bezel depth shadow (desktop) */}
         {isDesktop && (
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 6,
@@ -161,7 +185,7 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
         }} />
         )}
 
-        {/* Chamfer edge highlights + counter-chamfer — matches Home VF depth */}
+        {/* Chamfer edge highlights (desktop) */}
         {isDesktop && (<>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, zIndex: 7, pointerEvents: 'none',
             background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.01) 100%)',
@@ -176,6 +200,27 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
             background: 'linear-gradient(180deg, rgba(0,0,0,0.20) 0%, rgba(0,0,0,0.10) 50%, transparent 100%)',
           }} />
         </>)}
+
+        {/* Subline copy — engine-truthful status */}
+        {sublineCopy && (
+          <div style={{
+            position: 'absolute',
+            bottom: safeBottom + 28,
+            left: 0, right: 0,
+            display: 'flex', justifyContent: 'center',
+            zIndex: 8, pointerEvents: 'none',
+            animation: reducedMotion ? undefined : 'sublineFadeIn 0.5s ease forwards',
+          }}>
+            <span style={{
+              fontSize: 11, fontWeight: 600, color: steel(0.55),
+              letterSpacing: '0.18em', textTransform: 'uppercase',
+              textShadow: '0 1px 6px rgba(0,0,0,0.80)',
+              ...FS,
+            }}>
+              {sublineCopy}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Pattern tease on completion */}
@@ -184,7 +229,9 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
           position: 'absolute', inset: 0,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           zIndex: 10, pointerEvents: 'none',
-          animation: 'patternTeaseIn 0.6s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
+          animation: reducedMotion
+            ? 'sublineFadeIn 0.3s ease forwards'
+            : 'patternTeaseIn 0.6s cubic-bezier(0.16, 0.84, 0.32, 1.18) forwards',
         }}>
           <div style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
@@ -198,7 +245,8 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
             <p style={{
               margin: 0, fontSize: isDesktop ? 44 : 28, fontWeight: 700,
               color: 'rgba(245,247,250,0.95)', letterSpacing: '-0.4px', textAlign: 'center',
-              textShadow: '0 0 20px rgba(245,190,72,0.30), 0 2px 12px rgba(0,0,0,0.7)',
+              // No amber glow — dark drop shadow only
+              textShadow: '0 2px 12px rgba(0,0,0,0.70)',
               ...FS,
             }}>
               {prettify(result.pattern, { title: true })}
@@ -209,7 +257,7 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
               return (
                 <p style={{
                   margin: 0, fontSize: isDesktop ? 14 : 13, fontWeight: 600,
-                  color: conf >= 70 ? 'rgba(140,225,180,0.85)' : 'rgba(250,210,130,0.85)',
+                  color: confColor(conf),
                   letterSpacing: '1.5px', textTransform: 'uppercase',
                   ...FS,
                 }}>
@@ -230,6 +278,10 @@ export default function ProcessingScreen({ imagePreview, imageFile, analysisComp
       @keyframes patternTeaseIn {
         from { opacity: 0; transform: scale(0.92); }
         to   { opacity: 1; transform: scale(1); }
+      }
+      @keyframes sublineFadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
       }
     `}</style>
     </div>

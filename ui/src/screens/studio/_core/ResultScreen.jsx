@@ -4270,7 +4270,7 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
       {/* Hero reveal — bridges the desaturated ProcessingScreen look to full color */}
       <style>{`
         @keyframes heroRevealLift {
-          0%   { filter: brightness(0.90) saturate(0.85) contrast(0.95); opacity: 0.90; }
+          0%   { filter: brightness(0.82) saturate(0.50) contrast(0.92); opacity: 0.90; }
           100% { filter: brightness(1) saturate(1) contrast(1); opacity: 1; }
         }
       `}</style>
