@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:static-assets": "node ../scripts/check-static-assets.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.26.0",

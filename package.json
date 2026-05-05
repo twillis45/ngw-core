@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "check:static-assets": "node scripts/check-static-assets.mjs"
+  },
   "devDependencies": {
     "puppeteer": "^24.39.0"
   }
