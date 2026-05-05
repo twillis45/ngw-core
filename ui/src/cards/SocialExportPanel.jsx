@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { C, steel, MACHINED_SHADOW } from '../theme/studioMatte';
+import { useDispatch } from '../context/AppContext';
 import {
   FORMATS,
   renderStoryTemplate,
@@ -175,6 +176,8 @@ export default function SocialExportPanel({
   isAdmin = false,
   layout = 'compact',
 }) {
+  const appDispatch = useDispatch();
+
   // Initialize to system recommendation; user can override after mount
   const [template, setTemplate] = useState(() => {
     const rec = recommendExportFormat(result, !!imagePreview);
@@ -189,6 +192,13 @@ export default function SocialExportPanel({
   const animRafRef  = useRef(null);
   const animStartRef = useRef(null);
   const [reelRecording, setReelRecording] = useState(false);
+
+  // Judgment state — default from confidence at mount; user can override
+  const [judgment, setJudgment] = useState(() => {
+    const rawConf0 = result?.authoritative_confidence ?? result?.confidence;
+    const conf0 = rawConf0 != null ? (rawConf0 > 1 ? rawConf0 / 100 : rawConf0) : 0;
+    return conf0 >= 0.75 ? 'nailed' : 'close';
+  });
 
   const branded = !(isStudio || isAdmin);
   const pattern = result?.pattern || result?.authoritative_pattern || 'unknown';
@@ -375,6 +385,15 @@ export default function SocialExportPanel({
   const confLabel = confPct >= 80 ? 'High' : confPct >= 60 ? 'Moderate' : 'Low';
   const confColorStr = confPct >= 75 ? '#48ba88' : confPct >= 50 ? 'rgba(132,158,184,0.90)' : 'rgba(132,158,184,0.50)';
 
+  const strengthLabel = confPct >= 80 ? 'Strong Read' : confPct >= 60 ? 'Good Read' : 'Soft Read';
+  const proofLine = [
+    prettify(pattern, { title: true }),
+    strengthLabel,
+    `${confPct}%`,
+    lightCount > 0 ? `${lightCount} ${lightCount !== 1 ? 'lights' : 'light'}` : null,
+    confEvidence || null,
+  ].filter(Boolean).join(' · ');
+
   // ── Aspect-ratio shape dimensions for ExportFormatStrip chips
   const CHIP_ASP = {
     bts:      { w: 22, h: 28 },  // 4:5 portrait
@@ -413,6 +432,13 @@ export default function SocialExportPanel({
           </span>
         </div>
         <div style={{ margin: '10px 20px 0', height: 1, background: steel(0.07) }} />
+
+        {/* ── PROOF LINE ── */}
+        <div style={{ padding: '8px 20px 0' }}>
+          <span style={{ fontSize: 11, color: steel(0.46), letterSpacing: '0.02em', lineHeight: 1.4 }}>
+            {proofLine}
+          </span>
+        </div>
 
         {/* ── PLATE STAGE ── */}
         <div style={{ padding: '22px 20px 0', display: 'flex', justifyContent: 'center' }}>
@@ -493,6 +519,85 @@ export default function SocialExportPanel({
               </button>
             );
           })}
+        </div>
+
+        {/* ── JUDGMENT — "Did we nail the light?" ── */}
+        <div style={{ padding: '16px 20px 0' }}>
+          <div style={{ marginBottom: 10, fontSize: 11, fontWeight: 600, color: steel(0.42), letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Did we nail the light?
+          </div>
+          <div style={{ display: 'flex', gap: 7 }}>
+            {[
+              { id: 'nailed', label: 'Nailed It' },
+              { id: 'close',  label: 'Close Read' },
+              { id: 'missed', label: 'Missed It' },
+            ].map(j => {
+              const isJ = judgment === j.id;
+              return (
+                <button
+                  key={j.id}
+                  onClick={() => setJudgment(j.id)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    borderRadius: 8,
+                    border: `1px solid ${isJ ? steel(0.28) : steel(0.10)}`,
+                    background: isJ ? steel(0.10) : 'transparent',
+                    fontSize: 11,
+                    fontWeight: isJ ? 700 : 500,
+                    color: isJ ? steel(0.82) : steel(0.38),
+                    cursor: 'pointer',
+                    letterSpacing: '0.02em',
+                    transition: 'all 0.14s',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  {j.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── BUILD / TEACH ACTIONS ── */}
+        <div style={{ padding: '12px 20px 0', display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => appDispatch({ type: 'NAVIGATE', screen: 'shoot_mode' })}
+            style={{
+              flex: 1,
+              padding: '10px 8px',
+              borderRadius: 9,
+              border: `1px solid ${steel(0.16)}`,
+              background: steel(0.05),
+              fontSize: 12,
+              fontWeight: 600,
+              color: steel(0.68),
+              cursor: 'pointer',
+              letterSpacing: '0.02em',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            Build This Light
+          </button>
+          <button
+            onClick={() => {}}
+            title="Coming soon"
+            style={{
+              flex: 1,
+              padding: '10px 8px',
+              borderRadius: 9,
+              border: `1px solid ${steel(0.08)}`,
+              background: 'transparent',
+              fontSize: 12,
+              fontWeight: 500,
+              color: steel(0.32),
+              cursor: 'default',
+              letterSpacing: '0.02em',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            Teach the Engine
+          </button>
         </div>
 
         {/* ── ISSUE ACTIONS ── */}
@@ -577,6 +682,11 @@ export default function SocialExportPanel({
               </>
             )}
           </div>
+          {confEvidence && (
+            <div style={{ marginTop: 3, fontSize: 10, color: steel(0.36), letterSpacing: '0.01em' }}>
+              {confEvidence}
+            </div>
+          )}
         </div>
         <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.40), letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 1, flexShrink: 0 }}>
           {branded ? 'Pro' : 'Studio'}
@@ -656,12 +766,12 @@ export default function SocialExportPanel({
                   border: isSel
                     ? `1.5px solid ${steel(0.28)}`
                     : isRec
-                      ? '1.5px solid rgba(240,188,68,0.20)'
+                      ? `1.5px solid ${steel(0.16)}`
                       : `1px solid ${steel(0.09)}`,
                   background: isSel
                     ? `linear-gradient(141.71deg, ${C.ctaFrom} 0%, ${C.ctaMid} 100%)`
                     : isRec
-                      ? 'rgba(240,188,68,0.035)'
+                      ? steel(0.04)
                       : C.slotBg,
                   cursor: 'pointer',
                   flexShrink: 0,
@@ -680,9 +790,9 @@ export default function SocialExportPanel({
                     fontSize: 7,
                     fontWeight: 800,
                     letterSpacing: '0.07em',
-                    color: 'rgba(240,188,68,0.85)',
-                    background: 'rgba(240,188,68,0.12)',
-                    border: '1px solid rgba(240,188,68,0.22)',
+                    color: steel(0.58),
+                    background: steel(0.08),
+                    border: `1px solid ${steel(0.16)}`,
                     borderRadius: 3,
                     padding: '1px 3px',
                     lineHeight: 1.5,
@@ -723,6 +833,83 @@ export default function SocialExportPanel({
         <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.40), letterSpacing: '0.05em', flexShrink: 0, marginLeft: 12 }}>
           {activeTpl?.formatLabel}
         </span>
+      </div>
+
+      {/* ── COMPACT JUDGMENT ── */}
+      <div style={{ padding: '12px 12px 0' }}>
+        <div style={{ marginBottom: 7, fontSize: 10, fontWeight: 600, color: steel(0.40), letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Did we nail the light?
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+          {[
+            { id: 'nailed', label: 'Nailed It' },
+            { id: 'close',  label: 'Close Read' },
+            { id: 'missed', label: 'Missed It' },
+          ].map(j => {
+            const isJ = judgment === j.id;
+            return (
+              <button
+                key={j.id}
+                onClick={() => setJudgment(j.id)}
+                style={{
+                  flex: 1,
+                  padding: '7px 4px',
+                  borderRadius: 8,
+                  border: `1px solid ${isJ ? steel(0.28) : steel(0.10)}`,
+                  background: isJ ? steel(0.10) : 'transparent',
+                  fontSize: 10,
+                  fontWeight: isJ ? 700 : 500,
+                  color: isJ ? steel(0.82) : steel(0.36),
+                  cursor: 'pointer',
+                  letterSpacing: '0.01em',
+                  transition: 'all 0.14s',
+                  WebkitTapHighlightColor: 'transparent',
+                }}
+              >
+                {j.label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={() => appDispatch({ type: 'NAVIGATE', screen: 'shoot_mode' })}
+            style={{
+              flex: 1,
+              padding: '9px 8px',
+              borderRadius: 8,
+              border: `1px solid ${steel(0.16)}`,
+              background: steel(0.05),
+              fontSize: 11,
+              fontWeight: 600,
+              color: steel(0.68),
+              cursor: 'pointer',
+              letterSpacing: '0.01em',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            Build This Light
+          </button>
+          <button
+            onClick={() => {}}
+            title="Coming soon"
+            style={{
+              flex: 1,
+              padding: '9px 8px',
+              borderRadius: 8,
+              border: `1px solid ${steel(0.08)}`,
+              background: 'transparent',
+              fontSize: 11,
+              fontWeight: 500,
+              color: steel(0.28),
+              cursor: 'default',
+              letterSpacing: '0.01em',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+          >
+            Teach the Engine
+          </button>
+        </div>
       </div>
 
       {/* ── DOWNLOAD ACTIONS ── primary PNG + secondary reel */}
