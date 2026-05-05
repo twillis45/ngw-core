@@ -46,6 +46,18 @@ cd ui && npm run dev
 
 For production, `npx vite build` outputs to `static/ui/` which is served by FastAPI at `/ui`.
 
+### Static UI asset deploy rule
+
+Before committing frontend bundle changes to git:
+
+1. Run `cd ui && npm run build`
+2. Run `npm run check:static-assets` from the repo root — must exit 0
+3. Commit `static/ui/index.html` and **all** changed files in `static/ui/assets/` in the **same commit**
+4. Never commit `static/ui/index.html` without the generated chunks it references
+5. Never commit generated chunks without the matching `static/ui/index.html`
+
+The guard (`scripts/check-static-assets.mjs`) catches mismatched chunks before they reach production. A missing chunk causes a 404 on the JS module graph, which blanks the entire app. CI enforces this automatically on PRs and pushes touching `static/ui/**` (`.github/workflows/static-assets.yml`).
+
 ---
 
 ## Code Organization
