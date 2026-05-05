@@ -405,10 +405,10 @@ export default function SocialExportPanel({
 
         {/* ── PLATE MASTHEAD ── */}
         <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: steel(0.50), letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: steel(0.62), letterSpacing: '0.16em', textTransform: 'uppercase' }}>
             Dispatch
           </span>
-          <span style={{ fontSize: 9, fontWeight: 600, color: steel(0.22), letterSpacing: '0.10em', textTransform: 'uppercase' }}>
+          <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.40), letterSpacing: '0.10em', textTransform: 'uppercase' }}>
             {branded ? 'Pro' : 'Studio'}
           </span>
         </div>
@@ -458,7 +458,7 @@ export default function SocialExportPanel({
 
         {/* ── PLATE CAPTION ── */}
         <div style={{ padding: '12px 20px 0' }}>
-          <span style={{ fontSize: 13, color: steel(0.55), fontWeight: 400, lineHeight: 1.4 }}>
+          <span style={{ fontSize: 13, color: steel(0.65), fontWeight: 400, lineHeight: 1.4 }}>
             {caption}
           </span>
         </div>
@@ -528,7 +528,7 @@ export default function SocialExportPanel({
               fontSize: 12,
               fontWeight: 400,
               cursor: reelRecording ? 'default' : 'pointer',
-              color: reelRecording ? steel(0.28) : steel(0.38),
+              color: reelRecording ? steel(0.28) : steel(0.50),
               textAlign: 'center',
               letterSpacing: '0.02em',
               WebkitTapHighlightColor: 'transparent',
@@ -560,7 +560,7 @@ export default function SocialExportPanel({
         justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.32), letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 5 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: steel(0.45), letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 5 }}>
             Export
           </div>
           <div style={{ fontSize: 17, fontWeight: 700, color: steel(0.88), letterSpacing: '-0.3px', lineHeight: 1.2 }}>
@@ -578,7 +578,7 @@ export default function SocialExportPanel({
             )}
           </div>
         </div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: steel(0.25), letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 1, flexShrink: 0 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.40), letterSpacing: '0.12em', textTransform: 'uppercase', marginTop: 1, flexShrink: 0 }}>
           {branded ? 'Pro' : 'Studio'}
         </div>
       </div>
@@ -700,7 +700,7 @@ export default function SocialExportPanel({
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', color: isSel ? steel(0.92) : steel(0.48), lineHeight: 1 }}>
                   {t.label}
                 </span>
-                <span style={{ fontSize: 9, letterSpacing: '0.04em', color: isSel ? steel(0.40) : steel(0.22), lineHeight: 1 }}>
+                <span style={{ fontSize: 10, letterSpacing: '0.04em', color: isSel ? steel(0.48) : steel(0.34), lineHeight: 1 }}>
                   {t.id === 'story' ? '9:16' : t.id === 'carousel' ? '1:1' : '4:5'}
                 </span>
               </button>
@@ -717,10 +717,10 @@ export default function SocialExportPanel({
         justifyContent: 'space-between',
         borderBottom: `1px solid ${steel(0.06)}`,
       }}>
-        <span style={{ fontSize: 12, color: steel(0.44) }}>
+        <span style={{ fontSize: 12, color: steel(0.54) }}>
           {activeTpl?.desc}
         </span>
-        <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.26), letterSpacing: '0.05em', flexShrink: 0, marginLeft: 12 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: steel(0.40), letterSpacing: '0.05em', flexShrink: 0, marginLeft: 12 }}>
           {activeTpl?.formatLabel}
         </span>
       </div>
