@@ -1,0 +1,35 @@
+name: Static UI Asset Consistency
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "static/ui/**"
+      - "ui/src/**"
+      - "scripts/check-static-assets.mjs"
+      - "package.json"
+      - "ui/package.json"
+  pull_request:
+    paths:
+      - "static/ui/**"
+      - "ui/src/**"
+      - "scripts/check-static-assets.mjs"
+      - "package.json"
+      - "ui/package.json"
+
+jobs:
+  check-static-assets:
+    name: Static UI asset consistency
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Check static UI asset consistency
+        run: node scripts/check-static-assets.mjs
