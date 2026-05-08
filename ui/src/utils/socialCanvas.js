@@ -1040,6 +1040,7 @@ export function drawBlueprintCard(ctx, data, S) {
   const {
     pattern, confidence = 0, lights = [], imageEl: photo,
     branded = true, environment = null, diagramCanvas = null,
+    judgment = null,
     progress = 1, confEvidence = '',
   } = data;
 
@@ -1066,6 +1067,18 @@ export function drawBlueprintCard(ctx, data, S) {
     drawNoPhotoZone(ctx, 0, 0, w, photoH, pattern, confidence, S);
   }
   if (environment) drawEnvBadge(ctx, pad, px(28, S), environment, S);
+  ctx.restore();
+
+  // ── SERIES LABEL — LIGHT READ, small, centered, between photo and pattern ──
+  const seriesA = sect(progress, 0.18, 0.22);
+  ctx.save();
+  ctx.globalAlpha   = seriesA;
+  ctx.font          = `500 ${f(11, S)} ${FONT}`;
+  ctx.letterSpacing = `${px(2.5, S)}px`;
+  ctx.fillStyle     = 'rgba(132,158,184,0.32)';
+  ctx.textAlign     = 'center';
+  ctx.textBaseline  = 'alphabetic';
+  ctx.fillText('LIGHT READ', w / 2, photoH + px(28, S));
   ctx.restore();
 
   // ── PATTERN — centered header at 44% ──
@@ -1147,6 +1160,25 @@ export function drawBlueprintCard(ctx, data, S) {
     });
   }
 
+  {
+    const brandA = sect(progress, 0.94, 0.06);
+    ctx.save();
+    ctx.globalAlpha = brandA;
+
+    if (judgment === 'nailed' || judgment === 'close') {
+      const jLabel = judgment === 'nailed' ? 'NAILED IT' : 'CLOSE READ';
+      const jAlpha = judgment === 'nailed' ? 0.88 : 0.52;
+      ctx.font          = `600 ${f(11, S)} ${FONT}`;
+      ctx.letterSpacing = `${px(1.5, S)}px`;
+      ctx.fillStyle     = `rgba(132,158,184,${jAlpha})`;
+      ctx.textAlign     = 'left';
+      ctx.textBaseline  = 'alphabetic';
+      ctx.fillText(jLabel, pad, h - px(22, S));
+    }
+
+    ctx.restore();
+  }
+
   ctx.save(); ctx.globalAlpha = sect(progress, 0.94, 0.06);
   drawBrand(ctx, w, h - px(22, S), branded, S);
   ctx.restore();
@@ -1163,6 +1195,7 @@ export function drawSignalCard(ctx, data, S) {
   const {
     pattern, confidence = 0, imageEl: photo,
     branded = true,
+    judgment = null,
     progress = 1, confEvidence = '',
   } = data;
 
@@ -1218,6 +1251,18 @@ export function drawSignalCard(ctx, data, S) {
   ctx.beginPath(); ctx.moveTo(w - arm, specimenH); ctx.lineTo(w, specimenH); ctx.lineTo(w, specimenH - arm); ctx.stroke();
   ctx.restore();
 
+  // ── SERIES HEADER — LIGHT READ identifier, small, tracked ──
+  const seriesA = sect(progress, 0.28, 0.50);
+  ctx.save();
+  ctx.globalAlpha   = seriesA;
+  ctx.font          = `500 ${f(10, S)} ${FONT}`;
+  ctx.letterSpacing = `${px(2.0, S)}px`;
+  ctx.fillStyle     = 'rgba(132,158,184,0.35)';
+  ctx.textAlign     = 'left';
+  ctx.textBaseline  = 'alphabetic';
+  ctx.fillText('LIGHT READ', pad, analysisY + px(16, S));
+  ctx.restore();
+
   // ── CLASSIFICATION — uppercase, left-aligned, decisive ──
   const patternUpper = (pattern || 'UNKNOWN').toUpperCase().replace(/_/g, ' ');
   const nameLen      = patternUpper.replace(/\s/g, '').length;
@@ -1233,7 +1278,7 @@ export function drawSignalCard(ctx, data, S) {
   }
   ctx.restore();
 
-  const classY = analysisY + px(22, S);
+  const classY = analysisY + px(34, S); // shifted down 12px to clear LIGHT READ series header
   const classA = sect(progress, 0.34, 0.56);
   ctx.save();
   ctx.globalAlpha   = classA;
@@ -1272,17 +1317,31 @@ export function drawSignalCard(ctx, data, S) {
     ctx.restore();
   }
 
-  // ── NGW CALIBRATION STAMP — bottom-right, barely present ──
-  if (branded) {
-    const stampA = sect(progress, 0.86, 1.0);
+  // ── FOOTER IDENTITY — issued brand mark (left: judgment proof, right: NGW identity) ──
+  {
+    const footerA = sect(progress, 0.86, 1.0);
     ctx.save();
-    ctx.globalAlpha   = stampA;
-    ctx.font          = `500 ${f(10, S)} ${FONT}`;
-    ctx.letterSpacing = `${px(1.5, S)}px`;
-    ctx.fillStyle     = 'rgba(255,255,255,0.22)';
-    ctx.textAlign     = 'right';
-    ctx.textBaseline  = 'alphabetic';
-    ctx.fillText('NGW', w - pad, h - px(16, S));
+    ctx.globalAlpha  = footerA;
+    ctx.textBaseline = 'alphabetic';
+
+    if (branded) {
+      ctx.font          = `500 ${f(10, S)} ${FONT}`;
+      ctx.letterSpacing = `${px(1.5, S)}px`;
+      ctx.fillStyle     = 'rgba(132,158,184,0.70)';
+      ctx.textAlign     = 'right';
+      ctx.fillText('LIGHT READ · NGW', w - pad, h - px(16, S));
+    }
+
+    if (judgment === 'nailed' || judgment === 'close') {
+      const jLabel = judgment === 'nailed' ? 'NAILED IT' : 'CLOSE READ';
+      const jAlpha = judgment === 'nailed' ? 0.88 : 0.52;
+      ctx.font          = `600 ${f(11, S)} ${FONT}`;
+      ctx.letterSpacing = `${px(1.5, S)}px`;
+      ctx.fillStyle     = `rgba(132,158,184,${jAlpha})`;
+      ctx.textAlign     = 'left';
+      ctx.fillText(jLabel, pad, h - px(16, S));
+    }
+
     ctx.restore();
   }
 

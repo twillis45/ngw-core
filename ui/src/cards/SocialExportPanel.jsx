@@ -18,6 +18,49 @@ import prettify from '../utils/prettify';
 
 const FONT_SMOOTH = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' };
 
+// ── Caption / hashtag system ──────────────────────────────────────────────────
+
+const CAPTION_VARIANTS = [
+  { id: 'technical',   label: 'Technical' },
+  { id: 'confident',   label: 'Confident' },
+  { id: 'educational', label: 'Educational' },
+  { id: 'bts',         label: 'Behind the Shot' },
+  { id: 'flex',        label: 'Subtle Flex' },
+];
+
+function buildCaption(variant, { pattern: pat, confPct, lightCount, confEvidence, judgment }) {
+  const name      = prettify(pat, { title: true });
+  const lightPart = lightCount > 0 ? `${lightCount} ${lightCount !== 1 ? 'lights' : 'light'}.` : '';
+  const evidPart  = confEvidence ? `${confEvidence} confirmed.` : '';
+  switch (variant) {
+    case 'confident':
+      return judgment === 'nailed'
+        ? `Called ${name} before I touched a modifier. Nailed it.\nNGW Light Read.`
+        : `${name} read at ${confPct}%.\nNGW Light Read.`;
+    case 'educational':
+      return confEvidence
+        ? `${name} light. Confirmed at ${confPct}% — ${confEvidence}. Light Read via NGW.`
+        : `${name} light. ${confPct}% confidence. Light Read via NGW.`;
+    case 'bts':
+      return `${lightPart} Issued the Light Read.${judgment === 'nailed' ? ' Nailed it.' : ''}\nNGW Light Read.`.replace(/^\s/, '');
+    case 'flex':
+      return 'Not guessing anymore.';
+    default: { // technical
+      const parts = [`${name}, ${confPct}% confidence.`];
+      if (lightPart) parts.push(lightPart);
+      if (evidPart)  parts.push(evidPart);
+      return parts.join(' ') + '\nMy Light Read — issued by NGW.';
+    }
+  }
+}
+
+function buildHashtags(judgment) {
+  const tags = ['#LightRead'];
+  if (judgment === 'nailed') tags.push('#NailedTheLight');
+  tags.push('#LightingBreakdown', '#StudioLighting', '#PortraitLighting', '#BehindTheShot', '#PhotographyTips');
+  return tags.join(' ');
+}
+
 // Mirrors ResultScreen parseClockHour — returns true if str encodes a valid 1–12 hour.
 function parseCatchlightPresence(str) {
   if (str == null) return false;
@@ -200,6 +243,9 @@ export default function SocialExportPanel({
     return conf0 >= 0.75 ? 'nailed' : 'close';
   });
 
+  const [issued, setIssued]             = useState(false);
+  const [captionVariant, setCaptionVariant] = useState('technical');
+
   const branded = !(isStudio || isAdmin);
   const pattern = result?.pattern || result?.authoritative_pattern || 'unknown';
   // authoritative_confidence is 0-1; fall back to confidence / 100 if it's 0-100
@@ -234,6 +280,10 @@ export default function SocialExportPanel({
     if (sigs.nose_shadow_angle_deg != null) parts.push('shadow geometry');
     return parts.join(' + ');
   }, [result]);
+
+  // Derived caption and hashtags — reactive; update when judgment or variant changes
+  const captionText = useMemo(() => buildCaption(captionVariant, { pattern, confPct: Math.round(confidence * 100), lightCount: lights.length, confEvidence, judgment }), [captionVariant, pattern, confidence, lights.length, confEvidence, judgment]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hashtags    = useMemo(() => buildHashtags(judgment), [judgment]);
 
   useEffect(() => {
     if (!imagePreview) { setPhotoLoaded(false); return; }
@@ -277,17 +327,17 @@ export default function SocialExportPanel({
       const patternReasoning = result?.sections?.pattern?.reasoning
         || result?._raw?.reconstruction?.reconstruction_narrative
         || '';
-      drawSignalCard(ctx, { ...opts, imageEl: photoRef.current, patternReasoning, confEvidence, progress: animProgress }, S);
+      drawSignalCard(ctx, { ...opts, imageEl: photoRef.current, patternReasoning, confEvidence, judgment, progress: animProgress }, S);
     } else if (template === 'story') {
       renderStoryTemplate(ctx, { ...opts, setupSummary: result?.mood ? `${result.mood} lighting` : '' });
     } else if (template === 'summary') {
       const S = canvas.width / 1080;
-      drawBlueprintCard(ctx, { ...opts, imageEl: photoRef.current, diagramCanvas, confEvidence, progress: animProgress }, S);
+      drawBlueprintCard(ctx, { ...opts, imageEl: photoRef.current, diagramCanvas, confEvidence, judgment, progress: animProgress }, S);
     } else if (template === 'carousel' && lights.length > 0) {
       const idx = Math.min(carouselIdx, lights.length - 1);
       renderCarouselSlide(ctx, { light: lights[idx], index: idx, total: lights.length, pattern, format: previewFmt, branded, progress: animProgress });
     }
-  }, [template, photoLoaded, diagramCanvas, pattern, confidence, lights, camera, branded, carouselIdx, environment, result?.mood, animProgress, confEvidence]);
+  }, [template, photoLoaded, diagramCanvas, pattern, confidence, lights, camera, branded, carouselIdx, environment, result?.mood, animProgress, confEvidence, judgment]);
 
   useEffect(() => { renderPreview(); }, [renderPreview]);
 
@@ -303,22 +353,23 @@ export default function SocialExportPanel({
       const miniOpts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, format: miniFmt, branded, environment, progress: 1 };
       if (t.id === 'bts') {
         const patternReasoning = result?.sections?.pattern?.reasoning || result?._raw?.reconstruction?.reconstruction_narrative || '';
-        drawSignalCard(ctx, { ...miniOpts, imageEl: photoRef.current, patternReasoning, confEvidence, progress: 1 }, dims.cw / 1080);
+        drawSignalCard(ctx, { ...miniOpts, imageEl: photoRef.current, patternReasoning, confEvidence, judgment, progress: 1 }, dims.cw / 1080);
       } else if (t.id === 'story') {
         renderStoryTemplate(ctx, { ...miniOpts, setupSummary: result?.mood ? `${result.mood} lighting` : '' });
       } else if (t.id === 'summary') {
-        drawBlueprintCard(ctx, { ...miniOpts, imageEl: photoRef.current, diagramCanvas, confEvidence, progress: 1 }, dims.cw / 1080);
+        drawBlueprintCard(ctx, { ...miniOpts, imageEl: photoRef.current, diagramCanvas, confEvidence, judgment, progress: 1 }, dims.cw / 1080);
       } else if (t.id === 'carousel' && lights.length > 0) {
         renderCarouselSlide(ctx, { light: lights[0], index: 0, total: lights.length, pattern, format: miniFmt, branded, progress: 1 });
       }
     });
-  }, [photoLoaded, diagramCanvas, pattern, confidence, lights, camera, branded, environment, result?.mood, confEvidence, result?.sections?.pattern?.reasoning, result?._raw?.reconstruction?.reconstruction_narrative]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [photoLoaded, diagramCanvas, pattern, confidence, lights, camera, branded, environment, result?.mood, confEvidence, judgment, result?.sections?.pattern?.reasoning, result?._raw?.reconstruction?.reconstruction_narrative]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (layout === 'workbench') renderMiniPreviews(); }, [layout, renderMiniPreviews]);
 
   const handleDownload = useCallback(() => {
     const fmt = FORMAT_MAP[template] || FORMATS.PORTRAIT;
-    const opts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, format: fmt, branded, environment };
+    const opts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, format: fmt, branded, environment, judgment };
+    setIssued(true);
 
     const patSlug = (pattern || 'unknown').replace(/[^a-z0-9]/gi, '-').replace(/-+/g, '-');
     const Pat     = patSlug.charAt(0).toUpperCase() + patSlug.slice(1);
@@ -348,11 +399,11 @@ export default function SocialExportPanel({
         const patternReasoning = result?.sections?.pattern?.reasoning
           || result?._raw?.reconstruction?.reconstruction_narrative
           || '';
-        drawSignalCard(eCtx, { ...opts, imageEl: photoRef.current, patternReasoning, confEvidence }, S);
+        drawSignalCard(eCtx, { ...opts, imageEl: photoRef.current, patternReasoning, confEvidence, judgment }, S);
       } else if (template === 'story') renderStoryTemplate(eCtx, { ...opts, setupSummary: result?.mood ? `${result.mood} lighting` : '' });
       else if (template === 'summary') {
         const S = fmt.w / 1080;
-        drawBlueprintCard(eCtx, { ...opts, imageEl: photoRef.current, diagramCanvas, confEvidence }, S);
+        drawBlueprintCard(eCtx, { ...opts, imageEl: photoRef.current, diagramCanvas, confEvidence, judgment }, S);
       }
       else if (template === 'carousel') {
         const idx = Math.min(carouselIdx, lights.length - 1);
@@ -360,11 +411,11 @@ export default function SocialExportPanel({
       }
       downloadCanvas(exportCanvas, `NGW_${Pat}_${tplLabel}_${fmtLabel}.png`);
     }
-  }, [template, lights, pattern, branded, confidence, camera, diagramCanvas, result?.mood, carouselIdx, environment, confEvidence]);
+  }, [template, lights, pattern, branded, confidence, camera, diagramCanvas, result?.mood, carouselIdx, environment, confEvidence, judgment]);
 
   const handleDownloadReel = useCallback(async () => {
     setReelRecording(true);
-    const reelOpts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, branded, environment, setupSummary: result?.mood ? `${result.mood} lighting` : '', confEvidence };
+    const reelOpts = { photo: photoRef.current, diagramCanvas, pattern, confidence, lights, camera, branded, environment, setupSummary: result?.mood ? `${result.mood} lighting` : '', confEvidence, judgment };
     const reelTemplate = template === 'carousel' ? 'carousel' : template;
     const reelLight = template === 'carousel' ? lights[Math.min(carouselIdx, lights.length - 1)] : undefined;
     try {
@@ -372,7 +423,7 @@ export default function SocialExportPanel({
     } finally {
       setReelRecording(false);
     }
-  }, [template, lights, pattern, branded, confidence, camera, diagramCanvas, result?.mood, carouselIdx, environment, confEvidence]);
+  }, [template, lights, pattern, branded, confidence, camera, diagramCanvas, result?.mood, carouselIdx, environment, confEvidence, judgment]);
 
   // Reactive recommendation — updates if result changes; template state does not auto-reset
   const recommended = useMemo(() => {
@@ -385,10 +436,8 @@ export default function SocialExportPanel({
   const confLabel = confPct >= 80 ? 'High' : confPct >= 60 ? 'Moderate' : 'Low';
   const confColorStr = confPct >= 75 ? '#48ba88' : confPct >= 50 ? 'rgba(132,158,184,0.90)' : 'rgba(132,158,184,0.50)';
 
-  const strengthLabel = confPct >= 80 ? 'Strong Read' : confPct >= 60 ? 'Good Read' : 'Soft Read';
   const proofLine = [
     prettify(pattern, { title: true }),
-    strengthLabel,
     `${confPct}%`,
     lightCount > 0 ? `${lightCount} ${lightCount !== 1 ? 'lights' : 'light'}` : null,
     confEvidence || null,
@@ -411,7 +460,6 @@ export default function SocialExportPanel({
   };
 
   if (layout === 'workbench') {
-    const caption = `${prettify(pattern, { title: true })} — ${confPct}% confident${lightCount > 0 ? ` · ${lightCount} ${lightCount !== 1 ? 'lights' : 'light'}` : ''}`;
     return (
       <div style={{
         marginTop: 16,
@@ -482,12 +530,6 @@ export default function SocialExportPanel({
           </div>
         )}
 
-        {/* ── PLATE CAPTION ── */}
-        <div style={{ padding: '12px 20px 0' }}>
-          <span style={{ fontSize: 13, color: steel(0.65), fontWeight: 400, lineHeight: 1.4 }}>
-            {caption}
-          </span>
-        </div>
 
         {/* ── CONTACT STRIP ── */}
         <div style={{ padding: '14px 20px 0', display: 'flex', gap: 10, alignItems: 'flex-end' }}>
@@ -642,6 +684,72 @@ export default function SocialExportPanel({
             {reelRecording ? 'Recording reel…' : 'Issue with reel video →'}
           </button>
         </div>
+
+        {/* ── SHARE COPY BLOCK — caption + hashtags, shown after first Issue ── */}
+        {issued && (
+          <div style={{ margin: '0 20px 20px', borderTop: `1px solid ${steel(0.07)}`, paddingTop: 16 }}>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: steel(0.52), letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 3 }}>
+                Copy for sharing
+              </div>
+              <div style={{ fontSize: 11, color: steel(0.30), lineHeight: 1.45 }}>
+                Post it, text it, send it to a client, or save it with the job.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 4, marginBottom: 9, flexWrap: 'wrap' }}>
+              {CAPTION_VARIANTS.map(v => (
+                <button key={v.id} onClick={() => setCaptionVariant(v.id)} style={{
+                  padding: '3px 9px',
+                  borderRadius: 5,
+                  border: `1px solid ${captionVariant === v.id ? steel(0.24) : steel(0.09)}`,
+                  background: captionVariant === v.id ? steel(0.08) : 'transparent',
+                  fontSize: 10,
+                  fontWeight: captionVariant === v.id ? 700 : 500,
+                  color: captionVariant === v.id ? steel(0.72) : steel(0.34),
+                  cursor: 'pointer',
+                  letterSpacing: '0.01em',
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ background: steel(0.04), borderRadius: 8, border: `1px solid ${steel(0.08)}`, padding: '10px 13px', marginBottom: 9 }}>
+              <p style={{ margin: 0, fontSize: 12, color: steel(0.68), lineHeight: 1.55, whiteSpace: 'pre-wrap', userSelect: 'all' }}>
+                {captionText}
+              </p>
+            </div>
+
+            <div style={{ marginBottom: 9 }}>
+              <div style={{ fontSize: 10, fontWeight: 600, color: steel(0.40), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>
+                Suggested tags
+              </div>
+              <div style={{ fontSize: 10, color: steel(0.28), marginBottom: 6, lineHeight: 1.4 }}>
+                Optional. Use these only if you post publicly.
+              </div>
+              <div style={{ fontSize: 11, color: steel(0.50), lineHeight: 1.6, background: steel(0.03), borderRadius: 6, border: `1px solid ${steel(0.07)}`, padding: '8px 10px', userSelect: 'all' }}>
+                {hashtags}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 7 }}>
+              <button
+                onClick={() => navigator.clipboard?.writeText(captionText)}
+                style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1px solid ${steel(0.14)}`, background: steel(0.05), fontSize: 11, fontWeight: 600, color: steel(0.62), cursor: 'pointer', letterSpacing: '0.02em', WebkitTapHighlightColor: 'transparent' }}
+              >
+                Copy Caption
+              </button>
+              <button
+                onClick={() => navigator.clipboard?.writeText(hashtags)}
+                style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1px solid ${steel(0.14)}`, background: steel(0.05), fontSize: 11, fontWeight: 600, color: steel(0.62), cursor: 'pointer', letterSpacing: '0.02em', WebkitTapHighlightColor: 'transparent' }}
+              >
+                Copy Tags
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -980,6 +1088,72 @@ export default function SocialExportPanel({
         </button>
 
       </div>
+
+      {/* ── SHARE COPY BLOCK — caption + hashtags, shown after first Issue ── */}
+      {issued && (
+        <div style={{ padding: '14px 12px 16px', borderTop: `1px solid ${steel(0.07)}` }}>
+          <div style={{ marginBottom: 9 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: steel(0.50), letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: 3 }}>
+              Copy for sharing
+            </div>
+            <div style={{ fontSize: 11, color: steel(0.30), lineHeight: 1.45 }}>
+              Post it, text it, send it to a client, or save it with the job.
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+            {CAPTION_VARIANTS.map(v => (
+              <button key={v.id} onClick={() => setCaptionVariant(v.id)} style={{
+                padding: '3px 8px',
+                borderRadius: 5,
+                border: `1px solid ${captionVariant === v.id ? steel(0.24) : steel(0.09)}`,
+                background: captionVariant === v.id ? steel(0.08) : 'transparent',
+                fontSize: 10,
+                fontWeight: captionVariant === v.id ? 700 : 500,
+                color: captionVariant === v.id ? steel(0.72) : steel(0.34),
+                cursor: 'pointer',
+                letterSpacing: '0.01em',
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+                {v.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ background: steel(0.04), borderRadius: 8, border: `1px solid ${steel(0.08)}`, padding: '9px 12px', marginBottom: 8 }}>
+            <p style={{ margin: 0, fontSize: 12, color: steel(0.68), lineHeight: 1.55, whiteSpace: 'pre-wrap', userSelect: 'all' }}>
+              {captionText}
+            </p>
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: steel(0.38), letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>
+              Suggested tags
+            </div>
+            <div style={{ fontSize: 10, color: steel(0.26), marginBottom: 5, lineHeight: 1.4 }}>
+              Optional. Use these only if you post publicly.
+            </div>
+            <div style={{ fontSize: 11, color: steel(0.48), lineHeight: 1.6, background: steel(0.03), borderRadius: 6, border: `1px solid ${steel(0.07)}`, padding: '8px 10px', userSelect: 'all' }}>
+              {hashtags}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => navigator.clipboard?.writeText(captionText)}
+              style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1px solid ${steel(0.14)}`, background: steel(0.05), fontSize: 11, fontWeight: 600, color: steel(0.62), cursor: 'pointer', letterSpacing: '0.02em', WebkitTapHighlightColor: 'transparent' }}
+            >
+              Copy Caption
+            </button>
+            <button
+              onClick={() => navigator.clipboard?.writeText(hashtags)}
+              style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1px solid ${steel(0.14)}`, background: steel(0.05), fontSize: 11, fontWeight: 600, color: steel(0.62), cursor: 'pointer', letterSpacing: '0.02em', WebkitTapHighlightColor: 'transparent' }}
+            >
+              Copy Tags
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
