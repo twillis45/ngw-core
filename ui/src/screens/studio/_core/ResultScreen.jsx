@@ -12,7 +12,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { startStripeCheckout } from '../../../data/stripeCheckout';
 import { saveSetup } from '../../../data/setupStore';
 import { postSignal } from '../../../data/signalsApi';
+import { getToken } from '../../../data/authApi';
 import { createPortal } from 'react-dom';
+import CorrectionSheet from './components/CorrectionSheet';
 import { tapHaptic, selectHaptic, successHaptic, navHaptic } from '../../../utils/haptics';
 import { getFaceCropPosition } from '../../../utils/faceCrop';
 import { useIsDesktop, useViewportWidth, TABLET_MIN_WIDTH } from '../../../utils/useIsDesktop';
@@ -1760,6 +1762,8 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   const [socialDiagramCanvas, setSocialDiagramCanvas] = useState(null);
   const socialDiagramRef = useRef(null);
   const [outcomeRecorded, setOutcomeRecorded] = useState(null); // 'nailed_it' | 'close' | 'failed'
+  const [correctionSheetOpen, setCorrectionSheetOpen] = useState(false);
+  const [correctionFailureId, setCorrectionFailureId] = useState(null);
   const [setupSaved, setSetupSaved] = useState(false);
   const [briefCopied, setBriefCopied] = useState(false);
 
@@ -2247,13 +2251,33 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   const handleOutcome = useCallback((outcome) => {
     setOutcomeRecorded(outcome);
     tapHaptic();
-    // Fire signal via postSignal (correct endpoint + auth)
-    postSignal({
-      pattern_id: result?.pattern || result?.authoritative_pattern || 'unknown',
-      confidence_score: result?.confidence ?? result?.match_confidence ?? null,
-      outcome,
-      input_method: 'reference_photo',
-    });
+    const patternId   = result?.pattern || result?.authoritative_pattern || 'unknown';
+    const confScore   = result?.confidence ?? result?.match_confidence ?? null;
+    const authHdr     = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+    // Primary signal — recorded for every outcome
+    postSignal({ pattern_id: patternId, confidence_score: confScore, outcome, input_method: 'reference_photo' });
+    if (outcome === 'nailed_it') {
+      fetch('/api/intelligence/nailed-it', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHdr },
+        credentials: 'include',
+        body: JSON.stringify({ predicted_pattern: patternId, confidence: confScore }),
+      }).catch(() => {});
+    }
+    if (outcome === 'failed') {
+      fetch('/api/failures/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHdr },
+        credentials: 'include',
+        body: JSON.stringify({ predicted_pattern: patternId, confidence: confScore }),
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.id) setCorrectionFailureId(data.id);
+          setTimeout(() => setCorrectionSheetOpen(true), 600);
+        })
+        .catch(() => {});
+    }
   }, [result]);
 
   // Summary for the collapsed DETAIL drawer
@@ -2276,6 +2300,13 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
   // Warning chip styling now lives in _shared/Chip.jsx.
 
   return (
+    <>
+    {correctionSheetOpen && (
+      <CorrectionSheet
+        failureEventId={correctionFailureId}
+        onClose={() => setCorrectionSheetOpen(false)}
+      />
+    )}
     <div
       onTouchStart={!isDesktop ? handleSwipeStart : undefined}
       onTouchMove={!isDesktop ? handleSwipeMove : undefined}
@@ -4504,5 +4535,6 @@ export default function ResultScreen({ result, imagePreview, onSetup, onRetry, o
 
     </div>
     </div>
+    </>
   );
 }

@@ -15,6 +15,10 @@ import {
   downloadReel,
 } from '../utils/socialCanvas';
 import prettify from '../utils/prettify';
+import { postSignal } from '../data/signalsApi';
+import { getToken } from '../data/authApi';
+import { getSessionId } from '../data/analytics';
+import CorrectionSheet from '../screens/studio/_core/components/CorrectionSheet';
 
 const FONT_SMOOTH = { WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale' };
 
@@ -242,6 +246,10 @@ export default function SocialExportPanel({
     const conf0 = rawConf0 != null ? (rawConf0 > 1 ? rawConf0 / 100 : rawConf0) : 0;
     return conf0 >= 0.75 ? 'nailed' : 'close';
   });
+  // Correction loop state
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [failureEventId, setFailureEventId] = useState(null);
+  const judgmentFiredRef = useRef(false); // guard: fire signal once per session
 
   const [issued, setIssued]             = useState(false);
   const [captionVariant, setCaptionVariant] = useState('technical');
@@ -284,6 +292,43 @@ export default function SocialExportPanel({
   // Derived caption and hashtags — reactive; update when judgment or variant changes
   const captionText = useMemo(() => buildCaption(captionVariant, { pattern, confPct: Math.round(confidence * 100), lightCount: lights.length, confEvidence, judgment }), [captionVariant, pattern, confidence, lights.length, confEvidence, judgment]); // eslint-disable-line react-hooks/exhaustive-deps
   const hashtags    = useMemo(() => buildHashtags(judgment), [judgment]);
+
+  // Wire judgment selection to the intelligence pipeline.
+  // Fires once per Dispatch session (guard prevents redundant re-fires on re-render).
+  const handleJudgmentSelect = useCallback((id) => {
+    setJudgment(id);
+    if (judgmentFiredRef.current) return;
+    judgmentFiredRef.current = true;
+    const outcomeMap = { nailed: 'nailed_it', close: 'close', missed: 'failed' };
+    const outcome = outcomeMap[id];
+    // Primary signal — recorded regardless of judgment value
+    postSignal({
+      pattern_id: pattern,
+      confidence_score: confidence,
+      outcome,
+      input_method: 'reference_photo',
+    });
+    if (id === 'missed') {
+      // Record enriched failure event; use ID to anchor feedback submission
+      const authHdr = getToken() ? { Authorization: `Bearer ${getToken()}` } : {};
+      fetch('/api/failures/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHdr },
+        credentials: 'include',
+        body: JSON.stringify({
+          session_id: getSessionId(),
+          predicted_pattern: pattern,
+          confidence,
+        }),
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.id) setFailureEventId(data.id);
+          setTimeout(() => setCorrectionOpen(true), 600);
+        })
+        .catch(() => setTimeout(() => setCorrectionOpen(true), 600));
+    }
+  }, [pattern, confidence]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!imagePreview) { setPhotoLoaded(false); return; }
@@ -578,7 +623,7 @@ export default function SocialExportPanel({
               return (
                 <button
                   key={j.id}
-                  onClick={() => setJudgment(j.id)}
+                  onClick={() => handleJudgmentSelect(j.id)}
                   style={{
                     flex: 1,
                     padding: '8px 4px',
@@ -599,14 +644,33 @@ export default function SocialExportPanel({
               );
             })}
           </div>
+          {(judgment === 'missed' || judgment === 'close') && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                onClick={() => setCorrectionOpen(true)}
+                style={{
+                  background: 'none', border: 'none', padding: 0,
+                  fontSize: 11, fontWeight: 500, color: steel(0.42),
+                  cursor: 'pointer', letterSpacing: '0.02em',
+                  WebkitTapHighlightColor: 'transparent',
+                  textDecoration: 'underline',
+                  textDecorationColor: steel(0.20),
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Teach the Engine
+              </button>
+              <span style={{ fontSize: 10, color: steel(0.28) }}>— tell NGW what it missed</span>
+            </div>
+          )}
         </div>
 
-        {/* ── BUILD / TEACH ACTIONS ── */}
-        <div style={{ padding: '12px 20px 0', display: 'flex', gap: 8 }}>
+        {/* ── BUILD ACTION ── */}
+        <div style={{ padding: '12px 20px 0' }}>
           <button
             onClick={() => appDispatch({ type: 'NAVIGATE', screen: 'shoot_mode' })}
             style={{
-              flex: 1,
+              width: '100%',
               padding: '10px 8px',
               borderRadius: 9,
               border: `1px solid ${steel(0.16)}`,
@@ -620,25 +684,6 @@ export default function SocialExportPanel({
             }}
           >
             Build This Light
-          </button>
-          <button
-            onClick={() => {}}
-            title="Coming soon"
-            style={{
-              flex: 1,
-              padding: '10px 8px',
-              borderRadius: 9,
-              border: `1px solid ${steel(0.08)}`,
-              background: 'transparent',
-              fontSize: 12,
-              fontWeight: 500,
-              color: steel(0.32),
-              cursor: 'default',
-              letterSpacing: '0.02em',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            Teach the Engine
           </button>
         </div>
 
@@ -755,6 +800,13 @@ export default function SocialExportPanel({
   }
 
   return (
+    <>
+    {correctionOpen && (
+      <CorrectionSheet
+        failureEventId={failureEventId}
+        onClose={() => setCorrectionOpen(false)}
+      />
+    )}
     <div style={{
       marginTop: 16,
       borderRadius: 16,
@@ -958,7 +1010,7 @@ export default function SocialExportPanel({
             return (
               <button
                 key={j.id}
-                onClick={() => setJudgment(j.id)}
+                onClick={() => handleJudgmentSelect(j.id)}
                 style={{
                   flex: 1,
                   padding: '7px 4px',
@@ -979,11 +1031,30 @@ export default function SocialExportPanel({
             );
           })}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        {(judgment === 'missed' || judgment === 'close') && (
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <button
+              onClick={() => setCorrectionOpen(true)}
+              style={{
+                background: 'none', border: 'none', padding: 0,
+                fontSize: 10, fontWeight: 500, color: steel(0.40),
+                cursor: 'pointer', letterSpacing: '0.01em',
+                WebkitTapHighlightColor: 'transparent',
+                textDecoration: 'underline',
+                textDecorationColor: steel(0.18),
+                textUnderlineOffset: 2,
+              }}
+            >
+              Teach the Engine
+            </button>
+            <span style={{ fontSize: 10, color: steel(0.26) }}>— tell NGW what it missed</span>
+          </div>
+        )}
+        <div style={{ marginTop: 10 }}>
           <button
             onClick={() => appDispatch({ type: 'NAVIGATE', screen: 'shoot_mode' })}
             style={{
-              flex: 1,
+              width: '100%',
               padding: '9px 8px',
               borderRadius: 8,
               border: `1px solid ${steel(0.16)}`,
@@ -997,25 +1068,6 @@ export default function SocialExportPanel({
             }}
           >
             Build This Light
-          </button>
-          <button
-            onClick={() => {}}
-            title="Coming soon"
-            style={{
-              flex: 1,
-              padding: '9px 8px',
-              borderRadius: 8,
-              border: `1px solid ${steel(0.08)}`,
-              background: 'transparent',
-              fontSize: 11,
-              fontWeight: 500,
-              color: steel(0.28),
-              cursor: 'default',
-              letterSpacing: '0.01em',
-              WebkitTapHighlightColor: 'transparent',
-            }}
-          >
-            Teach the Engine
           </button>
         </div>
       </div>
@@ -1155,5 +1207,6 @@ export default function SocialExportPanel({
         </div>
       )}
     </div>
+    </>
   );
 }
