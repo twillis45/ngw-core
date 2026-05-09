@@ -184,7 +184,7 @@ function recommendExportFormat(result, hasPhoto) {
 const TEMPLATES = [
   {
     id: 'bts',
-    label: 'Signal Card',
+    label: 'Light Card',
     desc: 'Pattern + confidence — the share card',
     formatLabel: '1080×1350 · 4:5',
   },
@@ -418,7 +418,7 @@ export default function SocialExportPanel({
 
     const patSlug = (pattern || 'unknown').replace(/[^a-z0-9]/gi, '-').replace(/-+/g, '-');
     const Pat     = patSlug.charAt(0).toUpperCase() + patSlug.slice(1);
-    const TEMPLATE_LABEL = { bts: 'Signal-Card', story: 'Story', summary: 'Blueprint', carousel: 'Carousel' };
+    const TEMPLATE_LABEL = { bts: 'Light-Card', story: 'Story', summary: 'Blueprint', carousel: 'Carousel' };
     const FORMAT_LABEL   = { PORTRAIT: '4x5', STORY: '9x16', SQUARE: '1x1', LANDSCAPE: '16x9' };
     const fmtKey  = Object.keys(FORMATS).find(k => FORMATS[k].w === fmt.w && FORMATS[k].h === fmt.h) || 'PORTRAIT';
     const tplLabel = TEMPLATE_LABEL[template] || template;
@@ -517,9 +517,14 @@ export default function SocialExportPanel({
 
         {/* ── PLATE MASTHEAD ── */}
         <div style={{ padding: '14px 20px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: steel(0.62), letterSpacing: '0.16em', textTransform: 'uppercase' }}>
-            Dispatch
-          </span>
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: steel(0.62), letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+              Dispatch
+            </span>
+            <div style={{ fontSize: 11, color: steel(0.36), marginTop: 3, letterSpacing: '0.01em' }}>
+              Save or share this light read.
+            </div>
+          </div>
           <span style={{ fontSize: 10, fontWeight: 600, color: steel(0.40), letterSpacing: '0.10em', textTransform: 'uppercase' }}>
             {branded ? 'Pro' : 'Studio'}
           </span>
@@ -588,7 +593,7 @@ export default function SocialExportPanel({
                 title={t.label}
                 style={{
                   flexShrink: 0,
-                  padding: 0,
+                  padding: '0 0 4px',
                   border: `0.5px solid ${isSel ? steel(0.28) : 'transparent'}`,
                   borderRadius: 3,
                   cursor: 'pointer',
@@ -596,6 +601,10 @@ export default function SocialExportPanel({
                   opacity: isSel ? 1.0 : 0.42,
                   transition: 'opacity 0.15s',
                   overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 4,
                   WebkitTapHighlightColor: 'transparent',
                 }}
               >
@@ -603,6 +612,16 @@ export default function SocialExportPanel({
                   ref={el => { miniCanvasRefs.current[idx] = el; }}
                   style={{ width: dims.dw, height: 'auto', display: 'block', borderRadius: 2 }}
                 />
+                <span style={{
+                  fontSize: 9,
+                  fontWeight: isSel ? 700 : 500,
+                  color: steel(isSel ? 0.55 : 0.38),
+                  letterSpacing: '0.04em',
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {t.label}
+                </span>
               </button>
             );
           })}
@@ -707,8 +726,8 @@ export default function SocialExportPanel({
             }}
           >
             {template === 'carousel' && lights.length > 1
-              ? `Issue ${lights.length} plates`
-              : 'Issue plate'}
+              ? `Save ${lights.length} plates`
+              : 'Save plate'}
           </button>
           <button
             onClick={handleDownloadReel}
@@ -726,7 +745,7 @@ export default function SocialExportPanel({
               WebkitTapHighlightColor: 'transparent',
             }}
           >
-            {reelRecording ? 'Recording reel…' : 'Issue with reel video →'}
+            {reelRecording ? 'Recording reel…' : 'Save with reel video →'}
           </button>
         </div>
 
